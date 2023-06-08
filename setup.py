@@ -3,7 +3,7 @@ from setuptools.command.build_ext import build_ext
 import os
 import shutil
 import subprocess
-import numpy as np
+# import numpy as np
 
 # CUDA specific config
 
@@ -26,6 +26,8 @@ package_data = {
 
 class CustomBuildExt(build_ext):
     def build_extensions(self):
+        import numpy as np
+
         _gcc_compile_args = ["-std=c++11", "-fPIC"]
         
         # Compile the CUDA code
@@ -38,6 +40,7 @@ class CustomBuildExt(build_ext):
             ext.extra_compile_args = _gcc_compile_args
             ext.extra_objects = [obj_file]  # Link the CUDA object file
             ext.include_dirs.append(cuda_include_path)  # Add CUDA include path
+            ext.include_dirs.append(np.get_include()) 
             ext.library_dirs.append(cuda_lib_path)  # Add CUDA library path
             ext.libraries.append("cudart")  # Add the CUDA runtime library
         super().build_extensions()
@@ -46,17 +49,17 @@ ext_modules = [
     Extension(
         "gcmc.gpu",
         sources=["gcmc/gcmc.cpp"],
-        include_dirs=[np.get_include()],
         language="c++",
     )
 ]
 
 setup(
+    install_requires=["numpy"],
+    setup_requires=["numpy"],
     name="gcmc",
     version="0.1",
     packages=find_packages(),
     package_data=package_data,
     ext_modules=ext_modules,
     cmdclass={"build_ext": CustomBuildExt},
-    install_requires=["numpy"],
 )
