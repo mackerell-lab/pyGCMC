@@ -10,14 +10,15 @@
 """
 
 
-import numpy as np
-from . import gpu
-from . import gcmc
+# import numpy as np
+# from . import gpu
+from .gcmc import *
 
 # Load the CHARMM force field parameters
 import os
 import zipfile
 import pkg_resources
+
 
 toppar_dir = os.path.join(os.path.dirname(__file__), 'toppar')
 

@@ -10,9 +10,26 @@
 """
 
 
-import numpy as np
+# import numpy as np
 import pkg_resources
+from . import protein_data
+import sys
 import os
+
+import argparse
+
+# https://stackoverflow.com/questions/616645/how-do-i-duplicate-sys-stdout-to-a-log-file-in-python
+
+class Tee(object):
+    def __init__(self, *files):
+        self.files = files
+    def write(self, obj):
+        for f in self.files:
+            f.write(obj)
+            f.flush() # If you want the output to be visible immediately
+    def flush(self) :
+        for f in self.files:
+            f.flush()
 
 
 class GCMC:
@@ -60,3 +77,77 @@ class GCMC:
 
         
 
+def main():
+    # file_output = open('Analyze_output.txt', 'w')
+    # original_output = sys.stdout
+    # sys.stdout = Tee(sys.stdout, file_output)
+
+    parser = argparse.ArgumentParser(description="pyGCMC - A python package for GCMC simulation")
+
+    parser.add_argument(
+        "-P",
+        "--pdb-file",
+        dest="pdb_file",
+        required=True,
+        help="The file .pdb for GCMC",
+        metavar="file.pdb",
+        type=str,
+    )
+    parser.add_argument(
+        "-T",
+        "--top-file",
+        dest="top_file",
+        required=False,
+        help="The file .top for GCMC",
+        metavar="file.top",
+        type=str,
+    )
+    parser.add_argument(
+        "-O",
+        "--out-file",
+        dest="out_file",
+        required=False,
+        help="The output file for GCMC",
+        metavar="file.txt",
+        type=str,
+    )
+    args = parser.parse_args()
+    pdb_file = args.pdb_file
+    top_file = args.top_file
+    out_file = args.out_file
+    if out_file is not None:
+        file_output = open(out_file, 'w')
+        original_output = sys.stdout
+        sys.stdout = Tee(sys.stdout, file_output)
+    
+    print(f"Using pdb file: {pdb_file}")
+    if top_file is not None:
+        print(f"Using top file: {top_file}")
+        if os.path.exists('temp_link'):
+            os.remove('temp_link')
+        os.symlink(pkg_resources.resource_filename(__name__, 'charmm36.ff'), 'temp_link') # create a symbolic link to the force field directory
+        os.rename('temp_link', 'charmm36.ff') # rename the symbolic link
+    print(f"Using output file: {out_file}")
+
+    try:
+        cryst, atoms = protein_data.read_pdb(pdb_file)
+    except:
+        print(f"Error reading pdb file: {pdb_file}")
+        sys.exit(1)
+    print(f"pdb cryst: {cryst}")
+    print(f"pdb atom number: {len(atoms)}")
+
+    protein_data.read_top(top_file)
+
+    # if top_file is not None:
+    #     try:
+    #         # top = protein_data.read_top(top_file)
+    #         protein_data.read_top(top_file)
+    #     except:
+    #         print(f"Error reading top file: {top_file}")
+    #         sys.exit(1)
+    #     # print(f"top atom number: {len(top)}")
+
+    if out_file is not None:
+        sys.stdout = original_output
+        file_output.close()

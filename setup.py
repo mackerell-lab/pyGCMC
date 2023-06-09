@@ -62,4 +62,9 @@ setup(
     package_data=package_data,
     ext_modules=ext_modules,
     cmdclass={"build_ext": CustomBuildExt},
+    entry_points={
+        'console_scripts': [
+            'gcmc=gcmc:main',
+        ],
+    }
 )
