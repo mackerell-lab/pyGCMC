@@ -198,7 +198,7 @@ class GCMC:
         
         print(f"Total FF pair number: {len(self.ff_pairs)}")
         
-        print(self.ff_pairs)
+        # print(self.ff_pairs)
 
         for atom in self.atoms:
             atom.typeNum = self.atomtypes2.index(atom.type)
