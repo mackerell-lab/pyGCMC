@@ -36,40 +36,103 @@ class GCMC:
     
     def __init__(self):
 
-        # find the path of the mols files        
-        self.mols_str_path = pkg_resources.resource_filename(__name__, 'mols') + '/'
+        if os.path.exists('temp_link'):
+            os.remove('temp_link')
+        os.symlink(pkg_resources.resource_filename(__name__, 'charmm36.ff'), 'temp_link') # create a symbolic link to the force field directory
+        os.rename('temp_link', 'charmm36.ff') # rename the symbolic link to force field directory
 
-        
-        self.get_simulation()
+        self.fragmentName = ['BENX', 'PRPX', 'DMEE', 'MEOH', 'FORM', 'IMIA', 'ACEY', 'MAMY', 'SOL']
+
+        self.get_fragment()
+    
+    def get_pdb(self,pdb_file):
+
+        print(f"Using pdb file: {pdb_file}")
 
 
-        
-        
-    def get_fragment(self,fragment = None):
-        if fragment is None:
-            self.fragmentName = ['acey', 'benx', 'dmee', 'form', 'imia', 'mamy', 'meoh', 'prpx', 'sol']
+        try:
+            self.cryst, self.atoms = protein_data.read_pdb(pdb_file)
+        except:
+            print(f"Error reading pdb file: {pdb_file}")
+            sys.exit(1)
 
 
-            # fragmentPdb = [pmd.load_file('%s%s.pdb' % (self.mols_str_path,i)) for i in fragmentName]
-            # fragmentPsf = [pmd.load_file('%s%s.psf' % (self.mols_str_path,i)) for i in fragmentName]
+        print(f"pdb cryst: {self.cryst}")
+        print(f"pdb atom number: {len(self.atoms)}")
             
-            # for i in range(len(fragmentName)):
-            #     fragmentPsf[i].positions = fragmentPdb[i].positions
-            # self.fragment = fragmentPsf
-
-            # self.fragment = [(fragmentPdb[i],fragmentPsf[i]) for i in range(len(fragmentName))]
+    def get_top(self,top_file):
 
 
-    def get_simulation(self):
-
-        # NBFIX  rmin=<charmm_rmin>/2^(1/6), eps=4.184*<charmm_eps>
-        # NB  rmin=<charmm_rmin>/2^(1/6)*2, eps=-4.184*<charmm_eps>
-
-        # self.nbfix_dict = {i:[self.params.nbfix_types[i][1] / 2**(1./6) * 0.1,self.params.nbfix_types[i][0] * 4.184 ] 
-        #             for i in self.params.nbfix_types}
+        print(f"Using top file: {top_file}")
         
-        # self.nb_dict = {i:[self.params.atom_types_str[i].rmin / 2 ** (1./6) * 0.1 * 2,self.params.atom_types_str[i].epsilon *-4.184] 
-        #                 for i in self.params.atom_types_str}
+
+        try:
+            self.atom_top = protein_data.read_top(top_file)
+        except:
+            print(f"Error reading top file: {top_file}")
+            sys.exit(1)
+
+        print(f"top atom number: {len(self.atom_top)}")
+
+        if len(self.atoms) != len(self.atom_top):
+            print(f"Error: pdb atom number {len(self.atoms)} != top atom number {len(self.atom_top)}")
+            sys.exit(1)
+    
+        for i, atom in enumerate(self.atoms):
+            # if atom.name != atom_top[i][3]:
+            #     print(f"Error: pdb atom {i+1} name {atom.name} != top atom name {atom_top[i][3]}")
+            #     sys.exit(1)
+            if atom.residue[:3] != self.atom_top[i][2][:3]:
+                print(f"Error: pdb atom {i+1} residue {atom.residue} != top atom residue {self.atom_top[i][2]}")
+                sys.exit(1)
+            atom.residue = self.atom_top[i][2]
+            atom.type = self.atom_top[i][0]
+            atom.charge = self.atom_top[i][4]
+        
+
+
+    def get_fragment(self):
+        self.fragments = []
+
+        for frag in self.fragmentName:
+            try:
+
+                _,self.fragments += [protein_data.read_pdb(f"charmm36.ff/mol/{frag.lower()}.pdb")]
+                atom_top = protein_data.read_top(f"charmm36.ff/mol/{frag.lower()}.itp")
+                for i, atom in enumerate(self.fragments[-1]):
+                    # if atom.name != atom_top[i][3]:
+                    #     print(f"Error: pdb atom {i+1} name {atom.name} != top atom name {atom_top[i][3]}")
+                    #     sys.exit(1)
+                    if atom.residue[:3] != atom_top[i][2][:3]:
+                        print(f"Error: pdb atom {i+1} residue {atom.residue} != top atom residue {atom_top[i][2]}")
+                        sys.exit(1)
+                    atom.residue = atom_top[i][2]
+                    atom.type = atom_top[i][0]
+                    atom.charge = atom_top[i][4]
+            except:
+                print(f"Error reading fragment file: charmm36.ff/mol/{frag}")
+                sys.exit(1)
+
+        
+        
+    # def get_fragment(self,fragment = None):
+    #     if fragment is None:
+    #         self.fragmentName = ['BENX', 'PRPX', 'DMEE', 'MEOH', 'FORM', 'IMIA', 'ACEY', 'MAMY', 'SOL']
+
+
+
+            
+
+    # def get_simulation(self):
+
+    #     # NBFIX  rmin=<charmm_rmin>/2^(1/6), eps=4.184*<charmm_eps>
+    #     # NB  rmin=<charmm_rmin>/2^(1/6)*2, eps=-4.184*<charmm_eps>
+
+    #     # self.nbfix_dict = {i:[self.params.nbfix_types[i][1] / 2**(1./6) * 0.1,self.params.nbfix_types[i][0] * 4.184 ] 
+    #     #             for i in self.params.nbfix_types}
+        
+    #     # self.nb_dict = {i:[self.params.atom_types_str[i].rmin / 2 ** (1./6) * 0.1 * 2,self.params.atom_types_str[i].epsilon *-4.184] 
+    #     #                 for i in self.params.atom_types_str}
     
         
         
@@ -112,6 +175,9 @@ def main():
         type=str,
     )
     args = parser.parse_args()
+    
+    gcmc = GCMC()
+
     pdb_file = args.pdb_file
     top_file = args.top_file
     out_file = args.out_file
@@ -119,25 +185,22 @@ def main():
         file_output = open(out_file, 'w')
         original_output = sys.stdout
         sys.stdout = Tee(sys.stdout, file_output)
+        print(f"Using output file: {out_file}")
     
-    print(f"Using pdb file: {pdb_file}")
+
+    gcmc.get_pdb(pdb_file)
+
+        
+    
+
+
+
+
     if top_file is not None:
-        print(f"Using top file: {top_file}")
-        if os.path.exists('temp_link'):
-            os.remove('temp_link')
-        os.symlink(pkg_resources.resource_filename(__name__, 'charmm36.ff'), 'temp_link') # create a symbolic link to the force field directory
-        os.rename('temp_link', 'charmm36.ff') # rename the symbolic link
-    print(f"Using output file: {out_file}")
+        gcmc.get_top(top_file)
 
-    try:
-        cryst, atoms = protein_data.read_pdb(pdb_file)
-    except:
-        print(f"Error reading pdb file: {pdb_file}")
-        sys.exit(1)
-    print(f"pdb cryst: {cryst}")
-    print(f"pdb atom number: {len(atoms)}")
+    
 
-    protein_data.read_top(top_file)
 
     # if top_file is not None:
     #     try:
