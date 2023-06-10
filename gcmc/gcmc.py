@@ -49,8 +49,6 @@ class GCMC:
         os.rename('temp_link', 'charmm36.ff') # rename the symbolic link to force field directory
 
 
-        self.get_fragment()
-        self.get_forcefield()
 
 
     
@@ -99,6 +97,7 @@ class GCMC:
             atom.residue = self.atom_top[i][2]
             atom.type = self.atom_top[i][0]
             atom.charge = self.atom_top[i][4]
+            atom.nameTop = self.atom_top[i][3]
         
 
 
@@ -121,6 +120,7 @@ class GCMC:
                     atom.residue = atom_top[i][2]
                     atom.type = atom_top[i][0]
                     atom.charge = atom_top[i][4]
+                    atom.nameTop = atom_top[i][3]
             except:
                 print(f"Error reading fragment file: charmm36.ff/mol/{frag}")
                 sys.exit(1)
@@ -148,6 +148,10 @@ class GCMC:
     
 
     def get_simulation(self):
+
+        
+        self.get_fragment()
+        self.get_forcefield()
         
         if self.pdb_file is None or self.top_file is None:
             print("Error: pdb or top file not set")
@@ -193,7 +197,8 @@ class GCMC:
 
         
         print(f"Total FF pair number: {len(self.ff_pairs)}")
-
+        
+        print(self.ff_pairs)
 
         for atom in self.atoms:
             atom.typeNum = self.atomtypes2.index(atom.type)
@@ -201,6 +206,30 @@ class GCMC:
         for frag in self.fragments:
             for atom in frag:
                 atom.typeNum = self.atomtypes2.index(atom.type)
+
+
+        self.fix_atoms = []
+        relax_atoms = [[] for i in range(len(self.fragments))]
+        for atom in self.atoms:
+            if atom.residue in self.fragmentName:
+                relax_atoms[self.fragmentName.index(atom.residue)].append(atom)
+            else:
+                self.fix_atoms.append(atom)
+        
+
+        self.fraglist =[[relax_atoms[i][j:j + len(self.fragments[i])] for j in range(0, len(relax_atoms[i]), len(self.fragments[i]))] for i in range(len(self.fragments))]
+        
+        print(f"Total fixed atom number: {len(self.fix_atoms)}")
+        print(f"Total relax atom number: {len(self.atoms) - len(self.fix_atoms)}")
+        
+        for i, frag in enumerate(self.fragments):
+            print(f"Fragment {self.fragmentName[i]} number: {len(self.fraglist[i])}")
+
+        
+        # for atom in self.fix_atoms:
+        #     print(f"Fix atom: {atom.name} {atom.nameTop} {atom.type} {atom.typeNum}")
+
+
         
         # for frag in self.fragments:
         #     print(f"Fragment: {frag[0].residue}")
@@ -221,7 +250,7 @@ class GCMC:
         #     print(f"Residue {i}: {residue}")
 
 
-        
+
 
     # def get_simulation(self):
 
