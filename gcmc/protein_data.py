@@ -39,7 +39,7 @@ def read_pdb(pdb_file):
 
 
 
-def read_itp(itp_file):
+def read_itp_block(itp_file):
     '''Read a Gromacs .itp file and return a list of atoms'''
 
     s = open(itp_file, 'r').read()
@@ -73,6 +73,38 @@ def read_itp(itp_file):
                 blocks[-1].append(line.strip())
 
     return blocks
+
+def read_itp(itp_file):
+    '''Read a Gromacs .itp file and return a list of atoms'''
+
+    blocks = read_itp_block(itp_file)
+    moleculetypes = []
+    for blocknum in range(len(blocks)):
+        block = blocks[blocknum]
+        if block[0] == 'moleculetype':
+            for line in block[1:]:
+                line = line.strip()
+                if line:
+                    pattern = r'(\w+)\s+(\d+)'
+                    match = re.match(pattern, line)
+                    if match:
+                        moleculetypes.append([match.group(1)])
+                        break
+            for atomblock in blocks[blocknum+1:]:
+                if atomblock[0] == 'atoms':
+                    for line in atomblock[1:]:
+                        line = line.strip()
+                        if line:
+                            pattern = r'(\d+)\s+(\S+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\d+)\s+([0-9\.\-]+)'
+                            match = re.match(pattern, line)
+                            if match:
+                                moleculetypes[-1].append([match.group(2),match.group(3),match.group(4),match.group(5),match.group(7)])
+                            # else:
+                            #     print(atomblock[0],line)
+                            #     break
+                    break
+    return moleculetypes[-1][1:]
+
 
 def read_top(top_file):
     '''Read a Gromacs .top file and return a list of atoms'''
@@ -117,7 +149,7 @@ def read_top(top_file):
     itps = []
     for file in matches:
         if file.endswith('.itp'):
-            itps += [read_itp(file)]
+            itps += [read_itp_block(file)]
     
     molecules = []
     for block in blocks:
@@ -210,3 +242,30 @@ def read_top(top_file):
     #         if i[0] == 'moleculetype':
     #             print(i)
 
+
+def read_ff(ff_file):
+    '''Read a Gromacs .ff file and return a list of atoms'''    
+    nb_dict = {}
+    nbfix_dict = {}
+    blocks = read_itp_block(ff_file)
+
+    for block in blocks:
+        if block[0] == 'atomtypes':
+            for line in block[1:]:
+                line = line.strip()
+                if line:
+                    pattern = r'(\S+)\s+(\S+)\s+([0-9\.\-]+)\s+([0-9\.\-]+)\s+(\S+)\s+([0-9\.\-]+)+\s+([0-9\.\-]+)'
+                    match = re.match(pattern, line)
+                    if match:
+                        nb_dict[match.group(1)] = [float(match.group(6)),float(match.group(7))]
+    
+        if block[0] == 'nonbond_params' or block[0] == 'pairtypes':
+            for line in block[1:]:
+                line = line.strip()
+                if line:
+                    pattern = r'(\S+)\s+(\S+)\s+([0-9\.\-]+)\s+([0-9\.\-]+)\s+([0-9\.\-]+)'
+                    match = re.match(pattern, line)
+                    if match:
+                        nbfix_dict[(match.group(1),match.group(2))] = [float(match.group(4)),float(match.group(5))]
+
+    return nb_dict,nbfix_dict

@@ -10,7 +10,7 @@
 """
 
 
-# import numpy as np
+import numpy as np
 import pkg_resources
 from . import protein_data
 import sys
@@ -36,16 +36,26 @@ class GCMC:
     
     def __init__(self):
 
+        self.fragmentName = ['BENX', 'PRPX', 'DMEE', 'MEOH', 'FORM', 'IMIA', 'ACEY', 'MAMY', 'SOL']
+
+        self.ff_files = ['charmm36.ff/ffnonbonded.itp', 'charmm36.ff/nbfix.itp', 'charmm36.ff/silcs.itp']
+
+        self.top_file = None
+        self.pdb_file = None
+
         if os.path.exists('temp_link'):
             os.remove('temp_link')
         os.symlink(pkg_resources.resource_filename(__name__, 'charmm36.ff'), 'temp_link') # create a symbolic link to the force field directory
         os.rename('temp_link', 'charmm36.ff') # rename the symbolic link to force field directory
 
-        self.fragmentName = ['BENX', 'PRPX', 'DMEE', 'MEOH', 'FORM', 'IMIA', 'ACEY', 'MAMY', 'SOL']
 
         self.get_fragment()
+        self.get_forcefield()
+
+
     
     def get_pdb(self,pdb_file):
+        self.pdb_file = pdb_file
 
         print(f"Using pdb file: {pdb_file}")
 
@@ -61,6 +71,7 @@ class GCMC:
         print(f"pdb atom number: {len(self.atoms)}")
             
     def get_top(self,top_file):
+        self.top_file = top_file
 
 
         print(f"Using top file: {top_file}")
@@ -95,10 +106,11 @@ class GCMC:
         self.fragments = []
 
         for frag in self.fragmentName:
+
             try:
 
-                _,self.fragments += [protein_data.read_pdb(f"charmm36.ff/mol/{frag.lower()}.pdb")]
-                atom_top = protein_data.read_top(f"charmm36.ff/mol/{frag.lower()}.itp")
+                self.fragments += [protein_data.read_pdb(f"charmm36.ff/mol/{frag.lower()}.pdb")[1]]
+                atom_top = protein_data.read_itp(f"charmm36.ff/mol/{frag.lower()}.itp")
                 for i, atom in enumerate(self.fragments[-1]):
                     # if atom.name != atom_top[i][3]:
                     #     print(f"Error: pdb atom {i+1} name {atom.name} != top atom name {atom_top[i][3]}")
@@ -113,15 +125,103 @@ class GCMC:
                 print(f"Error reading fragment file: charmm36.ff/mol/{frag}")
                 sys.exit(1)
 
-        
-        
+            print(f"Read fragment: {frag} with {len(self.fragments[-1])} atoms")
     # def get_fragment(self,fragment = None):
     #     if fragment is None:
     #         self.fragmentName = ['BENX', 'PRPX', 'DMEE', 'MEOH', 'FORM', 'IMIA', 'ACEY', 'MAMY', 'SOL']
 
 
+    def get_forcefield(self):
+        self.nb_dict = {}
+        self.nbfix_dict = {}
 
+        for ff_file in self.ff_files:
+            try:
+                nb_dict, nbfix_dict = protein_data.read_ff(ff_file)
+                print(f"Using force field file: {ff_file} ,\tnb number: {len(nb_dict)} ,\tnbfix number: {len(nbfix_dict)}")
+                self.nb_dict.update(nb_dict)
+                self.nbfix_dict.update(nbfix_dict)
+            except:
+                print(f"Error reading force field file: {ff_file}")
+                sys.exit(1)
+    
+    
+
+    def get_simulation(self):
+        
+        if self.pdb_file is None or self.top_file is None:
+            print("Error: pdb or top file not set")
+            sys.exit(1)
+        
+        self.atomtypes1 = []
+        self.atomtypes2 = []
+        for frag in self.fragments:
+            for atom in frag:
+                if atom.type not in self.atomtypes2:
+                    self.atomtypes1.append(atom.type)
+                    self.atomtypes2.append(atom.type)
+        
+        for atom in self.atoms:
+            if atom.type not in self.atomtypes2:
+                self.atomtypes2.append(atom.type)
+        
+        print(f"Fragment Type number: {len(self.atomtypes1)}")
+        print(f"Total Type number: {len(self.atomtypes2)}")
+
+        self.ff_pairs = []
+
+        for i, type1 in enumerate(self.atomtypes1):
+            for j, type2 in enumerate(self.atomtypes2):
+                ff_pair = [0,0]
+                if (type1, type2) in self.nbfix_dict:
+                    ff_pair[0] = self.nbfix_dict[(type1, type2)][0]
+                    ff_pair[1] = self.nbfix_dict[(type1, type2)][1]
+                elif (type2, type1) in self.nbfix_dict:
+                    ff_pair[0] = self.nbfix_dict[(type2, type1)][0]
+                    ff_pair[1] = self.nbfix_dict[(type2, type1)][1]
+                else:
+                    sigma1 = self.nb_dict[type1][0]
+                    sigma2 = self.nb_dict[type2][0]
+                    sigma = (sigma1 + sigma2) / 2
+                    epsilon1 = self.nb_dict[type1][1]
+                    epsilon2 = self.nb_dict[type2][1]
+                    epsilon = np.sqrt(epsilon1 * epsilon2)
+
+                    ff_pair[0] = sigma
+                    ff_pair[1] = epsilon
+                self.ff_pairs.append(ff_pair)
+
+        
+        print(f"Total FF pair number: {len(self.ff_pairs)}")
+
+
+        for atom in self.atoms:
+            atom.typeNum = self.atomtypes2.index(atom.type)
             
+        for frag in self.fragments:
+            for atom in frag:
+                atom.typeNum = self.atomtypes2.index(atom.type)
+        
+        # for frag in self.fragments:
+        #     print(f"Fragment: {frag[0].residue}")
+        #     for atom in frag:
+        #         print(f"{atom.name} {atom.type} {atom.typeNum}")
+
+        # self.residueType = []
+        # for frag in self.fragments:
+        #     for atom in frag:
+        #         if atom.residue not in self.residueType:
+        #             self.residueType.append(atom.residue)
+        
+        # for atom in self.atoms:
+        #     if atom.residue not in self.residueType:
+        #         self.residueType.append(atom.residue)
+
+        # for i, residue in enumerate(self.residueType):
+        #     print(f"Residue {i}: {residue}")
+
+
+        
 
     # def get_simulation(self):
 
@@ -136,7 +236,7 @@ class GCMC:
     
         
         
-        self.get_fragment()
+    
 
         
 
@@ -198,6 +298,9 @@ def main():
 
     if top_file is not None:
         gcmc.get_top(top_file)
+
+    
+    gcmc.get_simulation()
 
     
 
