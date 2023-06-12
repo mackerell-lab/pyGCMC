@@ -216,7 +216,7 @@ class GCMC:
 
     def get_fragmuex(self, fragmuex):
         
-        fragmuex = [float(i) for i in fragmuex]
+        fragmuex = [float(i) for i in fragmuex if len(i) > 0]
         if len(fragmuex) != len(self.fragmentName):
             print("Error: fragmuex number not match")
             sys.exit(1)
@@ -225,7 +225,7 @@ class GCMC:
     
     def get_fragconf(self, fragconf):
 
-        fragconf = [float(i) for i in fragconf]
+        fragconf = [float(i) for i in fragconf if len(i) > 0]
         if len(fragconf) == 1:
             fragconf = [fragconf] * len(self.fragmentName)
             self.fragconf = fragconf
