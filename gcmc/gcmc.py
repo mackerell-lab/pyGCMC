@@ -214,6 +214,30 @@ class GCMC:
     # def update_data(self):
     #     pass
 
+    def get_fragmuex(self, fragmuex):
+        
+        fragmuex = [float(i) for i in fragmuex]
+        if len(fragmuex) != len(self.fragmentName):
+            print("Error: fragmuex number not match")
+            sys.exit(1)
+        else:
+            self.fragmuex = fragmuex
+    
+    def get_fragconf(self, fragconf):
+
+        fragconf = [float(i) for i in fragconf]
+        if len(fragconf) == 1:
+            fragconf = [fragconf] * len(self.fragmentName)
+            self.fragconf = fragconf
+        elif len(fragconf) == len(self.fragmentName):
+            self.fragconf = fragconf
+        else:
+            print("Error: fragconf number not match")
+            sys.exit(1)
+
+
+
+
     def get_simulation(self):
 
         
@@ -399,7 +423,7 @@ def main():
     parser = argparse.ArgumentParser(description="pyGCMC - A python package for GCMC simulation")
 
     parser.add_argument(
-        "-P",
+        "-p",
         "--pdb-file",
         dest="pdb_file",
         required=True,
@@ -408,7 +432,7 @@ def main():
         type=str,
     )
     parser.add_argument(
-        "-T",
+        "-t",
         "--top-file",
         dest="top_file",
         required=False,
@@ -417,7 +441,7 @@ def main():
         type=str,
     )
     parser.add_argument(
-        "-O",
+        "-o",
         "--out-file",
         dest="out_file",
         required=False,
@@ -425,6 +449,26 @@ def main():
         metavar="file.txt",
         type=str,
     )
+    parser.add_argument(
+        "-m",
+        "--fragmuex",
+        dest="fragmuex",
+        required=False,
+        help="The value of fragment muex(splice by , with no space)",
+        metavar="muex1,muex2,...",
+        type=str,
+    ) 
+    parser.add_argument(
+        "-c",
+        "--fragconf",
+        dest="fragconf",
+        required=False,
+        help="The value of fragment conf(splice by , with no space). Or only one value for all fragments",
+        metavar="conf1,conf2,...",
+        type=str,
+    )
+
+
     args = parser.parse_args()
     
     gcmc = GCMC()
@@ -437,7 +481,19 @@ def main():
         original_output = sys.stdout
         sys.stdout = Tee(sys.stdout, file_output)
         print(f"Using output file: {out_file}")
-    
+
+    if args.fragmuex is not None:
+        fragmuex = args.fragmuex
+        fragmuex = fragmuex.split(',')
+        gcmc.get_fragmuex(fragmuex)
+        print(f"Using fragment muex: {fragmuex}")    
+
+    if args.fragconf is not None:
+        fragconf = args.fragconf
+        fragconf = fragconf.split(',')
+        gcmc.get_fragconf(fragconf)
+        print(f"Using fragment conf: {fragconf}")
+
 
     gcmc.get_pdb(pdb_file)
 
