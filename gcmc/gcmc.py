@@ -17,6 +17,7 @@ import sys
 import os
 
 import argparse
+import random
 
 # https://stackoverflow.com/questions/616645/how-do-i-duplicate-sys-stdout-to-a-log-file-in-python
 
@@ -36,12 +37,43 @@ class GCMC:
     
     def __init__(self):
 
-        self.fragmentName = ['BENX', 'PRPX', 'DMEE', 'MEOH', 'FORM', 'IMIA', 'ACEY', 'MAMY', 'SOL']
-
         self.ff_files = ['charmm36.ff/ffnonbonded.itp', 'charmm36.ff/nbfix.itp', 'charmm36.ff/silcs.itp']
 
+
+        self.fragmentName = ['BENX', 'PRPX', 'DMEE', 'MEOH', 'FORM', 'IMIA', 'ACEY', 'MAMY', 'SOL']
+
+        self.fragconc = [ 0.25,   0.25,   0.25,   0.25,   0.25,   0.25,   0.25,   0.25,  55.00]
+
+        self.fragmuex = [-2.79, 1.46, -1.44, -5.36, -10.92, -14.18, -97.31, -68.49, -5.6]
+
+        self.fragconf = [1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000]
+
+        self.mctime = [1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 100.0]
+
+        self.mcsteps = 10000
+
+
+        self.attempt_prob_frag = [0.300, 0.300, 0.200, 0.200]
+        
+        self.attempt_prob_water = [0.250, 0.250, 0.250, 0.250]
+
+
+
+        self.cutoff = 15.0
+
+        self.fixCutoff = 6.0
+        
+        self.grid_dx = 1.0
+
+
+        
         self.top_file = None
         self.pdb_file = None
+
+
+
+
+
 
         if os.path.exists('temp_link'):
             os.remove('temp_link')
@@ -145,13 +177,50 @@ class GCMC:
                 print(f"Error reading force field file: {ff_file}")
                 sys.exit(1)
     
-    
+    def get_move(self):
+        self.move_array = random.choices(range(len(self.fragmentName)), weights=self.mctime, k=self.mcsteps)
+
+        for i, n in enumerate(self.move_array):
+            if self.fragmentName[n] == 'SOL':
+                self.move_array[i] = self.move_array[i] * 4 + random.choices(range(len(self.attempt_prob_water)), weights=self.attempt_prob_water, k=1)[0]
+            else:
+                self.move_array[i] = self.move_array[i] * 4 + random.choices(range(len(self.attempt_prob_frag)), weights=self.attempt_prob_frag, k=1)[0]
+
+        self.move_array_n = [0 for i in range(len(self.attempt_prob_frag) * len(self.fragmentName))]
+        self.move_array_frag = [0 for i in range(len(self.fragmentName))]
+
+        for i in self.move_array:
+            self.move_array_n[i] += 1
+            self.move_array_frag[i//4] += 1
+        
+        for i in range(len(self.fragmentName)):
+            print(f"Fragment {self.fragmentName[i]} move {self.move_array_frag[i]} times", end='\t')
+            for j in range(len(self.attempt_prob_frag)):
+                print(f"Movement {j} move {self.move_array_n[i*4+j]} times", end='\t')
+            print()
+
+        # for i in range(len(self.attempt_prob_frag)):
+        #     print(f"Movement {i} move {random_n[i]} times")
+        
+        # random_n = [0 for i in range(len(self.attempt_prob_frag))]
+
+        # for i in random_array:
+        #     random_n[i%4] += 1
+        
+        # for i, frag in enumerate(random_n):
+        #     print(f"Movement {i} move {random_n[i]} times")
+
+
+    # def update_data(self):
+    #     pass
 
     def get_simulation(self):
 
         
         self.get_fragment()
         self.get_forcefield()
+
+        self.get_move()
         
         if self.pdb_file is None or self.top_file is None:
             print("Error: pdb or top file not set")
@@ -225,7 +294,16 @@ class GCMC:
         for i, frag in enumerate(self.fragments):
             print(f"Fragment {self.fragmentName[i]} number: {len(self.fraglist[i])}")
 
+
+        self.set_fixCut()
+
+        # self.update_data()
+
+        # for atom in self.fix_atoms:
+        #     print(f"Fix atom: {atom.name} {atom.nameTop} {atom.type} {atom.typeNum} {atom.sequence} {atom.sequence2}")
+
         
+
         # for atom in self.fix_atoms:
         #     print(f"Fix atom: {atom.name} {atom.nameTop} {atom.type} {atom.typeNum}")
 
@@ -249,6 +327,37 @@ class GCMC:
         # for i, residue in enumerate(self.residueType):
         #     print(f"Residue {i}: {residue}")
 
+        # atoms_list = []
+        # atoms_sec = None
+        # for atom in self.fix_atoms:
+        #     if atom.sequence != atoms_sec:
+        #         atoms_list.append([atom])
+        #         atoms_sec = atom.sequence
+        #     else:
+        #         atoms_list[-1].append(atom)
+        # print(f"Total residue number: {len(atoms_list)}")
+
+
+        # def distance(atom1, atom2):
+        #     x1, y1, z1 = atom1.x, atom1.y, atom1.z
+        #     x2, y2, z2 = atom2.x, atom2.y, atom2.z
+            
+        #     return np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2 + (z2 - z1) ** 2)
+
+        # def find_max_distance(atom_list):
+        #     max_dist = 0
+            
+        #     for i, atom1 in enumerate(atom_list[:-1]):
+        #         for atom2 in atom_list[i + 1:]:
+        #             dist = distance(atom1, atom2)
+        #             max_dist = max(max_dist, dist)
+            
+        #     return max_dist
+
+        # for atom_list in atoms_list:
+        #     max_dist = find_max_distance(atom_list)
+        #     print(f"Max distance: {max_dist:.3f}")
+
 
 
 
@@ -266,7 +375,20 @@ class GCMC:
         
         
     
-
+    def set_fixCut(self):
+        
+        x0 = float('inf')
+        y0 = float('inf')
+        z0 = float('inf')
+        n = -1
+        for atom in self.fix_atoms:
+            x, y, z = atom.x, atom.y, atom.z
+            if np.sqrt((x - x0) ** 2 + (y - y0) ** 2 + (z - z0) ** 2) > self.fixCutoff:
+                n += 1
+                x0, y0, z0 = x, y, z
+                atom.sequence2 = n
+            else:
+                atom.sequence2 = n
         
 
 def main():
