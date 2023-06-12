@@ -467,6 +467,16 @@ def main():
         metavar="conf1,conf2,...",
         type=str,
     )
+    parser.add_argument(
+        "-n",
+        "--mcsteps",
+        dest="mcsteps",
+        required=False,
+        help="The number of MC steps",
+        metavar="mcsteps",
+        type=int,
+    )
+
 
 
     args = parser.parse_args()
@@ -494,6 +504,9 @@ def main():
         gcmc.get_fragconf(fragconf)
         print(f"Using fragment conf: {fragconf}")
 
+    if args.mcsteps is not None:
+        gcmc.mcsteps = args.mcsteps
+        print(f"Using MC steps: {args.mcsteps}")
 
     gcmc.get_pdb(pdb_file)
 
