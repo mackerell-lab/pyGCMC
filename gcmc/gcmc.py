@@ -48,7 +48,7 @@ class GCMC:
 
         self.fragconf = [1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000]
 
-        self.mctime = [1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 100.0]
+        self.mctime = [1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000]
 
         self.mcsteps = 10000
 
@@ -96,9 +96,22 @@ class GCMC:
             print(f"Error reading pdb file: {pdb_file}")
             sys.exit(1)
 
+        print(f"pdb atom number: {len(self.atoms)}")   
 
         print(f"pdb cryst: {self.cryst}")
-        print(f"pdb atom number: {len(self.atoms)}")
+        
+
+        x_values = [atom.x for atom in self.atoms]
+        y_values = [atom.y for atom in self.atoms]
+        z_values = [atom.z for atom in self.atoms]
+
+        
+
+        print("x direction: min =", min(x_values), "max =", max(x_values))
+        print("y direction: min =", min(y_values), "max =", max(y_values))
+        print("z direction: min =", min(z_values), "max =", max(z_values))
+
+        
             
     def get_top(self,top_file):
         self.top_file = top_file
@@ -194,7 +207,7 @@ class GCMC:
             self.move_array_frag[i//4] += 1
         
         for i in range(len(self.fragmentName)):
-            print(f"Fragment {self.fragmentName[i]} move {self.move_array_frag[i]} times", end='\t')
+            print(f"Fragment {self.fragmentName[i]}\t move {self.move_array_frag[i]} times", end='\t')
             for j in range(len(self.attempt_prob_frag)):
                 print(f"Movement {j} move {self.move_array_n[i*4+j]} times", end='\t')
             print()
@@ -225,9 +238,9 @@ class GCMC:
     
     def get_fragconf(self, fragconf):
 
-        fragconf = [float(i) for i in fragconf if len(i) > 0]
+        fragconf = [int(i) for i in fragconf if len(i) > 0]
         if len(fragconf) == 1:
-            fragconf = [fragconf] * len(self.fragmentName)
+            fragconf = fragconf * len(self.fragmentName)
             self.fragconf = fragconf
         elif len(fragconf) == len(self.fragmentName):
             self.fragconf = fragconf
@@ -235,7 +248,35 @@ class GCMC:
             print("Error: fragconf number not match")
             sys.exit(1)
 
+    def get_mctime(self, mctime):
 
+        mctime = [float(i) for i in mctime if len(i) > 0]
+        if len(mctime) != len(self.fragmentName):
+            print("Error: mctime number not match")
+            sys.exit(1)
+        else:
+            self.mctime = mctime
+
+    def get_fragconc(self, fragconc):
+
+        fragconc = [float(i) for i in fragconc if len(i) > 0]
+        if len(fragconc) != len(self.fragmentName):
+            print("Error: fragconc number not match")
+            sys.exit(1)
+        else:
+            self.fragconc = fragconc
+
+
+    def show_parameters(self):
+        print(f"MC steps: {self.mcsteps}")
+        print("Fragment Name: \t\t",'\t\t'.join(self.fragmentName))
+        print("Fragment Muex: \t\t",'\t\t'.join([str(i) for i in self.fragmuex]))
+        print("Fragment Conc: \t\t",'\t\t'.join([str(i) for i in self.fragconc]))
+        print("Fragment ConfBias: \t",'\t\t'.join([str(i) for i in self.fragconf]))
+        print("Fragment mcTime: \t",'\t\t'.join([str(i) for i in self.mctime]))
+
+
+        
 
 
     def get_simulation(self):
@@ -245,6 +286,8 @@ class GCMC:
         self.get_forcefield()
 
         self.get_move()
+
+        self.show_parameters()
         
         if self.pdb_file is None or self.top_file is None:
             print("Error: pdb or top file not set")
@@ -450,7 +493,7 @@ def main():
         type=str,
     )
     parser.add_argument(
-        "-m",
+        "-u",
         "--fragmuex",
         dest="fragmuex",
         required=False,
@@ -459,12 +502,12 @@ def main():
         type=str,
     ) 
     parser.add_argument(
-        "-c",
+        "-f",
         "--fragconf",
         dest="fragconf",
         required=False,
         help="The value of fragment conf(splice by , with no space). Or only one value for all fragments",
-        metavar="conf1,conf2,...",
+        metavar="conf1,conf2,... or conf",
         type=str,
     )
     parser.add_argument(
@@ -476,6 +519,25 @@ def main():
         metavar="mcsteps",
         type=int,
     )
+    parser.add_argument(
+        "-m",
+        "--mctime",
+        dest="mctime",
+        required=False,
+        help="The mctime of Fragments(splice by , with no space)",
+        metavar="mctime1,mctime2,...",
+        type=str,
+    )
+    parser.add_argument(
+        "-c",
+        "--fragconc",
+        dest="fragconc",
+        required=False,
+        help="The value of fragment concentration(splice by , with no space)",
+        metavar="conc1,conc2,...",
+        type=str,
+    )
+
 
 
 
@@ -507,6 +569,18 @@ def main():
     if args.mcsteps is not None:
         gcmc.mcsteps = args.mcsteps
         print(f"Using MC steps: {args.mcsteps}")
+
+    if args.mctime is not None:
+        mctime = args.mctime
+        mctime = mctime.split(',')
+        gcmc.get_mctime(mctime)
+        print(f"Using fragment mctime: {mctime}")
+
+    if args.fragconc is not None:
+        fragconc = args.fragconc
+        fragconc = fragconc.split(',')
+        gcmc.get_fragconc(fragconc)
+        print(f"Using fragment concentration: {fragconc}")
 
     gcmc.get_pdb(pdb_file)
 
