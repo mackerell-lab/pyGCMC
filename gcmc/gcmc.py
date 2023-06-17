@@ -33,6 +33,28 @@ class Tee(object):
             f.flush()
 
 
+Atom_dtype = np.dtype([
+    ('position', np.float32, (3, )),
+    ('charge', np.float32),
+    ('type', np.int32)
+])
+
+AtomArray_dtype = np.dtype([
+    ('name', 'S4'),
+
+    ('muex', np.float32),
+    ('conc', np.float32),
+    ('confBias', np.float32),
+    ('mcTime', np.float32),
+
+    ('totalNum', np.int32),
+    ('maxNum', np.int32),
+
+    ('num_atoms', np.int32),
+    ('atoms', Atom_dtype, (20, ))
+])
+
+
 class GCMC:
     
     def __init__(self):
@@ -66,6 +88,15 @@ class GCMC:
         self.grid_dx = 1.0
 
 
+        self.cavity_bias = True
+        self.cavity_bias_factor = 1.0
+        # self.cavity_bias_dx = 0.0
+
+        # self.grid = np.zeros(1, dtype = np.int32)
+
+        self.configurational_bias = True
+
+
         
         self.top_file = None
         self.pdb_file = None
@@ -81,8 +112,129 @@ class GCMC:
         os.rename('temp_link', 'charmm36.ff') # rename the symbolic link to force field directory
 
 
+    def get_grid(self):
+        print("Getting grid points...")
+
+        x_values = [atom.x for atom in self.atoms]
+        y_values = [atom.y for atom in self.atoms]
+        z_values = [atom.z for atom in self.atoms]
+
+        
+
+        print("x direction: min =", min(x_values), "max =", max(x_values),end = '\t')
+        print("y direction: min =", min(y_values), "max =", max(y_values),end = '\t')
+        print("z direction: min =", min(z_values), "max =", max(z_values))
+
+        x_center = (min(x_values) + max(x_values)) / 2.0
+        y_center = (min(y_values) + max(y_values)) / 2.0
+        z_center = (min(z_values) + max(z_values)) / 2.0
+
+        print("x center =", x_center, end = '\t')
+        print("y center =", y_center, end = '\t')
+        print("z center =", z_center)
+
+        self.startxyz = [x_center - self.cryst[0]/2.0, y_center - self.cryst[1]/2.0, z_center - self.cryst[2]/2.0]
+
+        print("startxyz =", self.startxyz, end = '\t')
+
+        self.endxyz = [x_center + self.cryst[0]/2.0, y_center + self.cryst[1]/2.0, z_center + self.cryst[2]/2.0]
+
+        print("endxyz =", self.endxyz)
+
+        # self.grid_n = [int((self.endxyz[0] - self.startxyz[0]) / self.grid_dx), int((self.endxyz[1] - self.startxyz[1]) / self.grid_dx), int((self.endxyz[2] - self.startxyz[2]) / self.grid_dx)]
+
+        # print("grid_n =", self.grid_n)
+
+        
 
 
+
+        if self.cavity_bias:
+            print("Using cavity bias: True")
+
+            print("Grid dx =", self.grid_dx)
+            self.grid_n = [int((self.endxyz[0] - self.startxyz[0]) / self.grid_dx), int((self.endxyz[1] - self.startxyz[1]) / self.grid_dx), int((self.endxyz[2] - self.startxyz[2]) / self.grid_dx)]
+            print("grid_n =", self.grid_n)
+
+            grid = {(x,y,z) for x in range(self.grid_n[0]) for y in range(self.grid_n[1]) for z in range(self.grid_n[2])}
+            
+            
+            # change_dx = set()
+
+            # for x in set(np.arange(0, self.cavity_bias_dx + self.grid_dx/2, self.grid_dx)) | set(np.arange(0,-self.cavity_bias_dx - self.grid_dx/2, -self.grid_dx)):
+            #     for y in set(np.arange(0, self.cavity_bias_dx + self.grid_dx/2, self.grid_dx)) | set(np.arange(0,-self.cavity_bias_dx - self.grid_dx/2, -self.grid_dx)):
+            #         for z in set(np.arange(0, self.cavity_bias_dx + self.grid_dx/2, self.grid_dx)) | set(np.arange(0,-self.cavity_bias_dx - self.grid_dx/2, -self.grid_dx)):
+            #             change_dx.add((x, y, z))
+            
+            # print("change_dx =", change_dx)
+
+            # for atom in self.atoms:
+            #     for dx in change_dx:
+            #         x = int((atom.x - self.startxyz[0] + dx[0]) / self.grid_dx) % self.grid_n[0]
+            #         y = int((atom.y - self.startxyz[1] + dx[1]) / self.grid_dx) % self.grid_n[1]
+            #         z = int((atom.z - self.startxyz[2] + dx[2]) / self.grid_dx) % self.grid_n[2]
+            #         grid.discard(x + y * self.grid_n[0] + z * self.grid_n[0] * self.grid_n[1])
+            for atom in self.atoms:
+                x = int((atom.x - self.startxyz[0]) / self.grid_dx) % self.grid_n[0]
+                y = int((atom.y - self.startxyz[1]) / self.grid_dx) % self.grid_n[1]
+                z = int((atom.z - self.startxyz[2]) / self.grid_dx) % self.grid_n[2]
+                grid.discard((x,y,z))
+            
+            
+
+            # grid_sum = np.sum(self.grid)
+            self.cavity_bias_factor = len(grid) / (self.grid_n[0] * self.grid_n[1] * self.grid_n[2])
+            print("The number of grid points =", len(grid))
+            print("cavity_bias_factor =", self.cavity_bias_factor)
+            if self.cavity_bias_factor < 0.05:
+                print("Error: cavity_bias_factor is too small, please decrease cavity_bias_dx")
+                sys.exit()
+        else:
+            print("Using cavity bias: False")
+
+            self.cavity_bias_factor = 1.0
+            self.grid_dx = 1.0
+
+            print("Grid dx =", self.grid_dx)
+            self.grid_n = [int((self.endxyz[0] - self.startxyz[0]) / self.grid_dx), int((self.endxyz[1] - self.startxyz[1]) / self.grid_dx), int((self.endxyz[2] - self.startxyz[2]) / self.grid_dx)]
+            print("grid_n =", self.grid_n)
+
+            grid = {(x,y,z) for x in range(self.grid_n[0]) for y in range(self.grid_n[1]) for z in range(self.grid_n[2])}
+            print("The number of grid points =", len(grid))
+            print("cavity_bias_factor =", self.cavity_bias_factor)
+            
+        self.grid = np.zeros(len(grid) * 3, dtype = np.float32)
+        for i, grid_point in enumerate(grid):
+            x, y, z = grid_point
+            self.grid[i*3] = x * self.grid_dx + self.startxyz[0]
+            self.grid[i*3+1] = y * self.grid_dx + self.startxyz[1]
+            self.grid[i*3+2] = z * self.grid_dx + self.startxyz[2]
+        
+        del grid
+        
+            # self.grid = np.zeros(self.grid_n[0] * self.grid_n[1] * self.grid_n[2], dtype = np.int32)
+            # print("The number of grid points =", len(self.grid))
+            # change_dx = [((i-1) * self.cavity_bias_dx,(j-1) * self.cavity_bias_dx, (k-1) * self.cavity_bias_dx) for i in range(3) for j in range(3) for k in range(3)]
+            # change_dx = set(change_dx)
+            # # print('change_dx =', change_dx)
+            # for atom in self.atoms:
+            #     for dx in change_dx:
+            #         x = int((atom.x - self.startxyz[0] + dx[0]) / self.grid_dx) % self.grid_n[0]
+            #         y = int((atom.y - self.startxyz[1] + dx[1]) / self.grid_dx) % self.grid_n[1]
+            #         z = int((atom.z - self.startxyz[2] + dx[2]) / self.grid_dx) % self.grid_n[2]
+
+            #         self.grid[x + y * self.grid_n[0] + z * self.grid_n[0] * self.grid_n[1]] += 1
+            # grid_sum = sum(bool(x) for x in self.grid)
+            # self.cavity_bias_factor = 1.0 - grid_sum / len(self.grid)
+            # print("The number of grid points with atoms =", grid_sum)
+            # print("The cavity bias factor =", self.cavity_bias_factor)
+            # if self.cavity_bias_factor < 0.1 and self.cavity_bias_factor > 0.0:
+            #     print("Error: The cavity bias factor is too small. Please decrease the cavity bias dx.")
+            #     sys.exit(1) 
+
+
+            
+        
     
     def get_pdb(self,pdb_file):
         self.pdb_file = pdb_file
@@ -99,17 +251,28 @@ class GCMC:
         print(f"pdb atom number: {len(self.atoms)}")   
 
         print(f"pdb cryst: {self.cryst}")
+
+        self.volume = self.cryst[0] * self.cryst[1] * self.cryst[2]
+
+        radius = self.cutoff / 2
+        volume = (4 / 3) * np.pi * (radius ** 3)
+
+        self.volume_n = int(self.volume / volume) + 1
+
+        print(f"Total volume: {self.volume}")
+        # print(f"Total volume: {self.volume}", end = '\t')
+        # print(f"Single volume: {volume}", end = '\t')
+        # print(f"volume_n: {self.volume_n}")
+
+        
         
 
-        x_values = [atom.x for atom in self.atoms]
-        y_values = [atom.y for atom in self.atoms]
-        z_values = [atom.z for atom in self.atoms]
 
-        
 
-        print("x direction: min =", min(x_values), "max =", max(x_values))
-        print("y direction: min =", min(y_values), "max =", max(y_values))
-        print("z direction: min =", min(z_values), "max =", max(z_values))
+
+
+
+
 
         
             
@@ -247,6 +410,9 @@ class GCMC:
         else:
             print("Error: fragconf number not match")
             sys.exit(1)
+        
+        if all(x == 1 for x in self.fragconf):
+            self.configurational_bias = False
 
     def get_mctime(self, mctime):
 
@@ -286,8 +452,11 @@ class GCMC:
         self.get_forcefield()
 
         self.get_move()
+        self.get_grid()
 
         self.show_parameters()
+
+        
         
         if self.pdb_file is None or self.top_file is None:
             print("Error: pdb or top file not set")
@@ -364,7 +533,7 @@ class GCMC:
 
         self.set_fixCut()
 
-        # self.update_data()
+        self.update_data()
 
         # for atom in self.fix_atoms:
         #     print(f"Fix atom: {atom.name} {atom.nameTop} {atom.type} {atom.typeNum} {atom.sequence} {atom.sequence2}")
@@ -456,6 +625,49 @@ class GCMC:
                 atom.sequence2 = n
             else:
                 atom.sequence2 = n
+
+    def update_data(self):
+        
+        self.fragmentInfo = np.empty(len(self.fragmentName), dtype=AtomArray_dtype)
+        for i, frag in enumerate(self.fragments):
+            self.fragmentInfo[i]['name'] = self.fragmentName[i]
+            
+            self.fragmentInfo[i]['muex'] = self.fragmuex[i]
+            self.fragmentInfo[i]['conc'] = self.fragconc[i]
+            self.fragmentInfo[i]['confBias'] = self.fragconf[i]
+            self.fragmentInfo[i]['mcTime'] = self.mctime[i]
+
+            self.fragmentInfo[i]['totalNum'] = len(self.fraglist[i])
+            self.fragmentInfo[i]['maxNum'] = len(self.fraglist[i]) + self.move_array_n[i*4] * 2 
+
+            print(f"Fragment {self.fragmentName[i]}: Total number: {self.fragmentInfo[i]['totalNum']}, Max number: {self.fragmentInfo[i]['maxNum']}")
+
+            self.fragmentInfo[i]['num_atoms'] = len(frag)
+
+            atom_center = np.zeros(3)
+            for atom in frag:
+                atom_center += np.array([atom.x, atom.y, atom.z])
+            atom_center /= len(frag)
+            # print(f"Fragment {self.fragmentName[i]}: Center of conf: {atom_center}", end='\t')
+            
+            for atom in frag:
+                atom.x -= atom_center[0]
+                atom.y -= atom_center[1]
+                atom.z -= atom_center[2]
+            atom_center = np.zeros(3)
+
+            for j, atom in enumerate(frag):
+                self.fragmentInfo[i]['atoms'][j]['position'][0] = atom.x
+                self.fragmentInfo[i]['atoms'][j]['position'][1] = atom.y
+                self.fragmentInfo[i]['atoms'][j]['position'][2] = atom.z
+                self.fragmentInfo[i]['atoms'][j]['charge'] = atom.charge
+                self.fragmentInfo[i]['atoms'][j]['type'] = atom.typeNum
+
+                atom_center += np.array([atom.x, atom.y, atom.z])
+            
+            atom_center /= len(frag)
+            # print(f"Fragment {self.fragmentName[i]}: The final center of conf: {atom_center}")
+        
         
 
 def main():
@@ -538,7 +750,15 @@ def main():
         type=str,
     )
 
-
+    parser.add_argument(
+        "-y",
+        "--cavitybias-dx",
+        dest="cavity_bias_dx",
+        required=False,
+        help="The value of cavity bias dx(if dx <= 0, then no cavity bias)",
+        metavar="cavity_bias_dx",
+        type=float,
+    )
 
 
     args = parser.parse_args()
@@ -581,6 +801,14 @@ def main():
         fragconc = fragconc.split(',')
         gcmc.get_fragconc(fragconc)
         print(f"Using fragment concentration: {fragconc}")
+    
+    if args.cavity_bias_dx is not None:
+        gcmc.grid_dx = args.cavity_bias_dx
+        if gcmc.grid_dx <= 0:
+            gcmc.cavity_bias = False
+            print(f"No cavity bias")
+        else:
+            print(f"Using cavity bias dx: {args.cavity_bias_dx}")
 
     gcmc.get_pdb(pdb_file)
 
