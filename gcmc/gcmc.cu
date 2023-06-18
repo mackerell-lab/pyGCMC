@@ -10,69 +10,146 @@
 
 #include <iostream>
 #include <cuda_runtime.h>
-#include <thrust/device_vector.h>
+#include <unistd.h>
+// #include <thrust/device_vector.h>
 
-extern "C" {
+struct Atom {
+    float position[3];
+    float charge;
+    int type;
+};
+
+struct AtomArray {
+    
+    char name[4];
+
+    int startRes;
+
+    float muex;
+    float conc;
+    float confBias;
+    float mcTime;
+    
+    int totalNum;
+    int maxNum;
+
+    int num_atoms;
+    Atom atoms[20];
+};
+
+struct InfoStruct{
+    int mcsteps;
+    float cutoff;
+    float grid_dx;
+    float startxyz[3];
+    float cryst[3];
+
+    float cavityFactor;
+    
+    int fragTypeNum;
+    
+    int totalGridNum;
+    int totalResNum;
+    int totalAtomNum;
+    
+    int ffXNum;
+    int ffYNum;
+};
+
+struct residue{
+    float position[3];
+    int atomNum;
+    int atomStart;
+};
 
 
-    __global__ void vector_add_kernel(const float *a, const float *b, float *c, int N) {
-        int i = blockIdx.x * blockDim.x + threadIdx.x;
-        if (i < N) {
-            c[i] = a[i] + b[i];
-        }
-    }
+extern "C"{
+    // void runGCMC_cuda(const InfoStruct *info, AtomArray *fragmentInfo, residue *residueInfo, Atom *atomInfo, const float *grid, const float *ff, const int *moveArray){}
+    void runGCMC_cuda(const InfoStruct *info, AtomArray *fragmentInfo, residue *residueInfo, Atom *atomInfo, const float *grid, const float *ff, const int *moveArray){
+        
+        InfoStruct *Ginfo;
+        AtomArray *GfragmentInfo;
+        residue *GresidueInfo; 
+        Atom *GatomInfo;
+        float *Ggrid;
+        float *Gff;
+        int *GmoveArray;
 
-    void vector_add_cuda(const float *a, const float *b, float *c, int N) {
-        float *d_a, *d_b, *d_c;
+        cudaMalloc(&Ginfo, sizeof(InfoStruct));
+        cudaMalloc(&GfragmentInfo, sizeof(AtomArray)*info->fragTypeNum);
+        cudaMalloc(&GresidueInfo, sizeof(residue)*info->totalResNum);
+        cudaMalloc(&GatomInfo, sizeof(Atom)*info->totalAtomNum);
+        cudaMalloc(&Ggrid, sizeof(float)*info->totalGridNum * 3);
+        cudaMalloc(&Gff, sizeof(float)*info->ffXNum*info->ffYNum *2);
+        cudaMalloc(&GmoveArray, sizeof(int)*info->mcsteps);
 
-        cudaMalloc(&d_a, N * sizeof(float));
-        cudaMalloc(&d_b, N * sizeof(float));
-        cudaMalloc(&d_c, N * sizeof(float));
+        sleep(60);
 
-        cudaMemcpy(d_a, a, N * sizeof(float), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_b, b, N * sizeof(float), cudaMemcpyHostToDevice);
+        cudaMemcpy(Ginfo, info, sizeof(InfoStruct), cudaMemcpyHostToDevice);
+        cudaMemcpy(GfragmentInfo, fragmentInfo, sizeof(AtomArray)*info->fragTypeNum, cudaMemcpyHostToDevice);
+        cudaMemcpy(GresidueInfo, residueInfo, sizeof(residue)*info->totalResNum, cudaMemcpyHostToDevice);
+        cudaMemcpy(GatomInfo, atomInfo, sizeof(Atom)*info->totalAtomNum, cudaMemcpyHostToDevice);
+        cudaMemcpy(Ggrid, grid, sizeof(float)*info->totalGridNum * 3, cudaMemcpyHostToDevice);
+        cudaMemcpy(Gff, ff, sizeof(float)*info->ffXNum*info->ffYNum *2, cudaMemcpyHostToDevice);
+        cudaMemcpy(GmoveArray, moveArray, sizeof(int)*info->mcsteps, cudaMemcpyHostToDevice);
 
-        int blockSize = 256;
-        int numBlocks = (N + blockSize - 1) / blockSize;
-        vector_add_kernel<<<numBlocks, blockSize>>>(d_a, d_b, d_c, N);
-
-        // Synchronize device
-        cudaDeviceSynchronize();
-
-        cudaMemcpy(c, d_c, N * sizeof(float), cudaMemcpyDeviceToHost);
-        cudaFree(d_a);
-        cudaFree(d_b);
-        cudaFree(d_c);
-    }
-
-    __global__ void vector_sub_kernel(const float *a, const float *b, float *c, int N) {
-        int i = blockIdx.x * blockDim.x + threadIdx.x;
-        if (i < N) {
-            c[i] = a[i] - b[i];
-        }
-    }
-
-    void vector_sub_cuda(const float *a, const float *b, float *c, int N) {
-        float *d_a, *d_b, *d_c;
-
-        cudaMalloc(&d_a, N * sizeof(float));
-        cudaMalloc(&d_b, N * sizeof(float));
-        cudaMalloc(&d_c, N * sizeof(float));
-
-        cudaMemcpy(d_a, a, N * sizeof(float), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_b, b, N * sizeof(float), cudaMemcpyHostToDevice);
-
-        int blockSize = 256;
-        int numBlocks = (N + blockSize - 1) / blockSize;
-        vector_sub_kernel<<<numBlocks, blockSize>>>(d_a, d_b, d_c, N);
-
-        // Synchronize device
-        cudaDeviceSynchronize();
-
-        cudaMemcpy(c, d_c, N * sizeof(float), cudaMemcpyDeviceToHost);
-        cudaFree(d_a);
-        cudaFree(d_b);
-        cudaFree(d_c);
+        
     }
 }
+
+// extern "C" {
+
+
+//     void runGCMC_cuda(const InfoStruct *info, AtomArray *fragmentInfo, residue *residueInfo, Atom *atomInfo, const float *grid, const float *ff, const int *moveArray){
+
+
+//         // InfoStruct *Ginfo;
+//         // AtomArray *GfragmentInfo;
+//         // residue *GresidueInfo; 
+//         // Atom *GatomInfo;
+//         // float *Ggrid;
+//         // float *Gff;
+//         // int *GmoveArray;
+
+
+//         // cudaMalloc(&Ginfo, sizeof(InfoStruct));
+
+//         // cudaMalloc((void**)&Ginfo, sizeof(InfoStruct));
+//         // cudaMalloc((void**)&GfragmentInfo, sizeof(AtomArray)*info->fragTypeNum);
+//         // cudaMalloc((void**)&GresidueInfo, sizeof(residue)*info->totalResNum);
+//         // cudaMalloc((void**)&GatomInfo, sizeof(Atom)*info->totalAtomNum);
+//         // cudaMalloc((void**)&Ggrid, sizeof(float)*info->totalGridNum * 3);
+//         // cudaMalloc((void**)&Gff, sizeof(float)*info->ffXNum*info->ffYNum *2);
+//         // cudaMalloc((void**)&GmoveArray, sizeof(int)*info->mcsteps);
+
+//         // cudaMemcpy(Ginfo, info, sizeof(InfoStruct), cudaMemcpyHostToDevice);
+//         // cudaMemcpy(GfragmentInfo, fragmentInfo, sizeof(AtomArray)*info->fragTypeNum, cudaMemcpyHostToDevice);
+//         // cudaMemcpy(GresidueInfo, residueInfo, sizeof(residue)*info->totalResNum, cudaMemcpyHostToDevice);
+//         // cudaMemcpy(GatomInfo, atomInfo, sizeof(Atom)*info->totalAtomNum, cudaMemcpyHostToDevice);
+//         // cudaMemcpy(Ggrid, grid, sizeof(float)*info->totalGridNum * 3, cudaMemcpyHostToDevice);
+//         // cudaMemcpy(Gff, ff, sizeof(float)*info->ffXNum*info->ffYNum *2, cudaMemcpyHostToDevice);
+//         // cudaMemcpy(GmoveArray, moveArray, sizeof(int)*info->mcsteps, cudaMemcpyHostToDevice);
+
+        
+//         // cudaDeviceSynchronize();
+
+//         // sleep(60);
+
+//         // cudaMemcpy(fragmentInfo, GfragmentInfo, sizeof(AtomArray)*info->fragTypeNum, cudaMemcpyDeviceToHost);
+//         // cudaMemcpy(residueInfo, GresidueInfo, sizeof(residue)*info->totalResNum, cudaMemcpyDeviceToHost);
+//         // cudaMemcpy(atomInfo, GatomInfo, sizeof(Atom)*info->totalAtomNum, cudaMemcpyDeviceToHost);
+
+//         // cudaFree(Ginfo);
+//         // cudaFree(GfragmentInfo);
+//         // cudaFree(GresidueInfo);
+//         // cudaFree(GatomInfo);
+//         // cudaFree(Ggrid);
+//         // cudaFree(Gff);
+//         // cudaFree(GmoveArray);
+
+//     }
+
+
+
+// }
 

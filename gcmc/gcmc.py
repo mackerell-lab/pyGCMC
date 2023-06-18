@@ -19,6 +19,9 @@ import os
 import argparse
 import random
 
+from .gpu import runGCMC
+
+
 # https://stackoverflow.com/questions/616645/how-do-i-duplicate-sys-stdout-to-a-log-file-in-python
 
 class Tee(object):
@@ -32,6 +35,7 @@ class Tee(object):
         for f in self.files:
             f.flush()
 
+MOLES_TO_MOLECULES = 0.0006023
 
 Atom_dtype = np.dtype([
     ('position', np.float32, (3, )),
@@ -41,6 +45,8 @@ Atom_dtype = np.dtype([
 
 AtomArray_dtype = np.dtype([
     ('name', 'S4'),
+
+    ('startRes', np.int32),
 
     ('muex', np.float32),
     ('conc', np.float32),
@@ -54,6 +60,27 @@ AtomArray_dtype = np.dtype([
     ('atoms', Atom_dtype, (20, ))
 ])
 
+Info_dtype = np.dtype([
+    ('mcsteps', np.int32),
+    ('cutoff', np.float32),
+    ('grid_dx', np.float32),
+    ('startxyz', np.float32, (3, )),
+    ('cryst', np.float32, (3, )),
+    ('showInfo', np.int32),
+    ('cavityFactor', np.float32),
+    ('fragTypeNum', np.int32),
+    ('totalGridNum', np.int32),
+    ('totalResNum', np.int32),
+    ('totalAtomNum', np.int32),
+    ('ffXNum', np.int32),
+    ('ffYNum', np.int32),
+])
+
+Residue_dtype = np.dtype([
+    ('position', np.float32, (3, )),
+    ('atomNum', np.int32),
+    ('atomStart', np.int32)
+])
 
 class GCMC:
     
@@ -70,7 +97,7 @@ class GCMC:
 
         self.fragconf = [1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000]
 
-        self.mctime = [1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000]
+        self.mctime = [1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 10.0]
 
         self.mcsteps = 10000
 
@@ -100,6 +127,8 @@ class GCMC:
         
         self.top_file = None
         self.pdb_file = None
+
+        self.showInfo = False
 
 
 
@@ -354,13 +383,22 @@ class GCMC:
                 sys.exit(1)
     
     def get_move(self):
-        self.move_array = random.choices(range(len(self.fragmentName)), weights=self.mctime, k=self.mcsteps)
+        self.move_array = np.array(random.choices(range(len(self.fragmentName)), weights=self.mctime, k=self.mcsteps),dtype=np.int32)
+        # self.move_array = np.random.choice(np.arange(len(self.fragmentName),dtype=np.int32), p=self.mctime, size=self.mcsteps)
+
 
         for i, n in enumerate(self.move_array):
             if self.fragmentName[n] == 'SOL':
                 self.move_array[i] = self.move_array[i] * 4 + random.choices(range(len(self.attempt_prob_water)), weights=self.attempt_prob_water, k=1)[0]
             else:
                 self.move_array[i] = self.move_array[i] * 4 + random.choices(range(len(self.attempt_prob_frag)), weights=self.attempt_prob_frag, k=1)[0]
+
+        # for i, n in enumerate(self.move_array):
+        #     if self.fragmentName[n] == 'SOL':
+        #         self.move_array[i] = self.move_array[i] * 4 + np.random.choice(range(len(self.attempt_prob_water)), p=self.attempt_prob_water, size=1)[0]
+        #     else:
+        #         self.move_array[i] = self.move_array[i] * 4 + np.random.choice(range(len(self.attempt_prob_frag)), p=self.attempt_prob_frag, size=1)[0]
+
 
         self.move_array_n = [0 for i in range(len(self.attempt_prob_frag) * len(self.fragmentName))]
         self.move_array_frag = [0 for i in range(len(self.fragmentName))]
@@ -370,9 +408,9 @@ class GCMC:
             self.move_array_frag[i//4] += 1
         
         for i in range(len(self.fragmentName)):
-            print(f"Fragment {self.fragmentName[i]}\t move {self.move_array_frag[i]} times", end='\t')
+            print(f"Fragment {self.fragmentName[i]}\t move {self.move_array_frag[i]}\ttimes", end='\t')
             for j in range(len(self.attempt_prob_frag)):
-                print(f"Movement {j} move {self.move_array_n[i*4+j]} times", end='\t')
+                print(f"Movement {j} move {self.move_array_n[i*4+j]}\ttimes", end='\t')
             print()
 
         # for i in range(len(self.attempt_prob_frag)):
@@ -438,7 +476,7 @@ class GCMC:
         print("Fragment Name: \t\t",'\t\t'.join(self.fragmentName))
         print("Fragment Muex: \t\t",'\t\t'.join([str(i) for i in self.fragmuex]))
         print("Fragment Conc: \t\t",'\t\t'.join([str(i) for i in self.fragconc]))
-        print("Fragment ConfBias: \t",'\t\t'.join([str(i) for i in self.fragconf]))
+        print("Fragment ConfB: \t",'\t\t'.join([str(i) for i in self.fragconf]))
         print("Fragment mcTime: \t",'\t\t'.join([str(i) for i in self.mctime]))
 
 
@@ -527,8 +565,8 @@ class GCMC:
         print(f"Total fixed atom number: {len(self.fix_atoms)}")
         print(f"Total relax atom number: {len(self.atoms) - len(self.fix_atoms)}")
         
-        for i, frag in enumerate(self.fragments):
-            print(f"Fragment {self.fragmentName[i]} number: {len(self.fraglist[i])}")
+        # for i, frag in enumerate(self.fragments):
+        #     print(f"Fragment {self.fragmentName[i]} number: {len(self.fraglist[i])}")
 
 
         self.set_fixCut()
@@ -627,6 +665,9 @@ class GCMC:
                 atom.sequence2 = n
 
     def update_data(self):
+
+
+        
         
         self.fragmentInfo = np.empty(len(self.fragmentName), dtype=AtomArray_dtype)
         for i, frag in enumerate(self.fragments):
@@ -638,7 +679,11 @@ class GCMC:
             self.fragmentInfo[i]['mcTime'] = self.mctime[i]
 
             self.fragmentInfo[i]['totalNum'] = len(self.fraglist[i])
-            self.fragmentInfo[i]['maxNum'] = len(self.fraglist[i]) + self.move_array_n[i*4] * 2 
+
+            maxNum1 = self.fragconc[i] * self.volume * MOLES_TO_MOLECULES + self.move_array_n[i*4]
+            maxNum2 = len(self.fraglist[i]) + self.move_array_n[i*4] 
+
+            self.fragmentInfo[i]['maxNum'] = max(maxNum1, maxNum2)
 
             print(f"Fragment {self.fragmentName[i]}: Total number: {self.fragmentInfo[i]['totalNum']}, Max number: {self.fragmentInfo[i]['maxNum']}")
 
@@ -654,7 +699,7 @@ class GCMC:
                 atom.x -= atom_center[0]
                 atom.y -= atom_center[1]
                 atom.z -= atom_center[2]
-            atom_center = np.zeros(3)
+            # atom_center = np.zeros(3)
 
             for j, atom in enumerate(frag):
                 self.fragmentInfo[i]['atoms'][j]['position'][0] = atom.x
@@ -663,12 +708,137 @@ class GCMC:
                 self.fragmentInfo[i]['atoms'][j]['charge'] = atom.charge
                 self.fragmentInfo[i]['atoms'][j]['type'] = atom.typeNum
 
-                atom_center += np.array([atom.x, atom.y, atom.z])
+                # atom_center += np.array([atom.x, atom.y, atom.z])
             
-            atom_center /= len(frag)
+        TotalResidueNum = self.fix_atoms[-1].sequence2 + 1 + sum([self.fragmentInfo[i]['maxNum'] for i in range(len(self.fragmentName))])
+        TotalAtomNum = len(self.fix_atoms) + sum([self.fragmentInfo[i]['maxNum'] * self.fragmentInfo[i]['num_atoms'] for i in range(len(self.fragmentName))]) 
+
+        self.residueInfo = np.empty(TotalResidueNum, dtype=Residue_dtype)
+        self.atomInfo = np.empty(TotalAtomNum, dtype=Atom_dtype)
+
+        n = -1
+        for i, atom in enumerate(self.fix_atoms):
+
+            sequence = atom.sequence2 
+            if sequence != n:
+                n = sequence
+                self.residueInfo[sequence]['atomNum'] = 0
+                self.residueInfo[sequence]['atomStart'] = i
+                self.residueInfo[sequence]['position'][0] = 0
+                self.residueInfo[sequence]['position'][1] = 0
+                self.residueInfo[sequence]['position'][2] = 0
+            
+            self.residueInfo[sequence]['atomNum'] += 1
+            self.residueInfo[sequence]['position'][0] += atom.x
+            self.residueInfo[sequence]['position'][1] += atom.y
+            self.residueInfo[sequence]['position'][2] += atom.z
+
+            self.atomInfo[i]['position'][0] = atom.x
+            self.atomInfo[i]['position'][1] = atom.y
+            self.atomInfo[i]['position'][2] = atom.z
+            self.atomInfo[i]['charge'] = atom.charge
+            self.atomInfo[i]['type'] = atom.typeNum
+
+        for i in range(sequence + 1):
+            self.residueInfo[i]['position'][0] /= self.residueInfo[i]['atomNum']
+            self.residueInfo[i]['position'][1] /= self.residueInfo[i]['atomNum']
+            self.residueInfo[i]['position'][2] /= self.residueInfo[i]['atomNum']
+        
+        for i, frag in enumerate(self.fragments):
+            self.fragmentInfo[i]['startRes'] = sequence + 1
+            for j in range(self.fragmentInfo[i]['maxNum']):
+                sequence += 1
+                self.residueInfo[sequence]['atomNum'] = self.fragmentInfo[i]['num_atoms']
+                self.residueInfo[sequence]['atomStart'] = self.residueInfo[sequence - 1]['atomStart'] + self.residueInfo[sequence - 1]['atomNum']
+                self.residueInfo[sequence]['position'][0] = 0
+                self.residueInfo[sequence]['position'][1] = 0
+                self.residueInfo[sequence]['position'][2] = 0
+                if j < self.fragmentInfo[i]['totalNum']:
+                    for k, atom in enumerate(self.fraglist[i][j]):
+                        self.residueInfo[sequence]['position'][0] += atom.x
+                        self.residueInfo[sequence]['position'][1] += atom.y
+                        self.residueInfo[sequence]['position'][2] += atom.z
+
+                        self.atomInfo[self.residueInfo[sequence]['atomStart'] + k]['position'][0] = atom.x
+                        self.atomInfo[self.residueInfo[sequence]['atomStart'] + k]['position'][1] = atom.y
+                        self.atomInfo[self.residueInfo[sequence]['atomStart'] + k]['position'][2] = atom.z
+                        self.atomInfo[self.residueInfo[sequence]['atomStart'] + k]['charge'] = atom.charge
+                        self.atomInfo[self.residueInfo[sequence]['atomStart'] + k]['type'] = atom.typeNum
+                    
+                    self.residueInfo[sequence]['position'][0] /= self.residueInfo[sequence]['atomNum']
+                    self.residueInfo[sequence]['position'][1] /= self.residueInfo[sequence]['atomNum']
+                    self.residueInfo[sequence]['position'][2] /= self.residueInfo[sequence]['atomNum']
+                
+
+                
+
+                # self.residueInfo[sequence]['position'][0] /= self.residueInfo[sequence]['atomNum']
+                # self.residueInfo[sequence]['position'][1] /= self.residueInfo[sequence]['atomNum']
+                # self.residueInfo[sequence]['position'][2] /= self.residueInfo[sequence]['atomNum']
+
+        
+        self.ff = np.empty(len(self.ff_pairs) * 2, dtype=np.float32)
+        for i, pair in enumerate(self.ff_pairs):
+            self.ff[i * 2] = pair[0]
+            self.ff[i * 2 + 1] = pair[1]
+        
+        
+        self.SimInfo = np.empty(1, dtype=Info_dtype)
+
+
+        self.SimInfo[0]['ffXNum'] = len(self.atomtypes1)
+        self.SimInfo[0]['ffYNum'] = len(self.atomtypes2)
+
+        self.SimInfo[0]['mcsteps'] = self.mcsteps
+        self.SimInfo[0]['cutoff'] = self.cutoff
+        self.SimInfo[0]['grid_dx'] = self.grid_dx
+        self.SimInfo[0]['startxyz'][0] = self.startxyz[0]
+        self.SimInfo[0]['startxyz'][1] = self.startxyz[1]
+        self.SimInfo[0]['startxyz'][2] = self.startxyz[2]
+        self.SimInfo[0]['cryst'][0] = self.cryst[0]
+        self.SimInfo[0]['cryst'][1] = self.cryst[1]
+        self.SimInfo[0]['cryst'][2] = self.cryst[2]
+
+        self.SimInfo[0]['cavityFactor'] = self.cavity_bias_factor
+
+        self.SimInfo[0]['fragTypeNum'] = len(self.fragmentName)
+
+        self.SimInfo[0]['totalGridNum'] = len(self.grid) // 3
+        self.SimInfo[0]['totalResNum'] = TotalResidueNum
+        self.SimInfo[0]['totalAtomNum'] = TotalAtomNum
+
+        self.SimInfo[0]['showInfo'] = self.showInfo
+
+        print('showInfo', self.SimInfo[0]['showInfo'])
+
+        # n = 0
+        # for frag in self.fragmentInfo:
+        #     for i in range(frag['num_atoms']):
+        #         for atom in self.fix_atoms:
+        #             n +=1
+        #             if n % 100 == 0:
+        #                 type1 = frag['atoms'][i]['type']
+        #                 type2 = atom.typeNum
+        #                 # print(type1,type2,self.atomtypes1[type1])
+        #                 print(type1, type2, self.atomtypes1[type1], self.atomtypes2[type2], self.ff[(type1 * self.SimInfo[0]['ffXNum'] + type2)* 2], self.ff[(type1 * self.SimInfo[0]['ffXNum'] + type2)* 2 + 1])
+                
+
+        # for i in self.atomtypes1:
+        #     print(i, end=' ')
+        # print()
+        # for i in self.atomtypes2:
+        #     print(i, end=' ')
+        # print()
+
+        
+
+
+            # atom_center /= len(frag)
             # print(f"Fragment {self.fragmentName[i]}: The final center of conf: {atom_center}")
         
-        
+    def run(self):
+        print('Start GCMC simulation...')
+        runGCMC(self.SimInfo, self.fragmentInfo, self.residueInfo, self.atomInfo, self.grid, self.ff, self.move_array)
 
 def main():
     # file_output = open('Analyze_output.txt', 'w')
@@ -760,6 +930,15 @@ def main():
         type=float,
     )
 
+    parser.add_argument(
+        "-s",
+        "--show-info",
+        dest="show_info",
+        required=False,
+        help="Show the information of fragments",
+        action='store_true',
+    )
+
 
     args = parser.parse_args()
     
@@ -809,6 +988,10 @@ def main():
             print(f"No cavity bias")
         else:
             print(f"Using cavity bias dx: {args.cavity_bias_dx}")
+    
+    if args.show_info:
+        gcmc.showInfo = True
+        print(f"Showing the information of fragments")
 
     gcmc.get_pdb(pdb_file)
 
@@ -823,6 +1006,10 @@ def main():
 
     
     gcmc.get_simulation()
+
+    gcmc.run()
+
+    
 
     
 

@@ -13,6 +13,29 @@ pip install .
 ## Usage
 Run the pyGCMC executable:
 ```
-gcmc [-h] -p file.pdb [-t file.top] [-o file.txt] [-m muex1,muex2,...] [-c conf1,conf2,...] [-n mcsteps]
-```
+usage: gcmc [-h] -p file.pdb [-t file.top] [-o file.txt] [-u muex1,muex2,...] [-f conf1,conf2,... or conf] [-n mcsteps] [-m mctime1,mctime2,...] [-c conc1,conc2,...] [-y cavity_bias_dx] [-s]
+
+options:
+  -h, --help            show this help message and exit
+  -p file.pdb, --pdb-file file.pdb
+                        The file .pdb for GCMC
+  -t file.top, --top-file file.top
+                        The file .top for GCMC
+  -o file.txt, --out-file file.txt
+                        The output file for GCMC
+  -u muex1,muex2,..., --fragmuex muex1,muex2,...
+                        The value of fragment muex(splice by , with no space)
+  -f conf1,conf2,... or conf, --fragconf conf1,conf2,... or conf
+                        The value of fragment conf(splice by , with no space). Or only one value for all fragments
+  -n mcsteps, --mcsteps mcsteps
+                        The number of MC steps
+  -m mctime1,mctime2,..., --mctime mctime1,mctime2,...
+                        The mctime of Fragments(splice by , with no space)
+  -c conc1,conc2,..., --fragconc conc1,conc2,...
+                        The value of fragment concentration(splice by , with no space)
+  -y cavity_bias_dx, --cavitybias-dx cavity_bias_dx
+                        The value of cavity bias dx(if dx <= 0, then no cavity bias)
+  -s, --show-info       Show the information of fragments
+
+  ```
 

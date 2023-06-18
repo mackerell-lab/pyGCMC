@@ -57,7 +57,7 @@ setup(
     install_requires=["numpy"],
     setup_requires=["numpy"],
     name="gcmc",
-    version="0.4.230617",
+    version="0.5.230618",
     packages=find_packages(),
     package_data=package_data,
     ext_modules=ext_modules,
