@@ -12,61 +12,7 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/arrayobject.h>
 
-#include <iostream>
-
-struct Atom {
-    float position[3];
-    float charge;
-    int type;
-};
-
-struct AtomArray {
-    
-    char name[4];
-
-    int startRes;
-
-    float muex;
-    float conc;
-    float confBias;
-    float mcTime;
-    
-    int totalNum;
-    int maxNum;
-
-    int num_atoms;
-    Atom atoms[20];
-};
-
-struct InfoStruct{
-    int mcsteps;
-    float cutoff;
-    float grid_dx;
-    float startxyz[3];
-    float cryst[3];
-
-    int showInfo;
-
-    float cavityFactor;
-    
-    int fragTypeNum;
-    
-    int totalGridNum;
-    int totalResNum;
-    int totalAtomNum;
-    
-    int ffXNum;
-    int ffYNum;
-};
-
-struct residue{
-    float position[3];
-    int atomNum;
-    int atomStart;
-};
-
-
-
+#include "gcmc.h"
 
 void print_atom(const Atom &atom) {
     std::cout << "  Position: (" << atom.position[0] << ", "
@@ -205,7 +151,7 @@ static PyObject *runGCMC(PyObject *self, PyObject *args) {
         print_all_info(info, fragmentInfo, residueInfo, atomInfo, grid, ff, moveArray);
 
     
-    // runGCMC_cuda(info, fragmentInfo, residueInfo, atomInfo, grid, ff, moveArray);
+    runGCMC_cuda(info, fragmentInfo, residueInfo, atomInfo, grid, ff, moveArray);
     // printf("Hello World!\n");
 
     Py_RETURN_NONE;

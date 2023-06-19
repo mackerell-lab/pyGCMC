@@ -13,7 +13,7 @@ pip install .
 ## Usage
 Run the pyGCMC executable:
 ```
-usage: gcmc [-h] -p file.pdb [-t file.top] [-o file.txt] [-u muex1,muex2,...] [-f conf1,conf2,... or conf] [-n mcsteps] [-m mctime1,mctime2,...] [-c conc1,conc2,...] [-y cavity_bias_dx] [-s]
+usage: gcmc [-h] -p file.pdb [-t file.top] [-s file.psf] [-o file.txt] [-u muex1,muex2,...] [-f conf1,conf2,... or conf] [-n mcsteps] [-m mctime1,mctime2,...] [-c conc1,conc2,...] [-y cavity_bias_dx] [-e seed] [-w]
 
 options:
   -h, --help            show this help message and exit
@@ -21,6 +21,8 @@ options:
                         The file .pdb for GCMC
   -t file.top, --top-file file.top
                         The file .top for GCMC
+  -s file.psf, --psf-file file.psf
+                        The file .psf for GCMC
   -o file.txt, --out-file file.txt
                         The output file for GCMC
   -u muex1,muex2,..., --fragmuex muex1,muex2,...
@@ -35,7 +37,8 @@ options:
                         The value of fragment concentration(splice by , with no space)
   -y cavity_bias_dx, --cavitybias-dx cavity_bias_dx
                         The value of cavity bias dx(if dx <= 0, then no cavity bias)
-  -s, --show-info       Show the information of fragments
+  -e seed, --seed seed  The seed of random number
+  -w, --show-info       Show the information of fragments
 
   ```
 

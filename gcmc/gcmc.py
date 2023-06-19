@@ -101,6 +101,7 @@ class GCMC:
 
         self.mcsteps = 10000
 
+        self.seed = None
 
         self.attempt_prob_frag = [0.300, 0.300, 0.200, 0.200]
         
@@ -336,7 +337,34 @@ class GCMC:
             atom.charge = self.atom_top[i][4]
             atom.nameTop = self.atom_top[i][3]
         
+    def get_psf(self,psf_file):
+        self.psf_file = psf_file
 
+        print(f"Using psf file: {psf_file}")
+
+        try:
+            self.atom_top = protein_data.read_psf(psf_file)
+        except:
+            print(f"Error reading psf file: {psf_file}")
+            sys.exit(1)
+
+        print(f"top atom number: {len(self.atom_top)}")
+
+        if len(self.atoms) != len(self.atom_top):
+            print(f"Error: pdb atom number {len(self.atoms)} != top atom number {len(self.atom_top)}")
+            sys.exit(1)
+    
+        for i, atom in enumerate(self.atoms):
+            # if atom.name != atom_top[i][3]:
+            #     print(f"Error: pdb atom {i+1} name {atom.name} != top atom name {atom_top[i][3]}")
+            #     sys.exit(1)
+            if atom.residue[:3] != self.atom_top[i][2][:3]:
+                print(f"Error: pdb atom {i+1} residue {atom.residue} != top atom residue {self.atom_top[i][2]}")
+                sys.exit(1)
+            atom.residue = self.atom_top[i][2]
+            atom.type = self.atom_top[i][0]
+            atom.charge = self.atom_top[i][4]
+            atom.nameTop = self.atom_top[i][3]
 
     def get_fragment(self):
         self.fragments = []
@@ -496,8 +524,12 @@ class GCMC:
 
         
         
-        if self.pdb_file is None or self.top_file is None:
-            print("Error: pdb or top file not set")
+        if self.pdb_file is None:
+            print("Error: pdb file not set")
+            sys.exit(1)
+
+        if self.top_file is None and self.psf_file is None:
+            print("Error: top file or psf file not set")
             sys.exit(1)
         
         self.atomtypes1 = []
@@ -671,7 +703,9 @@ class GCMC:
         
         self.fragmentInfo = np.empty(len(self.fragmentName), dtype=AtomArray_dtype)
         for i, frag in enumerate(self.fragments):
-            self.fragmentInfo[i]['name'] = self.fragmentName[i]
+            # self.fragmentInfo[i]['name'] = self.fragmentName[i]
+            self.fragmentInfo[i]['name'] = np.array(self.fragmentName[i].ljust(4)[:4], dtype='S4')
+
             
             self.fragmentInfo[i]['muex'] = self.fragmuex[i]
             self.fragmentInfo[i]['conc'] = self.fragconc[i]
@@ -866,6 +900,15 @@ def main():
         type=str,
     )
     parser.add_argument(
+        "-s",
+        "--psf-file",
+        dest="psf_file",
+        required=False,
+        help="The file .psf for GCMC",
+        metavar="file.psf",
+        type=str,
+    )
+    parser.add_argument(
         "-o",
         "--out-file",
         dest="out_file",
@@ -931,7 +974,18 @@ def main():
     )
 
     parser.add_argument(
-        "-s",
+        "-e",
+        "--seed",
+        dest="seed",
+        required=False,
+        help="The seed of random number",
+        metavar="seed",
+        type=int,
+    )
+
+
+    parser.add_argument(
+        "-w",
         "--show-info",
         dest="show_info",
         required=False,
@@ -947,6 +1001,8 @@ def main():
     pdb_file = args.pdb_file
     top_file = args.top_file
     out_file = args.out_file
+    psf_file = args.psf_file
+
     if out_file is not None:
         file_output = open(out_file, 'w')
         original_output = sys.stdout
@@ -988,6 +1044,11 @@ def main():
             print(f"No cavity bias")
         else:
             print(f"Using cavity bias dx: {args.cavity_bias_dx}")
+
+    if args.seed is not None:
+        gcmc.seed = args.seed
+        random.seed(gcmc.seed)
+        print(f"Using seed: {args.seed}")
     
     if args.show_info:
         gcmc.showInfo = True
@@ -1003,6 +1064,10 @@ def main():
 
     if top_file is not None:
         gcmc.get_top(top_file)
+    
+    if psf_file is not None:
+        gcmc.get_psf(psf_file)
+
 
     
     gcmc.get_simulation()

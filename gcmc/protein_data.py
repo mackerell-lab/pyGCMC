@@ -105,6 +105,55 @@ def read_itp(itp_file):
                     break
     return moleculetypes[-1][1:]
 
+def read_psf(psf_file):
+    '''Read a CHARMM .psf file and return a list of atoms'''
+
+    s = open(psf_file, 'r').read()
+
+    p = s.strip().split('\n')
+    p = p[1:] # skip the first line
+    p = [line.split('*', 1)[0] for line in p]
+    p = [line.split('!', 1)[0] for line in p]
+    p = [line.split('#', 1)[0] for line in p]
+
+    for i,line in enumerate(p):
+        try:
+            lineN = int(line)
+            linei = i
+            break
+        except:
+            pass
+
+    p = p[linei + lineN + 1:]
+
+
+    for i,line in enumerate(p):
+        try:
+            lineN = int(line)
+            linei = i
+            break
+        except:
+            pass
+
+    p = p[linei+ 1:]
+
+    atoms_top = []
+    n = 0
+    for line in p:
+        line = line.strip()
+        pattern = r"^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)"
+
+        match = re.match(pattern, line)
+        if match:
+            n += 1
+            if n > lineN:
+                break
+            atoms_top.append([match.group(6),match.group(3),match.group(4),match.group(5),match.group(7)])
+    
+    return atoms_top
+            # atoms_top.append([match.group(2),match.group(3),match.group(4),match.group(5),match.group(7)])
+
+
 
 def read_top(top_file):
     '''Read a Gromacs .top file and return a list of atoms'''
