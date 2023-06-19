@@ -40,7 +40,8 @@ class CustomBuildExt(build_ext):
             ext.extra_compile_args = _gcc_compile_args
             ext.extra_objects = [obj_file]  # Link the CUDA object file
             ext.include_dirs.append(cuda_include_path)  # Add CUDA include path
-            ext.include_dirs.append(np.get_include()) 
+            ext.include_dirs.append(np.get_include())
+            # ext.include_dirs.append(os.path.join(os.path.dirname(__file__), 'gcmc')) 
             ext.library_dirs.append(cuda_lib_path)  # Add CUDA library path
             ext.libraries.append("cudart")  # Add the CUDA runtime library
         super().build_extensions()
@@ -57,7 +58,7 @@ setup(
     install_requires=["numpy"],
     setup_requires=["numpy"],
     name="gcmc",
-    version="0.5.230618",
+    version="0.5.230619",
     packages=find_packages(),
     package_data=package_data,
     ext_modules=ext_modules,
