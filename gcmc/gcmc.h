@@ -1,5 +1,16 @@
 
 #include <iostream>
+#include <cuda_runtime.h>
+#include <curand_kernel.h>
+
+
+
+#ifndef GCMC_H_
+#define GCMC_H_
+
+
+#define numThreadsPerBlock 128
+#define PI 3.1415926535897932384626433832795028841971693993751058209749445923078164062
 
 struct Atom {
     float position[3];
@@ -15,7 +26,7 @@ struct AtomArray {
 
     float muex;
     float conc;
-    float confBias;
+    int confBias;
     float mcTime;
     
     int totalNum;
@@ -44,6 +55,8 @@ struct InfoStruct{
     
     int ffXNum;
     int ffYNum;
+
+    uint seed;
 };
 
 struct residue{
@@ -52,3 +65,4 @@ struct residue{
     int atomStart;
 };
 
+#endif

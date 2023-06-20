@@ -19,6 +19,8 @@ import os
 import argparse
 import random
 
+import time
+
 from .gpu import runGCMC
 
 
@@ -50,7 +52,7 @@ AtomArray_dtype = np.dtype([
 
     ('muex', np.float32),
     ('conc', np.float32),
-    ('confBias', np.float32),
+    ('confBias', np.int32),
     ('mcTime', np.float32),
 
     ('totalNum', np.int32),
@@ -74,6 +76,7 @@ Info_dtype = np.dtype([
     ('totalAtomNum', np.int32),
     ('ffXNum', np.int32),
     ('ffYNum', np.int32),
+    ('seed', np.uint32)
 ])
 
 Residue_dtype = np.dtype([
@@ -468,6 +471,12 @@ class GCMC:
     def get_fragconf(self, fragconf):
 
         fragconf = [int(i) for i in fragconf if len(i) > 0]
+
+        for i in fragconf:
+            if i <= 0:
+                print("Error: fragconf number <= 0")
+                sys.exit(1)
+
         if len(fragconf) == 1:
             fragconf = fragconf * len(self.fragmentName)
             self.fragconf = fragconf
@@ -843,7 +852,10 @@ class GCMC:
 
         self.SimInfo[0]['showInfo'] = self.showInfo
 
-        print('showInfo', self.SimInfo[0]['showInfo'])
+        self.SimInfo[0]['seed'] = random.randint(0, (2**32)-1)
+
+        # 
+        # print('showInfo', self.SimInfo[0]['showInfo'])
 
         # n = 0
         # for frag in self.fragmentInfo:
@@ -871,13 +883,23 @@ class GCMC:
             # print(f"Fragment {self.fragmentName[i]}: The final center of conf: {atom_center}")
         
     def run(self):
-        print('Start GCMC simulation...')
+        self.starttime = time.time()
+        print('Start GPU simulation...')
+
         runGCMC(self.SimInfo, self.fragmentInfo, self.residueInfo, self.atomInfo, self.grid, self.ff, self.move_array)
+
+        self.endtime = time.time()
+        print('End GPU simulation...')
+        print('GPU simulation time: %s s' % (self.endtime - self.starttime))
 
 def main():
     # file_output = open('Analyze_output.txt', 'w')
     # original_output = sys.stdout
     # sys.stdout = Tee(sys.stdout, file_output)
+
+    starttime = time.time()
+    print('Start GCMC simulation at %s...' % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
+    
 
     parser = argparse.ArgumentParser(description="pyGCMC - A python package for GCMC simulation")
 
@@ -1058,7 +1080,7 @@ def main():
 
         
     
-
+    
 
 
 
@@ -1072,11 +1094,17 @@ def main():
     
     gcmc.get_simulation()
 
+
+    endtime = time.time()
+    print(f"Python time used: {endtime - starttime} s")
+
     gcmc.run()
 
     
+    print('GCMC simulation finished at %s...' % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
 
-    
+    endtime = time.time()
+    print(f"Time used: {endtime - starttime} s")
 
 
     # if top_file is not None:

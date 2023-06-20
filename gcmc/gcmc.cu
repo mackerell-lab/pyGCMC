@@ -8,10 +8,10 @@
 */
 
 
-#include <cuda_runtime.h>
 // #include <unistd.h>
 // #include <thrust/device_vector.h>
 #include "gcmc.h"
+#include "gcmc_move.h"
 
 // #include <cstdio>
 // #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
@@ -24,7 +24,14 @@
 //    }
 // }
 
+
+
 extern "C"{
+
+    __global__ void setup_rng_states(curandState *states, unsigned long long seed) {
+        int global_threadIdx  = blockIdx.x * blockDim.x + threadIdx.x;
+        curand_init(seed, global_threadIdx, 0, &states[global_threadIdx]);
+    }
     // void runGCMC_cuda(const InfoStruct *info, AtomArray *fragmentInfo, residue *residueInfo, Atom *atomInfo, const float *grid, const float *ff, const int *moveArray){}
     void runGCMC_cuda(const InfoStruct *info, AtomArray *fragmentInfo, residue *residueInfo, Atom *atomInfo, const float *grid, const float *ff, const int *moveArray){
         
@@ -63,32 +70,80 @@ extern "C"{
         // cudaMemcpy(GmoveArray, moveArray, sizeof(int)*info->mcsteps, cudaMemcpyHostToDevice);
         // printf("cudaMemcpy GmoveArray done\n");
 
+
+        // cudaDeviceProp deviceProp;
+        // int device;
+        // cudaGetDevice(&device);
+        // cudaGetDeviceProperties(&deviceProp, device);
+        
+        // int numberOfSMs = deviceProp.multiProcessorCount;
+        
+        // std::cout << "Number of SMs: " << numberOfSMs << std::endl;
+
+        int maxConf = 0;
+        for (int fragType = 0; fragType < info->fragTypeNum; fragType ++ ){
+
+            if (fragmentInfo[fragType].confBias > maxConf){
+                maxConf = fragmentInfo[fragType].confBias;
+            }
+
+        }
+
+        AtomArray *GTempFrag;
+        cudaMalloc(&GTempFrag, sizeof(AtomArray)*maxConf);
+
+
+        Atom *GTempInfo;
+        cudaMalloc(&GTempInfo, sizeof(Atom)*maxConf);
+
+        Atom *TempInfo;
+        TempInfo = (Atom *)malloc(sizeof(Atom)*maxConf);
+
+        for (int i = 0;i < maxConf; i++){
+            TempInfo[i].type = 0;
+        }
+
+        cudaMemcpy(GTempInfo, TempInfo, sizeof(Atom)*maxConf, cudaMemcpyHostToDevice);
+
+
+        curandState *d_rng_states;
+        
+        cudaMalloc((void **)&d_rng_states, maxConf * sizeof(curandState) * numThreadsPerBlock);
+
+
+
+        setup_rng_states<<<maxConf, numThreadsPerBlock>>>(d_rng_states, info->seed);
+        // printf("setup_rng_states done %d\n",info->seed);
+
+
+        // std::cout << "maxConf: " << maxConf << std::endl;
+
         for (int stepi = 0 ; stepi < info->mcsteps; ++stepi){
             // Start MC steps
             int moveFragType = moveArray[stepi] / 4;
             int moveMoveType = moveArray[stepi] % 4;
             int confBias = fragmentInfo[moveFragType].confBias;
 
-            // // perform move
-            // bool accepted = false;
-            // switch (moveMoveType)
-            // {
-            // case 0: // Insert
-            //     accepted = move_add(Ginfo, GfragmentInfo, GresidueInfo, GatomInfo, Ggrid, Gff, moveFragType, confBias);
-            //     break;
+            // perform move
+            bool accepted = false;
+            switch (moveMoveType)
+            {
+            case 0: // Insert
+                accepted = move_add(Ginfo,fragmentInfo, GfragmentInfo, GresidueInfo, GatomInfo, Ggrid, Gff, moveFragType, GTempFrag, TempInfo, GTempInfo, d_rng_states);
+                break;
 
-            // case 1: // Del
-            //     accepted = move_del(frag_index);
-            //     break;
+            case 1: // Del
+                // accepted = move_del(frag_index);
+                break;
 
-            // case 2: // Trn
-            //     accepted = move_trans(frag_index);
-            //     break;
+            case 2: // Trn
+                // accepted = move_trans(frag_index);
+                break;
 
-            // case 3: // Rot
-            //     accepted = move_rotate(frag_index);
-            //     break;
-            // }
+            case 3: // Rot
+                // accepted = move_rotate(frag_index);
+                break;
+            }
 
 
 
@@ -113,6 +168,13 @@ extern "C"{
         cudaFree(GatomInfo);
         cudaFree(Ggrid);
         cudaFree(Gff);
+        cudaFree(GTempFrag);
+        cudaFree(GTempInfo);
+        cudaFree(d_rng_states);
+
+        free(TempInfo);
+
+
         // cudaFree(GmoveArray);
         
     }
