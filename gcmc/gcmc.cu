@@ -113,7 +113,7 @@ extern "C"{
 
 
         setup_rng_states<<<maxConf, numThreadsPerBlock>>>(d_rng_states, info->seed);
-        // printf("setup_rng_states done %d\n",info->seed);
+        // printf("setup_rng_states done %u\n",info->seed);
 
 
         // std::cout << "maxConf: " << maxConf << std::endl;

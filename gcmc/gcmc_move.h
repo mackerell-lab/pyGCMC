@@ -175,6 +175,47 @@ extern "C"{
             return sqrtf(dx * dx + dy * dy + dz * dz);
         }
 
+        
+        //If NBFIX entry exists for the pair, then this calculation
+        //!V(Lennard-Jones) = 4*Eps,i,j[(sigma,i,j/ri,j)**12 - (sigma,i,j/ri,j)**6]
+        // sigma and Eps are the nbfix entries
+        // units from force field: sigma (nm), epsilon (kJ)
+
+        __device__ inline float calc_vdw_nbfix (float sigma, float epsilon, float dist_sqrd)
+        {
+            // convert sigma from nm to Angstroms to match dist
+            // sigma *= 10;
+
+            float sigma_sqrd = sigma * sigma * 100;
+            float sigma_dist_sqrd = sigma_sqrd / dist_sqrd;
+            float E_vdw = 4*epsilon * ( pow(sigma_dist_sqrd, 6) - pow(sigma_dist_sqrd, 3) );
+
+            //cout << "(calc_vdw_nbfix) epsilon: " << epsilon << " sigma_sqrd: " << sigma_sqrd << " dist_sqrd: " << dist_sqrd << " E_vdw: " << E_vdw << endl;
+
+            return E_vdw;
+        }
+
+        
+        // E_elec = (1/4*pi*eps_0)*(q1*q2/d)
+        // units from force field: charge (e)
+        // units from this program: distance (A)
+        // eps_0 = 8.85e-12 (C^2/J*m)
+        // kel = 1/(4*pi*eps_0)
+        //     = 8.99e9 (J*m/C^2)
+        //     = 1389.3 (kJ/mol * A/e^2)
+        //     = 332.05 (kcal/mol * A/e^2)
+        // from http://users.mccammon.ucsd.edu/~blu/Research-Handbook/physical-constant.html
+        __device__ inline float calc_elec (float charge1, float charge2, float dist)
+        {
+            // float kel = 331.843 * KCAL_TO_KJ; //1389.3;  what's 331.843?
+
+            // float E_elec = kel * (charge1 * charge2) / dist / eps;
+            float E_elec = 1389.3 * (charge1 * charge2) / dist;
+
+            return E_elec;
+        }
+
+
         __device__ inline void calcProtEnergy(const InfoStruct SharedInfo, AtomArray &SharedFragmentInfo , AtomArray *GfragmentInfo,
                                     residue *GresidueInfo, Atom *GatomInfo, const float *Gff, Atom *GTempInfo, float *sh_energy){
             
@@ -186,31 +227,92 @@ extern "C"{
             
             __syncthreads();
 
-            for (int resi = tid;resi < maxResidueNum; resi+= blockDim.x){
+            for (int resi = tid;resi < maxResidueNum; resi+= numThreadsPerBlock){
 
                 // if (distanceP(GTempInfo->position, GresidueInfo[resi].position, SharedInfo.cryst) > SharedInfo.cutoff) {
                 if (distanceP(GTempInfo->position, GresidueInfo[resi].position, SharedInfo.cryst) > SharedInfo.cutoff) {
                     continue;
                 }
 
-                // int resiStart = GresidueInfo[resi].atomStart;
-                // int resiEnd = GresidueInfo[resi].atomStart + GresidueInfo[resi].atomNum;
-                // float resiEnergy = 0;
-                // for (int atomi = resiStart; atomi < resiEnd; atomi++){
-                //     int atomType = GatomInfo[atomi].type;
-                //     float atomCharge = GatomInfo[atomi].charge;
-                //     float atomEnergy = 0;
-                //     for (int atomj = 0; atomj < SharedFragmentInfo.num_atoms; atomj++){
-                //         float distance = sqrt((GatomInfo[atomi].position[0] - SharedFragmentInfo.atoms[atomj].position[0]) * (GatomInfo[atomi].position[0] - SharedFragmentInfo.atoms[atomj].position[0]) +
-                //                             (GatomInfo[atomi].position[1] - SharedFragmentInfo.atoms[atomj].position[1]) * (GatomInfo[atomi].position[1] - SharedFragmentInfo.atoms[atomj].position[1]) +
-                //                             (GatomInfo[atomi].position[2] - SharedFragmentInfo.atoms[atomj].position[2]) * (GatomInfo[atomi].position[2] - SharedFragmentInfo.atoms[atomj].position[2]));
-                //         float energy = Gff[atomType * SharedInfo.atomTypeNum + SharedFragmentInfo.atoms[atomj].type] * atomCharge * SharedFragmentInfo.atoms[atomj].charge / distance;
-                //         atomEnergy += energy;
-                //     }
-                //     resiEnergy += atomEnergy;
-                // }
-                // sh_energy[tid] += resiEnergy;
+                int resiStart = GresidueInfo[resi].atomStart;
+                int resiEnd = GresidueInfo[resi].atomStart + GresidueInfo[resi].atomNum;
+                float resiEnergy = 0;
+                for (int atomi = resiStart; atomi < resiEnd; atomi++){
+                    // int atomType = GatomInfo[atomi].type;
+                    // float atomCharge = GatomInfo[atomi].charge;
+                    // float atomEnergy = 0;
+                    for (int atomj = 0; atomj < SharedFragmentInfo.num_atoms; atomj++){
+
+                        float distance = distanceP(GatomInfo[atomi].position, SharedFragmentInfo.atoms[atomj].position, SharedInfo.cryst);
+                        int typeij = SharedFragmentInfo.atoms[atomj].type * SharedInfo.ffYNum + GatomInfo[atomi].type;
+                        // float sigma = Gff[typeij * 2];
+                        // float epsilon = Gff[typeij * 2 + 1];
+                        resiEnergy += calc_vdw_nbfix(Gff[typeij * 2], Gff[typeij * 2 + 1], distance * distance);
+                        resiEnergy += calc_elec(SharedFragmentInfo.atoms[atomj].charge, GatomInfo[atomi].charge, distance);
+                        // float sigma = Gff[typeij * 2];
+                        // float energy = Gff[atomType * SharedInfo.atomTypeNum + SharedFragmentInfo.atoms[atomj].type] * atomCharge * SharedFragmentInfo.atoms[atomj].charge / distance;
+                        // resiEnergy += energy;
+                    }
+                    // resiEnergy += atomEnergy;
+                }
+                sh_energy[tid] += resiEnergy;
             }
+
+
+        }
+
+
+        __device__ inline void calcFragEnergy(const InfoStruct SharedInfo, AtomArray &SharedFragmentInfo , AtomArray *GfragmentInfo,
+                                    residue *GresidueInfo, Atom *GatomInfo, const float *Gff, Atom *GTempInfo, float *sh_energy){
+            
+            int tid = threadIdx.x;
+            __shared__ int startResidueNum;
+            __shared__ int endResidueNum;
+
+
+            for (int fragType = 0; fragType < SharedInfo.fragTypeNum; fragType++){
+
+                if (tid == 0){
+                    startResidueNum = GfragmentInfo[fragType].startRes;
+                    endResidueNum = GfragmentInfo[fragType].startRes + GfragmentInfo[fragType].totalNum;
+                }
+
+                __syncthreads();
+
+                for (int resi = tid + startResidueNum;resi < endResidueNum; resi+= numThreadsPerBlock){
+
+                    // if (distanceP(GTempInfo->position, GresidueInfo[resi].position, SharedInfo.cryst) > SharedInfo.cutoff) {
+                    if (distanceP(GTempInfo->position, GresidueInfo[resi].position, SharedInfo.cryst) > SharedInfo.cutoff) {
+                        continue;
+                    }
+
+                    int resiStart = GresidueInfo[resi].atomStart;
+                    int resiEnd = GresidueInfo[resi].atomStart + GresidueInfo[resi].atomNum;
+                    float resiEnergy = 0;
+                    for (int atomi = resiStart; atomi < resiEnd; atomi++){
+                        // int atomType = GatomInfo[atomi].type;
+                        // float atomCharge = GatomInfo[atomi].charge;
+                        // float atomEnergy = 0;
+                        for (int atomj = 0; atomj < SharedFragmentInfo.num_atoms; atomj++){
+
+                            float distance = distanceP(GatomInfo[atomi].position, SharedFragmentInfo.atoms[atomj].position, SharedInfo.cryst);
+                            int typeij = SharedFragmentInfo.atoms[atomj].type * SharedInfo.ffYNum + GatomInfo[atomi].type;
+                            // float sigma = Gff[typeij * 2];
+                            // float epsilon = Gff[typeij * 2 + 1];
+                            resiEnergy += calc_vdw_nbfix(Gff[typeij * 2], Gff[typeij * 2 + 1], distance * distance);
+                            resiEnergy += calc_elec(SharedFragmentInfo.atoms[atomj].charge, GatomInfo[atomi].charge, distance);
+                            // float sigma = Gff[typeij * 2];
+                            // float energy = Gff[atomType * SharedInfo.atomTypeNum + SharedFragmentInfo.atoms[atomj].type] * atomCharge * SharedFragmentInfo.atoms[atomj].charge / distance;
+                            // resiEnergy += energy;
+                        }
+                        // resiEnergy += atomEnergy;
+                    }
+                    sh_energy[tid] += resiEnergy;
+                }
+                
+                __syncthreads();
+            }
+            
 
 
         }
@@ -219,11 +321,36 @@ extern "C"{
         __device__ void calcEnergy(const InfoStruct SharedInfo, AtomArray &SharedFragmentInfo , AtomArray *GfragmentInfo,
                                     residue *GresidueInfo, Atom *GatomInfo, const float *Gff, Atom *GTempInfo){
 
-            __shared__ float sh_energy[128];
+            __shared__ float sh_energy[numThreadsPerBlock];
+
+            int tid = threadIdx.x;
+
+            sh_energy[tid] = 0;
+
+            __syncthreads();
 
             calcProtEnergy(SharedInfo, SharedFragmentInfo, GfragmentInfo, GresidueInfo, GatomInfo, Gff, GTempInfo, sh_energy);
             
+            __syncthreads();
 
+            calcFragEnergy(SharedInfo, SharedFragmentInfo, GfragmentInfo, GresidueInfo, GatomInfo, Gff, GTempInfo, sh_energy);
+
+            __syncthreads();
+
+            for (int s = numThreadsPerBlock / 2; s > 0; s >>= 1) {
+                if (tid < s) {
+                    sh_energy[tid] += sh_energy[tid + s];
+                }
+                __syncthreads();
+            }
+
+            if (tid == 0){
+
+                GTempInfo->charge = sh_energy[0];
+                // if (blockIdx.x == 0){
+                //     printf("energy: %f\n", sh_energy[0]);
+                // }
+            }
 
         }
 
@@ -234,7 +361,7 @@ extern "C"{
             __shared__ InfoStruct SharedInfo;
             __shared__ AtomArray SharedFragmentInfo;
 
-            int threadId = blockDim.x * blockIdx.x + threadIdx.x;
+            int threadId = numThreadsPerBlock * blockIdx.x + threadIdx.x;
             curandState *rng_states = &d_rng_states[threadId];
 
 
@@ -242,6 +369,9 @@ extern "C"{
 
             if (threadIdx.x == 0) {
                 SharedInfo = Ginfo[0];
+            }
+            
+            if (threadIdx.x == 1) {
                 SharedFragmentInfo = GfragmentInfo[moveFragType];
             }
 
@@ -251,9 +381,14 @@ extern "C"{
 
             __syncthreads();
 
-            calcEnergy(SharedInfo, SharedFragmentInfo, GfragmentInfo, GresidueInfo, GatomInfo, Gff, &GTempInfo[blockIdx.x]);
+            if (SharedInfo.PME == 0)
+                calcEnergy(SharedInfo, SharedFragmentInfo, GfragmentInfo, GresidueInfo, GatomInfo, Gff, &GTempInfo[blockIdx.x]);
+            // else
+            //     calcEnergyPME(SharedInfo, SharedFragmentInfo, GfragmentInfo, GresidueInfo, GatomInfo, Gff, &GTempInfo[blockIdx.x]);
 
-            __syncthreads();
+            // __syncthreads();
+
+            // confBiasAdd(SharedInfo, SharedFragmentInfo, GfragmentInfo, GresidueInfo, GatomInfo, GTempInfo, GTempFrag, rng_states);
 
             // if (threadIdx.x == 0 && blockIdx.x == 0)
 
@@ -267,6 +402,16 @@ extern "C"{
 
         }
 
+        // __global__ void Gmove_add_check(const InfoStruct *Ginfo, AtomArray *GfragmentInfo, residue *GresidueInfo, 
+        //                 Atom *GatomInfo, const int moveFragType,
+        //                 AtomArray *GTempFrag, Atom *GTempInfo, curandState *d_rng_states) {
+                    
+
+        //     int tid = threadIdx.x;
+        //     for (int i = tid ;i < 100;i+= numThreadsPerBlock)
+
+        // }
+
 
         bool move_add(const InfoStruct *Ginfo, AtomArray *fragmentInfo, AtomArray *GfragmentInfo, residue *GresidueInfo, Atom *GatomInfo, const float *Ggrid, const float *Gff,
                     const int moveFragType, AtomArray *GTempFrag, Atom *TempInfo, Atom *GTempInfo, curandState *d_rng_states){
@@ -277,6 +422,8 @@ extern "C"{
             // printf("The size of a AtomArray is %d\n", sizeof(AtomArray));
 
             Gmove_add<<<nBlock, numThreadsPerBlock>>>(Ginfo, GfragmentInfo, GresidueInfo, GatomInfo, Ggrid, Gff, moveFragType, GTempFrag, GTempInfo, d_rng_states);
+
+            // Gmove_add_check<<<1, numThreadsPerBlock>>>(Ginfo, GfragmentInfo, GresidueInfo, GatomInfo, moveFragType, GTempFrag, GTempInfo, d_rng_states);
 
             // computeEnergy<<<nBlock, numThreadsPerBlock>>>(Ginfo, GfragmentInfo, GresidueInfo, GatomInfo, Ggrid, Gff, moveFragType);
 

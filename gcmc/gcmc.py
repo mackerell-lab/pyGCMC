@@ -76,6 +76,7 @@ Info_dtype = np.dtype([
     ('totalAtomNum', np.int32),
     ('ffXNum', np.int32),
     ('ffYNum', np.int32),
+    ('PME', np.int32),
     ('seed', np.uint32)
 ])
 
@@ -133,6 +134,8 @@ class GCMC:
         self.pdb_file = None
 
         self.showInfo = False
+
+        self.PME = False
 
 
 
@@ -852,6 +855,8 @@ class GCMC:
 
         self.SimInfo[0]['showInfo'] = self.showInfo
 
+        self.SimInfo[0]['PME'] = self.PME
+
         self.SimInfo[0]['seed'] = random.randint(0, (2**32)-1)
 
         # 
@@ -944,7 +949,7 @@ def main():
         "--fragmuex",
         dest="fragmuex",
         required=False,
-        help="The value of fragment muex(splice by , with no space)",
+        help="The value of fragment muex(splice by , with no space), if the first value is negative, then follow the -u or --fragmuex without space",
         metavar="muex1,muex2,...",
         type=str,
     ) 
@@ -1003,6 +1008,15 @@ def main():
         help="The seed of random number",
         metavar="seed",
         type=int,
+    )
+
+    parser.add_argument(
+        "-P",
+        "--PME",
+        dest="PME",
+        required=False,
+        help="Enable PME(Default: Disable)",
+        action='store_true',
     )
 
 
@@ -1071,6 +1085,10 @@ def main():
         gcmc.seed = args.seed
         random.seed(gcmc.seed)
         print(f"Using seed: {args.seed}")
+
+    if args.PME:
+        gcmc.PME = True
+        print(f"Using PME")
     
     if args.show_info:
         gcmc.showInfo = True

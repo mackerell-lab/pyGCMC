@@ -12,6 +12,10 @@
 #define numThreadsPerBlock 128
 #define PI 3.1415926535897932384626433832795028841971693993751058209749445923078164062
 
+// #define KCAL_TO_KJ 4.184
+
+// #define kelEps 
+
 struct Atom {
     float position[3];
     float charge;
@@ -55,6 +59,8 @@ struct InfoStruct{
     
     int ffXNum;
     int ffYNum;
+
+    int PME;
 
     uint seed;
 };
