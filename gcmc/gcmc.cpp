@@ -104,6 +104,7 @@ void print_move_array(const int *moveArray, int mcsteps, const AtomArray *fragme
 
         std::cout << "FragType: " ;
 
+        // std::cout << fragType << '\t';
         std::string nameStr(fragmentInfo[fragType].name, 4);
         std::cout << nameStr.substr(0, 4) << '\t';
 

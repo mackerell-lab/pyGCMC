@@ -4,7 +4,11 @@
 cd ..
 pip install .
 cd test
-gcmc -p 6v3g_silcs.1.pdb -t 6v3g_silcs.1.top -o output.txt
+#for ((i=0;i<100;i++))
+#do
+#echo "seed = $i" &>> tmp~
+gcmc -p 6v3g_silcs.1.pdb -t 6v3g_silcs.1.top -o output.txt 
+#done
 
 rm charmm36.ff output.txt 
 rm -rf ../gcmc.egg-info ../build ../gcmc/*.o ../.eggs ../.vscode

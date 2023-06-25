@@ -12,6 +12,8 @@
 // #include <thrust/device_vector.h>
 #include "gcmc.h"
 
+
+
 extern "C"{
 
         // Device kernel function
@@ -135,6 +137,35 @@ extern "C"{
             if (tid < 3){
                 randomR[tid] += Ggrid[gridN * 3 + tid];
             }
+
+            __syncthreads();
+
+            // if ( threadIdx.x == 0 && blockIdx.x == 636){
+
+            //     printf("Before before 4 rotation:\n");
+            //     // printf("randomR: %8.3f%8.3f%8.3f\n", randomR[0], randomR[1], randomR[2]);
+            //     // printf("randomThi: %8.3f%8.3f%8.3f\n", randomThi[0], randomThi[1], randomThi[2]);
+            //     // printf("randomPhi: %8.3f\n", randomPhi);
+            //     // printf("gridN: %d\n", gridN);
+            //     for (int i = 0; i < SharedFragmentInfo.num_atoms; i++){
+            //         printf("%8.3f%8.3f%8.3f\n", SharedFragmentInfo.atoms[i].position[0], SharedFragmentInfo.atoms[i].position[1], SharedFragmentInfo.atoms[i].position[2]);
+            //     }
+            // }
+            // __syncthreads();
+
+
+            // if (threadIdx.x == 0 && blockIdx.x == 636){
+            //     printf("randomR: %8.3f%8.3f%8.3f\n", randomR[0], randomR[1], randomR[2]);
+            //     printf("randomThi: %8.3f%8.3f%8.3f\n", randomThi[0], randomThi[1], randomThi[2]);
+            //     printf("randomPhi: %8.3f\n", randomPhi);
+            //     printf("gridN: %d\n", gridN);
+
+            //     printf("Before rotation:\n");
+            //     for (int i = 0; i < SharedFragmentInfo.num_atoms; i++){
+            //         printf("%8.3f%8.3f%8.3f\n", SharedFragmentInfo.atoms[i].position[0], SharedFragmentInfo.atoms[i].position[1], SharedFragmentInfo.atoms[i].position[2]);
+            //     }
+            // }
+            // __syncthreads();
             
             // for (int i=0;i<2000;i++)
             
@@ -142,6 +173,21 @@ extern "C"{
             rotate_atoms_shared(SharedFragmentInfo.atoms, SharedFragmentInfo.num_atoms, randomThi, randomPhi);
 
             __syncthreads();
+
+
+
+            // if (tid == 0 && blockIdx.x == 636){
+            //     printf("randomR: %8.3f%8.3f%8.3f\n", randomR[0], randomR[1], randomR[2]);
+            //     printf("randomThi: %8.3f%8.3f%8.3f\n", randomThi[0], randomThi[1], randomThi[2]);
+            //     printf("randomPhi: %8.3f\n", randomPhi);
+            //     printf("gridN: %d\n", gridN);
+
+            //     printf("After rotation:\n");
+            //     for (int i = 0; i < SharedFragmentInfo.num_atoms; i++){
+            //         printf("%8.3f%8.3f%8.3f\n", SharedFragmentInfo.atoms[i].position[0], SharedFragmentInfo.atoms[i].position[1], SharedFragmentInfo.atoms[i].position[2]);
+            //     }
+            // }
+            // __syncthreads();
 
             if (tid < SharedFragmentInfo.num_atoms){
                 SharedFragmentInfo.atoms[tid].position[0] += randomR[0];
@@ -365,7 +411,7 @@ extern "C"{
             curandState *rng_states = &d_rng_states[threadId];
 
 
-            
+            int tid = threadIdx.x;
 
             if (threadIdx.x == 0) {
                 SharedInfo = Ginfo[0];
@@ -373,6 +419,16 @@ extern "C"{
             
             if (threadIdx.x == 1) {
                 SharedFragmentInfo = GfragmentInfo[moveFragType];
+                
+                // if (blockIdx.x == 636){
+                //     printf("The center of the %d fragment is %8.3f%8.3f%8.3f\n", blockIdx.x, GTempInfo[blockIdx.x].position[0], GTempInfo[blockIdx.x].position[1], GTempInfo[blockIdx.x].position[2]);
+                //     printf("The energy of the fragment is %f\n", GTempInfo[blockIdx.x].charge);
+                //     printf("The type of the fragment is %d\n", GTempInfo[blockIdx.x].type);
+                //     for (int i = 0; i < SharedFragmentInfo.num_atoms; i++){
+                //         float total = SharedFragmentInfo.atoms[i].position[0] + SharedFragmentInfo.atoms[i].position[1] + SharedFragmentInfo.atoms[i].position[2] + 1;
+                //         printf("%8.3f%8.3f%8.3f %8.3f\n",  SharedFragmentInfo.atoms[i].position[0], SharedFragmentInfo.atoms[i].position[1], SharedFragmentInfo.atoms[i].position[2], total);
+                //     }
+                // }
             }
 
             __syncthreads();
@@ -381,8 +437,35 @@ extern "C"{
 
             __syncthreads();
 
+            // if (tid == 0 && blockIdx.x == 636){
+            //     printf("The center of the %d fragment is %8.3f%8.3f%8.3f\n", blockIdx.x, GTempInfo[blockIdx.x].position[0], GTempInfo[blockIdx.x].position[1], GTempInfo[blockIdx.x].position[2]);
+            //     printf("The energy of the fragment is %f\n", GTempInfo[blockIdx.x].charge);
+            //     printf("The type of the fragment is %d\n", GTempInfo[blockIdx.x].type);
+            //     for (int i = 0; i < SharedFragmentInfo.num_atoms; i++){
+            //         printf("%8.3f%8.3f%8.3f\n", SharedFragmentInfo.atoms[i].position[0], SharedFragmentInfo.atoms[i].position[1], SharedFragmentInfo.atoms[i].position[2]);
+            //     }
+            // }
+
+            if (tid == 0)
+                GTempFrag[blockIdx.x] = SharedFragmentInfo;
+
             if (SharedInfo.PME == 0)
                 calcEnergy(SharedInfo, SharedFragmentInfo, GfragmentInfo, GresidueInfo, GatomInfo, Gff, &GTempInfo[blockIdx.x]);
+
+
+
+            __syncthreads();
+
+            if (tid == 0 && blockIdx.x == 636){
+                printf("The center of the %d fragment is %8.3f%8.3f%8.3f\n", blockIdx.x, GTempInfo[blockIdx.x].position[0], GTempInfo[blockIdx.x].position[1], GTempInfo[blockIdx.x].position[2]);
+                printf("The energy of the fragment is %f\n", GTempInfo[blockIdx.x].charge);
+                printf("The type of the fragment is %d\n", GTempInfo[blockIdx.x].type);
+                for (int i = 0; i < SharedFragmentInfo.num_atoms; i++){
+                    float total = SharedFragmentInfo.atoms[i].position[0] + SharedFragmentInfo.atoms[i].position[1] + SharedFragmentInfo.atoms[i].position[2];
+                    printf("%8.3f%8.3f%8.3f %8.3f\n", SharedFragmentInfo.atoms[i].position[0], SharedFragmentInfo.atoms[i].position[1], SharedFragmentInfo.atoms[i].position[2], total);
+                }
+            }
+
             // else
             //     calcEnergyPME(SharedInfo, SharedFragmentInfo, GfragmentInfo, GresidueInfo, GatomInfo, Gff, &GTempInfo[blockIdx.x]);
 
@@ -422,6 +505,7 @@ extern "C"{
             // printf("The size of a AtomArray is %d\n", sizeof(AtomArray));
 
             Gmove_add<<<nBlock, numThreadsPerBlock>>>(Ginfo, GfragmentInfo, GresidueInfo, GatomInfo, Ggrid, Gff, moveFragType, GTempFrag, GTempInfo, d_rng_states);
+
 
             // Gmove_add_check<<<1, numThreadsPerBlock>>>(Ginfo, GfragmentInfo, GresidueInfo, GatomInfo, moveFragType, GTempFrag, GTempInfo, d_rng_states);
 
