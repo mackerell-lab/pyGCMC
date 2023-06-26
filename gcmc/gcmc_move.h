@@ -257,7 +257,8 @@ extern "C"{
 
             // float E_elec = kel * (charge1 * charge2) / dist / eps;
             float E_elec = 1389.3 * (charge1 * charge2) / dist;
-
+            // E_elec = 0;
+            // float E_elec = 1388.431112 * (charge1 * charge2) / dist;
             return E_elec;
         }
 
@@ -454,17 +455,16 @@ extern "C"{
 
 
 
-            __syncthreads();
+            // __syncthreads();
 
-            if (tid == 0 && blockIdx.x == 636){
-                printf("The center of the %d fragment is %8.3f%8.3f%8.3f\n", blockIdx.x, GTempInfo[blockIdx.x].position[0], GTempInfo[blockIdx.x].position[1], GTempInfo[blockIdx.x].position[2]);
-                printf("The energy of the fragment is %f\n", GTempInfo[blockIdx.x].charge);
-                printf("The type of the fragment is %d\n", GTempInfo[blockIdx.x].type);
-                for (int i = 0; i < SharedFragmentInfo.num_atoms; i++){
-                    float total = SharedFragmentInfo.atoms[i].position[0] + SharedFragmentInfo.atoms[i].position[1] + SharedFragmentInfo.atoms[i].position[2];
-                    printf("%8.3f%8.3f%8.3f %8.3f\n", SharedFragmentInfo.atoms[i].position[0], SharedFragmentInfo.atoms[i].position[1], SharedFragmentInfo.atoms[i].position[2], total);
-                }
-            }
+            // if (tid == 0 && abs(GTempInfo[blockIdx.x].charge) > 150 ){
+            //     printf("The center of the %d fragment is %8.3f%8.3f%8.3f\n", blockIdx.x, GTempInfo[blockIdx.x].position[0], GTempInfo[blockIdx.x].position[1], GTempInfo[blockIdx.x].position[2]);
+            //     printf("The energy of the fragment is %f\n", GTempInfo[blockIdx.x].charge);
+            //     printf("The type of the fragment is %d\n", GTempInfo[blockIdx.x].type);
+            //     for (int i = 0; i < SharedFragmentInfo.num_atoms; i++){
+            //         printf("%8.3f%8.3f%8.3f %8.3f\n", SharedFragmentInfo.atoms[i].position[0], SharedFragmentInfo.atoms[i].position[1], SharedFragmentInfo.atoms[i].position[2]);
+            //     }
+            // }
 
             // else
             //     calcEnergyPME(SharedInfo, SharedFragmentInfo, GfragmentInfo, GresidueInfo, GatomInfo, Gff, &GTempInfo[blockIdx.x]);

@@ -755,8 +755,10 @@ class GCMC:
                 self.fragmentInfo[i]['atoms'][j]['type'] = atom.typeNum
 
                 # atom_center += np.array([atom.x, atom.y, atom.z])
-            
-        TotalResidueNum = self.fix_atoms[-1].sequence2 + 1 + sum([self.fragmentInfo[i]['maxNum'] for i in range(len(self.fragmentName))])
+        if len(self.fix_atoms) == 0:
+            TotalResidueNum = sum([self.fragmentInfo[i]['maxNum'] for i in range(len(self.fragmentName))])
+        else:
+            TotalResidueNum = self.fix_atoms[-1].sequence2 + 1 + sum([self.fragmentInfo[i]['maxNum'] for i in range(len(self.fragmentName))])
         TotalAtomNum = len(self.fix_atoms) + sum([self.fragmentInfo[i]['maxNum'] * self.fragmentInfo[i]['num_atoms'] for i in range(len(self.fragmentName))]) 
 
         self.residueInfo = np.empty(TotalResidueNum, dtype=Residue_dtype)
@@ -784,7 +786,8 @@ class GCMC:
             self.atomInfo[i]['position'][2] = atom.z
             self.atomInfo[i]['charge'] = atom.charge
             self.atomInfo[i]['type'] = atom.typeNum
-
+        if len(self.fix_atoms) == 0:
+            sequence = -1
         for i in range(sequence + 1):
             self.residueInfo[i]['position'][0] /= self.residueInfo[i]['atomNum']
             self.residueInfo[i]['position'][1] /= self.residueInfo[i]['atomNum']
