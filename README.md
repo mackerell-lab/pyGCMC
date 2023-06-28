@@ -13,7 +13,11 @@ pip install .
 ## Usage
 Run the pyGCMC executable:
 ```
-usage: gcmc [-h] -p file.pdb [-t file.top] [-s file.psf] [-o file.txt] [-u muex1,muex2,...] [-f conf1,conf2,... or conf] [-n mcsteps] [-m mctime1,mctime2,...] [-c conc1,conc2,...] [-y cavity_bias_dx] [-e seed] [-w]
+Start GCMC simulation at 2023-06-28 13:23:45...
+usage: gcmc [-h] -p file.pdb [-t file.top] [-s file.psf] [-o file.txt] [-u muex1,muex2,...] [-f conf1,conf2,... or conf] [-n mcsteps] [-m mctime1,mctime2,...]
+            [-c conc1,conc2,...] [-y cavity_bias_dx] [-e seed] [-P] [-w]
+
+pyGCMC - A python package for GCMC simulation
 
 options:
   -h, --help            show this help message and exit
@@ -26,7 +30,7 @@ options:
   -o file.txt, --out-file file.txt
                         The output file for GCMC
   -u muex1,muex2,..., --fragmuex muex1,muex2,...
-                        The value of fragment muex(splice by , with no space)
+                        The value of fragment muex(splice by , with no space), if the first value is negative, then follow the -u or --fragmuex without space
   -f conf1,conf2,... or conf, --fragconf conf1,conf2,... or conf
                         The value of fragment conf(splice by , with no space). Or only one value for all fragments
   -n mcsteps, --mcsteps mcsteps
@@ -38,6 +42,7 @@ options:
   -y cavity_bias_dx, --cavitybias-dx cavity_bias_dx
                         The value of cavity bias dx(if dx <= 0, then no cavity bias)
   -e seed, --seed seed  The seed of random number
+  -P, --PME             Enable PME(Default: Disable)
   -w, --show-info       Show the information of fragments
 
   ```

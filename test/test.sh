@@ -7,7 +7,7 @@ cd test
 #for ((i=0;i<100;i++))
 #do
 #echo "seed = $i" &>> tmp~
-gcmc -p 6v3g_silcs.1.pdb -t 6v3g_silcs.1.top -o output.txt 
+gcmc -p 6v3g_silcs.1.pdb -t 6v3g_silcs.1.top -o output.txt -e 10 
 #done
 
 rm charmm36.ff output.txt 
