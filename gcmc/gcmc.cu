@@ -111,6 +111,7 @@ extern "C"{
         cudaMalloc((void **)&d_rng_states, maxConf * sizeof(curandState) * numThreadsPerBlock);
 
 
+        srand(info->seed);
 
         setup_rng_states<<<maxConf, numThreadsPerBlock>>>(d_rng_states, info->seed);
         // printf("setup_rng_states done %u\n",info->seed);
@@ -129,11 +130,11 @@ extern "C"{
             switch (moveMoveType)
             {
             case 0: // Insert
-                accepted = move_add(Ginfo,fragmentInfo, GfragmentInfo, GresidueInfo, GatomInfo, Ggrid, Gff, moveFragType, GTempFrag, TempInfo, GTempInfo, d_rng_states);
+                accepted = move_add(info, Ginfo,fragmentInfo, GfragmentInfo, GresidueInfo, GatomInfo, Ggrid, Gff, moveFragType, GTempFrag, TempInfo, GTempInfo, d_rng_states);
                 break;
 
             case 1: // Del
-                // accepted = move_del(frag_index);
+                accepted = move_del(info, Ginfo,fragmentInfo, GfragmentInfo, GresidueInfo, GatomInfo, Ggrid, Gff, moveFragType, GTempFrag, TempInfo, GTempInfo, d_rng_states);
                 break;
 
             case 2: // Trn

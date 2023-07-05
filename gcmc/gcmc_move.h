@@ -16,6 +16,11 @@
 
 extern "C"{
 
+        __device__ __host__ inline float Min(float a,float b)
+        {
+            return !(b<a)?a:b;	
+        }
+
         // Device kernel function
         __device__ inline void rotate_atoms(Atom *atoms, int num_atoms, float axis[3], float angle) {
             // Normalize the axis vector
@@ -205,11 +210,11 @@ extern "C"{
 
         }
 
-        __device__ inline float fast_round(const float a) {
+        __device__ __host__ inline float fast_round(const float a) {
             return a >= 0 ? (int)(a + 0.5f) : (int)(a - 0.5f);
         }
 
-        __device__ inline float distanceP(const float x[3], const float y[3], const float period[3]){
+        __device__ __host__ inline float distanceP(const float x[3], const float y[3], const float period[3]){
             float dx = x[0] - y[0];
             float dy = x[1] - y[1];
             float dz = x[2] - y[2];
@@ -256,9 +261,31 @@ extern "C"{
             // float kel = 331.843 * KCAL_TO_KJ; //1389.3;  what's 331.843?
 
             // float E_elec = kel * (charge1 * charge2) / dist / eps;
-            float E_elec = 1389.3 * (charge1 * charge2) / dist;
+            // float E_elec = 1389.3 * (charge1 * charge2) / dist;
             // E_elec = 0;
-            // float E_elec = 1388.431112 * (charge1 * charge2) / dist;
+
+
+            // Differences in the electrostatic energies:
+            //  
+            // (*) The conversion from charge units to kcal/mol in CHARMM is based 
+            // on the value 332.0716 whereas AMBER uses 18.2223**2 or 332.0522173.
+            // The actual value is somewhat lower than both these values
+            // (~331.843)!  To convert the charges to "CHARMM", they should be
+            // multiplied by 1.000058372.  This was not done within this file.
+            // [When this is done, the charges are not rounded and therefore
+            // non-integral charges for the residues are apparent.]  To get around
+            // this problem either the charges can be scaled within CHARMM (which
+            // will still lead to non-integral charge) or in versions of CHARMM
+            // beyond c25n3, and through the application of the "AMBER" keyword in
+            // pref.dat, the AMBER constant can be used.  By default, the "fast"
+            // routines cannot be used with the AMBER-style impropers.  In the
+            // later versions of CHARMM, the AMBER keyword circumvents this
+            // problem.
+            // 
+            // Ref: https://home.chpc.utah.edu/~cheatham/cornell_rtf
+
+
+            float E_elec = 1388.431112 * (charge1 * charge2) / dist;
             return E_elec;
         }
 
@@ -394,6 +421,7 @@ extern "C"{
             if (tid == 0){
 
                 GTempInfo->charge = sh_energy[0];
+                GTempInfo->type = -1;
                 // if (blockIdx.x == 0){
                 //     printf("energy: %f\n", sh_energy[0]);
                 // }
@@ -496,15 +524,286 @@ extern "C"{
         // }
 
 
-        bool move_add(const InfoStruct *Ginfo, AtomArray *fragmentInfo, AtomArray *GfragmentInfo, residue *GresidueInfo, Atom *GatomInfo, const float *Ggrid, const float *Gff,
+        // Gupdate<<<1, numThreadsPerBlock>>>(GTempInfo,GfragmentInfo,GresidueInfo, GatomInfo)
+
+        __global__ void GupdateAdd(AtomArray *GfragmentInfo, residue *GresidueInfo, 
+                        Atom *GatomInfo,
+                        AtomArray *GTempFrag, Atom *GTempInfo, const int moveFragType, const int totalNum) {
+            
+            int tid = threadIdx.x;
+            int bid = blockIdx.x;
+
+            __shared__ int bidStartRes;
+            __shared__ int bidStartAtom;
+            __shared__ int bidAtomNum;
+
+            if (tid == 0 && bid == 0){
+                GfragmentInfo[moveFragType].totalNum = totalNum;
+
+            }
+
+            if (GTempInfo[bid].type == -1)
+                return;
+
+            if (tid == 1){
+
+                bidStartRes = GfragmentInfo[moveFragType].startRes + GTempInfo[bid].type;
+
+            }
+            __syncthreads();
+            if (tid == 0){
+                bidAtomNum = GresidueInfo[bidStartRes].atomNum;
+                bidStartAtom = GresidueInfo[bidStartRes].atomStart;
+                GresidueInfo[bidStartRes].position[0] = GTempInfo[bid].position[0];
+                GresidueInfo[bidStartRes].position[1] = GTempInfo[bid].position[1];
+                GresidueInfo[bidStartRes].position[2] = GTempInfo[bid].position[2];
+            }
+            __syncthreads();
+            for (int i = tid;i<bidAtomNum;i+=numThreadsPerBlock){
+                GatomInfo[bidStartAtom + i].position[0] = GTempFrag[bid].atoms[i].position[0];
+                GatomInfo[bidStartAtom + i].position[1] = GTempFrag[bid].atoms[i].position[1];
+                GatomInfo[bidStartAtom + i].position[2] = GTempFrag[bid].atoms[i].position[2];
+            }
+
+
+        }
+
+        bool move_add(const InfoStruct *info, InfoStruct *Ginfo, AtomArray *fragmentInfo, AtomArray *GfragmentInfo, residue *GresidueInfo, Atom *GatomInfo, const float *Ggrid, const float *Gff,
                     const int moveFragType, AtomArray *GTempFrag, Atom *TempInfo, Atom *GTempInfo, curandState *d_rng_states){
 
+            if (fragmentInfo[moveFragType].totalNum == fragmentInfo[moveFragType].maxNum)
+                return false;
             
             const int nBlock = fragmentInfo[moveFragType].confBias;
+
+
+
+            
+
+            // printf("The nbar value is %f\n", nbar);
+            // printf("The B value is %f\n", B);
 
             // printf("The size of a AtomArray is %d\n", sizeof(AtomArray));
 
             Gmove_add<<<nBlock, numThreadsPerBlock>>>(Ginfo, GfragmentInfo, GresidueInfo, GatomInfo, Ggrid, Gff, moveFragType, GTempFrag, GTempInfo, d_rng_states);
+            
+            cudaMemcpy(TempInfo, GTempInfo, sizeof(Atom)*nBlock, cudaMemcpyDeviceToHost);
+
+
+            const float *period = info->cryst;
+
+            const int waterNum = fragmentInfo[info->fragTypeNum - 1].totalNum;
+
+
+            // use number of waters to determin nbar value; this allows to take into account excluded volume by solutes
+
+            const float nbar = waterNum / 55.0 * fragmentInfo[moveFragType].conc;
+
+
+            const float B = beta * fragmentInfo[moveFragType].muex + log(nbar);
+            std::unordered_set<unsigned int> conf_index_unused;
+            std::unordered_set<unsigned int> conf_index_used;
+
+            std::vector<double> conf_p;
+
+            conf_p.resize(nBlock);
+
+            int conf_index;
+
+            bool needUpdate = false;
+
+            
+
+
+            
+            for (int i = 0;i < nBlock; i++)
+                conf_index_unused.insert(i);
+
+
+            // int addNum = 0;
+
+
+            while (conf_index_unused.size()>0){
+                // printf("conf_index_unused.size() = %d\n",conf_index_unused.size());
+
+                auto it = *conf_index_unused.begin();
+                // printf("it = %d \n",it);
+
+                conf_index_used.clear();
+
+                conf_index_used.insert(it);
+                conf_index_unused.erase(it);
+                
+
+                double sum_p = 0;
+                float energy_min = TempInfo[it].charge;
+                for (auto iit = conf_index_unused.begin(); iit != conf_index_unused.end();){
+                    if ( distanceP(TempInfo[it].position, TempInfo[*iit].position, period) 
+                        <= info->cutoff ){
+                        // 	printf("sqrd%d:%f\n",iit,(conf_com[*it][0] - conf_com[iit][0] ) * (conf_com[*it][0] - conf_com[iit][0] )  +
+                        // (conf_com[*it][1] - conf_com[iit][1] ) * (conf_com[*it][1] - conf_com[iit][1] )  +
+                        // (conf_com[*it][2] - conf_com[iit][2] ) * (conf_com[*it][2] - conf_com[iit][2] ));
+
+                            if (TempInfo[*iit].charge < energy_min)
+                                energy_min = TempInfo[*iit].charge;
+
+                            
+                            conf_index_used.insert(*iit);
+                            iit = conf_index_unused.erase(iit);
+
+                            
+                    }
+                    else
+                        iit++;
+                }
+
+                // printf("conf_index_unused.size() = %d\n",conf_index_unused.size());
+                // printf("conf_index_used.size() = %d\n",conf_index_used.size());
+
+
+                for (auto iit: conf_index_used) {
+                    conf_p[iit] = exp(- beta * (TempInfo[iit].charge - energy_min ));
+                    sum_p += conf_p[iit];
+                }
+
+                
+                if (sum_p == 0) {
+                    conf_index = it;
+                } else {
+                    
+                    // conf_p[it] = conf_p[it] / sum_p;
+                    float conf_p_sum = 0;
+                    for (auto iit : conf_index_used)
+                    {
+                        conf_p_sum += conf_p[iit] / sum_p;
+                        conf_p[iit] = conf_p_sum;
+                    }
+                    float ran = (float)rand() / (float)RAND_MAX;
+
+                    for (auto iit : conf_index_used){
+                        conf_index = iit;
+
+                        if (ran < conf_p[iit] ){				
+                            break;
+                        }
+
+                    }
+                }
+
+                // Fragment frag_tmp = frag;
+
+                // q = conf_q[conf_index];
+                // new_com = conf_com[conf_index];
+                float energy_new = TempInfo[conf_index].charge;
+
+                // frag_tmp.translate_to(new_com);
+                // frag_tmp.rotate(q);
+
+                conf_p[conf_index] =  exp(-beta * (TempInfo[conf_index].charge - energy_min )) / sum_p;
+
+
+
+                float fn_tmp = info->cavityFactor / ( conf_index_used.size() * conf_p[conf_index] );
+
+
+                // printf("fn = %f\n",fn_tmp);
+
+
+                float diff = energy_new;
+
+
+                float n =  fragmentInfo[moveFragType].totalNum;
+                float p = Min(1, fn_tmp / (n + 1) * exp(B - beta * diff));
+                float ran = (float) rand() / (float)RAND_MAX;
+
+
+                if (ran < p)
+                {
+                    // success		
+                    
+                    for (auto iit = conf_index_unused.begin();iit != conf_index_unused.end();){
+
+                    if (distanceP(TempInfo[conf_index].position, TempInfo[*iit].position, period) 
+                        <= info->cutoff){
+                    // if ( (conf_com[conf_index][0] - conf_com[*iit][0] ) * (conf_com[conf_index][0] - conf_com[*iit][0] )  +
+                    // 	(conf_com[conf_index][1] - conf_com[*iit][1] ) * (conf_com[conf_index][1] - conf_com[*iit][1] )  +
+                    // 	(conf_com[conf_index][2] - conf_com[*iit][2] ) * (conf_com[conf_index][2] - conf_com[*iit][2] )  
+                    // 	<= gcmc->options->energy_cutoff_frag_sqrd){
+                        // 	printf("sqrd%d:%f\n",iit,(conf_com[*it][0] - conf_com[iit][0] ) * (conf_com[*it][0] - conf_com[iit][0] )  +
+                        // (conf_com[*it][1] - conf_com[iit][1] ) * (conf_com[*it][1] - conf_com[iit][1] )  +
+                        // (conf_com[*it][2] - conf_com[iit][2] ) * (conf_com[*it][2] - conf_com[iit][2] ));
+                            // printf("Delete %d\n",*iit);
+
+                            iit = conf_index_unused.erase(iit);
+                            
+                    }
+                    else
+                        iit ++ ;
+                    }
+
+                    // printf("Accept %d energy = %f \n",conf_index, TempInfo[conf_index].charge);
+
+
+                    // Accept:
+                    if (fragmentInfo[moveFragType].totalNum < fragmentInfo[moveFragType].maxNum){
+                        
+                        TempInfo[conf_index].type = fragmentInfo[moveFragType].totalNum;
+                        fragmentInfo[moveFragType].totalNum += 1;
+
+                        // addNum++;
+                        
+                        needUpdate = true;
+
+                    }
+                        
+
+
+
+                    // printf("Accept\n");
+
+                    // printf("\nAccept\n");
+                    // return_value = true;
+                }
+                else
+                {
+                    // printf("Reject %d energy = %f \n",conf_index, TempInfo[conf_index].charge);
+                    //printf("\nReject\n");
+                    // reject
+                    //return false;
+                }
+
+                        // printf("conf_index_unused.size() = %d\n",conf_index_unused.size());
+
+                }
+
+
+ 
+
+            if (needUpdate){
+                
+                cudaMemcpy(GTempInfo, TempInfo, sizeof(Atom)*nBlock, cudaMemcpyHostToDevice);
+                GupdateAdd<<<nBlock, numThreadsPerBlock>>>(GfragmentInfo,GresidueInfo, GatomInfo ,GTempFrag ,GTempInfo, moveFragType,fragmentInfo[moveFragType].totalNum);
+
+                
+
+
+            }
+
+            return needUpdate;
+
+            // cudaMemcpy(fragmentInfo, GfragmentInfo, sizeof(AtomArray)*info->fragTypeNum, cudaMemcpyDeviceToHost);
+            // int newwater = fragmentInfo[info->fragTypeNum - 1].totalNum;
+
+            // printf("waterNum = %d\n",waterNum);
+            // printf("addNum = %d\n",addNum);
+            // printf("newwater = %d\n",newwater);
+            // for (int i = 0;i< nBlock;i++){
+            //     printf("The energy of the %d fragment is %f\t", i, TempInfo[i].charge);
+            //     printf("The type is %d\t", TempInfo[i].type);
+            //     printf("The position is %f, %f, %f\n", TempInfo[i].position[0], TempInfo[i].position[1], TempInfo[i].position[2]);
+            // }
+
+            //cudaMemcpy(GTempInfo, TempInfo, sizeof(Atom)*maxConf, cudaMemcpyHostToDevice);
 
 
             // Gmove_add_check<<<1, numThreadsPerBlock>>>(Ginfo, GfragmentInfo, GresidueInfo, GatomInfo, moveFragType, GTempFrag, GTempInfo, d_rng_states);
@@ -517,5 +816,31 @@ extern "C"{
         
         }
         
-        
+
+        __global__ void Gmove_del(const InfoStruct *Ginfo, AtomArray *GfragmentInfo, residue *GresidueInfo, 
+                Atom *GatomInfo, const float *Ggrid, const float *Gff, const int moveFragType,
+                AtomArray *GTempFrag, Atom *GTempInfo, curandState *d_rng_states) {
+
+
+            }
+
+        bool move_del(const InfoStruct *info, InfoStruct *Ginfo, AtomArray *fragmentInfo, AtomArray *GfragmentInfo, residue *GresidueInfo, Atom *GatomInfo, const float *Ggrid, const float *Gff,
+                    const int moveFragType, AtomArray *GTempFrag, Atom *TempInfo, Atom *GTempInfo, curandState *d_rng_states){
+
+            
+            const int nBlock = fragmentInfo[moveFragType].confBias;
+
+
+
+            
+
+            // printf("The nbar value is %f\n", nbar);
+            // printf("The B value is %f\n", B);
+
+            // printf("The size of a AtomArray is %d\n", sizeof(AtomArray));
+
+            Gmove_del<<<nBlock, numThreadsPerBlock>>>(Ginfo, GfragmentInfo, GresidueInfo, GatomInfo, Ggrid, Gff, moveFragType, GTempFrag, GTempInfo, d_rng_states);
+            
+            
+        }
     } 

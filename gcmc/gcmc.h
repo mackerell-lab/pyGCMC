@@ -4,6 +4,11 @@
 #include <curand_kernel.h>
 
 
+#include <unordered_set>
+
+#include <vector>
+
+
 
 #ifndef GCMC_H_
 #define GCMC_H_
@@ -11,6 +16,14 @@
 
 #define numThreadsPerBlock 128
 #define PI 3.1415926535897932384626433832795028841971693993751058209749445923078164062
+
+#define temperature 300.0
+
+#define BOLTZMANN 0.0083115 // kJ*mol/K from McCammon webpage of conversions
+//#define BOLTZMANN 0.0019881 // kcal*mol/K from McCammon webpage of conversions
+
+
+#define beta 1.0 / (BOLTZMANN * temperature)
 
 // #define KCAL_TO_KJ 4.184
 
