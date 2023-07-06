@@ -203,7 +203,8 @@ extern "C"{
             if (tid < 3){
                 GTempInfo->position[tid] = randomR[tid];
             }
-
+            if (tid == 4)
+                GTempInfo->type = -1;
 
 
 
@@ -355,6 +356,9 @@ extern "C"{
 
                 for (int resi = tid + startResidueNum;resi < endResidueNum; resi+= numThreadsPerBlock){
 
+                    if (resi == SharedFragmentInfo.startRes)
+                        continue;
+
                     // if (distanceP(GTempInfo->position, GresidueInfo[resi].position, SharedInfo.cryst) > SharedInfo.cutoff) {
                     if (distanceP(GTempInfo->position, GresidueInfo[resi].position, SharedInfo.cryst) > SharedInfo.cutoff) {
                         continue;
@@ -421,7 +425,7 @@ extern "C"{
             if (tid == 0){
 
                 GTempInfo->charge = sh_energy[0];
-                GTempInfo->type = -1;
+                // GTempInfo->type = -1;
                 // if (blockIdx.x == 0){
                 //     printf("energy: %f\n", sh_energy[0]);
                 // }
@@ -448,6 +452,7 @@ extern "C"{
             
             if (threadIdx.x == 1) {
                 SharedFragmentInfo = GfragmentInfo[moveFragType];
+                SharedFragmentInfo.startRes = -1;
                 
                 // if (blockIdx.x == 636){
                 //     printf("The center of the %d fragment is %8.3f%8.3f%8.3f\n", blockIdx.x, GTempInfo[blockIdx.x].position[0], GTempInfo[blockIdx.x].position[1], GTempInfo[blockIdx.x].position[2]);
@@ -478,7 +483,7 @@ extern "C"{
             if (tid == 0)
                 GTempFrag[blockIdx.x] = SharedFragmentInfo;
 
-            if (SharedInfo.PME == 0)
+            // if (SharedInfo.PME == 0)
                 calcEnergy(SharedInfo, SharedFragmentInfo, GfragmentInfo, GresidueInfo, GatomInfo, Gff, &GTempInfo[blockIdx.x]);
 
 
@@ -789,13 +794,13 @@ extern "C"{
 
             }
 
-            return needUpdate;
+            
 
             // cudaMemcpy(fragmentInfo, GfragmentInfo, sizeof(AtomArray)*info->fragTypeNum, cudaMemcpyDeviceToHost);
             // int newwater = fragmentInfo[info->fragTypeNum - 1].totalNum;
 
             // printf("waterNum = %d\n",waterNum);
-            // printf("addNum = %d\n",addNum);
+            // // printf("addNum = %d\n",addNum);
             // printf("newwater = %d\n",newwater);
             // for (int i = 0;i< nBlock;i++){
             //     printf("The energy of the %d fragment is %f\t", i, TempInfo[i].charge);
@@ -811,7 +816,7 @@ extern "C"{
             // computeEnergy<<<nBlock, numThreadsPerBlock>>>(Ginfo, GfragmentInfo, GresidueInfo, GatomInfo, Ggrid, Gff, moveFragType);
 
             
-        
+            return needUpdate;
         
         
         }
@@ -820,18 +825,103 @@ extern "C"{
         __global__ void Gmove_del(const InfoStruct *Ginfo, AtomArray *GfragmentInfo, residue *GresidueInfo, 
                 Atom *GatomInfo, const float *Ggrid, const float *Gff, const int moveFragType,
                 AtomArray *GTempFrag, Atom *GTempInfo, curandState *d_rng_states) {
+                
+            __shared__ InfoStruct SharedInfo;
+            __shared__ AtomArray SharedFragmentInfo;
+
+            int threadId = numThreadsPerBlock * blockIdx.x + threadIdx.x;
+            curandState *rng_states = &d_rng_states[threadId];
 
 
+            int tid = threadIdx.x;
+
+            if (threadIdx.x == 0) {
+                SharedInfo = Ginfo[0];
             }
+            
+            if (threadIdx.x == 1) {
+                SharedFragmentInfo = GfragmentInfo[moveFragType];
+                SharedFragmentInfo.startRes = GTempInfo[blockIdx.x].type + GfragmentInfo[moveFragType].startRes;
+                GTempInfo[blockIdx.x].position[0] = GresidueInfo[SharedFragmentInfo.startRes].position[0];
+                GTempInfo[blockIdx.x].position[1] = GresidueInfo[SharedFragmentInfo.startRes].position[1];
+                GTempInfo[blockIdx.x].position[2] = GresidueInfo[SharedFragmentInfo.startRes].position[2];
+
+                
+
+                // if (blockIdx.x == 636){
+                //     printf("The center of the %d fragment is %8.3f%8.3f%8.3f\n", blockIdx.x, GTempInfo[blockIdx.x].position[0], GTempInfo[blockIdx.x].position[1], GTempInfo[blockIdx.x].position[2]);
+                //     printf("The energy of the fragment is %f\n", GTempInfo[blockIdx.x].charge);
+                //     printf("The type of the fragment is %d\n", GTempInfo[blockIdx.x].type);
+                //     for (int i = 0; i < SharedFragmentInfo.num_atoms; i++){
+                //         float total = SharedFragmentInfo.atoms[i].position[0] + SharedFragmentInfo.atoms[i].position[1] + SharedFragmentInfo.atoms[i].position[2] + 1;
+                //         printf("%8.3f%8.3f%8.3f %8.3f\n",  SharedFragmentInfo.atoms[i].position[0], SharedFragmentInfo.atoms[i].position[1], SharedFragmentInfo.atoms[i].position[2], total);
+                //     }
+                // }
+            }
+
+            __syncthreads();
+
+            for (int i=tid;i<SharedFragmentInfo.num_atoms;i+=numThreadsPerBlock){
+                SharedFragmentInfo.atoms[i].position[0] = GatomInfo[GresidueInfo[SharedFragmentInfo.startRes].atomStart + i].position[0];
+                SharedFragmentInfo.atoms[i].position[1] = GatomInfo[GresidueInfo[SharedFragmentInfo.startRes].atomStart + i].position[1];
+                SharedFragmentInfo.atoms[i].position[2] = GatomInfo[GresidueInfo[SharedFragmentInfo.startRes].atomStart + i].position[2];
+                // SharedFragmentInfo.atoms[i].charge = GatomInfo[GresidueInfo[SharedFragmentInfo.startRes].atomStart + i].charge;
+                // SharedFragmentInfo.atoms[i].type = GatomInfo[GresidueInfo[SharedFragmentInfo.startRes].atomStart + i].type;
+            }
+            
+            // randomFragment(SharedInfo, SharedFragmentInfo, &GTempInfo[blockIdx.x], Ggrid, rng_states);
+
+            __syncthreads();
+
+            // if (tid == 0 && blockIdx.x == 636){
+            //     printf("The center of the %d fragment is %8.3f%8.3f%8.3f\n", blockIdx.x, GTempInfo[blockIdx.x].position[0], GTempInfo[blockIdx.x].position[1], GTempInfo[blockIdx.x].position[2]);
+            //     printf("The energy of the fragment is %f\n", GTempInfo[blockIdx.x].charge);
+            //     printf("The type of the fragment is %d\n", GTempInfo[blockIdx.x].type);
+            //     for (int i = 0; i < SharedFragmentInfo.num_atoms; i++){
+            //         printf("%8.3f%8.3f%8.3f\n", SharedFragmentInfo.atoms[i].position[0], SharedFragmentInfo.atoms[i].position[1], SharedFragmentInfo.atoms[i].position[2]);
+            //     }
+            // }
+
+            if (tid == 0)
+                GTempFrag[blockIdx.x] = SharedFragmentInfo;
+
+            // if (SharedInfo.PME == 0)
+                calcEnergy(SharedInfo, SharedFragmentInfo, GfragmentInfo, GresidueInfo, GatomInfo, Gff, &GTempInfo[blockIdx.x]);
+
+
+
+                
+
+        }
 
         bool move_del(const InfoStruct *info, InfoStruct *Ginfo, AtomArray *fragmentInfo, AtomArray *GfragmentInfo, residue *GresidueInfo, Atom *GatomInfo, const float *Ggrid, const float *Gff,
                     const int moveFragType, AtomArray *GTempFrag, Atom *TempInfo, Atom *GTempInfo, curandState *d_rng_states){
 
             
-            const int nBlock = fragmentInfo[moveFragType].confBias;
+            const int nBlock = min(fragmentInfo[moveFragType].confBias, fragmentInfo[moveFragType].totalNum);
 
+            if (nBlock == 0){
+                return false;
+            }
 
+            
+            std::vector<int> nums(fragmentInfo[moveFragType].totalNum);
+            for (int i = 0; i < fragmentInfo[moveFragType].totalNum; ++i) {
+                nums[i] = i;
+            }
 
+            for (int i = 0; i < nBlock; ++i) {
+                int j = i + rand() % (fragmentInfo[moveFragType].totalNum - i);
+
+                std::swap(nums[i], nums[j]);
+
+            }
+
+            for (int i=0;i < nBlock;i++){
+                TempInfo[i].type = nums[i];
+            }
+
+            cudaMemcpy(GTempInfo, TempInfo, sizeof(Atom)*nBlock, cudaMemcpyHostToDevice);
             
 
             // printf("The nbar value is %f\n", nbar);
@@ -840,6 +930,14 @@ extern "C"{
             // printf("The size of a AtomArray is %d\n", sizeof(AtomArray));
 
             Gmove_del<<<nBlock, numThreadsPerBlock>>>(Ginfo, GfragmentInfo, GresidueInfo, GatomInfo, Ggrid, Gff, moveFragType, GTempFrag, GTempInfo, d_rng_states);
+
+            cudaMemcpy(TempInfo, GTempInfo, sizeof(Atom)*nBlock, cudaMemcpyDeviceToHost);
+
+            // for (int i=0;i < nBlock;i++){
+            //     printf("The energy of the fragment %d, %d is %f\t", i, TempInfo[i].type ,TempInfo[i].charge);
+            //     printf("The position of the fragment is %f %f %f\n", TempInfo[i].position[0], TempInfo[i].position[1], TempInfo[i].position[2]);
+            // }
+
             
             
         }

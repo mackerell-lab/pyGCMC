@@ -396,7 +396,7 @@ class GCMC:
                 print(f"Error reading fragment file: charmm36.ff/mol/{frag}")
                 sys.exit(1)
 
-            print(f"Read fragment: {frag} with {len(self.fragments[-1])} atoms")
+            print(f"Read solute: {frag} with {len(self.fragments[-1])} atoms")
     # def get_fragment(self,fragment = None):
     #     if fragment is None:
     #         self.fragmentName = ['BENX', 'PRPX', 'DMEE', 'MEOH', 'FORM', 'IMIA', 'ACEY', 'MAMY', 'SOL']
@@ -441,10 +441,11 @@ class GCMC:
             self.move_array_n[i] += 1
             self.move_array_frag[i//4] += 1
         
+        movementName = ['Insert', 'Delete', 'Translate', 'Rotate']
         for i in range(len(self.fragmentName)):
-            print(f"Fragment {self.fragmentName[i]}\t move {self.move_array_frag[i]}\ttimes", end='\t')
+            print(f"Solute {self.fragmentName[i]}\t Movement {self.move_array_frag[i]} times", end='\t')
             for j in range(len(self.attempt_prob_frag)):
-                print(f"Movement {j} move {self.move_array_n[i*4+j]}\ttimes", end='\t')
+                print(f"{movementName[j]} {self.move_array_n[i*4+j]} times", end='\t')
             print()
 
         # for i in range(len(self.attempt_prob_frag)):
@@ -513,11 +514,11 @@ class GCMC:
 
     def show_parameters(self):
         print(f"MC steps: {self.mcsteps}")
-        print("Fragment Name: \t\t",'\t\t'.join(self.fragmentName))
-        print("Fragment Muex: \t\t",'\t\t'.join([str(i) for i in self.fragmuex]))
-        print("Fragment Conc: \t\t",'\t\t'.join([str(i) for i in self.fragconc]))
-        print("Fragment ConfB: \t",'\t\t'.join([str(i) for i in self.fragconf]))
-        print("Fragment mcTime: \t",'\t\t'.join([str(i) for i in self.mctime]))
+        print("Solute Name: \t\t",'\t\t'.join(self.fragmentName))
+        print("Solute Muex: \t\t",'\t\t'.join([str(i) for i in self.fragmuex]))
+        print("Solute Conc: \t\t",'\t\t'.join([str(i) for i in self.fragconc]))
+        print("Solute ConfB: \t",'\t\t'.join([str(i) for i in self.fragconf]))
+        print("Solute mcTime: \t",'\t\t'.join([str(i) for i in self.mctime]))
 
 
         
@@ -556,8 +557,8 @@ class GCMC:
             if atom.type not in self.atomtypes2:
                 self.atomtypes2.append(atom.type)
         
-        print(f"Fragment Type number: {len(self.atomtypes1)}")
-        print(f"Total Type number: {len(self.atomtypes2)}")
+        print(f"Solute atom type number: {len(self.atomtypes1)}")
+        print(f"Total atom type number: {len(self.atomtypes2)}")
 
         self.ff_pairs = []
 
@@ -731,7 +732,7 @@ class GCMC:
 
             self.fragmentInfo[i]['maxNum'] = max(maxNum1, maxNum2)
 
-            print(f"Fragment {self.fragmentName[i]}: Total number: {self.fragmentInfo[i]['totalNum']}, Max number: {self.fragmentInfo[i]['maxNum']}")
+            print(f"Solute {self.fragmentName[i]}: Total number: {self.fragmentInfo[i]['totalNum']}, Max number: {self.fragmentInfo[i]['maxNum']}")
 
             self.fragmentInfo[i]['num_atoms'] = len(frag)
 
@@ -952,7 +953,7 @@ def main():
         "--fragmuex",
         dest="fragmuex",
         required=False,
-        help="The value of fragment muex(splice by , with no space), if the first value is negative, then follow the -u or --fragmuex without space",
+        help="The value of solute muex(splice by , with no space), if the first value is negative, then follow the -u or --fragmuex without space",
         metavar="muex1,muex2,...",
         type=str,
     ) 
@@ -961,7 +962,7 @@ def main():
         "--fragconf",
         dest="fragconf",
         required=False,
-        help="The value of fragment conf(splice by , with no space). Or only one value for all fragments",
+        help="The value of solute conf(splice by , with no space). Or only one value for all solutes",
         metavar="conf1,conf2,... or conf",
         type=str,
     )
@@ -979,7 +980,7 @@ def main():
         "--mctime",
         dest="mctime",
         required=False,
-        help="The mctime of Fragments(splice by , with no space)",
+        help="The mctime of solutes(splice by , with no space)",
         metavar="mctime1,mctime2,...",
         type=str,
     )
@@ -988,7 +989,7 @@ def main():
         "--fragconc",
         dest="fragconc",
         required=False,
-        help="The value of fragment concentration(splice by , with no space)",
+        help="The value of solute concentration(splice by , with no space)",
         metavar="conc1,conc2,...",
         type=str,
     )
@@ -1028,7 +1029,7 @@ def main():
         "--show-info",
         dest="show_info",
         required=False,
-        help="Show the information of fragments",
+        help="Show the information of solutes",
         action='store_true',
     )
 
@@ -1052,13 +1053,13 @@ def main():
         fragmuex = args.fragmuex
         fragmuex = fragmuex.split(',')
         gcmc.get_fragmuex(fragmuex)
-        print(f"Using fragment muex: {fragmuex}")    
+        print(f"Using solute muex: {fragmuex}")    
 
     if args.fragconf is not None:
         fragconf = args.fragconf
         fragconf = fragconf.split(',')
         gcmc.get_fragconf(fragconf)
-        print(f"Using fragment conf: {fragconf}")
+        print(f"Using solute conf: {fragconf}")
 
     if args.mcsteps is not None:
         gcmc.mcsteps = args.mcsteps
@@ -1068,13 +1069,13 @@ def main():
         mctime = args.mctime
         mctime = mctime.split(',')
         gcmc.get_mctime(mctime)
-        print(f"Using fragment mctime: {mctime}")
+        print(f"Using solute mctime: {mctime}")
 
     if args.fragconc is not None:
         fragconc = args.fragconc
         fragconc = fragconc.split(',')
         gcmc.get_fragconc(fragconc)
-        print(f"Using fragment concentration: {fragconc}")
+        print(f"Using solute concentration: {fragconc}")
     
     if args.cavity_bias_dx is not None:
         gcmc.grid_dx = args.cavity_bias_dx
@@ -1095,7 +1096,7 @@ def main():
     
     if args.show_info:
         gcmc.showInfo = True
-        print(f"Showing the information of fragments")
+        print(f"Showing the information of solutes")
 
     gcmc.get_pdb(pdb_file)
 

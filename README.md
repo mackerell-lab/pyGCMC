@@ -30,20 +30,20 @@ options:
   -o file.txt, --out-file file.txt
                         The output file for GCMC
   -u muex1,muex2,..., --fragmuex muex1,muex2,...
-                        The value of fragment muex(splice by , with no space), if the first value is negative, then follow the -u or --fragmuex without space
+                        The value of solute muex(splice by , with no space), if the first value is negative, then follow the -u or --fragmuex without space
   -f conf1,conf2,... or conf, --fragconf conf1,conf2,... or conf
-                        The value of fragment conf(splice by , with no space). Or only one value for all fragments
+                        The value of solute conf(splice by , with no space). Or only one value for all solutes
   -n mcsteps, --mcsteps mcsteps
                         The number of MC steps
   -m mctime1,mctime2,..., --mctime mctime1,mctime2,...
-                        The mctime of Fragments(splice by , with no space)
+                        The mctime of solutes(splice by , with no space)
   -c conc1,conc2,..., --fragconc conc1,conc2,...
-                        The value of fragment concentration(splice by , with no space)
+                        The value of solute concentration(splice by , with no space)
   -y cavity_bias_dx, --cavitybias-dx cavity_bias_dx
                         The value of cavity bias dx(if dx <= 0, then no cavity bias)
   -e seed, --seed seed  The seed of random number
   -P, --PME             Enable PME(Default: Disable)
-  -w, --show-info       Show the information of fragments
+  -w, --show-info       Show the information of solutes
 
   ```
 
