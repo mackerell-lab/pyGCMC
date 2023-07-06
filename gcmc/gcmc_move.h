@@ -193,12 +193,17 @@ extern "C"{
             //     }
             // }
             // __syncthreads();
-
-            if (tid < SharedFragmentInfo.num_atoms){
-                SharedFragmentInfo.atoms[tid].position[0] += randomR[0];
-                SharedFragmentInfo.atoms[tid].position[1] += randomR[1];
-                SharedFragmentInfo.atoms[tid].position[2] += randomR[2];
+            for (int i= tid ; i < SharedFragmentInfo.num_atoms; i += blockDim.x){
+                SharedFragmentInfo.atoms[i].position[0] += randomR[0];
+                SharedFragmentInfo.atoms[i].position[1] += randomR[1];
+                SharedFragmentInfo.atoms[i].position[2] += randomR[2];
             }
+
+            // if (tid < SharedFragmentInfo.num_atoms){
+            //     SharedFragmentInfo.atoms[tid].position[0] += randomR[0];
+            //     SharedFragmentInfo.atoms[tid].position[1] += randomR[1];
+            //     SharedFragmentInfo.atoms[tid].position[2] += randomR[2];
+            // }
 
             if (tid < 3){
                 GTempInfo->position[tid] = randomR[tid];
@@ -677,7 +682,7 @@ extern "C"{
                 } else {
                     
                     // conf_p[it] = conf_p[it] / sum_p;
-                    float conf_p_sum = 0;
+                    double conf_p_sum = 0;
                     for (auto iit : conf_index_used)
                     {
                         conf_p_sum += conf_p[iit] / sum_p;
@@ -894,6 +899,64 @@ extern "C"{
 
         }
 
+        
+
+        
+        __global__ void GupdateDel(AtomArray *GfragmentInfo, residue *GresidueInfo, 
+                        Atom *GatomInfo,
+                        AtomArray *GTempFrag, Atom *GTempInfo, const int moveFragType, const int totalNum, const int conf_index) {
+            
+            int tid = threadIdx.x;
+            // int bid = blockIdx.x;
+
+            __shared__ int bidStartRes;
+            __shared__ int bidStartAtom;
+            __shared__ int bidAtomNum;
+
+            __shared__ int bidEndRes;
+            __shared__ int bidEndAtom;
+
+            if (tid == 0){
+                GfragmentInfo[moveFragType].totalNum = totalNum;
+
+            }
+
+            if (totalNum == 0)
+                return;
+
+            if (tid == 1){
+
+                bidStartRes = GfragmentInfo[moveFragType].startRes + GTempInfo[conf_index].type;
+                bidAtomNum = GresidueInfo[bidStartRes].atomNum;
+                bidStartAtom = GresidueInfo[bidStartRes].atomStart;
+
+                bidEndRes = GfragmentInfo[moveFragType].startRes + totalNum;
+                bidEndAtom = GresidueInfo[bidEndRes].atomStart;
+
+            }
+            __syncthreads();
+
+
+
+            if (tid == 0){
+                
+                GresidueInfo[bidStartRes].position[0] = GresidueInfo[bidEndRes].position[0];
+                GresidueInfo[bidStartRes].position[1] = GresidueInfo[bidEndRes].position[1];
+                GresidueInfo[bidStartRes].position[2] = GresidueInfo[bidEndRes].position[2];
+            }
+            // __syncthreads();
+            for (int i = tid;i<bidAtomNum;i+=numThreadsPerBlock){
+                GatomInfo[bidStartAtom + i].position[0] = GatomInfo[bidEndAtom + i].position[0];
+                GatomInfo[bidStartAtom + i].position[1] = GatomInfo[bidEndAtom + i].position[1];
+                GatomInfo[bidStartAtom + i].position[2] = GatomInfo[bidEndAtom + i].position[2];
+            }
+
+            // printf("The energy of the fragment %d is %f\n", GTempInfo[conf_index].type, GTempInfo[conf_index].charge);
+
+        }
+
+
+
         bool move_del(const InfoStruct *info, InfoStruct *Ginfo, AtomArray *fragmentInfo, AtomArray *GfragmentInfo, residue *GresidueInfo, Atom *GatomInfo, const float *Ggrid, const float *Gff,
                     const int moveFragType, AtomArray *GTempFrag, Atom *TempInfo, Atom *GTempInfo, curandState *d_rng_states){
 
@@ -933,10 +996,99 @@ extern "C"{
 
             cudaMemcpy(TempInfo, GTempInfo, sizeof(Atom)*nBlock, cudaMemcpyDeviceToHost);
 
+            std::vector<double> conf_p(nBlock);
+            int conf_index = 0;
+            float energy_max = TempInfo[0].charge; 
+            double sum_p = 0;
+
+            for (int i=1;i< nBlock;i++){
+                if (TempInfo[i].charge > energy_max){
+                    energy_max = TempInfo[i].charge;
+                }
+            }
+
+            for (int i=0;i< nBlock;i++){
+                conf_p[i] = exp(beta * (TempInfo[i].charge - energy_max )); // reverse the sign of the energy
+                sum_p += conf_p[i];
+            }
+
+            if (sum_p == 0) {
+                conf_index = 0;
+            } else {
+                
+                // conf_p[it] = conf_p[it] / sum_p;
+                double conf_p_sum = 0;
+                for (int i=0;i< nBlock;i++)
+                {
+                    conf_p_sum += conf_p[i] / sum_p;
+                    conf_p[i] = conf_p_sum;
+                }
+                float ran = (float)rand() / (float)RAND_MAX;
+
+                for (int i=0;i< nBlock;i++){
+                    conf_index = i;
+
+                    if (ran < conf_p[i] ){				
+                        break;
+                    }
+
+                }
+            }
+
+            // printf("The energy of the fragment %d, %d is %f\n", conf_index, TempInfo[conf_index].type ,TempInfo[conf_index].charge);
+            // printf("The max energy is %f\n", energy_max);
+
+
             // for (int i=0;i < nBlock;i++){
             //     printf("The energy of the fragment %d, %d is %f\t", i, TempInfo[i].type ,TempInfo[i].charge);
             //     printf("The position of the fragment is %f %f %f\n", TempInfo[i].position[0], TempInfo[i].position[1], TempInfo[i].position[2]);
             // }
+
+
+            const int waterNum = fragmentInfo[info->fragTypeNum - 1].totalNum;
+
+
+            // use number of waters to determin nbar value; this allows to take into account excluded volume by solutes
+
+            const float nbar = waterNum / 55.0 * fragmentInfo[moveFragType].conc;
+
+
+            const float B = beta * fragmentInfo[moveFragType].muex + log(nbar);
+                    
+            float diff = -TempInfo[conf_index].charge;
+            
+            conf_p[conf_index] =  exp(beta * (TempInfo[conf_index].charge - energy_max )) / sum_p;
+
+            float fn = 1;
+ 
+
+            fn /= nBlock * conf_p[conf_index];
+
+            float n =  fragmentInfo[moveFragType].totalNum;
+
+
+            float p = Min(1, n / fn * exp(-B - beta * diff));
+            // cout << p << endl;
+            float ran = rand() / (float)RAND_MAX;
+
+            // printf("B = %f, nbar = %f, diff = %f, p = %f, ran = %f, fn * exp(-B - beta * diff) = %f\n", B, nbar, diff, p, ran, fn * exp(-B - beta * diff));
+
+            if (ran < p)
+            {
+                // success
+                // printf("Delete!\n");
+                fragmentInfo[moveFragType].totalNum -= 1;
+
+                GupdateDel<<<1, numThreadsPerBlock>>>(GfragmentInfo,GresidueInfo, GatomInfo ,GTempFrag ,GTempInfo, moveFragType,fragmentInfo[moveFragType].totalNum, conf_index);
+                
+                return true;
+
+            }
+            else
+            {
+                // reject
+                return false;
+            }
 
             
             
