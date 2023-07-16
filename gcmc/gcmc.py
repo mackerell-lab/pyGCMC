@@ -901,6 +901,29 @@ class GCMC:
         print('End GPU simulation...')
         print('GPU simulation time: %s s' % (self.endtime - self.starttime))
 
+    def load_parameters(self, filename):
+        config_dict = {}
+        with open(filename, 'r') as file:
+            for line in file:
+                line = line.strip()  # Remove leading/trailing white spaces
+                if line:  # Ignore empty lines
+                    # Ignore content after '#', '!' and '//'
+                    line = line.split('#', 1)[0]
+                    line = line.split('//', 1)[0]
+                    line = line.split('!',1)[0]
+                    line = line.strip()  # Remove leading/trailing white spaces again
+                    if line:  # Ignore lines with only comments
+                        key, value = line.split(':', 1)  # Split key and value
+                        key = key.strip()  # Remove leading/trailing white spaces from key
+                        value = value.strip()  # Remove leading/trailing white spaces from value
+                        if key in config_dict:
+                            # If key already exists, append the new value to the list
+                            config_dict[key].append(value)
+                        else:
+                            # Otherwise, create a new list with the value
+                            config_dict[key] = [value]
+        print(config_dict)            
+
 def main():
     # file_output = open('Analyze_output.txt', 'w')
     # original_output = sys.stdout
@@ -1121,6 +1144,88 @@ def main():
     print(f"Python time used: {endtime - starttime} s")
 
     gcmc.run()
+
+    
+    print('GCMC simulation finished at %s...' % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
+
+    endtime = time.time()
+    print(f"Time used: {endtime - starttime} s")
+
+
+    # if top_file is not None:
+    #     try:
+    #         # top = protein_data.read_top(top_file)
+    #         protein_data.read_top(top_file)
+    #     except:
+    #         print(f"Error reading top file: {top_file}")
+    #         sys.exit(1)
+    #     # print(f"top atom number: {len(top)}")
+
+    if out_file is not None:
+        sys.stdout = original_output
+        file_output.close()
+
+
+
+
+
+
+def mainGCMC():
+    # file_output = open('Analyze_output.txt', 'w')
+    # original_output = sys.stdout
+    # sys.stdout = Tee(sys.stdout, file_output)
+
+
+    starttime = time.time()
+    
+    
+
+
+    parser = argparse.ArgumentParser(description='Perform GCMC Simulation')
+
+    parser.add_argument('-p', '--paramfile', type=str, required=True, 
+                        help='[Required] input parameter file')
+    parser.add_argument('-v', '--verbose', action='store_true', 
+                        help='[Optional] verbose output')
+    parser.add_argument('--logfile', type=str, 
+                        help='[Optional] log file, if not specified, then output will be stdout')
+    parser.add_argument('--debug', action='store_true', 
+                        help='[Optional] for debug purpose')
+    parser.add_argument('--version', action='version', version='GCMC version', 
+                        help='Show program\'s version number and exit')
+    args = parser.parse_args()
+
+
+
+    out_file = args.logfile
+
+    if out_file is not None:
+        file_output = open(out_file, 'w')
+        original_output = sys.stdout
+        sys.stdout = Tee(sys.stdout, file_output)
+        # print(f"Using output file: {out_file}")
+
+
+    print('Start GCMC simulation at %s...' % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
+
+
+
+    if out_file is not None:
+        print(f"Using output file: {out_file}")
+
+    gcmc = GCMC()
+
+    try:
+        gcmc.load_parameters(args.paramfile)
+    except:
+        print(f"Error reading parameter file: {args.paramfile}")
+        sys.exit(1)
+        
+
+
+    endtime = time.time()
+    print(f"Python time used: {endtime - starttime} s")
+
 
     
     print('GCMC simulation finished at %s...' % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))

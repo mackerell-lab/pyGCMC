@@ -13,8 +13,7 @@ pip install .
 ## Usage
 Run the pyGCMC executable:
 ```
-Start GCMC simulation at 2023-06-28 13:23:45...
-usage: gcmc [-h] -p file.pdb [-t file.top] [-s file.psf] [-o file.txt] [-u muex1,muex2,...] [-f conf1,conf2,... or conf] [-n mcsteps] [-m mctime1,mctime2,...]
+usage: pygcmc [-h] -p file.pdb [-t file.top] [-s file.psf] [-o file.txt] [-u muex1,muex2,...] [-f conf1,conf2,... or conf] [-n mcsteps] [-m mctime1,mctime2,...]
             [-c conc1,conc2,...] [-y cavity_bias_dx] [-e seed] [-P] [-w]
 
 pyGCMC - A python package for GCMC simulation
@@ -47,3 +46,18 @@ options:
 
   ```
 
+To Run `gcmc` as the old version, you can use the following command:
+```
+usage: gcmc [-h] -p PARAMFILE [-v] [--logfile LOGFILE] [--debug] [--version]
+
+Perform GCMC Simulation
+
+options:
+  -h, --help            show this help message and exit
+  -p PARAMFILE, --paramfile PARAMFILE
+                        [Required] input parameter file
+  -v, --verbose         [Optional] verbose output
+  --logfile LOGFILE     [Optional] log file, if not specified, then output will be stdout
+  --debug               [Optional] for debug purpose
+  --version             Show program's version number and exit
+  ```

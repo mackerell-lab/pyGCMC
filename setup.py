@@ -58,14 +58,15 @@ setup(
     install_requires=["numpy"],
     setup_requires=["numpy"],
     name="gcmc",
-    version="0.6.230706",
+    version="0.7.230715",
     packages=find_packages(),
     package_data=package_data,
     ext_modules=ext_modules,
     cmdclass={"build_ext": CustomBuildExt},
     entry_points={
         'console_scripts': [
-            'gcmc=gcmc:main',
+            'pygcmc=gcmc:main',
+            'gcmc=gcmc:mainGCMC'
         ],
     }
 )
