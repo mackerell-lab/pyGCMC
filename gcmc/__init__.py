@@ -13,6 +13,8 @@
 # import numpy as np
 # from . import gpu
 from .gcmc import *
+from .main import main
+from .mainOld import main as mainOld
 
 # Load the CHARMM force field parameters
 import os
