@@ -6,6 +6,7 @@ The python package is written in python, C++ and CUDA. The python package requir
 
 ## Installation
 The package can be downloaded from GitHub https://github.com/mackerell-lab/pyGCMC
+
 Download the source code from GitHub and run the setup script:
 ```
 pip install .
