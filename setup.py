@@ -20,7 +20,7 @@ cuda_include_path = os.path.join(os.path.dirname(nvcc_dir), 'include')
 print("\nnvcc_bin:\t\t", nvcc_bin,"\ncuda_lib_path:\t\t", cuda_lib_path,"\ncuda_include_path:\t", cuda_include_path,"\n")
 
 package_data = {
-    'gcmc': ['toppar.str', 'resources.zip', 'charmm36.ff/*','toppar/*'],
+    'gcmc': ['toppar.str', 'resources.zip', 'charmm36.ff/*','toppar/*','charmm36.ff/mol/*','*.cu','*.h','*.cpp'],
 }
 
 
@@ -57,8 +57,8 @@ ext_modules = [
 setup(
     install_requires=["numpy"],
     setup_requires=["numpy"],
-    name="gcmc",
-    version="0.8.231122",
+    name="pyGCMC",
+    version="0.9.231213",
     packages=find_packages(),
     package_data=package_data,
     ext_modules=ext_modules,
