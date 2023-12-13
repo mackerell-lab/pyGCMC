@@ -23,6 +23,11 @@ package_data = {
     'gcmc': ['toppar.str', 'resources.zip', 'charmm36.ff/*','toppar/*','charmm36.ff/mol/*','*.cu','*.h','*.cpp'],
 }
 
+# Load README.md for the long description
+
+with open("README.md", "r") as fh:
+    long_description = fh.read()
+
 
 class CustomBuildExt(build_ext):
     def build_extensions(self):
@@ -58,7 +63,7 @@ setup(
     install_requires=["numpy"],
     setup_requires=["numpy"],
     name="pyGCMC",
-    version="0.9.231213",
+    version="0.9.231215",
     packages=find_packages(),
     package_data=package_data,
     ext_modules=ext_modules,
@@ -68,5 +73,7 @@ setup(
             'pygcmc=gcmc:main',
             'gcmc=gcmc:mainOld'
         ],
-    }
+    },
+    long_description=long_description,
+    long_description_content_type='text/markdown'
 )

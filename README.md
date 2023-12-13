@@ -5,10 +5,16 @@ pyGCMC is a python package for performing grand canonical Monte Carlo simulation
 The python package is written in python, C++ and CUDA. The python package requires numpy. The C++ code requires a C++11 compatible compiler. The CUDA code requires a CUDA compatible GPU and the CUDA toolkit.
 
 ## Installation
+The package can be downloaded from GitHub https://github.com/mackerell-lab/pyGCMC
 Download the source code from GitHub and run the setup script:
 ```
 pip install .
 ```
+Or you can install the package from PyPI:
+```
+pip install pygcmc
+```
+The web page for the package on PyPI is https://pypi.org/project/pygcmc/
 
 ## Usage
 Run the pyGCMC executable:
