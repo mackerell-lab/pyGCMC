@@ -19,7 +19,7 @@ def main():
     # sys.stdout = Tee(sys.stdout, file_output)
 
 
-    starttime = time.time()
+    startTime = time.time()
     
     
 
@@ -66,15 +66,15 @@ def main():
         
 
 
-    endtime = time.time()
-    print(f"Python time used: {endtime - starttime} s")
+    endTime = time.time()
+    print(f"Python time used: {endTime - startTime} s")
 
 
     
     print('GCMC simulation finished at %s...' % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
 
-    endtime = time.time()
-    print(f"Time used: {endtime - starttime} s")
+    endTime = time.time()
+    print(f"Time used: {endTime - startTime} s")
 
 
     # if top_file is not None:

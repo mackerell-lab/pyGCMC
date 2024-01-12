@@ -17,7 +17,7 @@ def main():
     # original_output = sys.stdout
     # sys.stdout = Tee(sys.stdout, file_output)
 
-    starttime = time.time()
+    startTime = time.time()
     print('Start GCMC simulation at %s...' % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
     
 
@@ -228,16 +228,16 @@ def main():
     gcmc.get_simulation()
 
 
-    endtime = time.time()
-    print(f"Python time used: {endtime - starttime} s")
+    endTime = time.time()
+    print(f"Python time used: {endTime - startTime} s")
 
     gcmc.run()
 
     
     print('GCMC simulation finished at %s...' % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
 
-    endtime = time.time()
-    print(f"Time used: {endtime - starttime} s")
+    endTime = time.time()
+    print(f"Time used: {endTime - startTime} s")
 
 
     # if top_file is not None:

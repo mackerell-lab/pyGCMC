@@ -96,7 +96,7 @@ void print_ff(const float *ff, int ffXNum, int ffYNum) {
     }
 }
 
-void print_move_array(const int *moveArray, int mcsteps, const AtomArray *fragmentInfo) {
+void print_moveArray(const int *moveArray, int mcsteps, const AtomArray *fragmentInfo) {
     for (int i = 0; i < mcsteps; ++i) {
         std::cout << "Move " << (i + 1) << ":\t";
         int fragType = moveArray[i] / 4;
@@ -119,7 +119,7 @@ void print_all_info(const InfoStruct *info, const AtomArray *fragmentInfo, const
     print_atoms(fragmentInfo, info->fragTypeNum, residueInfo, atomInfo);
     print_grid(grid, info->totalGridNum);
     print_ff(ff, info->ffXNum, info->ffYNum);
-    print_move_array(moveArray, info->mcsteps, fragmentInfo);
+    print_moveArray(moveArray, info->mcsteps, fragmentInfo);
     
 }
 

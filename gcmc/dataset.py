@@ -138,35 +138,35 @@ class GCMCDataset:
             #     sys.exit(1) 
  
     def get_move(self):
-        self.move_array = np.array(random.choices(range(len(self.fragmentName)), weights=self.mctime, k=self.mcsteps),dtype=np.int32)
-        # self.move_array = np.random.choice(np.arange(len(self.fragmentName),dtype=np.int32), p=self.mctime, size=self.mcsteps)
+        self.moveArray = np.array(random.choices(range(len(self.fragmentName)), weights=self.mctime, k=self.mcsteps),dtype=np.int32)
+        # self.moveArray = np.random.choice(np.arange(len(self.fragmentName),dtype=np.int32), p=self.mctime, size=self.mcsteps)
 
 
-        for i, n in enumerate(self.move_array):
+        for i, n in enumerate(self.moveArray):
             if self.fragmentName[n] == 'SOL':
-                self.move_array[i] = self.move_array[i] * 4 + random.choices(range(len(self.attempt_prob_water)), weights=self.attempt_prob_water, k=1)[0]
+                self.moveArray[i] = self.moveArray[i] * 4 + random.choices(range(len(self.attempt_prob_water)), weights=self.attempt_prob_water, k=1)[0]
             else:
-                self.move_array[i] = self.move_array[i] * 4 + random.choices(range(len(self.attempt_prob_frag)), weights=self.attempt_prob_frag, k=1)[0]
+                self.moveArray[i] = self.moveArray[i] * 4 + random.choices(range(len(self.attempt_prob_frag)), weights=self.attempt_prob_frag, k=1)[0]
 
-        # for i, n in enumerate(self.move_array):
+        # for i, n in enumerate(self.moveArray):
         #     if self.fragmentName[n] == 'SOL':
-        #         self.move_array[i] = self.move_array[i] * 4 + np.random.choice(range(len(self.attempt_prob_water)), p=self.attempt_prob_water, size=1)[0]
+        #         self.moveArray[i] = self.moveArray[i] * 4 + np.random.choice(range(len(self.attempt_prob_water)), p=self.attempt_prob_water, size=1)[0]
         #     else:
-        #         self.move_array[i] = self.move_array[i] * 4 + np.random.choice(range(len(self.attempt_prob_frag)), p=self.attempt_prob_frag, size=1)[0]
+        #         self.moveArray[i] = self.moveArray[i] * 4 + np.random.choice(range(len(self.attempt_prob_frag)), p=self.attempt_prob_frag, size=1)[0]
 
 
-        self.move_array_n = [0 for i in range(len(self.attempt_prob_frag) * len(self.fragmentName))]
-        self.move_array_frag = [0 for i in range(len(self.fragmentName))]
+        self.moveArray_n = [0 for i in range(len(self.attempt_prob_frag) * len(self.fragmentName))]
+        self.moveArray_frag = [0 for i in range(len(self.fragmentName))]
 
-        for i in self.move_array:
-            self.move_array_n[i] += 1
-            self.move_array_frag[i//4] += 1
+        for i in self.moveArray:
+            self.moveArray_n[i] += 1
+            self.moveArray_frag[i//4] += 1
         
         movementName = ['Insert', 'Delete', 'Translate', 'Rotate']
         for i in range(len(self.fragmentName)):
-            print(f"Solute {self.fragmentName[i]}\t Movement {self.move_array_frag[i]} times", end='\t')
+            print(f"Solute {self.fragmentName[i]}\t Movement {self.moveArray_frag[i]} times", end='\t')
             for j in range(len(self.attempt_prob_frag)):
-                print(f"{movementName[j]} {self.move_array_n[i*4+j]} times", end='\t')
+                print(f"{movementName[j]} {self.moveArray_n[i*4+j]} times", end='\t')
             print()
 
 
@@ -204,8 +204,8 @@ class GCMCDataset:
 
             self.fragmentInfo[i]['totalNum'] = len(self.fraglist[i])
 
-            maxNum1 = self.fragconc[i] * self.volume * MOLES_TO_MOLECULES + self.move_array_n[i*4]
-            maxNum2 = len(self.fraglist[i]) + self.move_array_n[i*4] 
+            maxNum1 = self.fragconc[i] * self.volume * MOLES_TO_MOLECULES + self.moveArray_n[i*4]
+            maxNum2 = len(self.fraglist[i]) + self.moveArray_n[i*4] 
 
             self.fragmentInfo[i]['maxNum'] = max(maxNum1, maxNum2)
 

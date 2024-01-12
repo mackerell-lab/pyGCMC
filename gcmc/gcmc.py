@@ -9,37 +9,46 @@
 
 """
 
-# from .main import main
-# from .mainOld import main as mainOld
-
-# from .packages import *
-# from .values import *
 from .base import GCMCBase
 from .files import GCMCFiles
 from .parameters import GCMCParameters
 from .simulation import GCMCSimulation
 from .dataset import GCMCDataset
-
 import time
 from .gpu import runGCMC
 
 
-class GCMC(GCMCBase,GCMCFiles,GCMCParameters,GCMCDataset,GCMCSimulation):
-    
-    def __init__(self):
+class GCMC(GCMCBase, GCMCFiles, GCMCParameters, GCMCDataset, GCMCSimulation):
+    """
+    GCMC class that integrates base, files, parameters, dataset, and simulation modules
+    to perform a Grand Canonical Monte Carlo simulation.
+    """
 
-        GCMCBase.__init__(self)
+    def __init__(self):
+        """
+        Initialize the GCMC object by calling the constructor of GCMCBase.
+        """
+        # super(GCMCBase, self).__init__()
+        # GCMCBase.__init__(self)
+        super().__init__()
 
     def run(self):
-        self.starttime = time.time()
+        """
+        Run the GCMC simulation.
+        """
+        self.startTime = time.time()
         print('Start GPU simulation...')
 
-        runGCMC(self.SimInfo, self.fragmentInfo, self.residueInfo, self.atomInfo, self.grid, self.ff, self.move_array)
+        runGCMC(
+            self.SimInfo,
+            self.fragmentInfo,
+            self.residueInfo,
+            self.atomInfo,
+            self.grid,
+            self.ff,
+            self.moveArray
+        )
 
-        self.endtime = time.time()
+        self.endTime = time.time()
         print('End GPU simulation...')
-        print('GPU simulation time: %s s' % (self.endtime - self.starttime))
-
-
-
-
+        print(f'GPU simulation time: {self.endTime - self.startTime:.2f} s')
