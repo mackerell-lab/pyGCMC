@@ -42,6 +42,8 @@ void print_atom_array(const AtomArray &atom_array) {
 }
 
 void print_fragmentInfo(const AtomArray *fragmentInfo, int fragTypeNum) {
+
+    std::cout << "\n\nPrinting FragmentInfo:\n\n";
     for (int i = 0; i < fragTypeNum; ++i) {
         std::cout << "AtomArray " << (i + 1) << ":\n";
         print_atom_array(fragmentInfo[i]);
@@ -50,6 +52,8 @@ void print_fragmentInfo(const AtomArray *fragmentInfo, int fragTypeNum) {
 }
 
 void print_info_struct(const InfoStruct *info) {
+
+    std::cout << "\n\nPrinting InfoStruct:\n\n";
 
     std::cout << "Mcsteps: " << info->mcsteps << '\n';
     std::cout << "Cutoff: " << info->cutoff << '\n';
@@ -68,6 +72,19 @@ void print_info_struct(const InfoStruct *info) {
 }
 
 void print_atoms(const AtomArray *fragmentInfo, int fragTypeNum, const residue *residueInfo, const Atom *atomInfo) {
+
+    std::cout << "\n\nPrinting Atoms:\n\n";
+
+
+    std::cout << "\nFixed Atoms " << residueInfo[0].atomStart << ":\n";
+    for (int i = 0; i < residueInfo[0].atomStart; ++i) {
+        std::cout << "Atom " << (i + 1) << ":\n";
+        print_atom(atomInfo[i]);
+    }
+    std::cout << '\n';
+
+
+    std::cout << "\nMoving Atoms:\n";
     for (int i = 0; i < fragTypeNum; ++i) {
         std::cout << "AtomArray " << (i + 1) << ":\n";
         for (int j = fragmentInfo[i].startRes; j < fragmentInfo[i].startRes + fragmentInfo[i].totalNum; ++j) {
@@ -83,12 +100,14 @@ void print_atoms(const AtomArray *fragmentInfo, int fragTypeNum, const residue *
 
 
 void print_grid(const float *grid, int totalGridNum) {
+    std::cout << "\n\nPrinting Grid:\n\n";
     for (int i = 0; i < totalGridNum ; ++i) {
         std::cout << "Grid " << (i + 1) << ": " << grid[i * 3] << ", " << grid[i * 3 + 1] << ", " << grid[i * 3 + 2] << '\n';
     }
 }
 
 void print_ff(const float *ff, int ffXNum, int ffYNum) {
+    std::cout << "\n\nPrinting FF:\n\n";
     for (int i = 0; i < ffXNum; ++i) {
         for (int j = 0; j < ffYNum; ++j) {
             std::cout << "FF " << (i + 1) << ", " << (j + 1) << ": " << ff[(i * ffYNum + j)*2] << ", " << ff[(i * ffYNum + j)*2 + 1] << '\n';
@@ -97,6 +116,7 @@ void print_ff(const float *ff, int ffXNum, int ffYNum) {
 }
 
 void print_moveArray(const int *moveArray, int mcsteps, const AtomArray *fragmentInfo) {
+    std::cout << "\n\nPrinting MoveArray:\n\n";
     for (int i = 0; i < mcsteps; ++i) {
         std::cout << "Move " << (i + 1) << ":\t";
         int fragType = moveArray[i] / 4;
