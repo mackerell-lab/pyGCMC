@@ -8,5 +8,5 @@ pygcmc -w -p 5uul_proa_silcs.1.prod.25.rec.pdb -t 5uul_proa_silcs.1.gc.25.top -o
 
 rm charmm36.ff output.txt 
 cd ..
-rm -rf ../gcmc.egg-info ../build ../gcmc/*.o ../.eggs ../.vscode ../gcmc/__pycache__
+rm -rf ../pyGCMC.egg-info ../build ../gcmc/*.o ../.eggs ../.vscode ../gcmc/__pycache__
 cd 5uul

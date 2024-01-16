@@ -599,16 +599,27 @@ extern "C"{
             
             cudaMemcpy(TempInfo, GTempInfo, sizeof(Atom)*nBlock, cudaMemcpyDeviceToHost);
 
+            // printf("\n\n");
+            // for (int i=0;i<nBlock;i++)
+            //     printf("The energy of the %d fragment is %f\n", i, TempInfo[i].charge);
+
+            // printf("\n\n");
+
 
             const float *period = info->cryst;
 
-            const int waterNum = fragmentInfo[info->fragTypeNum - 1].totalNum;
+            // const int waterNum = fragmentInfo[info->fragTypeNum - 1].totalNum;
 
 
             // use number of waters to determin nbar value; this allows to take into account excluded volume by solutes
 
-            const float nbar = waterNum / 55.0 * fragmentInfo[moveFragType].conc;
+            // const float nbar = waterNum / 55.0 * fragmentInfo[moveFragType].conc;
 
+
+            // use concentration to determin nbar value; this allows to take into account excluded volume by solutes
+            const float nbar = period[0] * period[1] * period[2] * fragmentInfo[moveFragType].conc * MOLES_TO_MOLECULES;
+
+            // nbar = grid.volume * options->fragconc_list[frag_index] * MOLES_TO_MOLECULES;
 
             const float B = beta * fragmentInfo[moveFragType].muex + log(nbar);
             std::unordered_set<unsigned int> conf_index_unused;
@@ -726,9 +737,12 @@ extern "C"{
                 float p = Min(1, fn_tmp / (n + 1) * exp(B - beta * diff));
                 float ran = (float) rand() / (float)RAND_MAX;
 
+                // printf("Energy = %f p = %f ran = %f ",diff,p,ran);
+                // printf("n = %f B = %f beta = %f diff = %f\n",n,B,beta,diff);
 
                 if (ran < p)
                 {
+                    // printf("Success\n");
                     // success		
                     
                     for (auto iit = conf_index_unused.begin();iit != conf_index_unused.end();){
@@ -790,6 +804,9 @@ extern "C"{
  
 
             if (needUpdate){
+
+                
+                // printf("\nAdding %d\n",moveFragType);
                 
                 cudaMemcpy(GTempInfo, TempInfo, sizeof(Atom)*nBlock, cudaMemcpyHostToDevice);
                 GupdateAdd<<<nBlock, numThreadsPerBlock>>>(GfragmentInfo,GresidueInfo, GatomInfo ,GTempFrag ,GTempInfo, moveFragType,fragmentInfo[moveFragType].totalNum);
@@ -1044,13 +1061,18 @@ extern "C"{
             //     printf("The position of the fragment is %f %f %f\n", TempInfo[i].position[0], TempInfo[i].position[1], TempInfo[i].position[2]);
             // }
 
+            const float *period = info->cryst;
 
-            const int waterNum = fragmentInfo[info->fragTypeNum - 1].totalNum;
+            // const int waterNum = fragmentInfo[info->fragTypeNum - 1].totalNum;
 
 
             // use number of waters to determin nbar value; this allows to take into account excluded volume by solutes
 
-            const float nbar = waterNum / 55.0 * fragmentInfo[moveFragType].conc;
+            // const float nbar = waterNum / 55.0 * fragmentInfo[moveFragType].conc;
+
+            // use concentration to determin nbar value; this allows to take into account excluded volume by solutes
+            const float nbar = period[0] * period[1] * period[2] * fragmentInfo[moveFragType].conc * MOLES_TO_MOLECULES;
+
 
 
             const float B = beta * fragmentInfo[moveFragType].muex + log(nbar);
@@ -1076,7 +1098,7 @@ extern "C"{
             if (ran < p)
             {
                 // success
-                // printf("Delete!\n");
+                // printf("Delete %d!\n", moveFragType);
                 fragmentInfo[moveFragType].totalNum -= 1;
 
                 GupdateDel<<<1, numThreadsPerBlock>>>(GfragmentInfo,GresidueInfo, GatomInfo ,GTempFrag ,GTempInfo, moveFragType,fragmentInfo[moveFragType].totalNum, conf_index);

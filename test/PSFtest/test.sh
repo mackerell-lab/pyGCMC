@@ -5,7 +5,7 @@ cd ../../
 pip install .
 cd test/PSFtest
 
-pygcmc -p step1_pdbreader.pdb -s step1_pdbreader.psf -o output.txt -e 1024 -w
+pygcmc -p step1_pdbreader.pdb -t step1_pdbreader.top -o output.txt -e 1024 
 
 rm charmm36.ff output.txt 
 rm -rf ../../pyGCMC.egg-info ../../build ../../gcmc/*.o ../../.eggs ../../.vscode

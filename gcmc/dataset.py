@@ -204,7 +204,9 @@ class GCMCDataset:
 
             self.fragmentInfo[i]['totalNum'] = len(self.fraglist[i])
 
-            maxNum1 = self.fragconc[i] * self.volume * MOLES_TO_MOLECULES + self.moveArray_n[i*4]
+            # Two times of the number of fragments or the number of fragments plus the number of fragments in the largest configuration
+            
+            maxNum1 = self.fragconc[i] * self.volume * MOLES_TO_MOLECULES * 2 + self.moveArray_n[i*4]
             maxNum2 = len(self.fraglist[i]) + self.moveArray_n[i*4] 
 
             self.fragmentInfo[i]['maxNum'] = max(maxNum1, maxNum2)

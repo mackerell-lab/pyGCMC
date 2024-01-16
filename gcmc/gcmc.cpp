@@ -75,9 +75,11 @@ void print_atoms(const AtomArray *fragmentInfo, int fragTypeNum, const residue *
 
     std::cout << "\n\nPrinting Atoms:\n\n";
 
+    int startRes = fragmentInfo[0].startRes;
+    int atomStart = residueInfo[startRes].atomStart;
+    std::cout << "\nFixed Atoms " << atomStart << ":\n";
 
-    std::cout << "\nFixed Atoms " << residueInfo[0].atomStart << ":\n";
-    for (int i = 0; i < residueInfo[0].atomStart; ++i) {
+    for (int i = 0; i < atomStart; ++i) {
         std::cout << "Atom " << (i + 1) << ":\n";
         print_atom(atomInfo[i]);
     }
@@ -110,7 +112,7 @@ void print_ff(const float *ff, int ffXNum, int ffYNum) {
     std::cout << "\n\nPrinting FF:\n\n";
     for (int i = 0; i < ffXNum; ++i) {
         for (int j = 0; j < ffYNum; ++j) {
-            std::cout << "FF " << (i + 1) << ", " << (j + 1) << ": " << ff[(i * ffYNum + j)*2] << ", " << ff[(i * ffYNum + j)*2 + 1] << '\n';
+            std::cout << "FF " << (i + 1) << ", " << (j + 1) << ": " << " sigma " << ff[(i * ffYNum + j)*2] << ", " << " epsilon " << ff[(i * ffYNum + j)*2 + 1] << '\n';
         }
     }
 }
@@ -140,6 +142,8 @@ void print_all_info(const InfoStruct *info, const AtomArray *fragmentInfo, const
     print_grid(grid, info->totalGridNum);
     print_ff(ff, info->ffXNum, info->ffYNum);
     print_moveArray(moveArray, info->mcsteps, fragmentInfo);
+
+    std::flush(std::cout);
     
 }
 
@@ -173,7 +177,11 @@ static PyObject *runGCMC(PyObject *self, PyObject *args) {
 
     
     runGCMC_cuda(info, fragmentInfo, residueInfo, atomInfo, grid, ff, moveArray);
-    // printf("Hello World!\n");
+
+    // std::cout << "Finished GCMC in GPU\n\n";
+
+    if (info->showInfo > 0)
+        print_all_info(info, fragmentInfo, residueInfo, atomInfo, grid, ff, moveArray);
 
     Py_RETURN_NONE;
 }
