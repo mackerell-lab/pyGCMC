@@ -138,11 +138,11 @@ extern "C"{
                 break;
 
             case 2: // Trn
-                // accepted = move_trn(info, Ginfo,fragmentInfo, GfragmentInfo, GresidueInfo, GatomInfo, Ggrid, Gff, moveFragType, GTempFrag, TempInfo, GTempInfo, d_rng_states);
+                accepted = move_trn(info, Ginfo,fragmentInfo, GfragmentInfo, GresidueInfo, GatomInfo, Ggrid, Gff, moveFragType, GTempFrag, TempInfo, GTempInfo, d_rng_states);
                 break;
 
             case 3: // Rot
-                // accepted = move_rotate(frag_index);
+                accepted = move_rot(info, Ginfo,fragmentInfo, GfragmentInfo, GresidueInfo, GatomInfo, Ggrid, Gff, moveFragType, GTempFrag, TempInfo, GTempInfo, d_rng_states);
                 break;
             }
 

@@ -370,3 +370,10 @@ class GCMCDataset:
             # atom_center /= len(frag)
             # print(f"Fragment {self.fragmentName[i]}: The final center of conf: {atom_center}")
         
+
+    def get_data(self):
+
+        print("Getting data...")
+        
+        for i in range(len(self.fragmentName)):
+            print(f"Solute %s: Total number: %d" % (self.fragmentName[i], self.fragmentInfo[i]['totalNum']))

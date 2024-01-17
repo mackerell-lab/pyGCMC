@@ -233,6 +233,8 @@ def main():
 
     gcmc.run()
 
+
+    gcmc.get_data()
     
     print('GCMC simulation finished at %s...' % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
 
