@@ -9,6 +9,7 @@ class Atom:
         self.x = x
         self.y = y
         self.z = z
+        self.s = None
 
 
 def read_pdb(pdb_file):
@@ -34,7 +35,15 @@ def read_pdb(pdb_file):
             residue = line[17:20].strip()
             sequence = line[22:26].strip()
             atom = Atom(serial, name, residue, sequence, x, y, z)
+            atom.s = line
             atoms.append(atom)
+
+    if cryst is None:
+        x = [atom.x for atom in atoms]
+        y = [atom.y for atom in atoms]
+        z = [atom.z for atom in atoms]
+        cryst = [max(x)-min(x), max(y)-min(y), max(z)-min(z)]
+    
     return cryst,atoms
 
 
