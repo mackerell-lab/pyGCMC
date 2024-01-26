@@ -1,3 +1,13 @@
+"""
+
+    © Copyright 2023 - University of Maryland, Baltimore   All Rights Reserved    
+    	Mingtian Zhao, Alexander D. MacKerell Jr.        
+    E-mail: 
+    	zhaomt@outerbanks.umaryland.edu
+    	alex@outerbanks.umaryland.edu
+
+"""
+
 from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 import os
