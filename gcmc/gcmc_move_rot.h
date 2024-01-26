@@ -72,19 +72,19 @@ extern "C"{
             if (tid == 3){
                 energyTemp = GTempInfo[blockIdx.x].charge;
             }
-            if (tid < 3){
-                randomR[tid] = curand_uniform(rng_states) * SharedInfo.grid_dx;
-                if (GTempInfo[blockIdx.x].position[tid] + randomR[tid] > SharedInfo.cryst[tid]){
-                    randomR[tid] = randomR[tid] - SharedInfo.cryst[tid];
-                }
-                if (GTempInfo[blockIdx.x].position[tid] + randomR[tid] < 0){
-                    randomR[tid] = randomR[tid] + SharedInfo.cryst[tid];
-                }
-                GTempInfo[blockIdx.x].position[tid] += randomR[tid];
+            // if (tid < 3){
+            //     randomR[tid] = curand_uniform(rng_states) * SharedInfo.grid_dx;
+            //     if (GTempInfo[blockIdx.x].position[tid] + randomR[tid] > SharedInfo.cryst[tid]){
+            //         randomR[tid] = randomR[tid] - SharedInfo.cryst[tid];
+            //     }
+            //     if (GTempInfo[blockIdx.x].position[tid] + randomR[tid] < 0){
+            //         randomR[tid] = randomR[tid] + SharedInfo.cryst[tid];
+            //     }
+            //     GTempInfo[blockIdx.x].position[tid] += randomR[tid];
 
-            }
+            // }
 
-            __syncthreads();
+            // __syncthreads();
 
             __shared__ float randomThi[3];
             __shared__ float randomPhi;
@@ -102,14 +102,18 @@ extern "C"{
 
             __syncthreads();
 
-
-
-            for (int i=tid;i<SharedFragmentInfo.num_atoms;i+=numThreadsPerBlock){
-                center[0] += SharedFragmentInfo.atoms[i].position[0] / SharedFragmentInfo.num_atoms;
-                center[1] += SharedFragmentInfo.atoms[i].position[1] / SharedFragmentInfo.num_atoms;
-                center[2] += SharedFragmentInfo.atoms[i].position[2] / SharedFragmentInfo.num_atoms;
-
+            if (tid < 3){
+                for (int i=0;i<SharedFragmentInfo.num_atoms;i++){
+                    center[tid] += SharedFragmentInfo.atoms[i].position[tid] / SharedFragmentInfo.num_atoms;
+                }
             }
+
+            // for (int i=tid;i<SharedFragmentInfo.num_atoms;i+=numThreadsPerBlock){
+            //     center[0] += SharedFragmentInfo.atoms[i].position[0] / SharedFragmentInfo.num_atoms;
+            //     center[1] += SharedFragmentInfo.atoms[i].position[1] / SharedFragmentInfo.num_atoms;
+            //     center[2] += SharedFragmentInfo.atoms[i].position[2] / SharedFragmentInfo.num_atoms;
+
+            // }
 
             __syncthreads();
 

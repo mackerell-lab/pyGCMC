@@ -74,10 +74,10 @@ extern "C"{
             }
             if (tid < 3){
                 randomR[tid] = curand_uniform(rng_states) * SharedInfo.grid_dx;
-                if (GTempInfo[blockIdx.x].position[tid] + randomR[tid] > SharedInfo.cryst[tid]){
+                if (GTempInfo[blockIdx.x].position[tid] + randomR[tid] > SharedInfo.cryst[tid] + SharedInfo.startxyz[tid]){
                     randomR[tid] = randomR[tid] - SharedInfo.cryst[tid];
                 }
-                if (GTempInfo[blockIdx.x].position[tid] + randomR[tid] < 0){
+                if (GTempInfo[blockIdx.x].position[tid] + randomR[tid] < SharedInfo.startxyz[tid]){
                     randomR[tid] = randomR[tid] + SharedInfo.cryst[tid];
                 }
                 GTempInfo[blockIdx.x].position[tid] += randomR[tid];

@@ -377,3 +377,37 @@ class GCMCDataset:
         
         for i in range(len(self.fragmentName)):
             print(f"Solute %s: Total number: %d" % (self.fragmentName[i], self.fragmentInfo[i]['totalNum']))
+
+        s = 'CRYST1  %7f  %7f  %7f  90.00  90.00  90.00 P 1           1\n' % (self.cryst[0], self.cryst[1], self.cryst[2])
+        for atom in self.fix_atoms:
+            s += atom.s
+            s += '\n'
+
+        try:
+            atomNum = self.fix_atoms[-1].serial + 1
+        except:
+            atomNum = 1
+
+        try:
+            residueNum = self.fix_atoms[-1].sequence + 1
+        except:
+            residueNum = 1
+
+        # atom = self.fragments[0][0]
+        # print(atom.name, atom.residue, atom.type)
+
+        for i in range(len(self.fragmentName)):
+            for j in range(self.fragmentInfo[i]['totalNum']):
+                resNum = self.fragmentInfo[i]['startRes'] + j
+                res = self.residueInfo[resNum]
+                for k in range(res['atomNum']):
+                    atom = self.atomInfo[res['atomStart'] + k]
+                    s += 'ATOM  %5d %-4s %4s %4d    %8.3f%8.3f%8.3f  1.00  0.00\n' % ((atomNum - 1) % 99999 + 1, self.fragments[i][k].name[:4], self.fragmentName[i][:4], (residueNum - 1) % 9999 + 1, atom['position'][0], atom['position'][1], atom['position'][2])
+                    atomNum += 1
+                residueNum += 1
+        s += 'END\n'
+
+        self.PDBString = s
+
+
+        # print(s)

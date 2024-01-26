@@ -23,7 +23,7 @@ class GCMCFiles:
 
 
         try:
-            self.cryst, self.atoms = protein_data.read_pdb(pdb_file)
+            self.cryst, self.atoms, self.PDBString = protein_data.read_pdb(pdb_file)
         except:
             print(f"Error reading pdb file: {pdb_file}")
             sys.exit(1)

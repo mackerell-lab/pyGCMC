@@ -231,12 +231,23 @@ def main():
     endTime = time.time()
     print(f"Python time used: {endTime - startTime} s")
 
+
+    # Strat GPU GCMC simulation
     gcmc.run()
 
 
     gcmc.get_data()
+
+
+    # Write the output pdb file
+    outPDBName = pdb_file.rsplit('.', 1)[0] + '_out.pdb'
+
+    open(outPDBName, 'w').write(gcmc.PDBString)
+
     
     print('GCMC simulation finished at %s...' % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
+
+    
 
     endTime = time.time()
     print(f"Time used: {endTime - startTime} s")

@@ -44,7 +44,7 @@ def read_pdb(pdb_file):
         z = [atom.z for atom in atoms]
         cryst = [max(x)-min(x), max(y)-min(y), max(z)-min(z)]
     
-    return cryst,atoms
+    return cryst,atoms,s
 
 
 
