@@ -5,7 +5,7 @@ cd ../../
 pip install .
 cd test/largeSystem
 
-pygcmc -p memcrowdatp_cg.pdb -s memcrowdatp_cg.psf -o output.txt -e 1024 -n 100
+pygcmc -p memcrowdatp_cg.pdb -s memcrowdatp_cg.psf -o output.txt -e 1024 -n 10000
 
 rm charmm36.ff output.txt 
 rm -rf ../../pyGCMC.egg-info ../../build ../../gcmc/*.o ../../.eggs ../../.vscode

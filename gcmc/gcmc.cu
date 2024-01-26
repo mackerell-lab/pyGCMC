@@ -118,11 +118,28 @@ extern "C"{
 
         // std::cout << "maxConf: " << maxConf << std::endl;
 
+        int step_threshold = info->mcsteps / 20; // Calculate 5% of total steps
+        
+        // A simple progress indicator
+        for (int i=0;i < 10; i++ )
+        {
+            printf("%d ", i);
+        }
+        printf("\n");
+
         for (int stepi = 0 ; stepi < info->mcsteps; ++stepi){
             // Start MC steps
             int moveFragType = moveArray[stepi] / 4;
             int moveMoveType = moveArray[stepi] % 4;
             int confBias = fragmentInfo[moveFragType].confBias;
+
+            
+            // Print a dot every 10% of total steps
+            if (step_threshold !=0 && stepi % step_threshold == 0) {
+                printf(".");
+                fflush(stdout); // Ensure the dot is printed immediately
+            } 
+
 
             // perform move
             bool accepted = false;
@@ -151,6 +168,7 @@ extern "C"{
 
 
         }
+        printf("\n"); // Print a newline at the end of the simulation
 
 
 
