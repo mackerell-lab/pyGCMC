@@ -383,12 +383,12 @@ class GCMCDataset:
             s += '\n'
 
         try:
-            atomNum = self.fix_atoms[-1].serial + 1
+            atomNum = int(self.fix_atoms[-1].serial) + 1
         except:
             atomNum = 1
 
         try:
-            residueNum = self.fix_atoms[-1].sequence + 1
+            residueNum = int(self.fix_atoms[-1].sequence) + 1
         except:
             residueNum = 1
 
@@ -401,7 +401,7 @@ class GCMCDataset:
                 res = self.residueInfo[resNum]
                 for k in range(res['atomNum']):
                     atom = self.atomInfo[res['atomStart'] + k]
-                    s += 'ATOM  %5d %-4s %4s %4d    %8.3f%8.3f%8.3f  1.00  0.00\n' % ((atomNum - 1) % 99999 + 1, self.fragments[i][k].name[:4], self.fragmentName[i][:4], (residueNum - 1) % 9999 + 1, atom['position'][0], atom['position'][1], atom['position'][2])
+                    s += 'ATOM  %5d  %-4s%4s %4d    %8.3f%8.3f%8.3f  1.00  0.00\n' % ((atomNum - 1) % 99999 + 1, self.fragments[i][k].name[:4], self.fragmentName[i][:4], (residueNum - 1) % 9999 + 1, atom['position'][0], atom['position'][1], atom['position'][2])
                     atomNum += 1
                 residueNum += 1
         s += 'END\n'

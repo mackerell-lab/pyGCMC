@@ -158,10 +158,13 @@ class GCMCFiles:
                 sys.exit(1)
     
 
-
+    def bool_parameters(self,value):
+        if value.lower() == 'yes' or value.lower() == 'true' or value.lower() == 'on' or value.lower() == '1':
+            return True
+        return False
     
     def load_parameters(self, filename):
-        config_dict = {}
+        self.config_dict = {}
         with open(filename, 'r') as file:
             for line in file:
                 line = line.strip()  # Remove leading/trailing white spaces
@@ -175,10 +178,11 @@ class GCMCFiles:
                         key, value = line.split(':', 1)  # Split key and value
                         key = key.strip()  # Remove leading/trailing white spaces from key
                         value = value.strip()  # Remove leading/trailing white spaces from value
-                        if key in config_dict:
+                        if key in self.config_dict:
                             # If key already exists, append the new value to the list
-                            config_dict[key].append(value)
+                            self.config_dict[key].append(value)
                         else:
                             # Otherwise, create a new list with the value
-                            config_dict[key] = [value]
-        print(config_dict)            
+                            self.config_dict[key] = [value]
+        for i in self.config_dict:
+            print(i, self.config_dict[i])

@@ -35,11 +35,11 @@ fragmuex:    11.61     8.63     2.29    -2.04    -7.67   -11.23   -61.77   -92.7
 fragconf:      400       15       15       10       20      300      200      100        2 
 mctime:      0.025    0.025    0.025    0.025    0.025    0.025    0.025    0.025    0.800 
 insdel_frac:0.6
-nprint:10000
+nprint:200
 conserve_frags:no
 map_generation:yes
 op_top:4wp7_fixed_with_5l13_silcs.1.gc.75.top
 op_pdb:4wp7_fixed_with_5l13_silcs.1.gc.75.pdb
 initcycle:no
 map_filename_prefix:gc_maps/4wp7_fixed_with_5l13_silcs.gc.1.75
-mcsteps:200000
+mcsteps:2000

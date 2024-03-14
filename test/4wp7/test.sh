@@ -13,6 +13,6 @@ gcmc -v -p gcmc.75.inp > gcmc.75.out
 # gcmc -p 6v3g_silcs.1.pdb -t 6v3g_silcs.1.top -o output.txt -e 54 -n 1
 #done
 
-rm charmm36.ff output.txt 
+rm -rf charmm36.ff output.txt 
 cd ../
 rm -rf ../gcmc.egg-info ../build ../gcmc/*.o ../.eggs ../.vscode
