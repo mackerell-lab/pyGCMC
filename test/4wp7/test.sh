@@ -15,4 +15,4 @@ gcmc -v -p gcmc.75.inp > gcmc.75.out
 
 rm -rf charmm36.ff output.txt 
 cd ../
-rm -rf ../gcmc.egg-info ../build ../gcmc/*.o ../.eggs ../.vscode
+rm -rf ../*.egg-info ../build ../gcmc/*.o ../.eggs ../.vscode
