@@ -91,6 +91,8 @@ extern "C"{
                 GatomInfo[bidStartAtom + i].position[0] = GTempFrag[bid].atoms[i].position[0];
                 GatomInfo[bidStartAtom + i].position[1] = GTempFrag[bid].atoms[i].position[1];
                 GatomInfo[bidStartAtom + i].position[2] = GTempFrag[bid].atoms[i].position[2];
+                GatomInfo[bidStartAtom + i].type = GTempFrag[bid].atoms[i].type;
+                GatomInfo[bidStartAtom + i].charge = GTempFrag[bid].atoms[i].charge;
             }
         }
 
