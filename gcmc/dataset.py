@@ -414,7 +414,7 @@ class GCMCDataset:
             
             s = copy.deepcopy(self.TOPString)
             try:
-                pattern = r'\s*\[\s*molecules\s*\]\s*'
+                pattern = r'\[\s*molecules\s*\]'
                 parts = re.split(pattern, s)
                 # print(parts[1])
                 parts[1] = parts[1].strip()+'\n'
@@ -430,7 +430,7 @@ class GCMCDataset:
                     else:
                         parts[1] += '%-s\t%d\n' % (self.fragmentName[i], self.fragmentInfo[i]['totalNum'])
                 
-                self.TOPString = parts[0] + '[ molecules ]\n' + parts[1]
+                self.TOPString = parts[0] + '\n[ molecules ]\n' + parts[1]
                 # print(self.TOPString)
 
             except:
