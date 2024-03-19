@@ -298,7 +298,7 @@ def read_top(top_file):
                 break
     # print(moleculetype)
     # print(atoms_top[233336])
-    return atoms_top
+    return atoms_top, s
     # for i in moleculetypes:
     #     print(i[0])
     

@@ -129,6 +129,7 @@ def main():
     gcmc.get_data()
 
     open(pdb_out_file, 'w').write(gcmc.PDBString)
+    open(top_out_file, 'w').write(gcmc.TOPString)
 
 
 

@@ -12,6 +12,8 @@ import sys
 import numpy as np
 import random
 from .values import *
+import copy
+import re
 
 
 class GCMCDataset:
@@ -407,6 +409,37 @@ class GCMCDataset:
         s += 'END\n'
 
         self.PDBString = s
+
+        if self.topologyType == 'top':
+            
+            s = copy.deepcopy(self.TOPString)
+            try:
+                pattern = r'\s*\[\s*molecules\s*\]\s*'
+                parts = re.split(pattern, s)
+                # print(parts[1])
+                parts[1] = parts[1].strip()+'\n'
+                p = re.findall(r'(\S+?)\s+(\d+)', parts[1])
+                d = {i[0]:i[1] for i in p}
+                # print(d)
+
+                for i in range(len(self.fragmentName)):
+                    if self.fragmentName[i] in d:
+                        ni = self.fragmentName[i]
+
+                        parts[1] = re.sub('%s\\s+%s' % (ni,d[ni]), '%-s\\t%d' % (self.fragmentName[i], self.fragmentInfo[i]['totalNum']), parts[1])  
+                    else:
+                        parts[1] += '%-s\t%d\n' % (self.fragmentName[i], self.fragmentInfo[i]['totalNum'])
+                
+                self.TOPString = parts[0] + '[ molecules ]\n' + parts[1]
+                # print(self.TOPString)
+
+            except:
+                print("Error: writing top file error")
+                sys.exit(1)
+
+
+
+
 
 
         # print(s)

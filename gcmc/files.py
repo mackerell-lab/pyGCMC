@@ -56,6 +56,8 @@ class GCMCFiles:
         
             
     def get_top(self,top_file):
+
+        self.topologyType = 'top'
         self.top_file = top_file
 
 
@@ -63,7 +65,7 @@ class GCMCFiles:
         
 
         try:
-            self.atom_top = protein_data.read_top(top_file)
+            self.atom_top, self.TOPString = protein_data.read_top(top_file)
         except:
             print(f"Error reading top file: {top_file}")
             sys.exit(1)
@@ -87,6 +89,7 @@ class GCMCFiles:
             atom.nameTop = self.atom_top[i][3]
         
     def get_psf(self,psf_file):
+        self.topologyType = 'psf'
         self.psf_file = psf_file
 
         print(f"Using psf file: {psf_file}")

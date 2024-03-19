@@ -42,4 +42,4 @@ op_top:4wp7_fixed_with_5l13_silcs.1.gc.75.top
 op_pdb:4wp7_fixed_with_5l13_silcs.1.gc.75.pdb
 initcycle:no
 map_filename_prefix:gc_maps/4wp7_fixed_with_5l13_silcs.gc.1.75
-mcsteps:10
+mcsteps:100
