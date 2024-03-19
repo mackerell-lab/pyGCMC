@@ -21,12 +21,12 @@ class GCMCFiles:
         print(f"Using pdb file: {pdb_file}")
 
 
-        # try:
-        self.cryst, self.atoms, self.PDBString = protein_data.read_pdb(pdb_file)
-        # except Exception as e:
-        #     print(f"Error reading pdb file: {pdb_file}")
-        #     print(f"Error message: {str(e)}")
-        #     sys.exit(1)
+        try:
+            self.cryst, self.atoms, self.PDBString = protein_data.read_pdb(pdb_file)
+        except Exception as e:
+            print(f"Error reading pdb file: {pdb_file}")
+            print(f"Error message: {str(e)}")
+            sys.exit(1)
 
         print(f"pdb atom number: {len(self.atoms)}")   
 
