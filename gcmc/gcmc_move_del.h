@@ -130,8 +130,11 @@ extern "C"{
                       const int moveFragType, AtomArray *GTempFrag, Atom *TempInfo, Atom *GTempInfo, curandState *d_rng_states){
 
             // Determine the number of blocks
-            const int nBlock = min(fragmentInfo[moveFragType].confBias, fragmentInfo[moveFragType].totalNum);
+            // const int nBlock = min(fragmentInfo[moveFragType].confBias, fragmentInfo[moveFragType].totalNum);
+            // It's very important to use a small value for nBlock, otherwise the program will delete all the solute molecules
 
+            const int nBlock = 1;
+            
             if (nBlock == 0){
                 return false;
             }
