@@ -223,6 +223,7 @@ extern "C"{
                         tempInfoHost[confIndex].type = fragmentInfoHost[moveFragType].totalNum;
                         fragmentInfoHost[moveFragType].totalNum += 1;
                         needUpdate = true;
+                        printf("Fragment %4s added. fnTmp %f / (n %f + 1) * exp(B %f - beta %f * diff %f) = %f\n", fragmentInfoHost[moveFragType].name, fnTmp, n, B, beta, diff, fnTmp / (n + 1) * exp(B - beta * diff));
                     }
                 }
             }

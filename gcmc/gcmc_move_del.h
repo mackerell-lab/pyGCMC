@@ -217,6 +217,9 @@ extern "C"{
             if (ran < p)
             {
                 // Accept the move
+
+                printf("Fragment %4s deleted. n %f/ fn %f* exp(-B %f- beta %f* diff %f) = %f\n", fragmentInfo[moveFragType].name, n, fn, B, beta, diff, n / fn * exp(-B - beta * diff));
+
                 fragmentInfo[moveFragType].totalNum -= 1;
                 GupdateDel<<<1, numThreadsPerBlock>>>(GfragmentInfo,GresidueInfo, GatomInfo ,GTempFrag ,GTempInfo, moveFragType,fragmentInfo[moveFragType].totalNum, conf_index);
                 return true;
