@@ -42,4 +42,4 @@ op_top:memcrowdatp_m4_silcs.6.gc.4.top
 op_pdb:memcrowdatp_m4_silcs.6.gc.4.pdb
 initcycle:no
 map_filename_prefix:gc_maps/memcrowdatp_m4_silcs.gc.6.4
-mcsteps:2000
+mcsteps:200000
