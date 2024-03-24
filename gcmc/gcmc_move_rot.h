@@ -321,6 +321,14 @@ extern "C"{
                 // Generate a random number
                 float ran = (float) rand() / (float)RAND_MAX;
 
+                int tempInfoHostType = tempInfoHost[confIndex].type;
+
+                for (auto iit = confIndexUsed.begin();iit != confIndexUsed.end();){
+                    tempInfoHost[*iit].type = -1;
+                    iit ++ ;
+
+                }
+
                 // If the random number is less than the acceptance probability
                 if (ran < p)
                 {
@@ -335,13 +343,7 @@ extern "C"{
                             iit ++ ;
                     }
 
-                    int tempInfoHostType = tempInfoHost[confIndex].type;
 
-                    for (auto iit = confIndexUsed.begin();iit != confIndexUsed.end();){
-                        tempInfoHost[*iit].type = -1;
-                        iit ++ ;
-
-                    }
 
                     tempInfoHost[confIndex].type = tempInfoHostType;
 
@@ -349,6 +351,13 @@ extern "C"{
 
                     // Set the update flag to true
                     needUpdate = true;
+
+                    char tempName[5];  
+                    strncpy(tempName, fragmentInfoHost[moveFragType].name, 4);  
+                    tempName[4] = '\0'; 
+
+                    printf("Fragment %4s No. %d rot. fnTmp %f * exp( - beta %f * diff %f) = %f\n", tempName, tempInfoHost[confIndex].type, fnTmp, beta, diff, fnTmp * exp( - beta * diff));
+
                     
                 }
             }

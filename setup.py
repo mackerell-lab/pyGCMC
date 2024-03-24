@@ -82,7 +82,7 @@ setup(
     install_requires=["numpy"],
     setup_requires=["numpy"],
     name="pyGCMC",
-    version="0.12.240126",
+    version="1.0.240323",
     packages=find_packages(),
     package_data=packageData,
     ext_modules=extModules,

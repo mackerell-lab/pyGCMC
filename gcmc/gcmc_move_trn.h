@@ -283,6 +283,14 @@ extern "C"{
                 // Generate a random number
                 float ran = (float) rand() / (float)RAND_MAX;
 
+                int tempInfoHostType = tempInfoHost[confIndex].type;
+
+                for (auto iit = confIndexUsed.begin();iit != confIndexUsed.end();){
+                    tempInfoHost[*iit].type = -1;
+                    iit ++ ;
+
+                }
+
                 // If the random number is less than the acceptance probability
                 if (ran < p)
                 {
@@ -297,15 +305,17 @@ extern "C"{
                             iit ++ ;
                     }
 
-                    int tempInfoHostType = tempInfoHost[confIndex].type;
 
-                    for (auto iit = confIndexUsed.begin();iit != confIndexUsed.end();){
-                        tempInfoHost[*iit].type = -1;
-                        iit ++ ;
-
-                    }
 
                     tempInfoHost[confIndex].type = tempInfoHostType;
+
+                    // printf("Fragment %4s No. %d deleted. n %f/ fn %f* exp(-B %f- beta %f* diff %f) = %f\n", tempName, TempInfo[conf_index].type, n, fn, B, beta, diff, n / fn * exp(-B - beta * diff));
+
+                    
+                    char tempName[5];  
+                    strncpy(tempName, fragmentInfoHost[moveFragType].name, 4);  
+                    tempName[4] = '\0'; 
+                    printf("Fragment %4s No. %d trn. fnTmp %f * exp( - beta %f * diff %f) = %f\n", tempName, tempInfoHost[confIndex].type, fnTmp, beta, diff, fnTmp * exp( - beta * diff));
 
                     // printf("move_trn: %d \tE= %f\t", tempInfoHostType, energyNew);
 

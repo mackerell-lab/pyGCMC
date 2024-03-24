@@ -218,7 +218,11 @@ extern "C"{
             {
                 // Accept the move
 
-                printf("Fragment %4s deleted. n %f/ fn %f* exp(-B %f- beta %f* diff %f) = %f\n", fragmentInfo[moveFragType].name, n, fn, B, beta, diff, n / fn * exp(-B - beta * diff));
+                char tempName[5];  
+                strncpy(tempName, fragmentInfo[moveFragType].name, 4);  
+                tempName[4] = '\0'; 
+
+                printf("Fragment %4s No. %d deleted. n %f/ fn %f* exp(-B %f- beta %f* diff %f) = %f\n", tempName, TempInfo[conf_index].type, n, fn, B, beta, diff, n / fn * exp(-B - beta * diff));
 
                 fragmentInfo[moveFragType].totalNum -= 1;
                 GupdateDel<<<1, numThreadsPerBlock>>>(GfragmentInfo,GresidueInfo, GatomInfo ,GTempFrag ,GTempInfo, moveFragType,fragmentInfo[moveFragType].totalNum, conf_index);

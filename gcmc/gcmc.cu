@@ -120,12 +120,12 @@ extern "C"{
 
         int step_threshold = info->mcsteps / 20; // Calculate 5% of total steps
         
-        // A simple progress indicator
-        for (int i=0;i < 10; i++ )
-        {
-            printf("%d ", i);
-        }
-        printf("\n");
+        // // A simple progress indicator
+        // for (int i=0;i < 10; i++ )
+        // {
+        //     printf("%d ", i);
+        // }
+        // printf("\n");
 
         for (int stepi = 0 ; stepi < info->mcsteps; ++stepi){
             // Start MC steps
@@ -134,11 +134,11 @@ extern "C"{
             int confBias = fragmentInfo[moveFragType].confBias;
 
             
-            // Print a dot every 10% of total steps
-            if (step_threshold !=0 && stepi % step_threshold == 0) {
-                printf(".");
-                fflush(stdout); // Ensure the dot is printed immediately
-            } 
+            // // Print a dot every 10% of total steps
+            // if (step_threshold !=0 && stepi % step_threshold == 0) {
+            //     printf(".");
+            //     fflush(stdout); // Ensure the dot is printed immediately
+            // } 
 
 
             // perform move

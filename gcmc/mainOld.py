@@ -123,6 +123,8 @@ def main():
     endTime = time.time()
     print(f"Python time used: {endTime - startTime} s")
 
+    sys.stdout.flush()
+
     # Start GPU GCMC simulation
     gcmc.run()
 
