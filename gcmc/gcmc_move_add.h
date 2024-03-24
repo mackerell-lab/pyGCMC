@@ -223,10 +223,10 @@ extern "C"{
                         tempInfoHost[confIndex].type = fragmentInfoHost[moveFragType].totalNum;
                         fragmentInfoHost[moveFragType].totalNum += 1;
                         needUpdate = true;
-                        char tempName[5];  
-                        strncpy(tempName, fragmentInfoHost[moveFragType].name, 4);  
-                        tempName[4] = '\0'; 
-                        printf("Fragment %4s inserted. fnTmp %f / (n %f + 1) * exp(B %f - beta %f * diff %f) = %f\n", tempName, fnTmp, n, B, beta, diff, fnTmp / (n + 1) * exp(B - beta * diff));
+                        // char tempName[5];  
+                        // strncpy(tempName, fragmentInfoHost[moveFragType].name, 4);  
+                        // tempName[4] = '\0'; 
+                        // printf("Fragment %4s inserted. fnTmp %f / (n %f + 1) * exp(B %f - beta %f * diff %f) = %f\n", tempName, fnTmp, n, B, beta, diff, fnTmp / (n + 1) * exp(B - beta * diff));
                     }
                 }
             }

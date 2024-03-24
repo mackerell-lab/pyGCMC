@@ -352,11 +352,11 @@ extern "C"{
                     // Set the update flag to true
                     needUpdate = true;
 
-                    char tempName[5];  
-                    strncpy(tempName, fragmentInfoHost[moveFragType].name, 4);  
-                    tempName[4] = '\0'; 
+                    // char tempName[5];  
+                    // strncpy(tempName, fragmentInfoHost[moveFragType].name, 4);  
+                    // tempName[4] = '\0'; 
 
-                    printf("Fragment %4s No. %d rot. fnTmp %f * exp( - beta %f * diff %f) = %f\n", tempName, tempInfoHost[confIndex].type, fnTmp, beta, diff, fnTmp * exp( - beta * diff));
+                    // printf("Fragment %4s No. %d rot. fnTmp %f * exp( - beta %f * diff %f) = %f\n", tempName, tempInfoHost[confIndex].type, fnTmp, beta, diff, fnTmp * exp( - beta * diff));
 
                     
                 }

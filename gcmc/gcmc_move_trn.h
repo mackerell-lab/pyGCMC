@@ -312,10 +312,10 @@ extern "C"{
                     // printf("Fragment %4s No. %d deleted. n %f/ fn %f* exp(-B %f- beta %f* diff %f) = %f\n", tempName, TempInfo[conf_index].type, n, fn, B, beta, diff, n / fn * exp(-B - beta * diff));
 
                     
-                    char tempName[5];  
-                    strncpy(tempName, fragmentInfoHost[moveFragType].name, 4);  
-                    tempName[4] = '\0'; 
-                    printf("Fragment %4s No. %d trn. fnTmp %f * exp( - beta %f * diff %f) = %f\n", tempName, tempInfoHost[confIndex].type, fnTmp, beta, diff, fnTmp * exp( - beta * diff));
+                    // char tempName[5];  
+                    // strncpy(tempName, fragmentInfoHost[moveFragType].name, 4);  
+                    // tempName[4] = '\0'; 
+                    // printf("Fragment %4s No. %d trn. fnTmp %f * exp( - beta %f * diff %f) = %f\n", tempName, tempInfoHost[confIndex].type, fnTmp, beta, diff, fnTmp * exp( - beta * diff));
 
                     // printf("move_trn: %d \tE= %f\t", tempInfoHostType, energyNew);
 
