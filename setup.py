@@ -1,33 +1,59 @@
 """
-
     © Copyright 2023 - University of Maryland, Baltimore   All Rights Reserved    
     	Mingtian Zhao, Alexander D. MacKerell Jr.        
     E-mail: 
     	zhaomt@outerbanks.umaryland.edu
     	alex@outerbanks.umaryland.edu
-
 """
 
 from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
+from distutils.command.clean import clean
 import os
 import shutil
 import subprocess
+import platform
+
+def find_nvcc():
+    nvcc_bins = [
+        os.environ.get('OPENMM_CUDA_COMPILER'),
+        shutil.which('nvcc'),
+        '/usr/local/cuda/bin/nvcc'
+    ]
+    for nvcc_path in nvcc_bins:
+        if nvcc_path and os.path.exists(nvcc_path):
+            return nvcc_path
+    raise RuntimeError("CUDA compiler (nvcc) not found. Please ensure CUDA is installed and in your PATH.")
+
+def get_cuda_version(nvcc_path):
+    try:
+        result = subprocess.run([nvcc_path, '--version'], capture_output=True, text=True)
+        version_str = result.stdout.split('release ')[-1].split(',')[0]
+        return tuple(map(int, version_str.split('.')))
+    except:
+        return None
 
 # CUDA specific configuration
-nvccBins = [os.environ.get('OPENMM_CUDA_COMPILER'), shutil.which('nvcc'), '/usr/local/cuda/bin/nvcc']
-nvccBin = next((nvccPath for nvccPath in nvccBins if nvccPath and os.path.exists(nvccPath)), None)
+nvcc_bin = find_nvcc()
+cuda_version = get_cuda_version(nvcc_bin)
 
-nvccDir = os.path.dirname(os.path.abspath(nvccBin))
-cudaLibPath = os.path.join(os.path.dirname(nvccDir), 'lib64')
-cudaIncludePath = os.path.join(os.path.dirname(nvccDir), 'include')
+if cuda_version and cuda_version < (9, 0):
+    raise RuntimeError(f"CUDA version {'.'.join(map(str, cuda_version))} is not supported. Please use CUDA 9.0 or later.")
 
-print("\nnvcc_bin:\t\t", nvccBin, 
-      "\ncuda_lib_path:\t\t", cudaLibPath, 
-      "\ncuda_include_path:\t", cudaIncludePath, "\n")
+nvcc_dir = os.path.dirname(os.path.abspath(nvcc_bin))
+if platform.system() == 'Windows':
+    cuda_lib_path = os.path.join(os.path.dirname(nvcc_dir), 'lib', 'x64')
+else:
+    cuda_lib_path = os.path.join(os.path.dirname(nvcc_dir), 'lib64')
+cuda_include_path = os.path.join(os.path.dirname(nvcc_dir), 'include')
+
+print(f"\nnvcc_bin: {nvcc_bin}")
+print(f"cuda_lib_path: {cuda_lib_path}")
+print(f"cuda_include_path: {cuda_include_path}")
+print(f"CUDA Version: {'.'.join(map(str, cuda_version)) if cuda_version else 'Unknown'}\n")
 
 # Package data
-packageData = {
+package_data = {
     'gcmc': [
         'toppar.str', 
         'resources.zip', 
@@ -41,35 +67,42 @@ packageData = {
 }
 
 # Load README.md for the long description
-with open("README.md", "r") as file:
-    longDescription = file.read()
+with open("README.md", "r", encoding="utf-8") as file:
+    long_description = file.read()
 
-
-# Custom build extension class
 class CustomBuildExt(build_ext):
-    """ Custom build extension class. """
     def build_extensions(self):
         import numpy as np
 
-        gccCompileArgs = ["-std=c++11", "-fPIC"]
+        gcc_compile_args = ["-std=c++11", "-fPIC", "-O3"]
         
         # Compile the CUDA code
-        cudaFile = "gcmc/gcmc.cu"
-        objFile = "gcmc/gcmc.o"
-        nvccCommand = [nvccBin, "-c", cudaFile, "-o", objFile, "--compiler-options", "-fPIC"]
-        subprocess.check_call(nvccCommand)
+        cuda_file = "gcmc/gcmc.cu"
+        obj_file = "gcmc/gcmc.o"
+        nvcc_command = [nvcc_bin, "-c", cuda_file, "-o", obj_file, "--compiler-options", "-fPIC", "-O3"]
+        subprocess.check_call(nvcc_command)
 
         for ext in self.extensions:
-            ext.extra_compile_args = gccCompileArgs
-            ext.extra_objects = [objFile]  # Link the CUDA object file
-            ext.include_dirs.append(cudaIncludePath)  # Add CUDA include path
-            ext.include_dirs.append(np.get_include())
-            ext.library_dirs.append(cudaLibPath)  # Add CUDA library path
-            ext.libraries.append("cudart")  # Add the CUDA runtime library
+            ext.extra_compile_args = gcc_compile_args
+            ext.extra_objects = [obj_file]
+            ext.include_dirs.extend([cuda_include_path, np.get_include()])
+            ext.library_dirs.append(cuda_lib_path)
+            ext.libraries.append("cudart")
         super().build_extensions()
 
+class CustomClean(clean):
+    def run(self):
+        super().run()
+        files_to_delete = ['gcmc/gcmc.o']
+        for file in files_to_delete:
+            try:
+                os.remove(file)
+                print(f"Removed {file}")
+            except OSError:
+                pass
+
 # Extension modules
-extModules = [
+ext_modules = [
     Extension(
         "gcmc.gpu",
         sources=["gcmc/gcmc.cpp"],
@@ -79,20 +112,30 @@ extModules = [
 
 # Setup configuration
 setup(
-    install_requires=["numpy"],
-    setup_requires=["numpy"],
     name="pyGCMC",
-    version="1.1.240324",
+    version="1.2.240826",
+    author="Mingtian Zhao, Alexander D. MacKerell Jr.",
+    author_email="zhaomt@outerbanks.umaryland.edu",
+    description="A python package for performing grand canonical Monte Carlo simulations",
+    long_description=long_description,
+    long_description_content_type='text/markdown',
+    url="https://github.com/mackerell-lab/pyGCMC",
     packages=find_packages(),
-    package_data=packageData,
-    ext_modules=extModules,
-    cmdclass={"build_ext": CustomBuildExt},
+    package_data=package_data,
+    ext_modules=ext_modules,
+    cmdclass={"build_ext": CustomBuildExt, "clean": CustomClean},
     entry_points={
         'console_scripts': [
             'pygcmc=gcmc:main',
             'gcmc=gcmc:mainOld'
         ],
     },
-    long_description=longDescription,
-    long_description_content_type='text/markdown'
+    install_requires=["numpy>=1.18,<2"],
+    setup_requires=["numpy>=1.18,<2"],
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+    ],
+    python_requires='>=3.6',
 )

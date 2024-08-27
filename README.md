@@ -1,10 +1,18 @@
 # pyGCMC
-pyGCMC is a python package for performing grand canonical Monte Carlo simulations of molecules in nanoporous materials. It is designed to be easy to use and to be easily extensible. It is also designed to be easy to install, with minimal dependencies. The package is written in pure python, and the only dependencies are numpy.
+
+pyGCMC is a python package for performing grand canonical Monte Carlo simulations of molecules in nanoporous materials. It is designed to be easy to use and to be easily extensible. The package is written in Python, C++, and CUDA.
+
+Current version: 1.1.240324
 
 ## Requirements
-The python package is written in python, C++ and CUDA. The python package requires numpy. The C++ code requires a C++11 compatible compiler. The CUDA code requires a CUDA compatible GPU and the CUDA toolkit.
+
+- Python 3.6 or later
+- numpy 1.18 or later
+- C++11 compatible compiler
+- CUDA compatible GPU and CUDA toolkit (version X.X or later)
 
 ## Installation
+
 The package can be downloaded from GitHub https://github.com/mackerell-lab/pyGCMC
 
 Download the source code from GitHub and run the setup script:
@@ -18,6 +26,11 @@ pip install pygcmc
 The web page for the package on PyPI is https://pypi.org/project/pygcmc/
 
 ## Usage
+
+pyGCMC provides two command-line interfaces: `pygcmc` (new version) and `gcmc` (old version).
+
+### New Version (pygcmc)
+
 Run the pyGCMC executable:
 ```
 usage: pygcmc [-h] -p file.pdb [-t file.top] [-s file.psf] [-o file.txt] [-u muex1,muex2,...] [-f conf1,conf2,... or conf] [-n mcsteps] [-m mctime1,mctime2,...]
@@ -53,7 +66,10 @@ options:
 
   ```
 
-To Run `gcmc` as the old version, you can use the following command:
+### Old Version (gcmc)
+
+To run `gcmc` as the old version, you can use the following command:
+
 ```
 usage: gcmc [-h] -p PARAMFILE [-v] [--logfile LOGFILE] [--debug] [--version]
 
