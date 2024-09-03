@@ -105,7 +105,7 @@ class CustomBuildExt(build_ext):
 class CustomClean(clean):
     def run(self):
         super().run()
-        files_to_delete = ['gcmc/gcmc.o', 'gcmc/*.so', 'gcmc/*.pyd', 'build']
+        files_to_delete = ['gcmc/gcmc.o', 'gcmc/*.so', 'gcmc/*.pyd', 'build', 'pyGCMC.egg-info']
         for file_pattern in files_to_delete:
             for file in glob.glob(file_pattern):
                 try:
@@ -113,9 +113,8 @@ class CustomClean(clean):
                         os.remove(file)
                     elif os.path.isdir(file):
                         shutil.rmtree(file)
-                    print(f"Removed {file}")
-                except OSError as e:
-                    print(f"Error removing {file}: {e}")
+                except OSError:
+                    pass
 
 # Extension modules
 ext_modules = [
