@@ -13,6 +13,7 @@ import os
 import shutil
 import subprocess
 import platform
+import glob
 
 def find_nvcc():
     nvcc_bins = [
@@ -74,16 +75,27 @@ class CustomBuildExt(build_ext):
     def build_extensions(self):
         import numpy as np
 
-        gcc_compile_args = ["-std=c++11", "-fPIC", "-O3"]
-        
+        compiler = self.compiler.compiler_type
+
+        if compiler == 'msvc':  # Microsoft Visual C++
+            compile_args = ['/O2']
+            if platform.machine().endswith('64'):
+                compile_args.append('/arch:AVX2')
+        else:  # GCC or Clang
+            compile_args = ['-O3', '-fPIC', '-march=native']
+            if compiler == 'unix':
+                compile_args.append('-std=c++11')
+
         # Compile the CUDA code
         cuda_file = "gcmc/gcmc.cu"
         obj_file = "gcmc/gcmc.o"
         nvcc_command = [nvcc_bin, "-c", cuda_file, "-o", obj_file, "--compiler-options", "-fPIC", "-O3"]
+        if platform.system() != 'Windows':
+            nvcc_command.extend(["-ccbin", "g++"])
         subprocess.check_call(nvcc_command)
 
         for ext in self.extensions:
-            ext.extra_compile_args = gcc_compile_args
+            ext.extra_compile_args = compile_args
             ext.extra_objects = [obj_file]
             ext.include_dirs.extend([cuda_include_path, np.get_include()])
             ext.library_dirs.append(cuda_lib_path)
@@ -93,13 +105,17 @@ class CustomBuildExt(build_ext):
 class CustomClean(clean):
     def run(self):
         super().run()
-        files_to_delete = ['gcmc/gcmc.o']
-        for file in files_to_delete:
-            try:
-                os.remove(file)
-                print(f"Removed {file}")
-            except OSError:
-                pass
+        files_to_delete = ['gcmc/gcmc.o', 'gcmc/*.so', 'gcmc/*.pyd', 'build']
+        for file_pattern in files_to_delete:
+            for file in glob.glob(file_pattern):
+                try:
+                    if os.path.isfile(file):
+                        os.remove(file)
+                    elif os.path.isdir(file):
+                        shutil.rmtree(file)
+                    print(f"Removed {file}")
+                except OSError as e:
+                    print(f"Error removing {file}: {e}")
 
 # Extension modules
 ext_modules = [
