@@ -13,6 +13,7 @@
 
 #include "gcmc.h"
 
+// Print information about a single atom
 void print_atom(const Atom &atom) {
     std::cout << "  Position: (" << atom.position[0] << ", "
               << atom.position[1] << ", " << atom.position[2] << ")\t";
@@ -20,6 +21,7 @@ void print_atom(const Atom &atom) {
     std::cout << "  Type: " << atom.type << '\n';
 }
 
+// Print information about an AtomArray structure
 void print_atom_array(const AtomArray &atom_array) {
     std::string nameStr(atom_array.name, 4);
     std::cout << "Name: " << nameStr.substr(0, 4) << '\n';
@@ -40,6 +42,7 @@ void print_atom_array(const AtomArray &atom_array) {
     }
 }
 
+// Print information about all fragments
 void print_fragmentInfo(const AtomArray *fragmentInfo, int fragTypeNum) {
 
     std::cout << "\n\nPrinting FragmentInfo:\n\n";
@@ -50,6 +53,7 @@ void print_fragmentInfo(const AtomArray *fragmentInfo, int fragTypeNum) {
     }
 }
 
+// Print information from the InfoStruct
 void print_info_struct(const InfoStruct *info) {
 
     std::cout << "\n\nPrinting InfoStruct:\n\n";
@@ -70,6 +74,7 @@ void print_info_struct(const InfoStruct *info) {
 
 }
 
+// Print information about all atoms, both fixed and moving
 void print_atoms(const AtomArray *fragmentInfo, int fragTypeNum, const residue *residueInfo, const Atom *atomInfo) {
 
     std::cout << "\n\nPrinting Atoms:\n\n";
@@ -100,6 +105,7 @@ void print_atoms(const AtomArray *fragmentInfo, int fragTypeNum, const residue *
 }
 
 
+// Print grid information
 void print_grid(const float *grid, int totalGridNum) {
     std::cout << "\n\nPrinting Grid:\n\n";
     for (int i = 0; i < totalGridNum ; ++i) {
@@ -107,6 +113,7 @@ void print_grid(const float *grid, int totalGridNum) {
     }
 }
 
+// Print force field parameters
 void print_ff(const float *ff, int ffXNum, int ffYNum) {
     std::cout << "\n\nPrinting FF:\n\n";
     for (int i = 0; i < ffXNum; ++i) {
@@ -116,6 +123,7 @@ void print_ff(const float *ff, int ffXNum, int ffYNum) {
     }
 }
 
+// Print information about the move array
 void print_moveArray(const int *moveArray, int mcsteps, const AtomArray *fragmentInfo) {
     std::cout << "\n\nPrinting MoveArray:\n\n";
     for (int i = 0; i < mcsteps; ++i) {
@@ -133,6 +141,7 @@ void print_moveArray(const int *moveArray, int mcsteps, const AtomArray *fragmen
     }
 }
 
+// Print all information about the GCMC simulation
 void print_all_info(const InfoStruct *info, const AtomArray *fragmentInfo, const residue *residueInfo, const Atom *atomInfo, const float *grid, const float *ff, const int *moveArray) {
     
     print_info_struct(info);
@@ -146,9 +155,10 @@ void print_all_info(const InfoStruct *info, const AtomArray *fragmentInfo, const
     
 }
 
+// External function declaration for CUDA GCMC implementation
 extern "C" void runGCMC_cuda(const InfoStruct *info, AtomArray *fragmentInfo, residue *residueInfo, Atom *atomInfo, const float *grid, const float *ff, const int *moveArray);
 
-
+// Python wrapper function to run GCMC simulation
 static PyObject *runGCMC(PyObject *self, PyObject *args) {
     PyObject *py_info;
     PyObject *py_fragmentInfo;
@@ -186,12 +196,14 @@ static PyObject *runGCMC(PyObject *self, PyObject *args) {
 }
 
 
+// Python module method definitions
 static PyMethodDef methods[] = {
     {"runGCMC", runGCMC, METH_VARARGS, "Run GCMC with CUDA"},
     {NULL, NULL, 0, NULL}
 };
 
 
+// Python module initialization function
 PyMODINIT_FUNC PyInit_gpu(void) {
     PyObject *m;
     static struct PyModuleDef moduledef = {

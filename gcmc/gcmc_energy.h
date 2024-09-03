@@ -19,11 +19,13 @@
 
 extern "C"{
 
+        // Returns the minimum of two float values
         __device__ __host__ inline float Min(float a,float b)
         {
             return !(b<a)?a:b;	
         }
 
+        // Rotates atoms in shared memory
         __device__ inline void rotate_atoms_shared(Atom *atoms, int num_atoms, float axis[3], float angle) {
             __shared__ float sh_axis[3];
             __shared__ float sh_R[3][3];
@@ -69,6 +71,7 @@ extern "C"{
             }
         }
 
+        // Generates a random fragment
         __device__ void randomFragment(const InfoStruct &SharedInfo, AtomArray &SharedFragmentInfo, Atom *GTempInfo, const float *Ggrid, curandState *rng_states) {
             int tid = threadIdx.x;
 
@@ -103,10 +106,12 @@ extern "C"{
             if (tid == 4) GTempInfo->type = -1;
         }
 
+        // Fast rounding of float to integer
         __device__ __host__ inline float fast_round(const float a) {
             return a >= 0 ? (int)(a + 0.5f) : (int)(a - 0.5f);
         }
 
+        // Calculates distance with periodic boundary conditions
         __device__ __host__ inline float distanceP(const float x[3], const float y[3], const float period[3]){
             float d[3];
             for (int i = 0; i < 3; i++) {
@@ -117,6 +122,7 @@ extern "C"{
         }
 
         
+        // Calculates van der Waals energy
         __device__ inline float calc_vdw_nbfix (float sigma, float epsilon, float dist_sqrd)
         {
             float sigma_sqrd = sigma * sigma * 100;
@@ -125,12 +131,14 @@ extern "C"{
         }
 
         
+        // Calculates electrostatic energy
         __device__ inline float calc_elec (float charge1, float charge2, float dist)
         {
             return 1388.431112 * (charge1 * charge2) / dist;
         }
 
 
+        // Calculates total energy
         __device__ inline void calcEnergy(const InfoStruct &SharedInfo, AtomArray &SharedFragmentInfo, 
                                           AtomArray *GfragmentInfo, residue *GresidueInfo, Atom *GatomInfo, 
                                           const float *Gff, Atom *GTempInfo) {
