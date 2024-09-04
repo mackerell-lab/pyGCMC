@@ -56,11 +56,11 @@ print(f"CUDA Version: {'.'.join(map(str, cuda_version)) if cuda_version else 'Un
 # Package data
 package_data = {
     'gcmc': [
-        'toppar.str', 
-        'resources.zip', 
-        'charmm36.ff/*', 
-        'toppar/*', 
-        'charmm36.ff/mol/*', 
+        'resources/toppar.str', 
+        'resources/resources.zip', 
+        'resources/charmm36.ff/*', 
+        'resources/toppar/*', 
+        'resources/charmm36.ff/mol/*', 
         '*.cu', 
         '*.h', 
         '*.cpp'

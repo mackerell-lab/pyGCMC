@@ -11,6 +11,7 @@
 
 import os
 import pkg_resources
+import zipfile
 
 class GCMCBase:
     def __init__(self):
@@ -67,7 +68,10 @@ class GCMCBase:
 
 
 
-        if os.path.exists('temp_link'):
-            os.remove('temp_link')
-        os.symlink(pkg_resources.resource_filename(__name__, 'charmm36.ff'), 'temp_link') # create a symbolic link to the force field directory
-        os.rename('temp_link', 'charmm36.ff') # rename the symbolic link to force field directory
+        # Replace the original symlink creation code
+        resources_zip = pkg_resources.resource_filename('gcmc', os.path.join('resources', 'resources.zip'))
+        
+        if not os.path.exists('charmm36.ff'):
+            with zipfile.ZipFile(resources_zip, 'r') as zip_ref:
+                zip_ref.extractall('.')
+
