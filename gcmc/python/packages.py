@@ -20,7 +20,8 @@ import random
 
 import time
 
-from .gpu import runGCMC
+from ..gpu import runGCMC
+
 
 
 # https://stackoverflow.com/questions/616645/how-do-i-duplicate-sys-stdout-to-a-log-file-in-python

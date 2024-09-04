@@ -8,7 +8,7 @@
 
 """
 
+from .main import main
+from .mainOld import main as main_old
 
-from .python import GCMC
-from .python import packages
-
+__all__ = ['main', 'main_old']

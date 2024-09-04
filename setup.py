@@ -61,9 +61,11 @@ package_data = {
         'resources/charmm36.ff/*', 
         'resources/toppar/*', 
         'resources/charmm36.ff/mol/*', 
-        '*.cu', 
-        '*.h', 
-        '*.cpp'
+        'cpp/*.cu', 
+        'cpp/*.h', 
+        'cpp/*.cpp',
+        'scripts/*.py',
+        'python/*.py'
     ],
 }
 
@@ -87,8 +89,8 @@ class CustomBuildExt(build_ext):
                 compile_args.append('-std=c++11')
 
         # Compile the CUDA code
-        cuda_file = "gcmc/gcmc.cu"
-        obj_file = "gcmc/gcmc.o"
+        cuda_file = "gcmc/cpp/gcmc.cu"
+        obj_file = "gcmc/cpp/gcmc.o"
         nvcc_command = [nvcc_bin, "-c", cuda_file, "-o", obj_file, "--compiler-options", "-fPIC", "-O3"]
         if platform.system() != 'Windows':
             nvcc_command.extend(["-ccbin", "g++"])
@@ -105,7 +107,7 @@ class CustomBuildExt(build_ext):
 class CustomClean(clean):
     def run(self):
         super().run()
-        files_to_delete = ['gcmc/gcmc.o', 'gcmc/*.so', 'gcmc/*.pyd', 'build', 'pyGCMC.egg-info']
+        files_to_delete = ['gcmc/cpp/gcmc.o', 'gcmc/cpp/*.so', 'gcmc/cpp/*.pyd', 'build', 'pyGCMC.egg-info']
         for file_pattern in files_to_delete:
             for file in glob.glob(file_pattern):
                 try:
@@ -120,7 +122,7 @@ class CustomClean(clean):
 ext_modules = [
     Extension(
         "gcmc.gpu",
-        sources=["gcmc/gcmc.cpp"],
+        sources=["gcmc/cpp/gcmc.cpp"],
         language="c++",
     )
 ]
@@ -141,8 +143,8 @@ setup(
     cmdclass={"build_ext": CustomBuildExt, "clean": CustomClean},
     entry_points={
         'console_scripts': [
-            'pygcmc=gcmc:main',
-            'gcmc=gcmc:mainOld'
+            'pygcmc=gcmc.scripts.main:main',
+            'gcmc=gcmc.scripts.main_old:main'
         ],
     },
     install_requires=["numpy>=1.18,<2"],

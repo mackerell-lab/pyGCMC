@@ -8,8 +8,8 @@
 
 """
 
-from .gcmc import GCMC
-from .packages import *
+from gcmc import GCMC
+from gcmc.python.packages import *
 
 
 def main():

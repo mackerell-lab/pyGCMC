@@ -14,7 +14,7 @@ from .parameters import GCMCParameters
 from .simulation import GCMCSimulation
 from .dataset import GCMCDataset
 import time
-from .gpu import runGCMC
+from ..gpu import runGCMC
 
 
 class GCMC(GCMCBase, GCMCFiles, GCMCParameters, GCMCDataset, GCMCSimulation):
