@@ -2,7 +2,7 @@
 
 pyGCMC is a python package for performing grand canonical Monte Carlo simulations of molecules in nanoporous materials. It is designed to be easy to use and to be easily extensible. The package is written in Python, C++, and CUDA.
 
-Current version: 1.1.240324
+Current version: 1.3.240904
 
 ## Requirements
 

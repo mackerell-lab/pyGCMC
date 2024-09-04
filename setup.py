@@ -128,7 +128,7 @@ ext_modules = [
 # Setup configuration
 setup(
     name="pyGCMC",
-    version="1.3.240903",
+    version="1.3.240904",
     author="Mingtian Zhao, Alexander D. MacKerell Jr.",
     author_email="zhaomt@outerbanks.umaryland.edu",
     description="A python package for performing grand canonical Monte Carlo simulations",
