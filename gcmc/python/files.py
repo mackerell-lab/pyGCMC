@@ -1,25 +1,41 @@
 """
-
     © Copyright 2023 - University of Maryland, Baltimore   All Rights Reserved    
     	Mingtian Zhao, Alexander D. MacKerell Jr.        
     E-mail: 
     	zhaomt@outerbanks.umaryland.edu
     	alex@outerbanks.umaryland.edu
-
 """
 
 import sys
-from . import protein_data
 import numpy as np
-
+from . import protein_data
 
 class GCMCFiles:
 
-    def get_pdb(self,pdb_file):
+    # Load and parse configuration parameters
+    def load_parameters(self, filename):
+        self.config_dict = {}
+        with open(filename, 'r') as file:
+            for line in file:
+                line = line.strip()
+                if line:
+                    line = line.split('#', 1)[0].split('//', 1)[0].split('!', 1)[0].strip()
+                    if line:
+                        key, value = line.split(':', 1)
+                        key, value = key.strip(), value.strip()
+                        self.config_dict.setdefault(key, []).append(value)
+        
+        for i, v in self.config_dict.items():
+            print(i, v)
+
+    # Convert string to boolean
+    def bool_parameters(self, value):
+        return value.lower() in ('yes', 'true', 'on', '1')
+
+    # Read and process PDB file
+    def get_pdb(self, pdb_file):
         self.pdb_file = pdb_file
-
         print(f"Using pdb file: {pdb_file}")
-
 
         try:
             self.cryst, self.atoms, self.PDBString = protein_data.read_pdb(pdb_file)
@@ -29,41 +45,20 @@ class GCMCFiles:
             sys.exit(1)
 
         print(f"pdb atom number: {len(self.atoms)}")   
-
         print(f"pdb cryst: {self.cryst}")
 
         self.volume = self.cryst[0] * self.cryst[1] * self.cryst[2]
-
         radius = self.cutoff / 2
         volume = (4 / 3) * np.pi * (radius ** 3)
-
         self.volume_n = int(self.volume / volume) + 1
 
         print(f"Total volume: {self.volume}")
-        # print(f"Total volume: {self.volume}", end = '\t')
-        # print(f"Single volume: {volume}", end = '\t')
-        # print(f"volume_n: {self.volume_n}")
 
-        
-        
-
-
-
-
-
-
-
-
-        
-            
-    def get_top(self,top_file):
-
+    # Read and process TOP file
+    def get_top(self, top_file):
         self.topologyType = 'top'
         self.top_file = top_file
-
-
         print(f"Using top file: {top_file}")
-        
 
         try:
             self.atom_top, self.TOPString = protein_data.read_top(top_file)
@@ -77,22 +72,12 @@ class GCMCFiles:
             print(f"Error: pdb atom number {len(self.atoms)} != top atom number {len(self.atom_top)}")
             sys.exit(1)
     
-        for i, atom in enumerate(self.atoms):
-            # if atom.name != atom_top[i][3]:
-            #     print(f"Error: pdb atom {i+1} name {atom.name} != top atom name {atom_top[i][3]}")
-            #     sys.exit(1)
-            if atom.residue[:3] != self.atom_top[i][2][:3]:
-                print(f"Error: pdb atom {i+1} residue {atom.residue} != top atom residue {self.atom_top[i][2]}")
-                sys.exit(1)
-            atom.residue = self.atom_top[i][2]
-            atom.type = self.atom_top[i][0]
-            atom.charge = self.atom_top[i][4]
-            atom.nameTop = self.atom_top[i][3]
-        
-    def get_psf(self,psf_file):
+        self._update_atom_info()
+
+    # Read and process PSF file
+    def get_psf(self, psf_file):
         self.topologyType = 'psf'
         self.psf_file = psf_file
-
         print(f"Using psf file: {psf_file}")
 
         try:
@@ -107,10 +92,11 @@ class GCMCFiles:
             print(f"Error: pdb atom number {len(self.atoms)} != top atom number {len(self.atom_top)}")
             sys.exit(1)
     
+        self._update_atom_info()
+
+    # Update atom information based on topology
+    def _update_atom_info(self):
         for i, atom in enumerate(self.atoms):
-            # if atom.name != atom_top[i][3]:
-            #     print(f"Error: pdb atom {i+1} name {atom.name} != top atom name {atom_top[i][3]}")
-            #     sys.exit(1)
             if atom.residue[:3] != self.atom_top[i][2][:3]:
                 print(f"Error: pdb atom {i+1} residue {atom.residue} != top atom residue {self.atom_top[i][2]}")
                 sys.exit(1)
@@ -119,20 +105,15 @@ class GCMCFiles:
             atom.charge = self.atom_top[i][4]
             atom.nameTop = self.atom_top[i][3]
 
-
+    # Read and process fragment files
     def get_fragment(self):
         self.fragments = []
 
         for frag in self.fragmentName:
-
             try:
-
                 self.fragments += [protein_data.read_pdb(f"charmm36.ff/mol/{frag.lower()}.pdb")[1]]
                 atom_top = protein_data.read_itp(f"charmm36.ff/mol/{frag.lower()}.itp")
                 for i, atom in enumerate(self.fragments[-1]):
-                    # if atom.name != atom_top[i][3]:
-                    #     print(f"Error: pdb atom {i+1} name {atom.name} != top atom name {atom_top[i][3]}")
-                    #     sys.exit(1)
                     if atom.residue[:3] != atom_top[i][2][:3]:
                         print(f"Error: pdb atom {i+1} residue {atom.residue} != top atom residue {atom_top[i][2]}")
                         sys.exit(1)
@@ -146,7 +127,7 @@ class GCMCFiles:
 
             print(f"Read solute: {frag} with {len(self.fragments[-1])} atoms")
 
-
+    # Read and process force field files
     def get_forcefield(self):
         self.nb_dict = {}
         self.nbfix_dict = {}
@@ -160,33 +141,4 @@ class GCMCFiles:
             except:
                 print(f"Error reading force field file: {ff_file}")
                 sys.exit(1)
-    
 
-    def bool_parameters(self,value):
-        if value.lower() == 'yes' or value.lower() == 'true' or value.lower() == 'on' or value.lower() == '1':
-            return True
-        return False
-    
-    def load_parameters(self, filename):
-        self.config_dict = {}
-        with open(filename, 'r') as file:
-            for line in file:
-                line = line.strip()  # Remove leading/trailing white spaces
-                if line:  # Ignore empty lines
-                    # Ignore content after '#', '!' and '//'
-                    line = line.split('#', 1)[0]
-                    line = line.split('//', 1)[0]
-                    line = line.split('!',1)[0]
-                    line = line.strip()  # Remove leading/trailing white spaces again
-                    if line:  # Ignore lines with only comments
-                        key, value = line.split(':', 1)  # Split key and value
-                        key = key.strip()  # Remove leading/trailing white spaces from key
-                        value = value.strip()  # Remove leading/trailing white spaces from value
-                        if key in self.config_dict:
-                            # If key already exists, append the new value to the list
-                            self.config_dict[key].append(value)
-                        else:
-                            # Otherwise, create a new list with the value
-                            self.config_dict[key] = [value]
-        for i in self.config_dict:
-            print(i, self.config_dict[i])

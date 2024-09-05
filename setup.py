@@ -107,7 +107,7 @@ class CustomBuildExt(build_ext):
 class CustomClean(clean):
     def run(self):
         super().run()
-        files_to_delete = ['gcmc/cpp/gcmc.o', 'gcmc/cpp/*.so', 'gcmc/cpp/*.pyd', 'build', 'pyGCMC.egg-info']
+        files_to_delete = ['gcmc/cpp/gcmc.o', 'gcmc/cpp/*.so', 'gcmc/cpp/*.pyd', 'build', 'pyGCMC.egg-info','.eggs']
         for file_pattern in files_to_delete:
             for file in glob.glob(file_pattern):
                 try:
@@ -130,7 +130,7 @@ ext_modules = [
 # Setup configuration
 setup(
     name="pyGCMC",
-    version="1.3.240904",
+    version="1.3.240905",
     author="Mingtian Zhao, Alexander D. MacKerell Jr.",
     author_email="zhaomt@outerbanks.umaryland.edu",
     description="A python package for performing grand canonical Monte Carlo simulations",
