@@ -12,7 +12,7 @@
 extern "C" {
 
 // Kernel for deleting a fragment in GCMC simulation
-__global__ void Gmove_del(const InfoStruct *Ginfo, AtomArray *GfragmentInfo, residue *GresidueInfo, 
+__global__ void Gmove_del(const InfoStruct *Ginfo, AtomArray *GfragmentInfo, Residue *GresidueInfo, 
                           Atom *GatomInfo, const float *Ggrid, const float *Gff, const int moveFragType,
                           AtomArray *GTempFrag, Atom *GTempInfo, curandState *d_rng_states) {
     __shared__ InfoStruct SharedInfo;
@@ -52,7 +52,7 @@ __global__ void Gmove_del(const InfoStruct *Ginfo, AtomArray *GfragmentInfo, res
 }
 
 // Kernel for updating the system after deleting a fragment
-__global__ void GupdateDel(AtomArray *GfragmentInfo, residue *GresidueInfo, 
+__global__ void GupdateDel(AtomArray *GfragmentInfo, Residue *GresidueInfo, 
                            Atom *GatomInfo, AtomArray *GTempFrag, Atom *GTempInfo, 
                            const int moveFragType, const int totalNum, const int conf_index) {
     int tid = threadIdx.x;
@@ -95,11 +95,15 @@ __global__ void GupdateDel(AtomArray *GfragmentInfo, residue *GresidueInfo,
 
 // Main function for deleting a fragment in GCMC simulation
 bool move_del(const InfoStruct *info, InfoStruct *Ginfo, AtomArray *fragmentInfo, AtomArray *GfragmentInfo, 
-              residue *GresidueInfo, Atom *GatomInfo, const float *Ggrid, const float *Gff,
+              Residue *GresidueInfo, Atom *GatomInfo, const float *Ggrid, const float *Gff,
               const int moveFragType, AtomArray *GTempFrag, Atom *TempInfo, Atom *GTempInfo, curandState *d_rng_states) {
     const int nBlock = 1;
     
     if (nBlock == 0) {
+        return false;
+    }
+
+    if (fragmentInfo[moveFragType].totalNum == 0) {
         return false;
     }
 

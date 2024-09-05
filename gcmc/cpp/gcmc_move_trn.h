@@ -12,7 +12,7 @@
 extern "C" {
 
 // CUDA kernel for performing translation move
-__global__ void Gmove_trn(const InfoStruct *Ginfo, AtomArray *GfragmentInfo, residue *GresidueInfo, 
+__global__ void Gmove_trn(const InfoStruct *Ginfo, AtomArray *GfragmentInfo, Residue *GresidueInfo, 
                           Atom *GatomInfo, const float *Ggrid, const float *Gff, const int moveFragType,
                           AtomArray *GTempFrag, Atom *GTempInfo, curandState *d_rng_states) {
     __shared__ InfoStruct SharedInfo;
@@ -89,7 +89,7 @@ __global__ void Gmove_trn(const InfoStruct *Ginfo, AtomArray *GfragmentInfo, res
 }
 
 // CUDA kernel for updating translated fragments
-__global__ void GupdateTrn(AtomArray *GfragmentInfo, residue *GresidueInfo, 
+__global__ void GupdateTrn(AtomArray *GfragmentInfo, Residue *GresidueInfo, 
                            Atom *GatomInfo,
                            AtomArray *GTempFrag, Atom *GTempInfo, const int moveFragType) {
     int tid = threadIdx.x;
@@ -123,7 +123,7 @@ __global__ void GupdateTrn(AtomArray *GfragmentInfo, residue *GresidueInfo,
 
 // Function to perform translation move
 bool move_trn(const InfoStruct *infoHost, InfoStruct *infoDevice, AtomArray *fragmentInfoHost, AtomArray *fragmentInfoDevice, 
-              residue *residueInfoDevice, Atom *atomInfoDevice, const float *gridDevice, const float *ffDevice,
+              Residue *residueInfoDevice, Atom *atomInfoDevice, const float *gridDevice, const float *ffDevice,
               const int moveFragType, AtomArray *tempFragDevice, Atom *tempInfoHost, Atom *tempInfoDevice, curandState *rngStatesDevice) {
 
     const int numBlocks = min(fragmentInfoHost[moveFragType].confBias, fragmentInfoHost[moveFragType].totalNum);

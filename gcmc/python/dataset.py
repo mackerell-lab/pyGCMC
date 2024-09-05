@@ -245,7 +245,7 @@ class GCMCDataset:
             self.ff[i * 2 + 1] = pair[1]
         
         # Update simulation information
-        self.SimInfo = np.empty(1, dtype=Info_dtype)
+        self.SimInfo = np.empty(1, dtype=InfoStruct_dtype)
         self.SimInfo[0]['ffXNum'] = len(self.atomtypes1)
         self.SimInfo[0]['ffYNum'] = len(self.atomtypes2)
         self.SimInfo[0]['mcsteps'] = self.mcsteps

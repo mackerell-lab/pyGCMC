@@ -75,7 +75,7 @@ void print_info_struct(const InfoStruct *info) {
 }
 
 // Print information about all atoms, both fixed and moving
-void print_atoms(const AtomArray *fragmentInfo, int fragTypeNum, const residue *residueInfo, const Atom *atomInfo) {
+void print_atoms(const AtomArray *fragmentInfo, int fragTypeNum, const Residue *residueInfo, const Atom *atomInfo) {
 
     std::cout << "\n\nPrinting Atoms:\n\n";
 
@@ -142,7 +142,7 @@ void print_moveArray(const int *moveArray, int mcsteps, const AtomArray *fragmen
 }
 
 // Print all information about the GCMC simulation
-void print_all_info(const InfoStruct *info, const AtomArray *fragmentInfo, const residue *residueInfo, const Atom *atomInfo, const float *grid, const float *ff, const int *moveArray) {
+void print_all_info(const InfoStruct *info, const AtomArray *fragmentInfo, const Residue *residueInfo, const Atom *atomInfo, const float *grid, const float *ff, const int *moveArray) {
     
     print_info_struct(info);
     print_fragmentInfo(fragmentInfo, info->fragTypeNum);
@@ -156,7 +156,7 @@ void print_all_info(const InfoStruct *info, const AtomArray *fragmentInfo, const
 }
 
 // External function declaration for CUDA GCMC implementation
-extern "C" void runGCMC_cuda(const InfoStruct *info, AtomArray *fragmentInfo, residue *residueInfo, Atom *atomInfo, const float *grid, const float *ff, const int *moveArray);
+extern "C" void runGCMC_cuda(const InfoStruct *info, AtomArray *fragmentInfo, Residue *residueInfo, Atom *atomInfo, const float *grid, const float *ff, const int *moveArray);
 
 // Python wrapper function to run GCMC simulation
 static PyObject *runGCMC(PyObject *self, PyObject *args) {
@@ -175,7 +175,7 @@ static PyObject *runGCMC(PyObject *self, PyObject *args) {
 
     InfoStruct *info = (InfoStruct *)PyArray_DATA((PyArrayObject *)py_info);
     AtomArray *fragmentInfo = (AtomArray *)PyArray_DATA((PyArrayObject *)py_fragmentInfo);
-    residue *residueInfo = (residue *)PyArray_DATA((PyArrayObject *)py_residueInfo);
+    Residue *residueInfo = (Residue *)PyArray_DATA((PyArrayObject *)py_residueInfo);
     Atom *atomInfo = (Atom *)PyArray_DATA((PyArrayObject *)py_atomInfo);
     float *grid = (float *)PyArray_DATA((PyArrayObject *)py_grid);
     float *ff = (float *)PyArray_DATA((PyArrayObject *)py_ff);

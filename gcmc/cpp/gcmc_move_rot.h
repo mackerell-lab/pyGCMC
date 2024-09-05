@@ -12,7 +12,7 @@
 extern "C" {
 
 // Kernel function to perform rotation move on GPU
-__global__ void Gmove_rot(const InfoStruct *Ginfo, AtomArray *GfragmentInfo, residue *GresidueInfo, 
+__global__ void Gmove_rot(const InfoStruct *Ginfo, AtomArray *GfragmentInfo, Residue *GresidueInfo, 
                           Atom *GatomInfo, const float *Ggrid, const float *Gff, const int moveFragType,
                           AtomArray *GTempFrag, Atom *GTempInfo, curandState *d_rng_states) {
     __shared__ InfoStruct SharedInfo;
@@ -115,7 +115,7 @@ __global__ void Gmove_rot(const InfoStruct *Ginfo, AtomArray *GfragmentInfo, res
 }
 
 // Kernel function to update rotated fragments
-__global__ void GupdateRot(AtomArray *GfragmentInfo, residue *GresidueInfo, 
+__global__ void GupdateRot(AtomArray *GfragmentInfo, Residue *GresidueInfo, 
                            Atom *GatomInfo,
                            AtomArray *GTempFrag, Atom *GTempInfo, const int moveFragType) {
     int tid = threadIdx.x;
@@ -149,7 +149,7 @@ __global__ void GupdateRot(AtomArray *GfragmentInfo, residue *GresidueInfo,
 
 // Function to perform rotation move
 bool move_rot(const InfoStruct *infoHost, InfoStruct *infoDevice, AtomArray *fragmentInfoHost, AtomArray *fragmentInfoDevice, 
-              residue *residueInfoDevice, Atom *atomInfoDevice, const float *gridDevice, const float *ffDevice,
+              Residue *residueInfoDevice, Atom *atomInfoDevice, const float *gridDevice, const float *ffDevice,
               const int moveFragType, AtomArray *tempFragDevice, Atom *tempInfoHost, Atom *tempInfoDevice, curandState *rngStatesDevice) {
 
     const int numBlocks = min(fragmentInfoHost[moveFragType].confBias, fragmentInfoHost[moveFragType].totalNum);

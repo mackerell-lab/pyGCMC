@@ -24,3 +24,4 @@ if not os.path.exists(toppar_dir) or not os.path.exists(os.path.join(toppar_dir,
     resources_zip = pkg_resources.resource_filename('gcmc', os.path.join('resources', 'resources.zip'))
     with zipfile.ZipFile(resources_zip, 'r') as zip_ref:
         zip_ref.extractall(os.path.join(os.path.dirname(__file__), 'resources'))
+

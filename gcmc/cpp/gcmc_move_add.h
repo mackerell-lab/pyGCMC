@@ -12,7 +12,7 @@
 extern "C" {
 
 // CUDA kernel for adding a fragment
-__global__ void Gmove_add(const InfoStruct *Ginfo, AtomArray *GfragmentInfo, residue *GresidueInfo, 
+__global__ void Gmove_add(const InfoStruct *Ginfo, AtomArray *GfragmentInfo, Residue *GresidueInfo, 
                           Atom *GatomInfo, const float *Ggrid, const float *Gff, const int moveFragType,
                           AtomArray *GTempFrag, Atom *GTempInfo, curandState *d_rng_states) {
     __shared__ InfoStruct SharedInfo;
@@ -44,7 +44,7 @@ __global__ void Gmove_add(const InfoStruct *Ginfo, AtomArray *GfragmentInfo, res
 }
 
 // CUDA kernel for updating after adding a fragment
-__global__ void GupdateAdd(AtomArray *GfragmentInfo, residue *GresidueInfo, 
+__global__ void GupdateAdd(AtomArray *GfragmentInfo, Residue *GresidueInfo, 
                            Atom *GatomInfo, AtomArray *GTempFrag, Atom *GTempInfo, 
                            const int moveFragType, const int totalNum) {
     int tid = threadIdx.x;
@@ -84,7 +84,7 @@ __global__ void GupdateAdd(AtomArray *GfragmentInfo, residue *GresidueInfo,
 
 // Function to perform the move_add operation
 bool move_add(const InfoStruct *infoHost, InfoStruct *infoDevice, AtomArray *fragmentInfoHost, 
-              AtomArray *fragmentInfoDevice, residue *residueInfoDevice, Atom *atomInfoDevice, 
+              AtomArray *fragmentInfoDevice, Residue *residueInfoDevice, Atom *atomInfoDevice, 
               const float *gridDevice, const float *ffDevice, const int moveFragType, 
               AtomArray *tempFragDevice, Atom *tempInfoHost, Atom *tempInfoDevice, 
               curandState *rngStatesDevice) {

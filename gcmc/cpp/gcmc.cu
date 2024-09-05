@@ -18,11 +18,11 @@ extern "C"{
     }
 
     // Main GCMC simulation function
-    void runGCMC_cuda(const InfoStruct *info, AtomArray *fragmentInfo, residue *residueInfo, Atom *atomInfo, const float *grid, const float *ff, const int *moveArray){
+    void runGCMC_cuda(const InfoStruct *info, AtomArray *fragmentInfo, Residue *residueInfo, Atom *atomInfo, const float *grid, const float *ff, const int *moveArray){
         
         InfoStruct *Ginfo;
         AtomArray *GfragmentInfo;
-        residue *GresidueInfo; 
+        Residue *GresidueInfo; 
         Atom *GatomInfo;
         float *Ggrid;
         float *Gff;
@@ -30,14 +30,14 @@ extern "C"{
 
         cudaMalloc(&Ginfo, sizeof(InfoStruct));
         cudaMalloc(&GfragmentInfo, sizeof(AtomArray)*info->fragTypeNum);
-        cudaMalloc(&GresidueInfo, sizeof(residue)*info->totalResNum);
+        cudaMalloc(&GresidueInfo, sizeof(Residue)*info->totalResNum);
         cudaMalloc(&GatomInfo, sizeof(Atom)*info->totalAtomNum);
         cudaMalloc(&Ggrid, sizeof(float)*info->totalGridNum * 3);
         cudaMalloc(&Gff, sizeof(float)*info->ffXNum*info->ffYNum *2);
 
         cudaMemcpy(Ginfo, info, sizeof(InfoStruct), cudaMemcpyHostToDevice);
         cudaMemcpy(GfragmentInfo, fragmentInfo, sizeof(AtomArray)*info->fragTypeNum, cudaMemcpyHostToDevice);
-        cudaMemcpy(GresidueInfo, residueInfo, sizeof(residue)*info->totalResNum, cudaMemcpyHostToDevice) ;
+        cudaMemcpy(GresidueInfo, residueInfo, sizeof(Residue)*info->totalResNum, cudaMemcpyHostToDevice) ;
         cudaMemcpy(GatomInfo, atomInfo, sizeof(Atom)*info->totalAtomNum, cudaMemcpyHostToDevice);
         cudaMemcpy(Ggrid, grid, sizeof(float)*info->totalGridNum * 3, cudaMemcpyHostToDevice);
         cudaMemcpy(Gff, ff, sizeof(float)*info->ffXNum*info->ffYNum *2, cudaMemcpyHostToDevice);
@@ -101,7 +101,7 @@ extern "C"{
         cudaDeviceSynchronize();
 
         cudaMemcpy(fragmentInfo, GfragmentInfo, sizeof(AtomArray)*info->fragTypeNum, cudaMemcpyDeviceToHost);
-        cudaMemcpy(residueInfo, GresidueInfo, sizeof(residue)*info->totalResNum, cudaMemcpyDeviceToHost);
+        cudaMemcpy(residueInfo, GresidueInfo, sizeof(Residue)*info->totalResNum, cudaMemcpyDeviceToHost);
         cudaMemcpy(atomInfo, GatomInfo, sizeof(Atom)*info->totalAtomNum, cudaMemcpyDeviceToHost);
 
         cudaFree(Ginfo);

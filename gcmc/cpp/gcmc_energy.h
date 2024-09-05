@@ -140,7 +140,7 @@ extern "C"{
 
         // Calculates total energy
         __device__ inline void calcEnergy(const InfoStruct &SharedInfo, AtomArray &SharedFragmentInfo, 
-                                          AtomArray *GfragmentInfo, residue *GresidueInfo, Atom *GatomInfo, 
+                                          AtomArray *GfragmentInfo, Residue *GresidueInfo, Atom *GatomInfo, 
                                           const float *Gff, Atom *GTempInfo) {
             __shared__ float sh_energy[numThreadsPerBlock];
             int tid = threadIdx.x;
