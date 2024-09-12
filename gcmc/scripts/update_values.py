@@ -47,8 +47,8 @@ def parse_cpp_header(header_file):
 
     # Parse constants, including both #define and const declarations
     constant_patterns = [
-        r'#define\s+(\w+)(?:\s+(.+))?',  # 对于 #define，现在内容是可选的
-        r'const\s+\w+\s+(\w+)\s*=\s*(.+?);'  # 对于 const 声明
+        r'#define\s+(\w+)(?:\s+(.+))?',  # For #define, content is now optional
+        r'const\s+\w+\s+(\w+)\s*=\s*(.+?);'  # For const declarations
     ]
     
     for pattern in constant_patterns:
@@ -57,19 +57,19 @@ def parse_cpp_header(header_file):
             constant_value = match.group(2)
             
             if constant_value is None or constant_value.strip() == '':
-                # 跳过空宏或没有值的宏
+                # Skip empty macros or macros without values
                 continue
             
             constant_value = constant_value.strip()
             
-            # 移除尾部注释（如果有）
+            # Remove trailing comments (if any)
             constant_value = re.split(r'\s*//.*', constant_value)[0].strip()
             
-            # 跳过如果常量值只是另一个宏或复杂的预处理器指令
+            # Skip if the constant value is just another macro or complex preprocessor directive
             if constant_value.startswith('#') or constant_value.startswith('('):
                 continue
             
-            # 添加常量
+            # Add the constant
             constants[constant_name] = constant_value
 
     return structs, constants
@@ -77,13 +77,13 @@ def parse_cpp_header(header_file):
 def generate_python_code(structs, constants):
     code = "import numpy as np\n\n"
 
-    # 生成 GcmcConstants 类
+    # Generate GcmcConstants class
     code += "class GcmcConstants:\n"
     for name, value in constants.items():
         code += f"    {name} = {value}\n"
     code += "\n"
 
-    # 生成结构体类型的类
+    # Generate classes for struct types
     for struct_name, fields in structs.items():
         code += f"{struct_name}_dtype = np.dtype([\n"
         for field in fields:
@@ -107,16 +107,16 @@ def update_values_py(header_file, values_file):
     structs, constants = parse_cpp_header(header_file)
     generated_code = generate_python_code(structs, constants)
 
-    # Create new content for the file
-    updated_content = (
-        '"""Automatically generated values from gcmc.h"""\n\n'
+    # Create new content to append
+    new_content = (
+        '\n\n"""Automatically generated values from gcmc.h"""\n\n'
         "# Auto-generated from gcmc.h\n" +
         generated_code
     )
 
-    # Write the content to the new file
-    with open(values_file, 'w') as f:
-        f.write(updated_content)
+    # Append the new content to the file
+    with open(values_file, 'a') as f:
+        f.write(new_content)
 
 if __name__ == "__main__":
     script_dir = os.path.dirname(os.path.abspath(__file__))

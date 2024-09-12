@@ -61,6 +61,7 @@ package_data = {
         'resources/charmm36.ff/*', 
         'resources/toppar/*', 
         'resources/charmm36.ff/mol/*', 
+        'resources/charmm36.ff/mol/mqtr/*',
         'cpp/*.cu', 
         'cpp/*.h', 
         'cpp/*.cpp',

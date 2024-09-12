@@ -52,7 +52,7 @@ class GCMCBase:
     def _setup_ff_directory(self):
         if os.path.exists('temp_link'):
             os.remove('temp_link')
-        os.symlink(pkg_resources.resource_filename(__name__, 'resources/charmm36.ff'), 'temp_link')
+        os.symlink(pkg_resources.resource_filename(__name__, '../resources/charmm36.ff'), 'temp_link')
         os.rename('temp_link', 'charmm36.ff')
 
 
