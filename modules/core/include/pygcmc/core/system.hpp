@@ -8,11 +8,14 @@
 // 粒子结构体
 struct Particle {
     double x, y, z;    // 位置坐标
+    double vx, vy, vz; // 速度
     int type;          // 粒子类型
     double charge;     // 粒子电荷
 
-    Particle(double x_val = 0.0, double y_val = 0.0, double z_val = 0.0, int t = 0, double q = 0.0)
-        : x(x_val), y(y_val), z(z_val), type(t), charge(q) {}
+    Particle(double x_val = 0.0, double y_val = 0.0, double z_val = 0.0, 
+             double vx_val = 0.0, double vy_val = 0.0, double vz_val = 0.0, 
+             int t = 0, double q = 0.0)
+        : x(x_val), y(y_val), z(z_val), vx(vx_val), vy(vy_val), vz(vz_val), type(t), charge(q) {}
 };
 
 // 系统类管理整个粒子系统
@@ -32,6 +35,10 @@ public:
 
     // 获取粒子数量
     size_t get_particle_count() const;
+
+    // Add new methods for dynamics
+    void update_positions(double dt);
+    void update_velocities(double dt);
 
 private:
     std::vector<Particle> particles_;

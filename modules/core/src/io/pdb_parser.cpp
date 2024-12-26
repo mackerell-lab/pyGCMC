@@ -1,0 +1,104 @@
+// modules/core/src/io/pdb_parser.cpp
+
+#include "pygcmc/core/io/parser.hpp"
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
+#include <cctype>
+#include <algorithm>
+
+namespace pygcmc {
+namespace core {
+namespace io {
+
+std::pair<std::vector<double>, std::vector<PDBAtom>> PDBParser::parse(const std::string& filename) {
+    std::vector<double> cryst;
+    std::vector<PDBAtom> atoms;
+
+    std::ifstream infile(filename);
+    if (!infile.is_open()) {
+        throw std::runtime_error("无法打开文件: " + filename);
+    }
+
+    std::string line;
+    while (std::getline(infile, line)) {
+        // 解析晶胞信息
+        if (line.substr(0, 6) == "CRYST1") {
+            try {
+                double a = std::stod(line.substr(6, 9));
+                double b = std::stod(line.substr(15, 9));
+                double c = std::stod(line.substr(24, 9));
+                cryst = {a, b, c};
+            } catch (...) {
+                throw std::runtime_error("解析晶胞信息失败: " + filename);
+            }
+            continue;
+        }
+
+        // 仅解析ATOM和HETATM记录
+        if ((line.substr(0, 6) == "ATOM  " || line.substr(0, 6) == "HETATM") && line.length() > 54) {
+            try {
+                int serial = std::stoi(line.substr(6, 5));
+                std::string name = line.substr(12, 4);
+                name.erase(std::remove_if(name.begin(), name.end(), ::isspace), name.end());
+
+                std::string residue = line.substr(17, 3);
+                residue.erase(std::remove_if(residue.begin(), residue.end(), ::isspace), residue.end());
+
+                int sequence = std::stoi(line.substr(22, 4));
+
+                double x = std::stod(line.substr(30, 8));
+                double y = std::stod(line.substr(38, 8));
+                double z = std::stod(line.substr(46, 8));
+
+                // 可选字段：电荷
+                double charge = 0.0;
+                if (line.length() >= 80) {
+                    std::string chargeStr = line.substr(78, 2);
+                    chargeStr.erase(std::remove_if(chargeStr.begin(), chargeStr.end(), ::isspace), chargeStr.end());
+                    if (!chargeStr.empty()) {
+                        charge = std::stod(chargeStr);
+                    }
+                }
+
+                // 粒子类型可以根据原子名称或其他规则设定
+                int type = 0; // 这里简单设为0，实际应用中可根据需求调整
+
+                atoms.emplace_back(serial, name, residue, sequence, x, y, z, charge, type);
+            } catch (...) {
+                // 处理解析错误，可以选择忽略或抛出异常
+                // 这里选择忽略并继续
+                continue;
+            }
+        }
+    }
+
+    infile.close();
+
+    // 如果晶胞信息未找到，计算基于原子坐标的晶胞
+    if (cryst.empty()) {
+        if (atoms.empty()) {
+            throw std::runtime_error("没有找到晶胞信息且原子列表为空: " + filename);
+        }
+        double min_x = atoms[0].x, max_x = atoms[0].x;
+        double min_y = atoms[0].y, max_y = atoms[0].y;
+        double min_z = atoms[0].z, max_z = atoms[0].z;
+
+        for (const auto& atom : atoms) {
+            min_x = std::min(min_x, atom.x);
+            max_x = std::max(max_x, atom.x);
+            min_y = std::min(min_y, atom.y);
+            max_y = std::max(max_y, atom.y);
+            min_z = std::min(min_z, atom.z);
+            max_z = std::max(max_z, atom.z);
+        }
+
+        cryst = {max_x - min_x, max_y - min_y, max_z - min_z};
+    }
+
+    return {cryst, atoms};
+}
+
+} // namespace io
+} // namespace core
+} // namespace pygcmc
