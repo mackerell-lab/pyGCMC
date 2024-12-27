@@ -1,7 +1,8 @@
 # modules/core/CMakeLists.txt
+
 cmake_minimum_required(VERSION 3.15)
 
-# Define the core library
+# 定义核心库
 add_library(pygcmc_core STATIC
     src/system.cpp
     src/force_field.cpp
@@ -14,20 +15,20 @@ add_library(pygcmc_core STATIC
     src/particles.cpp
 )
 
-# Enable compiler warnings
+# 启用编译器警告
 if(MSVC)
     target_compile_options(pygcmc_core PRIVATE /W4)
 else()
     target_compile_options(pygcmc_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# Position Independent Code for potential shared libraries
+# 设置位置独立代码（用于共享库）
 set_target_properties(pygcmc_core PROPERTIES 
     POSITION_INDEPENDENT_CODE ON
     DEBUG_POSTFIX "d"
 )
 
-# Include directories
+# 包含目录
 target_include_directories(pygcmc_core
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -36,7 +37,7 @@ target_include_directories(pygcmc_core
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-# Link dependencies if any (e.g., OpenMP)
+# 链接依赖（例如 OpenMP）
 find_package(OpenMP)
 if(OpenMP_CXX_FOUND)
     target_link_libraries(pygcmc_core PUBLIC OpenMP::OpenMP_CXX)

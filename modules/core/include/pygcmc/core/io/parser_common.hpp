@@ -3,30 +3,19 @@
 #ifndef PYGCMC_CORE_IO_PARSER_COMMON_HPP
 #define PYGCMC_CORE_IO_PARSER_COMMON_HPP
 
-// Standard library containers
 #include <vector>
 #include <array>
 #include <map>
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
-
-// String handling
 #include <string>
 #include <utility>
-
-// Error handling and utilities
 #include <stdexcept>
 #include <functional>
-
-// Math operations
 #include <cmath>
 #include <tuple>
-
-// Project includes
 #include "pygcmc/core/utils.hpp"
-
-// 现有的内容...
 
 namespace pygcmc {
 namespace core {
@@ -64,28 +53,40 @@ struct PDBAtom {
     std::string name;        ///< Atom name
     std::string residue;     ///< Residue name
     int sequence;            ///< Residue sequence number
+    char chain;              ///< Chain identifier
+    char alt_loc;            ///< Alternate location indicator
+    char insertion_code;     ///< Insertion code
     double x, y, z;          ///< Atomic coordinates
-    double charge;           ///< Atomic charge
+    double occupancy;        ///< Occupancy
+    double temp_factor;      ///< Temperature factor
+    std::string element;     ///< Element symbol
+    std::string charge;      ///< Charge
     std::string type;        ///< Atom type
 
     PDBAtom(int serial_ = 0, const std::string& name_ = "", 
             const std::string& residue_ = "", int sequence_ = 0,
+            char chain_ = ' ', char alt_loc_ = ' ', char insertion_code_ = ' ',
             double x_ = 0.0, double y_ = 0.0, double z_ = 0.0,
-            double charge_ = 0.0, const std::string& type_ = "")
+            double occupancy_ = 0.0, double temp_factor_ = 0.0,
+            const std::string& element_ = "", const std::string& charge_ = "",
+            const std::string& type_ = "")
         : serial(serial_), name(name_), residue(residue_),
-          sequence(sequence_), x(x_), y(y_), z(z_),
-          charge(charge_), type(type_) {}
-
+          sequence(sequence_), chain(chain_), alt_loc(alt_loc_), insertion_code(insertion_code_),
+          x(x_), y(y_), z(z_), occupancy(occupancy_), temp_factor(temp_factor_),
+          element(element_), charge(charge_), type(type_) {}
+    
     bool is_valid() const {
         return serial > 0 && !name.empty() && !residue.empty() &&
                std::isfinite(x) && std::isfinite(y) && std::isfinite(z) &&
-               std::isfinite(charge) && !type.empty();
+               std::isfinite(occupancy) && std::isfinite(temp_factor) &&
+               !element.empty() && !type.empty();
     }
 
     std::array<double, 3> position() const {
         return {x, y, z};
     }
 };
+
 
 /**
  * @brief ITP Atom structure
@@ -121,7 +122,7 @@ struct PSFBond {
 };
 
 /**
- * @brief PSF Topology structure
+ * @brief PSF Atom structure
  */
 struct PSFAtom {
     int id;              ///< Atom ID
@@ -214,18 +215,6 @@ struct TopAtomType {
 };
 
 /**
- * @brief Topology structure
- */
-struct Topology {
-    std::vector<TopAtomType> atom_types;
-
-    bool is_valid() const {
-        // 添加具体的验证逻辑，例如检查是否有重复的原子类型等
-        return true;
-    }
-};
-
-/**
  * @brief Force field parameter pair structure for non-bonded interactions
  */
 struct ForceFieldPair {
@@ -248,7 +237,7 @@ struct ForceFieldPair {
     ForceFieldPair combine_arithmetic(const ForceFieldPair& other) const {
         return ForceFieldPair(
             0.5 * (param1 + other.param1),     // arithmetic mean of sigma
-            std::sqrt(param2 * other.param2)    // geometric mean of epsilon
+            std::sqrt(param2 * other.param2)   // geometric mean of epsilon
         );
     }
 
@@ -282,6 +271,18 @@ struct PairStringHash {
 
 using NBMap = std::unordered_map<std::string, ForceFieldPair>;
 using NBFixMap = std::unordered_map<std::pair<std::string, std::string>, ForceFieldPair, PairStringHash>;
+
+struct Topology {
+    std::vector<TopAtomType> atom_types;
+
+    bool is_valid() const {
+        if (atom_types.empty()) return false;
+        for(const auto& atom_type : atom_types){
+            if(!atom_type.is_valid()) return false;
+        }
+        return true;
+    }
+};
 
 } // namespace io
 } // namespace core

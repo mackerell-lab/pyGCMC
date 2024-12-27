@@ -4,8 +4,6 @@
 #define PYGCMC_CORE_IO_TOP_PARSER_HPP
 
 #include "parser_common.hpp"
-#include <string>
-#include <istream>
 
 namespace pygcmc {
 namespace core {
@@ -14,14 +12,14 @@ namespace io {
 /**
  * @brief TOP Parser
  * 
- * Parse TOP files to extract atom type information and force field parameters.
+ * Parses TOP files to extract atom type information and force field parameters.
  */
 class TopParser {
 public:
     /**
-     * @brief Parse TOP file
+     * @brief Parse a TOP file
      * 
-     * @param filename Path to TOP file
+     * @param filename Path to the TOP file
      * @return Topology Parsed topology information
      */
     static Topology parse(const std::string& filename);

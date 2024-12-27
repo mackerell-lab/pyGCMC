@@ -85,9 +85,9 @@ bool TopParser::parse_atomtypes_section(const std::string& line, Topology& top) 
         top.atom_types.emplace_back(atom_type);
         return true;
     } catch (const FormatError& e) {
-    // 记录或处理无效的力场参数
-    return false;
-}
+        // 记录或处理无效的力场参数
+        return false;
+    }
 }
 
 } // namespace io

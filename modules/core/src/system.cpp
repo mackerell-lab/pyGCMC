@@ -1,3 +1,5 @@
+// modules/core/src/system.cpp
+
 #include "pygcmc/core/system.hpp"
 #include "pygcmc/core/io/pdb_parser.hpp"
 #include "pygcmc/core/io/psf_parser.hpp"
@@ -41,7 +43,17 @@ void System::load_pdb(const std::string& filename) {
             particle.x = p.x;
             particle.y = p.y;
             particle.z = p.z;
-            particle.charge = p.charge;
+            // Convert charge from string to double
+            if (!p.charge.empty()) {
+                try {
+                    particle.charge = std::stod(p.charge);
+                } catch (...) {
+                    particle.charge = 0.0; // 或其他默认值
+                }
+            } else {
+                particle.charge = 0.0; // 默认值
+            }
+            // Assign type; ensure Particle has 'type' as string
             particle.type = p.type;
             particle.nameTop = "";
             particle.typeNum = 0;
@@ -243,7 +255,7 @@ void System::set_periodic_boundary(double box_size) {
 
 double System::apply_pbc(double x) const {
     if (!use_periodic_) return x;
-    return x - box_size_ * std::round(x / box_size_);
+    return x - box_size_ * std::floor(x / box_size_);
 }
 
 std::array<double, 3> System::compute_distance(const Particle& p1, const Particle& p2) const {

@@ -1,0 +1,273 @@
+.
+├── build
+├── CMakeLists.txt
+├── config
+│   ├── optimization
+│   │   ├── cavity_bias.json
+│   │   ├── config_bias.json
+│   │   ├── emo.json
+│   │   └── oscillation.json
+│   ├── platforms
+│   │   ├── cuda_profile.json
+│   │   ├── opencl_profile.json
+│   │   └── rocm_profile.json
+│   ├── schemas
+│   │   ├── optimization_schema.json
+│   │   └── simulation_schema.json
+│   ├── simulation
+│   │   ├── config_schema.json
+│   │   └── parameters.json
+│   └── validators
+│       ├── validate_optimization.py
+│       └── validate_simulation.py
+├── data
+│   ├── analysis
+│   │   ├── correlation.cpp
+│   │   └── statistics.cpp
+│   ├── checkpoint
+│   │   ├── persistence
+│   │   │   ├── load_state.cpp
+│   │   │   └── save_state.cpp
+│   │   ├── recovery
+│   │   │   ├── recover.cpp
+│   │   │   └── verify_recovery.cpp
+│   │   └── serialization
+│   │       ├── deserialize.cpp
+│   │       └── serialize.cpp
+│   ├── io
+│   │   ├── read_data.cpp
+│   │   └── write_data.cpp
+│   └── trajectory
+│       ├── traj_reader.cpp
+│       └── traj_writer.cpp
+├── docs
+│   ├── api
+│   ├── examples
+│   └── guides
+│       ├── chemical_potential.rst
+│       ├── compute_pipeline.rst
+│       ├── development.rst
+│       ├── diagnostics.rst
+│       ├── distributed_computing.rst
+│       ├── gcmc_core.rst
+│       ├── getting_started.rst
+│       ├── gpu_optimization.rst
+│       ├── installation.rst
+│       ├── optimization.rst
+│       ├── parallel_optimization.rst
+│       ├── performance_tuning.rst
+│       ├── platform_integration.rst
+│       ├── troubleshooting.rst
+│       ├── usage.rst
+│       └── volume_bias.rst
+├── examples
+│   ├── advanced
+│   │   ├── run_compute_pipeline.py
+│   │   ├── run_custom_bias.py
+│   │   ├── run_large_system.py
+│   │   ├── run_protein.py
+│   │   └── run_volume_bias.py
+│   └── basic
+│       ├── CMakeLists.txt
+│       ├── cpp_example.cpp
+│       ├── example.py
+│       ├── python_example.py
+│       ├── run_system.cpp
+│       └── run_water.py
+├── LICENSE
+├── modules
+│   ├── bindings
+│   │   ├── CMakeLists.txt
+│   │   └── src
+│   │       └── bindings.cpp
+│   ├── core
+│   │   ├── CMakeLists.txt
+│   │   ├── include
+│   │   │   └── pygcmc
+│   │   │       └── core
+│   │   │           ├── box.hpp
+│   │   │           ├── force_field.hpp
+│   │   │           ├── io
+│   │   │           │   ├── ff_parser.hpp
+│   │   │           │   ├── itp_parser.hpp
+│   │   │           │   ├── parser_common.hpp
+│   │   │           │   ├── pdb_parser.hpp
+│   │   │           │   ├── psf_parser.hpp
+│   │   │           │   └── top_parser.hpp
+│   │   │           ├── particles.hpp
+│   │   │           ├── string.hpp
+│   │   │           ├── system.hpp
+│   │   │           └── utils.hpp
+│   │   └── src
+│   │       ├── box.cpp
+│   │       ├── force_field.cpp
+│   │       ├── io
+│   │       │   ├── ff_parser.cpp
+│   │       │   ├── itp_parser.cpp
+│   │       │   ├── pdb_parser.cpp
+│   │       │   ├── psf_parser.cpp
+│   │       │   └── top_parser.cpp
+│   │       ├── particles.cpp
+│   │       └── system.cpp
+│   ├── gcmc
+│   │   ├── include
+│   │   │   └── pygcmc
+│   │   │       └── gcmc
+│   │   │           ├── deletion.hpp
+│   │   │           ├── insertion.hpp
+│   │   │           └── metropolis.hpp
+│   │   └── src
+│   │       ├── deletion.cpp
+│   │       ├── insertion.cpp
+│   │       └── metropolis.cpp
+│   └── optimization
+│       ├── include
+│       │   └── pygcmc
+│       │       └── optimization
+│       │           ├── cavity_bias.hpp
+│       │           ├── config_bias.hpp
+│       │           ├── emo.hpp
+│       │           └── oscillation.hpp
+│       └── src
+│           ├── cavity_bias.cpp
+│           ├── config_bias.cpp
+│           ├── emo.cpp
+│           └── oscillation.cpp
+├── platforms
+│   ├── common
+│   │   ├── include
+│   │   │   └── pygcmc
+│   │   │       └── platforms
+│   │   │           └── common
+│   │   │               ├── device_memory.hpp
+│   │   │               ├── gpu_allocator.hpp
+│   │   │               ├── kernel_launcher.hpp
+│   │   │               └── platform.hpp
+│   │   └── src
+│   │       ├── device_memory.cpp
+│   │       ├── gpu_allocator.cpp
+│   │       ├── kernel_launcher.cpp
+│   │       └── platform.cpp
+│   ├── cuda
+│   │   ├── include
+│   │   │   └── pygcmc
+│   │   │       └── platforms
+│   │   │           └── cuda
+│   │   │               ├── cuda_device.hpp
+│   │   │               └── cuda_kernels.hpp
+│   │   └── src
+│   │       ├── cuda_device.cpp
+│   │       ├── cuda_helpers.cu
+│   │       └── cuda_kernels.cu
+│   ├── opencl
+│   │   ├── include
+│   │   │   └── pygcmc
+│   │   │       └── platforms
+│   │   │           └── opencl
+│   │   │               ├── opencl_device.hpp
+│   │   │               └── opencl_kernels.hpp
+│   │   └── src
+│   │       ├── opencl_device.cpp
+│   │       ├── opencl_helpers.cpp
+│   │       └── opencl_kernels.cpp
+│   └── rocm
+│       ├── include
+│       │   └── pygcmc
+│       │       └── platforms
+│       │           └── rocm
+│       │               ├── rocm_device.hpp
+│       │               └── rocm_kernels.hpp
+│       └── src
+│           ├── rocm_device.cpp
+│           ├── rocm_helpers.cpp
+│           └── rocm_kernels.cpp
+├── python
+│   ├── pygcmc
+│   │   ├── analysis
+│   │   │   ├── __init__.py
+│   │   │   ├── statistics.py
+│   │   │   └── visualization.py
+│   │   ├── builders
+│   │   │   ├── box_builder.py
+│   │   │   ├── __init__.py
+│   │   │   └── system_builder.py
+│   │   ├── core
+│   │   │   ├── __init__.py
+│   │   │   ├── simulation.py
+│   │   │   └── system.py
+│   │   ├── gcmc
+│   │   │   ├── acceptance.py
+│   │   │   ├── ensemble.py
+│   │   │   ├── __init__.py
+│   │   │   └── move_set.py
+│   │   ├── __init__.py
+│   │   ├── optimization
+│   │   │   ├── cavity_bias.py
+│   │   │   ├── config_bias.py
+│   │   │   ├── emo.py
+│   │   │   ├── __init__.py
+│   │   │   └── oscillation.py
+│   │   ├── platforms
+│   │   │   ├── __init__.py
+│   │   │   └── platform.py
+│   │   └── utils
+│   │       ├── config_loader.py
+│   │       ├── __init__.py
+│   │       └── logger.py
+│   └── tests
+│       ├── __init__.py
+│       ├── test_core.py
+│       ├── test_gcmc.py
+│       └── test_optimization.py
+├── README.md
+├── setup.py
+├── tests
+│   ├── CMakeLists.txt
+│   ├── core
+│   │   ├── test_box.cpp
+│   │   ├── test_force_field.cpp
+│   │   ├── test_particles.cpp
+│   │   ├── test_pdb_parser.cpp
+│   │   └── test_system.cpp
+│   ├── data
+│   │   └── test.pdb
+│   ├── gcmc
+│   │   ├── test_deletion.cpp
+│   │   ├── test_insertion.cpp
+│   │   └── test_metropolis.cpp
+│   ├── integration
+│   │   └── test_full_simulation.cpp
+│   ├── optimization
+│   │   ├── test_cavity_bias.cpp
+│   │   ├── test_config_bias.cpp
+│   │   ├── test_emo.cpp
+│   │   └── test_oscillation.cpp
+│   ├── performance
+│   │   ├── test_energy_performance.cpp
+│   │   └── test_move_performance.cpp
+│   └── regression
+│       └── test_regression.cpp
+├── tools
+│   ├── bandwidth_profiler
+│   │   └── profile_bandwidth.py
+│   ├── kernel_profiler
+│   │   └── profile_kernel.py
+│   ├── memory_profiler
+│   │   └── profile_memory.py
+│   ├── profiling
+│   │   ├── cuda_profiler
+│   │   │   ├── profile_energy.py
+│   │   │   └── profile_move.py
+│   │   ├── opencl_profiler
+│   │   │   ├── profile_energy_opencl.py
+│   │   │   └── profile_move_opencl.py
+│   │   └── rocm_profiler
+│   │       ├── profile_energy_rocm.py
+│   │       └── profile_move_rocm.py
+│   ├── utilities
+│   │   └── logger.py
+│   └── visualization
+│       └── visualize.py
+└── tree.txt
+
+95 directories, 175 files

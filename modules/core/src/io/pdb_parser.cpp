@@ -7,6 +7,7 @@
 #include "pygcmc/core/utils.hpp"
 #include <unordered_set>
 #include <unordered_map>
+#include <iostream> // 添加调试输出
 
 namespace pygcmc {
 namespace core {
@@ -36,6 +37,9 @@ std::pair<std::vector<double>, std::vector<PDBAtom>> PDBParser::parse(const std:
             PDBAtom atom;
             if (parse_atom_line(line, atom) && atom.is_valid()) {
                 atoms.emplace_back(atom);
+                // 调试输出
+                std::cout << "Parsed Atom: Serial " << atom.serial << ", Name " << atom.name 
+                          << ", Type " << atom.type << std::endl;
             }
         }
     }
@@ -80,40 +84,174 @@ bool PDBParser::parse_cryst1_line(const std::string& line, std::vector<double>& 
 
 bool PDBParser::parse_atom_line(const std::string& line, PDBAtom& atom) {
     try {
-        int serial = std::stoi(line.substr(6, 5));
-        std::string name = line.substr(12, 4);
-        name.erase(std::remove_if(name.begin(), name.end(), ::isspace), name.end());
+        // Minimum length check (through column 54 for essential fields)
+        if (line.length() < 54) {
+            return false;
+        }
 
-        std::string residue = line.substr(17, 3);
-        residue.erase(std::remove_if(residue.begin(), residue.end(), ::isspace), residue.end());
+        // Parse mandatory fields
+        int serial = std::stoi(utils::trim(line.substr(6, 5)));
 
-        int sequence = std::stoi(line.substr(22, 4));
+        std::string name = utils::trim(line.substr(12, 4));
+        if (name.empty()) {
+            return false;
+        }
 
-        double x = std::stod(line.substr(30, 8));
-        double y = std::stod(line.substr(38, 8));
-        double z = std::stod(line.substr(46, 8));
+        char alt_loc = (line.length() > 16) ? line[16] : ' ';
 
-        // 可选字段：电荷
-        double charge = 0.0;
-        if (line.length() >= 80) {
-            std::string chargeStr = line.substr(78, 2);
-            chargeStr.erase(std::remove_if(chargeStr.begin(), chargeStr.end(), ::isspace), chargeStr.end());
-            if (!chargeStr.empty()) {
-                charge = std::stod(chargeStr);
+        std::string residue = utils::trim(line.substr(17, 3));
+        if (residue.empty()) {
+            return false;
+        }
+
+        char chain = (line.length() > 21) ? line[21] : ' ';
+        int sequence = std::stoi(utils::trim(line.substr(22, 4)));
+        char insertion_code = (line.length() > 26) ? line[26] : ' ';
+
+        // Parse coordinates (required fields)
+        double x = std::stod(utils::trim(line.substr(30, 8)));
+        double y = std::stod(utils::trim(line.substr(38, 8)));
+        double z = std::stod(utils::trim(line.substr(46, 8)));
+
+        // Parse optional fields with defaults
+        double occupancy = 1.0;  // Default occupancy is 1.0
+        if (line.length() >= 60) {
+            std::string occupancyStr = utils::trim(line.substr(54, 6));
+            if (!occupancyStr.empty()) {
+                occupancy = std::stod(occupancyStr);
             }
         }
 
-        // 解析 type 作为字符串，从第 77-78 列提取
-        std::string type = "";
-        if (line.length() >= 78) {
-            type = pygcmc::core::utils::trim(line.substr(76, 2));
+        double temp_factor = 0.0;
+        if (line.length() >= 66) {
+            std::string tempFactorStr = utils::trim(line.substr(60, 6));
+            if (!tempFactorStr.empty()) {
+                temp_factor = std::stod(tempFactorStr);
+            }
         }
 
-        atom = PDBAtom(serial, name, residue, sequence, x, y, z, charge, type);
-        return true;
-    } catch (...) {
+        // Parse element and charge (optional)
+        std::string element;
+        if (line.length() >= 78) {
+            element = utils::trim(line.substr(76, 2));
+            if (element.empty()) {
+                // If element is not specified, try to derive it from atom name
+                element = derive_element_from_name(name);
+            }
+        } else {
+            element = derive_element_from_name(name);
+        }
+
+        std::string charge;
+        if (line.length() >= 80) {
+            charge = utils::trim(line.substr(78, 2));
+        }
+
+        // 创建并验证原子，将 type 设置为 element
+        atom = PDBAtom(serial, name, residue, sequence, chain, alt_loc, insertion_code,
+                      x, y, z, occupancy, temp_factor, element, charge, element);
+
+        // 调试输出
+        std::cout << "Parsed Atom - Serial: " << atom.serial
+                  << ", Name: " << atom.name
+                  << ", Residue: " << atom.residue
+                  << ", Sequence: " << atom.sequence
+                  << ", Chain: " << atom.chain
+                  << ", X: " << atom.x << ", Y: " << atom.y << ", Z: " << atom.z
+                  << ", Occupancy: " << atom.occupancy
+                  << ", Temp Factor: " << atom.temp_factor
+                  << ", Element: " << atom.element
+                  << ", Charge: " << atom.charge
+                  << ", Type: " << atom.type << std::endl;
+
+        return atom.is_valid();
+
+    } catch (const std::exception& e) {
+        std::cerr << "Error parsing atom line: " << e.what() << std::endl;
         return false;
     }
+}
+
+std::string PDBParser::derive_element_from_name(const std::string& name) {
+    if (name.empty()) return "";
+
+    // If name starts with a digit, element is the rest
+    if (std::isdigit(name[0])) {
+        if (name.length() >= 2) {
+            return utils::trim(name.substr(1, 1));  // Take second character
+        } else {
+            return "";
+        }
+    }
+
+    // Otherwise take first one or two characters based on name
+    if (name.length() >= 2 && std::isupper(name[1])) {
+        return utils::trim(name.substr(0, 2));  // Two-letter element
+    } else {
+        return utils::trim(name.substr(0, 1));  // One-letter element
+    }
+}
+
+bool PDBParser::validate_atom(const PDBAtom& atom) {
+    // Check atom validity
+    if (!atom.is_valid()) {
+        return false;
+    }
+
+    // Check coordinates
+    if (!std::isfinite(atom.x) || !std::isfinite(atom.y) || !std::isfinite(atom.z)) {
+        return false;
+    }
+
+    // Check occupancy range
+    if (atom.occupancy < 0.0 || atom.occupancy > 1.0) {
+        return false;
+    }
+
+    // Check temperature factor
+    if (!std::isfinite(atom.temp_factor) || atom.temp_factor < 0.0) {
+        return false;
+    }
+
+    return true;
+}
+
+bool PDBParser::validate_chain_structure(const std::unordered_map<char, 
+    std::map<std::string, std::set<std::pair<int, char>>>>& chain_residues) {
+        
+    for (const auto& [chain, residues] : chain_residues) {
+        for (const auto& [residue_name, sequences] : residues) {
+            // Convert sequence/insertion pairs to vector for analysis
+            std::vector<std::pair<int, char>> seq_vec(sequences.begin(), sequences.end());
+            
+            // Sort based on sequence number and insertion code
+            std::sort(seq_vec.begin(), seq_vec.end(), 
+                      [](const std::pair<int, char>& a, const std::pair<int, char>& b) -> bool {
+                          if (a.first != b.first) return a.first < b.first;
+                          return a.second < b.second;
+                      });
+
+            // Check for sequence continuity
+            for (size_t i = 1; i < seq_vec.size(); ++i) {
+                const auto& prev = seq_vec[i-1];
+                const auto& curr = seq_vec[i];
+                
+                // If same sequence number, must have different insertion codes
+                if (prev.first == curr.first && prev.second == curr.second) {
+                    return false;
+                }
+                
+                // Check for unreasonable gaps (more than 1 residue)
+                if (curr.first - prev.first > 1) {
+                    return false;  // Gap detected in residue sequence
+                }
+
+                // Optional: Handle insertion codes appropriately if needed
+            }
+        }
+    }
+    
+    return true;
 }
 
 bool PDBParser::validate_pdb_structure(const std::vector<PDBAtom>& atoms) {
@@ -121,12 +259,14 @@ bool PDBParser::validate_pdb_structure(const std::vector<PDBAtom>& atoms) {
         return false;  // Empty structure is invalid
     }
 
+    // Track unique identifiers and sequences
     std::unordered_set<int> serials;
-    std::unordered_map<std::string, std::unordered_set<int>> residue_sequences;
+    std::unordered_map<char, std::map<std::string, std::set<std::pair<int, char>>>> chain_residues;
+    // Format: chain -> residue_name -> set of (sequence, insertion_code)
 
     for (const auto& atom : atoms) {
-        // Check if atom is valid
-        if (!atom.is_valid()) {
+        // Basic atom validation
+        if (!validate_atom(atom)) {
             return false;
         }
 
@@ -135,29 +275,13 @@ bool PDBParser::validate_pdb_structure(const std::vector<PDBAtom>& atoms) {
             return false;
         }
 
-        // Check coordinates are finite
-        if (!std::isfinite(atom.x) || !std::isfinite(atom.y) || !std::isfinite(atom.z)) {
-            return false;
-        }
-
-        // Track residue sequence numbers for each residue name
-        residue_sequences[atom.residue].insert(atom.sequence);
+        // Track residue information
+        auto& residue_map = chain_residues[atom.chain];
+        residue_map[atom.residue].insert({atom.sequence, atom.insertion_code});
     }
 
-    // Check residue sequence continuity
-    for (const auto& [residue, sequences] : residue_sequences) {
-        std::vector<int> seq_nums(sequences.begin(), sequences.end());
-        std::sort(seq_nums.begin(), seq_nums.end());
-        
-        // Check for gaps in sequence numbers
-        for (size_t i = 1; i < seq_nums.size(); ++i) {
-            if (seq_nums[i] - seq_nums[i-1] > 1) {
-                return false;  // Gap detected in residue sequence
-            }
-        }
-    }
-
-    return true;
+    // Validate chain and residue organization
+    return validate_chain_structure(chain_residues);
 }
 
 } // namespace io
