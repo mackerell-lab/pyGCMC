@@ -12,8 +12,8 @@ PYBIND11_MODULE(pyGCMC, m) {
 
     py::class_<Particle>(m, "Particle")
         .def(py::init<int, const std::string&, const std::string&, 
-                     int, double, double, double, 
-                     double, int, const std::string&>(),
+                 int, double, double, double, 
+                 double, const std::string&, const std::string&>(),  // **Corrected**
              py::arg("serial") = 0,
              py::arg("name") = "",
              py::arg("residue") = "",
@@ -22,7 +22,7 @@ PYBIND11_MODULE(pyGCMC, m) {
              py::arg("y") = 0.0,
              py::arg("z") = 0.0,
              py::arg("charge") = 0.0,
-             py::arg("type") = 0,
+             py::arg("type") = "",            // **Changed to string**
              py::arg("nameTop") = "")
         .def_readwrite("serial", &Particle::serial)
         .def_readwrite("name", &Particle::name)

@@ -103,7 +103,7 @@ void System::load_itp(const std::string& filename) {
 
         // 将ITP中的原子类型信息与粒子关联
         for (size_t i = 0; i < particles_.size() && i < itp_atoms.size(); ++i) {
-            particles_[i].type = std::stoi(itp_atoms[i].type);
+            particles_[i].type = itp_atoms[i].type;
             particles_[i].charge = itp_atoms[i].charge;
             particles_[i].nameTop = itp_atoms[i].name;
         }

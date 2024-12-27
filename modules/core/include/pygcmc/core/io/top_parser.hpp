@@ -30,12 +30,12 @@ private:
     /**
      * @brief Parse [ atomtypes ] section
      * 
-     * @param is Input stream positioned at the start of atomtypes section
+     * @param line Line from the TOP file
      * @param top Topology object to store parsed information
      * @return true if parsing successful
      * @return false if parsing failed
      */
-    static bool parse_atomtypes_section(std::istream& is, Topology& top);
+    static bool parse_atomtypes_section(const std::string& line, Topology& top);
 };
 
 } // namespace io

@@ -29,10 +29,10 @@ int main() {
         // Initialize system with custom LJ parameters
         System sys(1.0, 3.355);  // epsilon = 1.0, sigma = 3.355
 
-        // Create water molecule particles
-        Particle h1(1, "H1", "HOH", 1, 0.0, 0.0, 0.0, 0.5, 1, "H");
-        Particle o1(2, "O1", "HOH", 1, 1.0, 0.0, 0.0, -1.0, 2, "O");
-        Particle h2(3, "H2", "HOH", 1, 1.0, 1.0, 0.0, 0.5, 1, "H");
+        // Create water molecule particles with corrected 'type_' parameter as string
+        Particle h1(1, "H1", "HOH", 1, 0.0, 0.0, 0.0, 0.5, "H", "H");
+        Particle o1(2, "O1", "HOH", 1, 1.0, 0.0, 0.0, -1.0, "O", "O");
+        Particle h2(3, "H2", "HOH", 1, 1.0, 1.0, 0.0, 0.5, "H", "H");
 
         // Add particles to system
         sys.add_particle(h1);
@@ -51,7 +51,7 @@ int main() {
 
         // Add some initial velocities
         auto& p1 = sys.get_particle(0);
-        p1.set_velocity(1.0, 0.0, 0.0);
+        p1.set_velocity({1.0, 0.0, 0.0});  // Corrected to use std::array
 
         // Run a few dynamics steps
         double dt = 0.001;

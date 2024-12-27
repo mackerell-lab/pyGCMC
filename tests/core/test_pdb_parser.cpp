@@ -1,7 +1,7 @@
 // tests/core/test_pdb_parser.cpp
 
 #include "gtest/gtest.h"
-#include "pygcmc/core/io/parser.hpp"
+#include "pygcmc/core/io/pdb_parser.hpp"
 
 TEST(PDBParserTest, ParseValidFile) {
     std::string filename = "tests/data/test.pdb"; // 确保存在测试 PDB 文件

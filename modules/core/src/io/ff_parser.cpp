@@ -7,7 +7,7 @@
 #include <cctype>
 #include <algorithm>
 #include <utility>
-#include "pygcmc/core/utils/string.hpp"
+#include "pygcmc/core/string.hpp" // 保持包含路径
 
 namespace pygcmc {
 namespace core {
@@ -35,7 +35,7 @@ std::pair<NBMap, NBFixMap> FFParser::parse(const std::string& filename) {
         }
 
         // 去除行首尾空白
-        line = utils::trim(line);
+        line = pygcmc::core::utils::trim(line); // 如果 `trim` 在 `utils.hpp`
 
         if (line.empty()) {
             continue;

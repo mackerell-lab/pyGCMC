@@ -35,5 +35,5 @@ inline std::string trim(const std::string& s) {
 } // namespace utils
 } // namespace core
 } // namespace pygcmc
-
 #endif // PYGCMC_CORE_UTILS_HPP
+

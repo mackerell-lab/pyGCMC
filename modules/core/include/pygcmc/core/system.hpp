@@ -47,20 +47,40 @@ struct Particle {
           typeNum(0), vx(0.0), vy(0.0), vz(0.0) {}
 
     bool is_valid() const {
-        return serial > 0 && !name.empty() && !residue.empty() &&
+        return serial > 0 && 
+               !name.empty() && 
+               !residue.empty() && 
+               sequence > 0 &&
                std::isfinite(x) && std::isfinite(y) && std::isfinite(z) &&
-               std::isfinite(charge);
+               std::isfinite(charge) &&
+               std::isfinite(vx) && std::isfinite(vy) && std::isfinite(vz) &&
+               !type.empty();
     }
 
-    std::array<double, 3> position() const { return {x, y, z}; }
-    std::array<double, 3> velocity() const { return {vx, vy, vz}; }
-    
-    void set_position(double x_, double y_, double z_) {
-        x = x_; y = y_; z = z_;
+    std::array<double, 3> position() const { 
+        return {x, y, z}; 
+    }
+
+    std::array<double, 3> velocity() const { 
+        return {vx, vy, vz}; 
     }
     
-    void set_velocity(double vx_, double vy_, double vz_) {
-        vx = vx_; vy = vy_; vz = vz_;
+    void set_position(const std::array<double, 3>& pos) {
+        x = pos[0]; y = pos[1]; z = pos[2];
+    }
+    
+    void set_velocity(const std::array<double, 3>& vel) {
+        vx = vel[0]; vy = vel[1]; vz = vel[2];
+    }
+
+    double kinetic_energy() const {
+        return 0.5 * (vx * vx + vy * vy + vz * vz);
+    }
+
+    void apply_periodic_boundary(double box_size) {
+        x -= box_size * std::floor(x / box_size);
+        y -= box_size * std::floor(y / box_size);
+        z -= box_size * std::floor(z / box_size);
     }
 };
 

@@ -1,6 +1,7 @@
 // modules/core/src/io/top_parser.cpp
 
 #include "pygcmc/core/io/top_parser.hpp"
+#include "pygcmc/core/utils.hpp" // 确保包含 utils.hpp
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -29,7 +30,7 @@ Topology TopParser::parse(const std::string& filename) {
         }
 
         // 去除行首尾空白
-        line = utils::trim(line);
+        line = pygcmc::core::utils::trim(line); // 使用完整命名空间前缀
 
         if (line.empty()) {
             continue;
@@ -83,10 +84,10 @@ bool TopParser::parse_atomtypes_section(const std::string& line, Topology& top) 
         }
         top.atom_types.emplace_back(atom_type);
         return true;
-    } catch (const ForceFieldError& e) {
-        // 记录或处理无效的力场参数
-        return false;
-    }
+    } catch (const FormatError& e) {
+    // 记录或处理无效的力场参数
+    return false;
+}
 }
 
 } // namespace io

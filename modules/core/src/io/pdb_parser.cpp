@@ -4,6 +4,9 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include "pygcmc/core/utils.hpp"
+#include <unordered_set>
+#include <unordered_map>
 
 namespace pygcmc {
 namespace core {
@@ -100,8 +103,11 @@ bool PDBParser::parse_atom_line(const std::string& line, PDBAtom& atom) {
             }
         }
 
-        // 粒子类型可以根据原子名称或其他规则设定
-        int type = 0; // 这里简单设为0，实际应用中可根据需求调整
+        // 解析 type 作为字符串，从第 77-78 列提取
+        std::string type = "";
+        if (line.length() >= 78) {
+            type = pygcmc::core::utils::trim(line.substr(76, 2));
+        }
 
         atom = PDBAtom(serial, name, residue, sequence, x, y, z, charge, type);
         return true;
@@ -111,7 +117,46 @@ bool PDBParser::parse_atom_line(const std::string& line, PDBAtom& atom) {
 }
 
 bool PDBParser::validate_pdb_structure(const std::vector<PDBAtom>& atoms) {
-    // 添加验证逻辑，例如检查是否有重复的原子序号等
+    if (atoms.empty()) {
+        return false;  // Empty structure is invalid
+    }
+
+    std::unordered_set<int> serials;
+    std::unordered_map<std::string, std::unordered_set<int>> residue_sequences;
+
+    for (const auto& atom : atoms) {
+        // Check if atom is valid
+        if (!atom.is_valid()) {
+            return false;
+        }
+
+        // Check for duplicate serial numbers
+        if (!serials.insert(atom.serial).second) {
+            return false;
+        }
+
+        // Check coordinates are finite
+        if (!std::isfinite(atom.x) || !std::isfinite(atom.y) || !std::isfinite(atom.z)) {
+            return false;
+        }
+
+        // Track residue sequence numbers for each residue name
+        residue_sequences[atom.residue].insert(atom.sequence);
+    }
+
+    // Check residue sequence continuity
+    for (const auto& [residue, sequences] : residue_sequences) {
+        std::vector<int> seq_nums(sequences.begin(), sequences.end());
+        std::sort(seq_nums.begin(), seq_nums.end());
+        
+        // Check for gaps in sequence numbers
+        for (size_t i = 1; i < seq_nums.size(); ++i) {
+            if (seq_nums[i] - seq_nums[i-1] > 1) {
+                return false;  // Gap detected in residue sequence
+            }
+        }
+    }
+
     return true;
 }
 

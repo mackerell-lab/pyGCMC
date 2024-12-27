@@ -3,16 +3,28 @@
 #ifndef PYGCMC_CORE_IO_PARSER_COMMON_HPP
 #define PYGCMC_CORE_IO_PARSER_COMMON_HPP
 
-#include <string>
+// Standard library containers
 #include <vector>
-#include <utility>
-#include <stdexcept>
-#include <cmath>
 #include <array>
 #include <map>
-#include <tuple>
+#include <set>
 #include <unordered_map>
+#include <unordered_set>
+
+// String handling
+#include <string>
+#include <utility>
+
+// Error handling and utilities
+#include <stdexcept>
 #include <functional>
+
+// Math operations
+#include <cmath>
+#include <tuple>
+
+// Project includes
+#include "pygcmc/core/utils.hpp"
 
 // 现有的内容...
 
@@ -111,11 +123,74 @@ struct PSFBond {
 /**
  * @brief PSF Topology structure
  */
-struct PSFTopology {
-    std::vector<PSFBond> bonds;
+struct PSFAtom {
+    int id;              ///< Atom ID
+    int residue_id;      ///< Residue ID
+    std::string name;    ///< Atom name
+    std::string type;    ///< Atom type
+    double charge;       ///< Atom charge
+    double mass;         ///< Atom mass
+
+    PSFAtom(int id_ = 0, int residue_id_ = 0, const std::string& name_ = "", 
+            const std::string& type_ = "", double charge_ = 0.0, double mass_ = 0.0)
+        : id(id_), residue_id(residue_id_), name(name_), type(type_), charge(charge_), mass(mass_) {}
 
     bool is_valid() const {
-        // 添加具体的验证逻辑，例如检查是否有重复的键等
+        return id > 0 && !name.empty() && !type.empty() &&
+               std::isfinite(charge) && std::isfinite(mass);
+    }
+};
+
+/**
+ * @brief PSF Topology structure
+ */
+struct PSFTopology {
+    std::vector<PSFAtom> atoms;  ///< List of atoms in the PSF
+    std::vector<PSFBond> bonds;  ///< List of bonds in the PSF
+
+    bool is_valid() const {
+        // Check if we have any atoms and bonds
+        if (atoms.empty()) {
+            return false;
+        }
+
+        // Validate all atoms
+        for (const auto& atom : atoms) {
+            if (!atom.is_valid()) {
+                return false;
+            }
+        }
+
+        // Create a set of valid atom IDs
+        std::unordered_set<int> valid_atom_ids;
+        for (const auto& atom : atoms) {
+            valid_atom_ids.insert(atom.id);
+        }
+
+        // Check bonds
+        std::set<std::pair<int, int>> bond_pairs;
+        for (const auto& bond : bonds) {
+            // Check if bond is valid
+            if (!bond.is_valid()) {
+                return false;
+            }
+
+            // Check if bond references valid atoms
+            if (valid_atom_ids.find(bond.atom1) == valid_atom_ids.end() ||
+                valid_atom_ids.find(bond.atom2) == valid_atom_ids.end()) {
+                return false;
+            }
+
+            // Check for duplicate bonds
+            int min_atom = std::min(bond.atom1, bond.atom2);
+            int max_atom = std::max(bond.atom1, bond.atom2);
+            auto bond_pair = std::make_pair(min_atom, max_atom);
+            
+            if (!bond_pairs.insert(bond_pair).second) {
+                return false;  // Duplicate bond found
+            }
+        }
+
         return true;
     }
 };
@@ -151,14 +226,52 @@ struct Topology {
 };
 
 /**
- * @brief Force field parameter pair structure
+ * @brief Force field parameter pair structure for non-bonded interactions
  */
 struct ForceFieldPair {
-    double param1;
-    double param2;
+    double param1; ///< First parameter (typically sigma in nm)
+    double param2; ///< Second parameter (typically epsilon in kJ/mol)
 
     ForceFieldPair(double p1 = 0.0, double p2 = 0.0) 
         : param1(p1), param2(p2) {}
+
+    bool is_valid() const {
+        return std::isfinite(param1) && std::isfinite(param2) && 
+               param1 >= 0.0;  // sigma should be non-negative
+    }
+
+    /**
+     * @brief Combines two ForceFieldPairs using arithmetic mixing rules
+     * @param other The other ForceFieldPair to combine with
+     * @return A new ForceFieldPair with combined parameters
+     */
+    ForceFieldPair combine_arithmetic(const ForceFieldPair& other) const {
+        return ForceFieldPair(
+            0.5 * (param1 + other.param1),     // arithmetic mean of sigma
+            std::sqrt(param2 * other.param2)    // geometric mean of epsilon
+        );
+    }
+
+    /**
+     * @brief Combines two ForceFieldPairs using geometric mixing rules
+     * @param other The other ForceFieldPair to combine with
+     * @return A new ForceFieldPair with combined parameters
+     */
+    ForceFieldPair combine_geometric(const ForceFieldPair& other) const {
+        return ForceFieldPair(
+            std::sqrt(param1 * other.param1),   // geometric mean of sigma
+            std::sqrt(param2 * other.param2)    // geometric mean of epsilon
+        );
+    }
+
+    /**
+     * @brief Scales the parameters by a factor
+     * @param factor The scaling factor
+     * @return A new ForceFieldPair with scaled parameters
+     */
+    ForceFieldPair scale(double factor) const {
+        return ForceFieldPair(param1 * factor, param2 * factor);
+    }
 };
 
 struct PairStringHash {
