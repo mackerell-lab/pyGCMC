@@ -22,6 +22,9 @@ set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeR
 option(BUILD_TESTING "Build tests" ON)
 option(BUILD_EXAMPLES "Build examples" ON)
 option(USE_SYSTEM_DEPS "Use system-installed dependencies instead of downloading them" OFF)
+option(WITH_CUDA "Build with CUDA support" OFF)
+option(WITH_ROCM "Build with ROCm support" OFF)
+option(WITH_OPENCL "Build with OpenCL support" OFF)
 
 # Include FetchContent
 include(FetchContent)
@@ -42,7 +45,7 @@ else()
     FetchContent_MakeAvailable(pybind11)
 endif()
 
-# GTest (only if testing is enabled)
+# Google Test (only if testing is enabled)
 if(BUILD_TESTING)
     if(USE_SYSTEM_DEPS)
         find_package(GTest CONFIG REQUIRED)
@@ -66,13 +69,62 @@ if(BUILD_TESTING)
     endif()
 endif()
 
+# CUDA配置
+if(WITH_CUDA)
+    enable_language(CUDA)
+    find_package(CUDA REQUIRED)
+    if(CUDA_FOUND)
+        message(STATUS "CUDA found: ${CUDA_VERSION}")
+        add_definitions(-DWITH_CUDA)
+    else()
+        message(FATAL_ERROR "CUDA requested but not found.")
+    endif()
+endif()
+
+# ROCm配置
+if(WITH_ROCM)
+    find_package(hip REQUIRED)
+    if(hip_FOUND)
+        message(STATUS "ROCm found: ${hip_VERSION}")
+        add_definitions(-DWITH_ROCM)
+    else()
+        message(FATAL_ERROR "ROCm requested but not found.")
+    endif()
+endif()
+
+# OpenCL配置
+if(WITH_OPENCL)
+    find_package(OpenCL REQUIRED)
+    if(OpenCL_FOUND)
+        message(STATUS "OpenCL found: ${OpenCL_VERSION}")
+        add_definitions(-DWITH_OPENCL)
+    else()
+        message(FATAL_ERROR "OpenCL requested but not found.")
+    endif()
+endif()
+
 # ---------------------------
 # 2. Core Library
 # ---------------------------
 add_subdirectory(modules/core)
 
 # ---------------------------
-# 3. Tests
+# 3. GCMC Module
+# ---------------------------
+# add_subdirectory(modules/gcmc)
+
+# ---------------------------
+# 4. Optimization Module
+# ---------------------------
+# add_subdirectory(modules/optimization)
+
+# ---------------------------
+# 5. Bindings
+# ---------------------------
+add_subdirectory(modules/bindings)
+
+# ---------------------------
+# 6. Tests
 # ---------------------------
 if(BUILD_TESTING)
     enable_testing()
@@ -80,17 +132,15 @@ if(BUILD_TESTING)
 endif()
 
 # ---------------------------
-# 4. Examples
+# 7. Examples
 # ---------------------------
 if(BUILD_EXAMPLES)
     add_subdirectory(examples/basic)
-    
-    add_executable(cpp_example examples/basic/cpp_example.cpp)
-    target_link_libraries(cpp_example PRIVATE pygcmc_core)
+    # add_subdirectory(examples/advanced)
 endif()
 
 # ---------------------------
-# 5. Installation
+# 8. Installation
 # ---------------------------
 include(GNUInstallDirs)
 set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/pyGCMC)
@@ -103,7 +153,6 @@ install(TARGETS pygcmc_core
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-# Export targets
 install(EXPORT pyGCMC-targets
     FILE pyGCMCTargets.cmake
     NAMESPACE pyGCMC::

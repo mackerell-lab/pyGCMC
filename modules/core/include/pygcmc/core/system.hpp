@@ -1,5 +1,3 @@
-// modules/core/include/pygcmc/core/system.hpp
-
 #ifndef PYGCMC_CORE_SYSTEM_HPP
 #define PYGCMC_CORE_SYSTEM_HPP
 
@@ -9,7 +7,6 @@
 #include <array>
 #include <cmath>
 #include <stdexcept>
-#include <memory>
 
 namespace pygcmc {
 namespace core {
@@ -18,6 +15,7 @@ namespace core {
  * @brief System-related exceptions
  */
 class SystemError : public std::runtime_error {
+public:
     using std::runtime_error::runtime_error;
 };
 
@@ -25,23 +23,23 @@ class SystemError : public std::runtime_error {
  * @brief Represents a particle in the system
  */
 struct Particle {
-    int serial;
-    std::string name;
-    std::string residue;
-    int sequence;
-    double x, y, z;
-    double charge;
-    std::string type;
-    std::string nameTop;
-    int typeNum;
-    double vx, vy, vz;
+    int serial;              ///< Atom serial number
+    std::string name;        ///< Atom name
+    std::string residue;     ///< Residue name
+    int sequence;            ///< Residue sequence number
+    double x, y, z;          ///< Atomic coordinates
+    double charge;           ///< Atomic charge
+    std::string type;        ///< Atom type
+    std::string nameTop;     ///< Topology name
+    int typeNum;             ///< Atom type number
+    double vx, vy, vz;       ///< Velocities
 
     Particle(int serial_ = 0, const std::string& name_ = "", 
              const std::string& residue_ = "", int sequence_ = 0,
              double x_ = 0.0, double y_ = 0.0, double z_ = 0.0,
              double charge_ = 0.0, const std::string& type_ = "", 
              const std::string& nameTop_ = "")
-        : serial(serial_), name(name_), residue(residue_), 
+        : serial(serial_), name(name_), residue(residue_),
           sequence(sequence_), x(x_), y(y_), z(z_), 
           charge(charge_), type(type_), nameTop(nameTop_),
           typeNum(0), vx(0.0), vy(0.0), vz(0.0) {}
@@ -84,9 +82,18 @@ struct Particle {
     }
 };
 
+/**
+ * @brief Manages the molecular system
+ */
 class System {
 public:
+    /**
+     * @brief Constructs the system with given force field parameters
+     * @param epsilon Lennard-Jones epsilon parameter
+     * @param sigma Lennard-Jones sigma parameter
+     */
     System(double epsilon = 1.0, double sigma = 1.0);
+    
     ~System();
 
     // File loading methods

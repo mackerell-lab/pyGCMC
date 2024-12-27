@@ -1,4 +1,4 @@
-// modules/core/src/io/bindings.cpp
+// modules/bindings/src/bindings.cpp
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -7,13 +7,14 @@
 namespace py = pybind11;
 using namespace pygcmc::core;
 
-PYBIND11_MODULE(pyGCMC, m) {
-    m.doc() = "Python bindings for GCMC simulation library";
+PYBIND11_MODULE(pyGCMC_bindings, m) {
+    m.doc() = "Python bindings for pyGCMC simulation library";
 
+    // Bind Particle struct
     py::class_<Particle>(m, "Particle")
         .def(py::init<int, const std::string&, const std::string&, 
                  int, double, double, double, 
-                 double, const std::string&, const std::string&>(),  // **Corrected**
+                 double, const std::string&, const std::string&>(),
              py::arg("serial") = 0,
              py::arg("name") = "",
              py::arg("residue") = "",
@@ -22,7 +23,7 @@ PYBIND11_MODULE(pyGCMC, m) {
              py::arg("y") = 0.0,
              py::arg("z") = 0.0,
              py::arg("charge") = 0.0,
-             py::arg("type") = "",            // **Changed to string**
+             py::arg("type") = "",
              py::arg("nameTop") = "")
         .def_readwrite("serial", &Particle::serial)
         .def_readwrite("name", &Particle::name)
@@ -44,6 +45,7 @@ PYBIND11_MODULE(pyGCMC, m) {
         .def("set_position", &Particle::set_position)
         .def("set_velocity", &Particle::set_velocity);
 
+    // Bind System class
     py::class_<System>(m, "System")
         .def(py::init<double, double>(),
              py::arg("epsilon") = 1.0,

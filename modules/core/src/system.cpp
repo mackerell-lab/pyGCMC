@@ -1,5 +1,3 @@
-// modules/core/src/system.cpp
-
 #include "pygcmc/core/system.hpp"
 #include "pygcmc/core/io/pdb_parser.hpp"
 #include "pygcmc/core/io/psf_parser.hpp"
@@ -22,10 +20,7 @@ System::System(double epsilon, double sigma)
 
 System::~System() = default;
 
-size_t System::get_particle_count() const {
-    return particles_.size();
-}
-
+// File loading methods
 void System::load_pdb(const std::string& filename) {
     try {
         auto parsed = io::PDBParser::parse(filename);
@@ -66,40 +61,40 @@ void System::load_psf(const std::string& filename) {
     try {
         auto psf = io::PSFParser::parse(filename);
         // 处理PSF中的键、角度等信息（当前仅处理键）
-        std::cout << "成功加载 PSF 文件: " << filename << std::endl;
-        std::cout << "键数量: " << psf.bonds.size() << std::endl;
+        std::cout << "Successfully loaded PSF file: " << filename << std::endl;
+        std::cout << "Number of bonds: " << psf.bonds.size() << std::endl;
 
         // 可以将键信息存储在系统中，供能量计算使用
         // 这里省略具体实现
     }
     catch (const std::exception& e) {
-        std::cerr << "加载 PSF 文件失败: " << e.what() << std::endl;
+        std::cerr << "Failed to load PSF file: " << e.what() << std::endl;
     }
 }
 
 void System::load_top(const std::string& filename) {
     try {
         auto top = io::TopParser::parse(filename);
-        std::cout << "成功加载 TOP 文件: " << filename << std::endl;
-        std::cout << "原子类型数量: " << top.atom_types.size() << std::endl;
+        std::cout << "Successfully loaded TOP file: " << filename << std::endl;
+        std::cout << "Number of atom types: " << top.atom_types.size() << std::endl;
 
         // 将TOP中的原子类型信息与粒子关联
         for (size_t i = 0; i < particles_.size() && i < top.atom_types.size(); ++i) {
-            particles_[i].type = top.atom_types[i].type;
+            particles_[i].type = top.atom_types[i].name;
             particles_[i].charge = top.atom_types[i].charge;
             particles_[i].nameTop = top.atom_types[i].name;
         }
     }
     catch (const std::exception& e) {
-        std::cerr << "加载 TOP 文件失败: " << e.what() << std::endl;
+        std::cerr << "Failed to load TOP file: " << e.what() << std::endl;
     }
 }
 
 void System::load_itp(const std::string& filename) {
     try {
         auto itp_atoms = io::ITPParser::parse(filename);
-        std::cout << "成功加载 ITP 文件: " << filename << std::endl;
-        std::cout << "ITP 原子数量: " << itp_atoms.size() << std::endl;
+        std::cout << "Successfully loaded ITP file: " << filename << std::endl;
+        std::cout << "Number of ITP atoms: " << itp_atoms.size() << std::endl;
 
         // 将ITP中的原子类型信息与粒子关联
         for (size_t i = 0; i < particles_.size() && i < itp_atoms.size(); ++i) {
@@ -109,7 +104,7 @@ void System::load_itp(const std::string& filename) {
         }
     }
     catch (const std::exception& e) {
-        std::cerr << "加载 ITP 文件失败: " << e.what() << std::endl;
+        std::cerr << "Failed to load ITP file: " << e.what() << std::endl;
     }
 }
 
@@ -118,14 +113,16 @@ void System::load_forcefield(const std::string& filename) {
         auto ff = io::FFParser::parse(filename);
         nb_dict_ = ff.first;
         nbfix_dict_ = ff.second;
-        std::cout << "成功加载势能文件: " << filename << std::endl;
-        std::cout << "非键参数数量: " << nb_dict_.size() << ", 修正参数数量: " << nbfix_dict_.size() << std::endl;
+        std::cout << "Successfully loaded force field file: " << filename << std::endl;
+        std::cout << "Number of non-bonded parameters: " << nb_dict_.size() 
+                  << ", number of NBFIX parameters: " << nbfix_dict_.size() << std::endl;
     }
     catch (const std::exception& e) {
-        std::cerr << "加载势能文件失败: " << e.what() << std::endl;
+        std::cerr << "Failed to load force field file: " << e.what() << std::endl;
     }
 }
 
+// Particle management
 void System::add_particle(const Particle& particle) {
     particles_.emplace_back(particle);
 }
@@ -136,6 +133,25 @@ void System::remove_particle(int index) {
     }
 }
 
+size_t System::get_particle_count() const {
+    return particles_.size();
+}
+
+const Particle& System::get_particle(size_t index) const {
+    if (index >= particles_.size()) {
+        throw std::out_of_range("Particle index out of range");
+    }
+    return particles_[index];
+}
+
+Particle& System::get_particle(size_t index) {
+    if (index >= particles_.size()) {
+        throw std::out_of_range("Particle index out of range");
+    }
+    return particles_[index];
+}
+
+// Energy computation
 double System::compute_total_energy() const {
     double total_energy = 0.0;
     
@@ -148,11 +164,29 @@ double System::compute_total_energy() const {
     return total_energy;
 }
 
+std::pair<double, double> System::get_system_state() const {
+    double kinetic_energy = 0.0;
+    double potential_energy = compute_total_energy();
+    
+    // Calculate kinetic energy
+    for (const auto& p : particles_) {
+        double v2 = p.vx*p.vx + p.vy*p.vy + p.vz*p.vz;
+        kinetic_energy += 0.5 * v2;  // Assuming mass = 1 for simplicity
+    }
+    
+    return {kinetic_energy, potential_energy};
+}
+
+// Dynamics methods
 void System::update_positions(double dt) {
     for (auto& particle : particles_) {
         particle.x += particle.vx * dt;
         particle.y += particle.vy * dt;
         particle.z += particle.vz * dt;
+
+        if (use_periodic_) {
+            particle.apply_periodic_boundary(box_size_);
+        }
     }
 }
 
@@ -170,12 +204,12 @@ void System::update_velocities(double dt) {
             double inv_r6 = std::pow(inv_r, 6);
             double inv_r12 = std::pow(inv_r6, 2);
 
-            // 计算力
+            // Calculate forces
             double force_lj = 24.0 * epsilon_ / distance * (2.0 * inv_r12 - inv_r6);
             double force_coulomb = (particles_[i].charge * particles_[j].charge) / (distance * distance);
             double total_force = force_lj + force_coulomb;
 
-            // 更新加速度
+            // Update accelerations
             double fx = total_force * (dx / distance);
             double fy = total_force * (dy / distance);
             double fz = total_force * (dz / distance);
@@ -190,7 +224,7 @@ void System::update_velocities(double dt) {
         }
     }
 
-    // 更新速度
+    // Update velocities
     for (size_t i = 0; i < particles_.size(); ++i) {
         particles_[i].vx += accelerations[i][0] * dt;
         particles_[i].vy += accelerations[i][1] * dt;
@@ -198,26 +232,18 @@ void System::update_velocities(double dt) {
     }
 }
 
-const Particle& System::get_particle(size_t index) const {
-    if (index >= particles_.size()) {
-        throw std::out_of_range("Particle index out of range");
-    }
-    return particles_[index];
-}
-
-Particle& System::get_particle(size_t index) {
-    if (index >= particles_.size()) {
-        throw std::out_of_range("Particle index out of range");
-    }
-    return particles_[index];
-}
-
+// Boundary conditions
 void System::set_periodic_boundary(double box_size) {
     if (box_size <= 0.0) {
         throw std::invalid_argument("Box size must be positive");
     }
     box_size_ = box_size;
     use_periodic_ = true;
+}
+
+double System::apply_pbc(double x) const {
+    if (!use_periodic_) return x;
+    return x - box_size_ * std::round(x / box_size_);
 }
 
 std::array<double, 3> System::compute_distance(const Particle& p1, const Particle& p2) const {
@@ -232,11 +258,6 @@ std::array<double, 3> System::compute_distance(const Particle& p1, const Particl
     return dr;
 }
 
-double System::apply_pbc(double x) const {
-    if (!use_periodic_) return x;
-    return x - box_size_ * std::round(x / box_size_);
-}
-
 double System::compute_pair_energy(const Particle& p1, const Particle& p2) const {
     auto dr = compute_distance(p1, p2);
     double r2 = dr[0]*dr[0] + dr[1]*dr[1] + dr[2]*dr[2];
@@ -247,7 +268,7 @@ double System::compute_pair_energy(const Particle& p1, const Particle& p2) const
     // Try to find NBFIX parameters first
     auto pair_key = std::make_pair(p1.nameTop, p2.nameTop);
     double lj_energy = 0.0;
-    
+
     auto nbfix_it = nbfix_dict_.find(pair_key);
     if (nbfix_it != nbfix_dict_.end()) {
         // Use NBFIX parameters
@@ -279,19 +300,6 @@ double System::compute_pair_energy(const Particle& p1, const Particle& p2) const
     
     double coulomb_energy = (p1.charge * p2.charge) / distance;
     return lj_energy + coulomb_energy;
-}
-
-std::pair<double, double> System::get_system_state() const {
-    double kinetic_energy = 0.0;
-    double potential_energy = compute_total_energy();
-    
-    // Calculate kinetic energy
-    for (const auto& p : particles_) {
-        double v2 = p.vx*p.vx + p.vy*p.vy + p.vz*p.vz;
-        kinetic_energy += 0.5 * v2;  // Assuming mass = 1 for simplicity
-    }
-    
-    return {kinetic_energy, potential_energy};
 }
 
 } // namespace core
