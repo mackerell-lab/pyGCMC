@@ -1,7 +1,11 @@
 // modules/core/src/system.cpp
 
 #include "pygcmc/core/system.hpp"
-#include "pygcmc/core/io/parser.hpp"
+#include "pygcmc/core/io/pdb_parser.hpp"
+#include "pygcmc/core/io/psf_parser.hpp"
+#include "pygcmc/core/io/top_parser.hpp"
+#include "pygcmc/core/io/itp_parser.hpp"
+#include "pygcmc/core/io/ff_parser.hpp"
 #include <iostream>
 #include <array>
 #include <cmath>
@@ -242,31 +246,38 @@ double System::compute_pair_energy(const Particle& p1, const Particle& p2) const
 
     // Try to find NBFIX parameters first
     auto pair_key = std::make_pair(p1.nameTop, p2.nameTop);
-    const io::ForceFieldPair* ff_params = nullptr;
+    double lj_energy = 0.0;
     
     auto nbfix_it = nbfix_dict_.find(pair_key);
     if (nbfix_it != nbfix_dict_.end()) {
-        ff_params = &nbfix_it->second;
+        // Use NBFIX parameters
+        const auto& params = nbfix_it->second;
+        double sigma = params.param1;
+        double epsilon = params.param2;
+        double inv_r = sigma / distance;
+        double inv_r6 = std::pow(inv_r, 6);
+        lj_energy = 4.0 * epsilon * (std::pow(inv_r6, 2) - inv_r6);
     } else {
         // Fall back to regular NB parameters with combining rules
         auto type1_it = nb_dict_.find(p1.nameTop);
         auto type2_it = nb_dict_.find(p2.nameTop);
         
         if (type1_it != nb_dict_.end() && type2_it != nb_dict_.end()) {
-            static io::ForceFieldPair combined_params;
-            combined_params = io::ForceFieldPair::lorentz_berthelot(
-                type1_it->second, type2_it->second);
-            ff_params = &combined_params;
+            // Use Lorentz-Berthelot combining rules
+            double sigma = 0.5 * (type1_it->second.param1 + type2_it->second.param1);
+            double epsilon = std::sqrt(type1_it->second.param2 * type2_it->second.param2);
+            double inv_r = sigma / distance;
+            double inv_r6 = std::pow(inv_r, 6);
+            lj_energy = 4.0 * epsilon * (std::pow(inv_r6, 2) - inv_r6);
+        } else {
+            // Use default parameters
+            double inv_r = sigma_ / distance;
+            double inv_r6 = std::pow(inv_r, 6);
+            lj_energy = 4.0 * epsilon_ * (std::pow(inv_r6, 2) - inv_r6);
         }
     }
-
-    // Calculate energies
-    double lj_energy = ff_params ? 
-        ff_params->compute_lj_energy(distance) :
-        io::ForceFieldPair(sigma_, epsilon_).compute_lj_energy(distance);
     
     double coulomb_energy = (p1.charge * p2.charge) / distance;
-    
     return lj_energy + coulomb_energy;
 }
 

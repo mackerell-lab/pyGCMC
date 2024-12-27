@@ -1,6 +1,5 @@
 # modules/core/CMakeLists.txt
 
-# Set minimum CMake version if not already set in parent
 cmake_minimum_required(VERSION 3.15)
 
 # Set C++ standard
@@ -11,8 +10,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Define source files groups
 set(CORE_SOURCES
     src/system.cpp
+    src/force_field.cpp
+    src/box.cpp
 )
 
+# IO Parser source files
 set(IO_SOURCES
     src/io/pdb_parser.cpp
     src/io/psf_parser.cpp
@@ -20,6 +22,12 @@ set(IO_SOURCES
     src/io/itp_parser.cpp
     src/io/ff_parser.cpp
 )
+
+# GCMC source files
+# 添加 GCMC 模块的源文件，如果有的话
+
+# Optimization source files
+# 添加 Optimization 模块的源文件，如果有的话
 
 # Add core static library
 add_library(pygcmc_core STATIC

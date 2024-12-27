@@ -1,24 +1,25 @@
 // modules/core/src/io/ff_parser.cpp
 
-#include "pygcmc/core/io/parser.hpp"
+#include "pygcmc/core/io/ff_parser.hpp"
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
 #include <cctype>
 #include <algorithm>
 #include <utility>
+#include "pygcmc/core/utils/string.hpp"
 
 namespace pygcmc {
 namespace core {
 namespace io {
 
-std::pair<FFParser::NBMap, FFParser::NBFixMap> FFParser::parse(const std::string& filename) {
-    FFParser::NBMap nb_dict;
-    FFParser::NBFixMap nbfix_dict;
+std::pair<NBMap, NBFixMap> FFParser::parse(const std::string& filename) {
+    NBMap nb_dict;
+    NBFixMap nbfix_dict;
 
     std::ifstream infile(filename);
     if (!infile.is_open()) {
-        throw std::runtime_error("无法打开文件: " + filename);
+        throw FileError("无法打开文件: " + filename);
     }
 
     std::string line;
@@ -31,6 +32,13 @@ std::pair<FFParser::NBMap, FFParser::NBFixMap> FFParser::parse(const std::string
         size_t comment_pos = line.find(';');
         if (comment_pos != std::string::npos) {
             line = line.substr(0, comment_pos);
+        }
+
+        // 去除行首尾空白
+        line = utils::trim(line);
+
+        if (line.empty()) {
+            continue;
         }
 
         // 检查进入不同部分
@@ -59,16 +67,8 @@ std::pair<FFParser::NBMap, FFParser::NBFixMap> FFParser::parse(const std::string
                 continue;
             }
 
-            std::istringstream iss(line);
-            std::string name;
-            int type;
-            double charge, mass;
-            double sigma, epsilon;
-
-            iss >> name >> type >> charge >> mass >> sigma >> epsilon;
-
-            if (!name.empty()) {
-                nb_dict[name] = ForceFieldPair{sigma, epsilon};
+            if (!parse_atomtypes_line(line, nb_dict)) {
+                throw FormatError("解析 atomtypes 行失败: " + line);
             }
         }
 
@@ -78,14 +78,8 @@ std::pair<FFParser::NBMap, FFParser::NBFixMap> FFParser::parse(const std::string
                 continue;
             }
 
-            std::istringstream iss(line);
-            std::string type1, type2;
-            double sigma, epsilon, rmin;
-
-            iss >> type1 >> type2 >> sigma >> epsilon >> rmin;
-
-            if (!type1.empty() && !type2.empty()) {
-                nbfix_dict[{type1, type2}] = ForceFieldPair{sigma, epsilon};
+            if (!parse_nonbond_params_line(line, nbfix_dict)) {
+                throw FormatError("解析 nonbond_params 行失败: " + line);
             }
         }
 
@@ -95,20 +89,53 @@ std::pair<FFParser::NBMap, FFParser::NBFixMap> FFParser::parse(const std::string
                 continue;
             }
 
-            std::istringstream iss(line);
-            std::string type1, type2;
-            double sigma, epsilon, rmin;
-
-            iss >> type1 >> type2 >> sigma >> epsilon >> rmin;
-
-            if (!type1.empty() && !type2.empty()) {
-                nbfix_dict[{type1, type2}] = ForceFieldPair{sigma, epsilon};
+            if (!parse_pairtypes_line(line, nbfix_dict)) {
+                throw FormatError("解析 pairtypes 行失败: " + line);
             }
         }
     }
 
     infile.close();
+
     return {nb_dict, nbfix_dict};
+}
+
+bool FFParser::parse_atomtypes_line(const std::string& line, NBMap& nb_dict) {
+    std::istringstream iss(line);
+    std::string name;
+    int type;
+    double charge, mass;
+    double sigma, epsilon;
+
+    iss >> name >> type >> charge >> mass >> sigma >> epsilon;
+
+    if (name.empty() || iss.fail()) {
+        return false;
+    }
+
+    nb_dict[name] = ForceFieldPair(sigma, epsilon);
+    return true;
+}
+
+bool FFParser::parse_nonbond_params_line(const std::string& line, NBFixMap& nbfix_dict) {
+    std::istringstream iss(line);
+    std::string type1, type2;
+    double sigma, epsilon;
+    std::string dummy;  // For any additional fields
+
+    iss >> type1 >> type2 >> sigma >> epsilon;
+
+    if (type1.empty() || type2.empty() || iss.fail()) {
+        return false;
+    }
+
+    nbfix_dict[{type1, type2}] = ForceFieldPair(sigma, epsilon);
+    return true;
+}
+
+bool FFParser::parse_pairtypes_line(const std::string& line, NBFixMap& nbfix_dict) {
+    // pairtypes 的解析与 nonbond_params 类似
+    return parse_nonbond_params_line(line, nbfix_dict);
 }
 
 } // namespace io

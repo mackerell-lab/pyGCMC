@@ -1,6 +1,6 @@
 // modules/core/src/io/top_parser.cpp
 
-#include "pygcmc/core/io/parser.hpp"
+#include "pygcmc/core/io/top_parser.hpp"
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -15,7 +15,7 @@ Topology TopParser::parse(const std::string& filename) {
     Topology topology;
     std::ifstream infile(filename);
     if (!infile.is_open()) {
-        throw std::runtime_error("无法打开文件: " + filename);
+        throw FileError("无法打开文件: " + filename);
     }
 
     std::string line;
@@ -28,7 +28,14 @@ Topology TopParser::parse(const std::string& filename) {
             line = line.substr(0, comment_pos);
         }
 
-        // 检查是否进入ATOMTYPES部分
+        // 去除行首尾空白
+        line = utils::trim(line);
+
+        if (line.empty()) {
+            continue;
+        }
+
+        // 检查是否进入 [ atomtypes ] 部分
         if (line.find("[ atomtypes ]") != std::string::npos) {
             in_atomtypes_section = true;
             continue;
@@ -36,25 +43,50 @@ Topology TopParser::parse(const std::string& filename) {
 
         if (in_atomtypes_section) {
             if (line.empty() || line[0] == '[') {
-                // 结束ATOMTYPES部分
-                break;
+                // 结束 [ atomtypes ] 部分
+                in_atomtypes_section = false;
+                continue;
             }
 
-            std::istringstream iss(line);
-            std::string name;
-            int type;
-            double charge, mass, sigma, epsilon;
-
-            iss >> name >> type >> charge >> mass >> sigma >> epsilon;
-
-            if (!name.empty()) {
-                topology.atom_types.emplace_back(TopAtomType{name, type, charge, mass});
+            if (!parse_atomtypes_section(line, topology)) {
+                throw FormatError("解析 atomtypes 行失败: " + line);
             }
         }
     }
 
     infile.close();
+
+    // 验证拓扑结构
+    if (!topology.is_valid()) {
+        throw FormatError("解析的 TOP 拓扑结构无效");
+    }
+
     return topology;
+}
+
+bool TopParser::parse_atomtypes_section(const std::string& line, Topology& top) {
+    std::istringstream iss(line);
+    std::string name;
+    int type;
+    double charge, mass;
+
+    iss >> name >> type >> charge >> mass;
+
+    if (name.empty()) {
+        return false;
+    }
+
+    try {
+        TopAtomType atom_type(name, type, charge, mass);
+        if (!atom_type.is_valid()) {
+            return false;
+        }
+        top.atom_types.emplace_back(atom_type);
+        return true;
+    } catch (const ForceFieldError& e) {
+        // 记录或处理无效的力场参数
+        return false;
+    }
 }
 
 } // namespace io

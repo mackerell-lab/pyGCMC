@@ -3,7 +3,7 @@
 #ifndef PYGCMC_CORE_SYSTEM_HPP
 #define PYGCMC_CORE_SYSTEM_HPP
 
-#include "pygcmc/core/force_field.hpp"
+#include "pygcmc/core/io/parser_common.hpp"
 #include <vector>
 #include <string>
 #include <array>
@@ -31,7 +31,7 @@ struct Particle {
     int sequence;
     double x, y, z;
     double charge;
-    int type;
+    std::string type;
     std::string nameTop;
     int typeNum;
     double vx, vy, vz;
@@ -39,7 +39,7 @@ struct Particle {
     Particle(int serial_ = 0, const std::string& name_ = "", 
              const std::string& residue_ = "", int sequence_ = 0,
              double x_ = 0.0, double y_ = 0.0, double z_ = 0.0,
-             double charge_ = 0.0, int type_ = 0, 
+             double charge_ = 0.0, const std::string& type_ = "", 
              const std::string& nameTop_ = "")
         : serial(serial_), name(name_), residue(residue_), 
           sequence(sequence_), x(x_), y(y_), z(z_), 
@@ -99,8 +99,8 @@ private:
     std::vector<Particle> particles_;
     double epsilon_;
     double sigma_;
-    NBMap nb_dict_;
-    NBFixMap nbfix_dict_;
+    io::NBMap nb_dict_;
+    io::NBFixMap nbfix_dict_;
     double box_size_ = 0.0;
     bool use_periodic_ = false;
 
