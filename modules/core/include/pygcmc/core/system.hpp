@@ -1,49 +1,116 @@
 // modules/core/include/pygcmc/core/system.hpp
+
 #ifndef PYGCMC_CORE_SYSTEM_HPP
 #define PYGCMC_CORE_SYSTEM_HPP
 
+#include "pygcmc/core/force_field.hpp"
 #include <vector>
+#include <string>
+#include <array>
 #include <cmath>
+#include <stdexcept>
+#include <memory>
 
-// 粒子结构体
-struct Particle {
-    double x, y, z;    // 位置坐标
-    double vx, vy, vz; // 速度
-    int type;          // 粒子类型
-    double charge;     // 粒子电荷
+namespace pygcmc {
+namespace core {
 
-    Particle(double x_val = 0.0, double y_val = 0.0, double z_val = 0.0, 
-             double vx_val = 0.0, double vy_val = 0.0, double vz_val = 0.0, 
-             int t = 0, double q = 0.0)
-        : x(x_val), y(y_val), z(z_val), vx(vx_val), vy(vy_val), vz(vz_val), type(t), charge(q) {}
+/**
+ * @brief System-related exceptions
+ */
+class SystemError : public std::runtime_error {
+    using std::runtime_error::runtime_error;
 };
 
-// 系统类管理整个粒子系统
+/**
+ * @brief Represents a particle in the system
+ */
+struct Particle {
+    int serial;
+    std::string name;
+    std::string residue;
+    int sequence;
+    double x, y, z;
+    double charge;
+    int type;
+    std::string nameTop;
+    int typeNum;
+    double vx, vy, vz;
+
+    Particle(int serial_ = 0, const std::string& name_ = "", 
+             const std::string& residue_ = "", int sequence_ = 0,
+             double x_ = 0.0, double y_ = 0.0, double z_ = 0.0,
+             double charge_ = 0.0, int type_ = 0, 
+             const std::string& nameTop_ = "")
+        : serial(serial_), name(name_), residue(residue_), 
+          sequence(sequence_), x(x_), y(y_), z(z_), 
+          charge(charge_), type(type_), nameTop(nameTop_),
+          typeNum(0), vx(0.0), vy(0.0), vz(0.0) {}
+
+    bool is_valid() const {
+        return serial > 0 && !name.empty() && !residue.empty() &&
+               std::isfinite(x) && std::isfinite(y) && std::isfinite(z) &&
+               std::isfinite(charge);
+    }
+
+    std::array<double, 3> position() const { return {x, y, z}; }
+    std::array<double, 3> velocity() const { return {vx, vy, vz}; }
+    
+    void set_position(double x_, double y_, double z_) {
+        x = x_; y = y_; z = z_;
+    }
+    
+    void set_velocity(double vx_, double vy_, double vz_) {
+        vx = vx_; vy = vy_; vz = vz_;
+    }
+};
+
 class System {
 public:
-    System(double epsilon = 1.0, double sigma = 1.0); // 添加参数
+    System(double epsilon = 1.0, double sigma = 1.0);
     ~System();
 
-    // 添加粒子
+    // File loading methods
+    void load_pdb(const std::string& filename);
+    void load_psf(const std::string& filename);
+    void load_top(const std::string& filename);
+    void load_itp(const std::string& filename);
+    void load_forcefield(const std::string& filename);
+
+    // Particle management
     void add_particle(const Particle& particle);
-
-    // 移除粒子（按索引）
     void remove_particle(int index);
-
-    // 计算总能量
-    double compute_total_energy() const;
-
-    // 获取粒子数量
     size_t get_particle_count() const;
+    const Particle& get_particle(size_t index) const;
+    Particle& get_particle(size_t index);
 
-    // Add new methods for dynamics
+    // Energy computation
+    double compute_total_energy() const;
+    std::pair<double, double> get_system_state() const;
+
+    // Dynamics methods
     void update_positions(double dt);
     void update_velocities(double dt);
 
+    // Boundary conditions
+    void set_periodic_boundary(double box_size);
+    double apply_pbc(double x) const;
+
 private:
     std::vector<Particle> particles_;
-    double epsilon_; // 势能参数
-    double sigma_;   // 势能参数
+    double epsilon_;
+    double sigma_;
+    NBMap nb_dict_;
+    NBFixMap nbfix_dict_;
+    double box_size_ = 0.0;
+    bool use_periodic_ = false;
+
+    std::array<double, 3> compute_distance(const Particle& p1, 
+                                         const Particle& p2) const;
+    double compute_pair_energy(const Particle& p1, 
+                             const Particle& p2) const;
 };
+
+} // namespace core
+} // namespace pygcmc
 
 #endif // PYGCMC_CORE_SYSTEM_HPP

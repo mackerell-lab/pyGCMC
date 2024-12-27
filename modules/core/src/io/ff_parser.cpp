@@ -8,26 +8,13 @@
 #include <algorithm>
 #include <utility>
 
-// 为了使 std::pair 可以作为 unordered_map 的键，需要提供哈希函数
-namespace std {
-    template <>
-    struct hash<std::pair<std::string, std::string>> {
-        size_t operator()(const std::pair<std::string, std::string>& p) const {
-            return hash<std::string>()(p.first) ^ hash<std::string>()(p.second);
-        }
-    };
-}
-
 namespace pygcmc {
 namespace core {
 namespace io {
 
-std::pair<
-    std::unordered_map<std::string, ForceFieldPair>, 
-    std::unordered_map<std::pair<std::string, std::string>, ForceFieldPair>
-> FFParser::parse(const std::string& filename) {
-    std::unordered_map<std::string, ForceFieldPair> nb_dict;
-    std::unordered_map<std::pair<std::string, std::string>, ForceFieldPair> nbfix_dict;
+std::pair<FFParser::NBMap, FFParser::NBFixMap> FFParser::parse(const std::string& filename) {
+    FFParser::NBMap nb_dict;
+    FFParser::NBFixMap nbfix_dict;
 
     std::ifstream infile(filename);
     if (!infile.is_open()) {
