@@ -7,15 +7,16 @@
 #include "pygcmc/core/utils.hpp"
 #include <unordered_set>
 #include <unordered_map>
-#include <iostream> // 添加调试输出
+#include <iostream> // For debugging output
 
 namespace pygcmc {
 namespace core {
 namespace io {
 
-std::pair<std::vector<double>, std::vector<PDBAtom>> PDBParser::parse(const std::string& filename) {
+std::pair<std::vector<double>, std::vector<IOResidue>> PDBParser::parse(const std::string& filename) {
     std::vector<double> cryst;
-    std::vector<PDBAtom> atoms;
+    std::vector<IOResidue> residues;
+    IOResidue* current_residue = nullptr;
 
     std::ifstream infile(filename);
     if (!infile.is_open()) {
@@ -24,7 +25,7 @@ std::pair<std::vector<double>, std::vector<PDBAtom>> PDBParser::parse(const std:
 
     std::string line;
     while (std::getline(infile, line)) {
-        // 解析晶胞信息
+        // Parse crystal information
         if (line.substr(0, 6) == "CRYST1") {
             if (!parse_cryst1_line(line, cryst)) {
                 throw ParserError("解析晶胞信息失败: " + filename);
@@ -32,42 +33,63 @@ std::pair<std::vector<double>, std::vector<PDBAtom>> PDBParser::parse(const std:
             continue;
         }
 
-        // 仅解析ATOM和HETATM记录
+        // Only parse ATOM and HETATM records
         if ((line.substr(0, 6) == "ATOM  " || line.substr(0, 6) == "HETATM") && line.length() > 54) {
             PDBAtom atom;
             if (parse_atom_line(line, atom) && atom.is_valid()) {
-                atoms.emplace_back(atom);
-                // 调试输出
-                std::cout << "Parsed Atom: Serial " << atom.serial << ", Name " << atom.name 
-                          << ", Type " << atom.type << std::endl;
+                // Check if a new residue needs to be created
+                if (current_residue == nullptr || 
+                    current_residue->name != atom.residue ||
+                    current_residue->sequence_number != atom.sequence ||
+                    current_residue->chain_id != atom.chain) {
+                    
+                    residues.emplace_back(atom.residue, atom.sequence, atom.chain);
+                    current_residue = &residues.back();
+                }
+
+                // Add the PDBAtom to the current residue
+                current_residue->atoms.push_back(atom);
+                
+                // Debug output
+                // std::cout << "Added Atom Serial " << atom.serial 
+                //           << " to Residue " << current_residue->name 
+                //           << " Sequence " << current_residue->sequence_number 
+                //           << " Chain " << current_residue->chain_id << std::endl;
             }
         }
     }
 
     infile.close();
 
-    // 如果晶胞信息未找到，计算基于原子坐标的晶胞
+    // If crystal information is not found, compute based on atom coordinates
     if (cryst.empty()) {
-        if (atoms.empty()) {
+        if (residues.empty()) {
             throw ParserError("没有找到晶胞信息且原子列表为空: " + filename);
         }
-        double min_x = atoms[0].x, max_x = atoms[0].x;
-        double min_y = atoms[0].y, max_y = atoms[0].y;
-        double min_z = atoms[0].z, max_z = atoms[0].z;
+        double min_x = residues[0].atoms[0].x, max_x = residues[0].atoms[0].x;
+        double min_y = residues[0].atoms[0].y, max_y = residues[0].atoms[0].y;
+        double min_z = residues[0].atoms[0].z, max_z = residues[0].atoms[0].z;
 
-        for (const auto& atom : atoms) {
-            min_x = std::min(min_x, atom.x);
-            max_x = std::max(max_x, atom.x);
-            min_y = std::min(min_y, atom.y);
-            max_y = std::max(max_y, atom.y);
-            min_z = std::min(min_z, atom.z);
-            max_z = std::max(max_z, atom.z);
+        for (const auto& residue : residues) {
+            for (const auto& atom : residue.atoms) {
+                min_x = std::min(min_x, atom.x);
+                max_x = std::max(max_x, atom.x);
+                min_y = std::min(min_y, atom.y);
+                max_y = std::max(max_y, atom.y);
+                min_z = std::min(min_z, atom.z);
+                max_z = std::max(max_z, atom.z);
+            }
         }
 
         cryst = {max_x - min_x, max_y - min_y, max_z - min_z};
     }
 
-    return {cryst, atoms};
+    // Validate residue structure
+    if (!validate_pdb_structure(residues)) {
+        throw ParserError("PDB 文件的残基结构验证失败: " + filename);
+    }
+
+    return {cryst, residues};
 }
 
 bool PDBParser::parse_cryst1_line(const std::string& line, std::vector<double>& cell_params) {
@@ -152,17 +174,17 @@ bool PDBParser::parse_atom_line(const std::string& line, PDBAtom& atom) {
                       x, y, z, occupancy, temp_factor, element, charge, element);
 
         // 调试输出
-        std::cout << "Parsed Atom - Serial: " << atom.serial
-                  << ", Name: " << atom.name
-                  << ", Residue: " << atom.residue
-                  << ", Sequence: " << atom.sequence
-                  << ", Chain: " << atom.chain
-                  << ", X: " << atom.x << ", Y: " << atom.y << ", Z: " << atom.z
-                  << ", Occupancy: " << atom.occupancy
-                  << ", Temp Factor: " << atom.temp_factor
-                  << ", Element: " << atom.element
-                  << ", Charge: " << atom.charge
-                  << ", Type: " << atom.type << std::endl;
+        // std::cout << "Parsed Atom - Serial: " << atom.serial
+        //           << ", Name: " << atom.name
+        //           << ", Residue: " << atom.residue
+        //           << ", Sequence: " << atom.sequence
+        //           << ", Chain: " << atom.chain
+        //           << ", X: " << atom.x << ", Y: " << atom.y << ", Z: " << atom.z
+        //           << ", Occupancy: " << atom.occupancy
+        //           << ", Temp Factor: " << atom.temp_factor
+        //           << ", Element: " << atom.element
+        //           << ", Charge: " << atom.charge
+        //           << ", Type: " << atom.type << std::endl;
 
         return atom.is_valid();
 
@@ -221,32 +243,23 @@ bool PDBParser::validate_chain_structure(const std::unordered_map<char,
         
     for (const auto& [chain, residues] : chain_residues) {
         for (const auto& [residue_name, sequences] : residues) {
-            // Convert sequence/insertion pairs to vector for analysis
             std::vector<std::pair<int, char>> seq_vec(sequences.begin(), sequences.end());
             
-            // Sort based on sequence number and insertion code
             std::sort(seq_vec.begin(), seq_vec.end(), 
                       [](const std::pair<int, char>& a, const std::pair<int, char>& b) -> bool {
                           if (a.first != b.first) return a.first < b.first;
                           return a.second < b.second;
                       });
 
-            // Check for sequence continuity
+            // Only check for duplicate sequence numbers and insertion codes
             for (size_t i = 1; i < seq_vec.size(); ++i) {
                 const auto& prev = seq_vec[i-1];
                 const auto& curr = seq_vec[i];
                 
-                // If same sequence number, must have different insertion codes
                 if (prev.first == curr.first && prev.second == curr.second) {
                     return false;
                 }
-                
-                // Check for unreasonable gaps (more than 1 residue)
-                if (curr.first - prev.first > 1) {
-                    return false;  // Gap detected in residue sequence
-                }
-
-                // Optional: Handle insertion codes appropriately if needed
+                // Removed gap check to allow for non-consecutive sequence numbers
             }
         }
     }
@@ -254,8 +267,8 @@ bool PDBParser::validate_chain_structure(const std::unordered_map<char,
     return true;
 }
 
-bool PDBParser::validate_pdb_structure(const std::vector<PDBAtom>& atoms) {
-    if (atoms.empty()) {
+bool PDBParser::validate_pdb_structure(const std::vector<IOResidue>& residues) {
+    if (residues.empty()) {
         return false;  // Empty structure is invalid
     }
 
@@ -264,20 +277,22 @@ bool PDBParser::validate_pdb_structure(const std::vector<PDBAtom>& atoms) {
     std::unordered_map<char, std::map<std::string, std::set<std::pair<int, char>>>> chain_residues;
     // Format: chain -> residue_name -> set of (sequence, insertion_code)
 
-    for (const auto& atom : atoms) {
-        // Basic atom validation
-        if (!validate_atom(atom)) {
-            return false;
-        }
+    for (const auto& residue : residues) {
+        for (const auto& atom : residue.atoms) {
+            // Basic atom validation
+            if (!validate_atom(atom)) {
+                return false;
+            }
 
-        // Check for duplicate serial numbers
-        if (!serials.insert(atom.serial).second) {
-            return false;
-        }
+            // Check for duplicate serial numbers
+            if (!serials.insert(atom.serial).second) {
+                return false;
+            }
 
-        // Track residue information
-        auto& residue_map = chain_residues[atom.chain];
-        residue_map[atom.residue].insert({atom.sequence, atom.insertion_code});
+            // Track residue information
+            auto& residue_map = chain_residues[residue.chain_id];
+            residue_map[residue.name].insert({residue.sequence_number, residue.atoms[0].insertion_code});
+        }
     }
 
     // Validate chain and residue organization

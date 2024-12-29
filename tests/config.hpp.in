@@ -1,0 +1,3 @@
+#pragma once
+
+#define PDB_DATA_DIR "@CMAKE_SOURCE_DIR@/tests/data" 

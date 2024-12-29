@@ -87,6 +87,18 @@ struct PDBAtom {
     }
 };
 
+/**
+ * @brief Residue structure
+ */
+struct Residue {
+    std::string name;                ///< Residue name
+    int sequence_number;             ///< Residue sequence number
+    char chain_id;                   ///< Chain identifier
+    std::vector<PDBAtom> atoms;      ///< Atoms within the residue
+
+    Residue(const std::string& name_ = "", int seq_num_ = 0, char chain_ = ' ')
+        : name(name_), sequence_number(seq_num_), chain_id(chain_) {}
+};
 
 /**
  * @brief ITP Atom structure
@@ -215,6 +227,49 @@ struct TopAtomType {
 };
 
 /**
+ * @brief Represents a residue as parsed from input files.
+ */
+struct IOResidue {
+    std::string name;                     ///< Residue name
+    int sequence_number;                  ///< Residue sequence number
+    char chain_id;                        ///< Chain identifier
+    std::vector<PDBAtom> atoms;           ///< Atoms within the residue
+
+    IOResidue(const std::string& name_ = "", int seq_num_ = 0, char chain_ = ' ')
+        : name(name_), sequence_number(seq_num_), chain_id(chain_) {}
+
+    // Add center of mass calculation
+    std::array<double, 3> center_of_mass() const {
+        if (atoms.empty()) {
+            return {0.0, 0.0, 0.0};
+        }
+        double sum_x = 0.0, sum_y = 0.0, sum_z = 0.0;
+        for (const auto& atom : atoms) {
+            sum_x += atom.x;
+            sum_y += atom.y;
+            sum_z += atom.z;
+        }
+        double n = static_cast<double>(atoms.size());
+        return {sum_x / n, sum_y / n, sum_z / n};
+    }
+
+    // Add atom count method
+    size_t atom_count() const {
+        return atoms.size();
+    }
+
+    bool is_valid() const {
+        if (name.empty()) return false;
+        if (sequence_number <= 0) return false;
+        if (atoms.empty()) return false;
+        for (const auto& atom : atoms) {
+            if (!atom.is_valid()) return false;
+        }
+        return true;
+    }
+};
+
+/**
  * @brief Force field parameter pair structure for non-bonded interactions
  */
 struct ForceFieldPair {
@@ -272,6 +327,9 @@ struct PairStringHash {
 using NBMap = std::unordered_map<std::string, ForceFieldPair>;
 using NBFixMap = std::unordered_map<std::pair<std::string, std::string>, ForceFieldPair, PairStringHash>;
 
+/**
+ * @brief Topology structure
+ */
 struct Topology {
     std::vector<TopAtomType> atom_types;
 

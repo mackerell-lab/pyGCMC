@@ -24,3 +24,15 @@ add_test(
     NAME TestSystem
     COMMAND test_system
 )
+
+# Configure config.hpp
+configure_file(
+    "${CMAKE_SOURCE_DIR}/tests/config.hpp.in"
+    "${CMAKE_BINARY_DIR}/tests/config.hpp"
+    @ONLY
+)
+
+# Add include directories
+target_include_directories(test_pdb_parser PRIVATE 
+    ${CMAKE_BINARY_DIR}/tests
+)

@@ -22,45 +22,53 @@ System::System(double epsilon, double sigma)
 
 System::~System() = default;
 
+namespace {
+// Single, unified helper function to convert IO::PDBAtom to core::Particle
+Particle convert_io_to_core_particle(const io::PDBAtom& io_atom) {
+    Particle particle;
+    particle.serial = io_atom.serial;
+    particle.name = io_atom.name;
+    particle.residue = io_atom.residue;
+    particle.sequence = io_atom.sequence;
+    particle.x = io_atom.x;
+    particle.y = io_atom.y;
+    particle.z = io_atom.z;
+    particle.charge = std::stod(io_atom.charge); // Ensure charge is converted correctly
+    particle.type = io_atom.type;
+    particle.nameTop = io_atom.element;
+    return particle;
+}
+
+// Helper function to convert IO::IOResidue to core::Residue
+Residue convert_io_to_core_residue(const io::IOResidue& io_residue) {
+    Residue core_residue;
+    core_residue.name = io_residue.name;
+    core_residue.sequence_number = io_residue.sequence_number;
+    core_residue.chain_id = io_residue.chain_id;
+    
+    core_residue.atoms.reserve(io_residue.atoms.size());
+    for (const auto& io_atom : io_residue.atoms) {
+        core_residue.atoms.push_back(convert_io_to_core_particle(io_atom));
+    }
+    
+    return core_residue;
+}
+}  // anonymous namespace
+
 // File loading methods
 void System::load_pdb(const std::string& filename) {
     try {
         auto parsed = io::PDBParser::parse(filename);
         auto cryst = parsed.first;
-        auto parsed_atoms = parsed.second;
+        auto parsed_residues = parsed.second;
 
-        std::cout << "Successfully loaded " << parsed_atoms.size() 
-                  << " particles from " << filename << std::endl;
+        std::cout << "Successfully loaded " << parsed_residues.size() 
+                  << " residues from " << filename << std::endl;
         std::cout << "Cell parameters: a=" << cryst[0] << ", b=" 
                   << cryst[1] << ", c=" << cryst[2] << std::endl;
 
-        for (const auto& p : parsed_atoms) {
-            Particle particle;
-            particle.serial = p.serial;
-            particle.name = p.name;
-            particle.residue = p.residue;
-            particle.sequence = p.sequence;
-            particle.x = p.x;
-            particle.y = p.y;
-            particle.z = p.z;
-            // Convert charge from string to double
-            if (!p.charge.empty()) {
-                try {
-                    particle.charge = std::stod(p.charge);
-                } catch (...) {
-                    particle.charge = 0.0; // 或其他默认值
-                }
-            } else {
-                particle.charge = 0.0; // 默认值
-            }
-            // Assign type; ensure Particle has 'type' as string
-            particle.type = p.type;
-            particle.nameTop = "";
-            particle.typeNum = 0;
-            particle.vx = 0.0;
-            particle.vy = 0.0;
-            particle.vz = 0.0;
-            add_particle(particle);
+        for (const auto& io_residue : parsed_residues) {
+            add_residue(convert_io_to_core_residue(io_residue));
         }
     }
     catch (const std::exception& e) {
@@ -91,10 +99,12 @@ void System::load_top(const std::string& filename) {
         std::cout << "Number of atom types: " << top.atom_types.size() << std::endl;
 
         // 将TOP中的原子类型信息与粒子关联
-        for (size_t i = 0; i < particles_.size() && i < top.atom_types.size(); ++i) {
-            particles_[i].type = top.atom_types[i].name;
-            particles_[i].charge = top.atom_types[i].charge;
-            particles_[i].nameTop = top.atom_types[i].name;
+        for (size_t i = 0; i < residues_.size(); ++i) {
+            for (size_t j = 0; j < residues_[i].atoms.size() && j < top.atom_types.size(); ++j) {
+                residues_[i].atoms[j].type = top.atom_types[j].name;
+                residues_[i].atoms[j].charge = top.atom_types[j].charge;
+                residues_[i].atoms[j].nameTop = top.atom_types[j].name;
+            }
         }
     }
     catch (const std::exception& e) {
@@ -109,10 +119,12 @@ void System::load_itp(const std::string& filename) {
         std::cout << "Number of ITP atoms: " << itp_atoms.size() << std::endl;
 
         // 将ITP中的原子类型信息与粒子关联
-        for (size_t i = 0; i < particles_.size() && i < itp_atoms.size(); ++i) {
-            particles_[i].type = itp_atoms[i].type;
-            particles_[i].charge = itp_atoms[i].charge;
-            particles_[i].nameTop = itp_atoms[i].name;
+        for (size_t i = 0; i < residues_.size(); ++i) {
+            for (size_t j = 0; j < residues_[i].atoms.size() && j < itp_atoms.size(); ++j) {
+                residues_[i].atoms[j].type = itp_atoms[j].type;
+                residues_[i].atoms[j].charge = itp_atoms[j].charge;
+                residues_[i].atoms[j].nameTop = itp_atoms[j].name;
+            }
         }
     }
     catch (const std::exception& e) {
@@ -134,46 +146,61 @@ void System::load_forcefield(const std::string& filename) {
     }
 }
 
-// Particle management
-void System::add_particle(const Particle& particle) {
-    particles_.emplace_back(particle);
+// Residue management
+void System::add_residue(const Residue& residue) {
+    if (!residue.is_valid()) {
+        throw SystemError("Invalid residue cannot be added to the system.");
+    }
+    residues_.emplace_back(residue);
 }
 
-void System::remove_particle(int index) {
-    if (index >= 0 && index < static_cast<int>(particles_.size())) {
-        particles_.erase(particles_.begin() + index);
+void System::remove_residue(int index) {
+    if (index >= 0 && index < static_cast<int>(residues_.size())) {
+        residues_.erase(residues_.begin() + index);
+    } else {
+        throw std::out_of_range("Residue index out of range");
     }
 }
 
-size_t System::get_particle_count() const {
-    return particles_.size();
+size_t System::get_residue_count() const {
+    return residues_.size();
 }
 
-const Particle& System::get_particle(size_t index) const {
-    if (index >= particles_.size()) {
-        throw std::out_of_range("Particle index out of range");
+const Residue& System::get_residue(size_t index) const {
+    if (index >= residues_.size()) {
+        throw std::out_of_range("Residue index out of range");
     }
-    return particles_[index];
+    return residues_[index];
 }
 
-Particle& System::get_particle(size_t index) {
-    if (index >= particles_.size()) {
-        throw std::out_of_range("Particle index out of range");
+Residue& System::get_residue(size_t index) {
+    if (index >= residues_.size()) {
+        throw std::out_of_range("Residue index out of range");
     }
-    return particles_[index];
+    return residues_[index];
 }
 
 // Energy computation
 double System::compute_total_energy() const {
     double total_energy = 0.0;
     
-    for (size_t i = 0; i < particles_.size(); ++i) {
-        for (size_t j = i + 1; j < particles_.size(); ++j) {
-            total_energy += compute_pair_energy(particles_[i], particles_[j]);
+    for (size_t i = 0; i < residues_.size(); ++i) {
+        for (size_t j = i + 1; j < residues_.size(); ++j) {
+            total_energy += compute_residue_energy(residues_[i], residues_[j]);
         }
     }
     
     return total_energy;
+}
+
+double System::compute_residue_energy(const Residue& res1, const Residue& res2) const {
+    double energy = 0.0;
+    for (const auto& atom1 : res1.atoms) {
+        for (const auto& atom2 : res2.atoms) {
+            energy += compute_pair_energy(atom1, atom2);
+        }
+    }
+    return energy;
 }
 
 std::pair<double, double> System::get_system_state() const {
@@ -181,9 +208,11 @@ std::pair<double, double> System::get_system_state() const {
     double potential_energy = compute_total_energy();
     
     // Calculate kinetic energy
-    for (const auto& p : particles_) {
-        double v2 = p.vx*p.vx + p.vy*p.vy + p.vz*p.vz;
-        kinetic_energy += 0.5 * v2;  // Assuming mass = 1 for simplicity
+    for (const auto& res : residues_) {
+        for (const auto& p : res.atoms) {
+            double v2 = p.vx*p.vx + p.vy*p.vy + p.vz*p.vz;
+            kinetic_energy += 0.5 * v2;  // Assuming mass = 1 for simplicity
+        }
     }
     
     return {kinetic_energy, potential_energy};
@@ -191,56 +220,66 @@ std::pair<double, double> System::get_system_state() const {
 
 // Dynamics methods
 void System::update_positions(double dt) {
-    for (auto& particle : particles_) {
-        particle.x += particle.vx * dt;
-        particle.y += particle.vy * dt;
-        particle.z += particle.vz * dt;
+    for (auto& res : residues_) {
+        for (auto& particle : res.atoms) {
+            particle.x += particle.vx * dt;
+            particle.y += particle.vy * dt;
+            particle.z += particle.vz * dt;
 
-        if (use_periodic_) {
-            particle.apply_periodic_boundary(box_size_);
+            if (use_periodic_) {
+                particle.apply_periodic_boundary(box_size_);
+            }
         }
     }
 }
 
 void System::update_velocities(double dt) {
-    std::vector<std::array<double, 3>> accelerations(particles_.size(), {0.0, 0.0, 0.0});
+    std::vector<std::array<double, 3>> accelerations(residues_.size(), {0.0, 0.0, 0.0});
+    
+    for (size_t i = 0; i < residues_.size(); ++i) {
+        for (size_t j = i + 1; j < residues_.size(); ++j) {
+            for (const auto& atom1 : residues_[i].atoms) {
+                for (const auto& atom2 : residues_[j].atoms) {
+                    double dx = atom1.x - atom2.x;
+                    double dy = atom1.y - atom2.y;
+                    double dz = atom1.z - atom2.z;
+                    double distance = std::sqrt(dx * dx + dy * dy + dz * dz) + 1e-12;
 
-    for (size_t i = 0; i < particles_.size(); ++i) {
-        for (size_t j = i + 1; j < particles_.size(); ++j) {
-            double dx = particles_[i].x - particles_[j].x;
-            double dy = particles_[i].y - particles_[j].y;
-            double dz = particles_[i].z - particles_[j].z;
-            double distance = std::sqrt(dx * dx + dy * dy + dz * dz) + 1e-12;
+                    double inv_r = sigma_ / distance;
+                    double inv_r6 = std::pow(inv_r, 6);
+                    double inv_r12 = std::pow(inv_r6, 2);
 
-            double inv_r = sigma_ / distance;
-            double inv_r6 = std::pow(inv_r, 6);
-            double inv_r12 = std::pow(inv_r6, 2);
+                    // Calculate forces
+                    double force_lj = 24.0 * epsilon_ / distance * (2.0 * inv_r12 - inv_r6);
+                    double force_coulomb = (atom1.charge * atom2.charge) / (distance * distance);
+                    double total_force = force_lj + force_coulomb;
 
-            // Calculate forces
-            double force_lj = 24.0 * epsilon_ / distance * (2.0 * inv_r12 - inv_r6);
-            double force_coulomb = (particles_[i].charge * particles_[j].charge) / (distance * distance);
-            double total_force = force_lj + force_coulomb;
+                    // Update accelerations
+                    double fx = total_force * (dx / distance);
+                    double fy = total_force * (dy / distance);
+                    double fz = total_force * (dz / distance);
 
-            // Update accelerations
-            double fx = total_force * (dx / distance);
-            double fy = total_force * (dy / distance);
-            double fz = total_force * (dz / distance);
+                    // 累加力
+                    // 由于加速度是基于残基的，这里需要按残基索引累加
+                    accelerations[i][0] += fx;
+                    accelerations[i][1] += fy;
+                    accelerations[i][2] += fz;
 
-            accelerations[i][0] += fx;
-            accelerations[i][1] += fy;
-            accelerations[i][2] += fz;
-
-            accelerations[j][0] -= fx;
-            accelerations[j][1] -= fy;
-            accelerations[j][2] -= fz;
+                    accelerations[j][0] -= fx;
+                    accelerations[j][1] -= fy;
+                    accelerations[j][2] -= fz;
+                }
+            }
         }
     }
 
-    // Update velocities
-    for (size_t i = 0; i < particles_.size(); ++i) {
-        particles_[i].vx += accelerations[i][0] * dt;
-        particles_[i].vy += accelerations[i][1] * dt;
-        particles_[i].vz += accelerations[i][2] * dt;
+    // 更新速度
+    for (size_t i = 0; i < residues_.size(); ++i) {
+        for (auto& atom : residues_[i].atoms) {
+            atom.vx += accelerations[i][0] * dt;
+            atom.vy += accelerations[i][1] * dt;
+            atom.vz += accelerations[i][2] * dt;
+        }
     }
 }
 

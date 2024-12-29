@@ -20,15 +20,15 @@ public:
      * @brief Parse a PDB file
      * 
      * @param filename Path to the PDB file
-     * @return std::pair<std::vector<double>, std::vector<PDBAtom>> 
-     *         A pair containing crystal parameters and a list of atoms
+     * @return std::pair<std::vector<double>, std::vector<IOResidue>> 
+     *         A pair containing crystal parameters and a list of IOResidues
      */
-    static std::pair<std::vector<double>, std::vector<PDBAtom>> parse(const std::string& filename);
+    static std::pair<std::vector<double>, std::vector<IOResidue>> parse(const std::string& filename);
 
 private:
     static bool parse_cryst1_line(const std::string& line, std::vector<double>& cell_params);
     static bool parse_atom_line(const std::string& line, PDBAtom& atom);
-    static bool validate_pdb_structure(const std::vector<PDBAtom>& atoms);
+    static bool validate_pdb_structure(const std::vector<IOResidue>& residues);
 
     // Private helper functions
     static std::string derive_element_from_name(const std::string& name);
