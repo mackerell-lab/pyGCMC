@@ -1,322 +1,192 @@
 // tests/core/test_system.cpp
 #include <gtest/gtest.h>
 #include "pygcmc/core/system.hpp"
-
-namespace {
+#include <memory>
+#include <cmath>
 
 using namespace pygcmc::core;
 
 class SystemTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // Set up default system with unit parameters
-        system = std::make_unique<System>(1.0, 1.0);
-    }
-
-    // Helper method to create a test particle
-    Particle create_test_particle(int serial, const std::string& name, 
-                                double x, double y, double z, 
-                                double charge = 0.0) {
-        // 确保所有必需字段都有有效值
-        Particle p;
-        p.serial = serial;
-        p.name = name;
-        p.residue = "TEST";  // 确保有残基名
-        p.sequence = 1;      // 确保有序列号
-        p.x = x;
-        p.y = y;
-        p.z = z;
-        p.charge = charge;
-        p.type = "TEST";     // 确保有类型
-        return p;
+        system = std::make_unique<System>();
     }
 
     std::unique_ptr<System> system;
+};
 
-    // Add new helper method for position/velocity verification
-    void verify_position_velocity(const Particle& p, 
-                                const std::array<double, 3>& expected_pos,
-                                const std::array<double, 3>& expected_vel) {
-        auto pos = p.position();
-        auto vel = p.velocity();
-        
-        for (int i = 0; i < 3; ++i) {
-            EXPECT_DOUBLE_EQ(pos[i], expected_pos[i]) 
-                << "Position mismatch at index " << i;
-            EXPECT_DOUBLE_EQ(vel[i], expected_vel[i]) 
-                << "Velocity mismatch at index " << i;
-        }
+// Test residue management
+TEST_F(SystemTest, ResidueManagement) {
+    size_t res_idx = system->add_residue("ALA");
+    EXPECT_EQ(system->get_residue_count(), 1);
+    EXPECT_EQ(system->get_residue(res_idx).name, "ALA");
+    
+    system->remove_residue(res_idx);
+    EXPECT_EQ(system->get_residue_count(), 0);
+    
+    EXPECT_THROW(system->get_residue(0), std::out_of_range);
+}
+
+// Test particle management
+TEST_F(SystemTest, ParticleManagement) {
+    size_t res_idx = system->add_residue("ALA");
+    Particle p({1.0, 2.0, 3.0}, {0.1, 0.2, 0.3}, 1.0, 2.0);
+    
+    size_t p_idx = system->add_particle(res_idx, p);
+    EXPECT_EQ(system->get_particle_count(res_idx), 1);
+    
+    const auto& added_p = system->get_particle(res_idx, p_idx);
+    EXPECT_EQ(added_p.position[0], 1.0);
+    EXPECT_EQ(added_p.velocity[1], 0.2);
+    EXPECT_EQ(added_p.charge, 1.0);
+    EXPECT_EQ(added_p.mass, 2.0);
+    
+    system->remove_particle(res_idx, p_idx);
+    EXPECT_EQ(system->get_particle_count(res_idx), 0);
+}
+
+// Test mass management
+TEST_F(SystemTest, MassManagement) {
+    size_t res_idx = system->add_residue("ALA");
+    Particle p({0, 0, 0}, {0, 0, 0}, 0.0, 1.0);
+    size_t p_idx = system->add_particle(res_idx, p);
+    
+    EXPECT_EQ(system->get_particle_mass(res_idx, p_idx), 1.0);
+    
+    system->set_particle_mass(res_idx, p_idx, 2.0);
+    EXPECT_EQ(system->get_particle_mass(res_idx, p_idx), 2.0);
+    
+    // Setting mass to zero should make it a virtual site
+    system->set_particle_mass(res_idx, p_idx, 0.0);
+    EXPECT_TRUE(system->is_virtual_site(res_idx, p_idx));
+    
+    EXPECT_THROW(system->set_particle_mass(res_idx, p_idx, -1.0), std::invalid_argument);
+}
+
+// Test virtual site management
+TEST_F(SystemTest, VirtualSiteManagement) {
+    size_t res_idx = system->add_residue("ALA");
+    Particle p({0, 0, 0}, {0, 0, 0}, 0.0, 1.0);
+    size_t p_idx = system->add_particle(res_idx, p);
+    
+    EXPECT_FALSE(system->is_virtual_site(res_idx, p_idx));
+    
+    system->set_virtual_site(res_idx, p_idx, true);
+    EXPECT_TRUE(system->is_virtual_site(res_idx, p_idx));
+    EXPECT_EQ(system->get_particle_mass(res_idx, p_idx), 0.0);
+    
+    system->set_virtual_site(res_idx, p_idx, false);
+    EXPECT_FALSE(system->is_virtual_site(res_idx, p_idx));
+}
+
+// Test constraint management
+TEST_F(SystemTest, ConstraintManagement) {
+    size_t res1_idx = system->add_residue("ALA");
+    size_t res2_idx = system->add_residue("GLY");
+    
+    Particle p1({0, 0, 0}, {0, 0, 0}, 0.0, 1.0);
+    Particle p2({1, 0, 0}, {0, 0, 0}, 0.0, 1.0);
+    
+    size_t p1_idx = system->add_particle(res1_idx, p1);
+    size_t p2_idx = system->add_particle(res2_idx, p2);
+    
+    size_t c_idx = system->add_constraint(res1_idx, p1_idx, res2_idx, p2_idx, 1.0);
+    EXPECT_EQ(system->get_constraint_count(), 1);
+    
+    size_t r1, r2, p1_out, p2_out;
+    double dist;
+    system->get_constraint_parameters(c_idx, r1, p1_out, r2, p2_out, dist);
+    EXPECT_EQ(r1, res1_idx);
+    EXPECT_EQ(r2, res2_idx);
+    EXPECT_EQ(p1_out, p1_idx);
+    EXPECT_EQ(p2_out, p2_idx);
+    EXPECT_EQ(dist, 1.0);
+    
+    system->set_constraint_parameters(c_idx, res1_idx, p1_idx, res2_idx, p2_idx, 2.0);
+    system->get_constraint_parameters(c_idx, r1, p1_out, r2, p2_out, dist);
+    EXPECT_EQ(dist, 2.0);
+    
+    // Test invalid operations
+    EXPECT_THROW(system->add_constraint(res1_idx, p1_idx, res2_idx, p2_idx, -1.0),
+                 std::invalid_argument);  // negative distance
+    
+    // Make p1 a virtual site
+    system->set_virtual_site(res1_idx, p1_idx, true);
+    EXPECT_THROW(system->add_constraint(res1_idx, p1_idx, res2_idx, p2_idx, 1.0),
+                 std::invalid_argument);  // virtual site constraint
+}
+
+// Test periodic boundary conditions
+TEST_F(SystemTest, PeriodicBoundaryConditions) {
+    std::array<double, 3> a = {2.0, 0.0, 0.0};
+    std::array<double, 3> b = {0.0, 2.0, 0.0};
+    std::array<double, 3> c = {0.0, 0.0, 2.0};
+    
+    system->set_periodic_box_vectors(a, b, c);
+    
+    std::array<double, 3> a_out, b_out, c_out;
+    system->get_periodic_box_vectors(a_out, b_out, c_out);
+    
+    for (size_t i = 0; i < 3; ++i) {
+        EXPECT_EQ(a_out[i], a[i]);
+        EXPECT_EQ(b_out[i], b[i]);
+        EXPECT_EQ(c_out[i], c[i]);
     }
+    
+    // Test invalid box vectors
+    std::array<double, 3> invalid_a = {0.0, 0.0, 0.0};  // zero vector
+    EXPECT_THROW(system->set_periodic_box_vectors(invalid_a, b, c),
+                 std::invalid_argument);
+}
 
-    // Add helper method for center of mass verification
-    void verify_center_of_mass(const Residue& res, 
-                             const std::array<double, 3>& expected_com) {
-        auto com = res.center_of_mass();
-        for (int i = 0; i < 3; ++i) {
-            EXPECT_DOUBLE_EQ(com[i], expected_com[i]) 
-                << "Center of mass mismatch at index " << i;
-        }
+// Mock Force class for testing
+class MockForce : public Force {
+public:
+    double calculate_forces(const System& system,
+                          std::vector<std::vector<std::array<double, 3>>>& forces) const override {
+        return 0.0;
     }
-
-    // Helper method to create a test residue
-    Residue create_test_residue(const std::vector<Particle>& particles, 
-                               const std::string& name, int seq_num, char chain) {
-        // 确保序列号是正数
-        if (seq_num <= 0) seq_num = 1;
-        
-        // 确保名称不为空
-        std::string res_name = name.empty() ? "TEST" : name;
-        
-        Residue res(res_name, seq_num, chain);
-        
-        // 确保粒子的残基信息与残基匹配
-        std::vector<Particle> valid_particles;
-        for (auto p : particles) {
-            p.residue = res_name;
-            p.sequence = seq_num;
-            if (p.is_valid()) {
-                valid_particles.push_back(p);
-            }
-        }
-        
-        if (valid_particles.empty()) {
-            throw std::runtime_error("No valid particles provided for residue");
-        }
-        
-        res.atoms = valid_particles;
-        return res;
+    
+    bool uses_periodic_boundary_conditions() const override {
+        return true;
     }
 };
 
-TEST_F(SystemTest, InitialState) {
-    EXPECT_EQ(system->get_particle_count(), 0);
+// Test force management
+TEST_F(SystemTest, ForceManagement) {
+    auto force = std::make_shared<MockForce>();
+    system->add_force(force);
+    EXPECT_EQ(system->get_force_count(), 1);
     
-    auto [kinetic, potential] = system->get_system_state();
-    EXPECT_DOUBLE_EQ(kinetic, 0.0);
-    EXPECT_DOUBLE_EQ(potential, 0.0);
+    auto retrieved_force = system->get_force(0);
+    EXPECT_EQ(retrieved_force, force);
+    
+    system->remove_force(0);
+    EXPECT_EQ(system->get_force_count(), 0);
+    
+    EXPECT_THROW(system->get_force(0), std::out_of_range);
+    EXPECT_THROW(system->add_force(nullptr), std::invalid_argument);
 }
 
-TEST_F(SystemTest, ParticleManagement) {
-    // Add particle
-    auto p1 = create_test_particle(1, "H1", 0.0, 0.0, 0.0, 0.5);
-    system->add_particle(p1);
-    EXPECT_EQ(system->get_particle_count(), 1);
+// Test system dynamics
+TEST_F(SystemTest, SystemDynamics) {
+    size_t res_idx = system->add_residue("ALA");
+    Particle p({0, 0, 0}, {1, 1, 1}, 0.0, 1.0);
+    size_t p_idx = system->add_particle(res_idx, p);
     
-    // Add another particle
-    auto p2 = create_test_particle(2, "O1", 1.0, 0.0, 0.0, -1.0);
-    system->add_particle(p2);
-    EXPECT_EQ(system->get_particle_count(), 2);
+    system->update_positions(0.1);
+    const auto& updated_p = system->get_particle(res_idx, p_idx);
     
-    // Remove particle
-    system->remove_particle(0);
-    EXPECT_EQ(system->get_particle_count(), 1);
-    
-    // Try to remove invalid index
-    EXPECT_NO_THROW(system->remove_particle(10));
-    EXPECT_EQ(system->get_particle_count(), 1);
-}
-
-TEST_F(SystemTest, EnergyComputation) {
-    // Add two particles at unit distance
-    auto p1 = create_test_particle(1, "H1", 0.0, 0.0, 0.0, 0.5);
-    auto p2 = create_test_particle(2, "O1", 1.0, 0.0, 0.0, -1.0);
-    
-    system->add_particle(p1);
-    system->add_particle(p2);
-    
-    double energy = system->compute_total_energy();
-    EXPECT_TRUE(std::isfinite(energy));
-    EXPECT_NE(energy, 0.0);
-}
-
-TEST_F(SystemTest, PeriodicBoundary) {
-    // Set up periodic boundary
-    double box_size = 10.0;
-    system->set_periodic_boundary(box_size);
-    
-    // Test PBC application
-    EXPECT_DOUBLE_EQ(system->apply_pbc(11.0), 1.0);
-    EXPECT_DOUBLE_EQ(system->apply_pbc(-1.0), 9.0);
-    EXPECT_DOUBLE_EQ(system->apply_pbc(5.0), 5.0);
-}
-
-TEST_F(SystemTest, ParticleAccess) {
-    auto p1 = create_test_particle(1, "H1", 0.0, 0.0, 0.0);
-    system->add_particle(p1);
-    
-    // Test const access
-    EXPECT_NO_THROW({
-        const auto& particle = system->get_particle(0);
-        EXPECT_EQ(particle.serial, 1);
-        EXPECT_EQ(particle.name, "H1");
-    });
-    
-    // Test non-const access
-    EXPECT_NO_THROW({
-        auto& particle = system->get_particle(0);
-        particle.charge = 1.0;
-        EXPECT_DOUBLE_EQ(particle.charge, 1.0);
-    });
-    
-    // Test invalid access
-    EXPECT_THROW(system->get_particle(1), std::out_of_range);
-}
-
-TEST_F(SystemTest, ParticlePositionVelocity) {
-    // Create a particle with initial position and velocity
-    Particle p1 = create_test_particle(1, "H1", 1.0, 2.0, 3.0);
-    p1.set_velocity({0.5, -0.5, 1.0});
-
-    // Test position method
-    auto pos = p1.position();
-    EXPECT_DOUBLE_EQ(pos[0], 1.0);
-    EXPECT_DOUBLE_EQ(pos[1], 2.0);
-    EXPECT_DOUBLE_EQ(pos[2], 3.0);
-
-    // Test velocity method
-    auto vel = p1.velocity();
-    EXPECT_DOUBLE_EQ(vel[0], 0.5);
-    EXPECT_DOUBLE_EQ(vel[1], -0.5);
-    EXPECT_DOUBLE_EQ(vel[2], 1.0);
-
-    // Test position setting
-    p1.set_position({4.0, 5.0, 6.0});
-    pos = p1.position();
-    EXPECT_DOUBLE_EQ(pos[0], 4.0);
-    EXPECT_DOUBLE_EQ(pos[1], 5.0);
-    EXPECT_DOUBLE_EQ(pos[2], 6.0);
-}
-
-TEST_F(SystemTest, DynamicsUpdate) {
-    // Create a valid particle
-    Particle p1 = create_test_particle(1, "H1", 0.0, 0.0, 0.0, 0.5);
-    p1.set_velocity({1.0, 0.0, 0.0});
-    
-    // Create a valid residue
-    std::vector<Particle> particles = {p1};
-    Residue res = create_test_residue(particles, "HOH", 1, 'A');
-    
-    // Add to system
-    system->add_residue(res);
-    
-    // Update position
-    double dt = 0.1;
-    system->update_positions(dt);
-    
-    // Verify position update
-    const auto& updated_p1 = system->get_residue(0).atoms[0];
-    auto pos = updated_p1.position();
-    EXPECT_DOUBLE_EQ(pos[0], dt);
-    EXPECT_DOUBLE_EQ(pos[1], 0.0);
-    EXPECT_DOUBLE_EQ(pos[2], 0.0);
-}
-
-TEST_F(SystemTest, ResidueCenterOfMass) {
-    // Create a residue with two particles
-    Particle p1 = create_test_particle(1, "H1", 0.0, 0.0, 0.0);
-    Particle p2 = create_test_particle(2, "O1", 2.0, 0.0, 0.0);
-    Residue res("HOH", 1, 'A');
-    res.atoms.push_back(p1);
-    res.atoms.push_back(p2);
-
-    // Test center of mass calculation
-    auto com = res.center_of_mass();
-    EXPECT_DOUBLE_EQ(com[0], 1.0);  // Average x = (0 + 2)/2
-    EXPECT_DOUBLE_EQ(com[1], 0.0);
-    EXPECT_DOUBLE_EQ(com[2], 0.0);
-
-    // Test atom count
-    EXPECT_EQ(res.atom_count(), 2);
-}
-
-TEST_F(SystemTest, ParticleVelocityUpdate) {
-    // Test velocity updates with different values
-    Particle p1 = create_test_particle(1, "H1", 0.0, 0.0, 0.0);
-    
-    // Test zero velocity
-    verify_position_velocity(p1, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0});
-    
-    // Test setting velocity
-    p1.set_velocity({1.0, -1.0, 0.5});
-    verify_position_velocity(p1, {0.0, 0.0, 0.0}, {1.0, -1.0, 0.5});
-    
-    // Test updating position with velocity
-    p1.set_position({p1.x + p1.vx, p1.y + p1.vy, p1.z + p1.vz});
-    verify_position_velocity(p1, {1.0, -1.0, 0.5}, {1.0, -1.0, 0.5});
-}
-
-TEST_F(SystemTest, ResidueCenterOfMassComplex) {
-    // Create particles with valid data
-    std::vector<Particle> particles = {
-        create_test_particle(1, "H1", -2.0, -2.0, -2.0),  // 第一个粒子
-        create_test_particle(2, "O1", 2.0, 2.0, 2.0),     // 第二个粒子
-        create_test_particle(3, "H2", 4.0, 4.0, 4.0)      // 第三个粒子
-    };
-    
-    Residue res = create_test_residue(particles, "HOH", 1, 'A');
-    
-    // 计算期望的质心：(-2+2+4)/3 = 4/3 ≈ 1.33
-    verify_center_of_mass(res, std::array<double, 3>{4.0/3.0, 4.0/3.0, 4.0/3.0});
-    
-    // 移动第一个粒子
-    res.atoms[0].set_position({-4.0, -4.0, -4.0});
-    // 新的期望质心：(-4+2+4)/3 = 2/3 ≈ 0.67
-    verify_center_of_mass(res, std::array<double, 3>{2.0/3.0, 2.0/3.0, 2.0/3.0});
-}
-
-TEST_F(SystemTest, VelocityIntegration) {
-    // Test velocity integration over multiple timesteps
-    Particle p1 = create_test_particle(1, "H1", 0.0, 0.0, 0.0);
-    p1.set_velocity({1.0, 0.5, 0.0});
-    
-    Residue res = create_test_residue({p1}, "TEST", 1, 'A');
-    system->add_residue(res);
-    
-    double dt = 0.1;
-    int steps = 5;
-    
-    for (int i = 0; i < steps; ++i) {
-        system->update_positions(dt);
-        auto& particle = system->get_residue(0).atoms[0];
-        auto pos = particle.position();
-        
-        // Position should increase linearly with time
-        EXPECT_DOUBLE_EQ(pos[0], (i + 1) * dt * 1.0);
-        EXPECT_DOUBLE_EQ(pos[1], (i + 1) * dt * 0.5);
-        EXPECT_DOUBLE_EQ(pos[2], 0.0);
-    }
-}
-
-TEST_F(SystemTest, ResidueGeometry) {
-    // Create a water molecule with realistic geometry
-    std::vector<Particle> water = {
-        create_test_particle(1, "O", 0.0, 0.0, 0.0),
-        create_test_particle(2, "H1", 0.957, 0.0, 0.0),
-        create_test_particle(3, "H2", -0.24, 0.927, 0.0)
-    };
-    
-    Residue res = create_test_residue(water, "HOH", 1, 'A');
-    system->add_residue(res);
-    
-    // Verify center of mass
-    auto expected_com = std::array<double, 3>{
-        (0.0 + 0.957 - 0.24) / 3.0,
-        (0.0 + 0.0 + 0.927) / 3.0,
-        0.0
-    };
-    verify_center_of_mass(res, expected_com);
-    
-    // Test rotation by updating positions
-    for (auto& atom : res.atoms) {
-        auto pos = atom.position();
-        atom.set_position({-pos[1], pos[0], pos[2]});  // 90-degree rotation around z
+    for (size_t i = 0; i < 3; ++i) {
+        EXPECT_NEAR(updated_p.position[i], 0.1, 1e-10);
     }
     
-    // Verify rotated center of mass (should be same magnitude, different direction)
-    auto com = res.center_of_mass();
-    EXPECT_NEAR(std::hypot(com[0], com[1]), 
-                std::hypot(expected_com[0], expected_com[1]), 
-                1e-10);
+    // Virtual sites should not move
+    system->set_virtual_site(res_idx, p_idx, true);
+    system->update_positions(0.1);
+    const auto& virtual_p = system->get_particle(res_idx, p_idx);
+    
+    for (size_t i = 0; i < 3; ++i) {
+        EXPECT_NEAR(virtual_p.position[i], 0.1, 1e-10);  // position unchanged
+    }
 }
-
-} // namespace

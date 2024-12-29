@@ -1,97 +1,74 @@
 // examples/basic/run_system.cpp
 #include <iostream>
-#include <iomanip>
+#include <array>
+#include <string>
 #include "pygcmc/core/system.hpp"
 
-using pygcmc::core::System;
-using pygcmc::core::Particle;
-using pygcmc::core::Residue;
+using namespace pygcmc::core;
 
 void print_particle_info(const Particle& p) {
-    auto pos = p.position();
-    std::cout << "Particle " << p.serial << " (" << p.name << "):\n"
-              << "  Position: (" << std::fixed << std::setprecision(3)
-              << pos[0] << ", " << pos[1] << ", " << pos[2] << ")\n"
+    std::cout << "Particle:\n"
+              << "  Position: [" << p.position[0] << ", " << p.position[1] << ", " << p.position[2] << "]\n"
+              << "  Velocity: [" << p.velocity[0] << ", " << p.velocity[1] << ", " << p.velocity[2] << "]\n"
               << "  Charge: " << p.charge << "\n"
-              << "  Type: " << p.type << "\n";
+              << "  Mass: " << p.mass << "\n"
+              << "  Virtual: " << (p.is_virtual ? "yes" : "no") << "\n";
 }
 
 void print_system_state(const System& sys) {
-    auto [kinetic, potential] = sys.get_system_state();
-    std::cout << "\nSystem State:\n"
-              << "  Residue count: " << sys.get_residue_count() << "\n"
-              << "  Kinetic energy: " << std::scientific << kinetic << "\n"
-              << "  Potential energy: " << potential << "\n"
-              << "  Total energy: " << kinetic + potential << "\n"
-              << std::defaultfloat;
-
-    // Print center of mass for each residue
-    for (size_t i = 0; i < sys.get_residue_count(); ++i) {
-        const auto& res = sys.get_residue(i);
-        auto com = res.center_of_mass();
-        std::cout << "  Residue " << i << " center: ("
-                  << std::fixed << std::setprecision(3)
-                  << com[0] << ", " << com[1] << ", " << com[2] << ")\n";
-    }
+    double energy = sys.compute_energy();
+    std::cout << "System energy: " << energy << "\n";
 }
 
 int main() {
     try {
-        // Initialize system with custom LJ parameters
-        System sys(1.0, 3.355);  // epsilon = 1.0, sigma = 3.355
+        // Create a new system
+        System sys;
 
-        // Create water molecule particles
-        Particle h1(1, "H1", "HOH", 1, 0.0, 0.0, 0.0, 0.5, "H", "H");
-        Particle o1(2, "O1", "HOH", 1, 1.0, 0.0, 0.0, -1.0, "O", "O");
-        Particle h2(3, "H2", "HOH", 1, 1.0, 1.0, 0.0, 0.5, "H", "H");
+        // Create particles for a water molecule
+        Particle h1({0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, 0.5, 1.008);  // H1
+        Particle o1({1.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, -1.0, 15.999); // O
+        Particle h2({1.0, 1.0, 0.0}, {0.0, 0.0, 0.0}, 0.5, 1.008);  // H2
 
-        // Create a residue and add particles to it
-        Residue water("HOH", 1, 'A');
-        water.atoms.push_back(h1);
-        water.atoms.push_back(o1);
-        water.atoms.push_back(h2);
+        // Create a residue for water
+        size_t water_idx = sys.add_residue("HOH");
+        Residue& water = sys.get_residue(water_idx);
 
-        // Add residue to system
-        sys.add_residue(water);
+        // Add particles to the water residue
+        sys.add_particle(water_idx, h1);
+        sys.add_particle(water_idx, o1);
+        sys.add_particle(water_idx, h2);
 
-        // Print initial state
-        std::cout << "Initial configuration:\n";
+        // Print initial system state
+        std::cout << "Initial system state:\n";
         for (size_t i = 0; i < sys.get_residue_count(); ++i) {
             const Residue& res = sys.get_residue(i);
-            std::cout << "Residue " << res.sequence_number << " (" << res.name 
-                      << ") with " << res.atom_count() << " atoms:\n";
-            for (const auto& atom : res.atoms) {
-                print_particle_info(atom);
+            std::cout << "Residue " << i << " (" << res.name << "):\n";
+            
+            for (size_t j = 0; j < sys.get_particle_count(i); ++j) {
+                const Particle& particle = sys.get_particle(i, j);
+                print_particle_info(particle);
             }
         }
-        print_system_state(sys);
 
         // Set up periodic boundary conditions
-        sys.set_periodic_boundary(10.0);
+        std::array<double, 3> a = {10.0, 0.0, 0.0};
+        std::array<double, 3> b = {0.0, 10.0, 0.0};
+        std::array<double, 3> c = {0.0, 0.0, 10.0};
+        sys.set_periodic_box_vectors(a, b, c);
 
-        // Add some initial velocities
-        auto& res0 = sys.get_residue(0);
-        if (!res0.atoms.empty()) {
-            auto& p1 = res0.atoms[0];
-            p1.set_velocity({1.0, 0.0, 0.0});  // Using new set_velocity method
-        }
+        // Add constraints between O-H bonds
+        sys.add_constraint(water_idx, 1, water_idx, 0, 0.9572); // O-H1 bond
+        sys.add_constraint(water_idx, 1, water_idx, 2, 0.9572); // O-H2 bond
 
-        // Run a few dynamics steps
-        double dt = 0.001;
-        for (int step = 0; step < 10; ++step) {
-            sys.update_positions(dt);
-            sys.update_velocities(dt);
+        // Print final system state
+        std::cout << "\nFinal system state:\n";
+        print_system_state(sys);
 
-            if (step % 5 == 0) {
-                std::cout << "\nStep " << step << ":\n";
-                print_system_state(sys);
-            }
-        }
-
-    } catch (const std::exception& e) {
+        return 0;
+    }
+    catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
-
-    return 0;
 }

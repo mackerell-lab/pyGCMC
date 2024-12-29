@@ -3,247 +3,167 @@
 #ifndef PYGCMC_CORE_SYSTEM_HPP
 #define PYGCMC_CORE_SYSTEM_HPP
 
-#include "pygcmc/core/io/parser_common.hpp"
-#include "pygcmc/core/io/pdb_parser.hpp"
-#include "pygcmc/core/io/psf_parser.hpp"
-#include "pygcmc/core/io/top_parser.hpp"
-#include "pygcmc/core/io/itp_parser.hpp"
-#include "pygcmc/core/io/ff_parser.hpp"
 #include <vector>
-#include <string>
 #include <array>
+#include <memory>
+#include <string>
 #include <cmath>
-#include <stdexcept>
+#include <algorithm>
+#include "pygcmc/core/force.hpp"
 
 namespace pygcmc {
 namespace core {
 
 /**
- * @brief System-related exceptions
- */
-class SystemError : public std::runtime_error {
-public:
-    using std::runtime_error::runtime_error;
-};
-
-/**
  * @brief Represents a particle in the system
  */
 struct Particle {
-    int serial;              ///< Atom serial number
-    std::string name;        ///< Atom name
-    std::string residue;     ///< Residue name
-    int sequence;            ///< Residue sequence number
-    double x, y, z;          ///< Atomic coordinates
-    double charge;           ///< Atomic charge
-    std::string type;        ///< Atom type
-    std::string nameTop;     ///< Topology name
-    int typeNum;             ///< Atom type number
-    double vx, vy, vz;       ///< Velocities
+    std::array<double, 3> position;
+    std::array<double, 3> velocity;
+    double charge;
+    double mass;
+    bool is_virtual;
 
-    Particle(int serial_ = 0, const std::string& name_ = "", 
-             const std::string& residue_ = "", int sequence_ = 0,
-             double x_ = 0.0, double y_ = 0.0, double z_ = 0.0,
-             double charge_ = 0.0, const std::string& type_ = "", 
-             const std::string& nameTop_ = "")
-        : serial(serial_), name(name_), residue(residue_),
-          sequence(sequence_), x(x_), y(y_), z(z_), 
-          charge(charge_), type(type_), nameTop(nameTop_),
-          typeNum(0), vx(0.0), vy(0.0), vz(0.0) {}
+    Particle(const std::array<double, 3>& pos = {0, 0, 0},
+            const std::array<double, 3>& vel = {0, 0, 0},
+            double q = 0.0,
+            double m = 1.0)
+        : position(pos), velocity(vel), charge(q), mass(m), is_virtual(false) {}
 
     bool is_valid() const {
-        return serial > 0 && 
-               !name.empty() && 
-               !residue.empty() && 
-               sequence > 0 &&
-               std::isfinite(x) && std::isfinite(y) && std::isfinite(z) &&
-               std::isfinite(charge) &&
-               std::isfinite(vx) && std::isfinite(vy) && std::isfinite(vz) &&
-               !type.empty();
+        return std::isfinite(charge) && std::isfinite(mass) && mass >= 0.0 &&
+               std::all_of(position.begin(), position.end(), [](double x) { return std::isfinite(x); }) &&
+               std::all_of(velocity.begin(), velocity.end(), [](double x) { return std::isfinite(x); });
     }
+};
 
-    std::array<double, 3> position() const { 
-        return {x, y, z};
-    }
+/**
+ * @brief Represents a constraint between two particles
+ */
+struct Constraint {
+    size_t particle1;
+    size_t particle2;
+    double distance;
 
-    std::array<double, 3> velocity() const { 
-        return {vx, vy, vz}; 
-    }
-
-    void set_velocity(const std::array<double, 3>& v) { 
-        vx = v[0]; 
-        vy = v[1]; 
-        vz = v[2]; 
-    }
-
-    void set_position(const std::array<double, 3>& pos) { 
-        x = pos[0]; 
-        y = pos[1]; 
-        z = pos[2]; 
-    }
-
-    // Method to apply periodic boundary conditions
-    void apply_periodic_boundary(double box_size) {
-        x = x - box_size * std::floor(x / box_size);
-        y = y - box_size * std::floor(y / box_size);
-        z = z - box_size * std::floor(z / box_size);
-    }
+    Constraint(size_t p1, size_t p2, double d)
+        : particle1(p1), particle2(p2), distance(d) {}
 };
 
 /**
  * @brief Represents a residue in the system
  */
 struct Residue {
-    std::string name;                ///< Residue name
-    int sequence_number;             ///< Residue sequence number
-    char chain_id;                   ///< Chain identifier
-    std::vector<Particle> atoms;      ///< Particles within the residue
+    std::string name;
+    std::vector<Particle> particles;
 
-    Residue(const std::string& name_ = "", int seq_num_ = 0, char chain_ = ' ')
-        : name(name_), sequence_number(seq_num_), chain_id(chain_) {}
+    Residue(const std::string& n = "") : name(n) {}
 
-    bool is_valid() const {
-        if (name.empty()) return false;
-        if (sequence_number <= 0) return false;
-        if (atoms.empty()) return false;
-        for (const auto& atom : atoms) {
-            if (!atom.is_valid()) return false;
-        }
-        return true;
-    }
-
-    size_t get_atom_count() const {
-        return atoms.size();
-    }
-
-    // Compute center of mass (assuming equal mass)
+    size_t atom_count() const { return particles.size(); }
+    
     std::array<double, 3> center_of_mass() const {
-        if (atoms.empty()) {
+        if (particles.empty()) {
             return {0.0, 0.0, 0.0};
         }
-        double sum_x = 0.0, sum_y = 0.0, sum_z = 0.0;
-        for (const auto& atom : atoms) {
-            sum_x += atom.x;
-            sum_y += atom.y;
-            sum_z += atom.z;
+        
+        double total_mass = 0.0;
+        std::array<double, 3> com = {0.0, 0.0, 0.0};
+        
+        for (const auto& particle : particles) {
+            if (!particle.is_virtual) {
+                total_mass += particle.mass;
+                for (size_t i = 0; i < 3; ++i) {
+                    com[i] += particle.position[i] * particle.mass;
+                }
+            }
         }
-        double n = static_cast<double>(atoms.size());
-        return {sum_x / n, sum_y / n, sum_z / n};
-    }
-
-    // Get number of atoms
-    size_t atom_count() const { 
-        return atoms.size(); 
+        
+        if (total_mass > 0.0) {
+            for (size_t i = 0; i < 3; ++i) {
+                com[i] /= total_mass;
+            }
+        }
+        
+        return com;
     }
 };
 
 /**
- * @brief Manages the molecular system
+ * @brief Main class representing a molecular system
  */
 class System {
 public:
-    /**
-     * @brief Constructs the system with given force field parameters
-     * @param epsilon Lennard-Jones epsilon parameter
-     * @param sigma Lennard-Jones sigma parameter
-     */
-    System(double epsilon = 1.0, double sigma = 1.0);
-    
-    ~System();
-
-    // File loading methods
-    void load_pdb(const std::string& filename);
-    void load_psf(const std::string& filename);
-    void load_top(const std::string& filename);
-    void load_itp(const std::string& filename);
-    void load_forcefield(const std::string& filename);
+    System() = default;
+    ~System() = default;
 
     // Residue management
-    void add_residue(const Residue& residue);
-    void remove_residue(int index);
+    size_t add_residue(const std::string& name);
+    void remove_residue(size_t index);
     size_t get_residue_count() const;
     const Residue& get_residue(size_t index) const;
     Residue& get_residue(size_t index);
 
-    // Energy computation
-    double compute_total_energy() const;
-    std::pair<double, double> get_system_state() const;
+    // Particle management
+    size_t add_particle(size_t residue_index, const Particle& particle);
+    void remove_particle(size_t residue_index, size_t particle_index);
+    size_t get_particle_count(size_t residue_index) const;
+    const Particle& get_particle(size_t residue_index, size_t particle_index) const;
+    Particle& get_particle(size_t residue_index, size_t particle_index);
 
-    // Dynamics methods
+    // Mass management
+    double get_particle_mass(size_t residue_index, size_t particle_index) const;
+    void set_particle_mass(size_t residue_index, size_t particle_index, double mass);
+
+    // Virtual site management
+    void set_virtual_site(size_t residue_index, size_t particle_index, bool is_virtual);
+    bool is_virtual_site(size_t residue_index, size_t particle_index) const;
+
+    // Constraint management
+    size_t add_constraint(size_t residue1, size_t particle1, size_t residue2, size_t particle2, double distance);
+    void remove_constraint(size_t index);
+    size_t get_constraint_count() const;
+    const Constraint& get_constraint(size_t index) const;
+    void get_constraint_parameters(size_t index, size_t& residue1, size_t& particle1, 
+                                 size_t& residue2, size_t& particle2, double& distance) const;
+    void set_constraint_parameters(size_t index, size_t residue1, size_t particle1,
+                                 size_t residue2, size_t particle2, double distance);
+
+    // Force management
+    void add_force(std::shared_ptr<Force> force);
+    void remove_force(size_t index);
+    size_t get_force_count() const;
+    std::shared_ptr<Force> get_force(size_t index) const;
+
+    // Periodic boundary conditions
+    void set_periodic_box_vectors(const std::array<double, 3>& a,
+                                const std::array<double, 3>& b,
+                                const std::array<double, 3>& c);
+    void get_periodic_box_vectors(std::array<double, 3>& a,
+                                std::array<double, 3>& b,
+                                std::array<double, 3>& c) const;
+    bool uses_periodic_boundary_conditions() const;
+
+    // Distance computation
+    std::array<double, 3> compute_distance(const Particle& p1, const Particle& p2) const;
+
+    // System state
+    double compute_energy() const;
     void update_positions(double dt);
     void update_velocities(double dt);
 
-    // Boundary conditions
-    void set_periodic_boundary(double box_size);
-    double apply_pbc(double x) const;
-
-    void add_particle(const Particle& particle) {
-        // Create a new residue for the particle
-        Residue res(particle.residue, particle.sequence);
-        res.atoms.push_back(particle);
-        residues_.push_back(res);
-    }
-
-    void remove_particle(size_t index) {
-        size_t current = 0;
-        for (auto it = residues_.begin(); it != residues_.end(); ++it) {
-            if (current + it->atoms.size() > index) {
-                size_t local_index = index - current;
-                it->atoms.erase(it->atoms.begin() + local_index);
-                if (it->atoms.empty()) {
-                    residues_.erase(it);
-                }
-                return;
-            }
-            current += it->atoms.size();
-        }
-    }
-
-    size_t get_particle_count() const {
-        size_t count = 0;
-        for (const auto& res : residues_) {
-            count += res.atoms.size();
-        }
-        return count;
-    }
-
-    // Particle access methods
-    const Particle& get_particle(size_t index) const {
-        size_t current = 0;
-        for (const auto& res : residues_) {
-            if (current + res.atoms.size() > index) {
-                return res.atoms[index - current];
-            }
-            current += res.atoms.size();
-        }
-        throw std::out_of_range("Particle index out of range");
-    }
-
-    Particle& get_particle(size_t index) {
-        size_t current = 0;
-        for (auto& res : residues_) {
-            if (current + res.atoms.size() > index) {
-                return res.atoms[index - current];
-            }
-            current += res.atoms.size();
-        }
-        throw std::out_of_range("Particle index out of range");
-    }
-
 private:
-    std::vector<Residue> residues_; ///< List of residues in the system
-    double epsilon_;
-    double sigma_;
-    io::NBMap nb_dict_;
-    io::NBFixMap nbfix_dict_;
-    double box_size_ = 0.0;
-    bool use_periodic_ = false;
+    std::vector<Residue> residues_;
+    std::vector<Constraint> constraints_;
+    std::vector<std::shared_ptr<Force>> forces_;
+    std::array<std::array<double, 3>, 3> box_vectors_;
+    bool has_periodic_boundary_ = false;
 
-    std::array<double, 3> compute_distance(const Particle& p1, 
-                                         const Particle& p2) const;
-    double compute_pair_energy(const Particle& p1, 
-                             const Particle& p2) const;
-    double compute_residue_energy(const Residue& res1, const Residue& res2) const;
+    void validate_residue_index(size_t index) const;
+    void validate_particle_index(size_t residue_index, size_t particle_index) const;
+    void validate_constraint_index(size_t index) const;
+    void validate_force_index(size_t index) const;
+    void validate_box_vectors(const std::array<double, 3>& a,
+                            const std::array<double, 3>& b,
+                            const std::array<double, 3>& c) const;
 };
 
 } // namespace core
