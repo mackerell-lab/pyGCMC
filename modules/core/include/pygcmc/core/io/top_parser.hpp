@@ -7,6 +7,7 @@
 #include <vector>
 #include <map>
 #include <unordered_map>
+#include <set>
 #include "pygcmc/core/io/parser_common.hpp"
 
 namespace pygcmc {
@@ -18,6 +19,9 @@ namespace io {
  */
 class TopParser {
 public:
+    TopParser() = default;
+    ~TopParser() = default;
+
     /**
      * @brief Parse a GROMACS topology file
      * @param filename Path to the topology file
@@ -44,6 +48,14 @@ public:
      * @return Number of atoms successfully updated
      */
     int update_pdb_atoms(std::vector<PDBAtom>& pdb_atoms) const;
+
+    /**
+     * @brief Get residues and their atoms that are missing topology information
+     * @param atoms Vector of PDB atoms to check
+     * @return Map of residue names to sets of atom names that are missing topology info
+     */
+    std::map<std::string, std::set<std::string>> get_missing_topology_info(
+        const std::vector<PDBAtom>& atoms) const;
 
 private:
     struct TopAtom {

@@ -4,8 +4,36 @@
 #include "pygcmc/core/io/top_parser.hpp"
 #include "pygcmc/core/io/pdb_parser.hpp"
 #include "config.hpp"
+#include <cmath>
+#include <map>
+#include <set>
 
 using namespace pygcmc::core::io;
+
+TEST(TopParserTest, DefaultTopologyValues) {
+    // Test default values
+    PDBAtom atom;
+    EXPECT_TRUE(atom.topo_type.empty());
+    EXPECT_TRUE(std::isnan(atom.topo_charge));
+    EXPECT_TRUE(std::isnan(atom.topo_mass));
+    EXPECT_FALSE(atom.has_topology_info());
+
+    // Test partial topology information
+    atom.topo_type = "CT1";
+    EXPECT_FALSE(atom.has_topology_info());  // still false because charge and mass are NaN
+
+    atom.topo_charge = -0.3;
+    EXPECT_FALSE(atom.has_topology_info());  // still false because mass is NaN
+
+    atom.topo_mass = 12.011;
+    EXPECT_TRUE(atom.has_topology_info());  // now true because all fields are set
+
+    // Test resetting to default
+    atom.topo_type = "";
+    atom.topo_charge = std::numeric_limits<double>::quiet_NaN();
+    atom.topo_mass = std::numeric_limits<double>::quiet_NaN();
+    EXPECT_FALSE(atom.has_topology_info());
+}
 
 TEST(TopParserTest, ParseTopologyFile) {
     TopParser parser;
@@ -114,5 +142,65 @@ TEST(TopParserTest, UpdatePDBAtoms) {
             EXPECT_DOUBLE_EQ(atom.topo_mass, 14.007);
             EXPECT_EQ(atom.topo_type, "NH2");
         }
+    }
+}
+
+TEST(TopParserTest, MissingTopologyInfo) {
+    // First parse the PDB file
+    std::string pdb_file = std::string(PDB_DATA_DIR) + "/test.pdb";
+    auto [cell_params, residues] = PDBParser::parse(pdb_file);
+    ASSERT_FALSE(residues.empty());
+
+    // Extract atoms from residues
+    std::vector<PDBAtom> pdb_atoms;
+    for (const auto& residue : residues) {
+        pdb_atoms.insert(pdb_atoms.end(), residue.atoms.begin(), residue.atoms.end());
+    }
+
+    // Parse topology file and update PDB atoms
+    TopParser top_parser;
+    std::string top_file = std::string(PDB_DATA_DIR) + "/test.top";
+    ASSERT_TRUE(top_parser.parse(top_file));
+    
+    int updated = top_parser.update_pdb_atoms(pdb_atoms);
+    EXPECT_GT(updated, 0);
+
+    // Get missing topology information using the new method
+    auto missing_info = top_parser.get_missing_topology_info(pdb_atoms);
+
+    // Verify expected missing residues
+    EXPECT_TRUE(missing_info.find("BEN") != missing_info.end());
+    EXPECT_TRUE(missing_info.find("SOL") != missing_info.end());
+    EXPECT_TRUE(missing_info.find("PRP") != missing_info.end());
+
+    // Print missing topology information for debugging
+    for (const auto& [residue, atoms] : missing_info) {
+        std::cout << "Missing topology for " << residue << " atoms:";
+        for (const auto& atom : atoms) {
+            std::cout << " " << atom;
+        }
+        std::cout << std::endl;
+    }
+
+    // Verify that known residues have complete topology info
+    EXPECT_TRUE(missing_info.find("ALA") == missing_info.end());
+    EXPECT_TRUE(missing_info.find("VAL") == missing_info.end());
+    EXPECT_TRUE(missing_info.find("PRO") == missing_info.end());
+    EXPECT_TRUE(missing_info.find("ASN") == missing_info.end());
+    EXPECT_TRUE(missing_info.find("GLN") == missing_info.end());
+
+    // Verify specific missing atoms for each residue
+    if (missing_info.find("BEN") != missing_info.end()) {
+        const auto& ben_atoms = missing_info.at("BEN");
+        EXPECT_TRUE(ben_atoms.find("CD1") != ben_atoms.end());
+        EXPECT_TRUE(ben_atoms.find("CZ") != ben_atoms.end());
+        EXPECT_TRUE(ben_atoms.find("HZ") != ben_atoms.end());
+    }
+
+    if (missing_info.find("SOL") != missing_info.end()) {
+        const auto& sol_atoms = missing_info.at("SOL");
+        EXPECT_TRUE(sol_atoms.find("OW") != sol_atoms.end());
+        EXPECT_TRUE(sol_atoms.find("HW1") != sol_atoms.end());
+        EXPECT_TRUE(sol_atoms.find("HW2") != sol_atoms.end());
     }
 } 

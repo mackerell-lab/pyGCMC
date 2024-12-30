@@ -16,6 +16,7 @@
 #include <cmath>
 #include <tuple>
 #include "pygcmc/core/utils.hpp"
+#include <limits>
 
 namespace pygcmc {
 namespace core {
@@ -77,7 +78,9 @@ struct PDBAtom {
           sequence(sequence_), chain(chain_), alt_loc(alt_loc_), insertion_code(insertion_code_),
           x(x_), y(y_), z(z_), occupancy(occupancy_), temp_factor(temp_factor_),
           element(element_), charge(charge_), type(type_),
-          topo_type(""), topo_charge(0.0), topo_mass(0.0) {}
+          topo_type(""), 
+          topo_charge(std::numeric_limits<double>::quiet_NaN()),
+          topo_mass(std::numeric_limits<double>::quiet_NaN()) {}
     
     bool is_valid() const {
         return serial > 0 && !name.empty() && !residue.empty() &&
@@ -88,6 +91,16 @@ struct PDBAtom {
 
     std::array<double, 3> position() const {
         return {x, y, z};
+    }
+
+    /**
+     * @brief Check if topology information is available
+     * @return true if all topology fields are set, false otherwise
+     */
+    bool has_topology_info() const {
+        return !topo_type.empty() && 
+               !std::isnan(topo_charge) && 
+               !std::isnan(topo_mass);
     }
 };
 

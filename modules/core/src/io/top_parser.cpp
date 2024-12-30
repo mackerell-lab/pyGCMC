@@ -169,6 +169,19 @@ int TopParser::update_pdb_atoms(std::vector<PDBAtom>& pdb_atoms) const {
     return updated;
 }
 
+std::map<std::string, std::set<std::string>> TopParser::get_missing_topology_info(
+    const std::vector<PDBAtom>& atoms) const {
+    std::map<std::string, std::set<std::string>> missing_info;
+    
+    for (const auto& atom : atoms) {
+        if (!atom.has_topology_info()) {
+            missing_info[atom.residue].insert(atom.name);
+        }
+    }
+    
+    return missing_info;
+}
+
 } // namespace io
 } // namespace core
 } // namespace pygcmc
