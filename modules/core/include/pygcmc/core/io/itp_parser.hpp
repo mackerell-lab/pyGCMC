@@ -29,6 +29,7 @@ public:
      * @brief Get atom properties for a specific residue and atom
      * @param residue_name Residue name
      * @param atom_name Atom name
+     * @param residue_number Residue number (optional, default is 1)
      * @param charge Output parameter for charge
      * @param mass Output parameter for mass
      * @return True if properties were found
@@ -36,7 +37,8 @@ public:
     bool get_atom_properties(const std::string& residue_name,
                            const std::string& atom_name,
                            double& charge,
-                           double& mass) const;
+                           double& mass,
+                           int residue_number = 1) const;
 
     /**
      * @brief Update PDB atoms with topology information from ITP
@@ -63,8 +65,20 @@ private:
         double mass;
     };
 
+    struct ResidueKey {
+        std::string resname;
+        int resid;
+
+        bool operator<(const ResidueKey& other) const {
+            if (resname != other.resname) {
+                return resname < other.resname;
+            }
+            return resid < other.resid;
+        }
+    };
+
     std::vector<ITPAtom> itp_atoms_;
-    std::map<std::string, std::map<std::string, size_t>> atom_index_;
+    std::map<ResidueKey, std::map<std::string, size_t>> atom_index_;
 
     bool parse_atoms_section(const std::vector<std::string>& lines);
 };
