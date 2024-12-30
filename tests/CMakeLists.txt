@@ -30,11 +30,21 @@ target_link_libraries(test_psf_parser PRIVATE
     GTest::gtest_main
 )
 
+# 添加 TestITPParser 测试
+add_executable(test_itp_parser core/test_itp_parser.cpp)
+target_link_libraries(test_itp_parser PRIVATE 
+    pygcmc_core 
+    GTest::gtest_main
+)
+
 # 设置 PDB 文件路径
 set(TEST_PDB_FILE "${CMAKE_SOURCE_DIR}/tests/data/test.pdb")
 
 # 设置 PSF 文件路径
 set(TEST_PSF_FILE "${CMAKE_SOURCE_DIR}/tests/data/test_proa.psf")
+
+# 设置 ITP 文件路径
+set(TEST_ITP_DIR "${CMAKE_SOURCE_DIR}/tests/data/mols")
 
 # 添加测试并传递命令行参数
 add_test(
@@ -50,6 +60,11 @@ add_test(
 add_test(
     NAME TestPSFParser
     COMMAND test_psf_parser --psf_file=${TEST_PSF_FILE}
+)
+
+add_test(
+    NAME TestITPParser
+    COMMAND test_itp_parser --itp_dir=${TEST_ITP_DIR}
 )
 
 # 添加 TestSystem 测试
@@ -81,6 +96,10 @@ target_include_directories(test_top_parser PRIVATE
 )
 
 target_include_directories(test_psf_parser PRIVATE 
+    ${CMAKE_BINARY_DIR}/tests
+)
+
+target_include_directories(test_itp_parser PRIVATE 
     ${CMAKE_BINARY_DIR}/tests
 )
 
