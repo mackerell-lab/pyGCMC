@@ -60,8 +60,11 @@ struct PDBAtom {
     double occupancy;        ///< Occupancy
     double temp_factor;      ///< Temperature factor
     std::string element;     ///< Element symbol
-    std::string charge;      ///< Charge
-    std::string type;        ///< Atom type
+    std::string charge;      ///< Charge string from PDB
+    std::string type;        ///< Atom type from PDB
+    std::string topo_type;   ///< Atom type from topology
+    double topo_charge;      ///< Charge from topology
+    double topo_mass;        ///< Mass from topology
 
     PDBAtom(int serial_ = 0, const std::string& name_ = "", 
             const std::string& residue_ = "", int sequence_ = 0,
@@ -73,7 +76,8 @@ struct PDBAtom {
         : serial(serial_), name(name_), residue(residue_),
           sequence(sequence_), chain(chain_), alt_loc(alt_loc_), insertion_code(insertion_code_),
           x(x_), y(y_), z(z_), occupancy(occupancy_), temp_factor(temp_factor_),
-          element(element_), charge(charge_), type(type_) {}
+          element(element_), charge(charge_), type(type_),
+          topo_type(""), topo_charge(0.0), topo_mass(0.0) {}
     
     bool is_valid() const {
         return serial > 0 && !name.empty() && !residue.empty() &&
