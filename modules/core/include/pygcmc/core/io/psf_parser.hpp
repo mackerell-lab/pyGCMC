@@ -3,37 +3,83 @@
 #ifndef PYGCMC_CORE_IO_PSF_PARSER_HPP
 #define PYGCMC_CORE_IO_PSF_PARSER_HPP
 
-#include "parser_common.hpp"
+#include <string>
+#include <vector>
+#include <map>
+#include <unordered_map>
+#include <set>
+#include "pygcmc/core/io/parser_common.hpp"
 
 namespace pygcmc {
 namespace core {
 namespace io {
 
 /**
- * @brief PSF Parser
- * 
- * 解析 PSF 文件，获取系统的拓扑信息（如键）。
+ * @brief Parser for PSF files
  */
 class PSFParser {
 public:
+    PSFParser() = default;
+    ~PSFParser() = default;
+
     /**
-     * @brief 解析 PSF 文件
-     * 
-     * @param filename PSF 文件路径
-     * @return PSFTopology 解析得到的拓扑信息
+     * @brief Parse a PSF file
+     * @param filename Path to the PSF file
+     * @return True if parsing was successful
      */
-    static PSFTopology parse(const std::string& filename);
+    bool parse(const std::string& filename);
+
+    /**
+     * @brief Get atom properties from PSF file
+     * @param residue_name Residue name
+     * @param atom_name Atom name
+     * @param charge Output parameter for charge
+     * @param mass Output parameter for mass
+     * @return True if the atom was found
+     */
+    bool get_atom_properties(const std::string& residue_name,
+                           const std::string& atom_name,
+                           double& charge,
+                           double& mass) const;
+
+    /**
+     * @brief Update PDB atoms with charge and mass from PSF
+     * @param pdb_atoms Vector of PDB atoms to update
+     * @return Number of atoms successfully updated
+     */
+    int update_pdb_atoms(std::vector<PDBAtom>& pdb_atoms) const;
+
+    /**
+     * @brief Get residues and their atoms that are missing topology information
+     * @param atoms Vector of PDB atoms to check
+     * @return Map of residue names to sets of atom names that are missing topology info
+     */
+    std::map<std::string, std::set<std::string>> get_missing_topology_info(
+        const std::vector<PDBAtom>& atoms) const;
 
 private:
+    struct PSFAtom {
+        std::string segment;
+        std::string residue;
+        std::string name;
+        std::string type;
+        int residue_number;
+        double charge;
+        double mass;
+    };
+
+    std::vector<PSFAtom> atoms_;
+    // Index structure: residue -> residue_number -> atom_name -> index
+    std::unordered_map<std::string,
+        std::map<int,
+            std::unordered_map<std::string, size_t>>> atom_index_;
+
     /**
-     * @brief 解析 BONDS 部分
-     * 
-     * @param is 输入流
-     * @param topology 存储解析得到的拓扑信息
-     * @return true 解析成功
-     * @return false 解析失败
+     * @brief Parse the atoms section of the PSF file
+     * @param lines Vector of lines from the atoms section
+     * @return True if parsing was successful
      */
-    static bool parse_bonds_section(std::istream& is, PSFTopology& topology);
+    bool parse_atoms_section(const std::vector<std::string>& lines);
 };
 
 } // namespace io
@@ -41,3 +87,4 @@ private:
 } // namespace pygcmc
 
 #endif // PYGCMC_CORE_IO_PSF_PARSER_HPP
+

@@ -4,89 +4,181 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <cctype>
+#include <iostream>
 
 namespace pygcmc {
 namespace core {
 namespace io {
 
-PSFTopology PSFParser::parse(const std::string& filename) {
-    PSFTopology psf;
-    std::ifstream infile(filename);
-    if (!infile.is_open()) {
-        throw FileError("无法打开文件: " + filename);
+bool PSFParser::parse(const std::string& filename) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Cannot open file: " << filename << std::endl;
+        return false;
     }
 
-    std::string line;
+    std::vector<std::string> atom_lines;
     bool in_atoms_section = false;
-    bool in_bonds_section = false;
-    int expected_atoms = 0;
-    int expected_bonds = 0;
+    std::string line;
+    int natoms = 0;
 
-    while (std::getline(infile, line)) {
-        // 跳过空行
-        if (line.empty()) continue;
+    while (std::getline(file, line)) {
+        // Skip empty lines and comments starting with *
+        if (line.empty() || line[0] == '*') {
+            continue;
+        }
 
-        // 检查节段标记
+        // Check for NATOM section
         if (line.find("!NATOM") != std::string::npos) {
+            // Extract number of atoms
             std::istringstream iss(line);
-            iss >> expected_atoms;
+            iss >> natoms;
+            std::cout << "Found " << natoms << " atoms" << std::endl;
             in_atoms_section = true;
-            in_bonds_section = false;
             continue;
         }
-        else if (line.find("!NBOND") != std::string::npos) {
-            std::istringstream iss(line);
-            iss >> expected_bonds;
+
+        // End of atoms section
+        if (in_atoms_section && line.find("!") != std::string::npos) {
             in_atoms_section = false;
-            in_bonds_section = true;
             continue;
         }
 
-        // 解析原子信息
-        if (in_atoms_section) {
-            std::istringstream iss(line);
-            PSFAtom atom;
-            std::string segment, residue_name;  // 暂时不使用的字段
-
-            // PSF格式：ID SEGID RESID RESNAME ATOMNAME TYPE CHARGE MASS
-            if (!(iss >> atom.id >> segment >> atom.residue_id >> residue_name 
-                     >> atom.name >> atom.type >> atom.charge >> atom.mass)) {
-                continue;  // 跳过无法解析的行
-            }
-
-            if (atom.is_valid()) {
-                psf.atoms.push_back(atom);
-            }
+        if (in_atoms_section && !line.empty()) {
+            atom_lines.push_back(line);
         }
-        // 解析键信息
-        else if (in_bonds_section) {
-            std::istringstream iss(line);
-            int atom1, atom2;
-            
-            // PSF bonds格式：每行可能包含多个键对
-            while (iss >> atom1 >> atom2) {
-                PSFBond bond(atom1, atom2);
-                if (bond.is_valid()) {
-                    psf.bonds.push_back(bond);
+    }
+
+    return parse_atoms_section(atom_lines);
+}
+
+bool PSFParser::parse_atoms_section(const std::vector<std::string>& lines) {
+    atoms_.clear();
+    atom_index_.clear();
+
+    for (const auto& line : lines) {
+        std::istringstream iss(line);
+        int atom_id;
+        PSFAtom atom;
+
+        // PSF format: ID SEGID RESID RESNAME ATOMNAME ATOMTYPE CHARGE MASS
+        if (!(iss >> atom_id >> atom.segment >> atom.residue_number >> atom.residue 
+              >> atom.name >> atom.type >> atom.charge >> atom.mass)) {
+            std::cerr << "Failed to parse atom line: " << line << std::endl;
+            continue;
+        }
+
+        std::cout << "Parsed atom: " << atom.residue << " " << atom.name 
+                  << " type=" << atom.type 
+                  << " charge=" << atom.charge 
+                  << " mass=" << atom.mass << std::endl;
+
+        // Add atom to vector and update index
+        size_t idx = atoms_.size();
+        atoms_.push_back(atom);
+        atom_index_[atom.residue][atom.residue_number][atom.name] = idx;
+    }
+
+    return !atoms_.empty();
+}
+
+bool PSFParser::get_atom_properties(const std::string& residue_name,
+                                  const std::string& atom_name,
+                                  double& charge,
+                                  double& mass) const {
+    auto res_it = atom_index_.find(residue_name);
+    if (res_it == atom_index_.end()) {
+        std::cerr << "Residue not found: " << residue_name << std::endl;
+        return false;
+    }
+
+    // Get the last defined residue number for this residue type
+    auto last_res_num_it = res_it->second.rbegin();
+    if (last_res_num_it == res_it->second.rend()) {
+        std::cerr << "No residue numbers found for: " << residue_name << std::endl;
+        return false;
+    }
+
+    auto atom_it = last_res_num_it->second.find(atom_name);
+    if (atom_it == last_res_num_it->second.end()) {
+        std::cerr << "Atom not found: " << residue_name << " " << atom_name << std::endl;
+        return false;
+    }
+
+    const PSFAtom& atom = atoms_[atom_it->second];
+    charge = atom.charge;
+    mass = atom.mass;
+    std::cout << "Found atom: " << residue_name << " " << atom_name 
+              << " charge=" << charge << " mass=" << mass << std::endl;
+    return true;
+}
+
+int PSFParser::update_pdb_atoms(std::vector<PDBAtom>& pdb_atoms) const {
+    int updated = 0;
+    for (auto& pdb_atom : pdb_atoms) {
+        auto res_it = atom_index_.find(pdb_atom.residue);
+        if (res_it == atom_index_.end()) {
+            std::cerr << "Residue not found: " << pdb_atom.residue << std::endl;
+            continue;
+        }
+
+        // Find the matching residue number
+        // First try exact match
+        auto res_num_it = res_it->second.find(pdb_atom.sequence);
+        if (res_num_it == res_it->second.end()) {
+            // If exact match fails, try to find any matching residue number
+            // that has the same atom name
+            bool found = false;
+            for (const auto& [res_num, atoms] : res_it->second) {
+                auto atom_it = atoms.find(pdb_atom.name);
+                if (atom_it != atoms.end()) {
+                    res_num_it = res_it->second.find(res_num);
+                    found = true;
+                    break;
                 }
             }
+            if (!found) {
+                std::cerr << "Residue number not found: " << pdb_atom.residue << " " << pdb_atom.sequence << std::endl;
+                continue;
+            }
+        }
+
+        auto atom_it = res_num_it->second.find(pdb_atom.name);
+        if (atom_it == res_num_it->second.end()) {
+            std::cerr << "Atom not found: " << pdb_atom.residue << " " << pdb_atom.name << std::endl;
+            continue;
+        }
+
+        const PSFAtom& atom = atoms_[atom_it->second];
+        pdb_atom.topo_type = atom.type;
+        pdb_atom.topo_charge = atom.charge;
+        pdb_atom.topo_mass = atom.mass;
+        std::cout << "Updated atom: " << pdb_atom.residue << " " << pdb_atom.name 
+                  << " type=" << pdb_atom.topo_type 
+                  << " charge=" << pdb_atom.topo_charge 
+                  << " mass=" << pdb_atom.topo_mass << std::endl;
+        updated++;
+    }
+    return updated;
+}
+
+std::map<std::string, std::set<std::string>> PSFParser::get_missing_topology_info(
+    const std::vector<PDBAtom>& atoms) const {
+    std::map<std::string, std::set<std::string>> missing_info;
+    
+    // Create a copy of the atoms to update with topology info
+    std::vector<PDBAtom> atoms_copy = atoms;
+    update_pdb_atoms(atoms_copy);
+    
+    // Check which atoms are still missing topology info
+    for (size_t i = 0; i < atoms.size(); ++i) {
+        if (!atoms_copy[i].has_topology_info()) {
+            missing_info[atoms[i].residue].insert(atoms[i].name);
         }
     }
-
-    infile.close();
-
-    // 验证解析结果
-    if (expected_atoms > 0 && psf.atoms.size() != static_cast<size_t>(expected_atoms)) {
-        throw FormatError("原子数量不匹配: 期望 " + std::to_string(expected_atoms) + 
-                         ", 实际 " + std::to_string(psf.atoms.size()));
-    }
-
-    if (expected_bonds > 0 && psf.bonds.size() != static_cast<size_t>(expected_bonds)) {
-        throw FormatError("键数量不匹配: 期望 " + std::to_string(expected_bonds) + 
-                         ", 实际 " + std::to_string(psf.bonds.size()));
-    }
-
-    return psf;
+    
+    return missing_info;
 }
 
 } // namespace io
