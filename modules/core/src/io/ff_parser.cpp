@@ -181,6 +181,24 @@ int FFParser::update_pdb_atoms(std::vector<PDBAtom>& atoms) const {
     return updated;
 }
 
+// 新增的函数：接受 PDBAtom 指针并直接修改对象
+int FFParser::update_pdb_atoms(std::vector<PDBAtom*>& atoms) const {
+    int updated = 0;
+    for (auto* atom : atoms) {
+        if (atom->topo_type.empty()) {
+            continue;
+        }
+        auto it = nonbonded_params_.find(atom->topo_type);
+        if (it != nonbonded_params_.end()) {
+            atom->forcefield_epsilon = it->second.epsilon;
+            atom->forcefield_rmin = it->second.rmin;
+            updated++;
+        }
+    }
+    return updated;
+}
+
+
 } // namespace io
 } // namespace core
 } // namespace pygcmc

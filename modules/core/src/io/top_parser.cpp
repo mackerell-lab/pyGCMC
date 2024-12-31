@@ -265,6 +265,51 @@ int TopParser::update_pdb_atoms(std::vector<PDBAtom>& pdb_atoms) const {
     return updated;
 }
 
+int TopParser::update_pdb_atoms(std::vector<PDBAtom*>& pdb_atoms) const {
+    int updated = 0;
+    for (auto* pdb_atom : pdb_atoms) {
+        auto res_it = atom_index_.find(pdb_atom->residue);
+        if (res_it == atom_index_.end()) {
+            std::cerr << "Residue not found: " 
+                      << pdb_atom->residue << std::endl;
+            continue;
+        }
+
+        // 先尝试用序号精确匹配
+        auto res_num_it = res_it->second.find(pdb_atom->sequence);
+        if (res_num_it == res_it->second.end()) {
+            // 若精确匹配找不到，就尝试同名残基下的其他 residue_number
+            for (const auto& [res_num, atoms_map] : res_it->second) {
+                auto atom_it = atoms_map.find(pdb_atom->name);
+                if (atom_it != atoms_map.end()) {
+                    const TopAtom& atom = atoms_[atom_it->second];
+                    pdb_atom->topo_type   = atom.type;
+                    pdb_atom->topo_charge = atom.charge;
+                    pdb_atom->topo_mass   = atom.mass;
+                    updated++;
+                    break;
+                }
+            }
+            continue;
+        }
+
+        // 在精确匹配的 residue_number 下找 atom
+        auto atom_it = res_num_it->second.find(pdb_atom->name);
+        if (atom_it == res_num_it->second.end()) {
+            continue;
+        }
+
+        const TopAtom& atom = atoms_[atom_it->second];
+        pdb_atom->topo_type   = atom.type;
+        pdb_atom->topo_charge = atom.charge;
+        pdb_atom->topo_mass   = atom.mass;
+        updated++;
+    }
+    return updated;
+}
+
+
+
 std::map<std::string, std::set<std::string>> TopParser::get_missing_topology_info(
     const std::vector<PDBAtom>& atoms) const {
     std::map<std::string, std::set<std::string>> missing_info;

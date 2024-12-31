@@ -3,12 +3,100 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include "pygcmc/core/system.hpp"
+#include "pygcmc/core/io/pdb_parser.hpp"
+#include "pygcmc/core/io/top_parser.hpp"
+#include "pygcmc/core/io/ff_parser.hpp"
 
 namespace py = pybind11;
 using namespace pygcmc::core;
 
 PYBIND11_MODULE(pyGCMC_bindings, m) {
     m.doc() = "Python bindings for pyGCMC simulation library";
+
+    // Bind PDBAtom struct
+    py::class_<io::PDBAtom>(m, "PDBAtom")
+        .def(py::init<>())
+        .def_readwrite("serial", &io::PDBAtom::serial)
+        .def_readwrite("name", &io::PDBAtom::name)
+        .def_readwrite("residue", &io::PDBAtom::residue)
+        .def_readwrite("sequence", &io::PDBAtom::sequence)
+        .def_readwrite("chain", &io::PDBAtom::chain)
+        .def_readwrite("alt_loc", &io::PDBAtom::alt_loc)
+        .def_readwrite("insertion_code", &io::PDBAtom::insertion_code)
+        .def_readwrite("x", &io::PDBAtom::x)
+        .def_readwrite("y", &io::PDBAtom::y)
+        .def_readwrite("z", &io::PDBAtom::z)
+        .def_readwrite("occupancy", &io::PDBAtom::occupancy)
+        .def_readwrite("temp_factor", &io::PDBAtom::temp_factor)
+        .def_readwrite("element", &io::PDBAtom::element)
+        .def_readwrite("charge", &io::PDBAtom::charge)
+        .def_readwrite("type", &io::PDBAtom::type)
+        .def_readwrite("topo_type", &io::PDBAtom::topo_type)
+        .def_readwrite("topo_charge", &io::PDBAtom::topo_charge)
+        .def_readwrite("topo_mass", &io::PDBAtom::topo_mass)
+        .def_readwrite("forcefield_epsilon", &io::PDBAtom::forcefield_epsilon)
+        .def_readwrite("forcefield_rmin", &io::PDBAtom::forcefield_rmin)
+        .def("is_valid", &io::PDBAtom::is_valid)
+        .def("has_topology_info", [](const io::PDBAtom& atom) {
+            return !atom.topo_type.empty() && !std::isnan(atom.topo_charge) && !std::isnan(atom.topo_mass);
+        })
+        .def("has_forcefield_info", [](const io::PDBAtom& atom) {
+            return !std::isnan(atom.forcefield_epsilon) && !std::isnan(atom.forcefield_rmin);
+        });
+
+    // Bind IOResidue struct
+    py::class_<io::IOResidue>(m, "IOResidue")
+        .def(py::init<>())
+        .def_readwrite("name", &io::IOResidue::name)
+        .def_readwrite("sequence_number", &io::IOResidue::sequence_number)
+        .def_readwrite("chain_id", &io::IOResidue::chain_id)
+        .def_readwrite("atoms", &io::IOResidue::atoms);
+
+    // Bind PDBParser class
+    py::class_<io::PDBParser>(m, "PDBParser")
+        .def(py::init<>())
+        .def_static("parse", &io::PDBParser::parse);
+
+    // Bind Residue struct for PDB
+    py::class_<io::Residue>(m, "PDBResidue")
+        .def(py::init<>())
+        .def_readwrite("name", &io::Residue::name)
+        .def_readwrite("sequence_number", &io::Residue::sequence_number)
+        .def_readwrite("chain_id", &io::Residue::chain_id)
+        .def_readwrite("atoms", &io::Residue::atoms);
+
+    // Bind TopParser class
+    py::class_<io::TopParser>(m, "TopParser")
+        .def(py::init<>())
+        .def("parse", &io::TopParser::parse)
+        .def("parse_with_includes", &io::TopParser::parse_with_includes)
+        // 绑定新的 update_pdb_atoms 方法，仅接受指针版本
+        .def("update_pdb_atoms", [](io::TopParser& self, py::list atoms) -> int {
+            std::vector<io::PDBAtom*> c_atoms;
+            for(auto item : atoms){
+                // 确保 item 是 PDBAtom 的实例
+                io::PDBAtom* atom = item.cast<io::PDBAtom*>();
+                c_atoms.push_back(atom);
+            }
+            // 调用 C++ 的 update_pdb_atoms 方法
+            return self.update_pdb_atoms(c_atoms);
+        }, py::arg("atoms"));
+
+    // Bind FFParser class
+    py::class_<io::FFParser>(m, "FFParser")
+        .def(py::init<>())
+        .def("parse", &io::FFParser::parse)
+        // 绑定新的 update_pdb_atoms 方法，仅接受指针版本
+        .def("update_pdb_atoms", [](io::FFParser& self, py::list atoms) -> int {
+            std::vector<io::PDBAtom*> c_atoms;
+            for(auto item : atoms){
+                // 确保 item 是 PDBAtom 的实例
+                io::PDBAtom* atom = item.cast<io::PDBAtom*>();
+                c_atoms.push_back(atom);
+            }
+            // 调用 C++ 的 update_pdb_atoms 方法
+            return self.update_pdb_atoms(c_atoms);
+        }, py::arg("atoms"));
 
     // Bind Particle struct
     py::class_<Particle>(m, "Particle")

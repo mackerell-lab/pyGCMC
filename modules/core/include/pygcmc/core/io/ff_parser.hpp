@@ -40,6 +40,13 @@ public:
      */
     int update_pdb_atoms(std::vector<PDBAtom>& atoms) const;
 
+    /**
+     * @brief Update PDB atoms with force field parameters
+     * @param atoms Vector of PDB atoms to update
+     * @return Number of atoms successfully updated
+     */
+    int update_pdb_atoms(std::vector<PDBAtom*>& atoms) const;   
+
 private:
     // Storage for parameters
     std::unordered_map<std::string, ForceFieldPair> nonbonded_params_;

@@ -57,6 +57,13 @@ public:
     int update_pdb_atoms(std::vector<PDBAtom>& pdb_atoms) const;
 
     /**
+     * @brief Update PDB atoms with charge and mass from topology
+     * @param pdb_atoms Vector of PDB atoms to update
+     * @return Number of atoms successfully updated
+     */
+    int update_pdb_atoms(std::vector<PDBAtom*>& pdb_atoms) const;
+
+    /**
      * @brief Get residues and their atoms that are missing topology information
      * @param atoms Vector of PDB atoms to check
      * @return Map of residue names to sets of atom names that are missing topology info
