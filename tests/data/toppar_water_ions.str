@@ -1,5 +1,5 @@
 * Toplogy and parameter information for water and ions.
-*
+* tests/data/toppar_water_ions.str
 
 !Testcase
 !test_water_ions.inp

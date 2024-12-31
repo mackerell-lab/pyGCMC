@@ -6,6 +6,7 @@
 #include <iostream>
 #include <cctype>
 #include <algorithm>
+#include <cmath>
 
 namespace pygcmc {
 namespace core {
@@ -18,16 +19,20 @@ bool FFParser::parse(const std::string& filename) {
         return false;
     }
 
-    // Clear existing data
-    nonbonded_params_.clear();
-    nbfix_params_.clear();
-
     std::string line;
+    bool inParamSection = false;
+    bool inNonbondedSection = false;
+    bool inNBFIXSection = false;
+
     while (std::getline(ifs, line)) {
         // Skip empty lines
         if (line.empty()) continue;
 
-        // Remove leading/trailing whitespace
+        // Remove comments and trim whitespace
+        auto commentPos = line.find('!');
+        if (commentPos != std::string::npos) {
+            line = line.substr(0, commentPos);
+        }
         auto startPos = line.find_first_not_of(" \t\r\n");
         if (startPos == std::string::npos) continue;
         line.erase(0, startPos);
@@ -36,19 +41,52 @@ bool FFParser::parse(const std::string& filename) {
             line.erase(endPos + 1);
         }
 
-        // Convert to uppercase for keyword matching
+        // Skip empty lines after removing comments
+        if (line.empty()) continue;
+
+        // Convert to uppercase for keyword comparison
         std::string uline = line;
         std::transform(uline.begin(), uline.end(), uline.begin(), ::toupper);
 
-        // Parse sections based on keywords
+        // Check for parameter section
+        if (uline.find("READ PARA") != std::string::npos || 
+            uline.find("PARAMETER") != std::string::npos) {
+            inParamSection = true;
+            continue;
+        }
+
+        // Skip lines until we find the parameter section
+        if (!inParamSection) continue;
+
+        // Check for section keywords
         if (uline.rfind("NONBONDED", 0) == 0) {
-            parse_nonbonded_section(ifs);
+            inNonbondedSection = true;
+            inNBFIXSection = false;
+            continue;
         }
         else if (uline.rfind("NBFIX", 0) == 0) {
-            parse_nbfix_section(ifs);
+            inNonbondedSection = false;
+            inNBFIXSection = true;
+            continue;
         }
         else if (uline == "END") {
-            break;
+            if (inNonbondedSection || inNBFIXSection) {
+                // End of a subsection
+                inNonbondedSection = false;
+                inNBFIXSection = false;
+            } else {
+                // End of parameter section
+                inParamSection = false;
+            }
+            continue;
+        }
+
+        // Process parameters based on current section
+        if (inParamSection && inNonbondedSection) {
+            parse_nonbonded_line(line);
+        }
+        else if (inParamSection && inNBFIXSection) {
+            parse_nbfix_line(line);
         }
     }
 
@@ -56,112 +94,81 @@ bool FFParser::parse(const std::string& filename) {
     return true;
 }
 
-void FFParser::parse_nonbonded_section(std::istream& in) {
-    std::string line;
-    bool inHeader = true;
+void FFParser::parse_nonbonded_line(const std::string& line) {
+    // Skip header lines
+    if (line.find("nbxmod") != std::string::npos ||
+        line.find("cutnb") != std::string::npos ||
+        line.find("ctofnb") != std::string::npos ||
+        line.find("ctonnb") != std::string::npos ||
+        line.find("eps") != std::string::npos ||
+        line.find("e14fac") != std::string::npos ||
+        line.find("wmin") != std::string::npos ||
+        line.find("NONBONDED") != std::string::npos) {
+        return;
+    }
 
-    while (std::getline(in, line)) {
-        // Skip empty lines
-        if (line.empty()) continue;
+    // Skip lines that start with special characters
+    if (line[0] == '-' || line[0] == '*' || line[0] == '@' || line[0] == '#' || line[0] == '!') {
+        return;
+    }
 
-        // Remove leading/trailing whitespace
-        auto startPos = line.find_first_not_of(" \t\r\n");
-        if (startPos == std::string::npos) continue;
-        line.erase(0, startPos);
-        auto endPos = line.find_last_not_of(" \t\r\n");
-        if (endPos != std::string::npos) {
-            line.erase(endPos + 1);
+    // Parse atom parameters
+    std::istringstream iss(line);
+    std::string atomType;
+    double ignore1, epsilon, rminHalf;
+    double eps14 = 0.0, rmin14Half = 0.0;
+    
+    if (iss >> atomType >> ignore1 >> epsilon >> rminHalf) {
+        // Try to read 1-4 parameters if present
+        double ignore2;
+        if (iss >> ignore2 >> eps14 >> rmin14Half) {
+            // Store 1-4 parameters if needed
         }
 
-        // Check for section endings (convert to uppercase for comparison)
-        std::string uline = line;
-        std::transform(uline.begin(), uline.end(), uline.begin(), ::toupper);
-        if (uline.rfind("NBFIX", 0) == 0) {
-            parse_nbfix_section(in);
-            return;
-        }
-        if (uline == "END") {
-            return;
-        }
+        // Process standard parameters:
+        // epsilon is negative in file (e.g. -0.2), take absolute value
+        // rminHalf is Rmin/2, multiply by 2 to get Rmin
+        double rmin = rminHalf * 2.0;
+        nonbonded_params_[atomType] = ForceFieldPair(rmin, std::fabs(epsilon));
 
-        // Skip comments and continuation lines
-        if (line[0] == '!' || line[0] == '-') continue;
-
-        // Skip header lines until we find actual data
-        if (inHeader) {
-            // Check if this line contains the nbxmod keyword
-            if (line.find("nbxmod") != std::string::npos) {
-                continue;
-            }
-            // If we get here and it's not a comment, we're past the header
-            if (line[0] != '!') {
-                inHeader = false;
-            }
-            continue;
-        }
-
-        // Parse the data line
-        std::istringstream iss(line);
-        std::string atomType;
-        double ignore1, epsilon, rminHalf;
-        double eps14 = 0.0, rmin14Half = 0.0;
-        
-        // Try to read both standard and 1-4 parameters
-        // Format: atomType ignored -epsilon Rmin/2 [ignored eps14 Rmin14/2]
-        if (iss >> atomType >> ignore1 >> epsilon >> rminHalf) {
-            // Skip if this is a comment line that happens to have numbers
-            if (atomType[0] == '!') continue;
-            
-            // Try to read 1-4 parameters if they exist
-            double ignore2;
-            if (iss >> ignore2 >> eps14 >> rmin14Half) {
-                // Store 1-4 parameters if needed
-                // nonbonded_params_14_[atomType] = ForceFieldPair(rmin14Half * 2.0, std::fabs(eps14));
-            }
-
-            // Process standard parameters:
-            // epsilon is negative in file (-0.2), take absolute value (0.2)
-            // rminHalf is 1.85, multiply by 2 to get Rmin (3.70)
-            double rmin = rminHalf * 2.0;
-            nonbonded_params_[atomType] = ForceFieldPair(rmin, std::fabs(epsilon));
-        }
+        // Debug output
+        // std::cout << "Parsed nonbonded: " << atomType 
+        //           << " | epsilon=" << std::fabs(epsilon) 
+        //           << ", rmin=" << rmin << std::endl;
     }
 }
 
-void FFParser::parse_nbfix_section(std::istream& in) {
-    std::string line;
-    while (std::getline(in, line)) {
-        // Skip empty lines and comments
-        if (line.empty() || line[0] == '!') continue;
+void FFParser::parse_nbfix_line(const std::string& line) {
+    // Skip header lines
+    if (line.find("Emin") != std::string::npos || 
+        line.find("kcal/mol") != std::string::npos ||
+        line.find("NBFIX") != std::string::npos) {
+        return;
+    }
 
-        // Check for section endings (convert to uppercase for comparison)
-        std::string uline = line;
-        std::transform(uline.begin(), uline.end(), uline.begin(), ::toupper);
-        if (uline.rfind("NONBONDED", 0) == 0) {
-            parse_nonbonded_section(in);
-            return;
-        }
-        if (uline == "END") {
-            return;
-        }
+    // Skip lines that start with special characters
+    if (line[0] == '-' || line[0] == '*' || line[0] == '@' || line[0] == '#' || line[0] == '!') {
+        return;
+    }
 
-        // Parse the line
-        std::istringstream iss(line);
-        std::string atom_type1, atom_type2;
-        double epsilon, rmin;
+    // Parse NBFIX line
+    std::istringstream iss(line);
+    std::string atom_type1, atom_type2;
+    double epsilon, rmin;
 
-        // CHARMM format has: type1 type2 -epsilon Rmin [ignored] [ignored] -epsilon_14 Rmin_14
-        // We only care about the first epsilon and Rmin
-        if (iss >> atom_type1 >> atom_type2 >> epsilon >> rmin) {
-            // In CHARMM format, the values are epsilon and Rmin
-            // Note: epsilon is positive in the parameter file
-            auto key = std::make_pair(atom_type1, atom_type2);
-            nbfix_params_[key] = ForceFieldPair(rmin, std::abs(epsilon));
-            
-            // Add reverse pair with same parameters
-            auto key_rev = std::make_pair(atom_type2, atom_type1);
-            nbfix_params_[key_rev] = ForceFieldPair(rmin, std::abs(epsilon));
-        }
+    if (iss >> atom_type1 >> atom_type2 >> epsilon >> rmin) {
+        // In CHARMM format, epsilon is negative
+        auto key = std::make_pair(atom_type1, atom_type2);
+        nbfix_params_[key] = ForceFieldPair(rmin, std::abs(epsilon));
+        
+        // Add reverse pair
+        auto key_rev = std::make_pair(atom_type2, atom_type1);
+        nbfix_params_[key_rev] = ForceFieldPair(rmin, std::abs(epsilon));
+        
+        // Debug output
+        // std::cout << "Parsed NBFIX: " << atom_type1 << " - " << atom_type2 
+        //           << " | epsilon=" << std::abs(epsilon) 
+        //           << ", rmin=" << rmin << std::endl;
     }
 }
 
@@ -173,15 +180,17 @@ int FFParser::update_pdb_atoms(std::vector<PDBAtom>& atoms) const {
         }
         auto it = nonbonded_params_.find(atom.topo_type);
         if (it != nonbonded_params_.end()) {
-            atom.forcefield_epsilon = it->second.epsilon;
-            atom.forcefield_rmin = it->second.rmin;
-            updated++;
+            // 仅在参数未设置（为 nan）时更新
+            if (std::isnan(atom.forcefield_epsilon) || std::isnan(atom.forcefield_rmin)) {
+                atom.forcefield_epsilon = it->second.epsilon;
+                atom.forcefield_rmin = it->second.rmin;
+                updated++;
+            }
         }
     }
     return updated;
 }
 
-// 新增的函数：接受 PDBAtom 指针并直接修改对象
 int FFParser::update_pdb_atoms(std::vector<PDBAtom*>& atoms) const {
     int updated = 0;
     for (auto* atom : atoms) {
@@ -190,16 +199,17 @@ int FFParser::update_pdb_atoms(std::vector<PDBAtom*>& atoms) const {
         }
         auto it = nonbonded_params_.find(atom->topo_type);
         if (it != nonbonded_params_.end()) {
-            atom->forcefield_epsilon = it->second.epsilon;
-            atom->forcefield_rmin = it->second.rmin;
-            updated++;
+            // 仅在参数未设置（为 nan）时更新
+            if (std::isnan(atom->forcefield_epsilon) || std::isnan(atom->forcefield_rmin)) {
+                atom->forcefield_epsilon = it->second.epsilon;
+                atom->forcefield_rmin = it->second.rmin;
+                updated++;
+            }
         }
     }
     return updated;
 }
 
-
 } // namespace io
 } // namespace core
 } // namespace pygcmc
-

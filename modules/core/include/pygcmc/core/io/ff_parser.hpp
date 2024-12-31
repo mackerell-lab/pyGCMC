@@ -57,8 +57,16 @@ private:
     > nbfix_params_;
 
     // Helper functions for parsing sections
-    void parse_nonbonded_section(std::istream& in);
-    void parse_nbfix_section(std::istream& in);
+    void parse_nonbonded_line(const std::string& line);
+    void parse_nbfix_line(const std::string& line);
+
+    // Nonbonded parameters
+    double cutnb_ = 14.0;
+    double ctofnb_ = 12.0;
+    double ctonnb_ = 10.0;
+    double eps_ = 1.0;
+    double e14fac_ = 1.0;
+    double wmin_ = 1.5;
 };
 
 } // namespace io

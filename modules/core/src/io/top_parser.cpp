@@ -142,8 +142,8 @@ bool TopParser::parse_atoms_section(const std::vector<std::string>& lines) {
         // 如果 token 不足，则跳过
         // 格式: nr type resnr residue atom cgnr charge mass
         if (tokens.size() < 8) {
-            std::cout << "Skipping line due to insufficient tokens (size=" 
-                      << tokens.size() << "): " << line << std::endl;
+            // std::cout << "Skipping line due to insufficient tokens (size=" 
+            //           << tokens.size() << "): " << line << std::endl;
             continue;
         }
 
