@@ -54,50 +54,50 @@ TEST_F(TestPSFParser, GetAtomProperties) {
     ASSERT_TRUE(parser_->parse(g_psf_file));
 
     double charge, mass;
-    // Test ALA residue atoms
-    ASSERT_TRUE(parser_->get_atom_properties("ALA", "N", charge, mass));
+    // Test ALA residue atoms (non N-terminal, residue 10)
+    ASSERT_TRUE(parser_->get_atom_properties("ALA", 10, "N", charge, mass));
     EXPECT_NEAR(charge, -0.47, 1e-6);  // Non N-terminal ALA N atom
     EXPECT_NEAR(mass, 14.007, 1e-6);
 
-    // Test VAL residue atoms
-    ASSERT_TRUE(parser_->get_atom_properties("VAL", "CA", charge, mass));
+    // Test VAL residue atoms (residue 8)
+    ASSERT_TRUE(parser_->get_atom_properties("VAL", 8, "CA", charge, mass));
     EXPECT_NEAR(charge, 0.07, 1e-6);
     EXPECT_NEAR(mass, 12.011, 1e-6);
 
-    ASSERT_TRUE(parser_->get_atom_properties("VAL", "CG1", charge, mass));
+    ASSERT_TRUE(parser_->get_atom_properties("VAL", 8, "CG1", charge, mass));
     EXPECT_NEAR(charge, -0.27, 1e-6);
     EXPECT_NEAR(mass, 12.011, 1e-6);
 
-    // Test PRO residue atoms
-    ASSERT_TRUE(parser_->get_atom_properties("PRO", "N", charge, mass));
+    // Test PRO residue atoms (residue 9)
+    ASSERT_TRUE(parser_->get_atom_properties("PRO", 9, "N", charge, mass));
     EXPECT_NEAR(charge, -0.29, 1e-6);
     EXPECT_NEAR(mass, 14.007, 1e-6);
 
-    ASSERT_TRUE(parser_->get_atom_properties("PRO", "CD", charge, mass));
+    ASSERT_TRUE(parser_->get_atom_properties("PRO", 9, "CD", charge, mass));
     EXPECT_NEAR(charge, 0.0, 1e-6);
     EXPECT_NEAR(mass, 12.011, 1e-6);
 
-    // Test ASN residue atoms
-    ASSERT_TRUE(parser_->get_atom_properties("ASN", "CG", charge, mass));
+    // Test ASN residue atoms (residue 12)
+    ASSERT_TRUE(parser_->get_atom_properties("ASN", 12, "CG", charge, mass));
     EXPECT_NEAR(charge, 0.55, 1e-6);
     EXPECT_NEAR(mass, 12.011, 1e-6);
 
-    ASSERT_TRUE(parser_->get_atom_properties("ASN", "OD1", charge, mass));
+    ASSERT_TRUE(parser_->get_atom_properties("ASN", 12, "OD1", charge, mass));
     EXPECT_NEAR(charge, -0.55, 1e-6);
     EXPECT_NEAR(mass, 15.9994, 1e-6);
 
-    // Test GLN residue atoms
-    ASSERT_TRUE(parser_->get_atom_properties("GLN", "NE2", charge, mass));
+    // Test GLN residue atoms (residue 13)
+    ASSERT_TRUE(parser_->get_atom_properties("GLN", 13, "NE2", charge, mass));
     EXPECT_NEAR(charge, -0.62, 1e-6);
     EXPECT_NEAR(mass, 14.007, 1e-6);
 
-    ASSERT_TRUE(parser_->get_atom_properties("GLN", "HE21", charge, mass));
+    ASSERT_TRUE(parser_->get_atom_properties("GLN", 13, "HE21", charge, mass));
     EXPECT_NEAR(charge, 0.32, 1e-6);
     EXPECT_NEAR(mass, 1.008, 1e-6);
 
     // Test non-existent atoms and residues
-    ASSERT_FALSE(parser_->get_atom_properties("XXX", "XXX", charge, mass));
-    ASSERT_FALSE(parser_->get_atom_properties("BEN", "C1", charge, mass));
+    ASSERT_FALSE(parser_->get_atom_properties("XXX", 1, "XXX", charge, mass));
+    ASSERT_FALSE(parser_->get_atom_properties("BEN", 1, "C1", charge, mass));
     ASSERT_FALSE(parser_->get_atom_properties("SOL", "OW", charge, mass));
 }
 

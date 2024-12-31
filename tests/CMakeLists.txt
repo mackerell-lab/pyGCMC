@@ -44,6 +44,13 @@ target_link_libraries(test_top_and_itp PRIVATE
     GTest::gtest_main
 )
 
+# 添加 TestPSFAndITP 测试
+add_executable(test_psf_and_itp core/test_psf_and_itp_parser.cpp)
+target_link_libraries(test_psf_and_itp PRIVATE 
+    pygcmc_core 
+    GTest::gtest_main
+)
+
 # 设置 PDB 文件路径
 set(TEST_PDB_FILE "${CMAKE_SOURCE_DIR}/tests/data/test.pdb")
 
@@ -77,6 +84,11 @@ add_test(
 add_test(
     NAME TestTopAndITP
     COMMAND test_top_and_itp
+)
+
+add_test(
+    NAME TestPSFAndITP
+    COMMAND test_psf_and_itp
 )
 
 # 添加 TestSystem 测试
@@ -116,6 +128,10 @@ target_include_directories(test_itp_parser PRIVATE
 )
 
 target_include_directories(test_top_and_itp PRIVATE 
+    ${CMAKE_BINARY_DIR}/tests
+)
+
+target_include_directories(test_psf_and_itp PRIVATE 
     ${CMAKE_BINARY_DIR}/tests
 )
 

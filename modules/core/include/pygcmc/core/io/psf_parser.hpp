@@ -43,6 +43,21 @@ public:
                            double& mass) const;
 
     /**
+     * @brief Get atom properties from PSF file
+     * @param residue_name Residue name
+     * @param residue_number Residue number
+     * @param atom_name Atom name
+     * @param charge Output parameter for charge
+     * @param mass Output parameter for mass
+     * @return True if the atom was found
+     */
+    bool get_atom_properties(const std::string& residue_name,
+                           int residue_number,
+                           const std::string& atom_name,
+                           double& charge,
+                           double& mass) const;
+
+    /**
      * @brief Update PDB atoms with charge and mass from PSF
      * @param pdb_atoms Vector of PDB atoms to update
      * @return Number of atoms successfully updated
@@ -59,13 +74,14 @@ public:
 
 private:
     struct PSFAtom {
-        std::string segment;
-        std::string residue;
-        std::string name;
-        std::string type;
-        int residue_number;
-        double charge;
-        double mass;
+        int id;                 ///< PSF 中的全局原子编号
+        std::string segment;    ///< 对应 SEGID
+        std::string residue;    ///< 残基名 (RESNAME)
+        std::string name;       ///< 原子名 (ATOMNAME)
+        std::string type;       ///< 原子类型 (ATOMTYPE)
+        int residue_number;     ///< 残基序号 (RESID)
+        double charge;          ///< 原子电荷
+        double mass;            ///< 原子质量
     };
 
     std::vector<PSFAtom> atoms_;
@@ -73,6 +89,8 @@ private:
     std::unordered_map<std::string,
         std::map<int,
             std::unordered_map<std::string, size_t>>> atom_index_;
+    // Index structure: atom_id -> index
+    std::unordered_map<int, size_t> id_index_;
 
     /**
      * @brief Parse the atoms section of the PSF file
