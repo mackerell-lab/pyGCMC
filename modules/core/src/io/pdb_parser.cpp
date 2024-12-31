@@ -121,7 +121,7 @@ bool PDBParser::parse_atom_line(const std::string& line, PDBAtom& atom) {
 
         char alt_loc = (line.length() > 16) ? line[16] : ' ';
 
-        std::string residue = utils::trim(line.substr(17, 3));
+        std::string residue = utils::trim(line.substr(17, 4));
         if (residue.empty()) {
             return false;
         }

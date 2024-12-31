@@ -85,7 +85,7 @@ TEST(TopParserTest, ParseTopologyFile) {
 
     // Test non-existent atoms
     ASSERT_FALSE(parser.get_atom_properties("XXX", "XXX", charge, mass));
-    ASSERT_FALSE(parser.get_atom_properties("BEN", "C1", charge, mass));
+    ASSERT_FALSE(parser.get_atom_properties("BENX", "C1", charge, mass));
     ASSERT_FALSE(parser.get_atom_properties("SOL", "OW", charge, mass));
 }
 
@@ -169,9 +169,9 @@ TEST(TopParserTest, MissingTopologyInfo) {
     auto missing_info = top_parser.get_missing_topology_info(pdb_atoms);
 
     // Verify expected missing residues
-    EXPECT_TRUE(missing_info.find("BEN") != missing_info.end());
+    EXPECT_TRUE(missing_info.find("BENX") != missing_info.end());
     EXPECT_TRUE(missing_info.find("SOL") != missing_info.end());
-    EXPECT_TRUE(missing_info.find("PRP") != missing_info.end());
+    EXPECT_TRUE(missing_info.find("PRPX") != missing_info.end());
 
     // Print missing topology information for debugging
     for (const auto& [residue, atoms] : missing_info) {
@@ -190,11 +190,11 @@ TEST(TopParserTest, MissingTopologyInfo) {
     EXPECT_TRUE(missing_info.find("GLN") == missing_info.end());
 
     // Verify specific missing atoms for each residue
-    if (missing_info.find("BEN") != missing_info.end()) {
-        const auto& ben_atoms = missing_info.at("BEN");
-        EXPECT_TRUE(ben_atoms.find("CD1") != ben_atoms.end());
-        EXPECT_TRUE(ben_atoms.find("CZ") != ben_atoms.end());
-        EXPECT_TRUE(ben_atoms.find("HZ") != ben_atoms.end());
+    if (missing_info.find("BENX") != missing_info.end()) {
+        const auto& benx_atoms = missing_info.at("BENX");
+        EXPECT_TRUE(benx_atoms.find("CD1") != benx_atoms.end());
+        EXPECT_TRUE(benx_atoms.find("CZ") != benx_atoms.end());
+        EXPECT_TRUE(benx_atoms.find("HZ") != benx_atoms.end());
     }
 
     if (missing_info.find("SOL") != missing_info.end()) {
@@ -202,5 +202,12 @@ TEST(TopParserTest, MissingTopologyInfo) {
         EXPECT_TRUE(sol_atoms.find("OW") != sol_atoms.end());
         EXPECT_TRUE(sol_atoms.find("HW1") != sol_atoms.end());
         EXPECT_TRUE(sol_atoms.find("HW2") != sol_atoms.end());
+    }
+
+    if (missing_info.find("PRPX") != missing_info.end()) {
+        const auto& prpx_atoms = missing_info.at("PRPX");
+        EXPECT_TRUE(prpx_atoms.find("C1") != prpx_atoms.end());
+        EXPECT_TRUE(prpx_atoms.find("C2") != prpx_atoms.end());
+        EXPECT_TRUE(prpx_atoms.find("C3") != prpx_atoms.end());
     }
 } 
