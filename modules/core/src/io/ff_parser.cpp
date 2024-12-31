@@ -20,7 +20,6 @@ bool FFParser::parse(const std::string& filename) {
     }
 
     std::string line;
-    bool inParamSection = false;
     bool inNonbondedSection = false;
     bool inNBFIXSection = false;
 
@@ -48,17 +47,7 @@ bool FFParser::parse(const std::string& filename) {
         std::string uline = line;
         std::transform(uline.begin(), uline.end(), uline.begin(), ::toupper);
 
-        // Check for parameter section
-        if (uline.find("READ PARA") != std::string::npos || 
-            uline.find("PARAMETER") != std::string::npos) {
-            inParamSection = true;
-            continue;
-        }
-
-        // Skip lines until we find the parameter section
-        if (!inParamSection) continue;
-
-        // Check for section keywords
+        // Detect sections
         if (uline.rfind("NONBONDED", 0) == 0) {
             inNonbondedSection = true;
             inNBFIXSection = false;
@@ -70,22 +59,16 @@ bool FFParser::parse(const std::string& filename) {
             continue;
         }
         else if (uline == "END") {
-            if (inNonbondedSection || inNBFIXSection) {
-                // End of a subsection
-                inNonbondedSection = false;
-                inNBFIXSection = false;
-            } else {
-                // End of parameter section
-                inParamSection = false;
-            }
+            inNonbondedSection = false;
+            inNBFIXSection = false;
             continue;
         }
 
-        // Process parameters based on current section
-        if (inParamSection && inNonbondedSection) {
+        // Parse lines based on current section
+        if (inNonbondedSection) {
             parse_nonbonded_line(line);
         }
-        else if (inParamSection && inNBFIXSection) {
+        else if (inNBFIXSection) {
             parse_nbfix_line(line);
         }
     }
