@@ -182,6 +182,45 @@ def main():
         
         # Print detailed information for each atom
         print_atom_info(atoms)
+
+        # Print all force field parameters
+        print("\n=== Force Field Parameters Summary ===")
+        
+        # Print global nonbonded parameters
+        print("\nGlobal Nonbonded Parameters:")
+        print(f"  cutnb  = {ff_parser_cgenff.get_cutnb():.1f} Å")
+        print(f"  ctofnb = {ff_parser_cgenff.get_ctofnb():.1f} Å")
+        print(f"  ctonnb = {ff_parser_cgenff.get_ctonnb():.1f} Å")
+        print(f"  eps    = {ff_parser_cgenff.get_eps():.1f}")
+        print(f"  e14fac = {ff_parser_cgenff.get_e14fac():.1f}")
+        print(f"  wmin   = {ff_parser_cgenff.get_wmin():.1f}")
+
+        # Print nonbonded parameters from each force field
+        def print_nonbonded(name, parser):
+            params = parser.get_nonbonded_params()
+            print(f"\nNonbonded Parameters from {name} ({len(params)} entries):")
+            # Sort by atom type for better readability
+            for atom_type in sorted(params.keys()):
+                param = params[atom_type]
+                print(f"  {atom_type:6s}: epsilon={param.epsilon:8.4f}, rmin={param.rmin:8.4f}")
+
+        print_nonbonded("Protein FF", ff_parser_prot)
+        print_nonbonded("CGenFF", ff_parser_cgenff)
+        print_nonbonded("Water/Ions", ff_parser_water)
+        print_nonbonded("SILCS", ff_parser_silcs)
+
+        # Print merged NBFIX parameters
+        print("\n=== Merged NBFIX Parameters ===")
+        parsers = [ff_parser_prot, ff_parser_cgenff, ff_parser_water, ff_parser_silcs]
+        merged_nbfix = core.FFParser.merge_nbfix_params(parsers)
+        print(f"\nTotal NBFIX entries: {len(merged_nbfix)}")
+        
+        # Sort the parameters by atom types for better readability
+        sorted_params = sorted(merged_nbfix.items(), key=lambda x: (x[0][0], x[0][1]))
+        for (type1, type2), param in sorted_params:
+            print(f"  {type1:6s}-{type2:6s}: epsilon={param.epsilon:8.4f}, rmin={param.rmin:8.4f}")
+
+        print("\n=== End of Force Field Parameters ===")
         
     except Exception as e:
         print(f"Error: {e}")

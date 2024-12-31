@@ -34,6 +34,30 @@ public:
     }
 
     /**
+     * @brief Merge NBFIX parameters from multiple force fields
+     * @param parsers Vector of force field parsers
+     * @return Combined NBFIX parameters map
+     */
+    static std::unordered_map<
+        std::pair<std::string, std::string>,
+        ForceFieldPair,
+        PairStringHash
+    > merge_nbfix_params(const std::vector<const FFParser*>& parsers) {
+        std::unordered_map<
+            std::pair<std::string, std::string>,
+            ForceFieldPair,
+            PairStringHash
+        > merged;
+
+        for (const auto* parser : parsers) {
+            const auto& params = parser->get_nbfix_params();
+            merged.insert(params.begin(), params.end());
+        }
+
+        return merged;
+    }
+
+    /**
      * @brief Update PDB atoms with force field parameters
      * @param atoms Vector of PDB atoms to update
      * @return Number of atoms successfully updated

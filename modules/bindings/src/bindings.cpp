@@ -13,6 +13,13 @@ using namespace pygcmc::core;
 PYBIND11_MODULE(pyGCMC_bindings, m) {
     m.doc() = "Python bindings for pyGCMC simulation library";
 
+    // Bind ForceFieldPair struct
+    py::class_<io::ForceFieldPair>(m, "ForceFieldPair")
+        .def(py::init<>())
+        .def(py::init<double, double>())
+        .def_readwrite("rmin", &io::ForceFieldPair::rmin)
+        .def_readwrite("epsilon", &io::ForceFieldPair::epsilon);
+
     // Bind PDBAtom struct
     py::class_<io::PDBAtom>(m, "PDBAtom")
         .def(py::init<>())
@@ -86,17 +93,30 @@ PYBIND11_MODULE(pyGCMC_bindings, m) {
     py::class_<io::FFParser>(m, "FFParser")
         .def(py::init<>())
         .def("parse", &io::FFParser::parse)
-        // 绑定新的 update_pdb_atoms 方法，仅接受指针版本
+        .def("get_nonbonded_params", &io::FFParser::get_nonbonded_params)
+        .def("get_nbfix_params", &io::FFParser::get_nbfix_params)
         .def("update_pdb_atoms", [](io::FFParser& self, py::list atoms) -> int {
-            std::vector<io::PDBAtom*> c_atoms;
-            for(auto item : atoms){
-                // 确保 item 是 PDBAtom 的实例
-                io::PDBAtom* atom = item.cast<io::PDBAtom*>();
-                c_atoms.push_back(atom);
+            std::vector<io::PDBAtom*> atom_ptrs;
+            for (auto item : atoms) {
+                atom_ptrs.push_back(item.cast<io::PDBAtom*>());
             }
-            // 调用 C++ 的 update_pdb_atoms 方法
-            return self.update_pdb_atoms(c_atoms);
-        }, py::arg("atoms"));
+            return self.update_pdb_atoms(atom_ptrs);
+        })
+        // Add global nonbonded parameter getters
+        .def("get_cutnb", &io::FFParser::get_cutnb)
+        .def("get_ctofnb", &io::FFParser::get_ctofnb)
+        .def("get_ctonnb", &io::FFParser::get_ctonnb)
+        .def("get_eps", &io::FFParser::get_eps)
+        .def("get_e14fac", &io::FFParser::get_e14fac)
+        .def("get_wmin", &io::FFParser::get_wmin)
+        // Add static method for merging NBFIX parameters
+        .def_static("merge_nbfix_params", [](py::list parsers) {
+            std::vector<const io::FFParser*> parser_ptrs;
+            for (auto item : parsers) {
+                parser_ptrs.push_back(item.cast<io::FFParser*>());
+            }
+            return io::FFParser::merge_nbfix_params(parser_ptrs);
+        });
 
     // Bind Particle struct
     py::class_<Particle>(m, "Particle")
