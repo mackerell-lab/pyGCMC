@@ -51,6 +51,16 @@ target_link_libraries(test_psf_and_itp PRIVATE
     GTest::gtest_main
 )
 
+# 添加 TestFFParser 测试
+add_executable(test_ff_parser core/test_ff_parser.cpp)
+target_link_libraries(test_ff_parser PRIVATE 
+    pygcmc_core 
+    GTest::gtest_main
+)
+
+# 设置参数文件路径
+set(TEST_PRM_FILE "${CMAKE_SOURCE_DIR}/tests/data/par_all36_cgenff.prm")
+
 # 设置 PDB 文件路径
 set(TEST_PDB_FILE "${CMAKE_SOURCE_DIR}/tests/data/test.pdb")
 
@@ -89,6 +99,11 @@ add_test(
 add_test(
     NAME TestPSFAndITP
     COMMAND test_psf_and_itp
+)
+
+add_test(
+    NAME TestFFParser
+    COMMAND test_ff_parser --prm_file=${TEST_PRM_FILE}
 )
 
 # 添加 TestSystem 测试
@@ -132,6 +147,10 @@ target_include_directories(test_top_and_itp PRIVATE
 )
 
 target_include_directories(test_psf_and_itp PRIVATE 
+    ${CMAKE_BINARY_DIR}/tests
+)
+
+target_include_directories(test_ff_parser PRIVATE 
     ${CMAKE_BINARY_DIR}/tests
 )
 

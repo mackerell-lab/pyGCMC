@@ -3,57 +3,63 @@
 #ifndef PYGCMC_CORE_IO_FF_PARSER_HPP
 #define PYGCMC_CORE_IO_FF_PARSER_HPP
 
-#include "parser_common.hpp"
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <stdexcept>
 
 namespace pygcmc {
 namespace core {
 namespace io {
 
-/**
- * @brief Force Field Parser
- * 
- * 解析力场参数文件（如 TOP 文件中的非键参数）。
- */
+// Structure to store Lennard-Jones parameters
+struct ForceFieldPair {
+    double epsilon;  // well depth
+    double rmin;     // Rmin/2 in CHARMM format
+
+    ForceFieldPair(double e=0.0, double r=0.0) : epsilon(e), rmin(r) {}
+};
+
+// Hash function for pair of strings (atom types)
+struct PairStringHash {
+    std::size_t operator()(const std::pair<std::string, std::string>& p) const {
+        auto h1 = std::hash<std::string>()(p.first);
+        auto h2 = std::hash<std::string>()(p.second);
+        return h1 ^ (h2 + 0x9e3779b97f4a7c15ULL + (h1 << 6) + (h1 >> 2));
+    }
+};
+
 class FFParser {
 public:
-    /**
-     * @brief 解析力场文件
-     * 
-     * @param filename 力场文件路径
-     * @return std::pair<NBMap, NBFixMap> 包含非键参数和修正参数的映射
-     */
-    static std::pair<NBMap, NBFixMap> parse(const std::string& filename);
+    // Parse CHARMM parameter file
+    bool parse(const std::string& filename);
+
+    // Get nonbonded parameters
+    const std::unordered_map<std::string, ForceFieldPair>& get_nonbonded_params() const {
+        return nonbonded_params_;
+    }
+
+    // Get NBFIX parameters
+    const std::unordered_map<
+        std::pair<std::string, std::string>, 
+        ForceFieldPair, 
+        PairStringHash
+    >& get_nbfix_params() const {
+        return nbfix_params_;
+    }
 
 private:
-    /**
-     * @brief 解析 [ atomtypes ] 部分
-     * 
-     * @param line 当前行内容
-     * @param nb_dict 非键参数映射
-     * @return true 解析成功
-     * @return false 解析失败
-     */
-    static bool parse_atomtypes_line(const std::string& line, NBMap& nb_dict);
+    // Storage for parameters
+    std::unordered_map<std::string, ForceFieldPair> nonbonded_params_;
+    std::unordered_map<
+        std::pair<std::string, std::string>, 
+        ForceFieldPair, 
+        PairStringHash
+    > nbfix_params_;
 
-    /**
-     * @brief 解析 [ nonbond_params ] 部分
-     * 
-     * @param line 当前行内容
-     * @param nbfix_dict 修正参数映射
-     * @return true 解析成功
-     * @return false 解析失败
-     */
-    static bool parse_nonbond_params_line(const std::string& line, NBFixMap& nbfix_dict);
-
-    /**
-     * @brief 解析 [ pairtypes ] 部分
-     * 
-     * @param line 当前行内容
-     * @param nbfix_dict 修正参数映射
-     * @return true 解析成功
-     * @return false 解析失败
-     */
-    static bool parse_pairtypes_line(const std::string& line, NBFixMap& nbfix_dict);
+    // Helper functions for parsing sections
+    void parse_nonbonded_section(std::istream& in);
+    void parse_nbfix_section(std::istream& in);
 };
 
 } // namespace io
@@ -61,3 +67,4 @@ private:
 } // namespace pygcmc
 
 #endif // PYGCMC_CORE_IO_FF_PARSER_HPP
+

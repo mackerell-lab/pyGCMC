@@ -3,141 +3,160 @@
 #include "pygcmc/core/io/ff_parser.hpp"
 #include <fstream>
 #include <sstream>
-#include <stdexcept>
+#include <iostream>
 #include <cctype>
 #include <algorithm>
-#include <utility>
-#include "pygcmc/core/string.hpp" // 保持包含路径
 
 namespace pygcmc {
 namespace core {
 namespace io {
 
-std::pair<NBMap, NBFixMap> FFParser::parse(const std::string& filename) {
-    NBMap nb_dict;
-    NBFixMap nbfix_dict;
-
-    std::ifstream infile(filename);
-    if (!infile.is_open()) {
-        throw FileError("无法打开文件: " + filename);
+bool FFParser::parse(const std::string& filename) {
+    std::ifstream ifs(filename);
+    if (!ifs.is_open()) {
+        std::cerr << "Failed to open force field file: " << filename << std::endl;
+        return false;
     }
+
+    // Clear existing data
+    nonbonded_params_.clear();
+    nbfix_params_.clear();
 
     std::string line;
-    bool in_atomtypes_section = false;
-    bool in_nonbond_params_section = false;
-    bool in_pairtypes_section = false;
+    while (std::getline(ifs, line)) {
+        // Skip empty lines
+        if (line.empty()) continue;
 
-    while (std::getline(infile, line)) {
-        // 忽略注释
-        size_t comment_pos = line.find(';');
-        if (comment_pos != std::string::npos) {
-            line = line.substr(0, comment_pos);
+        // Remove leading/trailing whitespace
+        auto startPos = line.find_first_not_of(" \t\r\n");
+        if (startPos == std::string::npos) continue;
+        line.erase(0, startPos);
+        auto endPos = line.find_last_not_of(" \t\r\n");
+        if (endPos != std::string::npos) {
+            line.erase(endPos + 1);
         }
 
-        // 去除行首尾空白
-        line = pygcmc::core::utils::trim(line); // 如果 `trim` 在 `utils.hpp`
+        // Convert to uppercase for keyword matching
+        std::string uline = line;
+        std::transform(uline.begin(), uline.end(), uline.begin(), ::toupper);
 
-        if (line.empty()) {
-            continue;
+        // Parse sections based on keywords
+        if (uline.rfind("NONBONDED", 0) == 0) {
+            parse_nonbonded_section(ifs);
         }
-
-        // 检查进入不同部分
-        if (line.find("[ atomtypes ]") != std::string::npos) {
-            in_atomtypes_section = true;
-            in_nonbond_params_section = false;
-            in_pairtypes_section = false;
-            continue;
+        else if (uline.rfind("NBFIX", 0) == 0) {
+            parse_nbfix_section(ifs);
         }
-        if (line.find("[ nonbond_params ]") != std::string::npos) {
-            in_nonbond_params_section = true;
-            in_atomtypes_section = false;
-            in_pairtypes_section = false;
-            continue;
-        }
-        if (line.find("[ pairtypes ]") != std::string::npos) {
-            in_pairtypes_section = true;
-            in_atomtypes_section = false;
-            in_nonbond_params_section = false;
-            continue;
-        }
-
-        if (in_atomtypes_section) {
-            if (line.empty() || line[0] == '[') {
-                in_atomtypes_section = false;
-                continue;
-            }
-
-            if (!parse_atomtypes_line(line, nb_dict)) {
-                throw FormatError("解析 atomtypes 行失败: " + line);
-            }
-        }
-
-        if (in_nonbond_params_section) {
-            if (line.empty() || line[0] == '[') {
-                in_nonbond_params_section = false;
-                continue;
-            }
-
-            if (!parse_nonbond_params_line(line, nbfix_dict)) {
-                throw FormatError("解析 nonbond_params 行失败: " + line);
-            }
-        }
-
-        if (in_pairtypes_section) {
-            if (line.empty() || line[0] == '[') {
-                in_pairtypes_section = false;
-                continue;
-            }
-
-            if (!parse_pairtypes_line(line, nbfix_dict)) {
-                throw FormatError("解析 pairtypes 行失败: " + line);
-            }
+        else if (uline == "END") {
+            break;
         }
     }
 
-    infile.close();
-
-    return {nb_dict, nbfix_dict};
-}
-
-bool FFParser::parse_atomtypes_line(const std::string& line, NBMap& nb_dict) {
-    std::istringstream iss(line);
-    std::string name;
-    int type;
-    double charge, mass;
-    double sigma, epsilon;
-
-    iss >> name >> type >> charge >> mass >> sigma >> epsilon;
-
-    if (name.empty() || iss.fail()) {
-        return false;
-    }
-
-    nb_dict[name] = ForceFieldPair(sigma, epsilon);
+    ifs.close();
     return true;
 }
 
-bool FFParser::parse_nonbond_params_line(const std::string& line, NBFixMap& nbfix_dict) {
-    std::istringstream iss(line);
-    std::string type1, type2;
-    double sigma, epsilon;
-    std::string dummy;  // For any additional fields
+void FFParser::parse_nonbonded_section(std::istream& in) {
+    std::string line;
+    // Skip header lines until we find actual data
+    while (std::getline(in, line)) {
+        if (line.empty()) continue;
+        
+        // Remove comments
+        auto cpos = line.find('!');
+        if (cpos != std::string::npos) {
+            line = line.substr(0, cpos);
+        }
 
-    iss >> type1 >> type2 >> sigma >> epsilon;
+        // Remove leading/trailing whitespace
+        auto startPos = line.find_first_not_of(" \t\r\n");
+        if (startPos == std::string::npos) continue;
+        line.erase(0, startPos);
+        auto endPos = line.find_last_not_of(" \t\r\n");
+        if (endPos != std::string::npos) {
+            line.erase(endPos + 1);
+        }
 
-    if (type1.empty() || type2.empty() || iss.fail()) {
-        return false;
+        // Check for section end or next section
+        {
+            std::string tmp = line;
+            std::transform(tmp.begin(), tmp.end(), tmp.begin(), ::toupper);
+            if (tmp.rfind("NBFIX", 0) == 0 || tmp == "END") {
+                in.seekg(-static_cast<int>(line.size())-1, std::ios::cur);
+                return;
+            }
+        }
+
+        // Parse nonbonded parameters
+        // Format: atomType ignored epsilon Rmin/2 [ignored ignored ignored]
+        std::istringstream iss(line);
+        std::string atomType;
+        double ignored, eps, rmin;
+        
+        if (!(iss >> atomType)) continue;
+        if (atomType[0] == '!') continue;  // Skip comment lines
+        
+        if (!(iss >> ignored >> eps >> rmin)) {
+            continue;
+        }
+
+        // Store parameters (use absolute value of epsilon)
+        nonbonded_params_[atomType] = ForceFieldPair(std::abs(eps), rmin);
     }
-
-    nbfix_dict[{type1, type2}] = ForceFieldPair(sigma, epsilon);
-    return true;
 }
 
-bool FFParser::parse_pairtypes_line(const std::string& line, NBFixMap& nbfix_dict) {
-    // pairtypes 的解析与 nonbond_params 类似
-    return parse_nonbond_params_line(line, nbfix_dict);
+void FFParser::parse_nbfix_section(std::istream& in) {
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.empty()) continue;
+
+        // Remove comments
+        auto cpos = line.find('!');
+        if (cpos != std::string::npos) {
+            line = line.substr(0, cpos);
+        }
+
+        // Remove leading/trailing whitespace
+        auto startPos = line.find_first_not_of(" \t\r\n");
+        if (startPos == std::string::npos) continue;
+        line.erase(0, startPos);
+        auto endPos = line.find_last_not_of(" \t\r\n");
+        if (endPos != std::string::npos) {
+            line.erase(endPos + 1);
+        }
+
+        // Check for section end or next section
+        {
+            std::string tmp = line;
+            std::transform(tmp.begin(), tmp.end(), tmp.begin(), ::toupper);
+            if (tmp == "END" || tmp.rfind("NONBONDED", 0) == 0) {
+                in.seekg(-static_cast<int>(line.size())-1, std::ios::cur);
+                return;
+            }
+        }
+
+        // Parse NBFIX parameters
+        // Format: type1 type2 epsilon Rmin
+        std::istringstream iss(line);
+        std::string t1, t2;
+        double eps, rmin;
+        
+        if (!(iss >> t1)) continue;
+        if (t1[0] == '!') continue;  // Skip comment lines
+        
+        if (!(iss >> t2 >> eps >> rmin)) {
+            continue;
+        }
+
+        // Store parameters (both directions due to symmetry)
+        // Use absolute value of epsilon
+        ForceFieldPair ff(std::abs(eps), rmin);
+        nbfix_params_[std::make_pair(t1, t2)] = ff;
+        nbfix_params_[std::make_pair(t2, t1)] = ff;
+    }
 }
 
 } // namespace io
 } // namespace core
 } // namespace pygcmc
+
