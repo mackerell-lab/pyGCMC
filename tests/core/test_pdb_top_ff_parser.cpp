@@ -272,6 +272,53 @@ TEST_F(PDBTopFFParserTest, CombinePDBTopFF) {
     if (found_water) {
         EXPECT_NEAR(total_water_charge, 0.0, 1e-4) << "Water molecule should have neutral total charge";
     }
+
+    // Print all force field parameters
+    std::cout << "\n=== Force Field Parameters Summary ===\n";
+    
+    // Print global nonbonded parameters
+    std::cout << "\nGlobal Nonbonded Parameters:\n";
+    std::cout << "  cutnb  = " << ff_parser_->get_cutnb() << " Å\n";
+    std::cout << "  ctofnb = " << ff_parser_->get_ctofnb() << " Å\n";
+    std::cout << "  ctonnb = " << ff_parser_->get_ctonnb() << " Å\n";
+    std::cout << "  eps    = " << ff_parser_->get_eps() << "\n";
+    std::cout << "  e14fac = " << ff_parser_->get_e14fac() << "\n";
+    std::cout << "  wmin   = " << ff_parser_->get_wmin() << "\n";
+
+    // Print nonbonded parameters from each force field
+    auto print_nonbonded = [](const std::string& name, const std::unique_ptr<FFParser>& parser) {
+        const auto& params = parser->get_nonbonded_params();
+        std::cout << "\nNonbonded Parameters from " << name << " (" 
+                 << params.size() << " entries):\n";
+        for (const auto& [type, param] : params) {
+            std::cout << "  " << type << ": epsilon=" << param.epsilon 
+                     << ", rmin=" << param.rmin << "\n";
+        }
+    };
+
+    print_nonbonded("Protein FF", ff_parser_prot_);
+    print_nonbonded("CGenFF", ff_parser_);
+    print_nonbonded("Water/Ions", ff_parser_water_);
+    print_nonbonded("SILCS", ff_parser_silcs_);
+
+    // Print NBFIX parameters from each force field
+    auto print_nbfix = [](const std::string& name, const std::unique_ptr<FFParser>& parser) {
+        const auto& params = parser->get_nbfix_params();
+        std::cout << "\nNBFIX Parameters from " << name << " (" 
+                 << params.size() << " entries):\n";
+        for (const auto& [types, param] : params) {
+            std::cout << "  " << types.first << "-" << types.second 
+                     << ": epsilon=" << param.epsilon 
+                     << ", rmin=" << param.rmin << "\n";
+        }
+    };
+
+    print_nbfix("Protein FF", ff_parser_prot_);
+    print_nbfix("CGenFF", ff_parser_);
+    print_nbfix("Water/Ions", ff_parser_water_);
+    print_nbfix("SILCS", ff_parser_silcs_);
+
+    std::cout << "\n=== End of Force Field Parameters ===\n";
 }
 
 } // namespace test
