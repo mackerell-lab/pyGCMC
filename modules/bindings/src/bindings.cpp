@@ -10,7 +10,7 @@
 namespace py = pybind11;
 using namespace pygcmc::core;
 
-PYBIND11_MODULE(pyGCMC_bindings, m) {
+PYBIND11_MODULE(pyGCMC, m) {
     m.doc() = "Python bindings for pyGCMC simulation library";
 
     // Bind ForceFieldPair struct

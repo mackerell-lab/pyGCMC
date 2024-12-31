@@ -2,8 +2,24 @@
 
 import os
 import sys
-import math  # 导入 math 模块以处理 'math.isnan'
-import pyGCMC_bindings as core
+import math
+import pyGCMC as gcmc
+
+class ForceFieldTester:
+    def __init__(self, test_data_dir):
+        self.test_data_dir = test_data_dir
+        self.pdb_file = os.path.join(test_data_dir, "test.pdb")
+        self.top_file = os.path.join(test_data_dir, "test.top")
+        self.cgenff_prm_file = os.path.join(test_data_dir, "par_all36_cgenff.prm")
+        self.prot_prm_file = os.path.join(test_data_dir, "par_all36m_prot.prm")
+        self.water_ions_str = os.path.join(test_data_dir, "toppar_water_ions.str")
+        self.silcs_str = os.path.join(test_data_dir, "silcs.str")
+        
+        # Initialize parsers
+        self.ff_parser_prot = gcmc.FFParser()
+        self.ff_parser_cgenff = gcmc.FFParser()
+        self.ff_parser_water = gcmc.FFParser()
+        self.ff_parser_silcs = gcmc.FFParser()
 
 def print_atom_info(atoms):
     print("\nDetailed Atom Information:")
@@ -43,16 +59,16 @@ def main():
     test_data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
     
     # Initialize parsers
-    pdb_parser = core.PDBParser()
-    top_parser = core.TopParser()
-    ff_parser_prot = core.FFParser()
-    ff_parser_cgenff = core.FFParser()
-    ff_parser_water = core.FFParser()
-    ff_parser_silcs = core.FFParser()
+    pdb_parser = gcmc.PDBParser()
+    top_parser = gcmc.TopParser()
+    ff_parser_prot = gcmc.FFParser()
+    ff_parser_cgenff = gcmc.FFParser()
+    ff_parser_water = gcmc.FFParser()
+    ff_parser_silcs = gcmc.FFParser()
 
     # Parse PDB file
     pdb_file = os.path.join(test_data_dir, "test.pdb")
-    coords, residues = core.PDBParser.parse(pdb_file)
+    coords, residues = gcmc.PDBParser.parse(pdb_file)
     if not residues:
         print("Error: PDB file contains no residues")
         return 1
@@ -99,7 +115,7 @@ def main():
     
     try:
         # 1. Parse PDB file
-        coords, residues = core.PDBParser.parse(pdb_file)
+        coords, residues = gcmc.PDBParser.parse(pdb_file)
         print(f"\nFound {len(residues)} residues in PDB file")
         
         # Extract atoms from residues
@@ -212,7 +228,7 @@ def main():
         # Print merged NBFIX parameters
         print("\n=== Merged NBFIX Parameters ===")
         parsers = [ff_parser_prot, ff_parser_cgenff, ff_parser_water, ff_parser_silcs]
-        merged_nbfix = core.FFParser.merge_nbfix_params(parsers)
+        merged_nbfix = gcmc.FFParser.merge_nbfix_params(parsers)
         print(f"\nTotal NBFIX entries: {len(merged_nbfix)}")
         
         # Sort the parameters by atom types for better readability

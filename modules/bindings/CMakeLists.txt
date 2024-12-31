@@ -3,26 +3,26 @@
 cmake_minimum_required(VERSION 3.15)
 
 # Define the bindings library
-pybind11_add_module(pyGCMC_bindings src/bindings.cpp)
+pybind11_add_module(pyGCMC src/bindings.cpp)
 
 # Link with core library and any other dependencies
-target_link_libraries(pyGCMC_bindings PRIVATE
+target_link_libraries(pyGCMC PRIVATE
     pygcmc_core
     pybind11::module
 )
 
 # Set include directories if needed
-target_include_directories(pyGCMC_bindings PRIVATE
+target_include_directories(pyGCMC PRIVATE
     ${CMAKE_SOURCE_DIR}/modules/core/include
 )
 
 # Set output directory for Python modules
-set_target_properties(pyGCMC_bindings PROPERTIES
+set_target_properties(pyGCMC PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/python"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/python"
 )
 
 # Installation rules
-install(TARGETS pyGCMC_bindings
+install(TARGETS pyGCMC
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/python
 )
