@@ -48,20 +48,54 @@ def main():
     ff_parser_prot = core.FFParser()
     ff_parser_cgenff = core.FFParser()
     ff_parser_water = core.FFParser()
-    
-    # File paths
+    ff_parser_silcs = core.FFParser()
+
+    # Parse PDB file
     pdb_file = os.path.join(test_data_dir, "test.pdb")
+    coords, residues = core.PDBParser.parse(pdb_file)
+    if not residues:
+        print("Error: PDB file contains no residues")
+        return 1
+
+    # Extract atoms from residues
+    atoms = []
+    for residue in residues:
+        atoms.extend(residue.atoms)
+
+    # Parse topology file with includes
     top_file = os.path.join(test_data_dir, "test.top")
+    if not top_parser.parse_with_includes(top_file):
+        print("Error: Failed to parse topology file")
+        return 1
+
+    # Parse force field files
     prot_prm_file = os.path.join(test_data_dir, "par_all36m_prot.prm")
+    if not ff_parser_prot.parse(prot_prm_file):
+        print("Error: Failed to parse protein force field file")
+        return 1
+
     cgenff_prm_file = os.path.join(test_data_dir, "par_all36_cgenff.prm")
-    water_prm_file = os.path.join(test_data_dir, "toppar_water_ions.str")
-    
+    if not ff_parser_cgenff.parse(cgenff_prm_file):
+        print("Error: Failed to parse general force field file")
+        return 1
+
+    water_ions_str = os.path.join(test_data_dir, "toppar_water_ions.str")
+    if not ff_parser_water.parse(water_ions_str):
+        print("Error: Failed to parse water and ions force field file")
+        return 1
+
+    silcs_str = os.path.join(test_data_dir, "silcs.str")
+    if not ff_parser_silcs.parse(silcs_str):
+        print("Error: Failed to parse SILCS force field file")
+        return 1
+
     print(f"Reading files from {test_data_dir}")
     print(f"PDB file: {pdb_file}")
     print(f"TOP file: {top_file}")
     print(f"Protein parameter file: {prot_prm_file}")
     print(f"CGenFF parameter file: {cgenff_prm_file}")
-    print(f"Water parameter file: {water_prm_file}")
+    print(f"Water parameter file: {water_ions_str}")
+    print(f"SILCS parameter file: {silcs_str}")
     
     try:
         # 1. Parse PDB file
@@ -94,8 +128,11 @@ def main():
         if not ff_parser_cgenff.parse(cgenff_prm_file):
             print("Failed to parse CGenFF force field file")
             return 1
-        if not ff_parser_water.parse(water_prm_file):
+        if not ff_parser_water.parse(water_ions_str):
             print("Failed to parse water force field file")
+            return 1
+        if not ff_parser_silcs.parse(silcs_str):
+            print("Failed to parse SILCS force field file")
             return 1
         print("Successfully parsed force field files")
         
@@ -128,9 +165,11 @@ def main():
         ff_updated_prot = ff_parser_prot.update_pdb_atoms(atoms)
         ff_updated_gen = ff_parser_cgenff.update_pdb_atoms(atoms)
         ff_updated_water = ff_parser_water.update_pdb_atoms(atoms)
+        ff_updated_silcs = ff_parser_silcs.update_pdb_atoms(atoms)
         print(f"Updated {ff_updated_prot} atoms with protein force field parameters")
         print(f"Updated {ff_updated_gen} atoms with CGenFF force field parameters")
         print(f"Updated {ff_updated_water} atoms with water force field parameters")
+        print(f"Updated {ff_updated_silcs} atoms with SILCS force field parameters")
         
         # Add debug print after force field update
         print("\nAfter force field update:")

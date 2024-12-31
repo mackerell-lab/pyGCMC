@@ -21,6 +21,7 @@ std::string g_top_file = TEST_DATA_DIR "/test.top";
 std::string g_cgenff_prm_file = TEST_DATA_DIR "/par_all36_cgenff.prm";
 std::string g_prot_prm_file = TEST_DATA_DIR "/par_all36m_prot.prm";
 std::string g_water_ions_str = TEST_DATA_DIR "/toppar_water_ions.str";
+std::string g_silcs_str = TEST_DATA_DIR "/silcs.str";
 
 // Parse command line arguments
 class Environment : public ::testing::Environment {
@@ -41,12 +42,14 @@ public:
                 g_prot_prm_file = arg.substr(16);
             } else if (arg.rfind("--water_ions_str=", 0) == 0) {
                 g_water_ions_str = arg.substr(17);
+            } else if (arg.rfind("--silcs_str=", 0) == 0) {
+                g_silcs_str = arg.substr(12);
             }
         }
 
         if (g_pdb_file.empty() || g_top_file.empty() || g_cgenff_prm_file.empty() || 
-            g_prot_prm_file.empty() || g_water_ions_str.empty()) {
-            std::cerr << "Error: --pdb_file, --top_file, --cgenff_prm_file, --prot_prm_file, and --water_ions_str arguments are required" << std::endl;
+            g_prot_prm_file.empty() || g_water_ions_str.empty() || g_silcs_str.empty()) {
+            std::cerr << "Error: --pdb_file, --top_file, --cgenff_prm_file, --prot_prm_file, --water_ions_str, and --silcs_str arguments are required" << std::endl;
             exit(1);
         }
     }
@@ -62,6 +65,7 @@ protected:
         ff_parser_ = std::make_unique<FFParser>();
         ff_parser_prot_ = std::make_unique<FFParser>();
         ff_parser_water_ = std::make_unique<FFParser>();
+        ff_parser_silcs_ = std::make_unique<FFParser>();
     }
 
     std::unique_ptr<PDBParser> pdb_parser_;
@@ -69,6 +73,7 @@ protected:
     std::unique_ptr<FFParser> ff_parser_;
     std::unique_ptr<FFParser> ff_parser_prot_;
     std::unique_ptr<FFParser> ff_parser_water_;
+    std::unique_ptr<FFParser> ff_parser_silcs_;
 };
 
 TEST_F(PDBTopFFParserTest, CombinePDBTopFF) {
@@ -93,6 +98,35 @@ TEST_F(PDBTopFFParserTest, CombinePDBTopFF) {
         << "Failed to parse general force field file";
     ASSERT_TRUE(ff_parser_water_->parse(g_water_ions_str))
         << "Failed to parse water and ions force field file";
+    ASSERT_TRUE(ff_parser_silcs_->parse(g_silcs_str))
+        << "Failed to parse SILCS force field file";
+
+    // Debug: Print SILCS force field parameters
+    const auto& silcs_params = ff_parser_silcs_->get_nonbonded_params();
+    {
+        auto it = silcs_params.find("LP");
+        if (it != silcs_params.end()) {
+            std::cout << "Found LP parameters: epsilon=" << it->second.epsilon 
+                     << ", rmin=" << it->second.rmin << std::endl;
+        } else {
+            std::cout << "LP parameters not found!" << std::endl;
+        }
+        
+        it = silcs_params.find("LQ");
+        if (it != silcs_params.end()) {
+            std::cout << "Found LQ parameters: epsilon=" << it->second.epsilon 
+                     << ", rmin=" << it->second.rmin << std::endl;
+        } else {
+            std::cout << "LQ parameters not found!" << std::endl;
+        }
+
+        // Print NBFIX parameters
+        const auto& nbfix_params = ff_parser_silcs_->get_nbfix_params();
+        for (const auto& [key, value] : nbfix_params) {
+            std::cout << "Found NBFIX parameters for " << key.first << "-" << key.second 
+                     << ": epsilon=" << value.epsilon << ", rmin=" << value.rmin << std::endl;
+        }
+    }
 
     // Debug: Print water force field parameters
     const auto& water_params = ff_parser_water_->get_nonbonded_params();

@@ -1,0 +1,41 @@
+* tests/data/silcs.str
+* Example: define LP, LQ in CHARMM style
+
+
+read rtf card append
+* Dummy atom types for SILCS
+*
+  50  1
+
+MASS -1  LP   0.00000
+MASS -1  LQ   0.00000
+
+
+! RESI DUMM  0.00
+! GROUP
+!   ATOM LP  LP  0.00
+!   ATOM LQ  LQ  0.00
+! PATCHING FIRST NONE LAST NONE
+
+END
+
+
+
+read para card flex append
+* Nonbonded and NBFIX for SILCS dummy
+*
+NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+
+LP   0.0   0.0   0.0
+LQ   0.0   0.0   0.0
+
+NBFIX
+! LP-LP:  (epsilon, Rmin) = (-0.01, 12.0 Å)
+LP  LP   -0.01   12.0
+
+! LQ-LQ:  (epsilon, Rmin) = (-0.01, 12.0 Å)
+LQ  LQ   -0.01   12.0
+
+END
