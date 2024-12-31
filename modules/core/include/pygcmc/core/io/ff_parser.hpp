@@ -7,27 +7,12 @@
 #include <unordered_map>
 #include <utility>
 #include <stdexcept>
+#include <vector>
+#include "pygcmc/core/io/parser_common.hpp"
 
 namespace pygcmc {
 namespace core {
 namespace io {
-
-// Structure to store Lennard-Jones parameters
-struct ForceFieldPair {
-    double epsilon;  // well depth
-    double rmin;     // Rmin/2 in CHARMM format
-
-    ForceFieldPair(double e=0.0, double r=0.0) : epsilon(e), rmin(r) {}
-};
-
-// Hash function for pair of strings (atom types)
-struct PairStringHash {
-    std::size_t operator()(const std::pair<std::string, std::string>& p) const {
-        auto h1 = std::hash<std::string>()(p.first);
-        auto h2 = std::hash<std::string>()(p.second);
-        return h1 ^ (h2 + 0x9e3779b97f4a7c15ULL + (h1 << 6) + (h1 >> 2));
-    }
-};
 
 class FFParser {
 public:
@@ -47,6 +32,13 @@ public:
     >& get_nbfix_params() const {
         return nbfix_params_;
     }
+
+    /**
+     * @brief Update PDB atoms with force field parameters
+     * @param atoms Vector of PDB atoms to update
+     * @return Number of atoms successfully updated
+     */
+    int update_pdb_atoms(std::vector<PDBAtom>& atoms) const;
 
 private:
     // Storage for parameters

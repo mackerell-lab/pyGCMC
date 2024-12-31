@@ -141,6 +141,66 @@ TEST_F(TestFFParser, ErrorHandling) {
     EXPECT_EQ(nbfix.find(key), nbfix.end());
 }
 
+// Test protein force field parameters
+TEST_F(TestFFParser, ProteinParameters) {
+    ASSERT_TRUE(parser_->parse(g_prot_prm_file));
+    const auto& params = parser_->get_nonbonded_params();
+
+    // Test NH3 (N-terminal nitrogen)
+    {
+        auto it = params.find("NH3");
+        ASSERT_NE(it, params.end());
+        EXPECT_NEAR(it->second.epsilon, 0.2000, 1e-4);
+        EXPECT_NEAR(it->second.rmin, 3.7000, 1e-4);  // 1.85 * 2
+    }
+
+    // Test CT1 (alpha carbon)
+    {
+        auto it = params.find("CT1");
+        ASSERT_NE(it, params.end());
+        EXPECT_NEAR(it->second.epsilon, 0.0320, 1e-4);
+        EXPECT_NEAR(it->second.rmin, 4.0000, 1e-4);  // 2.000 * 2
+    }
+
+    // Test O (carbonyl oxygen)
+    {
+        auto it = params.find("O");
+        ASSERT_NE(it, params.end());
+        EXPECT_NEAR(it->second.epsilon, 0.1200, 1e-4);
+        EXPECT_NEAR(it->second.rmin, 3.4000, 1e-4);  // 1.700 * 2
+    }
+
+    // Test HA1 (alpha hydrogen)
+    {
+        auto it = params.find("HA1");
+        ASSERT_NE(it, params.end());
+        EXPECT_NEAR(it->second.epsilon, 0.0450, 1e-4);
+        EXPECT_NEAR(it->second.rmin, 2.6800, 1e-4);  // 1.340 * 2
+    }
+}
+
+// Test NBFIX parameters from protein force field
+TEST_F(TestFFParser, ProteinNBFIXParameters) {
+    ASSERT_TRUE(parser_->parse(g_prot_prm_file));
+    const auto& nbfix = parser_->get_nbfix_params();
+
+    // Test NC2-OC pair from protein force field
+    {
+        auto key = std::make_pair("NC2", "OC");
+        auto it = nbfix.find(key);
+        ASSERT_NE(it, nbfix.end());
+        EXPECT_NEAR(it->second.epsilon, 0.154919, 1e-4);
+        EXPECT_NEAR(it->second.rmin, 3.637, 1e-4);
+
+        // Test symmetry (OC-NC2 should have same parameters)
+        auto key_rev = std::make_pair("OC", "NC2");
+        auto it_rev = nbfix.find(key_rev);
+        ASSERT_NE(it_rev, nbfix.end());
+        EXPECT_NEAR(it_rev->second.epsilon, 0.154919, 1e-4);
+        EXPECT_NEAR(it_rev->second.rmin, 3.637, 1e-4);
+    }
+}
+
 } // namespace test
 } // namespace io
 } // namespace core

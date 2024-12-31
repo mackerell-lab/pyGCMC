@@ -4,11 +4,38 @@
 #include "pygcmc/core/io/parser_common.hpp"
 #include <string>
 #include <cmath>
+#include <filesystem>
 
 namespace pygcmc {
 namespace core {
 namespace io {
 namespace test {
+
+// Global variable for file path
+std::string g_psf_file = TEST_DATA_DIR "/test_proa.psf";
+
+// Parse command line arguments
+class Environment : public ::testing::Environment {
+public:
+    ~Environment() override {}
+
+    void SetUp() override {
+        const auto& args = ::testing::internal::GetArgvs();
+        
+        for (const auto& arg : args) {
+            if (arg.rfind("--psf_file=", 0) == 0) {
+                g_psf_file = arg.substr(11);
+            }
+        }
+
+        if (g_psf_file.empty()) {
+            std::cerr << "Error: --psf_file argument is required" << std::endl;
+            exit(1);
+        }
+    }
+
+    void TearDown() override {}
+};
 
 TEST(PSFParserTest, DefaultTopologyValues) {
     // Test default values
@@ -34,8 +61,6 @@ TEST(PSFParserTest, DefaultTopologyValues) {
     atom.topo_mass = std::numeric_limits<double>::quiet_NaN();
     EXPECT_FALSE(atom.has_topology_info());
 }
-
-std::string g_psf_file;
 
 class TestPSFParser : public ::testing::Test {
 protected:
@@ -313,16 +338,8 @@ TEST_F(TestPSFParser, GetMissingTopologyInfo) {
 } // namespace core
 } // namespace pygcmc
 
-int main(int argc, char **argv) {
-    testing::InitGoogleTest(&argc, argv);
-    
-    // Parse command line arguments
-    for (int i = 1; i < argc; ++i) {
-        std::string arg = argv[i];
-        if (arg.find("--psf_file=") == 0) {
-            pygcmc::core::io::test::g_psf_file = arg.substr(11);
-        }
-    }
-    
+int main(int argc, char** argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    ::testing::AddGlobalTestEnvironment(new pygcmc::core::io::test::Environment);
     return RUN_ALL_TESTS();
 }

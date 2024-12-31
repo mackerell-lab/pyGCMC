@@ -67,6 +67,10 @@ struct PDBAtom {
     double topo_charge;      ///< Charge from topology
     double topo_mass;        ///< Mass from topology
 
+    // Force field parameters
+    double forcefield_epsilon;  ///< LJ well depth
+    double forcefield_rmin;     ///< LJ Rmin/2 in CHARMM format
+
     PDBAtom(int serial_ = 0, const std::string& name_ = "", 
             const std::string& residue_ = "", int sequence_ = 0,
             char chain_ = ' ', char alt_loc_ = ' ', char insertion_code_ = ' ',
@@ -80,7 +84,9 @@ struct PDBAtom {
           element(element_), charge(charge_), type(type_),
           topo_type(""), 
           topo_charge(std::numeric_limits<double>::quiet_NaN()),
-          topo_mass(std::numeric_limits<double>::quiet_NaN()) {}
+          topo_mass(std::numeric_limits<double>::quiet_NaN()),
+          forcefield_epsilon(std::numeric_limits<double>::quiet_NaN()),
+          forcefield_rmin(std::numeric_limits<double>::quiet_NaN()) {}
     
     bool is_valid() const {
         return serial > 0 && !name.empty() && !residue.empty() &&
@@ -101,6 +107,11 @@ struct PDBAtom {
         return !topo_type.empty() && 
                !std::isnan(topo_charge) && 
                !std::isnan(topo_mass);
+    }
+
+    bool has_forcefield_info() const {
+        return !std::isnan(forcefield_epsilon) 
+            && !std::isnan(forcefield_rmin);
     }
 };
 
@@ -290,15 +301,15 @@ struct IOResidue {
  * @brief Force field parameter pair structure for non-bonded interactions
  */
 struct ForceFieldPair {
-    double param1; ///< First parameter (typically sigma in nm)
-    double param2; ///< Second parameter (typically epsilon in kJ/mol)
+    double rmin;     ///< Rmin/2 in CHARMM format
+    double epsilon;  ///< Well depth
 
-    ForceFieldPair(double p1 = 0.0, double p2 = 0.0) 
-        : param1(p1), param2(p2) {}
+    ForceFieldPair(double r = 0.0, double e = 0.0) 
+        : rmin(r), epsilon(e) {}
 
     bool is_valid() const {
-        return std::isfinite(param1) && std::isfinite(param2) && 
-               param1 >= 0.0;  // sigma should be non-negative
+        return std::isfinite(rmin) && std::isfinite(epsilon) && 
+               rmin >= 0.0;  // rmin should be non-negative
     }
 
     /**
@@ -308,8 +319,8 @@ struct ForceFieldPair {
      */
     ForceFieldPair combine_arithmetic(const ForceFieldPair& other) const {
         return ForceFieldPair(
-            0.5 * (param1 + other.param1),     // arithmetic mean of sigma
-            std::sqrt(param2 * other.param2)   // geometric mean of epsilon
+            0.5 * (rmin + other.rmin),         // arithmetic mean of rmin
+            std::sqrt(epsilon * other.epsilon)  // geometric mean of epsilon
         );
     }
 
@@ -320,8 +331,8 @@ struct ForceFieldPair {
      */
     ForceFieldPair combine_geometric(const ForceFieldPair& other) const {
         return ForceFieldPair(
-            std::sqrt(param1 * other.param1),   // geometric mean of sigma
-            std::sqrt(param2 * other.param2)    // geometric mean of epsilon
+            std::sqrt(rmin * other.rmin),       // geometric mean of rmin
+            std::sqrt(epsilon * other.epsilon)   // geometric mean of epsilon
         );
     }
 
@@ -331,7 +342,7 @@ struct ForceFieldPair {
      * @return A new ForceFieldPair with scaled parameters
      */
     ForceFieldPair scale(double factor) const {
-        return ForceFieldPair(param1 * factor, param2 * factor);
+        return ForceFieldPair(rmin * factor, epsilon * factor);
     }
 };
 

@@ -3,6 +3,10 @@
 # 添加测试
 enable_testing()
 
+# 设置测试数据目录
+set(TEST_DATA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/data")
+add_compile_definitions(TEST_DATA_DIR="${TEST_DATA_DIR}")
+
 # 设置包含目录
 include_directories(
     ${CMAKE_SOURCE_DIR}/modules/core/include
@@ -51,59 +55,11 @@ target_link_libraries(test_psf_and_itp PRIVATE
     GTest::gtest_main
 )
 
-# 添加 TestFFParser 测试
-add_executable(test_ff_parser core/test_ff_parser.cpp)
-target_link_libraries(test_ff_parser PRIVATE 
+# 添加 TestPDBTopFFParser 测试
+add_executable(test_pdb_top_ff_parser core/test_pdb_top_ff_parser.cpp)
+target_link_libraries(test_pdb_top_ff_parser PRIVATE 
     pygcmc_core 
     GTest::gtest_main
-)
-
-# 设置参数文件路径
-set(TEST_PRM_FILE "${CMAKE_SOURCE_DIR}/tests/data/par_all36_cgenff.prm")
-
-# 设置 PDB 文件路径
-set(TEST_PDB_FILE "${CMAKE_SOURCE_DIR}/tests/data/test.pdb")
-
-# 设置 PSF 文件路径
-set(TEST_PSF_FILE "${CMAKE_SOURCE_DIR}/tests/data/test_proa.psf")
-
-# 设置 ITP 文件路径
-set(TEST_ITP_DIR "${CMAKE_SOURCE_DIR}/tests/data/mols")
-
-# 添加测试并传递命令行参数
-add_test(
-    NAME TestPDBParser
-    COMMAND test_pdb_parser --pdb_file=${TEST_PDB_FILE}
-)
-
-add_test(
-    NAME TestTopParser
-    COMMAND test_top_parser
-)
-
-add_test(
-    NAME TestPSFParser
-    COMMAND test_psf_parser --psf_file=${TEST_PSF_FILE}
-)
-
-add_test(
-    NAME TestITPParser
-    COMMAND test_itp_parser --itp_dir=${TEST_ITP_DIR}
-)
-
-add_test(
-    NAME TestTopAndITP
-    COMMAND test_top_and_itp
-)
-
-add_test(
-    NAME TestPSFAndITP
-    COMMAND test_psf_and_itp
-)
-
-add_test(
-    NAME TestFFParser
-    COMMAND test_ff_parser --prm_file=${TEST_PRM_FILE}
 )
 
 # 添加 TestSystem 测试
@@ -113,10 +69,15 @@ target_link_libraries(test_system PRIVATE
     GTest::gtest_main
 )
 
-add_test(
-    NAME TestSystem
-    COMMAND test_system
-)
+# 添加所有测试到 CTest
+add_test(NAME test_pdb_parser COMMAND test_pdb_parser)
+add_test(NAME test_top_parser COMMAND test_top_parser)
+add_test(NAME test_psf_parser COMMAND test_psf_parser)
+add_test(NAME test_itp_parser COMMAND test_itp_parser)
+add_test(NAME test_top_and_itp COMMAND test_top_and_itp)
+add_test(NAME test_psf_and_itp COMMAND test_psf_and_itp)
+add_test(NAME test_pdb_top_ff_parser COMMAND test_pdb_top_ff_parser)
+add_test(NAME test_system COMMAND test_system)
 
 # Configure config.hpp
 configure_file(
@@ -126,34 +87,11 @@ configure_file(
 )
 
 # Add include directories for all test targets
-target_include_directories(test_pdb_parser PRIVATE 
-    ${CMAKE_BINARY_DIR}/tests
-)
-
-target_include_directories(test_top_parser PRIVATE 
-    ${CMAKE_BINARY_DIR}/tests
-)
-
-target_include_directories(test_psf_parser PRIVATE 
-    ${CMAKE_BINARY_DIR}/tests
-)
-
-target_include_directories(test_itp_parser PRIVATE 
-    ${CMAKE_BINARY_DIR}/tests
-)
-
-target_include_directories(test_top_and_itp PRIVATE 
-    ${CMAKE_BINARY_DIR}/tests
-)
-
-target_include_directories(test_psf_and_itp PRIVATE 
-    ${CMAKE_BINARY_DIR}/tests
-)
-
-target_include_directories(test_ff_parser PRIVATE 
-    ${CMAKE_BINARY_DIR}/tests
-)
-
-target_include_directories(test_system PRIVATE 
-    ${CMAKE_BINARY_DIR}/tests
-)
+target_include_directories(test_pdb_parser PRIVATE ${CMAKE_BINARY_DIR}/tests)
+target_include_directories(test_top_parser PRIVATE ${CMAKE_BINARY_DIR}/tests)
+target_include_directories(test_psf_parser PRIVATE ${CMAKE_BINARY_DIR}/tests)
+target_include_directories(test_itp_parser PRIVATE ${CMAKE_BINARY_DIR}/tests)
+target_include_directories(test_top_and_itp PRIVATE ${CMAKE_BINARY_DIR}/tests)
+target_include_directories(test_psf_and_itp PRIVATE ${CMAKE_BINARY_DIR}/tests)
+target_include_directories(test_pdb_top_ff_parser PRIVATE ${CMAKE_BINARY_DIR}/tests)
+target_include_directories(test_system PRIVATE ${CMAKE_BINARY_DIR}/tests)
