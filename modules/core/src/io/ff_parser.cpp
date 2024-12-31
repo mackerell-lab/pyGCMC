@@ -78,46 +78,105 @@ bool FFParser::parse(const std::string& filename) {
 }
 
 void FFParser::parse_nonbonded_line(const std::string& line) {
-    // Skip header lines
-    if (line.find("nbxmod") != std::string::npos ||
-        line.find("cutnb") != std::string::npos ||
-        line.find("ctofnb") != std::string::npos ||
-        line.find("ctonnb") != std::string::npos ||
-        line.find("eps") != std::string::npos ||
-        line.find("e14fac") != std::string::npos ||
-        line.find("wmin") != std::string::npos ||
-        line.find("NONBONDED") != std::string::npos) {
+    // 跳过注释行等
+    if (line.empty()) return;
+    if (line[0] == '-' || line[0] == '*' || line[0] == '@' || line[0] == '#' || line[0] == '!')
         return;
-    }
 
-    // Skip lines that start with special characters
-    if (line[0] == '-' || line[0] == '*' || line[0] == '@' || line[0] == '#' || line[0] == '!') {
-        return;
-    }
-
-    // Parse atom parameters
+    // 我们把整行拆成 token，再一个个识别
     std::istringstream iss(line);
-    std::string atomType;
-    double ignore1, epsilon, rminHalf;
-    double eps14 = 0.0, rmin14Half = 0.0;
-    
-    if (iss >> atomType >> ignore1 >> epsilon >> rminHalf) {
-        // Try to read 1-4 parameters if present
-        double ignore2;
-        if (iss >> ignore2 >> eps14 >> rmin14Half) {
-            // Store 1-4 parameters if needed
+    std::vector<std::string> tokens;
+    {
+        std::string tk;
+        while (iss >> tk) {
+            tokens.push_back(tk);
+        }
+    }
+    if (tokens.empty()) return;
+
+    // 如果第一项就是 cutnb / ctofnb / ... 之类的关键字，
+    // 那说明这是一个"全局非键参数"行。
+    // 也可能它们全在一行：
+    //   cutnb 14.0 ctofnb 12.0 ctonnb 10.0 ...
+    // 我们就循环遍历 tokens 并解析。
+    bool recognized_global_params = false;
+    for (size_t i = 0; i < tokens.size(); i++) {
+        std::string tk = tokens[i];
+        // 转成小写做比较
+        std::string lower;
+        lower.resize(tk.size());
+        std::transform(tk.begin(), tk.end(), lower.begin(),
+                       [](unsigned char c){return std::tolower(c);});
+
+        if (lower == "cutnb") {
+            if (i+1 < tokens.size()) {
+                cutnb_ = std::stod(tokens[++i]); // 读下一个作为数值
+                recognized_global_params = true;
+            }
+        }
+        else if (lower == "ctofnb") {
+            if (i+1 < tokens.size()) {
+                ctofnb_ = std::stod(tokens[++i]);
+                recognized_global_params = true;
+            }
+        }
+        else if (lower == "ctonnb") {
+            if (i+1 < tokens.size()) {
+                ctonnb_ = std::stod(tokens[++i]);
+                recognized_global_params = true;
+            }
+        }
+        else if (lower == "eps") {
+            if (i+1 < tokens.size()) {
+                eps_ = std::stod(tokens[++i]);
+                recognized_global_params = true;
+            }
+        }
+        else if (lower == "e14fac") {
+            if (i+1 < tokens.size()) {
+                e14fac_ = std::stod(tokens[++i]);
+                recognized_global_params = true;
+            }
+        }
+        else if (lower == "wmin") {
+            if (i+1 < tokens.size()) {
+                wmin_ = std::stod(tokens[++i]);
+                recognized_global_params = true;
+            }
+        }
+    }
+
+    // 如果我们发现这行**只**是cutnb/ctofnb...这些关键字，并且都被成功解析，
+    // 那就认为这是"全局非键参数"行，不必再解析原子类型；直接 return
+    if (recognized_global_params && tokens.size() < 5) {
+        return;
+    }
+
+    // 如果 tokens.size() >= 4，尝试当作 "atomType ignore epsilon rminHalf"
+    if (tokens.size() >= 4 && !recognized_global_params) {
+        // Special handling for SILCS parameters (LP and LQ)
+        if (tokens[0] == "LP" || tokens[0] == "LQ") {
+            // For LP and LQ, we use the NBFIX parameters
+            // The nonbonded parameters are just placeholders
+            nonbonded_params_[tokens[0]] = ForceFieldPair(0.0, 0.0);
+            return;
         }
 
-        // Process standard parameters:
-        // epsilon is negative in file (e.g. -0.2), take absolute value
-        // rminHalf is Rmin/2, multiply by 2 to get Rmin
+        std::string atomType = tokens[0];
+        // 忽略第二个参数 (ignore)
+        double epsilon = std::stod(tokens[2]);
+        double rminHalf = std::stod(tokens[3]);
+
         double rmin = rminHalf * 2.0;
         nonbonded_params_[atomType] = ForceFieldPair(rmin, std::fabs(epsilon));
 
-        // Debug output
-        // std::cout << "Parsed nonbonded: " << atomType 
-        //           << " | epsilon=" << std::fabs(epsilon) 
-        //           << ", rmin=" << rmin << std::endl;
+        // 如果有1-4参数，也可以存储
+        if (tokens.size() >= 7) {
+            // 目前1-4参数未使用，暂时跳过
+            // tokens[4] = ignore2
+            // tokens[5] = eps14
+            // tokens[6] = rmin14Half
+        }
     }
 }
 
