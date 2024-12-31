@@ -42,3 +42,13 @@ find_package(OpenMP)
 if(OpenMP_CXX_FOUND)
     target_link_libraries(pygcmc_core PUBLIC OpenMP::OpenMP_CXX)
 endif()
+
+target_sources(pygcmc_core
+    PRIVATE
+        src/system.cpp
+        src/project.cpp
+        src/structure.cpp
+        src/io/pdb_parser.cpp
+        src/io/top_parser.cpp
+        src/io/ff_parser.cpp
+)

@@ -2,16 +2,20 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/numpy.h>
 #include "pygcmc/core/system.hpp"
 #include "pygcmc/core/io/pdb_parser.hpp"
 #include "pygcmc/core/io/top_parser.hpp"
 #include "pygcmc/core/io/ff_parser.hpp"
+#include "pygcmc/core/project.hpp"
+#include "pygcmc/core/structure.hpp"
+#include "pygcmc/core/forcefield.hpp"
 
 namespace py = pybind11;
 using namespace pygcmc::core;
 
-PYBIND11_MODULE(pyGCMC, m) {
-    m.doc() = "Python bindings for pyGCMC simulation library";
+PYBIND11_MODULE(pygcmc, m) {
+    m.doc() = "Python bindings for pygcmc simulation library";
 
     // Bind ForceFieldPair struct
     py::class_<io::ForceFieldPair>(m, "ForceFieldPair")
@@ -57,7 +61,10 @@ PYBIND11_MODULE(pyGCMC, m) {
         .def_readwrite("name", &io::IOResidue::name)
         .def_readwrite("sequence_number", &io::IOResidue::sequence_number)
         .def_readwrite("chain_id", &io::IOResidue::chain_id)
-        .def_readwrite("atoms", &io::IOResidue::atoms);
+        .def_readwrite("atoms", &io::IOResidue::atoms)
+        .def_readwrite("atom_ptrs", &io::IOResidue::atom_ptrs)
+        .def("center_of_mass", &io::IOResidue::center_of_mass)
+        .def("atom_count", &io::IOResidue::atom_count);
 
     // Bind PDBParser class
     py::class_<io::PDBParser>(m, "PDBParser")
@@ -207,4 +214,28 @@ PYBIND11_MODULE(pyGCMC, m) {
         .def("compute_distance", &System::compute_distance,
              py::arg("p1"), py::arg("p2"),
              "Compute distance between two particles");
+
+    // Bind Project class
+    py::class_<Project>(m, "Project")
+        .def(py::init<const std::string&>(), py::arg("name") = "")
+        .def("load_structure", &Project::load_structure)
+        .def("load_forcefield", &Project::load_forcefield)
+        .def("get_name", &Project::get_name);
+
+    // Bind Structure class
+    py::class_<Structure, std::shared_ptr<Structure>>(m, "Structure")
+        .def(py::init<>())
+        .def("apply_forcefield", &Structure::apply_forcefield)
+        .def_property_readonly("residues", &Structure::residues)
+        .def_property_readonly("atoms", &Structure::atoms)
+        .def("__len__", &Structure::get_num_atoms);
+
+    // Bind ForceField class
+    py::class_<ForceField, std::shared_ptr<ForceField>>(m, "ForceField")
+        .def(py::init<>())
+        .def_property("cutoff", &ForceField::get_cutoff, &ForceField::set_cutoff)
+        .def_property("switching", &ForceField::get_switching, &ForceField::set_switching)
+        .def_property("pairlist_distance", &ForceField::get_pairlist_distance, &ForceField::set_pairlist_distance)
+        .def_property_readonly("nonbonded_params", &ForceField::nonbonded_params)
+        .def_property_readonly("nbfix_params", &ForceField::nbfix_params);
 }

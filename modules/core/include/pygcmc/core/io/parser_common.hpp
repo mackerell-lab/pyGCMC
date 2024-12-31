@@ -17,6 +17,7 @@
 #include <tuple>
 #include "pygcmc/core/utils.hpp"
 #include <limits>
+#include <memory>
 
 namespace pygcmc {
 namespace core {
@@ -261,39 +262,124 @@ struct IOResidue {
     std::string name;                     ///< Residue name
     int sequence_number;                  ///< Residue sequence number
     char chain_id;                        ///< Chain identifier
-    std::vector<PDBAtom> atoms;           ///< Atoms within the residue
-
+    std::vector<PDBAtom> atoms;           ///< Atoms within the residue (legacy)
+    std::vector<std::shared_ptr<PDBAtom>> atom_ptrs;  ///< Shared pointers to atoms
+    
     IOResidue(const std::string& name_ = "", int seq_num_ = 0, char chain_ = ' ')
-        : name(name_), sequence_number(seq_num_), chain_id(chain_) {}
-
+        : name(name_), sequence_number(seq_num_), chain_id(chain_) {
+        // Initialize vectors with zero capacity to avoid unnecessary allocations
+        atoms.reserve(0);
+        atom_ptrs.reserve(0);
+    }
+    
+    // Copy constructor to ensure proper handling of shared pointers
+    IOResidue(const IOResidue& other)
+        : name(other.name), sequence_number(other.sequence_number), chain_id(other.chain_id) {
+        // Deep copy atoms if present
+        atoms = other.atoms;
+        
+        // Deep copy atom_ptrs
+        atom_ptrs.reserve(other.atom_ptrs.size());
+        for (const auto& ptr : other.atom_ptrs) {
+            if (ptr) {
+                atom_ptrs.push_back(std::make_shared<PDBAtom>(*ptr));
+            } else {
+                atom_ptrs.push_back(nullptr);
+            }
+        }
+    }
+    
+    // Assignment operator
+    IOResidue& operator=(const IOResidue& other) {
+        if (this != &other) {
+            name = other.name;
+            sequence_number = other.sequence_number;
+            chain_id = other.chain_id;
+            
+            // Deep copy atoms if present
+            atoms = other.atoms;
+            
+            // Deep copy atom_ptrs
+            atom_ptrs.clear();
+            atom_ptrs.reserve(other.atom_ptrs.size());
+            for (const auto& ptr : other.atom_ptrs) {
+                if (ptr) {
+                    atom_ptrs.push_back(std::make_shared<PDBAtom>(*ptr));
+                } else {
+                    atom_ptrs.push_back(nullptr);
+                }
+            }
+        }
+        return *this;
+    }
+    
     // Add center of mass calculation
     std::array<double, 3> center_of_mass() const {
-        if (atoms.empty()) {
+        double sum_x = 0.0, sum_y = 0.0, sum_z = 0.0;
+        size_t count = 0;
+
+        // First try atom_ptrs
+        for (const auto& atom_ptr : atom_ptrs) {
+            if (!atom_ptr) continue;
+            sum_x += atom_ptr->x;
+            sum_y += atom_ptr->y;
+            sum_z += atom_ptr->z;
+            count++;
+        }
+
+        // If no atom_ptrs, use atoms
+        if (count == 0) {
+            for (const auto& atom : atoms) {
+                sum_x += atom.x;
+                sum_y += atom.y;
+                sum_z += atom.z;
+                count++;
+            }
+        }
+
+        if (count == 0) {
             return {0.0, 0.0, 0.0};
         }
-        double sum_x = 0.0, sum_y = 0.0, sum_z = 0.0;
-        for (const auto& atom : atoms) {
-            sum_x += atom.x;
-            sum_y += atom.y;
-            sum_z += atom.z;
-        }
-        double n = static_cast<double>(atoms.size());
+
+        double n = static_cast<double>(count);
         return {sum_x / n, sum_y / n, sum_z / n};
     }
-
+    
     // Add atom count method
     size_t atom_count() const {
+        // First try atom_ptrs
+        if (!atom_ptrs.empty()) {
+            return atom_ptrs.size();
+        }
+        // Fall back to atoms if atom_ptrs is empty
         return atoms.size();
     }
 
     bool is_valid() const {
         if (name.empty()) return false;
         if (sequence_number <= 0) return false;
-        if (atoms.empty()) return false;
+        
+        // Check either atoms or atom_ptrs must be non-empty
+        if (atoms.empty() && atom_ptrs.empty()) return false;
+        
+        // Check atoms if present
         for (const auto& atom : atoms) {
             if (!atom.is_valid()) return false;
         }
+        
+        // Check atom_ptrs if present
+        for (const auto& atom_ptr : atom_ptrs) {
+            if (!atom_ptr || !atom_ptr->is_valid()) return false;
+        }
+        
         return true;
+    }
+    
+    // Destructor to ensure proper cleanup
+    ~IOResidue() {
+        // Clear vectors in reverse order of dependency
+        atom_ptrs.clear();
+        atoms.clear();
     }
 };
 

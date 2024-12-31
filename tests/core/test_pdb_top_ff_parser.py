@@ -3,7 +3,7 @@
 import os
 import sys
 import math
-import pyGCMC as gcmc
+import pygcmc as mc
 
 class ForceFieldTester:
     def __init__(self, test_data_dir):
@@ -16,10 +16,10 @@ class ForceFieldTester:
         self.silcs_str = os.path.join(test_data_dir, "silcs.str")
         
         # Initialize parsers
-        self.ff_parser_prot = gcmc.FFParser()
-        self.ff_parser_cgenff = gcmc.FFParser()
-        self.ff_parser_water = gcmc.FFParser()
-        self.ff_parser_silcs = gcmc.FFParser()
+        self.ff_parser_prot = mc.FFParser()
+        self.ff_parser_cgenff = mc.FFParser()
+        self.ff_parser_water = mc.FFParser()
+        self.ff_parser_silcs = mc.FFParser()
 
 def print_atom_info(atoms):
     print("\nDetailed Atom Information:")
@@ -59,16 +59,16 @@ def main():
     test_data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
     
     # Initialize parsers
-    pdb_parser = gcmc.PDBParser()
-    top_parser = gcmc.TopParser()
-    ff_parser_prot = gcmc.FFParser()
-    ff_parser_cgenff = gcmc.FFParser()
-    ff_parser_water = gcmc.FFParser()
-    ff_parser_silcs = gcmc.FFParser()
+    pdb_parser = mc.PDBParser()
+    top_parser = mc.TopParser()
+    ff_parser_prot = mc.FFParser()
+    ff_parser_cgenff = mc.FFParser()
+    ff_parser_water = mc.FFParser()
+    ff_parser_silcs = mc.FFParser()
 
     # Parse PDB file
     pdb_file = os.path.join(test_data_dir, "test.pdb")
-    coords, residues = gcmc.PDBParser.parse(pdb_file)
+    coords, residues = mc.PDBParser.parse(pdb_file)
     if not residues:
         print("Error: PDB file contains no residues")
         return 1
@@ -115,7 +115,7 @@ def main():
     
     try:
         # 1. Parse PDB file
-        coords, residues = gcmc.PDBParser.parse(pdb_file)
+        coords, residues = pdb_parser.parse(pdb_file)
         print(f"\nFound {len(residues)} residues in PDB file")
         
         # Extract atoms from residues
@@ -228,7 +228,7 @@ def main():
         # Print merged NBFIX parameters
         print("\n=== Merged NBFIX Parameters ===")
         parsers = [ff_parser_prot, ff_parser_cgenff, ff_parser_water, ff_parser_silcs]
-        merged_nbfix = gcmc.FFParser.merge_nbfix_params(parsers)
+        merged_nbfix = mc.FFParser.merge_nbfix_params(parsers)
         print(f"\nTotal NBFIX entries: {len(merged_nbfix)}")
         
         # Sort the parameters by atom types for better readability
