@@ -42,9 +42,9 @@ TEST(TopParserTest, ParseTopologyFile) {
 
     // Test getting atom properties for ALA residue
     double charge, mass;
-    // Note: The last defined ALA N atom (residue 10) will be used
+    // Note: The first defined ALA N atom (residue 7) will be used
     ASSERT_TRUE(parser.get_atom_properties("ALA", "N", charge, mass));
-    EXPECT_DOUBLE_EQ(charge, -0.47);  // From residue 10
+    EXPECT_DOUBLE_EQ(charge, -0.3);  // From residue 7
     EXPECT_DOUBLE_EQ(mass, 14.007);
 
     // Test VAL residue atoms
@@ -210,4 +210,26 @@ TEST(TopParserTest, MissingTopologyInfo) {
         EXPECT_TRUE(prpx_atoms.find("C2") != prpx_atoms.end());
         EXPECT_TRUE(prpx_atoms.find("C3") != prpx_atoms.end());
     }
+}
+
+TEST(TopParserTest, ParseTopologyWithIncludes) {
+    TopParser parser;
+    std::string top_file = std::string(PDB_DATA_DIR) + "/test.top";
+    ASSERT_TRUE(parser.parse_with_includes(top_file));
+
+    // Test getting atom properties for BENX residue
+    double charge, mass;
+    ASSERT_TRUE(parser.get_atom_properties("BENX", "CG", charge, mass));
+    EXPECT_DOUBLE_EQ(charge, -0.115);
+    EXPECT_DOUBLE_EQ(mass, 12.011);
+
+    // Test getting atom properties for PRPX residue
+    ASSERT_TRUE(parser.get_atom_properties("PRPX", "C1", charge, mass));
+    EXPECT_DOUBLE_EQ(charge, -0.27);
+    EXPECT_DOUBLE_EQ(mass, 12.011);
+
+    // Test getting atom properties for SOL residue
+    ASSERT_TRUE(parser.get_atom_properties("SOL", "OW", charge, mass));
+    EXPECT_DOUBLE_EQ(charge, -0.834);
+    EXPECT_DOUBLE_EQ(mass, 15.9994);
 } 

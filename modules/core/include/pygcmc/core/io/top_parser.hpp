@@ -30,6 +30,13 @@ public:
     bool parse(const std::string& filename);
 
     /**
+     * @brief Parse a GROMACS topology file with include directives
+     * @param filename Path to the topology file
+     * @return True if parsing was successful
+     */
+    bool parse_with_includes(const std::string& filename);
+
+    /**
      * @brief Get the charge and mass for a specific atom
      * @param residue_name Residue name
      * @param atom_name Atom name
@@ -72,6 +79,19 @@ private:
     std::unordered_map<std::string, 
         std::map<int, 
             std::unordered_map<std::string, size_t>>> atom_index_;
+
+    static bool _reverse_order;
+
+    /**
+     * @brief Parse a single topology file and collect atom lines
+     * @param filename Path to the topology file
+     * @param atom_lines Vector to store atom lines
+     * @param enable_includes Whether to process #include directives
+     * @return True if parsing was successful
+     */
+    bool parse_one_file(const std::string& filename, 
+                       std::vector<std::string>& atom_lines,
+                       bool enable_includes);
 
     /**
      * @brief Parse the atoms section of the topology file
