@@ -20,17 +20,18 @@ void Structure::apply_forcefield(std::shared_ptr<ForceField> ff) {
     if (!ff) return;  // Skip if force field is null
     
     // Apply force field parameters to all atoms
-    for (auto& atom : atoms_) {
+    for (const auto& atom : atoms_) {  // Changed to const reference
         if (!atom) continue;  // Skip null pointers
         
         try {
             // Get nonbonded parameters for this atom type
-            auto it = ff->get_nonbonded_params().find(atom->type);
-            if (it != ff->get_nonbonded_params().end()) {
+            const auto& nonbonded_params = ff->get_nonbonded_params();  // Get reference to avoid copying
+            auto it = nonbonded_params.find(atom->type);
+            if (it != nonbonded_params.end()) {
                 atom->forcefield_epsilon = it->second.epsilon;
                 atom->forcefield_rmin = it->second.rmin;
             }
-        } catch (const std::exception& e) {
+        } catch (const std::exception&) {
             // Log error but continue with other atoms
             continue;
         }
@@ -56,43 +57,28 @@ void Structure::add_residue(std::shared_ptr<io::IOResidue> residue) {
         // Reserve space for new atoms
         atoms_.reserve(current_atoms + new_atoms);
         
-        // Keep track of successfully added atoms for rollback
-        const size_t original_size = atoms_.size();
-        bool added_residue = false;
+        // Add residue to residues list first
+        residues_.push_back(residue);
         
-        try {
-            // Add residue to residues list first
-            residues_.push_back(residue);
-            added_residue = true;
-            
-            // Add all atoms from this residue's atom_ptrs
-            for (const auto& atom_ptr : residue->atom_ptrs) {
-                if (!atom_ptr || !atom_ptr->is_valid()) {
-                    throw std::invalid_argument("Invalid atom in residue");
-                }
-                // Create a new shared_ptr that shares ownership
-                atoms_.push_back(atom_ptr);
-            }
-        } catch (...) {
-            // Rollback on any error
-            if (added_residue) {
+        // Add all atoms from this residue's atom_ptrs
+        for (const auto& atom_ptr : residue->atom_ptrs) {
+            if (!atom_ptr || !atom_ptr->is_valid()) {
+                // Rollback on error
                 residues_.pop_back();
+                throw std::invalid_argument("Invalid atom in residue");
             }
-            // Restore atoms_ to original state
-            atoms_.resize(original_size);
-            throw;  // Re-throw the exception
+            atoms_.push_back(atom_ptr);  // Share ownership of the atom
         }
-    } catch (const std::exception& e) {
+    } catch (...) {
         throw;  // Re-throw after cleanup
     }
 }
 
 void Structure::add_atom(std::shared_ptr<io::PDBAtom> atom) {
-    if (!atom) return;  // Skip null pointers
-    if (!atom->is_valid()) {
+    if (!atom || !atom->is_valid()) {
         throw std::invalid_argument("Invalid atom");
     }
-    atoms_.push_back(atom);
+    atoms_.push_back(atom);  // Share ownership of the atom
 }
 
 size_t Structure::get_num_atoms() const {

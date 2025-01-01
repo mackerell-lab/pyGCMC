@@ -10,6 +10,8 @@
 #include "pygcmc/core/project.hpp"
 #include "pygcmc/core/structure.hpp"
 #include "pygcmc/core/forcefield.hpp"
+#include "pygcmc/core/project_atom.hpp"
+#include "pygcmc/core/project_residue.hpp"
 
 namespace py = pybind11;
 using namespace pygcmc::core;
@@ -24,7 +26,7 @@ PYBIND11_MODULE(pygcmc, m) {
         .def_readwrite("rmin", &io::ForceFieldPair::rmin)
         .def_readwrite("epsilon", &io::ForceFieldPair::epsilon);
 
-    // Bind PDBAtom struct
+    // Bind PDBAtom struct (for parser usage)
     py::class_<io::PDBAtom>(m, "PDBAtom")
         .def(py::init<>())
         .def_readwrite("serial", &io::PDBAtom::serial)
@@ -55,8 +57,47 @@ PYBIND11_MODULE(pygcmc, m) {
             return !std::isnan(atom.forcefield_epsilon) && !std::isnan(atom.forcefield_rmin);
         });
 
-    // Bind IOResidue struct
-    py::class_<io::IOResidue>(m, "IOResidue")
+    // Bind ProjectAtom class
+    py::class_<ProjectAtom>(m, "ProjectAtom")
+        .def(py::init<>())
+        .def(py::init<const io::PDBAtom&>())
+        .def_property("serial", &ProjectAtom::get_serial, &ProjectAtom::set_serial)
+        .def_property("name", &ProjectAtom::get_name, &ProjectAtom::set_name)
+        .def_property("residue", &ProjectAtom::get_residue, &ProjectAtom::set_residue)
+        .def_property("sequence", &ProjectAtom::get_sequence, &ProjectAtom::set_sequence)
+        .def_property("chain", &ProjectAtom::get_chain, &ProjectAtom::set_chain)
+        .def_property("alt_loc", &ProjectAtom::get_alt_loc, &ProjectAtom::set_alt_loc)
+        .def_property("insertion_code", &ProjectAtom::get_insertion_code, &ProjectAtom::set_insertion_code)
+        .def_property("x", &ProjectAtom::get_x, &ProjectAtom::set_x)
+        .def_property("y", &ProjectAtom::get_y, &ProjectAtom::set_y)
+        .def_property("z", &ProjectAtom::get_z, &ProjectAtom::set_z)
+        .def_property("occupancy", &ProjectAtom::get_occupancy, &ProjectAtom::set_occupancy)
+        .def_property("temp_factor", &ProjectAtom::get_temp_factor, &ProjectAtom::set_temp_factor)
+        .def_property("element", &ProjectAtom::get_element, &ProjectAtom::set_element)
+        .def_property("charge", &ProjectAtom::get_charge, &ProjectAtom::set_charge)
+        .def_property("type", &ProjectAtom::get_type, &ProjectAtom::set_type)
+        .def_property("topo_type", &ProjectAtom::get_topo_type, &ProjectAtom::set_topo_type)
+        .def_property("topo_charge", &ProjectAtom::get_topo_charge, &ProjectAtom::set_topo_charge)
+        .def_property("topo_mass", &ProjectAtom::get_topo_mass, &ProjectAtom::set_topo_mass)
+        .def_property("forcefield_epsilon", &ProjectAtom::get_forcefield_epsilon, &ProjectAtom::set_forcefield_epsilon)
+        .def_property("forcefield_rmin", &ProjectAtom::get_forcefield_rmin, &ProjectAtom::set_forcefield_rmin)
+        .def("is_valid", &ProjectAtom::is_valid)
+        .def("has_topology_info", &ProjectAtom::has_topology_info)
+        .def("has_forcefield_info", &ProjectAtom::has_forcefield_info);
+
+    // Bind ProjectResidue class
+    py::class_<ProjectResidue>(m, "ProjectResidue")
+        .def(py::init<>())
+        .def(py::init<const std::string&, int, char>())
+        .def_property("name", &ProjectResidue::get_name, &ProjectResidue::set_name)
+        .def_property("sequence_number", &ProjectResidue::get_sequence_number, &ProjectResidue::set_sequence_number)
+        .def_property("chain_id", &ProjectResidue::get_chain_id, &ProjectResidue::set_chain_id)
+        .def_property("atoms", &ProjectResidue::get_atoms, &ProjectResidue::set_atoms)
+        .def("center_of_mass", &ProjectResidue::center_of_mass)
+        .def("atom_count", &ProjectResidue::atom_count);
+
+    // Bind IOResidue struct with shared_ptr (for parser usage)
+    py::class_<io::IOResidue, std::shared_ptr<io::IOResidue>>(m, "IOResidue")
         .def(py::init<>())
         .def_readwrite("name", &io::IOResidue::name)
         .def_readwrite("sequence_number", &io::IOResidue::sequence_number)
@@ -71,7 +112,7 @@ PYBIND11_MODULE(pygcmc, m) {
         .def(py::init<>())
         .def_static("parse", &io::PDBParser::parse);
 
-    // Bind Residue struct for PDB
+    // Bind Residue struct for PDB with proper atom handling
     py::class_<io::Residue>(m, "PDBResidue")
         .def(py::init<>())
         .def_readwrite("name", &io::Residue::name)
@@ -84,15 +125,27 @@ PYBIND11_MODULE(pygcmc, m) {
         .def(py::init<>())
         .def("parse", &io::TopParser::parse)
         .def("parse_with_includes", &io::TopParser::parse_with_includes)
-        // 绑定新的 update_pdb_atoms 方法，仅接受指针版本
         .def("update_pdb_atoms", [](io::TopParser& self, py::list atoms) -> int {
             std::vector<io::PDBAtom*> c_atoms;
-            for(auto item : atoms){
-                // 确保 item 是 PDBAtom 的实例
-                io::PDBAtom* atom = item.cast<io::PDBAtom*>();
-                c_atoms.push_back(atom);
+            c_atoms.reserve(py::len(atoms));
+            
+            for(auto item : atoms) {
+                try {
+                    // Try as raw PDBAtom first
+                    auto& atom = item.cast<io::PDBAtom&>();
+                    c_atoms.push_back(&atom);
+                } catch (const py::cast_error&) {
+                    try {
+                        // Try as ProjectAtom
+                        auto& wrapper = item.cast<ProjectAtom&>();
+                        c_atoms.push_back(wrapper.get_ptr().get());
+                    } catch (const py::cast_error&) {
+                        // Try as shared_ptr
+                        auto shared_atom = item.cast<std::shared_ptr<io::PDBAtom>>();
+                        c_atoms.push_back(shared_atom.get());
+                    }
+                }
             }
-            // 调用 C++ 的 update_pdb_atoms 方法
             return self.update_pdb_atoms(c_atoms);
         }, py::arg("atoms"));
 
@@ -104,8 +157,24 @@ PYBIND11_MODULE(pygcmc, m) {
         .def("get_nbfix_params", &io::FFParser::get_nbfix_params)
         .def("update_pdb_atoms", [](io::FFParser& self, py::list atoms) -> int {
             std::vector<io::PDBAtom*> atom_ptrs;
+            atom_ptrs.reserve(py::len(atoms));
+            
             for (auto item : atoms) {
-                atom_ptrs.push_back(item.cast<io::PDBAtom*>());
+                try {
+                    // Try as raw PDBAtom first
+                    auto& atom = item.cast<io::PDBAtom&>();
+                    atom_ptrs.push_back(&atom);
+                } catch (const py::cast_error&) {
+                    try {
+                        // Try as ProjectAtom
+                        auto& wrapper = item.cast<ProjectAtom&>();
+                        atom_ptrs.push_back(wrapper.get_ptr().get());
+                    } catch (const py::cast_error&) {
+                        // Try as shared_ptr
+                        auto shared_atom = item.cast<std::shared_ptr<io::PDBAtom>>();
+                        atom_ptrs.push_back(shared_atom.get());
+                    }
+                }
             }
             return self.update_pdb_atoms(atom_ptrs);
         })
@@ -218,16 +287,50 @@ PYBIND11_MODULE(pygcmc, m) {
     // Bind Project class
     py::class_<Project>(m, "Project")
         .def(py::init<const std::string&>(), py::arg("name") = "")
-        .def("load_structure", &Project::load_structure)
+        .def("load_structure", [](Project& self, const std::string& pdb_file, const std::string& top_file) {
+            auto structure = self.load_structure(pdb_file, top_file);
+            // Convert raw pointers to shared pointers in the structure
+            for (auto& residue : structure->residues()) {
+                for (auto& atom_ptr : residue->atom_ptrs) {
+                    if (atom_ptr != nullptr) {
+                        auto new_atom = std::make_shared<io::PDBAtom>(*atom_ptr);
+                        atom_ptr = new_atom;
+                    }
+                }
+            }
+            return structure;
+        })
         .def("load_forcefield", &Project::load_forcefield)
         .def("get_name", &Project::get_name);
 
-    // Bind Structure class
+    // Bind Structure class with proper wrapper support
     py::class_<Structure, std::shared_ptr<Structure>>(m, "Structure")
         .def(py::init<>())
         .def("apply_forcefield", &Structure::apply_forcefield)
-        .def_property_readonly("residues", &Structure::residues)
-        .def_property_readonly("atoms", &Structure::atoms)
+        .def_property_readonly("residues", [](Structure& self) {
+            std::vector<ProjectResidue> wrapped_residues;
+            for (const auto& residue : self.residues()) {
+                ProjectResidue wrapper(residue->name, residue->sequence_number, residue->chain_id);
+                std::vector<ProjectAtom> atoms;
+                for (const auto& atom_ptr : residue->atom_ptrs) {
+                    if (atom_ptr) {
+                        atoms.emplace_back(*atom_ptr);
+                    }
+                }
+                wrapper.set_atoms(atoms);
+                wrapped_residues.push_back(wrapper);
+            }
+            return wrapped_residues;
+        })
+        .def_property_readonly("atoms", [](Structure& self) {
+            std::vector<ProjectAtom> wrapped_atoms;
+            for (const auto& atom_ptr : self.atoms()) {
+                if (atom_ptr != nullptr) {
+                    wrapped_atoms.emplace_back(*atom_ptr);
+                }
+            }
+            return wrapped_atoms;
+        })
         .def("__len__", &Structure::get_num_atoms);
 
     // Bind ForceField class

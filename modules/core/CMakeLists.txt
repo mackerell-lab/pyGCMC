@@ -13,6 +13,10 @@ add_library(pygcmc_core STATIC
     src/io/itp_parser.cpp
     src/io/ff_parser.cpp
     src/particles.cpp
+    src/project.cpp
+    src/structure.cpp
+    src/project_atom.cpp
+    src/project_residue.cpp
 )
 
 # 启用编译器警告
@@ -42,13 +46,3 @@ find_package(OpenMP)
 if(OpenMP_CXX_FOUND)
     target_link_libraries(pygcmc_core PUBLIC OpenMP::OpenMP_CXX)
 endif()
-
-target_sources(pygcmc_core
-    PRIVATE
-        src/system.cpp
-        src/project.cpp
-        src/structure.cpp
-        src/io/pdb_parser.cpp
-        src/io/top_parser.cpp
-        src/io/ff_parser.cpp
-)
