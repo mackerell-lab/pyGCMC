@@ -25,8 +25,16 @@ Structure Project::load_structure(const std::string& pdb_file, const std::string
     Structure structure;
     
     // Parse PDB file
-    auto [box, residues] = io::PDBParser::parse(pdb_file);
-    structure.set_box(box);
+    auto [box_vec, residues] = io::PDBParser::parse(pdb_file);
+    
+    // Convert vector box to array box if present
+    if (box_vec && box_vec->size() == 6) {
+        std::array<double, 6> box_arr;
+        std::copy(box_vec->begin(), box_vec->end(), box_arr.begin());
+        structure.set_box(std::make_optional(box_arr));
+    } else {
+        structure.set_box(std::nullopt);
+    }
     
     // Add residues to structure
     for (const auto& residue : residues) {
@@ -200,9 +208,23 @@ void Project::print_all_atoms() const {
 
 void Project::print_forcefield_info() const {
     if (!forcefield_) {
-        std::cout << "No force field loaded.\n";
+        std::cout << "No force field loaded." << std::endl;
         return;
     }
+
+    std::cout << "\nNonbonded Parameters Loaded:" << std::endl;
+    std::cout << "--------------------------------------------------" << std::endl;
+    std::cout << std::left << std::setw(10) << "Type" 
+              << std::setw(15) << "Epsilon" 
+              << std::setw(15) << "Rmin" << std::endl;
+    std::cout << "--------------------------------------------------" << std::endl;
+
+    for (const auto& [type, params] : forcefield_->nonbonded_params()) {
+        std::cout << std::left << std::setw(10) << type 
+                 << std::setw(15) << params.epsilon 
+                 << std::setw(15) << params.rmin << std::endl;
+    }
+    std::cout << std::endl;
 
     std::cout << "\n=== Force Field Parameters Summary ===\n\n";
     print_global_parameters();
@@ -219,21 +241,21 @@ void Project::print_global_parameters() const {
 }
 
 void Project::print_nbfix_info() const {
-    if (!forcefield_) return;
-
-    const auto& nbfix = forcefield_->nbfix_params();
-    std::cout << "NBFIX Parameters:\n";
-    std::cout << "Total NBFIX parameters: " << nbfix.size() << "\n\n";
-
-    if (!nbfix.empty()) {
-        std::cout << "All NBFIX parameters:\n";
-        for (const auto& [types, params] : nbfix) {
-            std::cout << "  " << types.first << "-" << types.second 
-                     << ": epsilon=" << params.epsilon 
-                     << ", rmin=" << params.rmin << "\n";
-        }
-        std::cout << "\n";
+    if (!forcefield_) {
+        std::cout << "No force field loaded." << std::endl;
+        return;
     }
+
+    std::cout << "\nNBFIX Parameters:" << std::endl;
+    std::cout << "Total NBFIX parameters: " << forcefield_->nbfix_params().size() << std::endl;
+    std::cout << "\nAll NBFIX parameters:" << std::endl;
+
+    for (const auto& [types, params] : forcefield_->nbfix_params()) {
+        std::cout << "  " << types.first << "-" << types.second 
+                 << ": epsilon=" << params.epsilon 
+                 << ", rmin=" << params.rmin << std::endl;
+    }
+    std::cout << std::endl;
 }
 
 } // namespace core

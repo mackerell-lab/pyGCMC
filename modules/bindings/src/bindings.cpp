@@ -330,8 +330,93 @@ PYBIND11_MODULE(pygcmc, m) {
             return wrapped_atoms;
         })
         .def("__len__", &Structure::get_num_atoms)
-        .def("get_box", &Structure::get_box, "Get box dimensions (a, b, c, alpha, beta, gamma)")
-        .def("set_box", &Structure::set_box, "Set box dimensions");
+        .def("get_box", &Structure::get_box)
+        .def("set_box", &Structure::set_box)
+        // Add new data access methods
+        .def("get_coordinates", [](Structure& self) {
+            auto coords = self.get_coordinates();
+            py::list result;
+            for (const auto& coord : coords) {
+                py::list xyz;
+                xyz.append(coord[0]);
+                xyz.append(coord[1]);
+                xyz.append(coord[2]);
+                result.append(xyz);
+            }
+            return result;
+        })
+        .def("get_box_vectors", [](Structure& self) {
+            auto vectors = self.get_box_vectors();
+            py::list result;
+            for (const auto& vector : vectors) {
+                py::list xyz;
+                xyz.append(vector[0]);
+                xyz.append(vector[1]);
+                xyz.append(vector[2]);
+                result.append(xyz);
+            }
+            return result;
+        })
+        .def("get_atoms_data", [](Structure& self) {
+            py::list result;
+            for (const auto& atom : self.atoms()) {
+                if (atom) {
+                    py::dict atom_data;
+                    atom_data["serial"] = atom->serial;
+                    atom_data["name"] = atom->name;
+                    atom_data["residue"] = atom->residue;
+                    atom_data["sequence"] = atom->sequence;
+                    atom_data["chain"] = std::string(1, atom->chain);
+                    atom_data["type"] = atom->type;
+                    atom_data["topo_type"] = atom->topo_type;
+                    atom_data["x"] = atom->x;
+                    atom_data["y"] = atom->y;
+                    atom_data["z"] = atom->z;
+                    atom_data["topo_charge"] = atom->topo_charge;
+                    atom_data["topo_mass"] = atom->topo_mass;
+                    result.append(atom_data);
+                }
+            }
+            return result;
+        })
+        .def("get_residues_data", [](Structure& self) {
+            py::list result;
+            for (const auto& residue : self.residues()) {
+                if (residue) {
+                    py::dict residue_data;
+                    residue_data["name"] = residue->name;
+                    residue_data["sequence_number"] = residue->sequence_number;
+                    residue_data["chain_id"] = std::string(1, residue->chain_id);
+                    residue_data["n_atoms"] = residue->atom_count();
+                    
+                    auto com = residue->center_of_mass();
+                    py::list com_list;
+                    com_list.append(com[0]);
+                    com_list.append(com[1]);
+                    com_list.append(com[2]);
+                    residue_data["center_of_mass"] = com_list;
+                    
+                    result.append(residue_data);
+                }
+            }
+            return result;
+        })
+        .def("get_energy_components", &Structure::get_energy_components)
+        .def("get_atom_energy_contributions", [](Structure& self) {
+            auto contributions = self.get_atom_energy_contributions();
+            py::list result;
+            
+            for (const auto& [idx, vdw_e, elec_e, total_e] : contributions) {
+                py::dict energy_data;
+                energy_data["atom_index"] = idx;
+                energy_data["vdw_energy"] = vdw_e;
+                energy_data["electrostatic_energy"] = elec_e;
+                energy_data["total_energy"] = total_e;
+                result.append(energy_data);
+            }
+            
+            return result;
+        });
 
     // Bind ForceField class
     py::class_<ForceField, std::shared_ptr<ForceField>>(m, "ForceField")
@@ -343,5 +428,38 @@ PYBIND11_MODULE(pygcmc, m) {
             static_cast<const std::map<std::string, io::ForceFieldPair>& (ForceField::*)() const>(&ForceField::nonbonded_params))
         .def_property_readonly("nbfix_params", 
             static_cast<const std::map<std::pair<std::string, std::string>, io::ForceFieldPair>& (ForceField::*)() const>(&ForceField::nbfix_params))
-        .def("print_nonbonded_params", &ForceField::print_nonbonded_params, "Print all nonbonded parameters");
+        .def("print_nonbonded_params", &ForceField::print_nonbonded_params, "Print all nonbonded parameters")
+        // Add new data access methods
+        .def("get_nonbonded_parameters", [](ForceField& self) {
+            py::list result;
+            for (const auto& [type, params] : self.nonbonded_params()) {
+                py::dict param_data;
+                param_data["atom_type"] = type;
+                param_data["epsilon"] = params.epsilon;
+                param_data["rmin"] = params.rmin;
+                param_data["epsilon14"] = params.epsilon * 0.5;  // Example scaling
+                param_data["rmin14"] = params.rmin;
+                result.append(param_data);
+            }
+            return result;
+        })
+        .def("get_nbfix_parameters", [](ForceField& self) {
+            py::list result;
+            for (const auto& [types, params] : self.nbfix_params()) {
+                py::dict param_data;
+                param_data["type1"] = types.first;
+                param_data["type2"] = types.second;
+                param_data["epsilon"] = params.epsilon;
+                param_data["rmin"] = params.rmin;
+                result.append(param_data);
+            }
+            return result;
+        })
+        .def("get_global_parameters", [](ForceField& self) {
+            py::dict params;
+            params["cutoff"] = self.get_cutoff();
+            params["switching"] = self.get_switching();
+            params["pairlist_distance"] = self.get_pairlist_distance();
+            return params;
+        });
 }
