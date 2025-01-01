@@ -7,14 +7,15 @@
 #include "pygcmc/core/utils.hpp"
 #include <unordered_set>
 #include <unordered_map>
-#include <iostream> // For debugging output
+#include <iostream>
+#include <optional>
 
 namespace pygcmc {
 namespace core {
 namespace io {
 
-std::pair<std::vector<double>, std::vector<IOResidue>> PDBParser::parse(const std::string& filename) {
-    std::vector<double> cryst;
+std::pair<std::optional<std::vector<double>>, std::vector<IOResidue>> PDBParser::parse(const std::string& filename) {
+    std::optional<std::vector<double>> cryst;
     std::vector<IOResidue> residues;
     IOResidue* current_residue = nullptr;
 
@@ -27,8 +28,9 @@ std::pair<std::vector<double>, std::vector<IOResidue>> PDBParser::parse(const st
     while (std::getline(infile, line)) {
         // Parse crystal information
         if (line.substr(0, 6) == "CRYST1") {
-            if (!parse_cryst1_line(line, cryst)) {
-                throw ParserError("解析晶胞信息失败: " + filename);
+            std::vector<double> box_dims;
+            if (parse_cryst1_line(line, box_dims)) {
+                cryst = box_dims;  // Store the box dimensions if successfully parsed
             }
             continue;
         }
@@ -49,40 +51,11 @@ std::pair<std::vector<double>, std::vector<IOResidue>> PDBParser::parse(const st
 
                 // Add the PDBAtom to the current residue
                 current_residue->atoms.push_back(atom);
-                
-                // Debug output
-                // std::cout << "Added Atom Serial " << atom.serial 
-                //           << " to Residue " << current_residue->name 
-                //           << " Sequence " << current_residue->sequence_number 
-                //           << " Chain " << current_residue->chain_id << std::endl;
             }
         }
     }
 
     infile.close();
-
-    // If crystal information is not found, compute based on atom coordinates
-    if (cryst.empty()) {
-        if (residues.empty()) {
-            throw ParserError("没有找到晶胞信息且原子列表为空: " + filename);
-        }
-        double min_x = residues[0].atoms[0].x, max_x = residues[0].atoms[0].x;
-        double min_y = residues[0].atoms[0].y, max_y = residues[0].atoms[0].y;
-        double min_z = residues[0].atoms[0].z, max_z = residues[0].atoms[0].z;
-
-        for (const auto& residue : residues) {
-            for (const auto& atom : residue.atoms) {
-                min_x = std::min(min_x, atom.x);
-                max_x = std::max(max_x, atom.x);
-                min_y = std::min(min_y, atom.y);
-                max_y = std::max(max_y, atom.y);
-                min_z = std::min(min_z, atom.z);
-                max_z = std::max(max_z, atom.z);
-            }
-        }
-
-        cryst = {max_x - min_x, max_y - min_y, max_z - min_z};
-    }
 
     // Validate residue structure
     if (!validate_pdb_structure(residues)) {
@@ -94,10 +67,43 @@ std::pair<std::vector<double>, std::vector<IOResidue>> PDBParser::parse(const st
 
 bool PDBParser::parse_cryst1_line(const std::string& line, std::vector<double>& cell_params) {
     try {
-        double a = std::stod(line.substr(6, 9));
-        double b = std::stod(line.substr(15, 9));
-        double c = std::stod(line.substr(24, 9));
-        cell_params = {a, b, c};
+        // CRYST1 format:
+        // Columns  Data
+        // 1-6      "CRYST1"
+        // 7-15     a (Angstroms)
+        // 16-24    b (Angstroms)
+        // 25-33    c (Angstroms)
+        // 34-40    alpha (degrees)
+        // 41-47    beta (degrees)
+        // 48-54    gamma (degrees)
+        // 56-66    Space group
+        // 67-70    Z value
+        
+        if (line.length() < 33) {  // Minimum length for a, b, c values
+            return false;
+        }
+
+        double a = std::stod(utils::trim(line.substr(6, 9)));
+        double b = std::stod(utils::trim(line.substr(15, 9)));
+        double c = std::stod(utils::trim(line.substr(24, 9)));
+        
+        // Also parse angles if available
+        double alpha = 90.0, beta = 90.0, gamma = 90.0;
+        if (line.length() >= 54) {
+            alpha = std::stod(utils::trim(line.substr(33, 7)));
+            beta = std::stod(utils::trim(line.substr(40, 7)));
+            gamma = std::stod(utils::trim(line.substr(47, 7)));
+        }
+
+        // Check for valid box dimensions and angles
+        if (a <= 0.0 || b <= 0.0 || c <= 0.0 ||
+            alpha <= 0.0 || alpha >= 180.0 ||
+            beta <= 0.0 || beta >= 180.0 ||
+            gamma <= 0.0 || gamma >= 180.0) {
+            return false;
+        }
+
+        cell_params = {a, b, c, alpha, beta, gamma};
         return true;
     } catch (...) {
         return false;

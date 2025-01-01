@@ -45,7 +45,9 @@ def test_project():
         'silcs.str': os.path.join(test_data_dir, 'silcs.str'),
         'par_all36m_prot.prm': os.path.join(test_data_dir, 'par_all36m_prot.prm'),
         'par_all36_cgenff.prm': os.path.join(test_data_dir, 'par_all36_cgenff.prm'),
-        'toppar_water_ions.str': os.path.join(test_data_dir, 'toppar_water_ions.str')
+        'toppar_water_ions.str': os.path.join(test_data_dir, 'toppar_water_ions.str'),
+        'water.pdb': os.path.join(test_data_dir, 'water.pdb'),
+        'benx.pdb': os.path.join(test_data_dir, 'mols', 'benx.pdb')
     }
 
     # Check if test files exist
@@ -59,15 +61,47 @@ def test_project():
             return
     print()
 
-    # Create project
+    # Create project first
     print("=== Creating project ===")
     print("About to create Project object...")
     project = Project("test_project")
     print("Project object created successfully")
     print(f"Project name: {project.get_name()}\n")
 
-    # Load structure
-    print("=== Loading structure ===")
+    # Test crystal parameters for different PDB files
+    print("=== Testing crystal parameters ===")
+    
+    # Test test.pdb (should have crystal info)
+    test_structure = project.load_structure(test_files['test.pdb'])
+    test_box = test_structure.get_box()
+    assert test_box is not None, "test.pdb should have crystal information"
+    assert len(test_box) == 6, "Box should have 6 parameters (a, b, c, alpha, beta, gamma)"
+    assert abs(test_box[0] - 127.022) < 1e-3, "Incorrect a parameter in test.pdb"
+    assert abs(test_box[1] - 133.419) < 1e-3, "Incorrect b parameter in test.pdb"
+    assert abs(test_box[2] - 132.854) < 1e-3, "Incorrect c parameter in test.pdb"
+    assert abs(test_box[3] - 90.0) < 1e-3, "Incorrect alpha angle in test.pdb"
+    assert abs(test_box[4] - 90.0) < 1e-3, "Incorrect beta angle in test.pdb"
+    assert abs(test_box[5] - 90.0) < 1e-3, "Incorrect gamma angle in test.pdb"
+
+    # Test water.pdb (should have crystal info)
+    water_structure = project.load_structure(test_files['water.pdb'])
+    water_box = water_structure.get_box()
+    assert water_box is not None, "water.pdb should have crystal information"
+    assert len(water_box) == 6, "Water box should have 6 parameters"
+    assert abs(water_box[0] - 10.0) < 1e-3, "Incorrect a parameter in water.pdb"
+    assert abs(water_box[1] - 10.0) < 1e-3, "Incorrect b parameter in water.pdb"
+    assert abs(water_box[2] - 10.0) < 1e-3, "Incorrect c parameter in water.pdb"
+    assert abs(water_box[3] - 90.0) < 1e-3, "Incorrect alpha angle in water.pdb"
+    assert abs(water_box[4] - 90.0) < 1e-3, "Incorrect beta angle in water.pdb"
+    assert abs(water_box[5] - 90.0) < 1e-3, "Incorrect gamma angle in water.pdb"
+
+    # Test benx.pdb (should not have crystal info)
+    benx_structure = project.load_structure(test_files['benx.pdb'])
+    benx_box = benx_structure.get_box()
+    assert benx_box is None, "benx.pdb should not have crystal information"
+
+    # Load structure with topology
+    print("=== Loading structure with topology ===")
     print("About to load structure from:")
     print(f"PDB: {test_files['test.pdb']}")
     print(f"TOP: {test_files['test.top']}")

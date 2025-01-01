@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <map>
 #include <set>
+#include <optional>
 #include "pygcmc/core/io/parser_common.hpp"
 
 namespace pygcmc {
@@ -19,6 +20,8 @@ namespace io {
  * @brief PDB Parser
  * 
  * Parses PDB files to extract crystal parameters and atom information.
+ * Crystal parameters are optional - if CRYST1 record is not found or invalid,
+ * returns std::nullopt for the crystal parameters.
  */
 class PDBParser {
 public:
@@ -26,10 +29,12 @@ public:
      * @brief Parse a PDB file
      * 
      * @param filename Path to the PDB file
-     * @return std::pair<std::vector<double>, std::vector<IOResidue>> 
-     *         A pair containing crystal parameters and a list of IOResidues
+     * @return std::pair<std::optional<std::vector<double>>, std::vector<IOResidue>> 
+     *         A pair containing optional crystal parameters (a, b, c, alpha, beta, gamma)
+     *         and a list of IOResidues. Crystal parameters will be std::nullopt if
+     *         CRYST1 record is not found or invalid.
      */
-    static std::pair<std::vector<double>, std::vector<IOResidue>> parse(const std::string& filename);
+    static std::pair<std::optional<std::vector<double>>, std::vector<IOResidue>> parse(const std::string& filename);
 
 private:
     static bool parse_atom_line(const std::string& line, PDBAtom& atom);

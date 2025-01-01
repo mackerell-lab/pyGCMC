@@ -5,6 +5,7 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <optional>
 #include "pygcmc/core/system.hpp"
 #include "pygcmc/core/io/pdb_parser.hpp"
 #include "pygcmc/core/io/top_parser.hpp"
@@ -17,29 +18,24 @@
 namespace pygcmc {
 namespace core {
 
-class Structure;
-class ForceField;
-
 class Project {
 public:
-    explicit Project(const std::string& name = "");
+    explicit Project(const std::string& name);
     ~Project();
 
-    // Load structure from PDB and topology files
-    std::shared_ptr<Structure> load_structure(const std::string& pdb_file, 
-                                            const std::string& top_file);
+    // Get project name
+    std::string get_name() const { return name_; }
+
+    // Load structure from PDB and optionally TOP files
+    Structure load_structure(const std::string& pdb_file, const std::string& top_file = "");
 
     // Load force field from parameter files
     std::shared_ptr<ForceField> load_forcefield(const std::vector<std::string>& param_files);
 
-    // Getters
-    const std::string& get_name() const { return name_; }
-    
-    // New methods for detailed information
+    // Methods for detailed information
     void print_atom_info(const ProjectAtom& atom) const;
     void print_detailed_atom_info(const ProjectAtom& atom) const;
     void print_atom_table_header() const;
-    void print_atom_table_row(const ProjectAtom& atom) const;
     void print_all_atoms() const;
     void print_forcefield_info() const;
     void print_nbfix_info() const;

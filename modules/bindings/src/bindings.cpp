@@ -287,7 +287,10 @@ PYBIND11_MODULE(pygcmc, m) {
     // Bind Project class
     py::class_<Project>(m, "Project")
         .def(py::init<const std::string&>(), py::arg("name") = "")
-        .def("load_structure", &Project::load_structure, "Load structure from PDB and topology files")
+        .def("load_structure", &Project::load_structure, 
+             py::arg("pdb_file"), 
+             py::arg("top_file") = "",
+             "Load structure from PDB and topology files")
         .def("load_forcefield", &Project::load_forcefield, "Load force field from parameter files")
         .def("get_name", &Project::get_name, "Get project name")
         .def("print_atom_info", &Project::print_atom_info, "Print detailed information for a single atom")
@@ -326,7 +329,9 @@ PYBIND11_MODULE(pygcmc, m) {
             }
             return wrapped_atoms;
         })
-        .def("__len__", &Structure::get_num_atoms);
+        .def("__len__", &Structure::get_num_atoms)
+        .def("get_box", &Structure::get_box, "Get box dimensions (a, b, c, alpha, beta, gamma)")
+        .def("set_box", &Structure::set_box, "Set box dimensions");
 
     // Bind ForceField class
     py::class_<ForceField, std::shared_ptr<ForceField>>(m, "ForceField")

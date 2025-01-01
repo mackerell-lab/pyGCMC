@@ -21,6 +21,25 @@ protected:
         water_pdb = std::string(PDB_DATA_DIR) + "/water.pdb";
     }
 
+    void print_crystal_info(const std::string& filename, const std::optional<std::vector<double>>& cryst) {
+        std::cout << "\nCrystal information for " << filename << ":\n";
+        if (cryst) {
+            const auto& box = cryst.value();
+            std::cout << "Box dimensions found:\n";
+            std::cout << "  a = " << box[0] << " Å\n";
+            std::cout << "  b = " << box[1] << " Å\n";
+            std::cout << "  c = " << box[2] << " Å\n";
+            if (box.size() > 3) {
+                std::cout << "  α = " << box[3] << "°\n";
+                std::cout << "  β = " << box[4] << "°\n";
+                std::cout << "  γ = " << box[5] << "°\n";
+            }
+        } else {
+            std::cout << "No crystal information found.\n";
+        }
+        std::cout << std::endl;
+    }
+
     void verify_atom_position(const PDBAtom& atom, double expected_x, 
                             double expected_y, double expected_z) {
         auto pos = atom.position();
@@ -181,17 +200,38 @@ TEST_F(PDBParserTest, FileHandling) {
 
 // Crystal information tests
 TEST_F(PDBParserTest, CrystalParameters) {
+    // Test file with CRYST1 record
     auto parsed_test = PDBParser::parse(test_pdb);
-    ASSERT_EQ(parsed_test.first.size(), 3);
-    EXPECT_DOUBLE_EQ(parsed_test.first[0], 127.022);
-    EXPECT_DOUBLE_EQ(parsed_test.first[1], 133.419);
-    EXPECT_DOUBLE_EQ(parsed_test.first[2], 132.854);
+    print_crystal_info("test.pdb", parsed_test.first);
+    ASSERT_TRUE(parsed_test.first.has_value()) << "test.pdb should have crystal information";
+    const auto& box = parsed_test.first.value();
+    ASSERT_EQ(box.size(), 6) << "Box should have 6 parameters (a, b, c, alpha, beta, gamma)";
+    EXPECT_DOUBLE_EQ(box[0], 127.022) << "Incorrect a parameter";
+    EXPECT_DOUBLE_EQ(box[1], 133.419) << "Incorrect b parameter";
+    EXPECT_DOUBLE_EQ(box[2], 132.854) << "Incorrect c parameter";
+    EXPECT_DOUBLE_EQ(box[3], 90.0) << "Incorrect alpha angle";
+    EXPECT_DOUBLE_EQ(box[4], 90.0) << "Incorrect beta angle";
+    EXPECT_DOUBLE_EQ(box[5], 90.0) << "Incorrect gamma angle";
 
+    // Test file with CRYST1 record (water.pdb)
     auto parsed_water = PDBParser::parse(water_pdb);
-    ASSERT_EQ(parsed_water.first.size(), 3);
-    EXPECT_DOUBLE_EQ(parsed_water.first[0], 10.0);
-    EXPECT_DOUBLE_EQ(parsed_water.first[1], 10.0);
-    EXPECT_DOUBLE_EQ(parsed_water.first[2], 10.0);
+    print_crystal_info("water.pdb", parsed_water.first);
+    ASSERT_TRUE(parsed_water.first.has_value()) << "water.pdb should have crystal information";
+    const auto& water_box = parsed_water.first.value();
+    ASSERT_EQ(water_box.size(), 6) << "Water box should have 6 parameters";
+    EXPECT_DOUBLE_EQ(water_box[0], 10.0) << "Incorrect water box a parameter";
+    EXPECT_DOUBLE_EQ(water_box[1], 10.0) << "Incorrect water box b parameter";
+    EXPECT_DOUBLE_EQ(water_box[2], 10.0) << "Incorrect water box c parameter";
+    EXPECT_DOUBLE_EQ(water_box[3], 90.0) << "Incorrect water box alpha angle";
+    EXPECT_DOUBLE_EQ(water_box[4], 90.0) << "Incorrect water box beta angle";
+    EXPECT_DOUBLE_EQ(water_box[5], 90.0) << "Incorrect water box gamma angle";
+
+    // Test file without CRYST1 record (benx.pdb)
+    std::string benx_pdb = std::string(PDB_DATA_DIR) + "/mols/benx.pdb";
+    auto parsed_benx = PDBParser::parse(benx_pdb);
+    print_crystal_info("benx.pdb", parsed_benx.first);
+    EXPECT_FALSE(parsed_benx.first.has_value()) << "benx.pdb should not have crystal information";
+    EXPECT_FALSE(parsed_benx.second.empty()) << "benx.pdb should still have residues";
 }
 
 // Residue parsing tests
