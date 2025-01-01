@@ -4,6 +4,8 @@
 #include "pygcmc/core/forcefield.hpp"
 #include <memory>
 #include <algorithm>
+#include <iomanip>
+#include <iostream>
 
 namespace pygcmc {
 namespace core {
@@ -16,26 +18,51 @@ Structure::~Structure() {
     residues_.clear();
 }
 
-void Structure::apply_forcefield(std::shared_ptr<ForceField> ff) {
-    if (!ff) return;  // Skip if force field is null
-    
-    // Apply force field parameters to all atoms
-    for (const auto& atom : atoms_) {  // Changed to const reference
-        if (!atom) continue;  // Skip null pointers
+void Structure::apply_forcefield(const std::shared_ptr<ForceField>& forcefield) {
+    if (!forcefield) {
+        std::cerr << "Error: Null force field pointer provided to apply_forcefield" << std::endl;
+        return;
+    }
+
+    std::cout << "\nApplying force field parameters to atoms:" << std::endl;
+    std::cout << std::string(80, '-') << std::endl;
+    std::cout << std::left 
+              << std::setw(10) << "Residue"
+              << std::setw(6) << "Seq"
+              << std::setw(8) << "Name"
+              << std::setw(10) << "TopoType"
+              << std::setw(15) << "Old Epsilon"
+              << std::setw(15) << "New Epsilon"
+              << std::setw(15) << "New Rmin" << std::endl;
+    std::cout << std::string(80, '-') << std::endl;
+
+    for (auto& atom_ptr : atoms_) {
+        if (!atom_ptr) continue;
         
-        try {
-            // Get nonbonded parameters for this atom type
-            const auto& nonbonded_params = ff->get_nonbonded_params();  // Get reference to avoid copying
-            auto it = nonbonded_params.find(atom->type);
-            if (it != nonbonded_params.end()) {
-                atom->forcefield_epsilon = it->second.epsilon;
-                atom->forcefield_rmin = it->second.rmin;
-            }
-        } catch (const std::exception&) {
-            // Log error but continue with other atoms
-            continue;
+        const auto& topo_type = atom_ptr->topo_type;
+        const auto old_epsilon = atom_ptr->forcefield_epsilon;
+        
+        auto it = forcefield->nonbonded_params().find(topo_type);
+        if (it != forcefield->nonbonded_params().end()) {
+            atom_ptr->forcefield_epsilon = it->second.epsilon;
+            atom_ptr->forcefield_rmin = it->second.rmin;
+            
+            std::cout << std::left 
+                      << std::setw(10) << atom_ptr->residue
+                      << std::setw(6) << atom_ptr->sequence
+                      << std::setw(8) << atom_ptr->name
+                      << std::setw(10) << topo_type
+                      << std::setw(15) << old_epsilon
+                      << std::setw(15) << atom_ptr->forcefield_epsilon
+                      << std::setw(15) << atom_ptr->forcefield_rmin << std::endl;
+        } else {
+            std::cerr << "Warning: No force field parameters found for topo_type '" 
+                      << topo_type << "' in atom " << atom_ptr->name 
+                      << " of residue " << atom_ptr->residue 
+                      << " " << atom_ptr->sequence << std::endl;
         }
     }
+    std::cout << std::endl;
 }
 
 void Structure::add_residue(std::shared_ptr<io::IOResidue> residue) {

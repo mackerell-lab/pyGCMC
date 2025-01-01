@@ -15,27 +15,25 @@ public:
     ForceField() = default;
     ~ForceField() = default;
 
-    // Global parameters
+    // Print methods
+    void print_nonbonded_params() const;
+
+    // Getters and setters
     double get_cutoff() const { return cutoff_; }
+    void set_cutoff(double cutoff) { cutoff_ = cutoff; }
+    
     double get_switching() const { return switching_; }
+    void set_switching(double switching) { switching_ = switching; }
+    
     double get_pairlist_distance() const { return pairlist_distance_; }
-    void set_cutoff(double value) { cutoff_ = value; }
-    void set_switching(double value) { switching_ = value; }
-    void set_pairlist_distance(double value) { pairlist_distance_ = value; }
+    void set_pairlist_distance(double distance) { pairlist_distance_ = distance; }
 
-    // Parameter access
-    const std::map<std::string, io::ForceFieldPair>& get_nonbonded_params() const { 
-        return nonbonded_params_; 
-    }
-    const std::map<std::pair<std::string, std::string>, io::ForceFieldPair>& get_nbfix_params() const { 
-        return nbfix_params_; 
-    }
-
-    // Python interface helpers
+    // Access to parameters
+    const std::map<std::string, io::ForceFieldPair>& nonbonded_params() const { return nonbonded_params_; }
     std::map<std::string, io::ForceFieldPair>& nonbonded_params() { return nonbonded_params_; }
-    std::map<std::pair<std::string, std::string>, io::ForceFieldPair>& nbfix_params() { 
-        return nbfix_params_; 
-    }
+    
+    const std::map<std::pair<std::string, std::string>, io::ForceFieldPair>& nbfix_params() const { return nbfix_params_; }
+    std::map<std::pair<std::string, std::string>, io::ForceFieldPair>& nbfix_params() { return nbfix_params_; }
 
 private:
     double cutoff_ = 14.0;

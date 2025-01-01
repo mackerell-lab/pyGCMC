@@ -2,9 +2,11 @@
 
 #pragma once
 
-#include "pygcmc/core/io/pdb_parser.hpp"
 #include <memory>
 #include <vector>
+#include "pygcmc/core/io/pdb_parser.hpp"
+#include "pygcmc/core/io/top_parser.hpp"
+#include "pygcmc/core/forcefield.hpp"
 
 namespace pygcmc {
 namespace core {
@@ -16,20 +18,22 @@ public:
     Structure();
     ~Structure();
 
-    // Apply force field parameters to atoms
-    void apply_forcefield(std::shared_ptr<ForceField> ff);
+    // Apply force field parameters to all atoms
+    void apply_forcefield(const std::shared_ptr<ForceField>& forcefield);
 
-    // Add residue and its atoms to the structure
+    // Add a residue to the structure
     void add_residue(std::shared_ptr<io::IOResidue> residue);
 
-    // Add a single atom to the structure
+    // Add an atom to the structure
     void add_atom(std::shared_ptr<io::PDBAtom> atom);
 
     // Get number of atoms
     size_t get_num_atoms() const;
 
-    // Access residues and atoms (const references to prevent modification)
+    // Get residues
     const std::vector<std::shared_ptr<io::IOResidue>>& residues() const;
+
+    // Get atoms
     const std::vector<std::shared_ptr<io::PDBAtom>>& atoms() const;
 
 private:

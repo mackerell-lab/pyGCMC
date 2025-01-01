@@ -287,21 +287,16 @@ PYBIND11_MODULE(pygcmc, m) {
     // Bind Project class
     py::class_<Project>(m, "Project")
         .def(py::init<const std::string&>(), py::arg("name") = "")
-        .def("load_structure", [](Project& self, const std::string& pdb_file, const std::string& top_file) {
-            auto structure = self.load_structure(pdb_file, top_file);
-            // Convert raw pointers to shared pointers in the structure
-            for (auto& residue : structure->residues()) {
-                for (auto& atom_ptr : residue->atom_ptrs) {
-                    if (atom_ptr != nullptr) {
-                        auto new_atom = std::make_shared<io::PDBAtom>(*atom_ptr);
-                        atom_ptr = new_atom;
-                    }
-                }
-            }
-            return structure;
-        })
-        .def("load_forcefield", &Project::load_forcefield)
-        .def("get_name", &Project::get_name);
+        .def("load_structure", &Project::load_structure, "Load structure from PDB and topology files")
+        .def("load_forcefield", &Project::load_forcefield, "Load force field from parameter files")
+        .def("get_name", &Project::get_name, "Get project name")
+        .def("print_atom_info", &Project::print_atom_info, "Print detailed information for a single atom")
+        .def("print_detailed_atom_info", &Project::print_detailed_atom_info, "Print detailed information for a single atom in table format")
+        .def("print_atom_table_header", &Project::print_atom_table_header, "Print header for atom table")
+        .def("print_all_atoms", &Project::print_all_atoms, "Print information for all atoms")
+        .def("print_forcefield_info", &Project::print_forcefield_info, "Print force field information")
+        .def("print_nbfix_info", &Project::print_nbfix_info, "Print NBFIX parameters")
+        .def("print_global_parameters", &Project::print_global_parameters, "Print global force field parameters");
 
     // Bind Structure class with proper wrapper support
     py::class_<Structure, std::shared_ptr<Structure>>(m, "Structure")
@@ -339,6 +334,9 @@ PYBIND11_MODULE(pygcmc, m) {
         .def_property("cutoff", &ForceField::get_cutoff, &ForceField::set_cutoff)
         .def_property("switching", &ForceField::get_switching, &ForceField::set_switching)
         .def_property("pairlist_distance", &ForceField::get_pairlist_distance, &ForceField::set_pairlist_distance)
-        .def_property_readonly("nonbonded_params", &ForceField::nonbonded_params)
-        .def_property_readonly("nbfix_params", &ForceField::nbfix_params);
+        .def_property_readonly("nonbonded_params", 
+            static_cast<const std::map<std::string, io::ForceFieldPair>& (ForceField::*)() const>(&ForceField::nonbonded_params))
+        .def_property_readonly("nbfix_params", 
+            static_cast<const std::map<std::pair<std::string, std::string>, io::ForceFieldPair>& (ForceField::*)() const>(&ForceField::nbfix_params))
+        .def("print_nonbonded_params", &ForceField::print_nonbonded_params, "Print all nonbonded parameters");
 }

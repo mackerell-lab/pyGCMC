@@ -1,158 +1,110 @@
-# tests/core/test_project.py
+#!/usr/bin/env python3
 
 import os
 import sys
-from math import isnan
+from pygcmc import Project
 
-print("=== Starting imports ===")
-print("Importing pygcmc...")
-import pygcmc as gcmc
-print("Successfully imported pygcmc")
+def get_test_data_dir():
+    """Get the path to the test data directory."""
+    print("Getting test data directory...")
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    test_data_dir = os.path.join(current_dir, "..", "data")
+    print(f"Test data directory: {test_data_dir}")
+    return test_data_dir
 
-def test_project():
-    print("\n=== Starting test_project ===")
-    try:
-        # Get the directory containing test data
-        print("Getting test data directory...")
-        test_data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
-        print(f"Test data directory: {test_data_dir}")
-        
-        # Verify test files exist
-        print("\nSetting up file paths...")
-        pdb_file = os.path.join(test_data_dir, "test.pdb")
-        top_file = os.path.join(test_data_dir, "test.top")
-        param_file = os.path.join(test_data_dir, "silcs.str")
-        
-        print("\nChecking test files:")
-        for file_path in [pdb_file, top_file, param_file]:
-            print(f"Checking {file_path}...")
-            if not os.path.exists(file_path):
-                raise FileNotFoundError(f"Required test file not found: {file_path}")
+def check_test_files(test_data_dir):
+    """Check if all required test files exist."""
+    print("\nChecking test files:")
+    files = ["test.pdb", "test.top", "silcs.str"]
+    for file in files:
+        file_path = os.path.join(test_data_dir, file)
+        print(f"Checking {file_path}...")
+        if os.path.exists(file_path):
             print(f"Found: {file_path}")
-        
-        print("\n=== Creating project ===")
-        print("About to create Project object...")
-        project = gcmc.Project("test_project")
-        print("Project object created successfully")
-        print(f"Project name: {project.get_name()}")
-        
-        print("\n=== Loading structure ===")
-        print(f"About to load structure from:")
-        print(f"PDB: {pdb_file}")
-        print(f"TOP: {top_file}")
-        print("Calling load_structure...")
-        structure = project.load_structure(pdb_file, top_file)
-        print("Structure loaded successfully")
-        print(f"Structure contains {len(structure)} atoms")
-        
-        print("\n=== Loading force field ===")
-        print(f"About to load force field from: {param_file}")
-        print("Creating parameter files list...")
-        param_files = [param_file]
-        print("Calling load_forcefield...")
-        ff = project.load_forcefield(param_files)
-        print("Force field loaded successfully")
-
-        # Apply force field to structure
-        print("\n=== Applying force field to structure ===")
-        structure.apply_forcefield(ff)
-        print("Force field applied successfully")
-        
-        # Print detailed information
-        print("\n=== Force Field Parameters ===")
-        print(f"Global parameters:")
-        print(f"  Cutoff: {ff.cutoff}")
-        print(f"  Switching: {ff.switching}")
-        print(f"  Pairlist distance: {ff.pairlist_distance}")
-        
-        print("\n=== Nonbonded Parameters ===")
-        nonbonded_params = ff.nonbonded_params
-        print(f"Total nonbonded parameters: {len(nonbonded_params)}")
-        print("\nSample nonbonded parameters:")
-        for atom_type, params in list(nonbonded_params.items())[:5]:
-            print(f"  {atom_type}: epsilon={params.epsilon}, rmin={params.rmin}")
-        
-        print("\n=== NBFIX Parameters ===")
-        nbfix_params = ff.nbfix_params
-        print(f"Total NBFIX parameters: {len(nbfix_params)}")
-        print("\nAll NBFIX parameters:")
-        for (type1, type2), params in nbfix_params.items():
-            print(f"  {type1}-{type2}: epsilon={params.epsilon}, rmin={params.rmin}")
-        
-        print("\n=== Structure Information ===")
-        try:
-            # Get total number of atoms without storing the list
-            print(f"Total atoms: {len(structure)}")
-            
-            print("\nSample atom information (first 5 atoms):")
-            atom_count = 0
-            for atom in structure.atoms:
-                if atom_count >= 5:
-                    break
-                    
-                print(f"\nAtom {atom_count + 1}:")
-                try:
-                    print(f"  Name: {atom.name}")
-                    print(f"  Type: {atom.type}")
-                    print(f"  Position: ({atom.x:.3f}, {atom.y:.3f}, {atom.z:.3f})")
-                    
-                    # Print topology information if available
-                    if hasattr(atom, 'topo_type') and atom.topo_type:
-                        print(f"  Topology type: {atom.topo_type}")
-                        if hasattr(atom, 'topo_charge'):
-                            print(f"  Charge: {atom.topo_charge:.3f}")
-                        if hasattr(atom, 'topo_mass'):
-                            print(f"  Mass: {atom.topo_mass:.3f}")
-                    
-                    # Print force field parameters if available
-                    if (hasattr(atom, 'forcefield_epsilon') and 
-                        not isnan(atom.forcefield_epsilon) and 
-                        hasattr(atom, 'forcefield_rmin') and 
-                        not isnan(atom.forcefield_rmin)):
-                        print(f"  Force field parameters:")
-                        print(f"    Epsilon: {atom.forcefield_epsilon:.3f}")
-                        print(f"    Rmin: {atom.forcefield_rmin:.3f}")
-                except Exception as e:
-                    print(f"  Error printing atom details: {str(e)}")
-                    continue
-                
-                atom_count += 1
-                    
-        except Exception as e:
-            print(f"Error accessing structure information: {str(e)}")
-        
-        # Clear references to help with cleanup
-        structure = None
-        ff = None
-        project = None
-        
-        print("\n=== Test completed successfully ===")
-        return True
-            
-    except Exception as e:
-        print(f"\nERROR during test execution: {str(e)}", file=sys.stderr)
-        import traceback
-        traceback.print_exc()
-        return False
+        else:
+            print(f"Error: {file_path} not found!")
+            sys.exit(1)
+    return {name: os.path.join(test_data_dir, name) for name in files}
 
 def main():
-    print("\n=== Starting main ===")
-    try:
-        success = test_project()
-        if success:
-            print("\n=== Test completed successfully ===")
-            return 0
-        else:
-            print("\n=== Test failed ===")
-            return 1
-    except Exception as e:
-        print(f"\nFATAL ERROR: {e}", file=sys.stderr)
-        import traceback
-        traceback.print_exc()
-        return 1
+    print("\n=== Starting main ===\n")
+    test_project()
 
-if __name__ == "__main__":
-    print("=== Starting test script ===")
-    result = main()
-    print(f"\n=== Script finished with exit code {result} ===")
-    sys.exit(result) 
+def test_project():
+    print("=== Starting test_project ===")
+    
+    # Get test data directory
+    print("Getting test data directory...")
+    test_data_dir = get_test_data_dir()
+    print(f"Test data directory: {test_data_dir}\n")
+
+    # Define test files
+    test_files = {
+        'test.pdb': os.path.join(test_data_dir, 'test.pdb'),
+        'test.top': os.path.join(test_data_dir, 'test.top'),
+        'silcs.str': os.path.join(test_data_dir, 'silcs.str'),
+        'par_all36m_prot.prm': os.path.join(test_data_dir, 'par_all36m_prot.prm'),
+        'par_all36_cgenff.prm': os.path.join(test_data_dir, 'par_all36_cgenff.prm'),
+        'toppar_water_ions.str': os.path.join(test_data_dir, 'toppar_water_ions.str')
+    }
+
+    # Check if test files exist
+    print("Checking test files:")
+    for name, path in test_files.items():
+        print(f"Checking {path}...")
+        if os.path.exists(path):
+            print(f"Found: {path}")
+        else:
+            print(f"Error: {path} not found!")
+            return
+    print()
+
+    # Create project
+    print("=== Creating project ===")
+    print("About to create Project object...")
+    project = Project("test_project")
+    print("Project object created successfully")
+    print(f"Project name: {project.get_name()}\n")
+
+    # Load structure
+    print("=== Loading structure ===")
+    print("About to load structure from:")
+    print(f"PDB: {test_files['test.pdb']}")
+    print(f"TOP: {test_files['test.top']}")
+    print("Calling load_structure...")
+    structure = project.load_structure(test_files['test.pdb'], test_files['test.top'])
+    print("Structure loaded successfully")
+    print(f"Structure contains {len(structure.atoms)} atoms\n")
+
+    # Load force field
+    print("=== Loading force field ===")
+    param_files = [
+        test_files['par_all36m_prot.prm'],
+        test_files['par_all36_cgenff.prm'],
+        test_files['toppar_water_ions.str'],
+        test_files['silcs.str']
+    ]
+    print("About to load force field parameters:")
+    for param_file in param_files:
+        print(f"  {param_file}")
+    print("Calling load_forcefield...")
+    forcefield = project.load_forcefield(param_files)
+    print("Force field loaded successfully")
+    
+    # Print force field parameters before applying
+    print("\n=== Force field parameters before applying ===")
+    forcefield.print_nonbonded_params()
+    
+    # Apply force field to structure
+    print("\n=== Applying force field to structure ===")
+    print("Calling apply_forcefield...")
+    structure.apply_forcefield(forcefield)
+    print("Force field applied successfully\n")
+
+    # Print detailed information
+    print("=== Printing detailed information ===")
+    project.print_all_atoms()
+    project.print_forcefield_info()
+
+if __name__ == '__main__':
+    main() 
