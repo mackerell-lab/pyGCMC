@@ -33,29 +33,39 @@ Structure Project::load_structure(const std::string& pdb_file, const std::string
         // Create a new shared_ptr to a copy of the residue
         auto residue_ptr = std::make_shared<io::IOResidue>();
         *residue_ptr = residue;  // Use copy assignment
+
+        // Create shared_ptr for each atom and update atom_ptrs
+        residue_ptr->atom_ptrs.clear();  // Clear existing pointers
+        for (const auto& atom : residue.atoms) {
+            auto atom_ptr = std::make_shared<io::PDBAtom>(atom);
+            residue_ptr->atom_ptrs.push_back(atom_ptr);
+            structure.add_atom(atom_ptr);  // Add atom to structure's atoms_ vector
+        }
+        
         structure.add_residue(residue_ptr);
     }
     
     // If topology file is provided, load it
     if (!top_file.empty()) {
-        // Create TopParser instance and parse the file
+        // Create TopParser instance and parse the file with includes
         io::TopParser top_parser;
-        if (!top_parser.parse(top_file)) {
+        if (!top_parser.parse_with_includes(top_file)) {
             throw std::runtime_error("Failed to parse topology file: " + top_file);
         }
         
-        // Apply topology to each residue's atoms
+        // Update all atoms with topology information using update_pdb_atoms
+        std::vector<io::PDBAtom*> atom_ptrs;
         for (const auto& residue : structure.residues()) {
             for (const auto& atom : residue->atom_ptrs) {
                 if (atom) {
-                    // Get topology information for this atom
-                    double charge, mass;
-                    if (top_parser.get_atom_properties(atom->residue, atom->name, charge, mass)) {
-                        atom->topo_charge = charge;
-                        atom->topo_mass = mass;
-                    }
+                    atom_ptrs.push_back(atom.get());
                 }
             }
+        }
+        
+        int updated = top_parser.update_pdb_atoms(atom_ptrs);
+        if (updated == 0) {
+            throw std::runtime_error("No atoms were updated with topology information");
         }
     }
     
@@ -74,7 +84,9 @@ std::shared_ptr<ForceField> Project::load_forcefield(const std::vector<std::stri
         // Parse each parameter file
         for (const auto& file : param_files) {
             io::FFParser parser;
-            parser.parse(file);
+            if (!parser.parse(file)) {
+                throw std::runtime_error("Failed to parse force field file: " + file);
+            }
             
             // Get parameters
             const auto& nonbonded = parser.get_nonbonded_params();
@@ -83,6 +95,19 @@ std::shared_ptr<ForceField> Project::load_forcefield(const std::vector<std::stri
             // Copy parameters into force field
             ff->nonbonded_params().insert(nonbonded.begin(), nonbonded.end());
             ff->nbfix_params().insert(nbfix.begin(), nbfix.end());
+
+            // If we have a structure loaded, update its atoms with force field parameters
+            if (structure_) {
+                std::vector<io::PDBAtom*> atom_ptrs;
+                for (const auto& residue : structure_->residues()) {
+                    for (const auto& atom : residue->atom_ptrs) {
+                        if (atom) {
+                            atom_ptrs.push_back(atom.get());
+                        }
+                    }
+                }
+                parser.update_pdb_atoms(atom_ptrs);
+            }
         }
         
         // Store force field in the project
