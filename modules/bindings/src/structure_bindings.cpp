@@ -18,6 +18,11 @@ void init_structure_bindings(py::module& m) {
         .def("read_top_file", &Structure::read_top_file, "Read topology from TOP file (with includes)")
         .def("read_top_file_without_includes", &Structure::read_top_file_without_includes, "Read topology from TOP file without includes")
         .def("read_top_file_with_includes", &Structure::read_top_file_with_includes, "Read topology from TOP file with includes (alias for read_top_file)")
+        // Add PSF and ITP loading methods (both read_* and load_* variants)
+        .def("read_psf", &Structure::read_psf, "Read topology from PSF file")
+        .def("read_itp", &Structure::read_itp, "Read topology from ITP file")
+        .def("load_psf", &Structure::load_psf, "Read topology from PSF file (alias for read_psf)")
+        .def("load_itp", &Structure::load_itp, "Read topology from ITP file (alias for read_itp)")
         // Add alias methods for test compatibility
         .def("read_pdb", &Structure::read_pdb, "Read structure from PDB file (alias for read_pdb_file)")
         .def("read_top", &Structure::read_top, "Read topology from TOP file (alias for read_top_file)")

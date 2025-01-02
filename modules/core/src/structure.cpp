@@ -4,6 +4,8 @@
 #include "pygcmc/core/forcefield.hpp"
 #include "pygcmc/core/io/pdb_parser.hpp"
 #include "pygcmc/core/io/top_parser.hpp"
+#include "pygcmc/core/io/psf_parser.hpp"
+#include "pygcmc/core/io/itp_parser.hpp"
 #include <memory>
 #include <vector>
 #include <stdexcept>
@@ -322,6 +324,128 @@ std::vector<std::unordered_map<std::string, std::variant<std::string, int, doubl
     }
     
     return atoms_data;
+}
+
+void Structure::load_psf(const std::string& psf_file) {
+    read_psf_file(psf_file);
+}
+
+void Structure::load_itp(const std::string& itp_file) {
+    read_itp_file(itp_file);
+}
+
+void Structure::read_psf_file(const std::string& psf_file) {
+    // Create PSFParser instance and parse the file
+    io::PSFParser psf_parser;
+    if (!psf_parser.parse(psf_file)) {
+        throw std::runtime_error("Cannot open file: " + psf_file);
+    }
+    
+    if (atoms_.empty()) {
+        // We should have atoms before reading PSF
+        throw std::runtime_error("No atoms were updated with topology information");
+    }
+    
+    // Update atoms with PSF information
+    update_atoms_topology(psf_parser);
+}
+
+void Structure::read_itp_file(const std::string& itp_file) {
+    // Create ITPParser instance and parse the file
+    io::ITPParser itp_parser;
+    if (!itp_parser.parse(itp_file)) {
+        throw std::runtime_error("Cannot open file: " + itp_file);
+    }
+    
+    if (atoms_.empty()) {
+        // Cache the ITP for later use
+        cached_itps_.push_back(std::move(itp_parser));
+    } else {
+        // Update atoms with ITP information
+        update_atoms_topology(itp_parser);
+    }
+}
+
+void Structure::update_atoms_topology(io::PSFParser& psf_parser) {
+    // Get all atom pointers
+    std::vector<io::PDBAtom*> atom_ptrs;
+    for (const auto& residue : residues_) {
+        for (const auto& atom : residue->atom_ptrs) {
+            if (atom) {
+                atom_ptrs.push_back(atom.get());
+            }
+        }
+    }
+    
+    // Convert pointers to actual atoms for update
+    std::vector<io::PDBAtom> atoms;
+    atoms.reserve(atom_ptrs.size());
+    for (auto* ptr : atom_ptrs) {
+        atoms.push_back(*ptr);
+    }
+    
+    // Update atoms with PSF information
+    int updated = psf_parser.update_pdb_atoms(atoms);
+    if (updated == 0) {
+        throw std::runtime_error("No atoms were updated with PSF information");
+    }
+    
+    // Copy updated information back to original atoms
+    for (size_t i = 0; i < atom_ptrs.size(); ++i) {
+        atom_ptrs[i]->topo_type = atoms[i].topo_type;
+        atom_ptrs[i]->topo_charge = atoms[i].topo_charge;
+        atom_ptrs[i]->topo_mass = atoms[i].topo_mass;
+        atom_ptrs[i]->chain = atoms[i].chain;
+    }
+}
+
+void Structure::update_atoms_topology(io::ITPParser& itp_parser) {
+    // Get all atom pointers
+    std::vector<io::PDBAtom*> atom_ptrs;
+    for (const auto& residue : residues_) {
+        for (const auto& atom : residue->atom_ptrs) {
+            if (atom) {
+                atom_ptrs.push_back(atom.get());
+            }
+        }
+    }
+    
+    // Convert pointers to actual atoms for update
+    std::vector<io::PDBAtom> atoms;
+    atoms.reserve(atom_ptrs.size());
+    for (auto* ptr : atom_ptrs) {
+        atoms.push_back(*ptr);
+    }
+    
+    // Update atoms with ITP information
+    // Don't check number of updated atoms - this is expected for ITP files
+    // that only contain some residues
+    itp_parser.update_pdb_atoms(atoms);
+    
+    // Copy updated information back to original atoms
+    for (size_t i = 0; i < atom_ptrs.size(); ++i) {
+        atom_ptrs[i]->topo_type = atoms[i].topo_type;
+        atom_ptrs[i]->topo_charge = atoms[i].topo_charge;
+        atom_ptrs[i]->topo_mass = atoms[i].topo_mass;
+        atom_ptrs[i]->chain = atoms[i].chain;
+    }
+}
+
+void Structure::apply_cached_psf() {
+    if (has_cached_psf_ && !atoms_.empty()) {
+        update_atoms_topology(*cached_psf_);
+        cached_psf_ = std::nullopt;
+        has_cached_psf_ = false;
+    }
+}
+
+void Structure::apply_cached_itps() {
+    if (!atoms_.empty()) {
+        for (auto& itp : cached_itps_) {
+            update_atoms_topology(itp);
+        }
+        cached_itps_.clear();
+    }
 }
 
 } // namespace core

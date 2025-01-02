@@ -11,6 +11,8 @@
 #include <variant>
 #include "pygcmc/core/io/pdb_parser.hpp"
 #include "pygcmc/core/io/top_parser.hpp"
+#include "pygcmc/core/io/psf_parser.hpp"
+#include "pygcmc/core/io/itp_parser.hpp"
 #include "pygcmc/core/forcefield.hpp"
 
 namespace pygcmc {
@@ -72,6 +74,14 @@ public:
     void read_top(const std::string& top_file) { read_top_file(top_file); }
     void read_top_without_includes(const std::string& top_file) { read_top_file_without_includes(top_file); }
 
+    // New PSF and ITP loading functions
+    void load_psf(const std::string& psf_file);
+    void load_itp(const std::string& itp_file);
+    
+    // Alias methods for PSF and ITP reading (for consistency with other methods)
+    void read_psf(const std::string& psf_file) { load_psf(psf_file); }
+    void read_itp(const std::string& itp_file) { load_itp(itp_file); }
+
 private:
     std::vector<std::shared_ptr<io::IOResidue>> residues_;
     std::vector<std::shared_ptr<io::PDBAtom>> atoms_;
@@ -82,11 +92,24 @@ private:
     std::optional<io::TopParser> cached_topology_;
     bool has_cached_topology_ = false;
 
-    // Helper function for topology loading
+    // Cache for PSF and ITP information
+    std::optional<io::PSFParser> cached_psf_;
+    std::vector<io::ITPParser> cached_itps_;
+    bool has_cached_psf_ = false;
+
+    // Helper functions for topology loading
     void update_atoms_topology(io::TopParser& top_parser);
+    void update_atoms_topology(io::PSFParser& psf_parser);
+    void update_atoms_topology(io::ITPParser& itp_parser);
     
     // Helper function to apply cached topology if exists
     void apply_cached_topology();
+    void apply_cached_psf();
+    void apply_cached_itps();
+
+    // Private implementation functions
+    void read_psf_file(const std::string& psf_file);
+    void read_itp_file(const std::string& itp_file);
 };
 
 } // namespace core
