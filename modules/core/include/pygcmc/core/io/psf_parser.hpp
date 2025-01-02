@@ -1,7 +1,6 @@
 // modules/core/include/pygcmc/core/io/psf_parser.hpp
 
-#ifndef PYGCMC_CORE_IO_PSF_PARSER_HPP
-#define PYGCMC_CORE_IO_PSF_PARSER_HPP
+#pragma once
 
 #include <string>
 #include <vector>
@@ -79,16 +78,23 @@ public:
     std::map<std::string, std::set<std::string>> get_missing_topology_info(
         const std::vector<PDBAtom>& atoms) const;
 
+    /**
+     * @brief Update PDB atoms with PSF topology information based on residue and atom order
+     * @param atoms Vector of pointers to PDB atoms to update
+     * @return Number of atoms updated
+     */
+    int update_pdb_atoms_by_order(std::vector<PDBAtom*>& atoms);
+
 private:
     struct PSFAtom {
-        int id;                 ///< PSF 中的全局原子编号
-        std::string segment;    ///< 对应 SEGID
-        std::string residue;    ///< 残基名 (RESNAME)
-        std::string name;       ///< 原子名 (ATOMNAME)
-        std::string type;       ///< 原子类型 (ATOMTYPE)
-        int residue_number;     ///< 残基序号 (RESID)
-        double charge;          ///< 原子电荷
-        double mass;            ///< 原子质量
+        int id;                 ///< PSF atom ID
+        std::string segment;    ///< Segment ID
+        std::string residue;    ///< Residue name
+        std::string name;       ///< Atom name
+        std::string type;       ///< Atom type
+        int residue_number;     ///< Residue number
+        double charge;          ///< Atom charge
+        double mass;            ///< Atom mass
     };
 
     std::vector<PSFAtom> atoms_;
@@ -110,6 +116,4 @@ private:
 } // namespace io
 } // namespace core
 } // namespace pygcmc
-
-#endif // PYGCMC_CORE_IO_PSF_PARSER_HPP
 

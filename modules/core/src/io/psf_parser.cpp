@@ -286,6 +286,51 @@ std::map<std::string, std::set<std::string>> PSFParser::get_missing_topology_inf
     return missing_info;
 }
 
+int PSFParser::update_pdb_atoms_by_order(std::vector<PDBAtom*>& atoms) {
+    // Group atoms by residue sequence number
+    std::map<std::pair<std::string, int>, std::vector<PDBAtom*>> pdb_atoms_by_res;
+    std::map<std::pair<std::string, int>, std::vector<const PSFAtom*>> psf_atoms_by_res;
+    
+    // Group PDB atoms
+    for (auto* atom : atoms) {
+        if (atom) {
+            pdb_atoms_by_res[std::make_pair(atom->residue, atom->sequence)].push_back(atom);
+        }
+    }
+    
+    // Group PSF atoms
+    for (const auto& atom : atoms_) {
+        psf_atoms_by_res[std::make_pair(atom.residue, atom.residue_number)].push_back(&atom);
+    }
+    
+    // For each residue, map topology data based on order
+    int updated_count = 0;
+    for (auto& [res_key, pdb_atoms] : pdb_atoms_by_res) {
+        auto psf_it = psf_atoms_by_res.find(res_key);
+        if (psf_it == psf_atoms_by_res.end()) continue;
+        
+        auto& psf_atoms = psf_it->second;
+        
+        // Sort both PDB and PSF atoms by their serial numbers within the residue
+        std::sort(pdb_atoms.begin(), pdb_atoms.end(),
+            [](const PDBAtom* a, const PDBAtom* b) { return a->serial < b->serial; });
+        std::sort(psf_atoms.begin(), psf_atoms.end(),
+            [](const PSFAtom* a, const PSFAtom* b) { return a->id < b->id; });
+        
+        // Map topology data in order
+        size_t num_atoms = std::min(pdb_atoms.size(), psf_atoms.size());
+        for (size_t i = 0; i < num_atoms; ++i) {
+            pdb_atoms[i]->topo_type = psf_atoms[i]->type;
+            pdb_atoms[i]->topo_charge = psf_atoms[i]->charge;
+            pdb_atoms[i]->topo_mass = psf_atoms[i]->mass;
+            pdb_atoms[i]->chain = psf_atoms[i]->segment.empty() ? ' ' : psf_atoms[i]->segment[0];
+            updated_count++;
+        }
+    }
+    
+    return updated_count;
+}
+
 } // namespace io
 } // namespace core
 } // namespace pygcmc

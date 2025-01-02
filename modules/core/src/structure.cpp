@@ -10,6 +10,8 @@
 #include <vector>
 #include <stdexcept>
 #include <cmath>
+#include <map>
+#include <algorithm>
 
 namespace pygcmc {
 namespace core {
@@ -374,8 +376,21 @@ void Structure::read_psf_file(const std::string& psf_file) {
         cached_psf_ = std::move(psf_parser);
         has_cached_psf_ = true;
     } else {
-        // Update atoms with PSF information
-        update_atoms_topology(psf_parser);
+        // Get all atom pointers
+        std::vector<io::PDBAtom*> atom_ptrs;
+        for (const auto& residue : residues_) {
+            for (const auto& atom : residue->atom_ptrs) {
+                if (atom) {
+                    atom_ptrs.push_back(atom.get());
+                }
+            }
+        }
+        
+        // Update atoms with PSF information using order-based mapping
+        int updated = psf_parser.update_pdb_atoms_by_order(atom_ptrs);
+        if (updated == 0) {
+            throw std::runtime_error("No atoms were updated with PSF information");
+        }
     }
 }
 

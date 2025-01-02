@@ -246,70 +246,70 @@ def test_topology_loading_order(project, structure_files):
     sol_structure2.read_pdb(structure_files['sol_pdb'])
     verify_sol_structure(sol_structure2) 
 
-# def test_topology_file_equivalence(project, structure_files, param_files):
-#     """Test that loading the same structure with different topology files gives identical results."""
-#     # Create and load the first structure using TOP file
-#     top_structure = project.create_structure()
-#     top_structure.read_pdb(structure_files['pdb'])
-#     top_structure.read_top(structure_files['top'])
+def test_topology_file_equivalence(project, structure_files, param_files):
+    """Test that loading the same structure with different topology files gives identical results."""
+    # Create and load the first structure using TOP file
+    top_structure = project.create_structure()
+    top_structure.read_pdb(structure_files['pdb'])
+    top_structure.read_top(structure_files['top'])
 
-#     # Create and load the second structure using PSF file
-#     psf_structure = project.create_structure()
-#     psf_structure.read_pdb(structure_files['pdb'])
-#     # Read PSF file first to establish base topology
-#     psf_structure.read_psf(structure_files['psf'])
-#     # Then read ITP files to add any additional information
-#     psf_structure.read_itp(structure_files['sol_itp'])
-#     psf_structure.read_itp(structure_files['benx_itp'])
-#     psf_structure.read_itp(structure_files['prpx_itp'])
+    # Create and load the second structure using PSF file
+    psf_structure = project.create_structure()
+    psf_structure.read_pdb(structure_files['pdb'])
+    # Read PSF file first to establish base topology
+    psf_structure.read_psf(structure_files['psf'])
+    # Then read ITP files to add any additional information
+    psf_structure.read_itp(structure_files['sol_itp'])
+    psf_structure.read_itp(structure_files['benx_itp'])
+    psf_structure.read_itp(structure_files['prpx_itp'])
 
-#     # Get atoms data from both structures
-#     top_atoms = top_structure.get_atoms_data()
-#     psf_atoms = psf_structure.get_atoms_data()
+    # Get atoms data from both structures
+    top_atoms = top_structure.get_atoms_data()
+    psf_atoms = psf_structure.get_atoms_data()
 
-#     # Compare number of atoms
-#     assert len(top_atoms) == len(psf_atoms), "Number of atoms mismatch"
+    # Compare number of atoms
+    assert len(top_atoms) == len(psf_atoms), "Number of atoms mismatch"
 
-#     # Compare atom properties
-#     for i, (top_atom, psf_atom) in enumerate(zip(top_atoms, psf_atoms)):
-#         # Print debug information for the first few atoms
-#         if i < 5:
-#             print(f"Atom {i}:")
-#             print(f"  TOP: {top_atom}")
-#             print(f"  PSF: {psf_atom}")
+    # Compare atom properties
+    for i, (top_atom, psf_atom) in enumerate(zip(top_atoms, psf_atoms)):
+        # Print debug information for the first few atoms
+        if i < 5:
+            print(f"Atom {i}:")
+            print(f"  TOP: {top_atom}")
+            print(f"  PSF: {psf_atom}")
 
-#         # Basic properties
-#         assert top_atom['residue'] == psf_atom['residue'], f"Residue mismatch at atom {i}"
-#         assert top_atom['sequence'] == psf_atom['sequence'], f"Sequence mismatch at atom {i}"
-#         assert top_atom['name'] == psf_atom['name'], f"Name mismatch at atom {i}"
+        # Basic properties
+        assert top_atom['residue'] == psf_atom['residue'], f"Residue mismatch at atom {i}"
+        assert top_atom['sequence'] == psf_atom['sequence'], f"Sequence mismatch at atom {i}"
+        assert top_atom['name'] == psf_atom['name'], f"Name mismatch at atom {i}"
 
-#         # Topology information
-#         assert top_atom['topo_type'] == psf_atom['topo_type'], f"Topology type mismatch at atom {i}"
-#         assert abs(top_atom['topo_charge'] - psf_atom['topo_charge']) < 1e-6, f"Charge mismatch at atom {i}"
-#         assert abs(top_atom['topo_mass'] - psf_atom['topo_mass']) < 1e-6, f"Mass mismatch at atom {i}"
+        # Topology information
+        assert top_atom['topo_type'] == psf_atom['topo_type'], f"Topology type mismatch at atom {i}"
+        assert abs(top_atom['topo_charge'] - psf_atom['topo_charge']) < 1e-6, f"Charge mismatch at atom {i}"
+        assert abs(top_atom['topo_mass'] - psf_atom['topo_mass']) < 1e-6, f"Mass mismatch at atom {i}"
 
-#         # Coordinates (handle NaN values)
-#         for coord in ['x', 'y', 'z']:
-#             top_val = top_atom[coord]
-#             psf_val = psf_atom[coord]
-#             if math.isnan(top_val) and math.isnan(psf_val):
-#                 continue
-#             assert abs(top_val - psf_val) < 1e-6, f"{coord} coordinate mismatch at atom {i}"
+        # Coordinates (handle NaN values)
+        for coord in ['x', 'y', 'z']:
+            top_val = top_atom[coord]
+            psf_val = psf_atom[coord]
+            if math.isnan(top_val) and math.isnan(psf_val):
+                continue
+            assert abs(top_val - psf_val) < 1e-6, f"{coord} coordinate mismatch at atom {i}"
 
-#     # Compare box parameters
-#     top_box = top_structure.get_box()
-#     psf_box = psf_structure.get_box()
-#     if top_box is None:
-#         assert psf_box is None, "Box parameter mismatch"
-#     else:
-#         assert psf_box is not None, "Box parameter mismatch"
-#         for i in range(len(top_box)):
-#             assert abs(top_box[i] - psf_box[i]) < 1e-6, f"Box parameter {i} mismatch"
+    # Compare box parameters
+    top_box = top_structure.get_box()
+    psf_box = psf_structure.get_box()
+    if top_box is None:
+        assert psf_box is None, "Box parameter mismatch"
+    else:
+        assert psf_box is not None, "Box parameter mismatch"
+        for i in range(len(top_box)):
+            assert abs(top_box[i] - psf_box[i]) < 1e-6, f"Box parameter {i} mismatch"
 
-#     # Compare box vectors
-#     top_box_vectors = top_structure.get_box_vectors()
-#     psf_box_vectors = psf_structure.get_box_vectors()
-#     assert len(top_box_vectors) == len(psf_box_vectors), "Box vectors length mismatch"
-#     for i in range(len(top_box_vectors)):
-#         for j in range(3):
-#             assert abs(top_box_vectors[i][j] - psf_box_vectors[i][j]) < 1e-6, f"Box vector {i},{j} mismatch" 
+    # Compare box vectors
+    top_box_vectors = top_structure.get_box_vectors()
+    psf_box_vectors = psf_structure.get_box_vectors()
+    assert len(top_box_vectors) == len(psf_box_vectors), "Box vectors length mismatch"
+    for i in range(len(top_box_vectors)):
+        for j in range(3):
+            assert abs(top_box_vectors[i][j] - psf_box_vectors[i][j]) < 1e-6, f"Box vector {i},{j} mismatch" 
