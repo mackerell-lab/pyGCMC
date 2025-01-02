@@ -120,6 +120,11 @@ TEST_F(TestPSFParser, GetAtomProperties) {
     EXPECT_NEAR(charge, 0.32, 1e-6);
     EXPECT_NEAR(mass, 1.008, 1e-6);
 
+    // Test ALA residue atom properties
+    ASSERT_TRUE(parser_->get_atom_properties("ALA", 7, "HT1", charge, mass));
+    EXPECT_NEAR(charge, 0.33, 1e-6);
+    EXPECT_NEAR(mass, 1.008, 1e-6);
+
     // Test non-existent atoms and residues
     ASSERT_FALSE(parser_->get_atom_properties("XXX", 1, "XXX", charge, mass));
     ASSERT_FALSE(parser_->get_atom_properties("BEN", 1, "C1", charge, mass));
