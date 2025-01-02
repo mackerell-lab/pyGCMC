@@ -1,6 +1,14 @@
 # modules/bindings/CMakeLists.txt
 
-pybind11_add_module(pygcmc src/bindings.cpp)
+pybind11_add_module(pygcmc 
+    src/bindings.cpp
+    src/basic_bindings.cpp
+    src/parser_bindings.cpp
+    src/structure_bindings.cpp
+    src/forcefield_bindings.cpp
+    src/project_bindings.cpp
+    src/system_bindings.cpp
+)
 
 target_link_libraries(pygcmc PRIVATE pygcmc_core)
 
