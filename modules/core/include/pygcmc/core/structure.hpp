@@ -52,11 +52,27 @@ public:
     std::unordered_map<std::string, double> get_energy_components() const;
     std::vector<std::tuple<size_t, double, double, double>> get_atom_energy_contributions() const;
 
+    // New functions for loading structure data
+    void load_pdb(const std::string& pdb_file);
+    void load_top(const std::string& top_file);
+    void load_top_with_includes(const std::string& top_file);
+
+    // New separate loading functions
+    void read_pdb_file(const std::string& pdb_file);
+    void read_top_file(const std::string& top_file);
+    void read_top_file_with_includes(const std::string& top_file);
+
 private:
     std::vector<std::shared_ptr<io::IOResidue>> residues_;
     std::vector<std::shared_ptr<io::PDBAtom>> atoms_;
     std::optional<std::array<double, 6>> box_;  // Box dimensions (a, b, c, alpha, beta, gamma)
     std::shared_ptr<ForceField> forcefield_;
+
+    // Helper function for topology loading
+    void update_atoms_topology(io::TopParser& top_parser);
+
+    // New helper function
+    void apply_topology_to_atoms(io::TopParser& top_parser);
 };
 
 } // namespace core

@@ -24,57 +24,12 @@ Project::~Project() {
 Structure Project::load_structure(const std::string& pdb_file, const std::string& top_file) {
     Structure structure;
     
-    // Parse PDB file
-    auto [box_vec, residues] = io::PDBParser::parse(pdb_file);
+    // Load PDB file
+    structure.load_pdb(pdb_file);
     
-    // Convert vector box to array box if present
-    if (box_vec && box_vec->size() == 6) {
-        std::array<double, 6> box_arr;
-        std::copy(box_vec->begin(), box_vec->end(), box_arr.begin());
-        structure.set_box(std::make_optional(box_arr));
-    } else {
-        structure.set_box(std::nullopt);
-    }
-    
-    // Add residues to structure
-    for (const auto& residue : residues) {
-        // Create a new shared_ptr to a copy of the residue
-        auto residue_ptr = std::make_shared<io::IOResidue>();
-        *residue_ptr = residue;  // Use copy assignment
-
-        // Create shared_ptr for each atom and update atom_ptrs
-        residue_ptr->atom_ptrs.clear();  // Clear existing pointers
-        for (const auto& atom : residue.atoms) {
-            auto atom_ptr = std::make_shared<io::PDBAtom>(atom);
-            residue_ptr->atom_ptrs.push_back(atom_ptr);
-            structure.add_atom(atom_ptr);  // Add atom to structure's atoms_ vector
-        }
-        
-        structure.add_residue(residue_ptr);
-    }
-    
-    // If topology file is provided, load it
+    // If topology file is provided, load it with includes
     if (!top_file.empty()) {
-        // Create TopParser instance and parse the file with includes
-        io::TopParser top_parser;
-        if (!top_parser.parse_with_includes(top_file)) {
-            throw std::runtime_error("Failed to parse topology file: " + top_file);
-        }
-        
-        // Update all atoms with topology information using update_pdb_atoms
-        std::vector<io::PDBAtom*> atom_ptrs;
-        for (const auto& residue : structure.residues()) {
-            for (const auto& atom : residue->atom_ptrs) {
-                if (atom) {
-                    atom_ptrs.push_back(atom.get());
-                }
-            }
-        }
-        
-        int updated = top_parser.update_pdb_atoms(atom_ptrs);
-        if (updated == 0) {
-            throw std::runtime_error("No atoms were updated with topology information");
-        }
+        structure.load_top_with_includes(top_file);
     }
     
     // Store structure in project

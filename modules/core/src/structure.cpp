@@ -2,6 +2,8 @@
 
 #include "pygcmc/core/structure.hpp"
 #include "pygcmc/core/forcefield.hpp"
+#include "pygcmc/core/io/pdb_parser.hpp"
+#include "pygcmc/core/io/top_parser.hpp"
 #include <memory>
 #include <vector>
 #include <stdexcept>
@@ -166,6 +168,115 @@ std::vector<std::tuple<size_t, double, double, double>> Structure::get_atom_ener
     }
     
     return atom_energies;
+}
+
+void Structure::load_pdb(const std::string& pdb_file) {
+    read_pdb_file(pdb_file);
+}
+
+void Structure::load_top(const std::string& top_file) {
+    read_top_file(top_file);
+}
+
+void Structure::load_top_with_includes(const std::string& top_file) {
+    read_top_file_with_includes(top_file);
+}
+
+void Structure::update_atoms_topology(io::TopParser& top_parser) {
+    // Get all atom pointers
+    std::vector<io::PDBAtom*> atom_ptrs;
+    for (const auto& residue : residues()) {
+        for (const auto& atom : residue->atom_ptrs) {
+            if (atom) {
+                atom_ptrs.push_back(atom.get());
+            }
+        }
+    }
+    
+    // Update atoms with topology information
+    int updated = top_parser.update_pdb_atoms(atom_ptrs);
+    if (updated == 0) {
+        throw std::runtime_error("No atoms were updated with topology information");
+    }
+}
+
+void Structure::read_pdb_file(const std::string& pdb_file) {
+    // Parse PDB file
+    auto [box_vec, residues] = io::PDBParser::parse(pdb_file);
+    
+    // Convert vector box to array box if present
+    if (box_vec && box_vec->size() == 6) {
+        std::array<double, 6> box_arr;
+        std::copy(box_vec->begin(), box_vec->end(), box_arr.begin());
+        set_box(std::make_optional(box_arr));
+    } else {
+        set_box(std::nullopt);
+    }
+    
+    // Clear existing data
+    residues_.clear();
+    atoms_.clear();
+    
+    // Add residues to structure
+    for (const auto& residue : residues) {
+        // Create a new shared_ptr to a copy of the residue
+        auto residue_ptr = std::make_shared<io::IOResidue>();
+        *residue_ptr = residue;  // Use copy assignment
+
+        // Create shared_ptr for each atom and update atom_ptrs
+        residue_ptr->atom_ptrs.clear();  // Clear existing pointers
+        for (const auto& atom : residue.atoms) {
+            auto atom_ptr = std::make_shared<io::PDBAtom>(atom);
+            residue_ptr->atom_ptrs.push_back(atom_ptr);
+            add_atom(atom_ptr);  // Add atom to structure's atoms_ vector
+        }
+        
+        add_residue(residue_ptr);
+    }
+}
+
+void Structure::read_top_file(const std::string& top_file) {
+    // Create TopParser instance and parse the file without includes
+    io::TopParser top_parser;
+    if (!top_parser.parse(top_file)) {
+        throw std::runtime_error("Failed to parse topology file: " + top_file);
+    }
+    
+    // Update atoms with topology information
+    apply_topology_to_atoms(top_parser);
+}
+
+void Structure::read_top_file_with_includes(const std::string& top_file) {
+    // Create TopParser instance and parse the file with includes
+    io::TopParser top_parser;
+    if (!top_parser.parse_with_includes(top_file)) {
+        throw std::runtime_error("Failed to parse topology file: " + top_file);
+    }
+    
+    // Update atoms with topology information
+    apply_topology_to_atoms(top_parser);
+}
+
+void Structure::apply_topology_to_atoms(io::TopParser& top_parser) {
+    if (atoms_.empty()) {
+        throw std::runtime_error("No atoms loaded. Please load PDB file first.");
+    }
+
+    // Get all atom pointers
+    std::vector<io::PDBAtom*> atom_ptrs;
+    for (const auto& residue : residues_) {
+        for (const auto& atom : residue->atom_ptrs) {
+            if (atom) {
+                atom_ptrs.push_back(atom.get());
+            }
+        }
+    }
+    
+    // Update atoms with topology information
+    int updated = top_parser.update_pdb_atoms(atom_ptrs);
+    if (updated == 0) {
+        throw std::runtime_error("No atoms were updated with topology information");
+    }
 }
 
 } // namespace core
