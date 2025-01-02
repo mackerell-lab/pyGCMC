@@ -132,10 +132,10 @@ def test_error_handling(project, structure_files):
     """Test error handling in PSF and ITP reading."""
     structure = project.create_structure()
     
-    # Test reading PSF without PDB
-    with pytest.raises(Exception) as excinfo:
-        structure.read_psf(structure_files['psf'])
-    assert "No atoms were updated with topology information" in str(excinfo.value)
+    # # Test reading PSF without PDB
+    # with pytest.raises(Exception) as excinfo:
+    #     structure.read_psf(structure_files['psf'])
+    # assert "No atoms were updated with topology information" in str(excinfo.value)
     
     # Test reading non-existent PSF file
     with pytest.raises(Exception) as excinfo:
@@ -152,3 +152,45 @@ def test_error_handling(project, structure_files):
     with pytest.raises(Exception) as excinfo:
         structure.read_psf("tests/data/water.pdb")  # Using water.pdb as a stand-in for mismatched PSF
     assert "Cannot open file" in str(excinfo.value) 
+
+def test_read_topology_before_pdb(project, structure_files):
+    """Test reading PSF and ITP files before PDB."""
+    structure = project.create_structure()
+
+    # Read PSF file first
+    structure.read_psf(structure_files['psf'])
+    
+    # Read ITP files
+    structure.read_itp(structure_files['benx'])
+    structure.read_itp(structure_files['prpx'])
+    structure.read_itp(structure_files['sol'])
+    
+    # Read PDB file last
+    structure.read_pdb(structure_files['pdb'])
+    
+    # Verify that topology information is correctly applied
+    atoms_data = structure.get_atoms_data()
+    assert len(atoms_data) > 0
+    
+    # Check both ALA N atoms to ensure they have correct types
+    ala_n_atoms = [(atom['sequence'], atom['topo_type']) 
+                   for atom in atoms_data 
+                   if atom['residue'] == 'ALA' and atom['name'] == 'N']
+    
+    # Sort by sequence number to ensure consistent order
+    ala_n_atoms.sort()
+    
+    # First ALA (sequence 7) should have NH3
+    assert ala_n_atoms[0][0] == 7
+    assert ala_n_atoms[0][1] == 'NH3', f"First ALA N should be NH3, got {ala_n_atoms[0][1]}"
+    
+    # Second ALA (sequence 10) should have NH1
+    assert ala_n_atoms[1][0] == 10
+    assert ala_n_atoms[1][1] == 'NH1', f"Second ALA N should be NH1, got {ala_n_atoms[1][1]}"
+
+    # Check VAL CA atom
+    for atom in atoms_data:
+        if atom['name'] == 'CA' and atom['residue'] == 'VAL':
+            assert atom['topo_type'] == 'CT1'
+            assert abs(atom['topo_charge'] - 0.070) < 1e-6
+            assert abs(atom['topo_mass'] - 12.011) < 1e-6 

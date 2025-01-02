@@ -14,8 +14,7 @@ namespace io {
 bool PSFParser::parse(const std::string& filename) {
     std::ifstream file(filename);
     if (!file.is_open()) {
-        std::cerr << "Cannot open file: " << filename << std::endl;
-        return false;
+        throw std::runtime_error("Cannot open file: " + filename);
     }
 
     std::vector<std::string> atom_lines;
@@ -34,7 +33,9 @@ bool PSFParser::parse(const std::string& filename) {
             // Extract number of atoms
             std::istringstream iss(line);
             iss >> natoms;
-            std::cout << "Found " << natoms << " atoms" << std::endl;
+            if (natoms <= 0) {
+                throw std::runtime_error("Invalid number of atoms in PSF file: " + std::to_string(natoms));
+            }
             in_atoms_section = true;
             continue;
         }
@@ -48,6 +49,10 @@ bool PSFParser::parse(const std::string& filename) {
         if (in_atoms_section && !line.empty()) {
             atom_lines.push_back(line);
         }
+    }
+
+    if (atom_lines.empty()) {
+        throw std::runtime_error("No atoms found in PSF file");
     }
 
     return parse_atoms_section(atom_lines);
@@ -170,75 +175,42 @@ bool PSFParser::get_atom_properties(const std::string& residue_name,
 
 int PSFParser::update_pdb_atoms(std::vector<PDBAtom>& pdb_atoms) const {
     int updated = 0;
+    
+    // First pass: match by exact residue number and atom name
     for (auto& pdb_atom : pdb_atoms) {
-        // 1) 先尝试通过 serial 号匹配
-        if (pdb_atom.serial > 0) {
-            auto it = id_index_.find(pdb_atom.serial);
-            if (it != id_index_.end()) {
-                const PSFAtom& psf_atom = atoms_[it->second];
-                // 验证残基名和原子名是否匹配
+        for (const auto& psf_atom : atoms_) {
+            if (psf_atom.residue == pdb_atom.residue && 
+                psf_atom.residue_number == pdb_atom.sequence &&
+                psf_atom.name == pdb_atom.name) {
+                
+                pdb_atom.topo_type = psf_atom.type;
+                pdb_atom.topo_charge = psf_atom.charge;
+                pdb_atom.topo_mass = psf_atom.mass;
+                pdb_atom.chain = psf_atom.segment.empty() ? ' ' : psf_atom.segment[0];
+                updated++;
+                break;
+            }
+        }
+    }
+    
+    // Second pass: match by residue name and atom name if sequence number didn't match
+    for (auto& pdb_atom : pdb_atoms) {
+        if (pdb_atom.topo_type.empty()) {  // Only try to match if not already matched
+            for (const auto& psf_atom : atoms_) {
                 if (psf_atom.residue == pdb_atom.residue && 
-                    psf_atom.name == pdb_atom.name) 
-                {
+                    psf_atom.name == pdb_atom.name) {
+                    
                     pdb_atom.topo_type = psf_atom.type;
                     pdb_atom.topo_charge = psf_atom.charge;
                     pdb_atom.topo_mass = psf_atom.mass;
                     pdb_atom.chain = psf_atom.segment.empty() ? ' ' : psf_atom.segment[0];
                     updated++;
-                    continue;
-                }
-            }
-        }
-
-        // 2) 如果通过 serial 号匹配失败，尝试通过 residue + sequence + name 匹配
-        auto res_it = atom_index_.find(pdb_atom.residue);
-        if (res_it == atom_index_.end()) {
-            std::cerr << "Residue not found: " << pdb_atom.residue << std::endl;
-            continue;
-        }
-
-        // 查找 residue_number
-        auto res_num_it = res_it->second.find(pdb_atom.sequence);
-        if (res_num_it == res_it->second.end()) {
-            // 如果精确匹配不到 residue_number，尝试找到第一个包含该原子名的残基
-            bool found = false;
-            for (const auto& [res_num, atoms_map] : res_it->second) {
-                auto atom_it = atoms_map.find(pdb_atom.name);
-                if (atom_it != atoms_map.end()) {
-                    res_num_it = res_it->second.find(res_num);
-                    found = true;
                     break;
                 }
             }
-            if (!found) {
-                std::cerr << "Residue number not found: " 
-                          << pdb_atom.residue << " " << pdb_atom.sequence << std::endl;
-                continue;
-            }
         }
-
-        // 查找 atom_name
-        auto atom_it = res_num_it->second.find(pdb_atom.name);
-        if (atom_it == res_num_it->second.end()) {
-            std::cerr << "Atom not found: " << pdb_atom.residue << " " 
-                      << pdb_atom.name << std::endl;
-            continue;
-        }
-
-        // 取出 PSFAtom 并更新 PDBAtom
-        const PSFAtom& psf_atom = atoms_[atom_it->second];
-        pdb_atom.topo_type = psf_atom.type;
-        pdb_atom.topo_charge = psf_atom.charge;
-        pdb_atom.topo_mass = psf_atom.mass;
-        pdb_atom.chain = psf_atom.segment.empty() ? ' ' : psf_atom.segment[0];
-
-        std::cout << "Updated atom: " << pdb_atom.residue << " " << pdb_atom.name
-                  << " type=" << pdb_atom.topo_type 
-                  << " charge=" << pdb_atom.topo_charge
-                  << " mass=" << pdb_atom.topo_mass 
-                  << " chain=" << pdb_atom.chain << std::endl;
-        updated++;
     }
+
     return updated;
 }
 

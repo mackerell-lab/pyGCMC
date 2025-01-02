@@ -215,6 +215,15 @@ void Structure::read_pdb_file(const std::string& pdb_file) {
         set_box(std::nullopt);
     }
     
+    // Store existing topology information
+    std::vector<std::tuple<std::string, int, std::string, std::string, double, double>> cached_topology;
+    for (const auto& atom : atoms_) {
+        if (atom) {
+            cached_topology.emplace_back(atom->residue, atom->sequence, atom->name, 
+                                       atom->topo_type, atom->topo_charge, atom->topo_mass);
+        }
+    }
+    
     // Clear existing data
     residues_.clear();
     atoms_.clear();
@@ -229,6 +238,17 @@ void Structure::read_pdb_file(const std::string& pdb_file) {
         residue_ptr->atom_ptrs.clear();  // Clear existing pointers
         for (const auto& atom : residue.atoms) {
             auto atom_ptr = std::make_shared<io::PDBAtom>(atom);
+            
+            // Restore topology information if it exists
+            for (const auto& [res, seq, name, type, charge, mass] : cached_topology) {
+                if (res == atom.residue && seq == atom.sequence && name == atom.name) {
+                    atom_ptr->topo_type = type;
+                    atom_ptr->topo_charge = charge;
+                    atom_ptr->topo_mass = mass;
+                    break;
+                }
+            }
+            
             residue_ptr->atom_ptrs.push_back(atom_ptr);
             add_atom(atom_ptr);  // Add atom to structure's atoms_ vector
         }
@@ -236,8 +256,12 @@ void Structure::read_pdb_file(const std::string& pdb_file) {
         add_residue(residue_ptr);
     }
 
-    // Apply cached topology if exists
+    // Apply cached topology in order: other topology first, then ITPs, and PSF last to take precedence
     apply_cached_topology();
+    apply_cached_itps();
+    if (has_cached_psf_ && cached_psf_) {
+        apply_cached_psf();
+    }
 }
 
 void Structure::read_top_file(const std::string& top_file) {
@@ -337,17 +361,22 @@ void Structure::load_itp(const std::string& itp_file) {
 void Structure::read_psf_file(const std::string& psf_file) {
     // Create PSFParser instance and parse the file
     io::PSFParser psf_parser;
-    if (!psf_parser.parse(psf_file)) {
-        throw std::runtime_error("Cannot open file: " + psf_file);
+    try {
+        if (!psf_parser.parse(psf_file)) {
+            throw std::runtime_error("Failed to parse PSF file: " + psf_file);
+        }
+    } catch (const std::exception& e) {
+        throw std::runtime_error("Failed to parse PSF file: " + psf_file + " - " + e.what());
     }
     
     if (atoms_.empty()) {
-        // We should have atoms before reading PSF
-        throw std::runtime_error("No atoms were updated with topology information");
+        // Cache the PSF for later use
+        cached_psf_ = std::move(psf_parser);
+        has_cached_psf_ = true;
+    } else {
+        // Update atoms with PSF information
+        update_atoms_topology(psf_parser);
     }
-    
-    // Update atoms with PSF information
-    update_atoms_topology(psf_parser);
 }
 
 void Structure::read_itp_file(const std::string& itp_file) {
@@ -432,7 +461,7 @@ void Structure::update_atoms_topology(io::ITPParser& itp_parser) {
 }
 
 void Structure::apply_cached_psf() {
-    if (has_cached_psf_ && !atoms_.empty()) {
+    if (has_cached_psf_ && !atoms_.empty() && cached_psf_) {
         update_atoms_topology(*cached_psf_);
         cached_psf_ = std::nullopt;
         has_cached_psf_ = false;
