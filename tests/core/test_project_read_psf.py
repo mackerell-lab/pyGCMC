@@ -194,3 +194,36 @@ def test_read_topology_before_pdb(project, structure_files):
             assert atom['topo_type'] == 'CT1'
             assert abs(atom['topo_charge'] - 0.070) < 1e-6
             assert abs(atom['topo_mass'] - 12.011) < 1e-6 
+
+    # Check BENX atoms
+    benx_atoms = {
+        ('CG', 1): {
+            'topo_type': 'CG2R61',
+            'topo_charge': -0.115,
+            'topo_mass': 12.011
+        },
+        ('HG', 1): {
+            'topo_type': 'HGR61',
+            'topo_charge': 0.115,
+            'topo_mass': 1.008
+        },
+        ('CD1', 1): {
+            'topo_type': 'CG2R61',
+            'topo_charge': -0.115,
+            'topo_mass': 12.011
+        },
+        ('CE1', 1): {
+            'topo_type': 'CG2R61',
+            'topo_charge': -0.115,
+            'topo_mass': 12.011
+        }
+    }
+
+    for atom in atoms_data:
+        if atom['residue'] == 'BENX':
+            key = (atom['name'], atom['sequence'])
+            if key in benx_atoms:
+                expected = benx_atoms[key]
+                assert atom['topo_type'] == expected['topo_type'], f"Wrong type for BENX atom {key}"
+                assert abs(atom['topo_charge'] - expected['topo_charge']) < 1e-6, f"Wrong charge for BENX atom {key}"
+                assert abs(atom['topo_mass'] - expected['topo_mass']) < 1e-6, f"Wrong mass for BENX atom {key}" 
