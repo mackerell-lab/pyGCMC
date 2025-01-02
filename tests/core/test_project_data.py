@@ -264,3 +264,87 @@ def test_crystal_parameters(project, structure_files):
     benx_structure = project.load_structure(structure_files['benx'])
     benx_box = benx_structure.get_box()
     assert benx_box is None, "benx.pdb should not have crystal information" 
+
+def test_print_forcefield_info(project, structure_files, param_files):
+    """Test printing forcefield information."""
+    # Load structure and forcefield
+    structure = project.load_structure(structure_files['pdb'], structure_files['top'])
+    forcefield = project.load_forcefield(param_files)
+    structure.apply_forcefield(forcefield)
+    
+    # Get forcefield info
+    nb_params = forcefield.get_nonbonded_parameters()
+    global_params = forcefield.get_global_parameters()
+    nbfix_params = forcefield.get_nbfix_parameters()
+    
+    # Verify the information
+    assert nb_params, "No nonbonded parameters found"
+    assert global_params, "No global parameters found"
+    assert nbfix_params, "No NBFIX parameters found"
+    
+    # Check specific parameters
+    assert 'cutoff' in global_params
+    assert 'switching' in global_params
+    assert 'pairlist_distance' in global_params
+    
+    # Check some nonbonded parameters
+    nb_params_dict = {param['atom_type']: param for param in nb_params}
+    expected_params = {
+        'NH3': {'epsilon': -0.2, 'rmin': 3.7},  # N-terminal nitrogen
+        'HC': {'epsilon': -0.046, 'rmin': 0.449},  # Hydrogen
+        'CT1': {'epsilon': -0.032, 'rmin': 4.0},   # Alpha carbon
+        'O': {'epsilon': -0.12, 'rmin': 3.4},      # Carbonyl oxygen
+    }
+    
+    for atom_type, expected in expected_params.items():
+        assert atom_type in nb_params_dict, f"Atom type {atom_type} not found"
+        param = nb_params_dict[atom_type]
+        assert abs(param['epsilon'] - expected['epsilon']) < 1e-3, \
+            f"Incorrect epsilon for {atom_type}"
+        assert abs(param['rmin'] - expected['rmin']) < 1e-3, \
+            f"Incorrect rmin for {atom_type}"
+
+def test_separate_structure_loading(project, structure_files):
+    """Test loading structure from PDB file only."""
+    # Load structure from PDB file
+    structure = project.load_structure(structure_files['pdb'])
+    
+    # Verify structure is loaded correctly
+    assert structure is not None
+    atoms_data = structure.get_atoms_data()
+    assert len(atoms_data) > 0
+    residues_data = structure.get_residues_data()
+    assert len(residues_data) > 0
+    
+    # Check box parameters
+    box = structure.get_box()
+    assert box is not None
+    assert len(box) == 6
+    assert all(x > 0 for x in box[:3])  # Check a, b, c parameters
+    assert all(abs(x - 90.0) < 1e-3 for x in box[3:])  # Check angles
+
+def test_separate_structure_loading_with_includes(project, structure_files):
+    """Test loading structure from PDB file and topology file with includes."""
+    # Load structure from PDB file first
+    structure = project.load_structure(structure_files['pdb'])
+    
+    # Load topology file with includes
+    structure = project.load_structure(structure_files['pdb'], structure_files['top'])
+    
+    # Verify topology information is applied correctly
+    atoms_data = structure.get_atoms_data()
+    assert any(atom['topo_charge'] != 0 for atom in atoms_data), "No charges found after loading topology"
+    assert any(atom['topo_type'] != "" for atom in atoms_data), "No atom types found after loading topology"
+
+def test_error_handling_in_separate_loading(project, structure_files):
+    """Test error handling in separate structure loading."""
+    # Test loading non-existent PDB file
+    with pytest.raises(Exception) as excinfo:
+        project.load_structure("non_existent.pdb")
+    assert "无法打开文件" in str(excinfo.value)
+    
+    # Test loading non-existent topology file
+    structure = project.load_structure(structure_files['pdb'])
+    with pytest.raises(Exception) as excinfo:
+        project.load_structure(structure_files['pdb'], "non_existent.top")
+    assert "Failed to parse topology file" in str(excinfo.value) 

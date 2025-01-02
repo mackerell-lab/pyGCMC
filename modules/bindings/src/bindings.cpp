@@ -305,10 +305,11 @@ PYBIND11_MODULE(pygcmc, m) {
     py::class_<Structure, std::shared_ptr<Structure>>(m, "Structure")
         .def(py::init<>())
         .def("apply_forcefield", &Structure::apply_forcefield)
-        // Add new structure loading methods
+        // Add structure loading methods
         .def("read_pdb_file", &Structure::read_pdb_file, "Read structure from PDB file")
-        .def("read_top_file", &Structure::read_top_file, "Read topology from TOP file without includes")
-        .def("read_top_file_with_includes", &Structure::read_top_file_with_includes, "Read topology from TOP file with includes")
+        .def("read_top_file", &Structure::read_top_file, "Read topology from TOP file (with includes)")
+        .def("read_top_file_without_includes", &Structure::read_top_file_without_includes, "Read topology from TOP file without includes")
+        .def("read_top_file_with_includes", &Structure::read_top_file_with_includes, "Read topology from TOP file with includes (alias for read_top_file)")
         .def_property_readonly("residues", [](Structure& self) {
             std::vector<ProjectResidue> wrapped_residues;
             for (const auto& residue : self.residues()) {

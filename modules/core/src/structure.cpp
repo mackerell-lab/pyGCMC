@@ -185,7 +185,7 @@ void Structure::load_top_with_includes(const std::string& top_file) {
 void Structure::update_atoms_topology(io::TopParser& top_parser) {
     // Get all atom pointers
     std::vector<io::PDBAtom*> atom_ptrs;
-    for (const auto& residue : residues()) {
+    for (const auto& residue : residues_) {
         for (const auto& atom : residue->atom_ptrs) {
             if (atom) {
                 atom_ptrs.push_back(atom.get());
@@ -236,6 +236,15 @@ void Structure::read_pdb_file(const std::string& pdb_file) {
 }
 
 void Structure::read_top_file(const std::string& top_file) {
+    // Default behavior is to read with includes
+    read_top_file_with_includes(top_file);
+}
+
+void Structure::read_top_file_without_includes(const std::string& top_file) {
+    if (atoms_.empty()) {
+        throw std::runtime_error("No atoms loaded. Please load PDB file first.");
+    }
+
     // Create TopParser instance and parse the file without includes
     io::TopParser top_parser;
     if (!top_parser.parse(top_file)) {
@@ -243,10 +252,14 @@ void Structure::read_top_file(const std::string& top_file) {
     }
     
     // Update atoms with topology information
-    apply_topology_to_atoms(top_parser);
+    update_atoms_topology(top_parser);
 }
 
 void Structure::read_top_file_with_includes(const std::string& top_file) {
+    if (atoms_.empty()) {
+        throw std::runtime_error("No atoms loaded. Please load PDB file first.");
+    }
+
     // Create TopParser instance and parse the file with includes
     io::TopParser top_parser;
     if (!top_parser.parse_with_includes(top_file)) {
@@ -254,29 +267,7 @@ void Structure::read_top_file_with_includes(const std::string& top_file) {
     }
     
     // Update atoms with topology information
-    apply_topology_to_atoms(top_parser);
-}
-
-void Structure::apply_topology_to_atoms(io::TopParser& top_parser) {
-    if (atoms_.empty()) {
-        throw std::runtime_error("No atoms loaded. Please load PDB file first.");
-    }
-
-    // Get all atom pointers
-    std::vector<io::PDBAtom*> atom_ptrs;
-    for (const auto& residue : residues_) {
-        for (const auto& atom : residue->atom_ptrs) {
-            if (atom) {
-                atom_ptrs.push_back(atom.get());
-            }
-        }
-    }
-    
-    // Update atoms with topology information
-    int updated = top_parser.update_pdb_atoms(atom_ptrs);
-    if (updated == 0) {
-        throw std::runtime_error("No atoms were updated with topology information");
-    }
+    update_atoms_topology(top_parser);
 }
 
 } // namespace core

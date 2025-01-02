@@ -59,8 +59,9 @@ public:
 
     // New separate loading functions
     void read_pdb_file(const std::string& pdb_file);
-    void read_top_file(const std::string& top_file);
-    void read_top_file_with_includes(const std::string& top_file);
+    void read_top_file(const std::string& top_file);  // Default with includes
+    void read_top_file_without_includes(const std::string& top_file);
+    void read_top_file_with_includes(const std::string& top_file);  // Alias for read_top_file
 
 private:
     std::vector<std::shared_ptr<io::IOResidue>> residues_;
@@ -70,9 +71,6 @@ private:
 
     // Helper function for topology loading
     void update_atoms_topology(io::TopParser& top_parser);
-
-    // New helper function
-    void apply_topology_to_atoms(io::TopParser& top_parser);
 };
 
 } // namespace core
