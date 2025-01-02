@@ -287,6 +287,7 @@ PYBIND11_MODULE(pygcmc, m) {
     // Bind Project class
     py::class_<Project>(m, "Project")
         .def(py::init<const std::string&>(), py::arg("name") = "")
+        .def("create_structure", &Project::create_structure, "Create a new empty structure")
         .def("load_structure", &Project::load_structure, 
              py::arg("pdb_file"), 
              py::arg("top_file") = "",
@@ -310,6 +311,10 @@ PYBIND11_MODULE(pygcmc, m) {
         .def("read_top_file", &Structure::read_top_file, "Read topology from TOP file (with includes)")
         .def("read_top_file_without_includes", &Structure::read_top_file_without_includes, "Read topology from TOP file without includes")
         .def("read_top_file_with_includes", &Structure::read_top_file_with_includes, "Read topology from TOP file with includes (alias for read_top_file)")
+        // Add alias methods for test compatibility
+        .def("read_pdb", &Structure::read_pdb, "Read structure from PDB file (alias for read_pdb_file)")
+        .def("read_top", &Structure::read_top, "Read topology from TOP file (alias for read_top_file)")
+        .def("read_top_without_includes", &Structure::read_top_without_includes, "Read topology from TOP file without includes (alias)")
         .def_property_readonly("residues", [](Structure& self) {
             std::vector<ProjectResidue> wrapped_residues;
             for (const auto& residue : self.residues()) {

@@ -233,6 +233,9 @@ void Structure::read_pdb_file(const std::string& pdb_file) {
         
         add_residue(residue_ptr);
     }
+
+    // Apply cached topology if exists
+    apply_cached_topology();
 }
 
 void Structure::read_top_file(const std::string& top_file) {
@@ -241,33 +244,84 @@ void Structure::read_top_file(const std::string& top_file) {
 }
 
 void Structure::read_top_file_without_includes(const std::string& top_file) {
-    if (atoms_.empty()) {
-        throw std::runtime_error("No atoms loaded. Please load PDB file first.");
-    }
-
     // Create TopParser instance and parse the file without includes
     io::TopParser top_parser;
     if (!top_parser.parse(top_file)) {
         throw std::runtime_error("Failed to parse topology file: " + top_file);
     }
     
-    // Update atoms with topology information
-    update_atoms_topology(top_parser);
+    if (atoms_.empty()) {
+        // Cache the topology for later use
+        cached_topology_ = std::move(top_parser);
+        has_cached_topology_ = true;
+    } else {
+        // Update atoms with topology information
+        update_atoms_topology(top_parser);
+    }
 }
 
 void Structure::read_top_file_with_includes(const std::string& top_file) {
-    if (atoms_.empty()) {
-        throw std::runtime_error("No atoms loaded. Please load PDB file first.");
-    }
-
     // Create TopParser instance and parse the file with includes
     io::TopParser top_parser;
     if (!top_parser.parse_with_includes(top_file)) {
         throw std::runtime_error("Failed to parse topology file: " + top_file);
     }
     
-    // Update atoms with topology information
-    update_atoms_topology(top_parser);
+    if (atoms_.empty()) {
+        // Cache the topology for later use
+        cached_topology_ = std::move(top_parser);
+        has_cached_topology_ = true;
+    } else {
+        // Update atoms with topology information
+        update_atoms_topology(top_parser);
+    }
+}
+
+void Structure::apply_cached_topology() {
+    if (has_cached_topology_ && !atoms_.empty()) {
+        update_atoms_topology(*cached_topology_);
+        cached_topology_ = std::nullopt;
+        has_cached_topology_ = false;
+    }
+}
+
+std::vector<std::unordered_map<std::string, std::variant<std::string, int, double>>> Structure::get_atoms_data() const {
+    std::vector<std::unordered_map<std::string, std::variant<std::string, int, double>>> atoms_data;
+    atoms_data.reserve(atoms_.size());
+
+    for (const auto& atom : atoms_) {
+        if (!atom) continue;
+
+        std::unordered_map<std::string, std::variant<std::string, int, double>> atom_data;
+        
+        // Basic atom information
+        atom_data["name"] = atom->name;
+        atom_data["residue"] = atom->residue;
+        atom_data["sequence"] = atom->sequence;
+        atom_data["type"] = atom->type;
+        
+        // Coordinates
+        atom_data["x"] = atom->x;
+        atom_data["y"] = atom->y;
+        atom_data["z"] = atom->z;
+        
+        // Topology information
+        atom_data["topo_type"] = atom->topo_type;
+        atom_data["topo_charge"] = atom->topo_charge;
+        atom_data["topo_mass"] = atom->topo_mass;
+        
+        // Force field parameters if available
+        if (!std::isnan(atom->forcefield_epsilon)) {
+            atom_data["forcefield_epsilon"] = atom->forcefield_epsilon;
+        }
+        if (!std::isnan(atom->forcefield_rmin)) {
+            atom_data["forcefield_rmin"] = atom->forcefield_rmin;
+        }
+        
+        atoms_data.push_back(std::move(atom_data));
+    }
+    
+    return atoms_data;
 }
 
 } // namespace core

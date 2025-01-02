@@ -8,6 +8,7 @@
 #include <array>
 #include <unordered_map>
 #include <tuple>
+#include <variant>
 #include "pygcmc/core/io/pdb_parser.hpp"
 #include "pygcmc/core/io/top_parser.hpp"
 #include "pygcmc/core/forcefield.hpp"
@@ -52,6 +53,9 @@ public:
     std::unordered_map<std::string, double> get_energy_components() const;
     std::vector<std::tuple<size_t, double, double, double>> get_atom_energy_contributions() const;
 
+    // Get atoms data in a format suitable for Python
+    std::vector<std::unordered_map<std::string, std::variant<std::string, int, double>>> get_atoms_data() const;
+
     // New functions for loading structure data
     void load_pdb(const std::string& pdb_file);
     void load_top(const std::string& top_file);
@@ -63,14 +67,26 @@ public:
     void read_top_file_without_includes(const std::string& top_file);
     void read_top_file_with_includes(const std::string& top_file);  // Alias for read_top_file
 
+    // Alias functions for test compatibility
+    void read_pdb(const std::string& pdb_file) { read_pdb_file(pdb_file); }
+    void read_top(const std::string& top_file) { read_top_file(top_file); }
+    void read_top_without_includes(const std::string& top_file) { read_top_file_without_includes(top_file); }
+
 private:
     std::vector<std::shared_ptr<io::IOResidue>> residues_;
     std::vector<std::shared_ptr<io::PDBAtom>> atoms_;
     std::optional<std::array<double, 6>> box_;  // Box dimensions (a, b, c, alpha, beta, gamma)
     std::shared_ptr<ForceField> forcefield_;
+    
+    // Cache for topology information
+    std::optional<io::TopParser> cached_topology_;
+    bool has_cached_topology_ = false;
 
     // Helper function for topology loading
     void update_atoms_topology(io::TopParser& top_parser);
+    
+    // Helper function to apply cached topology if exists
+    void apply_cached_topology();
 };
 
 } // namespace core

@@ -29,6 +29,9 @@ public:
     // Load structure from PDB and optionally TOP files
     Structure load_structure(const std::string& pdb_file, const std::string& top_file = "");
 
+    // Create a new empty structure
+    Structure create_structure();
+
     // Load force field from parameter files
     std::shared_ptr<ForceField> load_forcefield(const std::vector<std::string>& param_files);
 

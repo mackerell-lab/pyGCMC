@@ -21,6 +21,17 @@ Project::~Project() {
     structures_.clear();   // Then clear structures
 }
 
+Structure Project::create_structure() {
+    // Create a new empty structure
+    Structure structure;
+    
+    // Store structure in project
+    structures_.push_back(std::make_shared<Structure>(structure));
+    structure_ = structures_.back();
+    
+    return structure;
+}
+
 Structure Project::load_structure(const std::string& pdb_file, const std::string& top_file) {
     Structure structure;
     
