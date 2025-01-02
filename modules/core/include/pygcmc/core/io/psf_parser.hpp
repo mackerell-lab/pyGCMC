@@ -58,15 +58,22 @@ public:
                            double& mass) const;
 
     /**
-     * @brief Update PDB atoms with charge and mass from PSF
+     * @brief Update PDB atoms with topology information from PSF file
      * @param pdb_atoms Vector of PDB atoms to update
-     * @return Number of atoms successfully updated
+     * @return Number of atoms updated
      */
     int update_pdb_atoms(std::vector<PDBAtom>& pdb_atoms) const;
 
     /**
-     * @brief Get residues and their atoms that are missing topology information
-     * @param atoms Vector of PDB atoms to check
+     * @brief Update PDB atoms with topology information from PSF file
+     * @param pdb_atoms Vector of pointers to PDB atoms to update
+     * @return Number of atoms updated
+     */
+    int update_pdb_atoms(std::vector<PDBAtom*>& pdb_atoms) const;
+
+    /**
+     * @brief Get missing topology information for a set of atoms
+     * @param atoms Vector of atoms to check
      * @return Map of residue names to sets of atom names that are missing topology info
      */
     std::map<std::string, std::set<std::string>> get_missing_topology_info(

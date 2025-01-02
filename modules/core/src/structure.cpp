@@ -406,25 +406,10 @@ void Structure::update_atoms_topology(io::PSFParser& psf_parser) {
         }
     }
     
-    // Convert pointers to actual atoms for update
-    std::vector<io::PDBAtom> atoms;
-    atoms.reserve(atom_ptrs.size());
-    for (auto* ptr : atom_ptrs) {
-        atoms.push_back(*ptr);
-    }
-    
     // Update atoms with PSF information
-    int updated = psf_parser.update_pdb_atoms(atoms);
+    int updated = psf_parser.update_pdb_atoms(atom_ptrs);
     if (updated == 0) {
         throw std::runtime_error("No atoms were updated with PSF information");
-    }
-    
-    // Copy updated information back to original atoms
-    for (size_t i = 0; i < atom_ptrs.size(); ++i) {
-        atom_ptrs[i]->topo_type = atoms[i].topo_type;
-        atom_ptrs[i]->topo_charge = atoms[i].topo_charge;
-        atom_ptrs[i]->topo_mass = atoms[i].topo_mass;
-        atom_ptrs[i]->chain = atoms[i].chain;
     }
 }
 
@@ -439,25 +424,10 @@ void Structure::update_atoms_topology(io::ITPParser& itp_parser) {
         }
     }
     
-    // Convert pointers to actual atoms for update
-    std::vector<io::PDBAtom> atoms;
-    atoms.reserve(atom_ptrs.size());
-    for (auto* ptr : atom_ptrs) {
-        atoms.push_back(*ptr);
-    }
-    
     // Update atoms with ITP information
     // Don't check number of updated atoms - this is expected for ITP files
     // that only contain some residues
-    itp_parser.update_pdb_atoms(atoms);
-    
-    // Copy updated information back to original atoms
-    for (size_t i = 0; i < atom_ptrs.size(); ++i) {
-        atom_ptrs[i]->topo_type = atoms[i].topo_type;
-        atom_ptrs[i]->topo_charge = atoms[i].topo_charge;
-        atom_ptrs[i]->topo_mass = atoms[i].topo_mass;
-        atom_ptrs[i]->chain = atoms[i].chain;
-    }
+    itp_parser.update_pdb_atoms(atom_ptrs);
 }
 
 void Structure::apply_cached_psf() {

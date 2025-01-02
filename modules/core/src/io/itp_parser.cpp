@@ -123,11 +123,23 @@ bool ITPParser::parse_atoms_section(const std::vector<std::string>& lines) {
 bool ITPParser::get_atom_properties(const std::string& residue_name,
                                   const std::string& atom_name,
                                   double& charge,
-                                  double& mass,
-                                  int residue_number) const {
-    ResidueKey key{residue_name, residue_number};
+                                  double& mass) const {
+    // Try residue number 1 first (most common case)
+    ResidueKey key{residue_name, 1};
     auto res_it = atom_index_.find(key);
     if (res_it == atom_index_.end()) {
+        // If not found, try other residue numbers
+        for (const auto& [key, atoms] : atom_index_) {
+            if (key.resname == residue_name) {
+                auto atom_it = atoms.find(atom_name);
+                if (atom_it != atoms.end()) {
+                    const ITPAtom& atom = itp_atoms_[atom_it->second];
+                    charge = atom.charge;
+                    mass = atom.mass;
+                    return true;
+                }
+            }
+        }
         return false;
     }
 
@@ -172,6 +184,43 @@ int ITPParser::update_pdb_atoms(std::vector<PDBAtom>& pdb_atoms) const {
                   << " type=" << pdb_atom.topo_type 
                   << " charge=" << pdb_atom.topo_charge 
                   << " mass=" << pdb_atom.topo_mass << std::endl;
+        updated++;
+    }
+    return updated;
+}
+
+int ITPParser::update_pdb_atoms(std::vector<PDBAtom*>& pdb_atoms) const {
+    int updated = 0;
+    for (auto* pdb_atom : pdb_atoms) {
+        if (!pdb_atom) continue;
+        
+        // First try to find the atom in the first residue (usually residue 1)
+        ResidueKey key{pdb_atom->residue, 1};
+        auto res_it = atom_index_.find(key);
+        
+        if (res_it == atom_index_.end()) {
+            std::cerr << "Warning: Residue " << pdb_atom->residue 
+                      << " not found in ITP file" << std::endl;
+            continue;
+        }
+
+        auto atom_it = res_it->second.find(pdb_atom->name);
+        if (atom_it == res_it->second.end()) {
+            std::cerr << "Warning: Atom " << pdb_atom->name 
+                      << " not found in residue " << pdb_atom->residue << std::endl;
+            continue;
+        }
+
+        const ITPAtom& itp_atom = itp_atoms_[atom_it->second];
+        pdb_atom->topo_type = itp_atom.type;
+        pdb_atom->topo_charge = itp_atom.charge;
+        pdb_atom->topo_mass = itp_atom.mass;
+
+        std::cout << "Updated atom: " << pdb_atom->residue << " " << pdb_atom->name 
+                  << " (residue sequence " << pdb_atom->sequence << ")"
+                  << " type=" << pdb_atom->topo_type 
+                  << " charge=" << pdb_atom->topo_charge 
+                  << " mass=" << pdb_atom->topo_mass << std::endl;
         updated++;
     }
     return updated;

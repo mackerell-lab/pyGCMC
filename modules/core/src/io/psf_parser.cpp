@@ -214,6 +214,51 @@ int PSFParser::update_pdb_atoms(std::vector<PDBAtom>& pdb_atoms) const {
     return updated;
 }
 
+int PSFParser::update_pdb_atoms(std::vector<PDBAtom*>& pdb_atoms) const {
+    int updated = 0;
+    
+    // First pass: match by exact residue number and atom name
+    for (auto* pdb_atom : pdb_atoms) {
+        if (!pdb_atom) continue;
+        
+        for (const auto& psf_atom : atoms_) {
+            if (psf_atom.residue == pdb_atom->residue && 
+                psf_atom.residue_number == pdb_atom->sequence &&
+                psf_atom.name == pdb_atom->name) {
+                
+                pdb_atom->topo_type = psf_atom.type;
+                pdb_atom->topo_charge = psf_atom.charge;
+                pdb_atom->topo_mass = psf_atom.mass;
+                pdb_atom->chain = psf_atom.segment.empty() ? ' ' : psf_atom.segment[0];
+                updated++;
+                break;
+            }
+        }
+    }
+    
+    // Second pass: match by residue name and atom name if sequence number didn't match
+    for (auto* pdb_atom : pdb_atoms) {
+        if (!pdb_atom) continue;
+        
+        if (pdb_atom->topo_type.empty()) {  // Only try to match if not already matched
+            for (const auto& psf_atom : atoms_) {
+                if (psf_atom.residue == pdb_atom->residue && 
+                    psf_atom.name == pdb_atom->name) {
+                    
+                    pdb_atom->topo_type = psf_atom.type;
+                    pdb_atom->topo_charge = psf_atom.charge;
+                    pdb_atom->topo_mass = psf_atom.mass;
+                    pdb_atom->chain = psf_atom.segment.empty() ? ' ' : psf_atom.segment[0];
+                    updated++;
+                    break;
+                }
+            }
+        }
+    }
+
+    return updated;
+}
+
 std::map<std::string, std::set<std::string>> PSFParser::get_missing_topology_info(
     const std::vector<PDBAtom>& atoms) const {
     std::map<std::string, std::set<std::string>> missing_info;
