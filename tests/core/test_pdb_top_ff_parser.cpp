@@ -191,7 +191,7 @@ TEST_F(PDBTopFFParserTest, CombinePDBTopFF) {
             EXPECT_EQ(atom.topo_type, "NH3");
 
             // Check force field parameters - Rmin doubled from 1.85 to 3.70
-            EXPECT_NEAR(atom.forcefield_epsilon, 0.2, 1e-4);
+            EXPECT_NEAR(atom.forcefield_epsilon, -0.2, 1e-4);
             EXPECT_NEAR(atom.forcefield_rmin, 3.70, 1e-4);
             break;
         }
@@ -210,7 +210,7 @@ TEST_F(PDBTopFFParserTest, CombinePDBTopFF) {
             EXPECT_EQ(atom.topo_type, "CT1");
 
             // Check force field parameters - Rmin doubled from 2.0 to 4.0
-            EXPECT_NEAR(atom.forcefield_epsilon, 0.032, 1e-4);
+            EXPECT_NEAR(atom.forcefield_epsilon, -0.032, 1e-4);
             EXPECT_NEAR(atom.forcefield_rmin, 4.0, 1e-4);
             break;
         }
@@ -229,7 +229,7 @@ TEST_F(PDBTopFFParserTest, CombinePDBTopFF) {
             EXPECT_EQ(atom.topo_type, "OT");
 
             // Check force field parameters
-            EXPECT_NEAR(atom.forcefield_epsilon, 0.1521, 1e-4);
+            EXPECT_NEAR(atom.forcefield_epsilon, -0.1521, 1e-4);
             EXPECT_NEAR(atom.forcefield_rmin, 1.7682 * 2, 1e-4);
             break;
         }
@@ -248,7 +248,7 @@ TEST_F(PDBTopFFParserTest, CombinePDBTopFF) {
             EXPECT_EQ(atom.topo_type, "HT");
 
             // Check force field parameters
-            EXPECT_NEAR(atom.forcefield_epsilon, 0.046, 1e-4);
+            EXPECT_NEAR(atom.forcefield_epsilon, -0.046, 1e-4);
             EXPECT_NEAR(atom.forcefield_rmin, 0.2245 * 2, 1e-4);
             break;
         }

@@ -71,7 +71,7 @@ TEST_F(TestFFParser, NonbondedParameters) {
     {
         auto it = params.find("OT");
         ASSERT_NE(it, params.end()) << "Failed to find OT atom type";
-        EXPECT_NEAR(it->second.epsilon, 0.1521, 1e-4) << "Incorrect epsilon for OT atom";
+        EXPECT_NEAR(it->second.epsilon, -0.1521, 1e-4) << "Incorrect epsilon for OT atom";
         EXPECT_NEAR(it->second.rmin, 1.7682 * 2, 1e-4) << "Incorrect Rmin for OT atom";
     }
 
@@ -79,7 +79,7 @@ TEST_F(TestFFParser, NonbondedParameters) {
     {
         auto it = params.find("HT");
         ASSERT_NE(it, params.end()) << "Failed to find HT atom type";
-        EXPECT_NEAR(it->second.epsilon, 0.046, 1e-4) << "Incorrect epsilon for HT atom";
+        EXPECT_NEAR(it->second.epsilon, -0.046, 1e-4) << "Incorrect epsilon for HT atom";
         EXPECT_NEAR(it->second.rmin, 0.2245 * 2, 1e-4) << "Incorrect Rmin for HT atom";
     }
 }
@@ -97,14 +97,14 @@ TEST_F(TestFFParser, NBFIXParameters) {
         auto key = std::make_pair("SOD", "CLA");
         auto it = nbfix.find(key);
         ASSERT_NE(it, nbfix.end()) << "Failed to find SOD-CLA NBFIX parameters";
-        EXPECT_NEAR(it->second.epsilon, 0.0839, 1e-4) << "Incorrect NBFIX epsilon for SOD-CLA";
+        EXPECT_NEAR(it->second.epsilon, -0.0839, 1e-4) << "Incorrect NBFIX epsilon for SOD-CLA";
         EXPECT_NEAR(it->second.rmin, 3.7310, 1e-4) << "Incorrect NBFIX Rmin for SOD-CLA";
 
         // Test symmetry (CLA-SOD should have same parameters)
         auto key_rev = std::make_pair("CLA", "SOD");
         auto it_rev = nbfix.find(key_rev);
         ASSERT_NE(it_rev, nbfix.end()) << "Failed to find CLA-SOD NBFIX parameters";
-        EXPECT_NEAR(it_rev->second.epsilon, 0.0839, 1e-4) << "Incorrect NBFIX epsilon for CLA-SOD";
+        EXPECT_NEAR(it_rev->second.epsilon, -0.0839, 1e-4) << "Incorrect NBFIX epsilon for CLA-SOD";
         EXPECT_NEAR(it_rev->second.rmin, 3.7310, 1e-4) << "Incorrect NBFIX Rmin for CLA-SOD";
     }
 
@@ -113,7 +113,7 @@ TEST_F(TestFFParser, NBFIXParameters) {
         auto key = std::make_pair("POT", "CLA");
         auto it = nbfix.find(key);
         ASSERT_NE(it, nbfix.end()) << "Failed to find POT-CLA NBFIX parameters";
-        EXPECT_NEAR(it->second.epsilon, 0.1142, 1e-4) << "Incorrect NBFIX epsilon for POT-CLA";
+        EXPECT_NEAR(it->second.epsilon, -0.1142, 1e-4) << "Incorrect NBFIX epsilon for POT-CLA";
         EXPECT_NEAR(it->second.rmin, 4.0810, 1e-4) << "Incorrect NBFIX Rmin for POT-CLA";
     }
 }
@@ -152,7 +152,7 @@ TEST_F(TestFFParser, ProteinParameters) {
     {
         auto it = params.find("NH3");
         ASSERT_NE(it, params.end());
-        EXPECT_NEAR(it->second.epsilon, 0.2000, 1e-4);
+        EXPECT_NEAR(it->second.epsilon, -0.2000, 1e-4);
         EXPECT_NEAR(it->second.rmin, 3.7000, 1e-4);  // 1.85 * 2
     }
 
@@ -160,7 +160,7 @@ TEST_F(TestFFParser, ProteinParameters) {
     {
         auto it = params.find("CT1");
         ASSERT_NE(it, params.end());
-        EXPECT_NEAR(it->second.epsilon, 0.0320, 1e-4);
+        EXPECT_NEAR(it->second.epsilon, -0.0320, 1e-4);
         EXPECT_NEAR(it->second.rmin, 4.0000, 1e-4);  // 2.000 * 2
     }
 
@@ -168,7 +168,7 @@ TEST_F(TestFFParser, ProteinParameters) {
     {
         auto it = params.find("O");
         ASSERT_NE(it, params.end());
-        EXPECT_NEAR(it->second.epsilon, 0.1200, 1e-4);
+        EXPECT_NEAR(it->second.epsilon, -0.1200, 1e-4);
         EXPECT_NEAR(it->second.rmin, 3.4000, 1e-4);  // 1.700 * 2
     }
 
@@ -176,7 +176,7 @@ TEST_F(TestFFParser, ProteinParameters) {
     {
         auto it = params.find("HA1");
         ASSERT_NE(it, params.end());
-        EXPECT_NEAR(it->second.epsilon, 0.0450, 1e-4);
+        EXPECT_NEAR(it->second.epsilon, -0.0450, 1e-4);
         EXPECT_NEAR(it->second.rmin, 2.6800, 1e-4);  // 1.340 * 2
     }
 }
@@ -198,14 +198,14 @@ TEST_F(TestFFParser, ProteinNBFIXParameters) {
         auto key = std::make_pair("SOD", "OC");
         auto it = nbfix.find(key);
         ASSERT_NE(it, nbfix.end()) << "Failed to find SOD-OC NBFIX parameters";
-        EXPECT_NEAR(it->second.epsilon, 0.07502, 1e-4) << "Incorrect NBFIX epsilon for SOD-OC";
+        EXPECT_NEAR(it->second.epsilon, -0.07502, 1e-4) << "Incorrect NBFIX epsilon for SOD-OC";
         EXPECT_NEAR(it->second.rmin, 3.23, 1e-4) << "Incorrect NBFIX Rmin for SOD-OC";
 
         // Test symmetry (OC-SOD should have same parameters)
         auto key_rev = std::make_pair("OC", "SOD");
         auto it_rev = nbfix.find(key_rev);
         ASSERT_NE(it_rev, nbfix.end()) << "Failed to find OC-SOD NBFIX parameters";
-        EXPECT_NEAR(it_rev->second.epsilon, 0.07502, 1e-4) << "Incorrect NBFIX epsilon for OC-SOD";
+        EXPECT_NEAR(it_rev->second.epsilon, -0.07502, 1e-4) << "Incorrect NBFIX epsilon for OC-SOD";
         EXPECT_NEAR(it_rev->second.rmin, 3.23, 1e-4) << "Incorrect NBFIX Rmin for OC-SOD";
     }
 }
@@ -222,7 +222,7 @@ TEST_F(TestFFParser, ParseSTRFile) {
     {
         auto it = params.find("OT");
         ASSERT_NE(it, params.end()) << "Failed to find OT atom type";
-        EXPECT_NEAR(it->second.epsilon, 0.1521, 1e-4) << "Incorrect epsilon for OT atom";
+        EXPECT_NEAR(it->second.epsilon, -0.1521, 1e-4) << "Incorrect epsilon for OT atom";
         EXPECT_NEAR(it->second.rmin, 1.7682 * 2, 1e-4) << "Incorrect Rmin for OT atom";
     }
 
@@ -230,7 +230,7 @@ TEST_F(TestFFParser, ParseSTRFile) {
     {
         auto it = params.find("HT");
         ASSERT_NE(it, params.end()) << "Failed to find HT atom type";
-        EXPECT_NEAR(it->second.epsilon, 0.046, 1e-4) << "Incorrect epsilon for HT atom";
+        EXPECT_NEAR(it->second.epsilon, -0.046, 1e-4) << "Incorrect epsilon for HT atom";
         EXPECT_NEAR(it->second.rmin, 0.2245 * 2, 1e-4) << "Incorrect Rmin for HT atom";
     }
 
@@ -238,7 +238,7 @@ TEST_F(TestFFParser, ParseSTRFile) {
     {
         auto it = params.find("SOD");
         ASSERT_NE(it, params.end()) << "Failed to find SOD atom type";
-        EXPECT_NEAR(it->second.epsilon, 0.0469, 1e-4) << "Incorrect epsilon for SOD atom";
+        EXPECT_NEAR(it->second.epsilon, -0.0469, 1e-4) << "Incorrect epsilon for SOD atom";
         EXPECT_NEAR(it->second.rmin, 1.41075 * 2, 1e-4) << "Incorrect Rmin for SOD atom";
     }
 
@@ -246,7 +246,7 @@ TEST_F(TestFFParser, ParseSTRFile) {
     {
         auto it = params.find("CLA");
         ASSERT_NE(it, params.end()) << "Failed to find CLA atom type";
-        EXPECT_NEAR(it->second.epsilon, 0.150, 1e-4) << "Incorrect epsilon for CLA atom";
+        EXPECT_NEAR(it->second.epsilon, -0.150, 1e-4) << "Incorrect epsilon for CLA atom";
         EXPECT_NEAR(it->second.rmin, 2.27 * 2, 1e-4) << "Incorrect Rmin for CLA atom";
     }
 }
@@ -263,7 +263,7 @@ TEST_F(TestFFParser, WaterParameters) {
     {
         auto it = params.find("OT");
         ASSERT_NE(it, params.end()) << "Failed to find OT parameters";
-        EXPECT_NEAR(it->second.epsilon, 0.1521, 1e-4) << "Incorrect epsilon for OT";
+        EXPECT_NEAR(it->second.epsilon, -0.1521, 1e-4) << "Incorrect epsilon for OT";
         EXPECT_NEAR(it->second.rmin, 1.7682 * 2, 1e-4) << "Incorrect Rmin for OT";
     }
 
@@ -271,7 +271,7 @@ TEST_F(TestFFParser, WaterParameters) {
     {
         auto it = params.find("HT");
         ASSERT_NE(it, params.end()) << "Failed to find HT parameters";
-        EXPECT_NEAR(it->second.epsilon, 0.046, 1e-4) << "Incorrect epsilon for HT";
+        EXPECT_NEAR(it->second.epsilon, -0.046, 1e-4) << "Incorrect epsilon for HT";
         EXPECT_NEAR(it->second.rmin, 0.2245 * 2, 1e-4) << "Incorrect Rmin for HT";
     }
 }

@@ -168,7 +168,7 @@ void FFParser::parse_nonbonded_line(const std::string& line) {
         double rminHalf = std::stod(tokens[3]);
 
         double rmin = rminHalf * 2.0;
-        nonbonded_params_[atomType] = ForceFieldPair(rmin, std::fabs(epsilon));
+        nonbonded_params_[atomType] = ForceFieldPair(rmin, epsilon);
 
         // 如果有1-4参数，也可以存储
         if (tokens.size() >= 7) {
@@ -199,18 +199,13 @@ void FFParser::parse_nbfix_line(const std::string& line) {
     double epsilon, rmin;
 
     if (iss >> atom_type1 >> atom_type2 >> epsilon >> rmin) {
-        // In CHARMM format, epsilon is negative
+        // Store epsilon as-is (keeping the negative sign)
         auto key = std::make_pair(atom_type1, atom_type2);
-        nbfix_params_[key] = ForceFieldPair(rmin, std::abs(epsilon));
+        nbfix_params_[key] = ForceFieldPair(rmin, epsilon);
         
         // Add reverse pair
         auto key_rev = std::make_pair(atom_type2, atom_type1);
-        nbfix_params_[key_rev] = ForceFieldPair(rmin, std::abs(epsilon));
-        
-        // Debug output
-        // std::cout << "Parsed NBFIX: " << atom_type1 << " - " << atom_type2 
-        //           << " | epsilon=" << std::abs(epsilon) 
-        //           << ", rmin=" << rmin << std::endl;
+        nbfix_params_[key_rev] = ForceFieldPair(rmin, epsilon);
     }
 }
 
