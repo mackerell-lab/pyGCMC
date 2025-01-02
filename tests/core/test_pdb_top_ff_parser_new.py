@@ -1,5 +1,4 @@
 # tests/core/test_pdb_top_ff_parser_new.py
-# tests/core/test_pdb_top_ff_parser_new.py
 
 import os
 import math
@@ -194,3 +193,133 @@ class TestPDBTopFFParser:
         for param_name, expected_value in global_params.items():
             actual_value = getattr(cgenff_parser, f"get_{param_name}")()
             assert math.isclose(actual_value, expected_value, abs_tol=1e-4), f"Expected {param_name} = {expected_value}, found {actual_value}"
+
+    def test_water_molecule_parameters(self, initialize_parsers):
+        """Test complete water molecule parameters including topology and force field."""
+        atoms, _, _ = initialize_parsers
+        
+        # Find a complete water molecule
+        water_atoms = {}
+        for atom in atoms:
+            if atom.residue == "SOL" and atom.sequence == 2901:  # Using a specific water molecule
+                water_atoms[atom.name] = atom
+        
+        # Test oxygen parameters
+        assert "OW" in water_atoms, "Water oxygen atom not found"
+        ow = water_atoms["OW"]
+        assert ow.type == "O", f"Expected type 'O', found '{ow.type}'"
+        assert ow.topo_type == "OT", f"Expected topo_type 'OT', found '{ow.topo_type}'"
+        assert math.isclose(ow.topo_charge, -0.834, abs_tol=1e-4)
+        assert math.isclose(ow.topo_mass, 15.999, abs_tol=1e-3)
+        assert math.isclose(ow.forcefield_epsilon, -0.1521, abs_tol=1e-4)
+        assert math.isclose(ow.forcefield_rmin, 3.5364, abs_tol=1e-4)
+
+        # Test hydrogen parameters
+        for hw_name in ["HW1", "HW2"]:
+            assert hw_name in water_atoms, f"Water hydrogen atom {hw_name} not found"
+            hw = water_atoms[hw_name]
+            assert hw.type == "H", f"Expected type 'H', found '{hw.type}'"
+            assert hw.topo_type == "HT", f"Expected topo_type 'HT', found '{hw.topo_type}'"
+            assert math.isclose(hw.topo_charge, 0.417, abs_tol=1e-4)
+            assert math.isclose(hw.topo_mass, 1.008, abs_tol=1e-3)
+            assert math.isclose(hw.forcefield_epsilon, -0.046, abs_tol=1e-4)
+            assert math.isclose(hw.forcefield_rmin, 0.449, abs_tol=1e-3)
+
+    def test_protein_backbone_parameters(self, initialize_parsers):
+        """Test protein backbone parameters for multiple residues."""
+        atoms, _, _ = initialize_parsers
+        
+        # Test backbone atoms for ALA-7, VAL-8, and PRO-9
+        backbone_tests = [
+            # residue, atom, type, topo_type, charge, mass, epsilon, rmin
+            ("ALA", 7, "N", "N", "NH3", -0.3, 14.007, -0.2, 3.7),
+            ("ALA", 7, "CA", "C", "CT1", 0.21, 12.011, -0.032, 4.0),
+            ("ALA", 7, "C", "C", "C", 0.51, 12.011, -0.11, 4.0),
+            ("ALA", 7, "O", "O", "O", -0.51, 15.999, -0.12, 3.4),
+            ("VAL", 8, "N", "N", "NH1", -0.47, 14.007, -0.2, 3.7),
+            ("VAL", 8, "CA", "C", "CT1", 0.07, 12.011, -0.032, 4.0),
+            ("PRO", 9, "N", "N", "N", -0.29, 14.007, -0.2, 3.7),
+            ("PRO", 9, "CA", "C", "CP1", 0.02, 12.011, -0.02, 4.55),
+        ]
+        
+        for res, seq, name, type_, topo_type, charge, mass, epsilon, rmin in backbone_tests:
+            atom = next((a for a in atoms 
+                       if a.residue == res and a.sequence == seq and a.name == name), None)
+            assert atom is not None, f"Atom {name} in {res}-{seq} not found"
+            assert atom.type == type_, f"Expected type '{type_}', found '{atom.type}'"
+            assert atom.topo_type == topo_type, f"Expected topo_type '{topo_type}', found '{atom.topo_type}'"
+            assert math.isclose(atom.topo_charge, charge, abs_tol=1e-4)
+            assert math.isclose(atom.topo_mass, mass, abs_tol=1e-3)
+            assert math.isclose(atom.forcefield_epsilon, epsilon, abs_tol=1e-4)
+            assert math.isclose(atom.forcefield_rmin, rmin, abs_tol=1e-4)
+
+    def test_ligand_parameters(self, initialize_parsers):
+        """Test parameters for ligand atoms (BENX and PRPX)."""
+        atoms, _, _ = initialize_parsers
+        
+        # Test BENX (benzene) parameters
+        benx_tests = [
+            # atom, type, topo_type, charge, mass, epsilon, rmin
+            ("CG", "C", "CG2R61", -0.115, 12.011, -0.07, 3.9848),
+            ("HG", "H", "HGR61", 0.115, 1.008, -0.03, 2.7164),
+            ("CD1", "C", "CG2R61", -0.115, 12.011, -0.07, 3.9848),
+            ("HD1", "H", "HGR61", 0.115, 1.008, -0.03, 2.7164),
+        ]
+        
+        for name, type_, topo_type, charge, mass, epsilon, rmin in benx_tests:
+            atom = next((a for a in atoms 
+                       if a.residue == "BENX" and a.sequence == 651 and a.name == name), None)
+            assert atom is not None, f"BENX atom {name} not found"
+            assert atom.type == type_, f"Expected type '{type_}', found '{atom.type}'"
+            assert atom.topo_type == topo_type, f"Expected topo_type '{topo_type}', found '{atom.topo_type}'"
+            assert math.isclose(atom.topo_charge, charge, abs_tol=1e-4)
+            assert math.isclose(atom.topo_mass, mass, abs_tol=1e-3)
+            assert math.isclose(atom.forcefield_epsilon, epsilon, abs_tol=1e-4)
+            assert math.isclose(atom.forcefield_rmin, rmin, abs_tol=1e-4)
+
+        # Test PRPX (propane) parameters
+        prpx_tests = [
+            # atom, type, topo_type, charge, mass, epsilon, rmin
+            ("H11", "H", "HGA3", 0.09, 1.008, -0.024, 2.68),
+            ("C1", "C", "CG331", -0.27, 12.011, -0.078, 4.1),
+            ("C2", "C", "CG321", -0.18, 12.011, -0.056, 4.02),
+            ("H21", "H", "HGA2", 0.09, 1.008, -0.035, 2.68),
+        ]
+        
+        for name, type_, topo_type, charge, mass, epsilon, rmin in prpx_tests:
+            atom = next((a for a in atoms 
+                       if a.residue == "PRPX" and a.sequence == 792 and a.name == name), None)
+            assert atom is not None, f"PRPX atom {name} not found"
+            assert atom.type == type_, f"Expected type '{type_}', found '{atom.type}'"
+            assert atom.topo_type == topo_type, f"Expected topo_type '{topo_type}', found '{atom.topo_type}'"
+            assert math.isclose(atom.topo_charge, charge, abs_tol=1e-4)
+            assert math.isclose(atom.topo_mass, mass, abs_tol=1e-3)
+            assert math.isclose(atom.forcefield_epsilon, epsilon, abs_tol=1e-4)
+            assert math.isclose(atom.forcefield_rmin, rmin, abs_tol=1e-4)
+
+    def test_charge_conservation(self, initialize_parsers):
+        """Test charge conservation within residues."""
+        atoms, _, _ = initialize_parsers
+        
+        # Group atoms by residue
+        residues = {}
+        for atom in atoms:
+            key = (atom.residue, atom.sequence)
+            if key not in residues:
+                residues[key] = []
+            residues[key].append(atom)
+        
+        # Test charge conservation for each residue
+        for (res_name, res_seq), res_atoms in residues.items():
+            total_charge = sum(atom.topo_charge for atom in res_atoms)
+            
+            # Expected total charges
+            if res_name == "SOL":
+                assert math.isclose(total_charge, 0.0, abs_tol=1e-4), \
+                    f"Water molecule {res_seq} should have neutral total charge"
+            elif res_name == "BENX":
+                assert math.isclose(total_charge, 0.0, abs_tol=1e-4), \
+                    f"BENX molecule {res_seq} should have neutral total charge"
+            elif res_name == "PRPX":
+                assert math.isclose(total_charge, 0.0, abs_tol=1e-4), \
+                    f"PRPX molecule {res_seq} should have neutral total charge"
