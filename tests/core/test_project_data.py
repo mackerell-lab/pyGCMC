@@ -348,3 +348,96 @@ def test_error_handling_in_separate_loading(project, structure_files):
     with pytest.raises(Exception) as excinfo:
         project.load_structure(structure_files['pdb'], "non_existent.top")
     assert "Failed to parse topology file" in str(excinfo.value) 
+
+def test_flexible_structure_loading_order(project, structure_files):
+    """Test flexible loading order of PDB and topology files."""
+    # Test loading PDB first, then topology
+    structure1 = project.load_structure(structure_files['pdb'])
+    assert structure1 is not None
+    atoms_data1 = structure1.get_atoms_data()
+    assert len(atoms_data1) > 0
+    # Store initial topology information
+    initial_charges = [atom.get('topo_charge', 0) for atom in atoms_data1]
+    initial_types = [atom.get('topo_type', '') for atom in atoms_data1]
+    
+    # Apply topology after PDB
+    structure1 = project.load_structure(structure_files['pdb'], structure_files['top'])
+    atoms_data1_after = structure1.get_atoms_data()
+    assert any(atom['topo_charge'] != 0 for atom in atoms_data1_after)
+    assert any(atom['topo_type'] != '' for atom in atoms_data1_after)
+    
+    # Test loading PDB and topology together
+    structure2 = project.load_structure(structure_files['pdb'], structure_files['top'])
+    atoms_data2 = structure2.get_atoms_data()
+    assert len(atoms_data2) > 0
+    assert any(atom['topo_charge'] != 0 for atom in atoms_data2)
+    assert any(atom['topo_type'] != '' for atom in atoms_data2)
+    
+    # Verify both loading methods produce the same result
+    assert len(atoms_data1_after) == len(atoms_data2)
+    for atom1, atom2 in zip(atoms_data1_after, atoms_data2):
+        assert atom1['topo_charge'] == atom2['topo_charge']
+        assert atom1['topo_type'] == atom2['topo_type']
+        assert atom1['residue'] == atom2['residue']
+        assert atom1['sequence'] == atom2['sequence']
+        assert atom1['name'] == atom2['name']
+
+def test_topology_includes_handling(project, structure_files):
+    """Test handling of topology files with includes in different loading orders."""
+    # Test loading PDB first, then topology
+    structure1 = project.load_structure(structure_files['pdb'])
+    structure1 = project.load_structure(structure_files['pdb'], structure_files['top'])
+    atoms_data1 = structure1.get_atoms_data()
+    
+    # Verify specific atoms from included topology files
+    expected_atoms = {
+        ('ALA', 7, 'N'): {
+            'topo_type': 'NH3',
+            'topo_charge': -0.3,
+            'topo_mass': 14.007
+        },
+        ('ALA', 7, 'CA'): {
+            'topo_type': 'CT1',
+            'topo_charge': 0.21,
+            'topo_mass': 12.011
+        }
+    }
+    
+    for atom in atoms_data1:
+        key = (atom['residue'], atom['sequence'], atom['name'])
+        if key in expected_atoms:
+            expected = expected_atoms[key]
+            assert atom['topo_type'] == expected['topo_type']
+            assert abs(atom['topo_charge'] - expected['topo_charge']) < 1e-6
+            assert abs(atom['topo_mass'] - expected['topo_mass']) < 1e-6
+    
+    # Test loading PDB and topology together
+    structure2 = project.load_structure(structure_files['pdb'], structure_files['top'])
+    atoms_data2 = structure2.get_atoms_data()
+    
+    # Verify same results with different loading order
+    for atom in atoms_data2:
+        key = (atom['residue'], atom['sequence'], atom['name'])
+        if key in expected_atoms:
+            expected = expected_atoms[key]
+            assert atom['topo_type'] == expected['topo_type']
+            assert abs(atom['topo_charge'] - expected['topo_charge']) < 1e-6
+            assert abs(atom['topo_mass'] - expected['topo_mass']) < 1e-6
+
+def test_error_handling_in_flexible_loading(project, structure_files):
+    """Test error handling in flexible loading of PDB and topology files."""
+    # Test loading invalid PDB file
+    with pytest.raises(Exception) as excinfo:
+        project.load_structure("non_existent.pdb")
+    assert "无法打开文件" in str(excinfo.value)
+    
+    # Test loading invalid topology file
+    structure = project.load_structure(structure_files['pdb'])
+    with pytest.raises(Exception) as excinfo:
+        project.load_structure(structure_files['pdb'], "non_existent.top")
+    assert "Failed to parse topology file" in str(excinfo.value)
+    
+    # Test loading mismatched topology and PDB
+    with pytest.raises(Exception) as excinfo:
+        project.load_structure(structure_files['water'], structure_files['top'])  # water.pdb doesn't match test.top
+    assert "No atoms were updated with topology information" in str(excinfo.value) 
