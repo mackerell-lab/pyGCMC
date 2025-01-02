@@ -141,99 +141,106 @@ TEST_F(TestPSFParser, UpdatePDBAtoms) {
     PDBAtom ala_n(1, "N", "ALA", 7);
     pdb_atoms.push_back(ala_n);
 
-    PDBAtom ala_ca(2, "CA", "ALA", 7);
+    PDBAtom ala_ht1(2, "HT1", "ALA", 7);
+    pdb_atoms.push_back(ala_ht1);
+
+    PDBAtom ala_ca(3, "CA", "ALA", 7);
     pdb_atoms.push_back(ala_ca);
 
-    PDBAtom ala_cb(3, "CB", "ALA", 7);
+    PDBAtom ala_cb(4, "CB", "ALA", 7);
     pdb_atoms.push_back(ala_cb);
 
     // VAL residue atoms
-    PDBAtom val_n(4, "N", "VAL", 8);
+    PDBAtom val_n(5, "N", "VAL", 8);
     pdb_atoms.push_back(val_n);
 
-    PDBAtom val_ca(5, "CA", "VAL", 8);
+    PDBAtom val_ca(6, "CA", "VAL", 8);
     pdb_atoms.push_back(val_ca);
 
-    PDBAtom val_cg1(6, "CG1", "VAL", 8);
+    PDBAtom val_cg1(7, "CG1", "VAL", 8);
     pdb_atoms.push_back(val_cg1);
 
     // PRO residue atoms
-    PDBAtom pro_n(7, "N", "PRO", 9);
+    PDBAtom pro_n(8, "N", "PRO", 9);
     pdb_atoms.push_back(pro_n);
 
-    PDBAtom pro_cd(8, "CD", "PRO", 9);
+    PDBAtom pro_cd(9, "CD", "PRO", 9);
     pdb_atoms.push_back(pro_cd);
 
     // ASN residue atoms
-    PDBAtom asn_cg(9, "CG", "ASN", 10);
+    PDBAtom asn_cg(10, "CG", "ASN", 10);
     pdb_atoms.push_back(asn_cg);
 
-    PDBAtom asn_od1(10, "OD1", "ASN", 10);
+    PDBAtom asn_od1(11, "OD1", "ASN", 10);
     pdb_atoms.push_back(asn_od1);
 
     // GLN residue atoms
-    PDBAtom gln_ne2(11, "NE2", "GLN", 11);
+    PDBAtom gln_ne2(12, "NE2", "GLN", 11);
     pdb_atoms.push_back(gln_ne2);
 
-    PDBAtom gln_he21(12, "HE21", "GLN", 11);
+    PDBAtom gln_he21(13, "HE21", "GLN", 11);
     pdb_atoms.push_back(gln_he21);
 
     // Update atoms with PSF topology
     int updated = parser_->update_pdb_atoms(pdb_atoms);
-    EXPECT_EQ(updated, 12);
+    EXPECT_EQ(updated, 13);
 
     // Verify ALA residue atoms (N-terminal)
     EXPECT_NEAR(pdb_atoms[0].topo_charge, -0.3, 1e-6);
     EXPECT_NEAR(pdb_atoms[0].topo_mass, 14.007, 1e-6);
     EXPECT_EQ(pdb_atoms[0].topo_type, "NH3");
 
-    EXPECT_NEAR(pdb_atoms[1].topo_charge, 0.21, 1e-6);
-    EXPECT_NEAR(pdb_atoms[1].topo_mass, 12.011, 1e-6);
-    EXPECT_EQ(pdb_atoms[1].topo_type, "CT1");
+    EXPECT_NEAR(pdb_atoms[1].topo_charge, 0.33, 1e-6);
+    EXPECT_NEAR(pdb_atoms[1].topo_mass, 1.008, 1e-6);
+    EXPECT_EQ(pdb_atoms[1].topo_type, "HC");
 
-    EXPECT_NEAR(pdb_atoms[2].topo_charge, -0.27, 1e-6);
+    EXPECT_NEAR(pdb_atoms[2].topo_charge, 0.21, 1e-6);
     EXPECT_NEAR(pdb_atoms[2].topo_mass, 12.011, 1e-6);
-    EXPECT_EQ(pdb_atoms[2].topo_type, "CT3");
+    EXPECT_EQ(pdb_atoms[2].topo_type, "CT1");
+
+    EXPECT_NEAR(pdb_atoms[3].topo_charge, -0.27, 1e-6);
+    EXPECT_NEAR(pdb_atoms[3].topo_mass, 12.011, 1e-6);
+    EXPECT_EQ(pdb_atoms[3].topo_type, "CT3");
 
     // Verify VAL residue atoms
-    EXPECT_NEAR(pdb_atoms[3].topo_charge, -0.47, 1e-6);
-    EXPECT_NEAR(pdb_atoms[3].topo_mass, 14.007, 1e-6);
-    EXPECT_EQ(pdb_atoms[3].topo_type, "NH1");
+    EXPECT_NEAR(pdb_atoms[4].topo_charge, -0.47, 1e-6);
+    EXPECT_NEAR(pdb_atoms[4].topo_mass, 14.007, 1e-6);
+    EXPECT_EQ(pdb_atoms[4].topo_type, "NH1");
 
-    EXPECT_NEAR(pdb_atoms[4].topo_charge, 0.07, 1e-6);
-    EXPECT_NEAR(pdb_atoms[4].topo_mass, 12.011, 1e-6);
-    EXPECT_EQ(pdb_atoms[4].topo_type, "CT1");
-
-    EXPECT_NEAR(pdb_atoms[5].topo_charge, -0.27, 1e-6);
+    EXPECT_NEAR(pdb_atoms[5].topo_charge, 0.07, 1e-6);
     EXPECT_NEAR(pdb_atoms[5].topo_mass, 12.011, 1e-6);
-    EXPECT_EQ(pdb_atoms[5].topo_type, "CT3");
+    EXPECT_EQ(pdb_atoms[5].topo_type, "CT1");
+
+    EXPECT_NEAR(pdb_atoms[6].topo_charge, -0.27, 1e-6);
+    EXPECT_NEAR(pdb_atoms[6].topo_mass, 12.011, 1e-6);
+    EXPECT_EQ(pdb_atoms[6].topo_type, "CT3");
 
     // Verify PRO residue atoms
-    EXPECT_NEAR(pdb_atoms[6].topo_charge, -0.29, 1e-6);
-    EXPECT_NEAR(pdb_atoms[6].topo_mass, 14.007, 1e-6);
-    EXPECT_EQ(pdb_atoms[6].topo_type, "N");
+    EXPECT_NEAR(pdb_atoms[7].topo_charge, -0.29, 1e-6);
+    EXPECT_NEAR(pdb_atoms[7].topo_mass, 14.007, 1e-6);
+    EXPECT_EQ(pdb_atoms[7].topo_type, "N");
 
-    EXPECT_NEAR(pdb_atoms[7].topo_charge, 0.0, 1e-6);
-    EXPECT_NEAR(pdb_atoms[7].topo_mass, 12.011, 1e-6);
-    EXPECT_EQ(pdb_atoms[7].topo_type, "CP3");
+    EXPECT_NEAR(pdb_atoms[8].topo_charge, 0.0, 1e-6);
+    EXPECT_NEAR(pdb_atoms[8].topo_mass, 12.011, 1e-6);
+    EXPECT_EQ(pdb_atoms[8].topo_type, "CP3");
 
     // Verify ASN residue atoms
-    EXPECT_NEAR(pdb_atoms[8].topo_charge, 0.55, 1e-6);
-    EXPECT_NEAR(pdb_atoms[8].topo_mass, 12.011, 1e-6);
-    EXPECT_EQ(pdb_atoms[8].topo_type, "CC");
+    EXPECT_NEAR(pdb_atoms[9].topo_charge, 0.55, 1e-6);
+    EXPECT_NEAR(pdb_atoms[9].topo_mass, 12.011, 1e-6);
+    EXPECT_EQ(pdb_atoms[9].topo_type, "CC");
 
-    EXPECT_NEAR(pdb_atoms[9].topo_charge, -0.55, 1e-6);
-    EXPECT_NEAR(pdb_atoms[9].topo_mass, 15.9994, 1e-6);
-    EXPECT_EQ(pdb_atoms[9].topo_type, "O");
+    EXPECT_NEAR(pdb_atoms[10].topo_charge, -0.55, 1e-6);
+    EXPECT_NEAR(pdb_atoms[10].topo_mass, 15.9994, 1e-6);
+    EXPECT_EQ(pdb_atoms[10].topo_type, "O");
 
     // Verify GLN residue atoms
-    EXPECT_NEAR(pdb_atoms[10].topo_charge, -0.62, 1e-6);
-    EXPECT_NEAR(pdb_atoms[10].topo_mass, 14.007, 1e-6);
-    EXPECT_EQ(pdb_atoms[10].topo_type, "NH2");
+    EXPECT_NEAR(pdb_atoms[11].topo_charge, -0.62, 1e-6);
+    EXPECT_NEAR(pdb_atoms[11].topo_mass, 14.007, 1e-6);
+    EXPECT_EQ(pdb_atoms[11].topo_type, "NH2");
 
-    EXPECT_NEAR(pdb_atoms[11].topo_charge, 0.32, 1e-6);
-    EXPECT_NEAR(pdb_atoms[11].topo_mass, 1.008, 1e-6);
-    EXPECT_EQ(pdb_atoms[11].topo_type, "H");
+    EXPECT_NEAR(pdb_atoms[12].topo_charge, 0.32, 1e-6);
+    EXPECT_NEAR(pdb_atoms[12].topo_mass, 1.008, 1e-6);
+    EXPECT_EQ(pdb_atoms[12].topo_type, "H");
 }
 
 TEST_F(TestPSFParser, GetMissingTopologyInfo) {
