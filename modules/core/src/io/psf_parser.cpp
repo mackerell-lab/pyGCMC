@@ -81,11 +81,6 @@ bool PSFParser::parse_atoms_section(const std::vector<std::string>& lines) {
             continue;
         }
 
-        std::cout << "Parsed atom: " << atom.residue << " " << atom.name 
-                  << " type=" << atom.type 
-                  << " charge=" << atom.charge 
-                  << " mass=" << atom.mass << std::endl;
-
         // 存入容器
         size_t idx = atoms_.size();
         atoms_.push_back(atom);
@@ -131,8 +126,6 @@ bool PSFParser::get_atom_properties(const std::string& residue_name,
     const PSFAtom& atom = atoms_[atom_it->second];
     charge = atom.charge;
     mass = atom.mass;
-    std::cout << "Found atom: " << residue_name << " " << atom_name 
-              << " charge=" << charge << " mass=" << mass << std::endl;
     return true;
 }
 
@@ -168,8 +161,6 @@ bool PSFParser::get_atom_properties(const std::string& residue_name,
     const PSFAtom& atom = atoms_[atom_it->second];
     charge = atom.charge;
     mass = atom.mass;
-    std::cout << "Found atom: " << residue_name << " " << residue_number << " " << atom_name 
-              << " charge=" << charge << " mass=" << mass << std::endl;
     return true;
 }
 
