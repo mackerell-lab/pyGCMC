@@ -119,6 +119,14 @@ public:
     static int update_pdb_atoms_from_multiple_psf(std::vector<PDBAtom*>& pdb_atoms, 
                                                 const std::vector<std::string>& psf_files);
 
+    // New functions for handling different PSF types
+    static int update_pdb_atoms_multi_residue(std::vector<PDBAtom*>& pdb_atoms,
+                                            const std::string& psf_file);
+    
+    static int update_pdb_atoms_single_residue(std::vector<PDBAtom*>& pdb_atoms,
+                                             const std::string& psf_file,
+                                             const std::string& target_residue);
+
 private:
     bool is_first_file_;  // Track if we're parsing the first file
     struct PSFAtom {

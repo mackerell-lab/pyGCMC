@@ -122,6 +122,9 @@ public:
     void load_structure_psf(const std::string& pdb, const std::vector<std::string>& psf_files);
     void load_structure_top(const std::string& pdb, const std::string& top);
     void load_structure(const Structure& structure);
+    void load_structure_psf_multi(const std::string& pdb_file, const std::string& psf_file);
+    void load_structure_psf_single(const std::string& pdb_file, const std::string& psf_file, const std::string& target_residue);
+    void load_structure_psf_auto(const std::string& pdb_file, const std::string& psf_file);
 
     // Residue management
     size_t add_residue(const std::string& name);

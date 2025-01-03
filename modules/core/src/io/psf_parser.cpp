@@ -401,6 +401,102 @@ int PSFParser::update_pdb_atoms_from_multiple_psf(std::vector<PDBAtom*>& pdb_ato
     return total_updated;
 }
 
+int PSFParser::update_pdb_atoms_multi_residue(std::vector<PDBAtom*>& pdb_atoms,
+                                            const std::string& psf_file) {
+    PSFParser parser;
+    if (!parser.parse(psf_file)) {
+        return 0;
+    }
+
+    // Group PSF atoms by residue
+    std::map<std::pair<std::string, int>, std::vector<const PSFAtom*>> psf_atoms_by_res;
+    for (const auto& atom : parser.atoms_) {
+        psf_atoms_by_res[std::make_pair(atom.residue, atom.residue_number)].push_back(&atom);
+    }
+
+    // Group PDB atoms by residue
+    std::map<std::pair<std::string, int>, std::vector<PDBAtom*>> pdb_atoms_by_res;
+    for (auto* atom : pdb_atoms) {
+        if (!atom) continue;
+        pdb_atoms_by_res[std::make_pair(atom->residue, atom->sequence)].push_back(atom);
+    }
+
+    int updated = 0;
+    // For each residue in PDB, try to find matching residue in PSF
+    for (auto& [res_key, pdb_res_atoms] : pdb_atoms_by_res) {
+        auto psf_it = psf_atoms_by_res.find(res_key);
+        if (psf_it == psf_atoms_by_res.end()) continue;
+
+        auto& psf_res_atoms = psf_it->second;
+
+        // Sort both PDB and PSF atoms by their serial numbers within the residue
+        std::sort(pdb_res_atoms.begin(), pdb_res_atoms.end(),
+            [](const PDBAtom* a, const PDBAtom* b) { return a->serial < b->serial; });
+        std::sort(psf_res_atoms.begin(), psf_res_atoms.end(),
+            [](const PSFAtom* a, const PSFAtom* b) { return a->id < b->id; });
+
+        // Map topology data in order
+        size_t num_atoms = std::min(pdb_res_atoms.size(), psf_res_atoms.size());
+        for (size_t i = 0; i < num_atoms; ++i) {
+            pdb_res_atoms[i]->topo_type = psf_res_atoms[i]->type;
+            pdb_res_atoms[i]->topo_charge = psf_res_atoms[i]->charge;
+            pdb_res_atoms[i]->topo_mass = psf_res_atoms[i]->mass;
+            pdb_res_atoms[i]->chain = psf_res_atoms[i]->segment.empty() ? ' ' : psf_res_atoms[i]->segment[0];
+            updated++;
+        }
+    }
+
+    return updated;
+}
+
+int PSFParser::update_pdb_atoms_single_residue(std::vector<PDBAtom*>& pdb_atoms,
+                                             const std::string& psf_file,
+                                             const std::string& target_residue) {
+    PSFParser parser;
+    if (!parser.parse(psf_file)) {
+        return 0;
+    }
+
+    // Get all PSF atoms (should be from a single residue)
+    std::vector<const PSFAtom*> psf_atoms;
+    for (const auto& atom : parser.atoms_) {
+        psf_atoms.push_back(&atom);
+    }
+
+    // Sort PSF atoms by ID
+    std::sort(psf_atoms.begin(), psf_atoms.end(),
+        [](const PSFAtom* a, const PSFAtom* b) { return a->id < b->id; });
+
+    // Group PDB atoms by residue name
+    std::map<std::string, std::vector<PDBAtom*>> pdb_atoms_by_res;
+    for (auto* atom : pdb_atoms) {
+        if (!atom) continue;
+        if (atom->residue == target_residue) {
+            pdb_atoms_by_res[atom->residue].push_back(atom);
+        }
+    }
+
+    int updated = 0;
+    // Update each matching residue
+    for (auto& [res_name, res_atoms] : pdb_atoms_by_res) {
+        // Sort PDB atoms by serial number
+        std::sort(res_atoms.begin(), res_atoms.end(),
+            [](const PDBAtom* a, const PDBAtom* b) { return a->serial < b->serial; });
+
+        // Map topology data in order
+        size_t num_atoms = std::min(res_atoms.size(), psf_atoms.size());
+        for (size_t i = 0; i < num_atoms; ++i) {
+            res_atoms[i]->topo_type = psf_atoms[i]->type;
+            res_atoms[i]->topo_charge = psf_atoms[i]->charge;
+            res_atoms[i]->topo_mass = psf_atoms[i]->mass;
+            res_atoms[i]->chain = psf_atoms[i]->segment.empty() ? ' ' : psf_atoms[i]->segment[0];
+            updated++;
+        }
+    }
+
+    return updated;
+}
+
 } // namespace io
 } // namespace core
 } // namespace pygcmc

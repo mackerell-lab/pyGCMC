@@ -475,10 +475,15 @@ void System::load_structure_psf(const std::string& pdb_file, const std::string& 
             }
         }
 
-        std::vector<std::string> psf_files = {psf_file};
-        int updated = io::PSFParser::update_pdb_atoms_from_multiple_psf(atom_ptrs, psf_files);
+        // Try multi-residue approach first
+        int updated = io::PSFParser::update_pdb_atoms_multi_residue(atom_ptrs, psf_file);
         if (updated == 0) {
-            throw std::runtime_error("No atoms were updated with PSF information using either method");
+            // If multi-residue approach fails, try single-residue approach
+            updated = io::PSFParser::update_pdb_atoms_single_residue(atom_ptrs, psf_file, "BENX");
+        }
+        
+        if (updated == 0) {
+            throw std::runtime_error("No atoms were updated with PSF information using any method");
         }
     }
 
@@ -486,7 +491,7 @@ void System::load_structure_psf(const std::string& pdb_file, const std::string& 
     load_structure(structure);
 }
 
-void System::load_structure_psf(const std::string& pdb_file, const std::vector<std::string>& psf_files) {
+void System::load_structure_psf_multi(const std::string& pdb_file, const std::string& psf_file) {
     // Create a temporary project to load the structure
     Project project("temp_project");
     auto structure = project.create_structure();
@@ -504,10 +509,38 @@ void System::load_structure_psf(const std::string& pdb_file, const std::vector<s
         }
     }
 
-    // Try to update atoms using multiple PSF method
-    int updated = io::PSFParser::update_pdb_atoms_from_multiple_psf(atom_ptrs, psf_files);
+    // Try to update atoms using multi-residue method
+    int updated = io::PSFParser::update_pdb_atoms_multi_residue(atom_ptrs, psf_file);
     if (updated == 0) {
-        throw std::runtime_error("No atoms were updated with PSF information");
+        throw std::runtime_error("No atoms were updated with PSF information using multi-residue method");
+    }
+
+    // Load the structure into the system
+    load_structure(structure);
+}
+
+void System::load_structure_psf_single(const std::string& pdb_file, const std::string& psf_file, const std::string& target_residue) {
+    // Create a temporary project to load the structure
+    Project project("temp_project");
+    auto structure = project.create_structure();
+
+    // Load PDB file
+    structure.read_pdb(pdb_file);
+
+    // Get all atom pointers
+    std::vector<io::PDBAtom*> atom_ptrs;
+    for (const auto& residue : structure.residues()) {
+        for (const auto& atom : residue->atom_ptrs) {
+            if (atom) {
+                atom_ptrs.push_back(atom.get());
+            }
+        }
+    }
+
+    // Try to update atoms using single-residue method
+    int updated = io::PSFParser::update_pdb_atoms_single_residue(atom_ptrs, psf_file, target_residue);
+    if (updated == 0) {
+        throw std::runtime_error("No atoms were updated with PSF information using single-residue method");
     }
 
     // Load the structure into the system
@@ -525,6 +558,51 @@ void System::load_structure_top(const std::string& pdb_file, const std::string& 
 
     // Load the structure into the system
     load_structure(structure);
+}
+
+void System::load_structure_psf_auto(const std::string& pdb_file, const std::string& psf_file) {
+    // Create a temporary project to load the structure
+    Project project("temp_project");
+    auto structure = project.create_structure();
+
+    // Load PDB file
+    structure.read_pdb(pdb_file);
+
+    // Get all atom pointers
+    std::vector<io::PDBAtom*> atom_ptrs;
+    for (const auto& residue : structure.residues()) {
+        for (const auto& atom : residue->atom_ptrs) {
+            if (atom) {
+                atom_ptrs.push_back(atom.get());
+            }
+        }
+    }
+
+    // Try multi-residue approach first
+    int updated = io::PSFParser::update_pdb_atoms_multi_residue(atom_ptrs, psf_file);
+    if (updated > 0) {
+        // Multi-residue approach worked, load the structure
+        load_structure(structure);
+        return;
+    }
+
+    // If multi-residue approach failed, try single-residue approach with different residue names
+    std::set<std::string> residue_names;
+    for (const auto& residue : structure.residues()) {
+        residue_names.insert(residue->name);
+    }
+
+    for (const auto& residue_name : residue_names) {
+        updated = io::PSFParser::update_pdb_atoms_single_residue(atom_ptrs, psf_file, residue_name);
+        if (updated > 0) {
+            // Single-residue approach worked with this residue name
+            load_structure(structure);
+            return;
+        }
+    }
+
+    // If both approaches failed, throw an error
+    throw std::runtime_error("Failed to load PSF file: neither multi-residue nor single-residue approach worked");
 }
 
 } // namespace core

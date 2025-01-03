@@ -61,6 +61,18 @@ void init_system_bindings(py::module& m) {
              static_cast<void (System::*)(const Structure&)>(&System::load_structure),
              py::arg("structure"),
              "Load structure from a Structure object")
+        .def("load_structure_psf_auto",
+             &System::load_structure_psf_auto,
+             py::arg("pdb_file"), py::arg("psf_file"),
+             "Load structure from PDB and PSF files with automatic detection of PSF type")
+        .def("load_structure_psf_multi",
+             &System::load_structure_psf_multi,
+             py::arg("pdb_file"), py::arg("psf_file"),
+             "Load structure from PDB and multi-residue PSF file")
+        .def("load_structure_psf_single",
+             &System::load_structure_psf_single,
+             py::arg("pdb_file"), py::arg("psf_file"), py::arg("target_residue"),
+             "Load structure from PDB and single-residue PSF file, applying to specified residue type")
         // Residue management
         .def("get_residue_count", &System::get_residue_count,
              "Get number of residues")
