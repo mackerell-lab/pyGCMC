@@ -386,10 +386,16 @@ void Structure::read_psf_file(const std::string& psf_file) {
             }
         }
         
-        // Update atoms with PSF information using order-based mapping
+        // First try standard method (order-based mapping)
         int updated = psf_parser.update_pdb_atoms_by_order(atom_ptrs);
         if (updated == 0) {
-            throw std::runtime_error("No atoms were updated with PSF information");
+            // If standard method fails, try updating with multiple PSF method
+            std::vector<std::string> psf_files = {psf_file};
+            updated = io::PSFParser::update_pdb_atoms_from_multiple_psf(atom_ptrs, psf_files);
+            
+            if (updated == 0) {
+                throw std::runtime_error("No atoms were updated with PSF information using either method");
+            }
         }
     }
 }

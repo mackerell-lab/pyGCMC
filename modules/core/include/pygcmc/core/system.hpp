@@ -1,8 +1,13 @@
 // modules/core/include/pygcmc/core/system.hpp
 
-#ifndef PYGCMC_CORE_SYSTEM_HPP
-#define PYGCMC_CORE_SYSTEM_HPP
+#pragma once
 
+#include <string>
+#include <vector>
+#include <memory>
+#include <optional>
+#include "pygcmc/core/structure.hpp"
+#include "pygcmc/core/forcefield.hpp"
 #include <vector>
 #include <array>
 #include <memory>
@@ -114,6 +119,7 @@ public:
 
     // Structure loading methods
     void load_structure_psf(const std::string& pdb, const std::string& psf);
+    void load_structure_psf(const std::string& pdb, const std::vector<std::string>& psf_files);
     void load_structure_top(const std::string& pdb, const std::string& top);
     void load_structure(const Structure& structure);
 
@@ -190,5 +196,3 @@ private:
 
 } // namespace core
 } // namespace pygcmc
-
-#endif // PYGCMC_CORE_SYSTEM_HPP

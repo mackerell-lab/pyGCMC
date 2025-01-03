@@ -20,6 +20,8 @@ def structure_files(test_data_dir):
         'sol_pdb': os.path.join(test_data_dir, "mols", "sol.pdb"),
         'sol_itp': os.path.join(test_data_dir, "mols", "sol.itp"),
         'sol_psf': os.path.join(test_data_dir, "mols", "sol.psf"),
+        'benx_psf': os.path.join(test_data_dir, "mols", "benx.psf"),
+        'prpx_psf': os.path.join(test_data_dir, "mols", "prpx.psf"),
     }
 
 def test_system_creation():
@@ -59,23 +61,39 @@ def test_system_creation_with_nonexistent_files():
 
 def test_system_creation_with_invalid_topology(structure_files):
     """Test system creation with invalid topology file."""
-    with pytest.raises(RuntimeError, match="Failed to parse PSF file"):
+    with pytest.raises(RuntimeError, match="Cannot open file"):
         System(pdb=structure_files['pdb'], psf="test.xyz")
 
-# def test_system_creation_with_multiple_psf(structure_files):
-#     """Test system creation with PDB and multiple PSF files."""
-#     # Using constructor
-#     system1 = System(pdb=structure_files['pdb'], psf=[structure_files['psf'], structure_files['sol_psf']])
-#     verify_system_content(system1)
+def test_system_creation_with_multiple_psf(structure_files):
+    """Test system creation with PDB and multiple PSF files."""
+    psf_files = [
+        structure_files['psf'],  # test_proa.psf
+        structure_files['benx_psf'],  # benx.psf
+        structure_files['prpx_psf'],  # prpx.psf
+        structure_files['sol_psf']  # sol.psf
+    ]
     
-#     # Using load_structure
-#     system2 = System()
-#     system2.load_structure(pdb=structure_files['pdb'], psf=[structure_files['psf'], structure_files['sol_psf']])
-#     verify_system_content(system2)
+    # Using constructor
+    system1 = System(pdb=structure_files['pdb'], psf=psf_files)
+    verify_system_content(system1)
+    
+    # Using load_structure
+    system2 = System()
+    system2.load_structure(pdb=structure_files['pdb'], psf=psf_files)
+    verify_system_content(system2)
 
-#     # Verify that both structures are loaded
-#     assert system1.get_residue_count() == system2.get_residue_count()
-#     assert system1.get_residue_count() > 0
+    # Verify that both structures are loaded
+    assert system1.get_residue_count() == system2.get_residue_count()
+    assert system1.get_residue_count() > 0
+    
+    # Additional verification for multiple PSF files
+    residue_count = system1.get_residue_count()
+    assert residue_count > 0, "System should have residues"
+    
+    # Verify we can access residues from different PSF files
+    for i in range(residue_count):
+        residue = system1.get_residue(i)
+        assert len(residue.particles) > 0, f"Residue {i} should have particles"
 
 def verify_system_content(system):
     """Helper function to verify system content."""

@@ -72,40 +72,6 @@ bool PSFParser::parse(const std::string& filename, PSFParsingMode mode) {
     }
 }
 
-bool PSFParser::parse_files(const std::vector<std::string>& filenames) {
-    bool overall_success = true;
-    is_first_file_ = true;  // Reset first file flag
-
-    for (const auto& file : filenames) {
-        try {
-            // Attempt exact parsing first
-            bool success = parse(file, PSFParsingMode::Exact);
-            if (!success) {
-                throw std::runtime_error("Exact parsing returned false for file: " + file);
-            }
-            std::cout << "Successfully parsed (exact) PSF file: " << file << std::endl;
-        }
-        catch (const std::exception& e) {
-            std::cerr << "Exact parsing failed for " << file << ": " << e.what() << std::endl;
-            std::cerr << "Attempting rough parsing for " << file << "..." << std::endl;
-            try {
-                bool success = parse(file, PSFParsingMode::Rough);
-                if (!success) {
-                    throw std::runtime_error("Rough parsing returned false for file: " + file);
-                }
-                std::cout << "Successfully parsed (rough) PSF file: " << file << std::endl;
-            }
-            catch (const std::exception& e2) {
-                std::cerr << "Rough parsing also failed for " << file << ": " << e2.what() << std::endl;
-                overall_success = false;
-            }
-        }
-        is_first_file_ = false;  // Mark that we're no longer on the first file
-    }
-
-    return overall_success;
-}
-
 bool PSFParser::parse_atoms_section(const std::vector<std::string>& lines, PSFParsingMode mode) {
     // Only clear existing atoms if this is the first file being parsed
     if (is_first_file_ && mode == PSFParsingMode::Exact) {
@@ -391,6 +357,48 @@ int PSFParser::update_pdb_atoms_by_order(std::vector<PDBAtom*>& atoms) {
     }
     
     return updated_count;
+}
+
+int PSFParser::update_pdb_atoms_from_multiple_psf(std::vector<PDBAtom*>& pdb_atoms,
+                                                const std::vector<std::string>& psf_files) {
+    int total_updated = 0;
+    std::vector<PDBAtom*> remaining_atoms = pdb_atoms;
+
+    // Try to update atoms from each PSF file
+    for (const auto& psf_file : psf_files) {
+        PSFParser parser;
+        if (!parser.parse(psf_file)) {
+            continue;
+        }
+
+        // Update atoms that haven't been updated yet
+        std::vector<PDBAtom*> unmatched_atoms;
+        for (auto* atom : remaining_atoms) {
+            if (!atom || !atom->topo_type.empty()) {
+                continue;
+            }
+
+            // Try to update the atom
+            std::vector<PDBAtom*> single_atom = {atom};
+            int updated = parser.update_pdb_atoms(single_atom);
+            
+            if (updated == 0) {
+                unmatched_atoms.push_back(atom);
+            } else {
+                total_updated++;
+            }
+        }
+
+        // Update remaining atoms list
+        remaining_atoms = unmatched_atoms;
+
+        // If all atoms are updated, we can stop
+        if (remaining_atoms.empty()) {
+            break;
+        }
+    }
+
+    return total_updated;
 }
 
 } // namespace io

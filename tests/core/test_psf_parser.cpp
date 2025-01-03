@@ -364,20 +364,40 @@ TEST_F(TestPSFParser, ParseMultiplePSFFiles) {
         TEST_DATA_DIR "/mols/sol.psf"  // Water PSF file
     };
 
-    ASSERT_TRUE(parser_->parse_files(psf_files));
-
-    // Test that atoms from both files are present
-    double charge, mass;
+    // Create test PDB atoms
+    std::vector<PDBAtom> pdb_atoms;
     
+    // Add protein atoms
+    PDBAtom ala_n;
+    ala_n.residue = "ALA";
+    ala_n.name = "N";
+    ala_n.sequence = 7;
+    pdb_atoms.push_back(ala_n);
+
+    // Add water atoms
+    PDBAtom sol_ow;
+    sol_ow.residue = "SOL";
+    sol_ow.name = "OW";
+    sol_ow.sequence = 1;
+    pdb_atoms.push_back(sol_ow);
+
+    // Convert to pointers for the update function
+    std::vector<PDBAtom*> atom_ptrs;
+    for (auto& atom : pdb_atoms) {
+        atom_ptrs.push_back(&atom);
+    }
+
+    // Update atoms from multiple PSF files
+    int updated = PSFParser::update_pdb_atoms_from_multiple_psf(atom_ptrs, psf_files);
+    ASSERT_GT(updated, 0) << "No atoms were updated from PSF files";
+
     // Check protein atoms (from main PSF)
-    ASSERT_TRUE(parser_->get_atom_properties("ALA", 7, "N", charge, mass));
-    EXPECT_NEAR(charge, -0.3, 1e-6);
-    EXPECT_NEAR(mass, 14.007, 1e-6);
+    EXPECT_NEAR(pdb_atoms[0].topo_charge, -0.3, 1e-6);
+    EXPECT_NEAR(pdb_atoms[0].topo_mass, 14.007, 1e-6);
 
     // Check water atoms (from sol.psf)
-    ASSERT_TRUE(parser_->get_atom_properties("SOL", "OW", charge, mass));
-    EXPECT_NEAR(charge, -0.834, 1e-6);
-    EXPECT_NEAR(mass, 15.9994, 1e-6);
+    EXPECT_NEAR(pdb_atoms[1].topo_charge, -0.834, 1e-6);
+    EXPECT_NEAR(pdb_atoms[1].topo_mass, 15.9994, 1e-6);
 }
 
 TEST_F(TestPSFParser, HandleMalformedPSFFile) {

@@ -7,6 +7,7 @@
 #include <map>
 #include <unordered_map>
 #include <set>
+#include <optional>
 #include "pygcmc/core/io/parser_common.hpp"
 
 namespace pygcmc {
@@ -46,11 +47,11 @@ public:
     bool parse(const std::string& filename, PSFParsingMode mode = PSFParsingMode::Exact);
 
     /**
-     * @brief Parse multiple PSF files
-     * @param filenames Vector of paths to PSF files
+     * @brief Parse PSF file in rough mode (less strict parsing)
+     * @param filename Path to PSF file
      * @return True if parsing was successful
      */
-    bool parse_files(const std::vector<std::string>& filenames);
+    bool parse_rough(const std::string& filename);
 
     /**
      * @brief Get atom properties from PSF file
@@ -108,6 +109,15 @@ public:
      * @return Number of atoms updated
      */
     int update_pdb_atoms_by_order(std::vector<PDBAtom*>& atoms);
+
+    /**
+     * @brief Update PDB atoms with topology information from multiple PSF files
+     * @param pdb_atoms Vector of pointers to PDB atoms to update
+     * @param psf_files Vector of PSF file paths
+     * @return Total number of atoms updated across all PSF files
+     */
+    static int update_pdb_atoms_from_multiple_psf(std::vector<PDBAtom*>& pdb_atoms, 
+                                                const std::vector<std::string>& psf_files);
 
 private:
     bool is_first_file_;  // Track if we're parsing the first file

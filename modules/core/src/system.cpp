@@ -458,9 +458,57 @@ void System::load_structure_psf(const std::string& pdb_file, const std::string& 
     Project project("temp_project");
     auto structure = project.create_structure();
 
-    // Load PDB and PSF files
+    // Load PDB file
     structure.read_pdb(pdb_file);
-    structure.read_psf(psf_file);
+
+    // Try standard PSF loading first
+    try {
+        structure.read_psf(psf_file);
+    } catch (const std::runtime_error& e) {
+        // If standard method fails, try using multiple PSF method
+        std::vector<io::PDBAtom*> atom_ptrs;
+        for (const auto& residue : structure.residues()) {
+            for (const auto& atom : residue->atom_ptrs) {
+                if (atom) {
+                    atom_ptrs.push_back(atom.get());
+                }
+            }
+        }
+
+        std::vector<std::string> psf_files = {psf_file};
+        int updated = io::PSFParser::update_pdb_atoms_from_multiple_psf(atom_ptrs, psf_files);
+        if (updated == 0) {
+            throw std::runtime_error("No atoms were updated with PSF information using either method");
+        }
+    }
+
+    // Load the structure into the system
+    load_structure(structure);
+}
+
+void System::load_structure_psf(const std::string& pdb_file, const std::vector<std::string>& psf_files) {
+    // Create a temporary project to load the structure
+    Project project("temp_project");
+    auto structure = project.create_structure();
+
+    // Load PDB file
+    structure.read_pdb(pdb_file);
+
+    // Get all atom pointers
+    std::vector<io::PDBAtom*> atom_ptrs;
+    for (const auto& residue : structure.residues()) {
+        for (const auto& atom : residue->atom_ptrs) {
+            if (atom) {
+                atom_ptrs.push_back(atom.get());
+            }
+        }
+    }
+
+    // Try to update atoms using multiple PSF method
+    int updated = io::PSFParser::update_pdb_atoms_from_multiple_psf(atom_ptrs, psf_files);
+    if (updated == 0) {
+        throw std::runtime_error("No atoms were updated with PSF information");
+    }
 
     // Load the structure into the system
     load_structure(structure);
