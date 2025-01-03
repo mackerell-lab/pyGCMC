@@ -9,7 +9,13 @@ using namespace pygcmc::core;
 void init_system_bindings(py::module& m) {
     // Bind System class
     py::class_<System>(m, "System")
-        .def(py::init<>())
+        .def(py::init<const std::string&, const std::string&>(),
+             py::kw_only(),
+             py::arg("pdb") = "", py::arg("top") = "",
+             "Create a system, optionally loading structure from PDB and topology files")
+        .def("load_structure", &System::load_structure,
+             py::arg("pdb_file"), py::arg("top_file"),
+             "Load structure from PDB and topology files")
         .def("add_residue", &System::add_residue, py::arg("name"), "Add a residue to the system")
         .def("remove_residue", &System::remove_residue, py::arg("index"), "Remove a residue by index")
         .def("get_residue_count", &System::get_residue_count, "Get number of residues")
@@ -72,8 +78,5 @@ void init_system_bindings(py::module& m) {
              "Check if system uses periodic boundary conditions")
         .def("compute_distance", &System::compute_distance,
              py::arg("p1"), py::arg("p2"),
-             "Compute distance between two particles")
-        .def("load_structure", &System::load_structure,
-             py::arg("pdb_file"), py::arg("top_file"),
-             "Load structure from PDB and topology files");
+             "Compute distance between two particles");
 } 

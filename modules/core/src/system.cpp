@@ -378,64 +378,95 @@ void System::load_structure(const std::string& pdb_file, const std::string& top_
     forces_.clear();
     has_periodic_boundary_ = false;
 
-    try {
-        // Create a temporary project to handle file loading
-        Project project("temp_project");
+    // Create a temporary project to load the structure
+    Project project("temp_project");
+    auto structure = project.create_structure();
+
+    // Load PDB file
+    structure.read_pdb(pdb_file);
+
+    // Automatically detect topology file type based on extension
+    std::string ext = top_file.substr(top_file.find_last_of(".") + 1);
+    if (ext == "psf") {
+        structure.read_psf(top_file);
+    } else if (ext == "top" || ext == "itp") {
+        structure.read_top(top_file);
+    } else {
+        throw std::runtime_error("Unsupported topology file format");
+    }
+
+    // Get box information
+    auto box = structure.get_box();
+    if (box.has_value()) {
+        auto box_vectors = structure.get_box_vectors();
+        set_periodic_box_vectors(box_vectors[0], box_vectors[1], box_vectors[2]);
+    }
+    
+    // Get atoms data and transfer to system
+    auto atoms_data = structure.get_atoms_data();
+    
+    // Group atoms by residue
+    std::map<std::pair<std::string, int>, std::vector<std::unordered_map<std::string, std::variant<std::string, int, double>>>> residue_atoms;
+    for (const auto& atom : atoms_data) {
+        std::string residue_name = std::get<std::string>(atom.at("residue"));
+        int sequence = std::get<int>(atom.at("sequence"));
+        residue_atoms[{residue_name, sequence}].push_back(atom);
+    }
+    
+    // Create residues and add atoms
+    for (const auto& [residue_key, atoms] : residue_atoms) {
+        const auto& [residue_name, sequence] = residue_key;
+        size_t res_idx = add_residue(residue_name);
         
-        // Create and load structure
-        auto structure = project.create_structure();
-        structure.load_pdb(pdb_file);
-        
-        if (top_file.find(".psf") != std::string::npos) {
-            structure.load_psf(top_file);
-        } else if (top_file.find(".top") != std::string::npos || 
-                   top_file.find(".itp") != std::string::npos) {
-            structure.load_top(top_file);
-        } else {
-            throw std::runtime_error("Unsupported topology file format");
-        }
-        
-        // Get box information
-        auto box = structure.get_box();
-        if (box.has_value()) {
-            auto box_vectors = structure.get_box_vectors();
-            set_periodic_box_vectors(box_vectors[0], box_vectors[1], box_vectors[2]);
-        }
-        
-        // Get atoms data and transfer to system
-        auto atoms_data = structure.get_atoms_data();
-        
-        // Group atoms by residue
-        std::map<std::pair<std::string, int>, std::vector<std::unordered_map<std::string, std::variant<std::string, int, double>>>> residue_atoms;
-        for (const auto& atom : atoms_data) {
-            std::string residue_name = std::get<std::string>(atom.at("residue"));
-            int sequence = std::get<int>(atom.at("sequence"));
-            residue_atoms[{residue_name, sequence}].push_back(atom);
-        }
-        
-        // Create residues and add atoms
-        for (const auto& [residue_key, atoms] : residue_atoms) {
-            const auto& [residue_name, sequence] = residue_key;
-            size_t res_idx = add_residue(residue_name);
+        for (const auto& atom : atoms) {
+            Particle p;
+            p.position = {
+                std::get<double>(atom.at("x")),
+                std::get<double>(atom.at("y")),
+                std::get<double>(atom.at("z"))
+            };
+            p.velocity = {0.0, 0.0, 0.0};  // Initialize velocities to zero
             
-            for (const auto& atom : atoms) {
-                Particle p;
-                p.position = {
-                    std::get<double>(atom.at("x")),
-                    std::get<double>(atom.at("y")),
-                    std::get<double>(atom.at("z"))
-                };
-                p.velocity = {0.0, 0.0, 0.0};  // Initialize velocities to zero
-                p.charge = std::get<double>(atom.at("topo_charge"));
-                p.mass = std::get<double>(atom.at("topo_mass"));
-                p.is_virtual = false;  // Default to non-virtual
-                add_particle(res_idx, p);
+            // Try to get mass and charge from different possible fields
+            bool mass_found = false;
+            std::vector<std::string> mass_fields = {"mass", "topo_mass", "atom_mass"};
+            for (const auto& field : mass_fields) {
+                try {
+                    if (atom.find(field) != atom.end()) {
+                        p.mass = std::get<double>(atom.at(field));
+                        if (std::isfinite(p.mass) && p.mass > 0.0) {
+                            mass_found = true;
+                            break;
+                        }
+                    }
+                } catch (const std::exception&) {
+                    continue;
+                }
             }
+
+            // Try to get charge from different possible fields
+            std::vector<std::string> charge_fields = {"charge", "topo_charge", "atom_charge"};
+            for (const auto& field : charge_fields) {
+                try {
+                    if (atom.find(field) != atom.end()) {
+                        p.charge = std::get<double>(atom.at(field));
+                        if (std::isfinite(p.charge)) {
+                            break;
+                        }
+                    }
+                } catch (const std::exception&) {
+                    continue;
+                }
+            }
+
+            // If no valid mass found, use a default mass
+            if (!mass_found) {
+                p.mass = 1.0;  // Default mass in atomic mass units
+            }
+            
+            p.is_virtual = false;  // Default to non-virtual
+            add_particle(res_idx, p);
         }
-    } catch (const std::runtime_error& e) {
-        throw;  // Re-throw runtime_error as is
-    } catch (const std::exception& e) {
-        throw std::runtime_error(e.what());  // Convert other exceptions to runtime_error
     }
 }
 

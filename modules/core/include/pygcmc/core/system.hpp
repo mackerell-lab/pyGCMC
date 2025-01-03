@@ -92,8 +92,17 @@ struct Residue {
  */
 class System {
 public:
-    System() = default;
+    // Default constructor with optional PDB and topology files
+    System(const std::string& pdb = "", const std::string& top = "") {
+        if (!pdb.empty() && !top.empty()) {
+            load_structure(pdb, top);
+        }
+    }
+    
     ~System() = default;
+
+    // Structure loading
+    void load_structure(const std::string& pdb_file, const std::string& top_file);
 
     // Residue management
     size_t add_residue(const std::string& name);
@@ -149,9 +158,6 @@ public:
     double compute_energy() const;
     void update_positions(double dt);
     void update_velocities(double dt);
-
-    // Structure loading
-    void load_structure(const std::string& pdb_file, const std::string& top_file);
 
 private:
     std::vector<Residue> residues_;

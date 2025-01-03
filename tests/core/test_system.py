@@ -27,57 +27,54 @@ def test_system_creation():
     assert system is not None
     assert system.get_residue_count() == 0
 
-def test_load_structure_psf(structure_files):
-    """Test loading structure with PSF topology."""
-    system = System()
-    system.load_structure(pdb_file=structure_files['pdb'], 
-                         top_file=structure_files['psf'])
+def test_system_creation_with_psf(structure_files):
+    """Test system creation with PDB and PSF files."""
+    # Using constructor
+    system1 = System(pdb=structure_files['pdb'], top=structure_files['psf'])
+    verify_system_content(system1)
     
-    # Verify system has content
-    assert system.get_residue_count() > 0
-    
-    # Check first residue has particles
-    first_residue = system.get_residue(0)
-    assert len(first_residue.particles) > 0
-    
-    # Verify particle properties
-    particle = first_residue.particles[0]
-    assert particle.mass > 0
-    assert not particle.is_virtual
-    assert all(isinstance(x, float) for x in particle.position)
-    assert all(isinstance(x, float) for x in particle.velocity)
-    assert isinstance(particle.charge, float)
+    # Using load_structure
+    system2 = System()
+    system2.load_structure(pdb_file=structure_files['pdb'], top_file=structure_files['psf'])
+    verify_system_content(system2)
 
-def test_load_structure_itp(structure_files):
-    """Test loading structure with ITP topology."""
-    system = System()
-    system.load_structure(pdb_file=structure_files['sol_pdb'], 
-                         top_file=structure_files['sol_itp'])
+def test_system_creation_with_top(structure_files):
+    """Test system creation with PDB and TOP files."""
+    # Using constructor
+    system1 = System(pdb=structure_files['pdb'], top=structure_files['top'])
+    verify_system_content(system1)
     
-    # Verify system has content
-    assert system.get_residue_count() > 0
-    
-    # Check first residue has particles
-    first_residue = system.get_residue(0)
-    assert len(first_residue.particles) > 0
-    
-    # Verify particle properties
-    particle = first_residue.particles[0]
-    assert particle.mass > 0
-    assert not particle.is_virtual
-    assert all(isinstance(x, float) for x in particle.position)
-    assert all(isinstance(x, float) for x in particle.velocity)
-    assert isinstance(particle.charge, float)
+    # Using load_structure
+    system2 = System()
+    system2.load_structure(pdb_file=structure_files['pdb'], top_file=structure_files['top'])
+    verify_system_content(system2)
 
-def test_load_structure_invalid_topology(structure_files):
-    """Test loading structure with invalid topology file."""
-    system = System()
-    with pytest.raises(RuntimeError, match="Unsupported topology file format"):
-        system.load_structure(structure_files['pdb'], "test.xyz")
-
-def test_load_structure_nonexistent_file():
-    """Test loading structure with nonexistent files."""
-    system = System()
+def test_system_creation_with_nonexistent_files():
+    """Test system creation with nonexistent files."""
     with pytest.raises(RuntimeError, match="无法打开文件"):
-        system.load_structure("nonexistent.pdb", "nonexistent.psf")
+        System(pdb="nonexistent.pdb", top="nonexistent.psf")
+    with pytest.raises(RuntimeError, match="无法打开文件"):
+        System(pdb="nonexistent.pdb", top="nonexistent.top")
+
+def test_system_creation_with_invalid_topology(structure_files):
+    """Test system creation with invalid topology file."""
+    with pytest.raises(RuntimeError, match="Unsupported topology file format"):
+        System(pdb=structure_files['pdb'], top="test.xyz")
+
+def verify_system_content(system):
+    """Helper function to verify system content."""
+    # Verify system has content
+    assert system.get_residue_count() > 0
+    
+    # Check first residue has particles
+    first_residue = system.get_residue(0)
+    assert len(first_residue.particles) > 0
+    
+    # Verify particle properties
+    particle = first_residue.particles[0]
+    assert particle.mass > 0
+    assert not particle.is_virtual
+    assert all(isinstance(x, float) for x in particle.position)
+    assert all(isinstance(x, float) for x in particle.velocity)
+    assert isinstance(particle.charge, float)
 
