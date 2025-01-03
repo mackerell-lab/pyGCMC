@@ -10,6 +10,7 @@
 #include <cmath>
 #include <algorithm>
 #include "pygcmc/core/force.hpp"
+#include "pygcmc/core/structure.hpp"
 
 namespace pygcmc {
 namespace core {
@@ -92,17 +93,29 @@ struct Residue {
  */
 class System {
 public:
-    // Default constructor with optional PDB and topology files
-    System(const std::string& pdb = "", const std::string& top = "") {
-        if (!pdb.empty() && !top.empty()) {
-            load_structure(pdb, top);
+    // Default constructor
+    System() = default;
+    
+    // Constructor with PDB and PSF files
+    System(const std::string& pdb, const std::string& psf) {
+        if (!pdb.empty() && !psf.empty()) {
+            load_structure_psf(pdb, psf);
         }
+    }
+    
+    // Static factory method for TOP files
+    static System from_top(const std::string& pdb, const std::string& top) {
+        System system;
+        system.load_structure_top(pdb, top);
+        return system;
     }
     
     ~System() = default;
 
-    // Structure loading
-    void load_structure(const std::string& pdb_file, const std::string& top_file);
+    // Structure loading methods
+    void load_structure_psf(const std::string& pdb, const std::string& psf);
+    void load_structure_top(const std::string& pdb, const std::string& top);
+    void load_structure(const Structure& structure);
 
     // Residue management
     size_t add_residue(const std::string& name);

@@ -30,36 +30,36 @@ def test_system_creation():
 def test_system_creation_with_psf(structure_files):
     """Test system creation with PDB and PSF files."""
     # Using constructor
-    system1 = System(pdb=structure_files['pdb'], top=structure_files['psf'])
+    system1 = System(pdb=structure_files['pdb'], psf=structure_files['psf'])
     verify_system_content(system1)
     
     # Using load_structure
     system2 = System()
-    system2.load_structure(pdb_file=structure_files['pdb'], top_file=structure_files['psf'])
+    system2.load_structure(pdb=structure_files['pdb'], psf=structure_files['psf'])
     verify_system_content(system2)
 
 def test_system_creation_with_top(structure_files):
     """Test system creation with PDB and TOP files."""
-    # Using constructor
+    # Using factory method
     system1 = System(pdb=structure_files['pdb'], top=structure_files['top'])
     verify_system_content(system1)
     
     # Using load_structure
     system2 = System()
-    system2.load_structure(pdb_file=structure_files['pdb'], top_file=structure_files['top'])
+    system2.load_structure(pdb=structure_files['pdb'], top=structure_files['top'])
     verify_system_content(system2)
 
 def test_system_creation_with_nonexistent_files():
     """Test system creation with nonexistent files."""
     with pytest.raises(RuntimeError, match="无法打开文件"):
-        System(pdb="nonexistent.pdb", top="nonexistent.psf")
+        System(pdb="nonexistent.pdb", psf="nonexistent.psf")
     with pytest.raises(RuntimeError, match="无法打开文件"):
-        System(pdb="nonexistent.pdb", top="nonexistent.top")
+        System.from_top(pdb="nonexistent.pdb", top="nonexistent.top")
 
 def test_system_creation_with_invalid_topology(structure_files):
     """Test system creation with invalid topology file."""
-    with pytest.raises(RuntimeError, match="Unsupported topology file format"):
-        System(pdb=structure_files['pdb'], top="test.xyz")
+    with pytest.raises(RuntimeError, match="Failed to parse PSF file"):
+        System(pdb=structure_files['pdb'], psf="test.xyz")
 
 def verify_system_content(system):
     """Helper function to verify system content."""

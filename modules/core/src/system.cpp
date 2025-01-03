@@ -371,29 +371,12 @@ void System::validate_box_vectors(const std::array<double, 3>& a,
     }
 }
 
-void System::load_structure(const std::string& pdb_file, const std::string& top_file) {
+void System::load_structure(const Structure& structure) {
     // Clear existing data
     residues_.clear();
     constraints_.clear();
     forces_.clear();
     has_periodic_boundary_ = false;
-
-    // Create a temporary project to load the structure
-    Project project("temp_project");
-    auto structure = project.create_structure();
-
-    // Load PDB file
-    structure.read_pdb(pdb_file);
-
-    // Automatically detect topology file type based on extension
-    std::string ext = top_file.substr(top_file.find_last_of(".") + 1);
-    if (ext == "psf") {
-        structure.read_psf(top_file);
-    } else if (ext == "top" || ext == "itp") {
-        structure.read_top(top_file);
-    } else {
-        throw std::runtime_error("Unsupported topology file format");
-    }
 
     // Get box information
     auto box = structure.get_box();
@@ -468,6 +451,32 @@ void System::load_structure(const std::string& pdb_file, const std::string& top_
             add_particle(res_idx, p);
         }
     }
+}
+
+void System::load_structure_psf(const std::string& pdb_file, const std::string& psf_file) {
+    // Create a temporary project to load the structure
+    Project project("temp_project");
+    auto structure = project.create_structure();
+
+    // Load PDB and PSF files
+    structure.read_pdb(pdb_file);
+    structure.read_psf(psf_file);
+
+    // Load the structure into the system
+    load_structure(structure);
+}
+
+void System::load_structure_top(const std::string& pdb_file, const std::string& top_file) {
+    // Create a temporary project to load the structure
+    Project project("temp_project");
+    auto structure = project.create_structure();
+
+    // Load PDB and TOP files
+    structure.read_pdb(pdb_file);
+    structure.read_top(top_file);
+
+    // Load the structure into the system
+    load_structure(structure);
 }
 
 } // namespace core
