@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 #include "pygcmc/core/io/psf_parser.hpp"
 #include "pygcmc/core/io/itp_parser.hpp"
+#include "pygcmc/core/io/pdb_parser.hpp"
 #include "config.hpp"
 #include <filesystem>
 
@@ -172,3 +173,176 @@ TEST_F(PSFAndITPParserTest, GetMissingTopologyInfo) {
     EXPECT_TRUE(itp_missing.find("ALA") != itp_missing.end()) << "ALA should be missing from ITP";
     EXPECT_TRUE(itp_missing.find("UNKNOWN") != itp_missing.end()) << "UNKNOWN should be missing from ITP";
 }
+
+// TEST_F(PSFAndITPParserTest, CompareSolPSFAndITP) {
+//     // Parse SOL ITP file
+//     ITPParser itp_parser;
+//     std::string sol_itp_file = data_dir_ + "/mols/sol.itp";
+//     ASSERT_TRUE(itp_parser.parse(sol_itp_file)) << "Failed to parse SOL ITP file";
+
+//     // Parse SOL PSF file
+//     PSFParser psf_parser;
+//     std::string sol_psf_file = data_dir_ + "/mols/sol.psf";
+//     ASSERT_TRUE(psf_parser.parse(sol_psf_file)) << "Failed to parse SOL PSF file";
+
+//     // Create multiple water molecules with different sequence numbers
+//     std::vector<PDBAtom> water_atoms;
+    
+//     // First water molecule (SOL1)
+//     PDBAtom ow1, hw11, hw12;
+//     ow1.residue = "SOL"; ow1.name = "OW"; ow1.sequence = 1;
+//     hw11.residue = "SOL"; hw11.name = "HW1"; hw11.sequence = 1;
+//     hw12.residue = "SOL"; hw12.name = "HW2"; hw12.sequence = 1;
+//     water_atoms.push_back(ow1);
+//     water_atoms.push_back(hw11);
+//     water_atoms.push_back(hw12);
+
+//     // Second water molecule (SOL2) - different sequence number
+//     PDBAtom ow2, hw21, hw22;
+//     ow2.residue = "SOL"; ow2.name = "OW"; ow2.sequence = 2;
+//     hw21.residue = "SOL"; hw21.name = "HW1"; hw21.sequence = 2;
+//     hw22.residue = "SOL"; hw22.name = "HW2"; hw22.sequence = 2;
+//     water_atoms.push_back(ow2);
+//     water_atoms.push_back(hw21);
+//     water_atoms.push_back(hw22);
+
+//     // Third water molecule (SOL3) - yet another sequence number
+//     PDBAtom ow3, hw31, hw32;
+//     ow3.residue = "SOL"; ow3.name = "OW"; ow3.sequence = 3;
+//     hw31.residue = "SOL"; hw31.name = "HW1"; hw31.sequence = 3;
+//     hw32.residue = "SOL"; hw32.name = "HW2"; hw32.sequence = 3;
+//     water_atoms.push_back(ow3);
+//     water_atoms.push_back(hw31);
+//     water_atoms.push_back(hw32);
+
+//     // First update using ITP parser
+//     std::vector<PDBAtom> itp_atoms = water_atoms;
+//     int itp_updated = itp_parser.update_pdb_atoms(itp_atoms);
+//     EXPECT_EQ(itp_updated, 9) << "Failed to update all water atoms from ITP";
+
+//     // Then update using PSF parser
+//     std::vector<PDBAtom> psf_atoms = water_atoms;
+//     int psf_updated = psf_parser.update_pdb_atoms(psf_atoms);
+//     EXPECT_EQ(psf_updated, 9) << "Failed to update all water atoms from PSF";
+
+//     // Compare results for each atom
+//     for (size_t i = 0; i < water_atoms.size(); ++i) {
+//         SCOPED_TRACE("Comparing atom " + std::to_string(i) + 
+//                      " (" + water_atoms[i].residue + " " + 
+//                      water_atoms[i].name + " " + 
+//                      std::to_string(water_atoms[i].sequence) + ")");
+        
+//         // Compare topology type
+//         EXPECT_EQ(itp_atoms[i].topo_type, psf_atoms[i].topo_type)
+//             << "Topology type mismatch";
+        
+//         // Compare charge (with small tolerance for floating point comparison)
+//         EXPECT_NEAR(itp_atoms[i].topo_charge, psf_atoms[i].topo_charge, 1e-6)
+//             << "Charge mismatch";
+        
+//         // Compare mass (with small tolerance for floating point comparison)
+//         EXPECT_NEAR(itp_atoms[i].topo_mass, psf_atoms[i].topo_mass, 1e-6)
+//             << "Mass mismatch";
+
+//         // Verify expected values for water model
+//         if (water_atoms[i].name == "OW") {
+//             EXPECT_NEAR(psf_atoms[i].topo_charge, -0.834, 1e-6) << "Wrong charge for OW";
+//             EXPECT_NEAR(psf_atoms[i].topo_mass, 15.9994, 1e-6) << "Wrong mass for OW";
+//         } else if (water_atoms[i].name == "HW1" || water_atoms[i].name == "HW2") {
+//             EXPECT_NEAR(psf_atoms[i].topo_charge, 0.417, 1e-6) << "Wrong charge for HW";
+//             EXPECT_NEAR(psf_atoms[i].topo_mass, 1.008, 1e-6) << "Wrong mass for HW";
+//         }
+//     }
+// }
+
+// TEST_F(PSFAndITPParserTest, CompareCompleteStructures) {
+//     // Parse PSF files
+//     PSFParser psf_parser;
+//     std::string protein_psf_file = data_dir_ + "/test_proa.psf";
+//     std::string sol_psf_file = data_dir_ + "/mols/sol.psf";
+//     ASSERT_TRUE(psf_parser.parse(protein_psf_file)) << "Failed to parse protein PSF file";
+//     ASSERT_TRUE(psf_parser.parse(sol_psf_file)) << "Failed to read SOL PSF file";
+
+//     // Parse ITP files
+//     ITPParser itp_parser;
+//     std::string top_file = data_dir_ + "/test.top";
+//     std::string sol_itp = data_dir_ + "/mols/sol.itp";
+//     ASSERT_TRUE(itp_parser.parse(top_file)) << "Failed to parse TOP file";
+//     ASSERT_TRUE(itp_parser.parse(sol_itp)) << "Failed to parse SOL ITP file";
+
+//     // Create test atoms from PDB file
+//     PDBParser pdb_parser;
+//     std::string pdb_file = data_dir_ + "/test.pdb";
+//     auto [box_info, residues] = pdb_parser.parse(pdb_file);
+    
+//     // Convert residues to a flat vector of atoms
+//     std::vector<PDBAtom> pdb_atoms;
+//     for (const auto& residue : residues) {
+//         pdb_atoms.insert(pdb_atoms.end(), residue.atoms.begin(), residue.atoms.end());
+//     }
+
+//     // Create two copies of the atoms for PSF and ITP updates
+//     std::vector<PDBAtom> psf_atoms = pdb_atoms;
+//     std::vector<PDBAtom> itp_atoms = pdb_atoms;
+
+//     // Update atoms using both parsers
+//     int psf_updated = psf_parser.update_pdb_atoms(psf_atoms);
+//     int itp_updated = itp_parser.update_pdb_atoms(itp_atoms);
+
+//     // Compare number of updated atoms
+//     EXPECT_EQ(psf_updated, itp_updated) << "Different number of atoms updated";
+
+//     // Compare each atom's properties
+//     ASSERT_EQ(psf_atoms.size(), itp_atoms.size()) << "Number of atoms mismatch";
+//     for (size_t i = 0; i < psf_atoms.size(); ++i) {
+//         SCOPED_TRACE("Comparing atom " + std::to_string(i) + 
+//                      " (" + psf_atoms[i].residue + " " + 
+//                      psf_atoms[i].name + " " + 
+//                      std::to_string(psf_atoms[i].sequence) + ")");
+
+//         // Compare basic properties
+//         EXPECT_EQ(psf_atoms[i].residue, itp_atoms[i].residue) << "Residue mismatch";
+//         EXPECT_EQ(psf_atoms[i].name, itp_atoms[i].name) << "Atom name mismatch";
+//         EXPECT_EQ(psf_atoms[i].sequence, itp_atoms[i].sequence) << "Sequence number mismatch";
+
+//         // Compare topology information
+//         EXPECT_EQ(psf_atoms[i].topo_type, itp_atoms[i].topo_type) << "Topology type mismatch";
+//         EXPECT_NEAR(psf_atoms[i].topo_charge, itp_atoms[i].topo_charge, 1e-6) << "Charge mismatch";
+//         EXPECT_NEAR(psf_atoms[i].topo_mass, itp_atoms[i].topo_mass, 1e-6) << "Mass mismatch";
+
+//         // Compare coordinates
+//         EXPECT_NEAR(psf_atoms[i].x, itp_atoms[i].x, 1e-6) << "X coordinate mismatch";
+//         EXPECT_NEAR(psf_atoms[i].y, itp_atoms[i].y, 1e-6) << "Y coordinate mismatch";
+//         EXPECT_NEAR(psf_atoms[i].z, itp_atoms[i].z, 1e-6) << "Z coordinate mismatch";
+//     }
+
+//     // Compare box parameters
+//     if (box_info.has_value()) {
+//         const auto& box = box_info.value();
+//         ASSERT_EQ(box.size(), 6) << "Box parameters should have 6 values";
+        
+//         // Verify box parameters are reasonable
+//         EXPECT_GT(box[0], 0) << "Box length a should be positive";
+//         EXPECT_GT(box[1], 0) << "Box length b should be positive";
+//         EXPECT_GT(box[2], 0) << "Box length c should be positive";
+//         EXPECT_NEAR(box[3], 90.0, 1e-6) << "Box angle alpha should be 90 degrees";
+//         EXPECT_NEAR(box[4], 90.0, 1e-6) << "Box angle beta should be 90 degrees";
+//         EXPECT_NEAR(box[5], 90.0, 1e-6) << "Box angle gamma should be 90 degrees";
+//     }
+
+//     // Compare missing topology information
+//     auto psf_missing = psf_parser.get_missing_topology_info(pdb_atoms);
+//     auto itp_missing = itp_parser.get_missing_topology_info(pdb_atoms);
+    
+//     EXPECT_EQ(psf_missing.size(), itp_missing.size()) 
+//         << "Number of residues with missing topology mismatch";
+    
+//     for (const auto& [res, atoms] : psf_missing) {
+//         EXPECT_TRUE(itp_missing.find(res) != itp_missing.end())
+//             << "Residue " << res << " missing in ITP but not in PSF";
+//         if (itp_missing.find(res) != itp_missing.end()) {
+//             EXPECT_EQ(atoms, itp_missing[res])
+//                 << "Missing atoms mismatch for residue " << res;
+//         }
+//     }
+// }

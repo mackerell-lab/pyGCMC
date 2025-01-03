@@ -14,6 +14,16 @@ void init_system_bindings(py::module& m) {
              py::kw_only(),
              py::arg("pdb"), py::arg("psf"),
              "Create a system and load structure from PDB and PSF files")
+        .def(py::init([](const std::string& pdb, const std::vector<std::string>& psf) {
+                System system;
+                for (const auto& psf_file : psf) {
+                    system.load_structure_psf(pdb, psf_file);
+                }
+                return system;
+             }),
+             py::kw_only(),
+             py::arg("pdb"), py::arg("psf"),
+             "Create a system and load structure from PDB and multiple PSF files")
         .def(py::init([](const std::string& pdb, const std::string& top) {
                 return System::from_top(pdb, top);
              }),
@@ -31,6 +41,15 @@ void init_system_bindings(py::module& m) {
              py::kw_only(),
              py::arg("pdb"), py::arg("psf"),
              "Load structure from PDB and PSF files")
+        .def("load_structure",
+             [](System& self, const std::string& pdb, const std::vector<std::string>& psf) {
+                 for (const auto& psf_file : psf) {
+                     self.load_structure_psf(pdb, psf_file);
+                 }
+             },
+             py::kw_only(),
+             py::arg("pdb"), py::arg("psf"),
+             "Load structure from PDB and multiple PSF files")
         .def("load_structure",
              [](System& self, const std::string& pdb, const std::string& top) {
                  self.load_structure_top(pdb, top);

@@ -11,7 +11,7 @@ namespace pygcmc {
 namespace core {
 namespace io {
 
-bool PSFParser::parse(const std::string& filename) {
+bool PSFParser::parse(const std::string& filename, PSFParsingMode mode) {
     std::ifstream file(filename);
     if (!file.is_open()) {
         throw std::runtime_error("Cannot open file: " + filename);
@@ -34,7 +34,12 @@ bool PSFParser::parse(const std::string& filename) {
             std::istringstream iss(line);
             iss >> natoms;
             if (natoms <= 0) {
-                throw std::runtime_error("Invalid number of atoms in PSF file: " + std::to_string(natoms));
+                if (mode == PSFParsingMode::Exact) {
+                    throw std::runtime_error("Invalid number of atoms in PSF file: " + std::to_string(natoms));
+                } else {
+                    // In rough mode, proceed without atom count
+                    natoms = 0;
+                }
             }
             in_atoms_section = true;
             continue;
@@ -52,22 +57,69 @@ bool PSFParser::parse(const std::string& filename) {
     }
 
     if (atom_lines.empty()) {
-        throw std::runtime_error("No atoms found in PSF file");
+        if (mode == PSFParsingMode::Exact) {
+            throw std::runtime_error("No atoms found in PSF file");
+        } else {
+            // In rough mode, it's acceptable to have no atoms
+            return true;
+        }
     }
 
-    return parse_atoms_section(atom_lines);
+    if (mode == PSFParsingMode::Exact) {
+        return parse_atoms_section(atom_lines, mode);
+    } else {
+        return parse_atoms_section_rough(atom_lines);
+    }
 }
 
-bool PSFParser::parse_atoms_section(const std::vector<std::string>& lines) {
-    atoms_.clear();
-    atom_index_.clear();
-    id_index_.clear();
+bool PSFParser::parse_files(const std::vector<std::string>& filenames) {
+    bool overall_success = true;
+    is_first_file_ = true;  // Reset first file flag
+
+    for (const auto& file : filenames) {
+        try {
+            // Attempt exact parsing first
+            bool success = parse(file, PSFParsingMode::Exact);
+            if (!success) {
+                throw std::runtime_error("Exact parsing returned false for file: " + file);
+            }
+            std::cout << "Successfully parsed (exact) PSF file: " << file << std::endl;
+        }
+        catch (const std::exception& e) {
+            std::cerr << "Exact parsing failed for " << file << ": " << e.what() << std::endl;
+            std::cerr << "Attempting rough parsing for " << file << "..." << std::endl;
+            try {
+                bool success = parse(file, PSFParsingMode::Rough);
+                if (!success) {
+                    throw std::runtime_error("Rough parsing returned false for file: " + file);
+                }
+                std::cout << "Successfully parsed (rough) PSF file: " << file << std::endl;
+            }
+            catch (const std::exception& e2) {
+                std::cerr << "Rough parsing also failed for " << file << ": " << e2.what() << std::endl;
+                overall_success = false;
+            }
+        }
+        is_first_file_ = false;  // Mark that we're no longer on the first file
+    }
+
+    return overall_success;
+}
+
+bool PSFParser::parse_atoms_section(const std::vector<std::string>& lines, PSFParsingMode mode) {
+    // Only clear existing atoms if this is the first file being parsed
+    if (is_first_file_ && mode == PSFParsingMode::Exact) {
+        atoms_.clear();
+        atom_index_.clear();
+        id_index_.clear();
+        is_first_file_ = false;
+    }
 
     for (const auto& line : lines) {
         std::istringstream iss(line);
         PSFAtom atom;
 
-        // PSF format: ID SEGID RESID RESNAME ATOMNAME ATOMTYPE CHARGE MASS
+        // PSF exact format: ID SEGID RESID RESNAME ATOMNAME ATOMTYPE CHARGE MASS
         if (!(iss >> atom.id 
                   >> atom.segment 
                   >> atom.residue_number 
@@ -77,56 +129,59 @@ bool PSFParser::parse_atoms_section(const std::vector<std::string>& lines) {
                   >> atom.charge 
                   >> atom.mass)) 
         {
-            std::cerr << "Failed to parse atom line: " << line << std::endl;
-            continue;
+            if (mode == PSFParsingMode::Exact) {
+                std::cerr << "Failed to parse atom line in exact mode: " << line << std::endl;
+                throw std::runtime_error("Exact parsing failed due to malformed atom line.");
+            } else {
+                std::cerr << "Failed to parse atom line in exact mode: " << line << std::endl;
+                continue; // Skip malformed lines in exact mode
+            }
         }
 
-        // 存入容器
+        // Store the atom
         size_t idx = atoms_.size();
         atoms_.push_back(atom);
 
-        // 建立索引: residue_name -> (residue_number -> (atom_name -> idx))
+        // Update indexes
         atom_index_[atom.residue][atom.residue_number][atom.name] = idx;
-        
-        // 建立 atom_id 索引
-        id_index_[atom.id] = idx;
     }
 
     return !atoms_.empty();
 }
 
-bool PSFParser::get_atom_properties(const std::string& residue_name,
-                                  const std::string& atom_name,
-                                  double& charge,
-                                  double& mass) const {
-    // Find residue
-    auto res_it = atom_index_.find(residue_name);
-    if (res_it == atom_index_.end()) {
-        std::cerr << "[get_atom_properties] Residue not found: " 
-                  << residue_name << std::endl;
-        return false;
+bool PSFParser::parse_atoms_section_rough(const std::vector<std::string>& lines) {
+    for (const auto& line : lines) {
+        std::istringstream iss(line);
+        PSFAtom atom;
+        std::string dummy; // For skipping fields we don't need
+
+        // Try to extract the essential fields
+        if (!(iss >> dummy           // Skip ID
+                  >> atom.segment    // Keep segment
+                  >> dummy           // Skip residue number
+                  >> atom.residue    // Keep residue name
+                  >> atom.name       // Keep atom name
+                  >> atom.type))     // Keep atom type
+        {
+            std::cerr << "Failed to parse atom line in rough mode: " << line << std::endl;
+            continue; // Skip malformed lines
+        }
+
+        // Assign default values for missing fields
+        atom.id = 0;  // Not reliable in rough mode
+        atom.residue_number = 0;  // Not reliable in rough mode
+        atom.charge = 0.0;  // Will be assigned later if needed
+        atom.mass = 0.0;   // Will be assigned later if needed
+
+        // Store the atom
+        size_t idx = atoms_.size();
+        atoms_.push_back(atom);
+
+        // In rough mode, we only index by residue name and atom name
+        atom_index_[atom.residue][0][atom.name] = idx;
     }
 
-    // Get the first defined residue number for this residue type
-    auto first_res_num_it = res_it->second.begin();
-    if (first_res_num_it == res_it->second.end()) {
-        std::cerr << "[get_atom_properties] No residue numbers found for: "
-                  << residue_name << std::endl;
-        return false;
-    }
-
-    // Find atom name
-    auto atom_it = first_res_num_it->second.find(atom_name);
-    if (atom_it == first_res_num_it->second.end()) {
-        std::cerr << "[get_atom_properties] Atom not found: "
-                  << residue_name << " " << atom_name << std::endl;
-        return false;
-    }
-
-    const PSFAtom& atom = atoms_[atom_it->second];
-    charge = atom.charge;
-    mass = atom.mass;
-    return true;
+    return !atoms_.empty();
 }
 
 bool PSFParser::get_atom_properties(const std::string& residue_name,
@@ -142,26 +197,42 @@ bool PSFParser::get_atom_properties(const std::string& residue_name,
         return false;
     }
 
-    // Find residue number
+    // Try exact residue number first
     auto res_num_it = res_it->second.find(residue_number);
-    if (res_num_it == res_it->second.end()) {
-        std::cerr << "[get_atom_properties] Residue number not found: "
-                  << residue_name << " " << residue_number << std::endl;
-        return false;
+    if (res_num_it != res_it->second.end()) {
+        auto atom_it = res_num_it->second.find(atom_name);
+        if (atom_it != res_num_it->second.end()) {
+            const PSFAtom& atom = atoms_[atom_it->second];
+            charge = atom.charge;
+            mass = atom.mass;
+            return true;
+        }
     }
 
-    // Find atom name
-    auto atom_it = res_num_it->second.find(atom_name);
-    if (atom_it == res_num_it->second.end()) {
-        std::cerr << "[get_atom_properties] Atom not found: "
-                  << residue_name << " " << residue_number << " " << atom_name << std::endl;
-        return false;
+    // If not found with exact residue number and we're not looking for a specific number,
+    // try to find any matching atom
+    if (residue_number == 0) {
+        for (const auto& [num, atoms] : res_it->second) {
+            auto atom_it = atoms.find(atom_name);
+            if (atom_it != atoms.end()) {
+                const PSFAtom& atom = atoms_[atom_it->second];
+                charge = atom.charge;
+                mass = atom.mass;
+                return true;
+            }
+        }
     }
 
-    const PSFAtom& atom = atoms_[atom_it->second];
-    charge = atom.charge;
-    mass = atom.mass;
-    return true;
+    std::cerr << "[get_atom_properties] Atom not found: "
+              << residue_name << " " << residue_number << " " << atom_name << std::endl;
+    return false;
+}
+
+bool PSFParser::get_atom_properties(const std::string& residue_name,
+                                  const std::string& atom_name,
+                                  double& charge,
+                                  double& mass) const {
+    return get_atom_properties(residue_name, 0, atom_name, charge, mass);
 }
 
 int PSFParser::update_pdb_atoms(std::vector<PDBAtom>& pdb_atoms) const {

@@ -5,6 +5,7 @@
 #include <string>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 
 namespace pygcmc {
 namespace core {
@@ -343,6 +344,67 @@ TEST_F(TestPSFParser, GetMissingTopologyInfo) {
         }
         std::cout << std::endl;
     }
+}
+
+TEST_F(TestPSFParser, ParsePSFFileWithRoughMode) {
+    // Test rough parsing mode
+    ASSERT_TRUE(parser_->parse(g_psf_file, PSFParsingMode::Rough));
+
+    // Verify that essential fields are parsed
+    double charge, mass;
+    ASSERT_TRUE(parser_->get_atom_properties("ALA", "N", charge, mass));
+    // In rough mode, charge and mass should be 0
+    EXPECT_NEAR(charge, 0.0, 1e-6);
+    EXPECT_NEAR(mass, 0.0, 1e-6);
+}
+
+TEST_F(TestPSFParser, ParseMultiplePSFFiles) {
+    std::vector<std::string> psf_files = {
+        g_psf_file,  // Main PSF file
+        TEST_DATA_DIR "/mols/sol.psf"  // Water PSF file
+    };
+
+    ASSERT_TRUE(parser_->parse_files(psf_files));
+
+    // Test that atoms from both files are present
+    double charge, mass;
+    
+    // Check protein atoms (from main PSF)
+    ASSERT_TRUE(parser_->get_atom_properties("ALA", 7, "N", charge, mass));
+    EXPECT_NEAR(charge, -0.3, 1e-6);
+    EXPECT_NEAR(mass, 14.007, 1e-6);
+
+    // Check water atoms (from sol.psf)
+    ASSERT_TRUE(parser_->get_atom_properties("SOL", "OW", charge, mass));
+    EXPECT_NEAR(charge, -0.834, 1e-6);
+    EXPECT_NEAR(mass, 15.9994, 1e-6);
+}
+
+TEST_F(TestPSFParser, HandleMalformedPSFFile) {
+    // Create a temporary malformed PSF file
+    std::string temp_psf = "temp_malformed.psf";
+    {
+        std::ofstream file(temp_psf);
+        file << "PSF\n\n";
+        file << "       1 !NATOM\n";
+        file << "       1 MAIN 1    ALA  N    NH3   -0.30\n";  // Missing mass field
+        file << "\n";
+    }
+
+    // Test that exact parsing fails
+    EXPECT_THROW(parser_->parse(temp_psf, PSFParsingMode::Exact), std::runtime_error);
+
+    // Test that rough parsing succeeds
+    ASSERT_TRUE(parser_->parse(temp_psf, PSFParsingMode::Rough));
+
+    // Verify the atom was parsed with default values
+    double charge, mass;
+    ASSERT_TRUE(parser_->get_atom_properties("ALA", "N", charge, mass));
+    EXPECT_NEAR(charge, 0.0, 1e-6);
+    EXPECT_NEAR(mass, 0.0, 1e-6);
+
+    // Clean up
+    std::filesystem::remove(temp_psf);
 }
 
 } // namespace test

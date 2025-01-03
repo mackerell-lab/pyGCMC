@@ -13,20 +13,44 @@ namespace pygcmc {
 namespace core {
 namespace io {
 
+enum class PSFParsingMode {
+    Exact,   // Parse with exact residue numbers and all fields
+    Rough    // Parse only essential fields like ITP parser
+};
+
 /**
  * @brief Parser for PSF files
  */
 class PSFParser {
 public:
-    PSFParser() = default;
+    PSFParser() : is_first_file_(true) {}
     ~PSFParser() = default;
+
+    /**
+     * @brief Reset the parser state
+     * This clears all stored atoms and resets the first file flag
+     */
+    void reset() {
+        atoms_.clear();
+        atom_index_.clear();
+        id_index_.clear();
+        is_first_file_ = true;
+    }
 
     /**
      * @brief Parse a PSF file
      * @param filename Path to the PSF file
+     * @param mode Parsing mode
      * @return True if parsing was successful
      */
-    bool parse(const std::string& filename);
+    bool parse(const std::string& filename, PSFParsingMode mode = PSFParsingMode::Exact);
+
+    /**
+     * @brief Parse multiple PSF files
+     * @param filenames Vector of paths to PSF files
+     * @return True if parsing was successful
+     */
+    bool parse_files(const std::vector<std::string>& filenames);
 
     /**
      * @brief Get atom properties from PSF file
@@ -86,6 +110,7 @@ public:
     int update_pdb_atoms_by_order(std::vector<PDBAtom*>& atoms);
 
 private:
+    bool is_first_file_;  // Track if we're parsing the first file
     struct PSFAtom {
         int id;                 ///< PSF atom ID
         std::string segment;    ///< Segment ID
@@ -108,9 +133,17 @@ private:
     /**
      * @brief Parse the atoms section of the PSF file
      * @param lines Vector of lines from the atoms section
+     * @param mode Parsing mode
      * @return True if parsing was successful
      */
-    bool parse_atoms_section(const std::vector<std::string>& lines);
+    bool parse_atoms_section(const std::vector<std::string>& lines, PSFParsingMode mode);
+
+    /**
+     * @brief Parse the atoms section of the PSF file
+     * @param lines Vector of lines from the atoms section
+     * @return True if parsing was successful
+     */
+    bool parse_atoms_section_rough(const std::vector<std::string>& lines);
 };
 
 } // namespace io
