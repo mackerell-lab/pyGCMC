@@ -72,5 +72,8 @@ void init_system_bindings(py::module& m) {
              "Check if system uses periodic boundary conditions")
         .def("compute_distance", &System::compute_distance,
              py::arg("p1"), py::arg("p2"),
-             "Compute distance between two particles");
+             "Compute distance between two particles")
+        .def("load_structure", &System::load_structure,
+             py::arg("pdb_file"), py::arg("top_file"),
+             "Load structure from PDB and topology files");
 } 

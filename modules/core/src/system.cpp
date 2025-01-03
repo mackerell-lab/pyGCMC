@@ -1,9 +1,13 @@
 // modules/core/src/system.cpp
 
 #include "pygcmc/core/system.hpp"
+#include "pygcmc/core/project.hpp"
 #include <stdexcept>
 #include <cmath>
 #include <algorithm>
+#include <map>
+#include <unordered_map>
+#include <variant>
 
 namespace pygcmc {
 namespace core {
@@ -364,6 +368,74 @@ void System::validate_box_vectors(const std::array<double, 3>& a,
                    a[2] * (b[0] * c[1] - b[1] * c[0]);
     if (volume <= 0.0) {
         throw std::invalid_argument("Box vectors must form a valid triclinic box with positive volume");
+    }
+}
+
+void System::load_structure(const std::string& pdb_file, const std::string& top_file) {
+    // Clear existing data
+    residues_.clear();
+    constraints_.clear();
+    forces_.clear();
+    has_periodic_boundary_ = false;
+
+    try {
+        // Create a temporary project to handle file loading
+        Project project("temp_project");
+        
+        // Create and load structure
+        auto structure = project.create_structure();
+        structure.load_pdb(pdb_file);
+        
+        if (top_file.find(".psf") != std::string::npos) {
+            structure.load_psf(top_file);
+        } else if (top_file.find(".top") != std::string::npos || 
+                   top_file.find(".itp") != std::string::npos) {
+            structure.load_top(top_file);
+        } else {
+            throw std::runtime_error("Unsupported topology file format");
+        }
+        
+        // Get box information
+        auto box = structure.get_box();
+        if (box.has_value()) {
+            auto box_vectors = structure.get_box_vectors();
+            set_periodic_box_vectors(box_vectors[0], box_vectors[1], box_vectors[2]);
+        }
+        
+        // Get atoms data and transfer to system
+        auto atoms_data = structure.get_atoms_data();
+        
+        // Group atoms by residue
+        std::map<std::pair<std::string, int>, std::vector<std::unordered_map<std::string, std::variant<std::string, int, double>>>> residue_atoms;
+        for (const auto& atom : atoms_data) {
+            std::string residue_name = std::get<std::string>(atom.at("residue"));
+            int sequence = std::get<int>(atom.at("sequence"));
+            residue_atoms[{residue_name, sequence}].push_back(atom);
+        }
+        
+        // Create residues and add atoms
+        for (const auto& [residue_key, atoms] : residue_atoms) {
+            const auto& [residue_name, sequence] = residue_key;
+            size_t res_idx = add_residue(residue_name);
+            
+            for (const auto& atom : atoms) {
+                Particle p;
+                p.position = {
+                    std::get<double>(atom.at("x")),
+                    std::get<double>(atom.at("y")),
+                    std::get<double>(atom.at("z"))
+                };
+                p.velocity = {0.0, 0.0, 0.0};  // Initialize velocities to zero
+                p.charge = std::get<double>(atom.at("topo_charge"));
+                p.mass = std::get<double>(atom.at("topo_mass"));
+                p.is_virtual = false;  // Default to non-virtual
+                add_particle(res_idx, p);
+            }
+        }
+    } catch (const std::runtime_error& e) {
+        throw;  // Re-throw runtime_error as is
+    } catch (const std::exception& e) {
+        throw std::runtime_error(e.what());  // Convert other exceptions to runtime_error
     }
 }
 

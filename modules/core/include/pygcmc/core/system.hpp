@@ -150,6 +150,9 @@ public:
     void update_positions(double dt);
     void update_velocities(double dt);
 
+    // Structure loading
+    void load_structure(const std::string& pdb_file, const std::string& top_file);
+
 private:
     std::vector<Residue> residues_;
     std::vector<Constraint> constraints_;
