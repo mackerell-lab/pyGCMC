@@ -174,86 +174,86 @@ TEST_F(PSFAndITPParserTest, GetMissingTopologyInfo) {
     EXPECT_TRUE(itp_missing.find("UNKNOWN") != itp_missing.end()) << "UNKNOWN should be missing from ITP";
 }
 
-// TEST_F(PSFAndITPParserTest, CompareSolPSFAndITP) {
-//     // Parse SOL ITP file
-//     ITPParser itp_parser;
-//     std::string sol_itp_file = data_dir_ + "/mols/sol.itp";
-//     ASSERT_TRUE(itp_parser.parse(sol_itp_file)) << "Failed to parse SOL ITP file";
+TEST_F(PSFAndITPParserTest, CompareSolPSFAndITP) {
+    // Parse SOL ITP file
+    ITPParser itp_parser;
+    std::string sol_itp_file = data_dir_ + "/mols/sol.itp";
+    ASSERT_TRUE(itp_parser.parse(sol_itp_file)) << "Failed to parse SOL ITP file";
 
-//     // Parse SOL PSF file
-//     PSFParser psf_parser;
-//     std::string sol_psf_file = data_dir_ + "/mols/sol.psf";
-//     ASSERT_TRUE(psf_parser.parse(sol_psf_file)) << "Failed to parse SOL PSF file";
+    // Parse SOL PSF file
+    PSFParser psf_parser;
+    std::string sol_psf_file = data_dir_ + "/mols/sol.psf";
+    ASSERT_TRUE(psf_parser.parse(sol_psf_file)) << "Failed to parse SOL PSF file";
 
-//     // Create multiple water molecules with different sequence numbers
-//     std::vector<PDBAtom> water_atoms;
+    // Create multiple water molecules with different sequence numbers
+    std::vector<PDBAtom> water_atoms;
     
-//     // First water molecule (SOL1)
-//     PDBAtom ow1, hw11, hw12;
-//     ow1.residue = "SOL"; ow1.name = "OW"; ow1.sequence = 1;
-//     hw11.residue = "SOL"; hw11.name = "HW1"; hw11.sequence = 1;
-//     hw12.residue = "SOL"; hw12.name = "HW2"; hw12.sequence = 1;
-//     water_atoms.push_back(ow1);
-//     water_atoms.push_back(hw11);
-//     water_atoms.push_back(hw12);
+    // First water molecule (SOL1)
+    PDBAtom ow1, hw11, hw12;
+    ow1.residue = "SOL"; ow1.name = "OW"; ow1.sequence = 1;
+    hw11.residue = "SOL"; hw11.name = "HW1"; hw11.sequence = 1;
+    hw12.residue = "SOL"; hw12.name = "HW2"; hw12.sequence = 1;
+    water_atoms.push_back(ow1);
+    water_atoms.push_back(hw11);
+    water_atoms.push_back(hw12);
 
-//     // Second water molecule (SOL2) - different sequence number
-//     PDBAtom ow2, hw21, hw22;
-//     ow2.residue = "SOL"; ow2.name = "OW"; ow2.sequence = 2;
-//     hw21.residue = "SOL"; hw21.name = "HW1"; hw21.sequence = 2;
-//     hw22.residue = "SOL"; hw22.name = "HW2"; hw22.sequence = 2;
-//     water_atoms.push_back(ow2);
-//     water_atoms.push_back(hw21);
-//     water_atoms.push_back(hw22);
+    // Second water molecule (SOL2) - different sequence number
+    PDBAtom ow2, hw21, hw22;
+    ow2.residue = "SOL"; ow2.name = "OW"; ow2.sequence = 2;
+    hw21.residue = "SOL"; hw21.name = "HW1"; hw21.sequence = 2;
+    hw22.residue = "SOL"; hw22.name = "HW2"; hw22.sequence = 2;
+    water_atoms.push_back(ow2);
+    water_atoms.push_back(hw21);
+    water_atoms.push_back(hw22);
 
-//     // Third water molecule (SOL3) - yet another sequence number
-//     PDBAtom ow3, hw31, hw32;
-//     ow3.residue = "SOL"; ow3.name = "OW"; ow3.sequence = 3;
-//     hw31.residue = "SOL"; hw31.name = "HW1"; hw31.sequence = 3;
-//     hw32.residue = "SOL"; hw32.name = "HW2"; hw32.sequence = 3;
-//     water_atoms.push_back(ow3);
-//     water_atoms.push_back(hw31);
-//     water_atoms.push_back(hw32);
+    // Third water molecule (SOL3) - yet another sequence number
+    PDBAtom ow3, hw31, hw32;
+    ow3.residue = "SOL"; ow3.name = "OW"; ow3.sequence = 3;
+    hw31.residue = "SOL"; hw31.name = "HW1"; hw31.sequence = 3;
+    hw32.residue = "SOL"; hw32.name = "HW2"; hw32.sequence = 3;
+    water_atoms.push_back(ow3);
+    water_atoms.push_back(hw31);
+    water_atoms.push_back(hw32);
 
-//     // First update using ITP parser
-//     std::vector<PDBAtom> itp_atoms = water_atoms;
-//     int itp_updated = itp_parser.update_pdb_atoms(itp_atoms);
-//     EXPECT_EQ(itp_updated, 9) << "Failed to update all water atoms from ITP";
+    // First update using ITP parser
+    std::vector<PDBAtom> itp_atoms = water_atoms;
+    int itp_updated = itp_parser.update_pdb_atoms(itp_atoms);
+    EXPECT_EQ(itp_updated, 9) << "Failed to update all water atoms from ITP";
 
-//     // Then update using PSF parser
-//     std::vector<PDBAtom> psf_atoms = water_atoms;
-//     int psf_updated = psf_parser.update_pdb_atoms(psf_atoms);
-//     EXPECT_EQ(psf_updated, 9) << "Failed to update all water atoms from PSF";
+    // Then update using PSF parser
+    std::vector<PDBAtom> psf_atoms = water_atoms;
+    int psf_updated = psf_parser.update_pdb_atoms(psf_atoms);
+    EXPECT_EQ(psf_updated, 9) << "Failed to update all water atoms from PSF";
 
-//     // Compare results for each atom
-//     for (size_t i = 0; i < water_atoms.size(); ++i) {
-//         SCOPED_TRACE("Comparing atom " + std::to_string(i) + 
-//                      " (" + water_atoms[i].residue + " " + 
-//                      water_atoms[i].name + " " + 
-//                      std::to_string(water_atoms[i].sequence) + ")");
+    // Compare results for each atom
+    for (size_t i = 0; i < water_atoms.size(); ++i) {
+        SCOPED_TRACE("Comparing atom " + std::to_string(i) + 
+                     " (" + water_atoms[i].residue + " " + 
+                     water_atoms[i].name + " " + 
+                     std::to_string(water_atoms[i].sequence) + ")");
         
-//         // Compare topology type
-//         EXPECT_EQ(itp_atoms[i].topo_type, psf_atoms[i].topo_type)
-//             << "Topology type mismatch";
+        // Compare topology type
+        EXPECT_EQ(itp_atoms[i].topo_type, psf_atoms[i].topo_type)
+            << "Topology type mismatch";
         
-//         // Compare charge (with small tolerance for floating point comparison)
-//         EXPECT_NEAR(itp_atoms[i].topo_charge, psf_atoms[i].topo_charge, 1e-6)
-//             << "Charge mismatch";
+        // Compare charge (with small tolerance for floating point comparison)
+        EXPECT_NEAR(itp_atoms[i].topo_charge, psf_atoms[i].topo_charge, 1e-6)
+            << "Charge mismatch";
         
-//         // Compare mass (with small tolerance for floating point comparison)
-//         EXPECT_NEAR(itp_atoms[i].topo_mass, psf_atoms[i].topo_mass, 1e-6)
-//             << "Mass mismatch";
+        // Compare mass (with small tolerance for floating point comparison)
+        EXPECT_NEAR(itp_atoms[i].topo_mass, psf_atoms[i].topo_mass, 1e-6)
+            << "Mass mismatch";
 
-//         // Verify expected values for water model
-//         if (water_atoms[i].name == "OW") {
-//             EXPECT_NEAR(psf_atoms[i].topo_charge, -0.834, 1e-6) << "Wrong charge for OW";
-//             EXPECT_NEAR(psf_atoms[i].topo_mass, 15.9994, 1e-6) << "Wrong mass for OW";
-//         } else if (water_atoms[i].name == "HW1" || water_atoms[i].name == "HW2") {
-//             EXPECT_NEAR(psf_atoms[i].topo_charge, 0.417, 1e-6) << "Wrong charge for HW";
-//             EXPECT_NEAR(psf_atoms[i].topo_mass, 1.008, 1e-6) << "Wrong mass for HW";
-//         }
-//     }
-// }
+        // Verify expected values for water model
+        if (water_atoms[i].name == "OW") {
+            EXPECT_NEAR(psf_atoms[i].topo_charge, -0.834, 1e-6) << "Wrong charge for OW";
+            EXPECT_NEAR(psf_atoms[i].topo_mass, 15.9994, 1e-6) << "Wrong mass for OW";
+        } else if (water_atoms[i].name == "HW1" || water_atoms[i].name == "HW2") {
+            EXPECT_NEAR(psf_atoms[i].topo_charge, 0.417, 1e-6) << "Wrong charge for HW";
+            EXPECT_NEAR(psf_atoms[i].topo_mass, 1.008, 1e-6) << "Wrong mass for HW";
+        }
+    }
+}
 
 // TEST_F(PSFAndITPParserTest, CompareCompleteStructures) {
 //     // Parse PSF files
