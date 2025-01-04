@@ -12,7 +12,6 @@
 #include <cmath>
 #include <map>
 #include <algorithm>
-#include <sstream>
 
 namespace pygcmc {
 namespace core {
@@ -466,123 +465,6 @@ void Structure::apply_cached_itps() {
             update_atoms_topology(itp);
         }
         cached_itps_.clear();
-    }
-}
-
-void Structure::load_structure_psf_single(const std::string& psf_file, const std::string& pdb_file) {
-    // Load PDB first to get coordinates
-    load_structure_pdb(pdb_file);
-    
-    // Now parse PSF file to get topology information
-    std::ifstream psf(psf_file);
-    if (!psf.is_open()) {
-        throw std::runtime_error("Could not open PSF file: " + psf_file);
-    }
-    
-    std::string line;
-    bool reading_atoms = false;
-    int num_atoms = 0;
-    int atom_count = 0;
-    
-    while (std::getline(psf, line)) {
-        if (line.find("!NATOM") != std::string::npos) {
-            std::istringstream iss(line);
-            iss >> num_atoms;
-            reading_atoms = true;
-            continue;
-        }
-        
-        if (reading_atoms && atom_count < num_atoms) {
-            // PSF format: ID SEGID RESID RES ATOM TYPE CHARGE MASS 0
-            std::istringstream iss(line);
-            int id;
-            std::string segid, resid, res, atom, type;
-            double charge, mass;
-            int zero;
-            
-            iss >> id >> segid >> resid >> res >> atom >> type >> charge >> mass >> zero;
-            
-            // Find corresponding atom in atoms_data_
-            for (auto& atom_data : atoms_data_) {
-                if (std::get<std::string>(atom_data["residue"]) == res &&
-                    std::get<int>(atom_data["sequence"]) == std::stoi(resid) &&
-                    std::get<std::string>(atom_data["name"]) == atom) {
-                    // Store topology information
-                    atom_data["topo_mass"] = mass;
-                    atom_data["topo_charge"] = charge;
-                    atom_data["topo_type"] = type;
-                    break;
-                }
-            }
-            
-            atom_count++;
-        }
-        
-        if (atom_count >= num_atoms) {
-            reading_atoms = false;
-        }
-    }
-}
-
-void Structure::load_structure_psf_auto(const std::string& psf_file, const std::string& pdb_file) {
-    // Load PDB first to get coordinates
-    load_structure_pdb(pdb_file);
-    
-    // Now parse PSF file to get topology information
-    std::ifstream psf(psf_file);
-    if (!psf.is_open()) {
-        throw std::runtime_error("Could not open PSF file: " + psf_file);
-    }
-    
-    std::string line;
-    bool reading_atoms = false;
-    int num_atoms = 0;
-    int atom_count = 0;
-    
-    // Map to store topology information by residue name and atom name
-    std::map<std::pair<std::string, std::string>, std::tuple<double, double, std::string>> topo_info;
-    
-    while (std::getline(psf, line)) {
-        if (line.find("!NATOM") != std::string::npos) {
-            std::istringstream iss(line);
-            iss >> num_atoms;
-            reading_atoms = true;
-            continue;
-        }
-        
-        if (reading_atoms && atom_count < num_atoms) {
-            // PSF format: ID SEGID RESID RES ATOM TYPE CHARGE MASS 0
-            std::istringstream iss(line);
-            int id;
-            std::string segid, resid, res, atom, type;
-            double charge, mass;
-            int zero;
-            
-            iss >> id >> segid >> resid >> res >> atom >> type >> charge >> mass >> zero;
-            
-            // Store topology information by residue and atom name
-            topo_info[{res, atom}] = std::make_tuple(mass, charge, type);
-            
-            atom_count++;
-        }
-        
-        if (atom_count >= num_atoms) {
-            reading_atoms = false;
-        }
-    }
-    
-    // Apply topology information to all matching atoms
-    for (auto& atom_data : atoms_data_) {
-        std::string res = std::get<std::string>(atom_data["residue"]);
-        std::string atom = std::get<std::string>(atom_data["name"]);
-        
-        auto it = topo_info.find({res, atom});
-        if (it != topo_info.end()) {
-            const auto& [mass, charge, type] = it->second;
-            atom_data["topo_mass"] = mass;
-            atom_data["topo_charge"] = charge;
-            atom_data["topo_type"] = type;
-        }
     }
 }
 
