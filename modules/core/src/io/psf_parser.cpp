@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <iostream>
+#include <unordered_map>
 
 namespace pygcmc {
 namespace core {
@@ -457,15 +458,11 @@ int PSFParser::update_pdb_atoms_single_residue(std::vector<PDBAtom*>& pdb_atoms,
         return 0;
     }
 
-    // Get all PSF atoms (should be from a single residue)
-    std::vector<const PSFAtom*> psf_atoms;
+    // Create a map of atom names to PSF atoms for quick lookup
+    std::unordered_map<std::string, const PSFAtom*> psf_atoms_by_name;
     for (const auto& atom : parser.atoms_) {
-        psf_atoms.push_back(&atom);
+        psf_atoms_by_name[atom.name] = &atom;
     }
-
-    // Sort PSF atoms by ID
-    std::sort(psf_atoms.begin(), psf_atoms.end(),
-        [](const PSFAtom* a, const PSFAtom* b) { return a->id < b->id; });
 
     // Group PDB atoms by residue name
     std::map<std::string, std::vector<PDBAtom*>> pdb_atoms_by_res;
@@ -479,18 +476,16 @@ int PSFParser::update_pdb_atoms_single_residue(std::vector<PDBAtom*>& pdb_atoms,
     int updated = 0;
     // Update each matching residue
     for (auto& [res_name, res_atoms] : pdb_atoms_by_res) {
-        // Sort PDB atoms by serial number
-        std::sort(res_atoms.begin(), res_atoms.end(),
-            [](const PDBAtom* a, const PDBAtom* b) { return a->serial < b->serial; });
-
-        // Map topology data in order
-        size_t num_atoms = std::min(res_atoms.size(), psf_atoms.size());
-        for (size_t i = 0; i < num_atoms; ++i) {
-            res_atoms[i]->topo_type = psf_atoms[i]->type;
-            res_atoms[i]->topo_charge = psf_atoms[i]->charge;
-            res_atoms[i]->topo_mass = psf_atoms[i]->mass;
-            res_atoms[i]->chain = psf_atoms[i]->segment.empty() ? ' ' : psf_atoms[i]->segment[0];
-            updated++;
+        for (auto* pdb_atom : res_atoms) {
+            auto psf_it = psf_atoms_by_name.find(pdb_atom->name);
+            if (psf_it != psf_atoms_by_name.end()) {
+                const PSFAtom* psf_atom = psf_it->second;
+                pdb_atom->topo_type = psf_atom->type;
+                pdb_atom->topo_charge = psf_atom->charge;
+                pdb_atom->topo_mass = psf_atom->mass;
+                pdb_atom->chain = psf_atom->segment.empty() ? ' ' : psf_atom->segment[0];
+                updated++;
+            }
         }
     }
 

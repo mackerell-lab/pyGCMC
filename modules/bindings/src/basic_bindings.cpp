@@ -117,6 +117,6 @@ void init_basic_bindings(py::module& m) {
              py::arg("name") = "")
         .def_readwrite("name", &Residue::name)
         .def_readwrite("particles", &Residue::particles)
-        .def("center_of_mass", &Residue::center_of_mass)
-        .def("atom_count", &Residue::atom_count);
+        .def("get_particle_count", &Residue::get_particle_count)
+        .def("center_of_mass", &Residue::center_of_mass);
 } 

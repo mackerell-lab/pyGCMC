@@ -410,35 +410,54 @@ void System::load_structure(const Structure& structure) {
             };
             p.velocity = {0.0, 0.0, 0.0};  // Initialize velocities to zero
             
-            // Try to get mass and charge from different possible fields
+            // Try to get mass and charge from topology fields first
             bool mass_found = false;
-            std::vector<std::string> mass_fields = {"mass", "topo_mass", "atom_mass"};
-            for (const auto& field : mass_fields) {
-                try {
-                    if (atom.find(field) != atom.end()) {
-                        p.mass = std::get<double>(atom.at(field));
-                        if (std::isfinite(p.mass) && p.mass > 0.0) {
-                            mass_found = true;
-                            break;
-                        }
-                    }
-                } catch (const std::exception&) {
-                    continue;
+            if (atom.find("topo_mass") != atom.end()) {
+                double topo_mass = std::get<double>(atom.at("topo_mass"));
+                if (std::isfinite(topo_mass) && topo_mass > 0.0) {
+                    p.mass = topo_mass;
+                    mass_found = true;
                 }
             }
 
-            // Try to get charge from different possible fields
-            std::vector<std::string> charge_fields = {"charge", "topo_charge", "atom_charge"};
-            for (const auto& field : charge_fields) {
-                try {
-                    if (atom.find(field) != atom.end()) {
-                        p.charge = std::get<double>(atom.at(field));
-                        if (std::isfinite(p.charge)) {
-                            break;
+            // If topology mass not found, try other mass fields
+            if (!mass_found) {
+                std::vector<std::string> mass_fields = {"mass", "atom_mass"};
+                for (const auto& field : mass_fields) {
+                    try {
+                        if (atom.find(field) != atom.end()) {
+                            p.mass = std::get<double>(atom.at(field));
+                            if (std::isfinite(p.mass) && p.mass > 0.0) {
+                                mass_found = true;
+                                break;
+                            }
                         }
+                    } catch (const std::exception&) {
+                        continue;
                     }
-                } catch (const std::exception&) {
-                    continue;
+                }
+            }
+
+            // Try to get charge from topology fields first
+            if (atom.find("topo_charge") != atom.end()) {
+                double topo_charge = std::get<double>(atom.at("topo_charge"));
+                if (std::isfinite(topo_charge)) {
+                    p.charge = topo_charge;
+                }
+            } else {
+                // Try other charge fields
+                std::vector<std::string> charge_fields = {"charge", "atom_charge"};
+                for (const auto& field : charge_fields) {
+                    try {
+                        if (atom.find(field) != atom.end()) {
+                            p.charge = std::get<double>(atom.at(field));
+                            if (std::isfinite(p.charge)) {
+                                break;
+                            }
+                        }
+                    } catch (const std::exception&) {
+                        continue;
+                    }
                 }
             }
 

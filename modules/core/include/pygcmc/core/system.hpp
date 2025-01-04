@@ -64,7 +64,9 @@ struct Residue {
 
     Residue(const std::string& n = "") : name(n) {}
 
-    size_t atom_count() const { return particles.size(); }
+    size_t get_particle_count() const {
+        return particles.size();
+    }
     
     std::array<double, 3> center_of_mass() const {
         if (particles.empty()) {
