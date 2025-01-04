@@ -16,6 +16,7 @@
 #include <algorithm>
 #include "pygcmc/core/force.hpp"
 #include "pygcmc/core/structure.hpp"
+#include "pygcmc/core/io/parser_common.hpp"
 
 namespace pygcmc {
 namespace core {
@@ -183,12 +184,25 @@ public:
     void update_positions(double dt);
     void update_velocities(double dt);
 
+    // PDBAtom support
+    size_t get_pdb_atom_count() const;
+    const io::PDBAtom& get_pdb_atom(size_t index) const;
+    io::PDBAtom& get_pdb_atom(size_t index);
+    void add_pdb_atom(const io::PDBAtom& atom);
+    void remove_pdb_atom(size_t index);
+    std::vector<io::PDBAtom> get_pdb_atoms_by_residue(const std::string& residue_name) const;
+    std::vector<io::PDBAtom> get_pdb_atoms_by_residue_sequence(const std::string& residue_name, int sequence) const;
+    std::vector<io::PDBAtom> get_pdb_atoms_by_chain(char chain) const;
+    void clear_pdb_atoms();
+    bool has_pdb_atoms() const;
+
 private:
     std::vector<Residue> residues_;
     std::vector<Constraint> constraints_;
     std::vector<std::shared_ptr<Force>> forces_;
     std::array<std::array<double, 3>, 3> box_vectors_;
     bool has_periodic_boundary_ = false;
+    std::vector<io::PDBAtom> pdb_atoms_;  // Store PDBAtom objects
 
     void validate_residue_index(size_t index) const;
     void validate_particle_index(size_t residue_index, size_t particle_index) const;
@@ -197,6 +211,7 @@ private:
     void validate_box_vectors(const std::array<double, 3>& a,
                             const std::array<double, 3>& b,
                             const std::array<double, 3>& c) const;
+    void validate_pdb_atom_index(size_t index) const;
 };
 
 } // namespace core

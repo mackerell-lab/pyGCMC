@@ -4,10 +4,12 @@
 #include "pygcmc/core/project.hpp"
 #include <stdexcept>
 #include <cmath>
+#include <limits>
 #include <algorithm>
 #include <map>
 #include <unordered_map>
 #include <variant>
+#include <iostream>
 
 namespace pygcmc {
 namespace core {
@@ -371,13 +373,85 @@ void System::validate_box_vectors(const std::array<double, 3>& a,
     }
 }
 
+// PDBAtom support implementations
+size_t System::get_pdb_atom_count() const {
+    return pdb_atoms_.size();
+}
+
+const io::PDBAtom& System::get_pdb_atom(size_t index) const {
+    validate_pdb_atom_index(index);
+    return pdb_atoms_[index];
+}
+
+io::PDBAtom& System::get_pdb_atom(size_t index) {
+    validate_pdb_atom_index(index);
+    return pdb_atoms_[index];
+}
+
+void System::add_pdb_atom(const io::PDBAtom& atom) {
+    pdb_atoms_.push_back(atom);
+}
+
+void System::remove_pdb_atom(size_t index) {
+    validate_pdb_atom_index(index);
+    pdb_atoms_.erase(pdb_atoms_.begin() + index);
+}
+
+std::vector<io::PDBAtom> System::get_pdb_atoms_by_residue(const std::string& residue_name) const {
+    std::vector<io::PDBAtom> result;
+    result.reserve(pdb_atoms_.size());  // Pre-allocate to avoid reallocation
+    for (const auto& atom : pdb_atoms_) {
+        if (atom.residue == residue_name) {
+            result.push_back(atom);
+        }
+    }
+    return result;
+}
+
+std::vector<io::PDBAtom> System::get_pdb_atoms_by_residue_sequence(const std::string& residue_name, int sequence) const {
+    std::vector<io::PDBAtom> result;
+    result.reserve(pdb_atoms_.size());  // Pre-allocate to avoid reallocation
+    for (const auto& atom : pdb_atoms_) {
+        if (atom.residue == residue_name && atom.sequence == sequence) {
+            result.push_back(atom);
+        }
+    }
+    return result;
+}
+
+std::vector<io::PDBAtom> System::get_pdb_atoms_by_chain(char chain) const {
+    std::vector<io::PDBAtom> result;
+    result.reserve(pdb_atoms_.size());  // Pre-allocate to avoid reallocation
+    for (const auto& atom : pdb_atoms_) {
+        if (atom.chain == chain) {
+            result.push_back(atom);
+        }
+    }
+    return result;
+}
+
+void System::clear_pdb_atoms() {
+    pdb_atoms_.clear();
+}
+
+bool System::has_pdb_atoms() const {
+    return !pdb_atoms_.empty();
+}
+
+void System::validate_pdb_atom_index(size_t index) const {
+    if (index >= pdb_atoms_.size()) {
+        throw std::out_of_range("PDB atom index out of range");
+    }
+}
+
+// Modify load_structure to also handle PDBAtom data
 void System::load_structure(const Structure& structure) {
     // Clear existing data
     residues_.clear();
-    constraints_.clear();
     forces_.clear();
     has_periodic_boundary_ = false;
-
+    pdb_atoms_.clear();
+    
     // Get box information
     auto box = structure.get_box();
     if (box.has_value()) {
@@ -385,89 +459,61 @@ void System::load_structure(const Structure& structure) {
         set_periodic_box_vectors(box_vectors[0], box_vectors[1], box_vectors[2]);
     }
     
-    // Get atoms data and transfer to system
-    auto atoms_data = structure.get_atoms_data();
-    
     // Group atoms by residue
-    std::map<std::pair<std::string, int>, std::vector<std::unordered_map<std::string, std::variant<std::string, int, double>>>> residue_atoms;
-    for (const auto& atom : atoms_data) {
-        std::string residue_name = std::get<std::string>(atom.at("residue"));
-        int sequence = std::get<int>(atom.at("sequence"));
-        residue_atoms[{residue_name, sequence}].push_back(atom);
+    std::map<std::pair<std::string, int>, std::vector<io::PDBAtom>> residue_atoms;
+    
+    // Process each atom in the structure
+    for (const auto& atom_ptr : structure.atoms()) {
+        try {
+            if (!atom_ptr) {
+                continue;  // Skip null pointers
+            }
+            
+            // Create a copy of the PDB atom
+            io::PDBAtom pdb_atom = *atom_ptr;
+            
+            // Add to residue group and PDB atoms list
+            residue_atoms[{pdb_atom.residue, pdb_atom.sequence}].push_back(pdb_atom);
+            pdb_atoms_.push_back(pdb_atom);  // Add to PDB atoms list immediately
+            
+        } catch (const std::exception& e) {
+            std::cerr << "Error processing atom: " << e.what() << std::endl;
+            continue;  // Skip atoms with invalid data
+        }
     }
     
-    // Create residues and add atoms
+    // Create residues and add particles
     for (const auto& [residue_key, atoms] : residue_atoms) {
         const auto& [residue_name, sequence] = residue_key;
+        
+        // Create new residue
         size_t res_idx = add_residue(residue_name);
         
-        for (const auto& atom : atoms) {
+        // Process each atom in the residue
+        for (const auto& pdb_atom : atoms) {
+            // Create particle
             Particle p;
-            p.position = {
-                std::get<double>(atom.at("x")),
-                std::get<double>(atom.at("y")),
-                std::get<double>(atom.at("z"))
-            };
-            p.velocity = {0.0, 0.0, 0.0};  // Initialize velocities to zero
+            p.position = {pdb_atom.x, pdb_atom.y, pdb_atom.z};
+            p.velocity = {0.0, 0.0, 0.0};  // Initialize velocity to zero
             
-            // Try to get mass and charge from topology fields first
-            bool mass_found = false;
-            if (atom.find("topo_mass") != atom.end()) {
-                double topo_mass = std::get<double>(atom.at("topo_mass"));
-                if (std::isfinite(topo_mass) && topo_mass > 0.0) {
-                    p.mass = topo_mass;
-                    mass_found = true;
-                }
-            }
-
-            // If topology mass not found, try other mass fields
-            if (!mass_found) {
-                std::vector<std::string> mass_fields = {"mass", "atom_mass"};
-                for (const auto& field : mass_fields) {
-                    try {
-                        if (atom.find(field) != atom.end()) {
-                            p.mass = std::get<double>(atom.at(field));
-                            if (std::isfinite(p.mass) && p.mass > 0.0) {
-                                mass_found = true;
-                                break;
-                            }
-                        }
-                    } catch (const std::exception&) {
-                        continue;
-                    }
-                }
-            }
-
-            // Try to get charge from topology fields first
-            if (atom.find("topo_charge") != atom.end()) {
-                double topo_charge = std::get<double>(atom.at("topo_charge"));
-                if (std::isfinite(topo_charge)) {
-                    p.charge = topo_charge;
-                }
+            // Set mass from topology if available
+            if (!std::isnan(pdb_atom.topo_mass)) {
+                p.mass = pdb_atom.topo_mass;
             } else {
-                // Try other charge fields
-                std::vector<std::string> charge_fields = {"charge", "atom_charge"};
-                for (const auto& field : charge_fields) {
-                    try {
-                        if (atom.find(field) != atom.end()) {
-                            p.charge = std::get<double>(atom.at(field));
-                            if (std::isfinite(p.charge)) {
-                                break;
-                            }
-                        }
-                    } catch (const std::exception&) {
-                        continue;
-                    }
-                }
-            }
-
-            // If no valid mass found, use a default mass
-            if (!mass_found) {
                 p.mass = 1.0;  // Default mass in atomic mass units
             }
             
+            // Set charge from topology if available
+            if (!std::isnan(pdb_atom.topo_charge)) {
+                p.charge = pdb_atom.topo_charge;
+            } else {
+                p.charge = 0.0;  // Default charge
+            }
+            
             p.is_virtual = false;  // Default to non-virtual
-            add_particle(res_idx, p);
+            
+            // Add particle to the residue
+            residues_[res_idx].particles.push_back(p);
         }
     }
 }

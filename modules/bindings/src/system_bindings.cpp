@@ -107,5 +107,35 @@ void init_system_bindings(py::module& m) {
         .def("get_particle",
              py::overload_cast<size_t, size_t>(&System::get_particle),
              py::arg("residue_index"), py::arg("particle_index"),
-             "Get particle by indices (mutable)");
+             "Get particle by indices (mutable)")
+        // PDBAtom support
+        .def("get_pdb_atom_count", &System::get_pdb_atom_count,
+             "Get number of PDB atoms")
+        .def("get_pdb_atom",
+             py::overload_cast<size_t>(&System::get_pdb_atom, py::const_),
+             py::arg("index"),
+             "Get PDB atom by index (const)")
+        .def("get_pdb_atom",
+             py::overload_cast<size_t>(&System::get_pdb_atom),
+             py::arg("index"),
+             "Get PDB atom by index (mutable)")
+        .def("add_pdb_atom", &System::add_pdb_atom,
+             py::arg("atom"),
+             "Add a PDB atom to the system")
+        .def("remove_pdb_atom", &System::remove_pdb_atom,
+             py::arg("index"),
+             "Remove a PDB atom by index")
+        .def("get_pdb_atoms_by_residue", &System::get_pdb_atoms_by_residue,
+             py::arg("residue_name"),
+             "Get PDB atoms by residue name")
+        .def("get_pdb_atoms_by_residue_sequence", &System::get_pdb_atoms_by_residue_sequence,
+             py::arg("residue_name"), py::arg("sequence"),
+             "Get PDB atoms by residue name and sequence number")
+        .def("get_pdb_atoms_by_chain", &System::get_pdb_atoms_by_chain,
+             py::arg("chain"),
+             "Get PDB atoms by chain identifier")
+        .def("clear_pdb_atoms", &System::clear_pdb_atoms,
+             "Clear all PDB atoms")
+        .def("has_pdb_atoms", &System::has_pdb_atoms,
+             "Check if system has any PDB atoms");
 } 
