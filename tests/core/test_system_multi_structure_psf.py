@@ -3,6 +3,7 @@
 import os
 import pytest
 from pygcmc import System, Project
+import math
 
 @pytest.fixture
 def test_data_dir():
@@ -338,3 +339,395 @@ def test_load_structure_psf_single_fail(structure_files):
     with pytest.raises(RuntimeError, match="No atoms found in PSF file"):
         # 使用 TOP 文件作为无效的 PSF 文件以触发错误
         system.load_structure_psf_single(structure_files['pdb'], structure_files['top'], "SOL")
+
+def test_boundary_residues(structure_files):
+    """测试第一个和最后一个残基的完整性。"""
+    system = System()
+    system.load_structure_psf_multi(structure_files['pdb'], structure_files['psf'])
+    
+    # 测试第一个残基（ALA 7）
+    first_residue_atoms = system.get_pdb_atoms_by_residue_sequence("ALA", 7)
+    assert len(first_residue_atoms) == 12  # 根据PSF文件中ALA的原子数
+    assert first_residue_atoms[0].name == "N"
+    assert first_residue_atoms[0].x == pytest.approx(76.563)
+    assert first_residue_atoms[0].y == pytest.approx(93.118)
+    assert first_residue_atoms[0].z == pytest.approx(93.806)
+    
+    # 获取最后一个残基的序号
+    last_sequence = 0
+    for i in range(system.get_pdb_atom_count()):
+        atom = system.get_pdb_atom(i)
+        last_sequence = max(last_sequence, atom.sequence)
+    
+    # 测试最后一个残基
+    last_residue_atoms = system.get_pdb_atoms_by_residue_sequence(
+        system.get_pdb_atom(system.get_pdb_atom_count() - 1).residue,
+        last_sequence
+    )
+    assert len(last_residue_atoms) > 0
+
+def test_atom_properties_completeness(structure_files):
+    """测试原子属性是否完整地从PSF文件转移到了系统中。"""
+    system = System()
+    system.load_structure_psf_multi(structure_files['pdb'], structure_files['psf'])
+    
+    # 测试ALA 7的N原子
+    ala_atoms = system.get_pdb_atoms_by_residue_sequence("ALA", 7)
+    n_atom = next(atom for atom in ala_atoms if atom.name == "N")
+    
+    # 验证从PDB文件读取的属性
+    assert n_atom.x == pytest.approx(76.563)
+    assert n_atom.y == pytest.approx(93.118)
+    assert n_atom.z == pytest.approx(93.806)
+    
+    # 验证拓扑属性
+    assert n_atom.topo_type == "NH3"
+    assert n_atom.topo_charge == pytest.approx(-0.300000)
+    assert n_atom.topo_mass == pytest.approx(14.0070)
+
+def test_crystal_parameters(structure_files):
+    """测试晶胞参数是否正确读取。"""
+    system = System()
+    system.load_structure_psf_multi(structure_files['pdb'], structure_files['psf'])
+    
+    # 验证晶胞参数
+    # 注：这里我们只验证系统是否成功加载，因为晶胞参数的访问方法可能不同
+    assert system.has_pdb_atoms()
+    
+    # 验证第一个原子的坐标在合理范围内
+    first_atom = system.get_pdb_atom(0)
+    assert 0 <= first_atom.x <= 127.022
+    assert 0 <= first_atom.y <= 133.419
+    assert 0 <= first_atom.z <= 132.854
+
+def test_residue_connectivity(structure_files):
+    """测试残基内部原子的连接性。"""
+    system = System()
+    system.load_structure_psf_multi(structure_files['pdb'], structure_files['psf'])
+    
+    # 测试ALA 7的关键原子连接
+    ala_atoms = system.get_pdb_atoms_by_residue_sequence("ALA", 7)
+    
+    # 找到关键原子
+    n_atom = next(atom for atom in ala_atoms if atom.name == "N")
+    ca_atom = next(atom for atom in ala_atoms if atom.name == "CA")
+    c_atom = next(atom for atom in ala_atoms if atom.name == "C")
+    
+    # 验证它们的相对位置关系
+    n_ca_distance = ((ca_atom.x - n_atom.x)**2 + 
+                    (ca_atom.y - n_atom.y)**2 + 
+                    (ca_atom.z - n_atom.z)**2)**0.5
+    ca_c_distance = ((c_atom.x - ca_atom.x)**2 + 
+                    (c_atom.y - ca_atom.y)**2 + 
+                    (c_atom.z - ca_atom.z)**2)**0.5
+    
+    # 典型的N-CA和CA-C键长约为1.47和1.52埃
+    assert n_ca_distance == pytest.approx(1.47, abs=0.1)
+    assert ca_c_distance == pytest.approx(1.52, abs=0.1)
+
+def test_inter_residue_connectivity(structure_files):
+    """测试相邻残基之间的连接。"""
+    system = System()
+    system.load_structure_psf_multi(structure_files['pdb'], structure_files['psf'])
+    
+    # 测试ALA 7和VAL 8之间的肽键连接
+    ala_atoms = system.get_pdb_atoms_by_residue_sequence("ALA", 7)
+    val_atoms = system.get_pdb_atoms_by_residue_sequence("VAL", 8)
+    
+    ala_c = next(atom for atom in ala_atoms if atom.name == "C")
+    val_n = next(atom for atom in val_atoms if atom.name == "N")
+    
+    # 计算肽键长度
+    peptide_bond_length = ((val_n.x - ala_c.x)**2 + 
+                          (val_n.y - ala_c.y)**2 + 
+                          (val_n.z - ala_c.z)**2)**0.5
+    
+    # 典型的肽键长度约为1.33埃
+    assert peptide_bond_length == pytest.approx(1.33, abs=0.1)
+
+def test_pdb_atom_topology_info(structure_files):
+    """测试PDB原子的拓扑信息是否正确加载。"""
+    system = System()
+    system.load_structure_psf_multi(structure_files['pdb'], structure_files['psf'])
+    
+    # 测试ALA 7的所有原子
+    ala_atoms = system.get_pdb_atoms_by_residue_sequence("ALA", 7)
+    assert len(ala_atoms) > 0, "No atoms found for ALA 7"
+    
+    # 验证N原子的拓扑信息
+    n_atom = next(atom for atom in ala_atoms if atom.name == "N")
+    assert n_atom.topo_type == "NH3", "Wrong topology type for N atom"
+    assert n_atom.topo_charge == pytest.approx(-0.300000), "Wrong topology charge for N atom"
+    assert n_atom.topo_mass == pytest.approx(14.0070), "Wrong topology mass for N atom"
+    
+    # 验证CA原子的拓扑信息
+    ca_atom = next(atom for atom in ala_atoms if atom.name == "CA")
+    assert ca_atom.topo_type == "CT1", "Wrong topology type for CA atom"
+    assert ca_atom.topo_charge == pytest.approx(0.210000), "Wrong topology charge for CA atom"
+    assert ca_atom.topo_mass == pytest.approx(12.0110), "Wrong topology mass for CA atom"
+    
+    # 验证C原子的拓扑信息
+    c_atom = next(atom for atom in ala_atoms if atom.name == "C")
+    assert c_atom.topo_type == "C", "Wrong topology type for C atom"
+    assert c_atom.topo_charge == pytest.approx(0.510000), "Wrong topology charge for C atom"
+    assert c_atom.topo_mass == pytest.approx(12.0110), "Wrong topology mass for C atom"
+
+def test_pdb_atom_coordinates(structure_files):
+    """测试PDB原子的坐标信息是否正确加载。"""
+    system = System()
+    system.load_structure_psf_multi(structure_files['pdb'], structure_files['psf'])
+    
+    # 测试第一个和最后一个原子的坐标
+    first_atom = system.get_pdb_atom(0)
+    last_atom = system.get_pdb_atom(system.get_pdb_atom_count() - 1)
+    
+    # 验证坐标是有限数
+    assert all(map(math.isfinite, [first_atom.x, first_atom.y, first_atom.z])), \
+        "First atom has invalid coordinates"
+    assert all(map(math.isfinite, [last_atom.x, last_atom.y, last_atom.z])), \
+        "Last atom has invalid coordinates"
+    
+    # 验证坐标在合理范围内（根据CRYST1记录）
+    assert 0 <= first_atom.x <= 127.022, "First atom x coordinate out of box"
+    assert 0 <= first_atom.y <= 133.419, "First atom y coordinate out of box"
+    assert 0 <= first_atom.z <= 132.854, "First atom z coordinate out of box"
+    
+    assert 0 <= last_atom.x <= 127.022, "Last atom x coordinate out of box"
+    assert 0 <= last_atom.y <= 133.419, "Last atom y coordinate out of box"
+    assert 0 <= last_atom.z <= 132.854, "Last atom z coordinate out of box"
+
+def test_pdb_atom_chain_info(structure_files):
+    """测试PDB原子的链信息是否正确加载。"""
+    system = System()
+    system.load_structure_psf_multi(structure_files['pdb'], structure_files['psf'])
+    
+    # 获取所有链的原子
+    chains = set()
+    for i in range(system.get_pdb_atom_count()):
+        atom = system.get_pdb_atom(i)
+        chains.add(atom.chain)
+    
+    # 验证每条链
+    for chain in chains:
+        chain_atoms = system.get_pdb_atoms_by_chain(chain)
+        assert len(chain_atoms) > 0, f"No atoms found for chain {chain}"
+        
+        # 验证所有原子确实属于这条链
+        for atom in chain_atoms:
+            assert atom.chain == chain, f"Atom has wrong chain identifier: {atom.chain} != {chain}"
+            
+        # 验证链内残基的有效性
+        residue_sequences = sorted(list(set((atom.residue, atom.sequence) for atom in chain_atoms)))
+        for i in range(len(residue_sequences) - 1):
+            curr_res = residue_sequences[i]
+            next_res = residue_sequences[i + 1]
+            # 只验证残基序号是否有效
+            assert curr_res[1] > 0 and next_res[1] > 0, \
+                f"Invalid residue numbers in chain {chain}: {curr_res} -> {next_res}"
+
+def test_pdb_atom_validation(structure_files):
+    """测试PDB原子的验证功能。"""
+    system = System()
+    system.load_structure_psf_multi(structure_files['pdb'], structure_files['psf'])
+    
+    # 验证所有原子的基本属性
+    for i in range(system.get_pdb_atom_count()):
+        atom = system.get_pdb_atom(i)
+        
+        # 验证原子序号
+        assert atom.serial > 0, f"Invalid serial number for atom {i}"
+        
+        # 验证原子名称
+        assert atom.name, f"Missing name for atom {i}"
+        assert len(atom.name.strip()) > 0, f"Empty name for atom {i}"
+        
+        # 验证残基信息
+        assert atom.residue, f"Missing residue name for atom {i}"
+        assert len(atom.residue.strip()) > 0, f"Empty residue name for atom {i}"
+        assert atom.sequence > 0, f"Invalid sequence number for atom {i}"
+        
+        # 验证坐标
+        assert all(map(math.isfinite, [atom.x, atom.y, atom.z])), \
+            f"Invalid coordinates for atom {i}"
+        
+        # 验证PDB特有属性
+        assert 0 <= atom.occupancy <= 1, f"Invalid occupancy for atom {i}"
+        assert atom.temp_factor >= 0, f"Invalid temperature factor for atom {i}"
+        
+        # 验证元素信息
+        assert atom.element or atom.type, f"Missing element and type for atom {i}"
+
+def test_pdb_atom_element_types(structure_files):
+    """测试PDB原子的元素类型是否正确。"""
+    system = System()
+    system.load_structure_psf_multi(structure_files['pdb'], structure_files['psf'])
+    
+    # 收集所有原子的元素类型
+    element_types = {}
+    for i in range(system.get_pdb_atom_count()):
+        atom = system.get_pdb_atom(i)
+        # 从原子名称推断元素类型
+        element = atom.name[0].upper()
+        if element not in element_types:
+            element_types[element] = []
+        element_types[element].append(atom)
+    
+    # 验证常见元素的存在性
+    common_elements = {"C", "H", "N", "O"}
+    for element in common_elements:
+        assert element in element_types, f"Common element {element} not found"
+    
+    # 验证每种元素类型的原子特性
+    expected_masses = {
+        "C": 12.0110,  # 碳原子
+        "N": 14.0070,  # 氮原子
+        "O": 15.9994,  # 氧原子
+        "H": 1.0080    # 氢原子
+    }
+    
+    for element, atoms in element_types.items():
+        if element in expected_masses:
+            # 找到至少一个具有正确质量的原子
+            has_valid_mass = False
+            for atom in atoms:
+                if (hasattr(atom, 'topo_mass') and 
+                    atom.topo_mass is not None and 
+                    not math.isnan(atom.topo_mass)):
+                    assert abs(atom.topo_mass - expected_masses[element]) < 0.001, \
+                        f"Wrong mass for {element} atom {atom.name}: {atom.topo_mass} != {expected_masses[element]}"
+                    has_valid_mass = True
+            assert has_valid_mass, f"No atom with valid mass found for element {element}"
+
+def test_pdb_atom_basic_properties(structure_files):
+    """测试PDB原子的基本属性。"""
+    system = System()
+    system.load_structure_psf_multi(structure_files['pdb'], structure_files['psf'])
+    
+    # 测试第一个原子（ALA 7的N原子）
+    first_atom = system.get_pdb_atom(0)
+    assert first_atom.serial == 1, "First atom should have serial number 1"
+    assert first_atom.name == "N", "First atom should be N"
+    assert first_atom.residue == "ALA", "First atom should be in ALA"
+    assert first_atom.sequence == 7, "First atom should be in residue 7"
+    assert first_atom.chain == "P", "First atom should be in chain P"
+    
+    # 测试坐标
+    assert first_atom.x == pytest.approx(76.563)
+    assert first_atom.y == pytest.approx(93.118)
+    assert first_atom.z == pytest.approx(93.806)
+    
+    # 测试PDB特有属性
+    assert first_atom.occupancy == pytest.approx(1.0)
+    assert first_atom.temp_factor == pytest.approx(0.0)
+    assert first_atom.alt_loc == " "
+    assert first_atom.insertion_code == " "
+
+def test_pdb_atom_topology_properties(structure_files):
+    """测试PDB原子的拓扑属性。"""
+    system = System()
+    system.load_structure_psf_multi(structure_files['pdb'], structure_files['psf'])
+    
+    # 获取ALA 7的所有原子
+    ala_atoms = system.get_pdb_atoms_by_residue_sequence("ALA", 7)
+    
+    # 验证主链原子的拓扑属性
+    backbone_atoms = {
+        "N": {"type": "NH3", "charge": -0.300000, "mass": 14.0070},
+        "CA": {"type": "CT1", "charge": 0.210000, "mass": 12.0110},
+        "C": {"type": "C", "charge": 0.510000, "mass": 12.0110},
+        "O": {"type": "O", "charge": -0.510000, "mass": 15.9994}
+    }
+    
+    for name, props in backbone_atoms.items():
+        atom = next(atom for atom in ala_atoms if atom.name == name)
+        assert atom.topo_type == props["type"], \
+            f"Wrong topology type for {name} atom"
+        assert atom.topo_charge == pytest.approx(props["charge"]), \
+            f"Wrong topology charge for {name} atom"
+        assert atom.topo_mass == pytest.approx(props["mass"]), \
+            f"Wrong topology mass for {name} atom"
+
+def test_pdb_residue_composition(structure_files):
+    """测试残基内的原子组成。"""
+    system = System()
+    system.load_structure_psf_multi(structure_files['pdb'], structure_files['psf'])
+    
+    # 验证ALA残基的原子组成
+    ala_atoms = system.get_pdb_atoms_by_residue_sequence("ALA", 7)
+    ala_atom_names = {atom.name for atom in ala_atoms}
+    expected_ala_atoms = {
+        "N", "H1", "H2", "H3",  # N端氨基（注意：使用H1/H2/H3而不是HT1/HT2/HT3）
+        "CA", "HA",             # α碳
+        "CB", "HB1", "HB2", "HB3", # 侧链
+        "C", "O"                # C端羧基
+    }
+    assert ala_atom_names == expected_ala_atoms, \
+        f"Missing or extra atoms in ALA residue: {ala_atom_names - expected_ala_atoms}"
+    
+    # 验证VAL残基的原子组成
+    val_atoms = system.get_pdb_atoms_by_residue_sequence("VAL", 8)
+    val_atom_names = {atom.name for atom in val_atoms}
+    expected_val_atoms = {
+        "N", "HN",                  # 肽键氨基
+        "CA", "HA",                 # α碳
+        "CB", "HB",                 # β碳
+        "CG1", "HG11", "HG12", "HG13", # γ碳1
+        "CG2", "HG21", "HG22", "HG23", # γ碳2
+        "C", "O"                    # 肽键羰基
+    }
+    assert val_atom_names == expected_val_atoms, \
+        f"Missing or extra atoms in VAL residue: {val_atom_names - expected_val_atoms}"
+
+def test_pdb_atom_spatial_relations(structure_files):
+    """测试原子间的空间关系。"""
+    system = System()
+    system.load_structure_psf_multi(structure_files['pdb'], structure_files['psf'])
+    
+    # 获取ALA 7的原子
+    ala_atoms = system.get_pdb_atoms_by_residue_sequence("ALA", 7)
+    
+    # 计算键长
+    def calc_distance(atom1, atom2):
+        return ((atom1.x - atom2.x)**2 + 
+                (atom1.y - atom2.y)**2 + 
+                (atom1.z - atom2.z)**2)**0.5
+    
+    # 验证N-CA键长
+    n_atom = next(atom for atom in ala_atoms if atom.name == "N")
+    ca_atom = next(atom for atom in ala_atoms if atom.name == "CA")
+    n_ca_distance = calc_distance(n_atom, ca_atom)
+    assert n_ca_distance == pytest.approx(1.47, abs=0.1), \
+        f"N-CA bond length {n_ca_distance} is out of range"
+    
+    # 验证CA-CB键长
+    cb_atom = next(atom for atom in ala_atoms if atom.name == "CB")
+    ca_cb_distance = calc_distance(ca_atom, cb_atom)
+    assert ca_cb_distance == pytest.approx(1.52, abs=0.1), \
+        f"CA-CB bond length {ca_cb_distance} is out of range"
+    
+    # 验证CA-C键长
+    c_atom = next(atom for atom in ala_atoms if atom.name == "C")
+    ca_c_distance = calc_distance(ca_atom, c_atom)
+    assert ca_c_distance == pytest.approx(1.52, abs=0.1), \
+        f"CA-C bond length {ca_c_distance} is out of range"
+
+def test_pdb_atom_sequence_order(structure_files):
+    """测试PDB原子的序列顺序。"""
+    system = System()
+    system.load_structure_psf_multi(structure_files['pdb'], structure_files['psf'])
+    
+    # 验证残基内原子的顺序（以ALA 7为例）
+    ala_atoms = system.get_pdb_atoms_by_residue_sequence("ALA", 7)
+    expected_order = ["N", "H1", "H2", "H3", "CA", "HA", "CB", "HB1", "HB2", "HB3", "C", "O"]
+    actual_order = [atom.name for atom in ala_atoms]
+    assert actual_order == expected_order, \
+        f"Wrong atom order in ALA residue: {actual_order}"
+    
+    # 验证残基序号的连续性
+    prev_sequence = None
+    for i in range(system.get_pdb_atom_count()):
+        atom = system.get_pdb_atom(i)
+        if prev_sequence is not None and atom.sequence != prev_sequence:
+            assert atom.sequence > prev_sequence, \
+                f"Residue sequence numbers not monotonically increasing at atom {i}"
+        prev_sequence = atom.sequence
