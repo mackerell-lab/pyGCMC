@@ -123,6 +123,14 @@ def test_load_structure_psf_individual(test_data_dir):
             else:  # Non-terminal ALA
                 assert atom.topo_type == "NH1", f"Wrong topology type for N atom in non-terminal ALA"
                 assert atom.topo_charge == pytest.approx(-0.47), f"Wrong topology charge for N atom in non-terminal ALA"
+        elif atom.sequence == 7:  # N-terminal ALA hydrogens
+            if atom.name in ["HT1", "HT2", "HT3"]:
+                assert atom.topo_type == "HC", f"Wrong topology type for {atom.name} in N-terminal ALA"
+                assert atom.topo_charge == pytest.approx(0.33), f"Wrong topology charge for {atom.name} in N-terminal ALA"
+        else:  # Non-terminal ALA hydrogens
+            if atom.name == "HN":
+                assert atom.topo_type == "H", f"Wrong topology type for HN in non-terminal ALA"
+                assert atom.topo_charge == pytest.approx(0.31), f"Wrong topology charge for HN in non-terminal ALA"
     
     # 测试苯分子PSF (benx.psf)
     system = System(pdb=pdb_file, psf=os.path.join(test_data_dir, "mols", "benx.psf"))
