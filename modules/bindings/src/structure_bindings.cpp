@@ -12,6 +12,35 @@ void init_structure_bindings(py::module& m) {
     // Bind Structure class with proper wrapper support
     py::class_<Structure, std::shared_ptr<Structure>>(m, "Structure")
         .def(py::init<>())
+        .def(py::init([](const std::string& pdb, const std::string& psf) {
+                Structure structure;
+                structure.read_pdb(pdb);
+                structure.read_psf(psf);
+                return structure;
+             }),
+             py::kw_only(),
+             py::arg("pdb"), py::arg("psf"),
+             "Create a structure and load from PDB and PSF files")
+        .def(py::init([](const std::string& pdb, const std::vector<std::string>& psf) {
+                Structure structure;
+                structure.read_pdb(pdb);
+                for (const auto& psf_file : psf) {
+                    structure.read_psf(psf_file);
+                }
+                return structure;
+             }),
+             py::kw_only(),
+             py::arg("pdb"), py::arg("psf"),
+             "Create a structure and load from PDB and multiple PSF files")
+        .def(py::init([](const std::string& pdb, const std::string& top) {
+                Structure structure;
+                structure.read_pdb(pdb);
+                structure.read_top(top);
+                return structure;
+             }),
+             py::kw_only(),
+             py::arg("pdb"), py::arg("top"),
+             "Create a structure and load from PDB and TOP files")
         .def("apply_forcefield", &Structure::apply_forcefield)
         // Add structure loading methods
         .def("read_pdb_file", &Structure::read_pdb_file, "Read structure from PDB file")
