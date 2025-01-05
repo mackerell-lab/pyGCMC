@@ -1,6 +1,5 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <pybind11/numpy.h>
 #include "pygcmc/core/io/pdb_parser.hpp"
 #include "pygcmc/core/io/top_parser.hpp"
 #include "pygcmc/core/io/ff_parser.hpp"

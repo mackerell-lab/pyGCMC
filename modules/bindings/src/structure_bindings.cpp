@@ -1,6 +1,5 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <pybind11/numpy.h>
 #include "pygcmc/core/structure.hpp"
 #include "pygcmc/core/project_residue.hpp"
 #include "pygcmc/core/project_atom.hpp"

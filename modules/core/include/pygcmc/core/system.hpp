@@ -118,6 +118,12 @@ public:
         return system;
     }
     
+    // Static factory methods for complex initialization
+    static System from_pdb_psf(const std::string& pdb_file, const std::vector<std::string>& psf_files);
+    static System from_pdb_psf_itp(const std::string& pdb_file, const std::vector<std::string>& psf_files, const std::string& itp_file);
+    static System from_pdb_psf_itps(const std::string& pdb_file, const std::vector<std::string>& psf_files, const std::vector<std::string>& itp_files);
+    static System from_kwargs(const std::unordered_map<std::string, std::variant<std::string, std::vector<std::string>>>& kwargs);
+    
     ~System() = default;
 
     // Structure loading methods

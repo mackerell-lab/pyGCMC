@@ -670,5 +670,180 @@ void System::load_structure_psf_auto(const std::string& pdb_file, const std::str
     throw std::runtime_error("Failed to load PSF file: neither multi-residue nor single-residue approach worked");
 }
 
+// Static constructor methods
+System System::from_pdb_psf(const std::string& pdb_file, const std::vector<std::string>& psf_files) {
+    // Create a structure
+    Structure structure;
+
+    // Load PDB file
+    structure.read_pdb(pdb_file);
+
+    // Read the first PSF file to establish base topology
+    structure.read_psf(psf_files[0]);
+
+    // Get all atom pointers
+    std::vector<io::PDBAtom*> atom_ptrs;
+    for (const auto& residue : structure.residues()) {
+        for (const auto& atom : residue->atom_ptrs) {
+            if (atom) {
+                atom_ptrs.push_back(atom.get());
+            }
+        }
+    }
+
+    // Update atoms with remaining PSF files
+    if (psf_files.size() > 1) {
+        std::vector<std::string> remaining_psf_files(psf_files.begin() + 1, psf_files.end());
+        int updated = io::PSFParser::update_pdb_atoms_from_multiple_psf(atom_ptrs, remaining_psf_files);
+        if (updated == 0) {
+            throw std::runtime_error("No atoms were updated with PSF information from additional PSF files");
+        }
+    }
+
+    // Create and return the system
+    System system;
+    system.load_structure(structure);
+    return system;
+}
+
+System System::from_pdb_psf_itp(const std::string& pdb_file, const std::vector<std::string>& psf_files, const std::string& itp_file) {
+    // Create a structure
+    Structure structure;
+
+    // Load PDB file
+    structure.read_pdb(pdb_file);
+
+    // Read the first PSF file to establish base topology
+    structure.read_psf(psf_files[0]);
+
+    // Get all atom pointers
+    std::vector<io::PDBAtom*> atom_ptrs;
+    for (const auto& residue : structure.residues()) {
+        for (const auto& atom : residue->atom_ptrs) {
+            if (atom) {
+                atom_ptrs.push_back(atom.get());
+            }
+        }
+    }
+
+    // Update atoms with remaining PSF files
+    if (psf_files.size() > 1) {
+        std::vector<std::string> remaining_psf_files(psf_files.begin() + 1, psf_files.end());
+        int updated = io::PSFParser::update_pdb_atoms_from_multiple_psf(atom_ptrs, remaining_psf_files);
+        if (updated == 0) {
+            throw std::runtime_error("No atoms were updated with PSF information from additional PSF files");
+        }
+    }
+
+    // Load ITP file
+    structure.read_itp(itp_file);
+
+    // Create and return the system
+    System system;
+    system.load_structure(structure);
+    return system;
+}
+
+System System::from_pdb_psf_itps(const std::string& pdb_file, const std::vector<std::string>& psf_files, const std::vector<std::string>& itp_files) {
+    // Create a structure
+    Structure structure;
+
+    // Load PDB file
+    structure.read_pdb(pdb_file);
+
+    // Get all atom pointers
+    std::vector<io::PDBAtom*> atom_ptrs;
+    for (const auto& residue : structure.residues()) {
+        for (const auto& atom : residue->atom_ptrs) {
+            if (atom) {
+                atom_ptrs.push_back(atom.get());
+            }
+        }
+    }
+
+    // Try to update atoms using multiple PSF method
+    int updated = io::PSFParser::update_pdb_atoms_from_multiple_psf(atom_ptrs, psf_files);
+    if (updated == 0) {
+        throw std::runtime_error("No atoms were updated with PSF information using multiple PSF method");
+    }
+
+    // Load ITP files
+    for (const auto& itp_file : itp_files) {
+        structure.read_itp(itp_file);
+    }
+
+    // Create and return the system
+    System system;
+    system.load_structure(structure);
+    return system;
+}
+
+System System::from_kwargs(const std::unordered_map<std::string, std::variant<std::string, std::vector<std::string>>>& kwargs) {
+    // Create a structure
+    Structure structure;
+    System system;
+
+    // Check for PDB file
+    auto pdb_it = kwargs.find("pdb");
+    if (pdb_it != kwargs.end()) {
+        const std::string& pdb_file = std::get<std::string>(pdb_it->second);
+        structure.read_pdb(pdb_file);
+    }
+
+    // Get all atom pointers
+    std::vector<io::PDBAtom*> atom_ptrs;
+    for (const auto& residue : structure.residues()) {
+        for (const auto& atom : residue->atom_ptrs) {
+            if (atom) {
+                atom_ptrs.push_back(atom.get());
+            }
+        }
+    }
+
+    // Handle PSF files
+    auto psf_it = kwargs.find("psf");
+    if (psf_it != kwargs.end()) {
+        if (std::holds_alternative<std::string>(psf_it->second)) {
+            // Single PSF file
+            const std::string& psf_file = std::get<std::string>(psf_it->second);
+            structure.read_psf(psf_file);
+        } else if (std::holds_alternative<std::vector<std::string>>(psf_it->second)) {
+            // Multiple PSF files
+            const auto& psf_files = std::get<std::vector<std::string>>(psf_it->second);
+            int updated = io::PSFParser::update_pdb_atoms_from_multiple_psf(atom_ptrs, psf_files);
+            if (updated == 0) {
+                throw std::runtime_error("No atoms were updated with PSF information using multiple PSF method");
+            }
+        }
+    }
+
+    // Handle TOP file
+    auto top_it = kwargs.find("top");
+    if (top_it != kwargs.end()) {
+        const std::string& top_file = std::get<std::string>(top_it->second);
+        structure.read_top(top_file);
+    }
+
+    // Handle ITP files
+    auto itp_it = kwargs.find("itp");
+    if (itp_it != kwargs.end()) {
+        if (std::holds_alternative<std::string>(itp_it->second)) {
+            // Single ITP file
+            const std::string& itp_file = std::get<std::string>(itp_it->second);
+            structure.read_itp(itp_file);
+        } else if (std::holds_alternative<std::vector<std::string>>(itp_it->second)) {
+            // Multiple ITP files
+            const auto& itp_files = std::get<std::vector<std::string>>(itp_it->second);
+            for (const auto& itp_file : itp_files) {
+                structure.read_itp(itp_file);
+            }
+        }
+    }
+
+    // Load the structure into the system
+    system.load_structure(structure);
+    return system;
+}
+
 } // namespace core
 } // namespace pygcmc
