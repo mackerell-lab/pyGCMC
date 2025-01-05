@@ -2,7 +2,6 @@
 #include <pybind11/stl.h>
 #include "pygcmc/core/system.hpp"
 #include "pygcmc/core/structure.hpp"
-#include "pygcmc/core/io/psf_parser.hpp"
 #include <variant>
 #include <unordered_map>
 

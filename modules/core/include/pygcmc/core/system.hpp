@@ -134,6 +134,7 @@ public:
     void load_structure_psf_multi(const std::string& pdb_file, const std::string& psf_file);
     void load_structure_psf_single(const std::string& pdb_file, const std::string& psf_file, const std::string& target_residue);
     void load_structure_psf_auto(const std::string& pdb_file, const std::string& psf_file);
+    void load_structure_from_kwargs(const std::unordered_map<std::string, std::variant<std::string, std::vector<std::string>>>& kwargs);
 
     // Residue management
     size_t add_residue(const std::string& name);
