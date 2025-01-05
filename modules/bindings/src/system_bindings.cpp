@@ -2,6 +2,7 @@
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
 #include "pygcmc/core/system.hpp"
+#include "pygcmc/core/structure.hpp"
 
 namespace py = pybind11;
 using namespace pygcmc::core;
@@ -15,10 +16,31 @@ void init_system_bindings(py::module& m) {
              py::arg("pdb"), py::arg("psf"),
              "Create a system and load structure from PDB and PSF files")
         .def(py::init([](const std::string& pdb, const std::vector<std::string>& psf) {
-                System system;
-                for (const auto& psf_file : psf) {
-                    system.load_structure_psf(pdb, psf_file);
+                // Create a structure
+                Structure structure;
+
+                // Load PDB file
+                structure.read_pdb(pdb);
+
+                // Get all atom pointers
+                std::vector<io::PDBAtom*> atom_ptrs;
+                for (const auto& residue : structure.residues()) {
+                    for (const auto& atom : residue->atom_ptrs) {
+                        if (atom) {
+                            atom_ptrs.push_back(atom.get());
+                        }
+                    }
                 }
+
+                // Try to update atoms using multiple PSF method
+                int updated = io::PSFParser::update_pdb_atoms_from_multiple_psf(atom_ptrs, psf);
+                if (updated == 0) {
+                    throw std::runtime_error("No atoms were updated with PSF information using multiple PSF method");
+                }
+
+                // Create and return the system
+                System system;
+                system.load_structure(structure);
                 return system;
              }),
              py::kw_only(),

@@ -265,32 +265,39 @@ int PSFParser::update_pdb_atoms(std::vector<PDBAtom*>& pdb_atoms) const {
                 auto atom_it = seq_it->second.find(pdb_atom->name);
                 if (atom_it != seq_it->second.end()) {
                     const PSFAtom* psf_atom = atom_it->second;
-                    pdb_atom->topo_type = psf_atom->type;
-                    pdb_atom->topo_charge = psf_atom->charge;
-                    pdb_atom->topo_mass = psf_atom->mass;
-                    pdb_atom->chain = psf_atom->segment.empty() ? ' ' : psf_atom->segment[0];
-                    updated++;
-                    continue;  // Skip to next atom
-                }
-            }
-        }
-        
-        // If exact match failed, try matching by residue name and atom name only
-        for (const auto& [res_name, res_data] : psf_atom_map) {
-            if (res_name == pdb_atom->residue) {
-                for (const auto& [seq_num, atom_data] : res_data) {
-                    auto atom_it = atom_data.find(pdb_atom->name);
-                    if (atom_it != atom_data.end()) {
-                        const PSFAtom* psf_atom = atom_it->second;
+                    // Only update if not already set or if we have a better match
+                    if (pdb_atom->topo_type.empty() || 
+                        (psf_atom->residue_number == pdb_atom->sequence && 
+                         psf_atom->name == pdb_atom->name)) {
                         pdb_atom->topo_type = psf_atom->type;
                         pdb_atom->topo_charge = psf_atom->charge;
                         pdb_atom->topo_mass = psf_atom->mass;
                         pdb_atom->chain = psf_atom->segment.empty() ? ' ' : psf_atom->segment[0];
                         updated++;
-                        break;
                     }
                 }
-                break;
+            }
+        }
+    }
+    
+    // Second pass: match by residue name and atom name only if not matched in first pass
+    for (auto* pdb_atom : pdb_atoms) {
+        if (!pdb_atom || !pdb_atom->topo_type.empty()) continue;  // Skip if already matched
+        
+        auto res_it = psf_atom_map.find(pdb_atom->residue);
+        if (res_it != psf_atom_map.end()) {
+            // Try to find a match with any sequence number
+            for (const auto& [seq_num, atom_data] : res_it->second) {
+                auto atom_it = atom_data.find(pdb_atom->name);
+                if (atom_it != atom_data.end()) {
+                    const PSFAtom* psf_atom = atom_it->second;
+                    pdb_atom->topo_type = psf_atom->type;
+                    pdb_atom->topo_charge = psf_atom->charge;
+                    pdb_atom->topo_mass = psf_atom->mass;
+                    pdb_atom->chain = psf_atom->segment.empty() ? ' ' : psf_atom->segment[0];
+                    updated++;
+                    break;
+                }
             }
         }
     }
@@ -382,30 +389,10 @@ int PSFParser::update_pdb_atoms_from_multiple_psf(std::vector<PDBAtom*>& pdb_ato
             continue;
         }
 
-        // Update atoms that haven't been updated yet
-        std::vector<PDBAtom*> unmatched_atoms;
-        for (auto* atom : remaining_atoms) {
-            if (!atom || !atom->topo_type.empty()) {
-                continue;
-            }
-
-            // Try to update the atom
-            std::vector<PDBAtom*> single_atom = {atom};
-            int updated = parser.update_pdb_atoms(single_atom);
-            
-            if (updated == 0) {
-                unmatched_atoms.push_back(atom);
-            } else {
-                total_updated++;
-            }
-        }
-
-        // Update remaining atoms list
-        remaining_atoms = unmatched_atoms;
-
-        // If all atoms are updated, we can stop
-        if (remaining_atoms.empty()) {
-            break;
+        // Try to update all atoms with this PSF file
+        int updated = parser.update_pdb_atoms(pdb_atoms);
+        if (updated > 0) {
+            total_updated += updated;
         }
     }
 
