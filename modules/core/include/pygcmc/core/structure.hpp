@@ -83,6 +83,10 @@ public:
     void read_itp(const std::string& itp_file) { load_itp(itp_file); }
 
     // New methods from System class
+    void load_structure_psf(const std::string& pdb, const std::string& psf);
+    void load_structure_psf(const std::string& pdb, const std::vector<std::string>& psf_files);
+    void load_structure_top(const std::string& pdb, const std::string& top);
+    void load_structure_from_kwargs(const std::unordered_map<std::string, std::variant<std::string, std::vector<std::string>>>& kwargs);
     void load_structure_psf_auto(const std::string& pdb_file, const std::string& psf_file);
     void load_structure_psf_multi(const std::string& pdb_file, const std::string& psf_file);
     void load_structure_psf_single(const std::string& pdb_file, const std::string& psf_file, const std::string& target_residue);

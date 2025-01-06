@@ -557,6 +557,7 @@ void Structure::load_structure_psf_auto(const std::string& pdb_file, const std::
     if (updated > 0) {
         // Success with multi-residue approach, update this structure
         clear_pdb_atoms();  // Clear existing data
+        residues_.clear();
         
         // Copy residues and atoms from temp structure
         for (const auto& residue : temp_structure.residues_) {
@@ -578,11 +579,6 @@ void Structure::load_structure_psf_auto(const std::string& pdb_file, const std::
             set_box(temp_structure.get_box());
         }
 
-        // Copy cache information
-        if (temp_structure.has_cached_psf_) {
-            cached_psf_ = temp_structure.cached_psf_;
-            has_cached_psf_ = true;
-        }
         return;
     }
 
@@ -597,6 +593,7 @@ void Structure::load_structure_psf_auto(const std::string& pdb_file, const std::
         if (updated > 0) {
             // Success with single-residue approach, update this structure
             clear_pdb_atoms();  // Clear existing data
+            residues_.clear();
             
             // Copy residues and atoms from temp structure
             for (const auto& residue : temp_structure.residues_) {
@@ -618,32 +615,24 @@ void Structure::load_structure_psf_auto(const std::string& pdb_file, const std::
                 set_box(temp_structure.get_box());
             }
 
-            // Copy cache information
-            if (temp_structure.has_cached_psf_) {
-                cached_psf_ = temp_structure.cached_psf_;
-                has_cached_psf_ = true;
-            }
             return;
         }
     }
 
-    // If all attempts fail, try to cache the PSF for later use
-    io::PSFParser psf_parser;
-    if (psf_parser.parse(psf_file)) {
-        cached_psf_ = std::move(psf_parser);
-        has_cached_psf_ = true;
-    }
-
+    // If all attempts fail, throw an error
     throw std::runtime_error("Failed to load PSF file: neither multi-residue nor single-residue approach worked");
 }
 
 void Structure::load_structure_psf_multi(const std::string& pdb_file, const std::string& psf_file) {
+    // Create a temporary structure for loading
+    Structure temp_structure;
+    
     // Load PDB file first
-    read_pdb_file(pdb_file);
+    temp_structure.read_pdb_file(pdb_file);
 
     // Get all atom pointers
     std::vector<io::PDBAtom*> atom_ptrs;
-    for (const auto& residue : residues_) {
+    for (const auto& residue : temp_structure.residues_) {
         for (const auto& atom : residue->atom_ptrs) {
             if (atom) {
                 atom_ptrs.push_back(atom.get());
@@ -656,15 +645,42 @@ void Structure::load_structure_psf_multi(const std::string& pdb_file, const std:
     if (updated == 0) {
         throw std::runtime_error("No atoms were updated with PSF information using multi-residue method");
     }
+
+    // Success, update this structure
+    clear_pdb_atoms();  // Clear existing data
+    residues_.clear();
+    
+    // Copy residues and atoms from temp structure
+    for (const auto& residue : temp_structure.residues_) {
+        auto new_residue = std::make_shared<io::IOResidue>(*residue);
+        // Copy atom pointers
+        new_residue->atom_ptrs.clear();
+        for (const auto& atom : residue->atom_ptrs) {
+            if (atom) {
+                auto new_atom = std::make_shared<io::PDBAtom>(*atom);
+                new_residue->atom_ptrs.push_back(new_atom);
+                add_atom(new_atom);  // Also add to structure's atoms list
+            }
+        }
+        add_residue(new_residue);
+    }
+    
+    // Copy box information if present
+    if (temp_structure.get_box()) {
+        set_box(temp_structure.get_box());
+    }
 }
 
 void Structure::load_structure_psf_single(const std::string& pdb_file, const std::string& psf_file, const std::string& target_residue) {
+    // Create a temporary structure for loading
+    Structure temp_structure;
+    
     // Load PDB file first
-    read_pdb_file(pdb_file);
+    temp_structure.read_pdb_file(pdb_file);
 
     // Get all atom pointers
     std::vector<io::PDBAtom*> atom_ptrs;
-    for (const auto& residue : residues_) {
+    for (const auto& residue : temp_structure.residues_) {
         for (const auto& atom : residue->atom_ptrs) {
             if (atom) {
                 atom_ptrs.push_back(atom.get());
@@ -676,6 +692,30 @@ void Structure::load_structure_psf_single(const std::string& pdb_file, const std
     int updated = io::PSFParser::update_pdb_atoms_single_residue(atom_ptrs, psf_file, target_residue);
     if (updated == 0) {
         throw std::runtime_error("No atoms were updated with PSF information using single-residue method");
+    }
+
+    // Success, update this structure
+    clear_pdb_atoms();  // Clear existing data
+    residues_.clear();
+    
+    // Copy residues and atoms from temp structure
+    for (const auto& residue : temp_structure.residues_) {
+        auto new_residue = std::make_shared<io::IOResidue>(*residue);
+        // Copy atom pointers
+        new_residue->atom_ptrs.clear();
+        for (const auto& atom : residue->atom_ptrs) {
+            if (atom) {
+                auto new_atom = std::make_shared<io::PDBAtom>(*atom);
+                new_residue->atom_ptrs.push_back(new_atom);
+                add_atom(new_atom);  // Also add to structure's atoms list
+            }
+        }
+        add_residue(new_residue);
+    }
+    
+    // Copy box information if present
+    if (temp_structure.get_box()) {
+        set_box(temp_structure.get_box());
     }
 }
 
@@ -908,6 +948,253 @@ Structure Structure::from_kwargs(const std::unordered_map<std::string, std::vari
     }
 
     return result;
+}
+
+void Structure::load_structure_psf(const std::string& pdb, const std::string& psf) {
+    // Create a temporary structure for loading
+    Structure temp_structure;
+    
+    // Load PDB file first
+    temp_structure.read_pdb_file(pdb);
+
+    // Get all atom pointers
+    std::vector<io::PDBAtom*> atom_ptrs;
+    for (const auto& residue : temp_structure.residues_) {
+        for (const auto& atom : residue->atom_ptrs) {
+            if (atom) {
+                atom_ptrs.push_back(atom.get());
+            }
+        }
+    }
+
+    // Try standard PSF loading first
+    try {
+        temp_structure.read_psf(psf);
+        
+        // Success, update this structure
+        clear_pdb_atoms();  // Clear existing data
+        residues_.clear();
+        
+        // Copy residues and atoms from temp structure
+        for (const auto& residue : temp_structure.residues_) {
+            auto new_residue = std::make_shared<io::IOResidue>(*residue);
+            // Copy atom pointers
+            new_residue->atom_ptrs.clear();
+            for (const auto& atom : residue->atom_ptrs) {
+                if (atom) {
+                    auto new_atom = std::make_shared<io::PDBAtom>(*atom);
+                    new_residue->atom_ptrs.push_back(new_atom);
+                    add_atom(new_atom);  // Also add to structure's atoms list
+                }
+            }
+            add_residue(new_residue);
+        }
+        
+        // Copy box information if present
+        if (temp_structure.get_box()) {
+            set_box(temp_structure.get_box());
+        }
+    } catch (const std::runtime_error& e) {
+        // If standard method fails, try using multiple PSF method
+        std::vector<std::string> psf_files = {psf};
+        int updated = io::PSFParser::update_pdb_atoms_from_multiple_psf(atom_ptrs, psf_files);
+        if (updated == 0) {
+            throw std::runtime_error("No atoms were updated with PSF information using any method");
+        }
+        
+        // Success, update this structure
+        clear_pdb_atoms();  // Clear existing data
+        residues_.clear();
+        
+        // Copy residues and atoms from temp structure
+        for (const auto& residue : temp_structure.residues_) {
+            auto new_residue = std::make_shared<io::IOResidue>(*residue);
+            // Copy atom pointers
+            new_residue->atom_ptrs.clear();
+            for (const auto& atom : residue->atom_ptrs) {
+                if (atom) {
+                    auto new_atom = std::make_shared<io::PDBAtom>(*atom);
+                    new_residue->atom_ptrs.push_back(new_atom);
+                    add_atom(new_atom);  // Also add to structure's atoms list
+                }
+            }
+            add_residue(new_residue);
+        }
+        
+        // Copy box information if present
+        if (temp_structure.get_box()) {
+            set_box(temp_structure.get_box());
+        }
+    }
+}
+
+void Structure::load_structure_psf(const std::string& pdb, const std::vector<std::string>& psf_files) {
+    // Create a temporary structure for loading
+    Structure temp_structure;
+    
+    // Load PDB file first
+    temp_structure.read_pdb_file(pdb);
+
+    // Get all atom pointers
+    std::vector<io::PDBAtom*> atom_ptrs;
+    for (const auto& residue : temp_structure.residues_) {
+        for (const auto& atom : residue->atom_ptrs) {
+            if (atom) {
+                atom_ptrs.push_back(atom.get());
+            }
+        }
+    }
+
+    // Try to update atoms using multiple PSF method
+    int updated = io::PSFParser::update_pdb_atoms_from_multiple_psf(atom_ptrs, psf_files);
+    if (updated == 0) {
+        throw std::runtime_error("No atoms were updated with PSF information using multiple PSF method");
+    }
+
+    // Success, update this structure
+    clear_pdb_atoms();  // Clear existing data
+    residues_.clear();
+    
+    // Copy residues and atoms from temp structure
+    for (const auto& residue : temp_structure.residues_) {
+        auto new_residue = std::make_shared<io::IOResidue>(*residue);
+        // Copy atom pointers
+        new_residue->atom_ptrs.clear();
+        for (const auto& atom : residue->atom_ptrs) {
+            if (atom) {
+                auto new_atom = std::make_shared<io::PDBAtom>(*atom);
+                new_residue->atom_ptrs.push_back(new_atom);
+                add_atom(new_atom);  // Also add to structure's atoms list
+            }
+        }
+        add_residue(new_residue);
+    }
+    
+    // Copy box information if present
+    if (temp_structure.get_box()) {
+        set_box(temp_structure.get_box());
+    }
+}
+
+void Structure::load_structure_top(const std::string& pdb, const std::string& top) {
+    // Create a temporary structure for loading
+    Structure temp_structure;
+    
+    // Load PDB file first
+    temp_structure.read_pdb_file(pdb);
+    
+    // Load TOP file
+    temp_structure.read_top_file(top);
+
+    // Success, update this structure
+    clear_pdb_atoms();  // Clear existing data
+    residues_.clear();
+    
+    // Copy residues and atoms from temp structure
+    for (const auto& residue : temp_structure.residues_) {
+        auto new_residue = std::make_shared<io::IOResidue>(*residue);
+        // Copy atom pointers
+        new_residue->atom_ptrs.clear();
+        for (const auto& atom : residue->atom_ptrs) {
+            if (atom) {
+                auto new_atom = std::make_shared<io::PDBAtom>(*atom);
+                new_residue->atom_ptrs.push_back(new_atom);
+                add_atom(new_atom);  // Also add to structure's atoms list
+            }
+        }
+        add_residue(new_residue);
+    }
+    
+    // Copy box information if present
+    if (temp_structure.get_box()) {
+        set_box(temp_structure.get_box());
+    }
+}
+
+void Structure::load_structure_from_kwargs(const std::unordered_map<std::string, std::variant<std::string, std::vector<std::string>>>& kwargs) {
+    // Create a temporary structure for loading
+    Structure temp_structure;
+    
+    // Check for PDB file
+    auto pdb_it = kwargs.find("pdb");
+    if (pdb_it != kwargs.end()) {
+        const std::string& pdb_file = std::get<std::string>(pdb_it->second);
+        temp_structure.read_pdb_file(pdb_file);
+    }
+
+    // Get all atom pointers
+    std::vector<io::PDBAtom*> atom_ptrs;
+    for (const auto& residue : temp_structure.residues_) {
+        for (const auto& atom : residue->atom_ptrs) {
+            if (atom) {
+                atom_ptrs.push_back(atom.get());
+            }
+        }
+    }
+
+    // Handle PSF files
+    auto psf_it = kwargs.find("psf");
+    if (psf_it != kwargs.end()) {
+        if (std::holds_alternative<std::string>(psf_it->second)) {
+            // Single PSF file
+            const std::string& psf_file = std::get<std::string>(psf_it->second);
+            temp_structure.read_psf(psf_file);
+        } else if (std::holds_alternative<std::vector<std::string>>(psf_it->second)) {
+            // Multiple PSF files
+            const auto& psf_files = std::get<std::vector<std::string>>(psf_it->second);
+            int updated = io::PSFParser::update_pdb_atoms_from_multiple_psf(atom_ptrs, psf_files);
+            if (updated == 0) {
+                throw std::runtime_error("No atoms were updated with PSF information using multiple PSF method");
+            }
+        }
+    }
+
+    // Handle TOP file
+    auto top_it = kwargs.find("top");
+    if (top_it != kwargs.end()) {
+        const std::string& top_file = std::get<std::string>(top_it->second);
+        temp_structure.read_top(top_file);
+    }
+
+    // Handle ITP files
+    auto itp_it = kwargs.find("itp");
+    if (itp_it != kwargs.end()) {
+        if (std::holds_alternative<std::string>(itp_it->second)) {
+            // Single ITP file
+            const std::string& itp_file = std::get<std::string>(itp_it->second);
+            temp_structure.read_itp(itp_file);
+        } else if (std::holds_alternative<std::vector<std::string>>(itp_it->second)) {
+            // Multiple ITP files
+            const auto& itp_files = std::get<std::vector<std::string>>(itp_it->second);
+            for (const auto& itp_file : itp_files) {
+                temp_structure.read_itp(itp_file);
+            }
+        }
+    }
+
+    // Success, update this structure
+    clear_pdb_atoms();  // Clear existing data
+    residues_.clear();
+    
+    // Copy residues and atoms from temp structure
+    for (const auto& residue : temp_structure.residues_) {
+        auto new_residue = std::make_shared<io::IOResidue>(*residue);
+        // Copy atom pointers
+        new_residue->atom_ptrs.clear();
+        for (const auto& atom : residue->atom_ptrs) {
+            if (atom) {
+                auto new_atom = std::make_shared<io::PDBAtom>(*atom);
+                new_residue->atom_ptrs.push_back(new_atom);
+                add_atom(new_atom);  // Also add to structure's atoms list
+            }
+        }
+        add_residue(new_residue);
+    }
+    
+    // Copy box information if present
+    if (temp_structure.get_box()) {
+        set_box(temp_structure.get_box());
+    }
 }
 
 } // namespace core

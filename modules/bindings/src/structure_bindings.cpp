@@ -15,8 +15,7 @@ void init_structure_bindings(py::module& m) {
         .def(py::init<>())
         .def(py::init([](const std::string& pdb, const std::string& psf) {
                 Structure structure;
-                structure.read_pdb(pdb);
-                structure.read_psf(psf);
+                structure.load_structure_psf(pdb, psf);
                 return structure;
              }),
              py::kw_only(),
@@ -28,12 +27,31 @@ void init_structure_bindings(py::module& m) {
              py::kw_only(),
              py::arg("pdb"), py::arg("psf"),
              "Create a structure and load from PDB and multiple PSF files")
+        .def(py::init([](const std::string& pdb, const std::vector<std::string>& psf, const std::string& itp) {
+                return Structure::from_pdb_psf_itp(pdb, psf, itp);
+             }),
+             py::kw_only(),
+             py::arg("pdb"), py::arg("psf"), py::arg("itp"),
+             "Create a structure and load from PDB, multiple PSF files, and an ITP file")
+        .def(py::init([](const std::string& pdb, const std::vector<std::string>& psf, const std::vector<std::string>& itp) {
+                return Structure::from_pdb_psf_itps(pdb, psf, itp);
+             }),
+             py::kw_only(),
+             py::arg("pdb"), py::arg("psf"), py::arg("itp"),
+             "Create a structure and load from PDB, multiple PSF files, and multiple ITP files")
         .def(py::init([](const std::string& pdb, const std::string& top) {
                 Structure structure;
-                structure.read_pdb(pdb);
-                structure.read_top(top);
+                structure.load_structure_top(pdb, top);
                 return structure;
              }),
+             py::kw_only(),
+             py::arg("pdb"), py::arg("top"),
+             "Create a structure and load from PDB and TOP files")
+        .def_static("from_top", [](const std::string& pdb, const std::string& top) {
+                Structure structure;
+                structure.load_structure_top(pdb, top);
+                return structure;
+             },
              py::kw_only(),
              py::arg("pdb"), py::arg("top"),
              "Create a structure and load from PDB and TOP files")
@@ -237,5 +255,44 @@ void init_structure_bindings(py::module& m) {
             }
             
             return result;
-        });
+        })
+        .def("load_structure",
+             [](Structure& self, const std::string& pdb, const std::string& psf) {
+                 self.load_structure_psf(pdb, psf);
+             },
+             py::kw_only(),
+             py::arg("pdb"), py::arg("psf"),
+             "Load structure from PDB and PSF files")
+        .def("load_structure",
+             [](Structure& self, const std::string& pdb, const std::string& top) {
+                 self.load_structure_top(pdb, top);
+             },
+             py::kw_only(),
+             py::arg("pdb"), py::arg("top"),
+             "Load structure from PDB and TOP files")
+        .def("load_structure",
+             [](Structure& self, py::kwargs kwargs) {
+                 std::unordered_map<std::string, std::variant<std::string, std::vector<std::string>>> cpp_kwargs;
+                 
+                 // Convert Python kwargs to C++ map
+                 for (const auto& item : kwargs) {
+                     std::string key = py::cast<std::string>(item.first);
+                     py::handle value = item.second;
+                     
+                     if (py::isinstance<py::str>(value)) {
+                         cpp_kwargs[key] = py::cast<std::string>(value);
+                     } else if (py::isinstance<py::list>(value)) {
+                         cpp_kwargs[key] = py::cast<std::vector<std::string>>(value);
+                     }
+                 }
+                 
+                 self.load_structure_from_kwargs(cpp_kwargs);
+             },
+             "Load structure with flexible file loading options.\n\n"
+             "Args:\n"
+             "    pdb (str): Path to PDB file\n"
+             "    psf (str or List[str], optional): Path(s) to PSF file(s)\n"
+             "    top (str, optional): Path to TOP file\n"
+             "    itp (str or List[str], optional): Path(s) to ITP file(s)\n\n"
+             "Note: You can combine different file types as needed.");
 } 
