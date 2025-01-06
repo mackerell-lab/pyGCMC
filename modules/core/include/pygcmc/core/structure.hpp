@@ -82,6 +82,29 @@ public:
     void read_psf(const std::string& psf_file) { load_psf(psf_file); }
     void read_itp(const std::string& itp_file) { load_itp(itp_file); }
 
+    // New methods from System class
+    void load_structure_psf_auto(const std::string& pdb_file, const std::string& psf_file);
+    void load_structure_psf_multi(const std::string& pdb_file, const std::string& psf_file);
+    void load_structure_psf_single(const std::string& pdb_file, const std::string& psf_file, const std::string& target_residue);
+    
+    // PDB atom management methods from System
+    size_t get_pdb_atom_count() const { return atoms_.size(); }
+    const io::PDBAtom& get_pdb_atom(size_t index) const;
+    io::PDBAtom& get_pdb_atom(size_t index);
+    void add_pdb_atom(const io::PDBAtom& atom);
+    void remove_pdb_atom(size_t index);
+    std::vector<io::PDBAtom> get_pdb_atoms_by_residue(const std::string& residue_name) const;
+    std::vector<io::PDBAtom> get_pdb_atoms_by_residue_sequence(const std::string& residue_name, int sequence) const;
+    std::vector<io::PDBAtom> get_pdb_atoms_by_chain(char chain) const;
+    void clear_pdb_atoms();
+    bool has_pdb_atoms() const { return !atoms_.empty(); }
+
+    // Static factory methods from System
+    static Structure from_pdb_psf(const std::string& pdb_file, const std::vector<std::string>& psf_files);
+    static Structure from_pdb_psf_itp(const std::string& pdb_file, const std::vector<std::string>& psf_files, const std::string& itp_file);
+    static Structure from_pdb_psf_itps(const std::string& pdb_file, const std::vector<std::string>& psf_files, const std::vector<std::string>& itp_files);
+    static Structure from_kwargs(const std::unordered_map<std::string, std::variant<std::string, std::vector<std::string>>>& kwargs);
+
 private:
     std::vector<std::shared_ptr<io::IOResidue>> residues_;
     std::vector<std::shared_ptr<io::PDBAtom>> atoms_;
@@ -110,6 +133,9 @@ private:
     // Private implementation functions
     void read_psf_file(const std::string& psf_file);
     void read_itp_file(const std::string& itp_file);
+    
+    // Helper function to validate indices
+    void validate_pdb_atom_index(size_t index) const;
 };
 
 } // namespace core

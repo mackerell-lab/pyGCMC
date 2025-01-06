@@ -21,12 +21,7 @@ void init_structure_bindings(py::module& m) {
              py::arg("pdb"), py::arg("psf"),
              "Create a structure and load from PDB and PSF files")
         .def(py::init([](const std::string& pdb, const std::vector<std::string>& psf) {
-                Structure structure;
-                structure.read_pdb(pdb);
-                for (const auto& psf_file : psf) {
-                    structure.read_psf(psf_file);
-                }
-                return structure;
+                return Structure::from_pdb_psf(pdb, psf);
              }),
              py::kw_only(),
              py::arg("pdb"), py::arg("psf"),
@@ -40,6 +35,30 @@ void init_structure_bindings(py::module& m) {
              py::kw_only(),
              py::arg("pdb"), py::arg("top"),
              "Create a structure and load from PDB and TOP files")
+        .def(py::init([](py::kwargs kwargs) {
+                std::unordered_map<std::string, std::variant<std::string, std::vector<std::string>>> cpp_kwargs;
+                
+                // Convert Python kwargs to C++ map
+                for (const auto& item : kwargs) {
+                    std::string key = py::cast<std::string>(item.first);
+                    py::handle value = item.second;
+                    
+                    if (py::isinstance<py::str>(value)) {
+                        cpp_kwargs[key] = py::cast<std::string>(value);
+                    } else if (py::isinstance<py::list>(value)) {
+                        cpp_kwargs[key] = py::cast<std::vector<std::string>>(value);
+                    }
+                }
+                
+                return Structure::from_kwargs(cpp_kwargs);
+             }),
+             "Create a structure with flexible file loading options.\n\n"
+             "Args:\n"
+             "    pdb (str): Path to PDB file\n"
+             "    psf (str or List[str], optional): Path(s) to PSF file(s)\n"
+             "    top (str, optional): Path to TOP file\n"
+             "    itp (str or List[str], optional): Path(s) to ITP file(s)\n\n"
+             "Note: You can combine different file types as needed.")
         .def("apply_forcefield", &Structure::apply_forcefield)
         // Add structure loading methods
         .def("read_pdb_file", &Structure::read_pdb_file, "Read structure from PDB file")
@@ -55,6 +74,56 @@ void init_structure_bindings(py::module& m) {
         .def("read_pdb", &Structure::read_pdb, "Read structure from PDB file (alias for read_pdb_file)")
         .def("read_top", &Structure::read_top, "Read topology from TOP file (alias for read_top_file)")
         .def("read_top_without_includes", &Structure::read_top_without_includes, "Read topology from TOP file without includes (alias)")
+        // Add new PSF loading methods from System
+        .def("load_structure_psf_auto", &Structure::load_structure_psf_auto,
+             py::arg("pdb_file"), py::arg("psf_file"),
+             "Load structure from PDB and PSF files with automatic detection of PSF type")
+        .def("load_structure_psf_multi", &Structure::load_structure_psf_multi,
+             py::arg("pdb_file"), py::arg("psf_file"),
+             "Load structure from PDB and multi-residue PSF file")
+        .def("load_structure_psf_single", &Structure::load_structure_psf_single,
+             py::arg("pdb_file"), py::arg("psf_file"), py::arg("target_residue"),
+             "Load structure from PDB and single-residue PSF file, applying to specified residue type")
+        // Add static factory methods
+        .def_static("from_pdb_psf", &Structure::from_pdb_psf,
+             py::arg("pdb_file"), py::arg("psf_files"),
+             "Create a structure from PDB and multiple PSF files")
+        .def_static("from_pdb_psf_itp", &Structure::from_pdb_psf_itp,
+             py::arg("pdb_file"), py::arg("psf_files"), py::arg("itp_file"),
+             "Create a structure from PDB, multiple PSF files, and an ITP file")
+        .def_static("from_pdb_psf_itps", &Structure::from_pdb_psf_itps,
+             py::arg("pdb_file"), py::arg("psf_files"), py::arg("itp_files"),
+             "Create a structure from PDB, multiple PSF files, and multiple ITP files")
+        // Add PDB atom management methods
+        .def("get_pdb_atom_count", &Structure::get_pdb_atom_count,
+             "Get number of PDB atoms")
+        .def("get_pdb_atom",
+             py::overload_cast<size_t>(&Structure::get_pdb_atom, py::const_),
+             py::arg("index"),
+             "Get PDB atom by index (const)")
+        .def("get_pdb_atom",
+             py::overload_cast<size_t>(&Structure::get_pdb_atom),
+             py::arg("index"),
+             "Get PDB atom by index (mutable)")
+        .def("add_pdb_atom", &Structure::add_pdb_atom,
+             py::arg("atom"),
+             "Add a PDB atom to the structure")
+        .def("remove_pdb_atom", &Structure::remove_pdb_atom,
+             py::arg("index"),
+             "Remove a PDB atom by index")
+        .def("get_pdb_atoms_by_residue", &Structure::get_pdb_atoms_by_residue,
+             py::arg("residue_name"),
+             "Get PDB atoms by residue name")
+        .def("get_pdb_atoms_by_residue_sequence", &Structure::get_pdb_atoms_by_residue_sequence,
+             py::arg("residue_name"), py::arg("sequence"),
+             "Get PDB atoms by residue name and sequence number")
+        .def("get_pdb_atoms_by_chain", &Structure::get_pdb_atoms_by_chain,
+             py::arg("chain"),
+             "Get PDB atoms by chain identifier")
+        .def("clear_pdb_atoms", &Structure::clear_pdb_atoms,
+             "Clear all PDB atoms")
+        .def("has_pdb_atoms", &Structure::has_pdb_atoms,
+             "Check if structure has any PDB atoms")
         .def_property_readonly("residues", [](Structure& self) {
             std::vector<ProjectResidue> wrapped_residues;
             for (const auto& residue : self.residues()) {
