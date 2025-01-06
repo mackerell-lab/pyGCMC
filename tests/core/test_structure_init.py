@@ -1,3 +1,5 @@
+# tests/core/test_structure_init.py
+
 import os
 import pytest
 from pygcmc import Structure
