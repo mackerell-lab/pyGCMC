@@ -397,7 +397,9 @@ void Structure::read_psf_file(const std::string& psf_file) {
             updated = io::PSFParser::update_pdb_atoms_from_multiple_psf(atom_ptrs, psf_files);
             
             if (updated == 0) {
-                throw std::runtime_error("No atoms were updated with PSF information using either method");
+                // Cache the PSF for later use if no atoms were updated
+                cached_psf_ = std::move(psf_parser);
+                has_cached_psf_ = true;
             }
         }
     }
@@ -559,12 +561,27 @@ void Structure::load_structure_psf_auto(const std::string& pdb_file, const std::
         // Copy residues and atoms from temp structure
         for (const auto& residue : temp_structure.residues_) {
             auto new_residue = std::make_shared<io::IOResidue>(*residue);
+            // Copy atom pointers
+            new_residue->atom_ptrs.clear();
+            for (const auto& atom : residue->atom_ptrs) {
+                if (atom) {
+                    auto new_atom = std::make_shared<io::PDBAtom>(*atom);
+                    new_residue->atom_ptrs.push_back(new_atom);
+                    add_atom(new_atom);  // Also add to structure's atoms list
+                }
+            }
             add_residue(new_residue);
         }
         
         // Copy box information if present
         if (temp_structure.get_box()) {
             set_box(temp_structure.get_box());
+        }
+
+        // Copy cache information
+        if (temp_structure.has_cached_psf_) {
+            cached_psf_ = temp_structure.cached_psf_;
+            has_cached_psf_ = true;
         }
         return;
     }
@@ -584,6 +601,15 @@ void Structure::load_structure_psf_auto(const std::string& pdb_file, const std::
             // Copy residues and atoms from temp structure
             for (const auto& residue : temp_structure.residues_) {
                 auto new_residue = std::make_shared<io::IOResidue>(*residue);
+                // Copy atom pointers
+                new_residue->atom_ptrs.clear();
+                for (const auto& atom : residue->atom_ptrs) {
+                    if (atom) {
+                        auto new_atom = std::make_shared<io::PDBAtom>(*atom);
+                        new_residue->atom_ptrs.push_back(new_atom);
+                        add_atom(new_atom);  // Also add to structure's atoms list
+                    }
+                }
                 add_residue(new_residue);
             }
             
@@ -591,8 +617,21 @@ void Structure::load_structure_psf_auto(const std::string& pdb_file, const std::
             if (temp_structure.get_box()) {
                 set_box(temp_structure.get_box());
             }
+
+            // Copy cache information
+            if (temp_structure.has_cached_psf_) {
+                cached_psf_ = temp_structure.cached_psf_;
+                has_cached_psf_ = true;
+            }
             return;
         }
+    }
+
+    // If all attempts fail, try to cache the PSF for later use
+    io::PSFParser psf_parser;
+    if (psf_parser.parse(psf_file)) {
+        cached_psf_ = std::move(psf_parser);
+        has_cached_psf_ = true;
     }
 
     throw std::runtime_error("Failed to load PSF file: neither multi-residue nor single-residue approach worked");
@@ -660,6 +699,15 @@ Structure Structure::from_pdb_psf(const std::string& pdb_file, const std::vector
     // Try to update atoms using multiple PSF method
     int updated = io::PSFParser::update_pdb_atoms_from_multiple_psf(atom_ptrs, psf_files);
     if (updated == 0) {
+        // If update fails, try to cache PSF files for later use
+        for (const auto& psf_file : psf_files) {
+            io::PSFParser psf_parser;
+            if (psf_parser.parse(psf_file)) {
+                structure.cached_psf_ = std::move(psf_parser);
+                structure.has_cached_psf_ = true;
+                break;  // Cache the first successful parse
+            }
+        }
         throw std::runtime_error("No atoms were updated with PSF information using multiple PSF method");
     }
 
@@ -685,6 +733,12 @@ Structure Structure::from_pdb_psf(const std::string& pdb_file, const std::vector
     // Copy box information if present
     if (structure.get_box()) {
         result.set_box(structure.get_box());
+    }
+
+    // Copy cache information
+    if (structure.has_cached_psf_) {
+        result.cached_psf_ = structure.cached_psf_;
+        result.has_cached_psf_ = true;
     }
 
     return result;
