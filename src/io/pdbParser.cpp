@@ -318,21 +318,9 @@ void PDBParser::parseHelixRecord(const std::string& line, ParseResult& result) {
             }
         }
         
-        std::string initChainId = std::string(1, line[19]);
-        if (!initChainId.empty()) {
-            size_t start = initChainId.find_first_not_of(" ");
-            if (start != std::string::npos) {
-                initChainId = initChainId.substr(start);
-            }
-        }
-        
-        std::string initICode = line.length() > 25 ? std::string(1, line[25]) : "";
-        if (!initICode.empty()) {
-            size_t start = initICode.find_first_not_of(" ");
-            if (start != std::string::npos) {
-                initICode = initICode.substr(start);
-            }
-        }
+        char initChainId = line[19];
+        int initSeqNum = std::stoi(line.substr(21, 4));
+        char initICode = (line.length() > 25) ? line[25] : ' ';
         
         std::string endResName = line.substr(27, 3);
         if (!endResName.empty()) {
@@ -345,26 +333,28 @@ void PDBParser::parseHelixRecord(const std::string& line, ParseResult& result) {
             }
         }
         
-        std::string endChainId = std::string(1, line[31]);
-        if (!endChainId.empty()) {
-            size_t start = endChainId.find_first_not_of(" ");
-            if (start != std::string::npos) {
-                endChainId = endChainId.substr(start);
-            }
-        }
-        
-        std::string endICode = line.length() > 37 ? std::string(1, line[37]) : "";
-        if (!endICode.empty()) {
-            size_t start = endICode.find_first_not_of(" ");
-            if (start != std::string::npos) {
-                endICode = endICode.substr(start);
-            }
-        }
+        char endChainId = line[31];
+        int endSeqNum = std::stoi(line.substr(33, 4));
+        char endICode = (line.length() > 37) ? line[37] : ' ';
         
         int helixClass = std::stoi(line.substr(38, 2));
         
-        // Store helix information
-        result.helices[initChainId].push_back(helixClass);
+        // Create and store helix information
+        HelixInfo helixInfo{
+            helixId,
+            initResName,
+            initChainId,
+            initSeqNum,
+            initICode,
+            endResName,
+            endChainId,
+            endSeqNum,
+            endICode,
+            helixClass
+        };
+        
+        std::string chainKey(1, initChainId);
+        result.helices[chainKey].push_back(helixInfo);
 
     } catch (const std::exception& e) {
         throw std::runtime_error("Error parsing HELIX record: " + std::string(e.what()));

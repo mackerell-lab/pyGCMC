@@ -92,9 +92,9 @@ def test_parse_secondary_structure():
     assert len(result.helices["A"]) == 2  # Two helices in chain A
     
     # Check helix classes
-    helix_classes = result.helices["A"]
-    assert helix_classes[0] == 1  # Right-handed alpha
-    assert helix_classes[1] == 1  # Right-handed alpha
+    helices = result.helices["A"]
+    assert helices[0].helixClass == 1  # Right-handed alpha
+    assert helices[1].helixClass == 1  # Right-handed alpha
     
     # Check SHEET records
     assert len(result.sheets) == 1  # Chain B has sheets

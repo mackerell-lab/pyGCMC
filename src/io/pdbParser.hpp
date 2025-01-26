@@ -31,7 +31,21 @@ public:
         CRYST1
     };
 
-    // Terminal information for TER records
+    // Structure to hold helix information
+    struct HelixInfo {
+        std::string helixId;
+        std::string initResName;
+        char initChainId;
+        int initSeqNum;
+        char initICode;
+        std::string endResName;
+        char endChainId;
+        int endSeqNum;
+        char endICode;
+        int helixClass;
+    };
+
+    // Structure to hold terminal record information
     struct TerminalInfo {
         char chainId;
         int resSeq;
@@ -43,11 +57,11 @@ public:
     struct ParseResult {
         std::vector<std::shared_ptr<model::Atom>> atoms;
         std::vector<std::shared_ptr<model::Residue>> residues;
-        std::map<std::string, std::vector<int>> helices;  // Chain -> helix classes
-        std::map<std::string, std::vector<std::string>> sheets;  // Chain -> sheet info
-        std::vector<std::string> ssbonds;  // Disulfide bond info
-        std::optional<std::vector<double>> boxDimensions;  // Unit cell parameters
-        std::vector<TerminalInfo> terminals;  // TER record information
+        std::vector<TerminalInfo> terminals;
+        std::map<std::string, std::vector<HelixInfo>> helices;  // Map of chain ID to helix information
+        std::map<std::string, std::vector<std::string>> sheets;
+        std::vector<std::string> ssbonds;
+        std::vector<double> boxDimensions;
     };
 
     /**
