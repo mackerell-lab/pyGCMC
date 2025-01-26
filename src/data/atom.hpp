@@ -157,6 +157,32 @@ public:
     void setChain(char ch) { chain = ch; }
     void setHetatm(bool het) { hetatm = het; }
 
+    // Additional setters
+    void setBynu(int bn) { 
+        if (bn <= 0) throw std::invalid_argument("Invalid atom number");
+        bynu = bn; 
+    }
+    
+    void setType(const std::string& t) { 
+        if (t.empty()) throw std::invalid_argument("Empty atom type");
+        type = t; 
+    }
+    
+    void setResname(const std::string& rn) { 
+        if (rn.empty()) throw std::invalid_argument("Empty residue name");
+        resname = rn; 
+    }
+    
+    void setIres(int ir) { 
+        if (ir <= 0) throw std::invalid_argument("Invalid residue number");
+        ires = ir; 
+    }
+    
+    void setSegid(const std::string& sid) { segid = sid; }
+    
+    void setAltloc(char alt) { altloc = alt; }
+    void setInscode(char ins) { inscode = ins; }
+
     // Utility methods
     bool hasLJParams() const {
         return std::isfinite(eps) && std::isfinite(rmin);
