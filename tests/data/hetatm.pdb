@@ -1,0 +1,14 @@
+HEADER    PROTEIN WITH WATER                      01-JAN-24   TEST
+TITLE     TEST STRUCTURE WITH HETATM RECORDS ./tests/data/hetatm.pdb
+ATOM      1  N   ALA A   1      10.340  15.430   5.614  1.00  0.00           N  
+ATOM      2  CA  ALA A   1      11.266  16.413   5.842  1.00  0.00           C  
+ATOM      3  C   ALA A   1      10.913  17.639   5.531  1.00  0.00           C  
+ATOM      4  O   ALA A   1       9.886  17.463   4.263  1.00  0.00           O  
+ATOM      5  CB  ALA A   1      12.112  16.880   4.649  1.00  0.00           C  
+TER       6      ALA A   1
+HETATM    7  O   HOH A 201      15.168  20.391  18.649  1.00  0.00           O  
+HETATM    8  O   HOH A 202      13.605  20.058  16.544  1.00  0.00           O  
+HETATM    9  O   HOH A 203      12.291  23.272  17.463  1.00  0.00           O  
+END 
+
+

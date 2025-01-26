@@ -1,0 +1,25 @@
+HEADER    PROTEIN WITH SECONDARY STRUCTURE        01-JAN-24   TEST
+TITLE     TEST STRUCTURE WITH HELIX AND SHEET ./tests/data/secondary.pdb
+HELIX    1  H1 GLY A    1  ALA A    5  1                                   5
+HELIX    2  H2 VAL A   10  LEU A   15  1                                   6
+SHEET    1  S1 1 VAL B   1  ILE B   5  0
+SHEET    2  S1 2 PHE B  10  TYR B  15 -1  N  LEU B  11   O  VAL B   2
+ATOM      1  N   GLY A   1      17.047  14.099   3.625  1.00  0.00           N  
+ATOM      2  CA  GLY A   1      16.967  12.674   3.881  1.00  0.00           C  
+ATOM      3  C   GLY A   1      15.685  12.165   4.556  1.00  0.00           C  
+ATOM      4  O   GLY A   1      14.991  12.893   5.212  1.00  0.00           O  
+ATOM      5  N   ALA A   2      15.423  10.873   4.356  1.00  0.00           N  
+ATOM      6  CA  ALA A   2      14.197  10.270   4.879  1.00  0.00           C  
+ATOM      7  C   ALA A   2      14.161   8.785   4.565  1.00  0.00           C  
+ATOM      8  O   ALA A   2      15.131   8.269   4.014  1.00  0.00           O  
+TER       9      ALA A   2
+ATOM     10  N   VAL B   1      27.340  24.430   2.614  1.00  0.00           N  
+ATOM     11  CA  VAL B   1      26.266  25.413   2.842  1.00  0.00           C  
+ATOM     12  C   VAL B   1      26.913  26.639   3.531  1.00  0.00           C  
+ATOM     13  O   VAL B   1      27.886  26.463   4.263  1.00  0.00           O  
+ATOM     14  CB  VAL B   1      25.112  24.880   3.649  1.00  0.00           C  
+TER      15      VAL B   1
+END 
+
+
+

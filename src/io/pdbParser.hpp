@@ -1,19 +1,17 @@
 // src/io/pdbParser.hpp
 
-#ifndef PYGCMC_IO_PDB_PARSER_HPP
-#define PYGCMC_IO_PDB_PARSER_HPP
+#ifndef PYGCMC_IO_PDBPARSER_HPP
+#define PYGCMC_IO_PDBPARSER_HPP
 
 #include <string>
 #include <vector>
 #include <memory>
-#include <unordered_map>
+#include <map>
+#include <optional>
+#include "model/atom.hpp"
+#include "model/residue.hpp"
 
 namespace pygcmc {
-namespace model {
-    class Atom;     // Forward declaration
-    class Residue;  // Forward declaration
-}
-
 namespace io {
 
 /**
@@ -23,22 +21,24 @@ class PDBParser {
 public:
     // Record types
     enum class RecordType {
+        UNKNOWN,
         ATOM,
         HETATM,
         TER,
         HELIX,
         SHEET,
         SSBOND,
-        UNKNOWN
+        CRYST1
     };
 
     // Parse results
     struct ParseResult {
         std::vector<std::shared_ptr<model::Atom>> atoms;
         std::vector<std::shared_ptr<model::Residue>> residues;
-        std::unordered_map<std::string, std::vector<int>> helices;  // chain -> helix types
-        std::unordered_map<std::string, std::vector<std::string>> sheets;  // chain -> sheet info
-        std::vector<std::string> ssbonds;  // Disulfide bond information
+        std::map<std::string, std::vector<int>> helices;  // Chain -> helix classes
+        std::map<std::string, std::vector<std::string>> sheets;  // Chain -> sheet info
+        std::vector<std::string> ssbonds;  // Disulfide bond info
+        std::optional<std::vector<double>> boxDimensions;  // Unit cell parameters
     };
 
     /**
@@ -70,11 +70,13 @@ private:
     static void parseSheetRecord(const std::string& line, ParseResult& result);
     
     static void parseSSBondRecord(const std::string& line, ParseResult& result);
+
+    static void parseCryst1Record(const std::string& line, ParseResult& result);
 };
 
 } // namespace io
 } // namespace pygcmc
 
-#endif // PYGCMC_IO_PDB_PARSER_HPP
+#endif // PYGCMC_IO_PDBPARSER_HPP
 
 

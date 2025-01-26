@@ -1,0 +1,22 @@
+HEADER    PROTEIN MULTICHAIN                      01-JAN-24   TEST
+TITLE     TEST STRUCTURE WITH MULTIPLE CHAINS ./tests/data/multichain.pdb
+ATOM      1  N   GLY A   1      17.047  14.099   3.625  1.00  0.00           N  
+ATOM      2  CA  GLY A   1      16.967  12.674   3.881  1.00  0.00           C  
+ATOM      3  C   GLY A   1      15.685  12.165   4.556  1.00  0.00           C  
+ATOM      4  O   GLY A   1      14.991  12.893   5.212  1.00  0.00           O  
+TER       5      GLY A   1
+ATOM      6  N   ALA B   1      27.340  24.430   2.614  1.00  0.00           N  
+ATOM      7  CA  ALA B   1      26.266  25.413   2.842  1.00  0.00           C  
+ATOM      8  C   ALA B   1      26.913  26.639   3.531  1.00  0.00           C  
+ATOM      9  O   ALA B   1      27.886  26.463   4.263  1.00  0.00           O  
+ATOM     10  CB  ALA B   1      25.112  24.880   3.649  1.00  0.00           C  
+TER      11      ALA B   1
+ATOM     12  N   VAL C   1      10.340  15.430   5.614  1.00  0.00           N  
+ATOM     13  CA  VAL C   1      11.266  16.413   5.842  1.00  0.00           C  
+ATOM     14  C   VAL C   1      10.913  17.639   5.531  1.00  0.00           C  
+ATOM     15  O   VAL C   1       9.886  17.463   4.263  1.00  0.00           O  
+ATOM     16  CB  VAL C   1      12.112  16.880   4.649  1.00  0.00           C  
+TER      17      VAL C   1
+END 
+
+

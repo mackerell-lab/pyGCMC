@@ -70,7 +70,8 @@ public:
         inscode(' '),    // Insertion code
         move(1),         // Movement flag (MOVE)
         ignore(0),       // Ignore flag (IGNORE)
-        constrain(0)     // Constraint flag (CONSTRAIN)
+        constrain(0),    // Constraint flag (CONSTRAIN)
+        hetatm(false)    // HETATM flag
     {}
 
     Residue(const std::string& resname, int ires, 
@@ -85,7 +86,8 @@ public:
         inscode(inscode),
         move(1),
         ignore(0),
-        constrain(0)
+        constrain(0),
+        hetatm(false)
     {}
 
     // CHARMM standard getters
@@ -243,6 +245,10 @@ public:
         return {0, atoms.size()};  // Equivalent to IBASE(IRES) to IBASE(IRES+1)
     }
 
+    // HETATM support
+    bool isHetatm() const noexcept { return hetatm; }
+    void setHetatm(bool het) noexcept { hetatm = het; }
+
 private:
     // CHARMM standard fields
     std::string resname;     ///< Residue name (RESNAME)
@@ -255,6 +261,7 @@ private:
     int move;                ///< Movement flag (MOVE)
     int ignore;              ///< Ignore flag (IGNORE)
     int constrain;           ///< Constraint flag (CONSTRAIN)
+    bool hetatm;             ///< HETATM flag
 
     // Atom storage
     std::vector<std::shared_ptr<Atom>> atoms;  ///< Atoms in residue

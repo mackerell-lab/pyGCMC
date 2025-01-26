@@ -6,6 +6,7 @@
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <iostream>
 
 namespace pygcmc {
 namespace io {
@@ -50,6 +51,9 @@ PDBParser::ParseResult PDBParser::parseString(const std::string& pdbStr) {
             case RecordType::SSBOND:
                 parseSSBondRecord(line, result);
                 break;
+            case RecordType::CRYST1:
+                parseCryst1Record(line, result);
+                break;
             default:
                 continue;
         }
@@ -66,6 +70,7 @@ PDBParser::RecordType PDBParser::getRecordType(const std::string& line) {
     if (recordName.substr(0, 5) == "HELIX") return RecordType::HELIX;
     if (recordName.substr(0, 5) == "SHEET") return RecordType::SHEET;
     if (recordName.substr(0, 6) == "SSBOND") return RecordType::SSBOND;
+    if (recordName.substr(0, 6) == "CRYST1") return RecordType::CRYST1;
     return RecordType::UNKNOWN;
 }
 
@@ -98,6 +103,9 @@ void PDBParser::parseAtomRecord(const std::string& line, RecordType type,
         std::string charge = (line.length() > 79) ? 
             line.substr(78, 2) : "";
 
+        // Only use record type to determine HETATM status
+        bool isHetatm = type == RecordType::HETATM;
+
         // Create atom
         auto atom = std::make_shared<model::Atom>();
         atom->setBynu(serialNum);
@@ -113,21 +121,38 @@ void PDBParser::parseAtomRecord(const std::string& line, RecordType type,
         atom->setSegid(segId);
         atom->setElement(element);
         atom->setChargeString(charge);
-        atom->setHetatm(type == RecordType::HETATM);
+        atom->setHetatm(isHetatm);
 
         // Add to result
         result.atoms.push_back(atom);
 
         // Handle residue
-        std::string residueKey = chainId + std::to_string(resSeq) + iCode;
         if (!currentResidue || 
             currentResidue->getChain() != chainId ||
             currentResidue->getIres() != resSeq ||
-            currentResidue->getInscode() != iCode) {
-            // Create new residue
-            currentResidue = std::make_shared<model::Residue>(
-                resName, resSeq, segId, 0, chainId, iCode);
-            result.residues.push_back(currentResidue);
+            currentResidue->getInscode() != iCode ||
+            currentResidue->getResname() != resName ||
+            currentResidue->isHetatm() != isHetatm) {
+            // Check if residue already exists
+            bool found = false;
+            for (auto& res : result.residues) {
+                if (res->getChain() == chainId &&
+                    res->getIres() == resSeq &&
+                    res->getInscode() == iCode &&
+                    res->getResname() == resName &&
+                    res->isHetatm() == isHetatm) {
+                    currentResidue = res;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                // Create new residue
+                currentResidue = std::make_shared<model::Residue>(
+                    resName, resSeq, segId, 0, chainId, iCode);
+                currentResidue->setHetatm(isHetatm);
+                result.residues.push_back(currentResidue);
+            }
         }
         currentResidue->addAtom(atom);
 
@@ -137,23 +162,24 @@ void PDBParser::parseAtomRecord(const std::string& line, RecordType type,
     }
 }
 
-void PDBParser::parseTerRecord(const std::string& line,
-                             std::shared_ptr<model::Residue>& currentResidue) {
-    currentResidue.reset();  // End current residue
+void PDBParser::parseTerRecord([[maybe_unused]] const std::string& line,
+                              std::shared_ptr<model::Residue>& currentResidue) {
+    // Reset current residue pointer to indicate end of chain
+    currentResidue = nullptr;
 }
 
 void PDBParser::parseHelixRecord(const std::string& line, ParseResult& result) {
     try {
-        int serialNum = std::stoi(line.substr(7, 3));
+        [[maybe_unused]] int serialNum = std::stoi(line.substr(7, 3));
         std::string helixId = line.substr(11, 3);
         std::string initResName = line.substr(15, 3);
         char initChainId = line[19];
-        int initSeqNum = std::stoi(line.substr(21, 4));
-        char initICode = line[25];
+        [[maybe_unused]] int initSeqNum = std::stoi(line.substr(21, 4));
+        [[maybe_unused]] char initICode = line[25];
         std::string endResName = line.substr(27, 3);
-        char endChainId = line[31];
-        int endSeqNum = std::stoi(line.substr(33, 4));
-        char endICode = line[37];
+        [[maybe_unused]] char endChainId = line[31];
+        [[maybe_unused]] int endSeqNum = std::stoi(line.substr(33, 4));
+        [[maybe_unused]] char endICode = line[37];
         int helixClass = std::stoi(line.substr(38, 2));
         
         // Store helix information
@@ -167,41 +193,67 @@ void PDBParser::parseHelixRecord(const std::string& line, ParseResult& result) {
 
 void PDBParser::parseSheetRecord(const std::string& line, ParseResult& result) {
     try {
-        int strandNum = std::stoi(line.substr(7, 3));
-        std::string sheetId = line.substr(11, 3);
-        int numStrands = std::stoi(line.substr(14, 2));
+        // Ensure line is long enough for minimal SHEET record
+        if (line.length() < 38) {
+            throw std::runtime_error("SHEET record too short");
+        }
+
+        // Parse fields according to PDB format specification
+        std::string strandStr = line.substr(7, 3);      // Strand number (8-10)
+        std::string sheetId = line.substr(11, 3);       // Sheet ID (12-14)
+        char initChainId = line[21];                    // Initial chain ID (22)
         
-        // Initial residue
-        std::string initResName = line.substr(17, 3);
-        char initChainId = line[21];
-        int initSeqNum = std::stoi(line.substr(22, 4));
-        char initICode = line[26];
+        // Trim whitespace
+        strandStr.erase(std::remove_if(strandStr.begin(), strandStr.end(), ::isspace), strandStr.end());
+        sheetId.erase(std::remove_if(sheetId.begin(), sheetId.end(), ::isspace), sheetId.end());
         
-        // Terminal residue
-        std::string endResName = line.substr(28, 3);
-        char endChainId = line[32];
-        int endSeqNum = std::stoi(line.substr(33, 4));
-        char endICode = line[37];
+        // Convert to integer with validation
+        int strandNum = strandStr.empty() ? 1 : std::stoi(strandStr);
         
-        // Sense
-        int sense = std::stoi(line.substr(38, 2));
+        // Parse sense value (columns 39-40)
+        int sense = 0;  // default for first strand
+        if (line.length() >= 40) {
+            std::string senseStr = line.substr(38, 2);  // columns 39-40
+            // Print raw sense string for debugging
+            std::cerr << "Raw sense string: '" << senseStr << "'" << std::endl;
+            
+            // Remove spaces but keep negative sign
+            senseStr.erase(std::remove_if(senseStr.begin(), senseStr.end(), 
+                [](unsigned char c) { return std::isspace(c); }), senseStr.end());
+            
+            // Print trimmed sense string
+            std::cerr << "Trimmed sense string: '" << senseStr << "'" << std::endl;
+            
+            if (!senseStr.empty()) {
+                try {
+                    sense = std::stoi(senseStr);
+                    std::cerr << "Converted sense value: " << sense << std::endl;
+                } catch (const std::exception& e) {
+                    std::cerr << "Failed to convert sense string: " << e.what() << std::endl;
+                    // Keep default sense value if conversion fails
+                }
+            }
+        }
         
-        // Create sheet info string
+        // Create sheet info string (format: sheetId:strandNum:sense)
         std::string sheetInfo = sheetId + ":" + 
             std::to_string(strandNum) + ":" + 
             std::to_string(sense);
         
+        // Initialize vector if chain not present
+        if (result.sheets.find(std::string(1, initChainId)) == result.sheets.end()) {
+            result.sheets[std::string(1, initChainId)] = std::vector<std::string>();
+        }
         result.sheets[std::string(1, initChainId)].push_back(sheetInfo);
 
     } catch (const std::exception& e) {
-        throw std::runtime_error("Error parsing SHEET record: " + 
-                               std::string(e.what()));
+        throw std::runtime_error("Error parsing SHEET record: " + std::string(e.what()));
     }
 }
 
 void PDBParser::parseSSBondRecord(const std::string& line, ParseResult& result) {
     try {
-        int serialNum = std::stoi(line.substr(7, 3));
+        [[maybe_unused]] int serialNum = std::stoi(line.substr(7, 3));
         
         // First CYS
         char chain1 = line[15];
@@ -223,6 +275,25 @@ void PDBParser::parseSSBondRecord(const std::string& line, ParseResult& result) 
 
     } catch (const std::exception& e) {
         throw std::runtime_error("Error parsing SSBOND record: " + 
+                               std::string(e.what()));
+    }
+}
+
+void PDBParser::parseCryst1Record(const std::string& line, ParseResult& result) {
+    try {
+        // Parse unit cell parameters according to PDB format
+        double a = std::stod(line.substr(6, 9));
+        double b = std::stod(line.substr(15, 9));
+        double c = std::stod(line.substr(24, 9));
+        double alpha = std::stod(line.substr(33, 7));
+        double beta = std::stod(line.substr(40, 7));
+        double gamma = std::stod(line.substr(47, 7));
+        
+        // Store box dimensions
+        result.boxDimensions = std::vector<double>{a, b, c, alpha, beta, gamma};
+        
+    } catch (const std::exception& e) {
+        throw std::runtime_error("Error parsing CRYST1 record: " + 
                                std::string(e.what()));
     }
 }

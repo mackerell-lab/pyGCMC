@@ -267,15 +267,17 @@ private:
     std::array<double, 3> coor; ///< Coordinates (X, Y, Z)
     std::array<double, 3> xcom; ///< Component coordinates (XCOM, YCOM, ZCOM)
     std::array<double, 3> xref; ///< Reference coordinates (XREF, YREF, ZREF)
+    double occupancy;          ///< PDB occupancy
+    double tempfactor;         ///< PDB temperature factor
     double wmain;              ///< Main weight (WMAIN)
     double wcomp;              ///< Component weight (WCOMP)
     double mass;               ///< Mass (MASS)
     double charge;             ///< Charge (CHARGE)
     std::string chem;          ///< Chemical type (CHEM)
-    double eps;                ///< LJ well depth (epsilon)
-    double rmin;               ///< LJ Rmin/2 (rmin)
     double radius;             ///< VDW radius (RADIUS)
     double alpha;              ///< Polarizability (ALPHA)
+    double eps;                ///< LJ well depth (epsilon)
+    double rmin;               ///< LJ Rmin/2 (rmin)
     double fbeta;              ///< Force beta (FBETA)
     int move;                  ///< Movement flag (MOVE)
     int ignore;               ///< Ignore flag (IGNORE)
@@ -287,8 +289,6 @@ private:
     std::array<double, 9> scalar;  ///< User-defined scalar properties
 
     // Additional PDB fields
-    double occupancy;          ///< PDB occupancy
-    double tempfactor;         ///< PDB temperature factor
     std::string element;       ///< Element symbol
     std::string chargestr;     ///< Charge as string from PDB
 };
