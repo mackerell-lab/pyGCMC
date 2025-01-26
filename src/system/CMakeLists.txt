@@ -3,11 +3,11 @@ add_library(pygcmc_system
     system.cpp
 )
 
-# Link dependencies - system depends on data and forcefield
+# Link dependencies - system depends on model and forcefield
 target_link_libraries(pygcmc_system
     PUBLIC 
-        pygcmc_data        # system's interface exposes data types
-        pygcmc_forcefield  # system's interface exposes forcefield types
+        pygcmc_model      # system's interface exposes model types
+        pygcmc_forcefield # system's interface exposes forcefield types
 )
 
 # Set include directories for this target

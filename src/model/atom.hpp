@@ -1,7 +1,7 @@
-// src/data/atom.hpp
+// src/model/atom.hpp
 
-#ifndef PYGCMC_DATA_ATOM_HPP
-#define PYGCMC_DATA_ATOM_HPP
+#ifndef PYGCMC_MODEL_ATOM_HPP
+#define PYGCMC_MODEL_ATOM_HPP
 
 #include <string>
 #include <array>
@@ -12,7 +12,7 @@
 #include <algorithm>  // for std::all_of
 
 namespace pygcmc {
-namespace data {
+namespace model {
 
 /**
  * @brief Atom class following CHARMM naming conventions and PDB format
@@ -293,8 +293,8 @@ private:
     std::string chargestr;     ///< Charge as string from PDB
 };
 
-} // namespace data
+} // namespace model
 } // namespace pygcmc
 
-#endif // PYGCMC_DATA_ATOM_HPP
+#endif // PYGCMC_MODEL_ATOM_HPP
 

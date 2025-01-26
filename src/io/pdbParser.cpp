@@ -1,8 +1,8 @@
 // src/io/pdbParser.cpp
 
 #include "pdbParser.hpp"
-#include "data/atom.hpp"
-#include "data/residue.hpp"
+#include "model/atom.hpp"
+#include "model/residue.hpp"
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -27,7 +27,7 @@ PDBParser::ParseResult PDBParser::parseString(const std::string& pdbStr) {
     
     // Current chain tracking
     std::string currentChain;
-    std::shared_ptr<data::Residue> currentResidue;
+    std::shared_ptr<model::Residue> currentResidue;
     
     while (std::getline(iss, line)) {
         if (line.length() < 6) continue;
@@ -71,7 +71,7 @@ PDBParser::RecordType PDBParser::getRecordType(const std::string& line) {
 
 void PDBParser::parseAtomRecord(const std::string& line, RecordType type,
                               ParseResult& result,
-                              std::shared_ptr<data::Residue>& currentResidue) {
+                              std::shared_ptr<model::Residue>& currentResidue) {
     try {
         // Parse atom fields according to PDB format
         int serialNum = std::stoi(line.substr(6, 5));
@@ -99,7 +99,7 @@ void PDBParser::parseAtomRecord(const std::string& line, RecordType type,
             line.substr(78, 2) : "";
 
         // Create atom
-        auto atom = std::make_shared<data::Atom>();
+        auto atom = std::make_shared<model::Atom>();
         atom->setBynu(serialNum);
         atom->setType(atomName);
         atom->setAltloc(altLoc);
@@ -125,7 +125,7 @@ void PDBParser::parseAtomRecord(const std::string& line, RecordType type,
             currentResidue->getIres() != resSeq ||
             currentResidue->getInscode() != iCode) {
             // Create new residue
-            currentResidue = std::make_shared<data::Residue>(
+            currentResidue = std::make_shared<model::Residue>(
                 resName, resSeq, segId, 0, chainId, iCode);
             result.residues.push_back(currentResidue);
         }
@@ -138,7 +138,7 @@ void PDBParser::parseAtomRecord(const std::string& line, RecordType type,
 }
 
 void PDBParser::parseTerRecord(const std::string& line,
-                             std::shared_ptr<data::Residue>& currentResidue) {
+                             std::shared_ptr<model::Residue>& currentResidue) {
     currentResidue.reset();  // End current residue
 }
 

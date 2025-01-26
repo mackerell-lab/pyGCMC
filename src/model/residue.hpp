@@ -1,7 +1,7 @@
-// src/data/residue.hpp
+// src/model/residue.hpp
 
-#ifndef PYGCMC_DATA_RESIDUE_HPP
-#define PYGCMC_DATA_RESIDUE_HPP
+#ifndef PYGCMC_MODEL_RESIDUE_HPP
+#define PYGCMC_MODEL_RESIDUE_HPP
 
 #include <vector>
 #include <memory>
@@ -12,7 +12,7 @@
 #include "atom.hpp"
 
 namespace pygcmc {
-namespace data {
+namespace model {
 
 /**
  * @brief Residue class following CHARMM naming conventions
@@ -269,7 +269,7 @@ private:
     SSBond ssbond;
 };
 
-} // namespace data
+} // namespace model
 } // namespace pygcmc
 
-#endif // PYGCMC_DATA_RESIDUE_HPP
+#endif // PYGCMC_MODEL_RESIDUE_HPP

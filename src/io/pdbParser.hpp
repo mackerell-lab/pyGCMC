@@ -9,7 +9,7 @@
 #include <unordered_map>
 
 namespace pygcmc {
-namespace data {
+namespace model {
     class Atom;     // Forward declaration
     class Residue;  // Forward declaration
 }
@@ -34,8 +34,8 @@ public:
 
     // Parse results
     struct ParseResult {
-        std::vector<std::shared_ptr<data::Atom>> atoms;
-        std::vector<std::shared_ptr<data::Residue>> residues;
+        std::vector<std::shared_ptr<model::Atom>> atoms;
+        std::vector<std::shared_ptr<model::Residue>> residues;
         std::unordered_map<std::string, std::vector<int>> helices;  // chain -> helix types
         std::unordered_map<std::string, std::vector<std::string>> sheets;  // chain -> sheet info
         std::vector<std::string> ssbonds;  // Disulfide bond information
@@ -60,10 +60,10 @@ private:
     
     static void parseAtomRecord(const std::string& line, RecordType type,
                               ParseResult& result,
-                              std::shared_ptr<data::Residue>& currentResidue);
+                              std::shared_ptr<model::Residue>& currentResidue);
     
     static void parseTerRecord(const std::string& line,
-                             std::shared_ptr<data::Residue>& currentResidue);
+                             std::shared_ptr<model::Residue>& currentResidue);
     
     static void parseHelixRecord(const std::string& line, ParseResult& result);
     

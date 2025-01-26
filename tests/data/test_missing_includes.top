@@ -1,0 +1,36 @@
+;   tests/data/test_missing_includes.top
+;	File 'test_missing_includes.top' was generated for testing
+;	By user: zhaomt (1420)
+;	On host: delmar
+;	At date: Mon Dec 30 03:15:54 2024
+;
+;	This is a standalone topology file
+;
+
+; Include forcefield parameters (missing)
+#include "./charmm36.ff/forcefield.itp"
+
+; Include molecule topology files (missing)
+#include "mols/missing_benx.itp"
+#include "mols/missing_prpx.itp"
+#include "mols/missing_sol.itp"
+
+[ moleculetype ]
+; Name            nrexcl
+Protein_chain_A     3
+
+[ atoms ]
+;   nr       type  resnr residue  atom   cgnr     charge       mass  typeB    chargeB      massB
+; residue   7 ALA rtp ALA  q +1.0
+     1        NH3      7    ALA      N      1       -0.3     14.007
+     2         HC      7    ALA     H1      2       0.33      1.008
+     3         HC      7    ALA     H2      3       0.33      1.008
+     4         HC      7    ALA     H3      4       0.33      1.008
+     5        CT1      7    ALA     CA      5       0.21     12.011
+     6        HB1      7    ALA     HA      6        0.1      1.008
+     7        CT3      7    ALA     CB      7      -0.27     12.011
+     8        HA3      7    ALA    HB1      8       0.09      1.008
+     9        HA3      7    ALA    HB2      9       0.09      1.008
+    10        HA3      7    ALA    HB3     10       0.09      1.008
+    11          C      7    ALA      C     11       0.51     12.011
+    12          O      7    ALA      O     12      -0.51    15.9994   ; qtot 1 
