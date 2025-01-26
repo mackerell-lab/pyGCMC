@@ -20,7 +20,7 @@ def test_parse_simple_pdb():
     # Check first atom's properties (N)
     atom = result.atoms[0]
     assert atom.getBynu() == 1
-    assert atom.getType() == " N  "
+    assert atom.getType() == "N"
     assert atom.getResname() == "MET"
     assert atom.getChain() == "A"
     assert atom.getIres() == 1
@@ -47,7 +47,7 @@ def test_parse_hetatm():
     water = water_atoms[0]
     assert water.isHetatm()
     assert water.getResname() == "HOH"
-    assert water.getType() == " O  "
+    assert water.getType() == "O"
     
     # Check water coordinates
     coords = water.getCoor()
@@ -222,7 +222,7 @@ def test_parse_protein_fragment():
     
     # Check first atom properties
     first_atom = protein_atoms[0]
-    assert first_atom.getType() == " N  "
+    assert first_atom.getType() == "N"
     assert first_atom.getResname() == "ALA"
     assert first_atom.getIres() == 7
     assert first_atom.getChain() == " "
@@ -260,19 +260,19 @@ def test_parse_solvent_and_ligands():
     
     # Check first water molecule
     first_water = water_atoms[0]
-    assert first_water.getType() == " OW "
+    assert first_water.getType() == "OW"
     assert first_water.getResname() == "SOL"
     assert not first_water.isHetatm()  # In test.pdb, these are ATOM records
     
     # Check first BENX molecule
     first_benx = benx_atoms[0]
-    assert first_benx.getType() == " CG "
+    assert first_benx.getType() == "CG"
     assert first_benx.getResname() == "BENX"
     assert not first_benx.isHetatm()  # In test.pdb, these are ATOM records
     
     # Check first PRPX molecule
     first_prpx = prpx_atoms[0]
-    assert first_prpx.getType() == " H11"
+    assert first_prpx.getType() == "H11"
     assert first_prpx.getResname() == "PRPX"
     assert not first_prpx.isHetatm()  # In test.pdb, these are ATOM records
 

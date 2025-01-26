@@ -40,7 +40,7 @@ PDBParser::ParseResult PDBParser::parseString(const std::string& pdbStr) {
                 parseAtomRecord(line, recordType, result, currentResidue);
                 break;
             case RecordType::TER:
-                parseTerRecord(line, currentResidue);
+                parseTerRecord(line, currentResidue, result);
                 break;
             case RecordType::HELIX:
                 parseHelixRecord(line, result);
@@ -80,15 +80,57 @@ void PDBParser::parseAtomRecord(const std::string& line, RecordType type,
     try {
         // Parse atom fields according to PDB format
         int serialNum = std::stoi(line.substr(6, 5));
+        
+        // Extract atom name and trim leading/trailing spaces
         std::string atomName = line.substr(12, 4);
-        char altLoc = (line.length() > 16) ? line[16] : ' ';
+        if (!atomName.empty()) {
+            size_t start = atomName.find_first_not_of(" ");
+            size_t end = atomName.find_last_not_of(" ");
+            if (start != std::string::npos && end != std::string::npos) {
+                atomName = atomName.substr(start, end - start + 1);
+            } else {
+                atomName = "";
+            }
+        }
+
+        // Extract residue name and trim leading/trailing spaces
         std::string resName = line.substr(17, 4);
-        // Trim trailing whitespace from residue name
-        resName.erase(std::find_if(resName.rbegin(), resName.rend(), 
-            [](unsigned char ch) { return !std::isspace(ch); }).base(), resName.end());
-        char chainId = (line.length() > 21) ? line[21] : ' ';
+        if (!resName.empty()) {
+            size_t start = resName.find_first_not_of(" ");
+            size_t end = resName.find_last_not_of(" ");
+            if (start != std::string::npos && end != std::string::npos) {
+                resName = resName.substr(start, end - start + 1);
+            } else {
+                resName = "";
+            }
+        }
+
+        // Extract and trim other fields
+        std::string altLoc = line.length() > 16 ? std::string(1, line[16]) : "";
+        if (!altLoc.empty()) {
+            size_t start = altLoc.find_first_not_of(" ");
+            if (start != std::string::npos) {
+                altLoc = altLoc.substr(start);
+            }
+        }
+        
+        std::string chainId = line.length() > 21 ? std::string(1, line[21]) : "";
+        if (!chainId.empty()) {
+            size_t start = chainId.find_first_not_of(" ");
+            if (start != std::string::npos) {
+                chainId = chainId.substr(start);
+            }
+        }
+        
         int resSeq = std::stoi(line.substr(22, 4));
-        char iCode = (line.length() > 26) ? line[26] : ' ';
+        
+        std::string iCode = line.length() > 26 ? std::string(1, line[26]) : "";
+        if (!iCode.empty()) {
+            size_t start = iCode.find_first_not_of(" ");
+            if (start != std::string::npos) {
+                iCode = iCode.substr(start);
+            }
+        }
         
         double x = std::stod(line.substr(30, 8));
         double y = std::stod(line.substr(38, 8));
@@ -101,60 +143,99 @@ void PDBParser::parseAtomRecord(const std::string& line, RecordType type,
         
         std::string segId = (line.length() > 75) ? 
             line.substr(72, 4) : "";
+        if (!segId.empty()) {
+            size_t start = segId.find_first_not_of(" ");
+            size_t end = segId.find_last_not_of(" ");
+            if (start != std::string::npos && end != std::string::npos) {
+                segId = segId.substr(start, end - start + 1);
+            } else {
+                segId = "";
+            }
+        }
+        
         std::string element = (line.length() > 77) ? 
             line.substr(76, 2) : "";
+        if (!element.empty()) {
+            size_t start = element.find_first_not_of(" ");
+            size_t end = element.find_last_not_of(" ");
+            if (start != std::string::npos && end != std::string::npos) {
+                element = element.substr(start, end - start + 1);
+            } else {
+                element = "";
+            }
+        }
+        
         std::string charge = (line.length() > 79) ? 
             line.substr(78, 2) : "";
+        if (!charge.empty()) {
+            size_t start = charge.find_first_not_of(" ");
+            size_t end = charge.find_last_not_of(" ");
+            if (start != std::string::npos && end != std::string::npos) {
+                charge = charge.substr(start, end - start + 1);
+            } else {
+                charge = "";
+            }
+        }
 
-        // Only use record type to determine HETATM status
-        bool isHetatm = type == RecordType::HETATM;
-
-        // Create atom
+        // Create atom with stripped values
         auto atom = std::make_shared<model::Atom>();
         atom->setBynu(serialNum);
         atom->setType(atomName);
-        atom->setAltloc(altLoc);
+        atom->setAltloc(altLoc.empty() ? ' ' : altLoc[0]);
         atom->setResname(resName);
-        atom->setChain(chainId);
+        atom->setChain(chainId.empty() ? ' ' : chainId[0]);
         atom->setIres(resSeq);
-        atom->setInscode(iCode);
+        atom->setInscode(iCode.empty() ? ' ' : iCode[0]);
         atom->setCoor(x, y, z);
         atom->setOccupancy(occupancy);
         atom->setTempfactor(tempFactor);
         atom->setSegid(segId);
         atom->setElement(element);
         atom->setChargeString(charge);
-        atom->setHetatm(isHetatm);
+        atom->setHetatm(type == RecordType::HETATM);
 
         // Add to result
         result.atoms.push_back(atom);
 
         // Handle residue
         if (!currentResidue || 
-            currentResidue->getChain() != chainId ||
+            currentResidue->getChain() != chainId[0] ||
             currentResidue->getIres() != resSeq ||
-            currentResidue->getInscode() != iCode ||
-            currentResidue->getResname() != resName ||
-            currentResidue->isHetatm() != isHetatm) {
+            currentResidue->getInscode() != iCode[0]) {
             // Check if residue already exists
             bool found = false;
             for (auto& res : result.residues) {
-                if (res->getChain() == chainId &&
+                if (res->getChain() == chainId[0] &&
                     res->getIres() == resSeq &&
-                    res->getInscode() == iCode &&
-                    res->getResname() == resName &&
-                    res->isHetatm() == isHetatm) {
+                    res->getInscode() == iCode[0]) {
                     currentResidue = res;
                     found = true;
                     break;
                 }
             }
             if (!found) {
-                // Create new residue
+                // Create new residue with current name and HETATM status
                 currentResidue = std::make_shared<model::Residue>(
-                    resName, resSeq, segId, 0, chainId, iCode);
-                currentResidue->setHetatm(isHetatm);
+                    resName, resSeq, segId, 0, chainId[0], iCode[0]);
+                currentResidue->setHetatm(type == RecordType::HETATM);
                 result.residues.push_back(currentResidue);
+            } else if (currentResidue->getResname() != resName || 
+                      currentResidue->isHetatm() != (type == RecordType::HETATM)) {
+                // If residue exists but has different name/HETATM status,
+                // create a new one with updated properties
+                auto newResidue = std::make_shared<model::Residue>(
+                    resName, resSeq, segId, 0, chainId[0], iCode[0]);
+                newResidue->setHetatm(type == RecordType::HETATM);
+                // Copy existing atoms
+                for (const auto& existingAtom : currentResidue->getAtoms()) {
+                    newResidue->addAtom(existingAtom);
+                }
+                // Replace old residue with new one
+                auto it = std::find(result.residues.begin(), result.residues.end(), currentResidue);
+                if (it != result.residues.end()) {
+                    *it = newResidue;
+                }
+                currentResidue = newResidue;
             }
         }
         currentResidue->addAtom(atom);
@@ -165,89 +246,196 @@ void PDBParser::parseAtomRecord(const std::string& line, RecordType type,
     }
 }
 
-void PDBParser::parseTerRecord([[maybe_unused]] const std::string& line,
-                              std::shared_ptr<model::Residue>& currentResidue) {
-    // Reset current residue pointer to indicate end of chain
-    currentResidue = nullptr;
+void PDBParser::parseTerRecord(const std::string& line,
+                             std::shared_ptr<model::Residue>& currentResidue,
+                             ParseResult& result) {
+    try {
+        std::string chainId = line.length() > 21 ? std::string(1, line[21]) : "";
+        if (!chainId.empty()) {
+            size_t start = chainId.find_first_not_of(" ");
+            if (start != std::string::npos) {
+                chainId = chainId.substr(start);
+            }
+        }
+        
+        int resSeq = 0;
+        std::string iCode = " ";
+        std::string resName;
+
+        // Get residue information from current residue if available
+        if (currentResidue) {
+            chainId = std::string(1, currentResidue->getChain());
+            resSeq = currentResidue->getIres();
+            iCode = std::string(1, currentResidue->getInscode());
+            resName = currentResidue->getResname();
+        }
+
+        // Try to parse residue sequence number if present
+        if (line.length() >= 26) {
+            try {
+                resSeq = std::stoi(line.substr(22, 4));
+            } catch (const std::exception&) {
+                // Use default or current residue value
+            }
+        }
+
+        // Store terminal information
+        result.terminals.push_back(TerminalInfo{
+            chainId.empty() ? ' ' : chainId[0], 
+            resSeq, 
+            iCode.empty() ? ' ' : iCode[0], 
+            resName
+        });
+
+        // Reset current residue pointer
+        currentResidue = nullptr;
+    } catch (const std::exception& e) {
+        throw std::runtime_error("Error parsing TER record: " + std::string(e.what()));
+    }
 }
 
 void PDBParser::parseHelixRecord(const std::string& line, ParseResult& result) {
     try {
-        [[maybe_unused]] int serialNum = std::stoi(line.substr(7, 3));
         std::string helixId = line.substr(11, 3);
+        if (!helixId.empty()) {
+            size_t start = helixId.find_first_not_of(" ");
+            size_t end = helixId.find_last_not_of(" ");
+            if (start != std::string::npos && end != std::string::npos) {
+                helixId = helixId.substr(start, end - start + 1);
+            } else {
+                helixId = "";
+            }
+        }
+        
         std::string initResName = line.substr(15, 3);
-        char initChainId = line[19];
-        [[maybe_unused]] int initSeqNum = std::stoi(line.substr(21, 4));
-        [[maybe_unused]] char initICode = line[25];
+        if (!initResName.empty()) {
+            size_t start = initResName.find_first_not_of(" ");
+            size_t end = initResName.find_last_not_of(" ");
+            if (start != std::string::npos && end != std::string::npos) {
+                initResName = initResName.substr(start, end - start + 1);
+            } else {
+                initResName = "";
+            }
+        }
+        
+        std::string initChainId = std::string(1, line[19]);
+        if (!initChainId.empty()) {
+            size_t start = initChainId.find_first_not_of(" ");
+            if (start != std::string::npos) {
+                initChainId = initChainId.substr(start);
+            }
+        }
+        
+        std::string initICode = line.length() > 25 ? std::string(1, line[25]) : "";
+        if (!initICode.empty()) {
+            size_t start = initICode.find_first_not_of(" ");
+            if (start != std::string::npos) {
+                initICode = initICode.substr(start);
+            }
+        }
+        
         std::string endResName = line.substr(27, 3);
-        [[maybe_unused]] char endChainId = line[31];
-        [[maybe_unused]] int endSeqNum = std::stoi(line.substr(33, 4));
-        [[maybe_unused]] char endICode = line[37];
+        if (!endResName.empty()) {
+            size_t start = endResName.find_first_not_of(" ");
+            size_t end = endResName.find_last_not_of(" ");
+            if (start != std::string::npos && end != std::string::npos) {
+                endResName = endResName.substr(start, end - start + 1);
+            } else {
+                endResName = "";
+            }
+        }
+        
+        std::string endChainId = std::string(1, line[31]);
+        if (!endChainId.empty()) {
+            size_t start = endChainId.find_first_not_of(" ");
+            if (start != std::string::npos) {
+                endChainId = endChainId.substr(start);
+            }
+        }
+        
+        std::string endICode = line.length() > 37 ? std::string(1, line[37]) : "";
+        if (!endICode.empty()) {
+            size_t start = endICode.find_first_not_of(" ");
+            if (start != std::string::npos) {
+                endICode = endICode.substr(start);
+            }
+        }
+        
         int helixClass = std::stoi(line.substr(38, 2));
         
         // Store helix information
-        result.helices[std::string(1, initChainId)].push_back(helixClass);
+        result.helices[initChainId].push_back(helixClass);
 
     } catch (const std::exception& e) {
-        throw std::runtime_error("Error parsing HELIX record: " + 
-                               std::string(e.what()));
+        throw std::runtime_error("Error parsing HELIX record: " + std::string(e.what()));
     }
 }
 
 void PDBParser::parseSheetRecord(const std::string& line, ParseResult& result) {
     try {
-        // Ensure line is long enough for minimal SHEET record
         if (line.length() < 38) {
             throw std::runtime_error("SHEET record too short");
         }
 
-        // Parse fields according to PDB format specification
-        std::string strandStr = line.substr(7, 3);      // Strand number (8-10)
-        std::string sheetId = line.substr(11, 3);       // Sheet ID (12-14)
-        char initChainId = line[21];                    // Initial chain ID (22)
+        std::string strandStr = line.substr(7, 3);
+        if (!strandStr.empty()) {
+            size_t start = strandStr.find_first_not_of(" ");
+            size_t end = strandStr.find_last_not_of(" ");
+            if (start != std::string::npos && end != std::string::npos) {
+                strandStr = strandStr.substr(start, end - start + 1);
+            } else {
+                strandStr = "";
+            }
+        }
         
-        // Trim whitespace
-        strandStr.erase(std::remove_if(strandStr.begin(), strandStr.end(), ::isspace), strandStr.end());
-        sheetId.erase(std::remove_if(sheetId.begin(), sheetId.end(), ::isspace), sheetId.end());
+        std::string sheetId = line.substr(11, 3);
+        if (!sheetId.empty()) {
+            size_t start = sheetId.find_first_not_of(" ");
+            size_t end = sheetId.find_last_not_of(" ");
+            if (start != std::string::npos && end != std::string::npos) {
+                sheetId = sheetId.substr(start, end - start + 1);
+            } else {
+                sheetId = "";
+            }
+        }
         
-        // Convert to integer with validation
+        std::string initChainId = std::string(1, line[21]);
+        if (!initChainId.empty()) {
+            size_t start = initChainId.find_first_not_of(" ");
+            if (start != std::string::npos) {
+                initChainId = initChainId.substr(start);
+            }
+        }
+        
         int strandNum = strandStr.empty() ? 1 : std::stoi(strandStr);
         
-        // Parse sense value (columns 39-40)
-        int sense = 0;  // default for first strand
+        int sense = 0;
         if (line.length() >= 40) {
-            std::string senseStr = line.substr(38, 2);  // columns 39-40
-            // Print raw sense string for debugging
-            std::cerr << "Raw sense string: '" << senseStr << "'" << std::endl;
-            
-            // Remove spaces but keep negative sign
-            senseStr.erase(std::remove_if(senseStr.begin(), senseStr.end(), 
-                [](unsigned char c) { return std::isspace(c); }), senseStr.end());
-            
-            // Print trimmed sense string
-            std::cerr << "Trimmed sense string: '" << senseStr << "'" << std::endl;
-            
+            std::string senseStr = line.substr(38, 2);
             if (!senseStr.empty()) {
-                try {
-                    sense = std::stoi(senseStr);
-                    std::cerr << "Converted sense value: " << sense << std::endl;
-                } catch (const std::exception& e) {
-                    std::cerr << "Failed to convert sense string: " << e.what() << std::endl;
-                    // Keep default sense value if conversion fails
+                size_t start = senseStr.find_first_not_of(" ");
+                size_t end = senseStr.find_last_not_of(" ");
+                if (start != std::string::npos && end != std::string::npos) {
+                    senseStr = senseStr.substr(start, end - start + 1);
+                    if (!senseStr.empty()) {
+                        try {
+                            sense = std::stoi(senseStr);
+                        } catch (const std::exception&) {
+                            // Keep default sense value if conversion fails
+                        }
+                    }
                 }
             }
         }
         
-        // Create sheet info string (format: sheetId:strandNum:sense)
         std::string sheetInfo = sheetId + ":" + 
             std::to_string(strandNum) + ":" + 
             std::to_string(sense);
         
-        // Initialize vector if chain not present
-        if (result.sheets.find(std::string(1, initChainId)) == result.sheets.end()) {
-            result.sheets[std::string(1, initChainId)] = std::vector<std::string>();
+        if (result.sheets.find(initChainId) == result.sheets.end()) {
+            result.sheets[initChainId] = std::vector<std::string>();
         }
-        result.sheets[std::string(1, initChainId)].push_back(sheetInfo);
+        result.sheets[initChainId].push_back(sheetInfo);
 
     } catch (const std::exception& e) {
         throw std::runtime_error("Error parsing SHEET record: " + std::string(e.what()));
@@ -256,29 +444,51 @@ void PDBParser::parseSheetRecord(const std::string& line, ParseResult& result) {
 
 void PDBParser::parseSSBondRecord(const std::string& line, ParseResult& result) {
     try {
-        [[maybe_unused]] int serialNum = std::stoi(line.substr(7, 3));
+        std::string chain1 = std::string(1, line[15]);
+        if (!chain1.empty()) {
+            size_t start = chain1.find_first_not_of(" ");
+            if (start != std::string::npos) {
+                chain1 = chain1.substr(start);
+            }
+        }
         
-        // First CYS
-        char chain1 = line[15];
         int resnum1 = std::stoi(line.substr(17, 4));
-        char inscode1 = line[21];
         
-        // Second CYS
-        char chain2 = line[29];
+        std::string inscode1 = line.length() > 21 ? std::string(1, line[21]) : "";
+        if (!inscode1.empty()) {
+            size_t start = inscode1.find_first_not_of(" ");
+            if (start != std::string::npos) {
+                inscode1 = inscode1.substr(start);
+            }
+        }
+        
+        std::string chain2 = std::string(1, line[29]);
+        if (!chain2.empty()) {
+            size_t start = chain2.find_first_not_of(" ");
+            if (start != std::string::npos) {
+                chain2 = chain2.substr(start);
+            }
+        }
+        
         int resnum2 = std::stoi(line.substr(31, 4));
-        char inscode2 = line[35];
         
-        // Create bond info string
-        std::string bondInfo = std::string(1, chain1) + ":" + 
-            std::to_string(resnum1) + std::string(1, inscode1) + "-" +
-            std::string(1, chain2) + ":" + 
-            std::to_string(resnum2) + std::string(1, inscode2);
+        std::string inscode2 = line.length() > 35 ? std::string(1, line[35]) : "";
+        if (!inscode2.empty()) {
+            size_t start = inscode2.find_first_not_of(" ");
+            if (start != std::string::npos) {
+                inscode2 = inscode2.substr(start);
+            }
+        }
+        
+        std::string bondInfo = chain1 + ":" + 
+            std::to_string(resnum1) + inscode1 + "-" +
+            chain2 + ":" + 
+            std::to_string(resnum2) + inscode2;
         
         result.ssbonds.push_back(bondInfo);
 
     } catch (const std::exception& e) {
-        throw std::runtime_error("Error parsing SSBOND record: " + 
-                               std::string(e.what()));
+        throw std::runtime_error("Error parsing SSBOND record: " + std::string(e.what()));
     }
 }
 

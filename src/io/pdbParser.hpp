@@ -31,6 +31,14 @@ public:
         CRYST1
     };
 
+    // Terminal information for TER records
+    struct TerminalInfo {
+        char chainId;
+        int resSeq;
+        char iCode;
+        std::string resName;
+    };
+
     // Parse results
     struct ParseResult {
         std::vector<std::shared_ptr<model::Atom>> atoms;
@@ -39,6 +47,7 @@ public:
         std::map<std::string, std::vector<std::string>> sheets;  // Chain -> sheet info
         std::vector<std::string> ssbonds;  // Disulfide bond info
         std::optional<std::vector<double>> boxDimensions;  // Unit cell parameters
+        std::vector<TerminalInfo> terminals;  // TER record information
     };
 
     /**
@@ -59,11 +68,12 @@ private:
     static RecordType getRecordType(const std::string& line);
     
     static void parseAtomRecord(const std::string& line, RecordType type,
-                              ParseResult& result,
-                              std::shared_ptr<model::Residue>& currentResidue);
+                       ParseResult& result,
+                       std::shared_ptr<model::Residue>& currentResidue);
     
     static void parseTerRecord(const std::string& line,
-                             std::shared_ptr<model::Residue>& currentResidue);
+                       std::shared_ptr<model::Residue>& currentResidue,
+                       ParseResult& result);
     
     static void parseHelixRecord(const std::string& line, ParseResult& result);
     
