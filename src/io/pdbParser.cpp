@@ -82,7 +82,10 @@ void PDBParser::parseAtomRecord(const std::string& line, RecordType type,
         int serialNum = std::stoi(line.substr(6, 5));
         std::string atomName = line.substr(12, 4);
         char altLoc = (line.length() > 16) ? line[16] : ' ';
-        std::string resName = line.substr(17, 3);
+        std::string resName = line.substr(17, 4);
+        // Trim trailing whitespace from residue name
+        resName.erase(std::find_if(resName.rbegin(), resName.rend(), 
+            [](unsigned char ch) { return !std::isspace(ch); }).base(), resName.end());
         char chainId = (line.length() > 21) ? line[21] : ' ';
         int resSeq = std::stoi(line.substr(22, 4));
         char iCode = (line.length() > 26) ? line[26] : ' ';
