@@ -28,6 +28,11 @@ struct TopologyAtom {
     double mass;            ///< Atomic mass
     int residue_id;        ///< ID of the residue this atom belongs to
     int segment_id;        ///< ID of the segment this atom belongs to
+    // B-state parameters for free energy calculations
+    std::string typeB;
+    double chargeB = 0.0;
+    double massB = 0.0;
+    bool has_b_state = false;
 };
 
 /**
@@ -58,6 +63,7 @@ struct TopologyBond {
     int atom2;              ///< Index of second atom
     double length;          ///< Equilibrium bond length (optional)
     double force_constant;  ///< Bond force constant (optional)
+    int function_type = 1;    // Default to GROMACS function type 1
 };
 
 /**
@@ -69,9 +75,11 @@ struct TopologyAngle {
     int atom3;              ///< Index of third atom
     double angle;           ///< Equilibrium angle in degrees (optional)
     double force_constant;  ///< Angle force constant (optional)
+    int function_type = 1;   // Default to GROMACS function type 1
     // Urey-Bradley terms
-    double ub_length;       ///< Urey-Bradley 1-3 distance (optional)
-    double ub_constant;     ///< Urey-Bradley force constant (optional)
+    double ub_length = 0.0;
+    double ub_constant = 0.0;
+    bool has_ub = false;
 };
 
 /**
@@ -86,6 +94,7 @@ struct TopologyDihedral {
     double angle;           ///< Equilibrium angle in degrees
     double force_constant;  ///< Dihedral force constant
     bool improper;          ///< Whether this is an improper dihedral
+    int function_type = 1;   // Default to GROMACS function type 1
 };
 
 /**
@@ -200,7 +209,7 @@ public:
         }
     }
 
-    inline void add_bond(int atom1, int atom2, double length = 0.0, double force_constant = 0.0) {
+    inline void add_bond(int atom1, int atom2, double length = 0.0, double force_constant = 0.0, int function_type = 1) {
         if (!has_atom(atom1) || !has_atom(atom2)) {
             throw std::out_of_range("Invalid atom indices in add_bond");
         }
@@ -210,10 +219,11 @@ public:
         bond.atom2 = atom2;
         bond.length = length;
         bond.force_constant = force_constant;
+        bond.function_type = function_type;
         bonds_.push_back(bond);
     }
 
-    inline void add_angle(int atom1, int atom2, int atom3, double angle = 0.0, double force_constant = 0.0) {
+    inline void add_angle(int atom1, int atom2, int atom3, double angle = 0.0, double force_constant = 0.0, int function_type = 1) {
         if (!has_atom(atom1) || !has_atom(atom2) || !has_atom(atom3)) {
             throw std::out_of_range("Invalid atom indices in add_angle");
         }
@@ -224,23 +234,19 @@ public:
         ang.atom3 = atom3;
         ang.angle = angle;
         ang.force_constant = force_constant;
+        ang.function_type = function_type;
         ang.ub_length = 0.0;
         ang.ub_constant = 0.0;
         angles_.push_back(ang);
     }
 
     inline void add_dihedral(int atom1, int atom2, int atom3, int atom4, int multiplicity = 1,
-                     double angle = 0.0, double force_constant = 0.0, bool improper = false) {
+                     double angle = 0.0, double force_constant = 0.0, bool improper = false, int function_type = 1) {
         if (!has_atom(atom1) || !has_atom(atom2) || !has_atom(atom3) || !has_atom(atom4)) {
             throw std::out_of_range("Invalid atom indices in add_dihedral");
         }
 
         TopologyDihedral dihedral;
-        // PSF file already has the correct atom order for impropers:
-        // - Peptide C improper (C-CA-N-O)
-        // - Peptide N improper (N-C-CA-H)
-        // - Sidechain amide C improper (C-C-N-O)
-        // - Sidechain amide N improper (N-C-H1-H2)
         dihedral.atom1 = atom1;
         dihedral.atom2 = atom2;
         dihedral.atom3 = atom3;
@@ -249,6 +255,7 @@ public:
         dihedral.angle = angle;
         dihedral.force_constant = force_constant;
         dihedral.improper = improper;
+        dihedral.function_type = function_type;
         dihedrals_.push_back(dihedral);
     }
 
