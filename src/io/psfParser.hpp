@@ -50,6 +50,7 @@ private:
     // Helper functions
     bool read_section_header(std::ifstream& file, const std::string& expected_header, int& count);
     std::vector<int> read_index_block(std::ifstream& file, int expected_count, int indices_per_item);
+    std::string trim(const std::string& str);
 };
 
 } // namespace io

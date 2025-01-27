@@ -3,6 +3,8 @@
 #include <sstream>
 #include <vector>
 #include <array>
+#include <algorithm>
+#include <iostream>
 
 namespace pygcmc {
 namespace io {
@@ -10,51 +12,33 @@ namespace io {
 bool PSFParser::parse_to_topology(const std::string& filename, model::Topology& topology) {
     std::ifstream file(filename);
     if (!file.is_open()) {
+        std::cerr << "Failed to open PSF file: " << filename << std::endl;
         return false;
     }
 
+    // Read and validate PSF header
     std::string line;
-    std::getline(file, line);  // Read "PSF" header
-    if (line.find("PSF") == std::string::npos) {
-        return false;  // Not a PSF file
+    if (!std::getline(file, line)) {
+        std::cerr << "Failed to read PSF header" << std::endl;
+        return false;
     }
 
-    while (std::getline(file, line)) {
-        if (line.empty() || line[0] == '*') continue;
+    // Check for PSF header
+    if (line.find("PSF") == std::string::npos) {
+        std::cerr << "Invalid PSF file: missing PSF header" << std::endl;
+        return false;
+    }
 
-        if (line.find("!NTITLE") != std::string::npos) {
-            if (!parse_title(file, topology)) return false;
-        }
-        else if (line.find("!NATOM") != std::string::npos) {
-            if (!parse_atoms(file, topology)) return false;
-        }
-        else if (line.find("!NBOND") != std::string::npos) {
-            if (!parse_bonds(file, topology)) return false;
-        }
-        else if (line.find("!NTHETA") != std::string::npos) {
-            if (!parse_angles(file, topology)) return false;
-        }
-        else if (line.find("!NPHI") != std::string::npos) {
-            if (!parse_dihedrals(file, topology)) return false;
-        }
-        else if (line.find("!NIMPHI") != std::string::npos) {
-            if (!parse_impropers(file, topology)) return false;
-        }
-        else if (line.find("!NDON") != std::string::npos) {
-            if (!parse_donors(file, topology)) return false;
-        }
-        else if (line.find("!NACC") != std::string::npos) {
-            if (!parse_acceptors(file, topology)) return false;
-        }
-        else if (line.find("!NNB") != std::string::npos) {
-            if (!parse_nonbonded_exclusions(file, topology)) return false;
-        }
-        else if (line.find("!NGRP") != std::string::npos) {
-            if (!parse_groups(file, topology)) return false;
-        }
-        else if (line.find("!NCRTERM") != std::string::npos) {
-            if (!parse_cmap(file, topology)) return false;
-        }
+    // Parse title section
+    if (!parse_title(file, topology)) {
+        std::cerr << "Failed to parse title section" << std::endl;
+        return false;
+    }
+
+    // Parse atoms section
+    if (!parse_atoms(file, topology)) {
+        std::cerr << "Failed to parse atoms section" << std::endl;
+        return false;
     }
 
     return true;
@@ -65,6 +49,11 @@ bool PSFParser::read_section_header(std::ifstream& file, const std::string& expe
     std::getline(file, line);
     if (line.empty()) return false;
     
+    // Verify the header if provided
+    if (!expected_header.empty() && line.find(expected_header) == std::string::npos) {
+        return false;
+    }
+    
     std::istringstream iss(line);
     iss >> count;
     return true;
@@ -72,10 +61,10 @@ bool PSFParser::read_section_header(std::ifstream& file, const std::string& expe
 
 std::vector<int> PSFParser::read_index_block(std::ifstream& file, int expected_count, int indices_per_item) {
     std::vector<int> indices;
-    indices.reserve(expected_count * indices_per_item);
+    indices.reserve(static_cast<size_t>(expected_count) * static_cast<size_t>(indices_per_item));
     
     std::string line;
-    while (indices.size() < expected_count * indices_per_item) {
+    while (indices.size() < static_cast<size_t>(expected_count) * static_cast<size_t>(indices_per_item)) {
         std::getline(file, line);
         std::istringstream iss(line);
         int idx;
@@ -87,12 +76,28 @@ std::vector<int> PSFParser::read_index_block(std::ifstream& file, int expected_c
 }
 
 bool PSFParser::parse_title(std::ifstream& file, model::Topology& topology) {
-    int num_titles;
-    if (!read_section_header(file, "!NTITLE", num_titles)) return false;
-
     std::string line;
+    int num_titles = 0;
+
+    // Read lines until we find !NTITLE
+    while (std::getline(file, line)) {
+        std::string trimmed = trim(line);
+        if (trimmed.empty()) {
+            continue;
+        }
+        if (trimmed.find("!NTITLE") != std::string::npos) {
+            std::istringstream iss(trimmed);
+            iss >> num_titles;
+            break;
+        }
+    }
+
+    // Read exactly num_titles lines
     for (int i = 0; i < num_titles; ++i) {
-        std::getline(file, line);
+        if (!std::getline(file, line)) {
+            std::cerr << "Failed to read title lines" << std::endl;
+            return false;
+        }
         if (!line.empty()) {
             topology.add_title(line);
         }
@@ -102,26 +107,105 @@ bool PSFParser::parse_title(std::ifstream& file, model::Topology& topology) {
 
 bool PSFParser::parse_atoms(std::ifstream& file, model::Topology& topology) {
     std::string line;
-    std::getline(file, line);  // Get the number of atoms
-    int num_atoms = std::stoi(line);
+    int num_atoms = 0;
 
-    for (int i = 0; i < num_atoms; ++i) {
-        std::getline(file, line);
-        if (line.empty()) continue;
-
-        // PSF atom format:
-        // atomid segname resid resname atomname atomtype charge mass
-        std::istringstream iss(line);
-        int atomid;
-        std::string segname, resname, atomname, atomtype;
-        int resid;
-        double charge, mass;
-
-        iss >> atomid >> segname >> resid >> resname >> atomname >> atomtype >> charge >> mass;
-
-        topology.add_atom(atomname, atomtype, charge, mass, resname, resid, segname);
+    // Step 1: Find the line containing "!NATOM" and parse the integer before it
+    while (std::getline(file, line)) {
+        std::string trimmedLine = trim(line);
+        if (trimmedLine.empty()) {
+            continue;
+        }
+        if (trimmedLine.find("!NATOM") != std::string::npos) {
+            std::istringstream iss(trimmedLine);
+            iss >> num_atoms;
+            break;
+        }
     }
+
+    if (num_atoms <= 0) {
+        std::cerr << "Invalid number of atoms: " << num_atoms << std::endl;
+        return false;
+    }
+
+    // Step 2: Read exactly num_atoms lines
+    for (int i = 0; i < num_atoms; ++i) {
+        if (!std::getline(file, line)) {
+            std::cerr << "Failed to read atom line " << i + 1 << std::endl;
+            return false;
+        }
+
+        // Split by whitespace
+        std::istringstream iss(line);
+
+        // Typical PSF has these 9 fields in each ATOM line (XPLOR style):
+        //  1) atomIndex (int)
+        //  2) segmentName (string)
+        //  3) residueNumber (int)
+        //  4) residueName (string)
+        //  5) atomName (string)
+        //  6) atomType (string)
+        //  7) charge (double)
+        //  8) mass (double)
+        //  9) extra integer (often 0)
+        
+        int atomIndex;
+        std::string segment_name;
+        int residue_number;
+        std::string residue_name;
+        std::string atom_name;
+        std::string atom_type;
+        double charge;
+        double mass;
+        int unusedField; // often 0 or some integer
+
+        // Try reading all fields - if some files omit the last integer, we'll handle that gracefully
+        bool parsedOK = false;
+
+        // Try reading 9 fields first
+        if (iss >> atomIndex >> segment_name >> residue_number
+                >> residue_name >> atom_name >> atom_type
+                >> charge >> mass >> unusedField) {
+            parsedOK = true;
+        } else {
+            // Clear stream state and rewind
+            iss.clear();
+            iss.seekg(0);
+
+            // Try reading only 8 fields if the file doesn't have the extra integer
+            if (iss >> atomIndex >> segment_name >> residue_number
+                    >> residue_name >> atom_name >> atom_type
+                    >> charge >> mass) {
+                parsedOK = true;
+            }
+        }
+
+        if (!parsedOK) {
+            std::cerr << "Failed to parse atom line " << (i + 1)
+                      << ": " << line << std::endl;
+            return false;
+        }
+
+        // Add to topology (ignore atomIndex and unusedField)
+        topology.add_atom(
+            atom_name,
+            atom_type,
+            charge,
+            mass,
+            residue_name,
+            residue_number,
+            segment_name
+        );
+    }
+
     return true;
+}
+
+// Helper function to trim whitespace
+std::string PSFParser::trim(const std::string& str) {
+    size_t first = str.find_first_not_of(" \t\n\r");
+    if (first == std::string::npos) return "";
+    size_t last = str.find_last_not_of(" \t\n\r");
+    return str.substr(first, last - first + 1);
 }
 
 bool PSFParser::parse_bonds(std::ifstream& file, model::Topology& topology) {
@@ -130,7 +214,8 @@ bool PSFParser::parse_bonds(std::ifstream& file, model::Topology& topology) {
     int num_bonds = std::stoi(line);
 
     std::vector<int> bond_indices;
-    while (bond_indices.size() < num_bonds * 2) {
+    bond_indices.reserve(static_cast<size_t>(num_bonds) * 2);
+    while (bond_indices.size() < static_cast<size_t>(num_bonds) * 2) {
         std::getline(file, line);
         std::istringstream iss(line);
         int idx;
@@ -151,7 +236,8 @@ bool PSFParser::parse_angles(std::ifstream& file, model::Topology& topology) {
     int num_angles = std::stoi(line);
 
     std::vector<int> angle_indices;
-    while (angle_indices.size() < num_angles * 3) {
+    angle_indices.reserve(static_cast<size_t>(num_angles) * 3);
+    while (angle_indices.size() < static_cast<size_t>(num_angles) * 3) {
         std::getline(file, line);
         std::istringstream iss(line);
         int idx;
@@ -172,7 +258,8 @@ bool PSFParser::parse_dihedrals(std::ifstream& file, model::Topology& topology) 
     int num_dihedrals = std::stoi(line);
 
     std::vector<int> dihedral_indices;
-    while (dihedral_indices.size() < num_dihedrals * 4) {
+    dihedral_indices.reserve(static_cast<size_t>(num_dihedrals) * 4);
+    while (dihedral_indices.size() < static_cast<size_t>(num_dihedrals) * 4) {
         std::getline(file, line);
         std::istringstream iss(line);
         int idx;
@@ -219,7 +306,7 @@ bool PSFParser::parse_acceptors(std::ifstream& file, model::Topology& topology) 
     if (!read_section_header(file, "!NACC", num_acceptors)) return false;
 
     auto indices = read_index_block(file, num_acceptors, 1);
-    for (int idx : indices) {
+    for (const auto& idx : indices) {
         topology.add_acceptor(idx);
     }
     return true;

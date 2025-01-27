@@ -1,6 +1,7 @@
 # Create IO library
 add_library(pygcmc_io STATIC
     pdbParser.cpp
+    psfParser.cpp
 )
 
 # Set position independent code
@@ -10,6 +11,7 @@ set_property(TARGET pygcmc_io PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_include_directories(pygcmc_io
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_SOURCE_DIR}/src
 )
 
 # Link dependencies

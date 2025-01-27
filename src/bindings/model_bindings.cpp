@@ -2,6 +2,7 @@
 #include <pybind11/stl.h>
 #include "model/atom.hpp"
 #include "model/residue.hpp"
+#include "model/topology.hpp"
 
 namespace py = pybind11;
 
@@ -13,7 +14,7 @@ void init_model(py::module& m) {
     auto model = m.def_submodule("model", "Data model classes");
     
     // Bind Atom class
-    py::class_<model::Atom, std::shared_ptr<model::Atom>>(model, "Atom")
+    py::class_<model::Atom, std::shared_ptr<model::Atom>>(model, "PDBAtom")
         .def(py::init<>())
         .def("getBynu", &model::Atom::getBynu)
         .def("getType", &model::Atom::getType)
@@ -48,8 +49,8 @@ void init_model(py::module& m) {
         .def("hasLJParams", &model::Atom::hasLJParams)
         .def("isValid", &model::Atom::isValid);
 
-    // Bind Residue class
-    py::class_<model::Residue, std::shared_ptr<model::Residue>>(model, "Residue")
+    // Bind PDB Residue class
+    py::class_<model::Residue, std::shared_ptr<model::Residue>>(model, "PDBResidue")
         .def(py::init<>())
         .def("getResname", &model::Residue::getResname)
         .def("getIres", &model::Residue::getIres)
@@ -70,6 +71,41 @@ void init_model(py::module& m) {
         .def("findAtomByPDBName", &model::Residue::findAtomByPDBName)
         .def("updateAtomMap", &model::Residue::updateAtomMap)
         .def("getAtomRange", &model::Residue::getAtomRange);
+
+    // Bind Topology class
+    py::class_<model::Topology>(model, "Topology")
+        .def(py::init<>())
+        .def("add_atom", &model::Topology::add_atom)
+        .def("add_bond", &model::Topology::add_bond)
+        .def("add_angle", &model::Topology::add_angle)
+        .def("add_dihedral", &model::Topology::add_dihedral)
+        .def("add_improper", &model::Topology::add_improper)
+        .def("add_donor", &model::Topology::add_donor)
+        .def("add_acceptor", &model::Topology::add_acceptor)
+        .def("add_nonbonded_exclusion", &model::Topology::add_nonbonded_exclusion)
+        .def("add_group", &model::Topology::add_group)
+        .def("add_cmap", &model::Topology::add_cmap)
+        .def("add_title", &model::Topology::add_title)
+        .def("get_num_atoms", &model::Topology::get_num_atoms)
+        .def("get_num_residues", &model::Topology::get_num_residues)
+        .def("get_num_segments", &model::Topology::get_num_segments)
+        .def("get_residue", &model::Topology::get_residue, py::return_value_policy::reference_internal)
+        .def("get_atom", &model::Topology::get_atom, py::return_value_policy::reference_internal)
+        .def("find_residue", &model::Topology::find_residue);
+
+    // Bind TopologyResidue
+    py::class_<model::TopologyResidue>(model, "TopologyResidue")
+        .def_readonly("name", &model::TopologyResidue::name)
+        .def_readonly("number", &model::TopologyResidue::number)
+        .def_readonly("atoms", &model::TopologyResidue::atoms)
+        .def_readonly("segment", &model::TopologyResidue::segment);
+
+    // Bind TopologyAtom
+    py::class_<model::TopologyAtom>(model, "TopologyAtom")
+        .def_readonly("name", &model::TopologyAtom::name)
+        .def_readonly("type", &model::TopologyAtom::type)
+        .def_readonly("charge", &model::TopologyAtom::charge)
+        .def_readonly("mass", &model::TopologyAtom::mass);
 }
 
 } // namespace bindings

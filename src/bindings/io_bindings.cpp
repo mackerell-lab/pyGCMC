@@ -2,7 +2,8 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include "io/pdbParser.hpp"
+#include "../io/pdbParser.hpp"
+#include "../io/psfParser.hpp"
 #include "model/atom.hpp"
 #include "model/residue.hpp"
 
@@ -51,6 +52,12 @@ void init_io(py::module& m) {
             py::arg("pdb_str"),
             "Parse a PDB string and return the parsed data");
     io.attr("PDBParser") = parser;
+
+    // PSFParser bindings
+    auto psf_parser = py::class_<pygcmc::io::PSFParser>(m, "PSFParser")
+        .def(py::init<>())
+        .def("parse_to_topology", &pygcmc::io::PSFParser::parse_to_topology);
+    io.attr("PSFParser") = psf_parser;
 }
 
 } // namespace bindings
