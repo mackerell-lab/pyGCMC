@@ -574,6 +574,13 @@ public:
         return false;
     }
 
+    inline const TopologyGroup& get_group(int index) const {
+        if (index < 0 || index >= static_cast<int>(groups_.size())) {
+            throw std::out_of_range("Invalid group index");
+        }
+        return groups_[index];
+    }
+
     void reserve_atoms(size_t n) {
         atoms_.reserve(n);
     }

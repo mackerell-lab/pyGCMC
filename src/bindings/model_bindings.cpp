@@ -99,6 +99,9 @@ void init_model(py::module& m) {
         .def("get_num_acceptors", &model::Topology::get_num_acceptors)
         .def("get_num_cmaps", &model::Topology::get_num_cmaps)
         .def("get_num_groups", &model::Topology::get_num_groups)
+        .def("get_group", &model::Topology::get_group, py::return_value_policy::reference_internal)
+        .def("has_atom", &model::Topology::has_atom)
+        .def("has_group", &model::Topology::has_group)
         .def("has_bond", &model::Topology::has_bond)
         .def("has_angle", &model::Topology::has_angle)
         .def("has_dihedral", &model::Topology::has_dihedral)
@@ -106,7 +109,6 @@ void init_model(py::module& m) {
         .def("has_donor", &model::Topology::has_donor)
         .def("has_acceptor", &model::Topology::has_acceptor)
         .def("has_cmap", &model::Topology::has_cmap)
-        .def("has_group", &model::Topology::has_group)
         .def("get_residue", &model::Topology::get_residue, py::return_value_policy::reference_internal)
         .def("get_atom", &model::Topology::get_atom, py::return_value_policy::reference_internal)
         .def("find_residue", &model::Topology::find_residue);
@@ -124,6 +126,12 @@ void init_model(py::module& m) {
         .def_readonly("type", &model::TopologyAtom::type)
         .def_readonly("charge", &model::TopologyAtom::charge)
         .def_readonly("mass", &model::TopologyAtom::mass);
+
+    // Bind TopologyGroup
+    py::class_<model::TopologyGroup>(model, "TopologyGroup")
+        .def_readonly("id", &model::TopologyGroup::id)
+        .def_readonly("atoms", &model::TopologyGroup::atoms)
+        .def_readonly("type", &model::TopologyGroup::type);
 }
 
 } // namespace bindings
