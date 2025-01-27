@@ -5,121 +5,207 @@
 #include <array>
 #include <algorithm>
 #include <iostream>
+#include <unordered_map>
 
 namespace pygcmc {
 namespace io {
 
-bool PSFParser::parse_to_topology(const std::string& filename, model::Topology& topology) {
+// Helper function to read file lines
+bool readFileToLines(const std::string& filename, std::vector<std::string>& lines) {
     std::ifstream file(filename);
     if (!file.is_open()) {
-        std::cerr << "Failed to open PSF file: " << filename << std::endl;
+        std::cerr << "Failed to open file: " << filename << std::endl;
         return false;
     }
 
-    // Read and validate PSF header
     std::string line;
-    if (!std::getline(file, line)) {
-        std::cerr << "Failed to read PSF header" << std::endl;
-        return false;
-    }
-
-    // Check for PSF header
-    if (line.find("PSF") == std::string::npos) {
-        std::cerr << "Invalid PSF file: missing PSF header" << std::endl;
-        return false;
-    }
-
-    // Parse title section
-    if (!parse_title(file, topology)) {
-        std::cerr << "Failed to parse title section" << std::endl;
-        return false;
-    }
-
-    // Parse atoms section
-    if (!parse_atoms(file, topology)) {
-        std::cerr << "Failed to parse atoms section" << std::endl;
-        return false;
-    }
-
-    return true;
-}
-
-bool PSFParser::read_section_header(std::ifstream& file, const std::string& expected_header, int& count) {
-    std::string line;
-    std::getline(file, line);
-    if (line.empty()) return false;
-    
-    // Verify the header if provided
-    if (!expected_header.empty() && line.find(expected_header) == std::string::npos) {
-        return false;
-    }
-    
-    std::istringstream iss(line);
-    iss >> count;
-    return true;
-}
-
-std::vector<int> PSFParser::read_index_block(std::ifstream& file, int expected_count, int indices_per_item) {
-    std::vector<int> indices;
-    indices.reserve(static_cast<size_t>(expected_count) * static_cast<size_t>(indices_per_item));
-    
-    std::string line;
-    while (indices.size() < static_cast<size_t>(expected_count) * static_cast<size_t>(indices_per_item)) {
-        std::getline(file, line);
-        std::istringstream iss(line);
-        int idx;
-        while (iss >> idx) {
-            indices.push_back(idx - 1);  // Convert to 0-based indexing
-        }
-    }
-    return indices;
-}
-
-bool PSFParser::parse_title(std::ifstream& file, model::Topology& topology) {
-    std::string line;
-    int num_titles = 0;
-
-    // Read lines until we find !NTITLE
     while (std::getline(file, line)) {
-        std::string trimmed = trim(line);
-        if (trimmed.empty()) {
-            continue;
+        lines.push_back(line);
+    }
+
+    return true;
+}
+
+std::string PSFParser::trim(const std::string& str) {
+    const auto start = str.find_first_not_of(" \t\r\n");
+    if (start == std::string::npos) {
+        return "";
+    }
+    const auto end = str.find_last_not_of(" \t\r\n");
+    return str.substr(start, end - start + 1);
+}
+
+bool PSFParser::parse_to_topology(const std::string& filename, model::Topology& topology) {
+    // Read all lines at once
+    std::vector<std::string> lines;
+    if (!readFileToLines(filename, lines)) {
+        return false;
+    }
+
+    // Define section order for consistent parsing
+    const std::vector<std::string> sections_order = {
+        "NATOM", "NBOND", "NTHETA", "NPHI", "NIMPHI", "CMAP", "NGRP", "NDON", "NACC"
+    };
+
+    // Find start of each section
+    std::unordered_map<std::string, size_t> section_index;
+    for (size_t i = 0; i < lines.size(); i++) {
+        std::string trimmed = trim(lines[i]);
+        if (trimmed.find("!NATOM") != std::string::npos) {
+            section_index["NATOM"] = i;
+        } else if (trimmed.find("!NBOND") != std::string::npos) {
+            section_index["NBOND"] = i;
+        } else if (trimmed.find("!NTHETA") != std::string::npos) {
+            section_index["NTHETA"] = i;
+        } else if (trimmed.find("!NPHI") != std::string::npos) {
+            section_index["NPHI"] = i;
+        } else if (trimmed.find("!NIMPHI") != std::string::npos) {
+            section_index["NIMPHI"] = i;
+        } else if (trimmed.find("!NCRTERM") != std::string::npos ||
+                   trimmed.find("!NCMAP") != std::string::npos) {
+            section_index["CMAP"] = i;
+        } else if (trimmed.find("!NGRP") != std::string::npos) {
+            section_index["NGRP"] = i;
+        } else if (trimmed.find("!NDON") != std::string::npos) {
+            section_index["NDON"] = i;
+        } else if (trimmed.find("!NACC") != std::string::npos) {
+            section_index["NACC"] = i;
         }
-        if (trimmed.find("!NTITLE") != std::string::npos) {
-            std::istringstream iss(trimmed);
-            iss >> num_titles;
-            break;
+    }
+
+    // Extract each section's lines into dedicated buffers
+    std::unordered_map<std::string, std::vector<std::string>> section_data;
+    for (size_t s = 0; s < sections_order.size(); s++) {
+        const std::string& key = sections_order[s];
+        if (!section_index.count(key)) continue;
+
+        size_t start_line = section_index[key];
+        
+        // Find next section's start or end of file
+        size_t end_line = lines.size();
+        for (size_t t = s + 1; t < sections_order.size(); t++) {
+            const std::string& next_key = sections_order[t];
+            if (section_index.count(next_key)) {
+                size_t next_start = section_index[next_key];
+                if (next_start > start_line && next_start < end_line) {
+                    end_line = next_start;
+                }
+            }
         }
+
+        // Validate section size
+        if (start_line >= end_line || start_line >= lines.size()) {
+            std::cerr << "Invalid section bounds for " << key << std::endl;
+            return false;
+        }
+
+        // Copy lines for this section
+        section_data[key].reserve(end_line - start_line);
+        for (size_t l = start_line; l < end_line; l++) {
+            section_data[key].push_back(lines[l]);
+        }
+
+        // Validate we have at least one line (for count)
+        if (section_data[key].empty()) {
+            std::cerr << "Empty section: " << key << std::endl;
+            return false;
+        }
+    }
+
+    // Parse sections in canonical order
+    size_t current_line = 0;  // Each section starts at line 0
+
+    // NATOM must be first
+    if (!section_data.count("NATOM")) {
+        std::cerr << "No NATOM section found" << std::endl;
+        return false;
+    }
+
+    // Reserve space for atoms to avoid reallocation
+    std::istringstream iss(trim(section_data["NATOM"][0]));
+    int num_atoms = 0;
+    if (iss >> num_atoms && num_atoms > 0) {
+        topology.reserve_atoms(num_atoms);
+    }
+
+    if (!parse_atoms_from_lines(section_data["NATOM"], current_line, topology)) {
+        return false;
+    }
+
+    // Parse optional sections in order
+    if (section_data.count("NBOND")) {
+        current_line = 0;  // Reset for new section
+        if (!parse_bonds_from_lines(section_data["NBOND"], current_line, topology)) return false;
+    }
+
+    if (section_data.count("NTHETA")) {
+        current_line = 0;  // Reset for new section
+        if (!parse_angles_from_lines(section_data["NTHETA"], current_line, topology)) return false;
+    }
+
+    if (section_data.count("NPHI")) {
+        current_line = 0;  // Reset for new section
+        if (!parse_dihedrals_from_lines(section_data["NPHI"], current_line, topology)) return false;
+    }
+
+    if (section_data.count("NIMPHI")) {
+        current_line = 0;  // Reset for new section
+        if (!parse_impropers_from_lines(section_data["NIMPHI"], current_line, topology)) return false;
+    }
+
+    if (section_data.count("CMAP")) {
+        current_line = 0;  // Reset for new section
+        if (!parse_cmap_from_lines(section_data["CMAP"], current_line, topology)) return false;
+    }
+
+    if (section_data.count("NGRP")) {
+        current_line = 0;  // Reset for new section
+        if (!parse_groups_from_lines(section_data["NGRP"], current_line, topology)) return false;
+    }
+
+    if (section_data.count("NDON")) {
+        current_line = 0;  // Reset for new section
+        if (!parse_donors_from_lines(section_data["NDON"], current_line, topology)) return false;
+    }
+
+    if (section_data.count("NACC")) {
+        current_line = 0;  // Reset for new section
+        if (!parse_acceptors_from_lines(section_data["NACC"], current_line, topology)) return false;
+    }
+
+    return true;
+}
+
+bool PSFParser::parse_title_from_lines(const std::vector<std::string>& lines, size_t& current_line, model::Topology& topology) {
+    // Parse number of titles from the current line
+    std::istringstream iss(trim(lines[current_line]));
+    int num_titles = 0;
+    if (!(iss >> num_titles)) {
+        std::cerr << "Failed to parse number of title lines" << std::endl;
+        return false;
     }
 
     // Read exactly num_titles lines
     for (int i = 0; i < num_titles; ++i) {
-        if (!std::getline(file, line)) {
-            std::cerr << "Failed to read title lines" << std::endl;
+        current_line++;
+        if (current_line >= lines.size()) {
+            std::cerr << "Failed to read title line " << i + 1 << std::endl;
             return false;
         }
-        if (!line.empty()) {
-            topology.add_title(line);
+        if (!lines[current_line].empty()) {
+            topology.add_title(lines[current_line]);
         }
     }
     return true;
 }
 
-bool PSFParser::parse_atoms(std::ifstream& file, model::Topology& topology) {
-    std::string line;
+bool PSFParser::parse_atoms_from_lines(const std::vector<std::string>& lines, size_t& current_line, model::Topology& topology) {
+    // Parse number of atoms from the current line
+    std::istringstream iss(trim(lines[current_line]));
     int num_atoms = 0;
-
-    // Step 1: Find the line containing "!NATOM" and parse the integer before it
-    while (std::getline(file, line)) {
-        std::string trimmedLine = trim(line);
-        if (trimmedLine.empty()) {
-            continue;
-        }
-        if (trimmedLine.find("!NATOM") != std::string::npos) {
-            std::istringstream iss(trimmedLine);
-            iss >> num_atoms;
-            break;
-        }
+    if (!(iss >> num_atoms)) {
+        std::cerr << "Failed to parse number of atoms" << std::endl;
+        return false;
     }
 
     if (num_atoms <= 0) {
@@ -127,27 +213,15 @@ bool PSFParser::parse_atoms(std::ifstream& file, model::Topology& topology) {
         return false;
     }
 
-    // Step 2: Read exactly num_atoms lines
+    // Read exactly num_atoms lines
     for (int i = 0; i < num_atoms; ++i) {
-        if (!std::getline(file, line)) {
+        current_line++;
+        if (current_line >= lines.size()) {
             std::cerr << "Failed to read atom line " << i + 1 << std::endl;
             return false;
         }
 
-        // Split by whitespace
-        std::istringstream iss(line);
-
-        // Typical PSF has these 9 fields in each ATOM line (XPLOR style):
-        //  1) atomIndex (int)
-        //  2) segmentName (string)
-        //  3) residueNumber (int)
-        //  4) residueName (string)
-        //  5) atomName (string)
-        //  6) atomType (string)
-        //  7) charge (double)
-        //  8) mass (double)
-        //  9) extra integer (often 0)
-        
+        std::istringstream iss(lines[current_line]);
         int atomIndex;
         std::string segment_name;
         int residue_number;
@@ -156,22 +230,16 @@ bool PSFParser::parse_atoms(std::ifstream& file, model::Topology& topology) {
         std::string atom_type;
         double charge;
         double mass;
-        int unusedField; // often 0 or some integer
+        int unusedField;
 
-        // Try reading all fields - if some files omit the last integer, we'll handle that gracefully
         bool parsedOK = false;
-
-        // Try reading 9 fields first
         if (iss >> atomIndex >> segment_name >> residue_number
                 >> residue_name >> atom_name >> atom_type
                 >> charge >> mass >> unusedField) {
             parsedOK = true;
         } else {
-            // Clear stream state and rewind
             iss.clear();
             iss.seekg(0);
-
-            // Try reading only 8 fields if the file doesn't have the extra integer
             if (iss >> atomIndex >> segment_name >> residue_number
                     >> residue_name >> atom_name >> atom_type
                     >> charge >> mass) {
@@ -181,11 +249,10 @@ bool PSFParser::parse_atoms(std::ifstream& file, model::Topology& topology) {
 
         if (!parsedOK) {
             std::cerr << "Failed to parse atom line " << (i + 1)
-                      << ": " << line << std::endl;
+                      << ": " << lines[current_line] << std::endl;
             return false;
         }
 
-        // Add to topology (ignore atomIndex and unusedField)
         topology.add_atom(
             atom_name,
             atom_type,
@@ -200,173 +267,362 @@ bool PSFParser::parse_atoms(std::ifstream& file, model::Topology& topology) {
     return true;
 }
 
-// Helper function to trim whitespace
-std::string PSFParser::trim(const std::string& str) {
-    size_t first = str.find_first_not_of(" \t\n\r");
-    if (first == std::string::npos) return "";
-    size_t last = str.find_last_not_of(" \t\n\r");
-    return str.substr(first, last - first + 1);
-}
+bool PSFParser::parse_bonds_from_lines(const std::vector<std::string>& lines, size_t& current_line, model::Topology& topology) {
+    // Parse number of bonds from the current line
+    std::istringstream iss(trim(lines[current_line]));
+    int num_bonds = 0;
+    if (!(iss >> num_bonds)) {
+        std::cerr << "Failed to parse number of bonds" << std::endl;
+        return false;
+    }
 
-bool PSFParser::parse_bonds(std::ifstream& file, model::Topology& topology) {
-    std::string line;
-    std::getline(file, line);  // Get the number of bonds
-    int num_bonds = std::stoi(line);
+    if (num_bonds <= 0) {
+        // Bonds are optional, so just return true if there are none
+        return true;
+    }
 
+    // Read bond indices
     std::vector<int> bond_indices;
-    bond_indices.reserve(static_cast<size_t>(num_bonds) * 2);
+    bond_indices.reserve(num_bonds * 2);
+
     while (bond_indices.size() < static_cast<size_t>(num_bonds) * 2) {
-        std::getline(file, line);
-        std::istringstream iss(line);
+        current_line++;
+        if (current_line >= lines.size()) {
+            std::cerr << "Unexpected end of file while reading bonds" << std::endl;
+            return false;
+        }
+
+        std::istringstream iss(lines[current_line]);
         int idx;
         while (iss >> idx) {
-            bond_indices.push_back(idx - 1);  // Convert to 0-based indexing
+            // Skip zero values as they are placeholders in PSF format
+            if (idx == 0) {
+                continue;
+            }
+            // Convert to 0-based indexing and check validity
+            idx--;  // Convert to 0-based indexing
+            if (idx < 0 || idx >= topology.get_num_atoms()) {
+                std::cerr << "Invalid atom index " << (idx + 1) << " in bond" << std::endl;
+                return false;
+            }
+            bond_indices.push_back(idx);
         }
     }
 
+    // Add bonds to topology
     for (size_t i = 0; i < bond_indices.size(); i += 2) {
         topology.add_bond(bond_indices[i], bond_indices[i + 1]);
     }
+
     return true;
 }
 
-bool PSFParser::parse_angles(std::ifstream& file, model::Topology& topology) {
-    std::string line;
-    std::getline(file, line);  // Get the number of angles
-    int num_angles = std::stoi(line);
+bool PSFParser::parse_angles_from_lines(const std::vector<std::string>& lines, size_t& current_line, model::Topology& topology) {
+    // Parse number of angles from the current line
+    std::istringstream iss(trim(lines[current_line]));
+    int num_angles = 0;
+    if (!(iss >> num_angles)) {
+        std::cerr << "Failed to parse number of angles" << std::endl;
+        return false;
+    }
 
+    if (num_angles <= 0) {
+        // Angles are optional, so just return true if there are none
+        return true;
+    }
+
+    // Read angle indices
     std::vector<int> angle_indices;
-    angle_indices.reserve(static_cast<size_t>(num_angles) * 3);
+    angle_indices.reserve(num_angles * 3);
+
     while (angle_indices.size() < static_cast<size_t>(num_angles) * 3) {
-        std::getline(file, line);
-        std::istringstream iss(line);
+        current_line++;
+        if (current_line >= lines.size()) {
+            std::cerr << "Unexpected end of file while reading angles" << std::endl;
+            return false;
+        }
+
+        std::istringstream iss(lines[current_line]);
         int idx;
         while (iss >> idx) {
-            angle_indices.push_back(idx - 1);  // Convert to 0-based indexing
+            // Skip zero values as they are placeholders in PSF format
+            if (idx == 0) {
+                continue;
+            }
+            // Convert to 0-based indexing and check validity
+            idx--;  // Convert to 0-based indexing
+            if (idx < 0 || idx >= topology.get_num_atoms()) {
+                std::cerr << "Invalid atom index " << (idx + 1) << " in angle" << std::endl;
+                return false;
+            }
+            angle_indices.push_back(idx);
         }
     }
 
+    // Add angles to topology
     for (size_t i = 0; i < angle_indices.size(); i += 3) {
-        topology.add_angle(angle_indices[i], angle_indices[i + 1], angle_indices[i + 2]);
-    }
-    return true;
-}
-
-bool PSFParser::parse_dihedrals(std::ifstream& file, model::Topology& topology) {
-    std::string line;
-    std::getline(file, line);  // Get the number of dihedrals
-    int num_dihedrals = std::stoi(line);
-
-    std::vector<int> dihedral_indices;
-    dihedral_indices.reserve(static_cast<size_t>(num_dihedrals) * 4);
-    while (dihedral_indices.size() < static_cast<size_t>(num_dihedrals) * 4) {
-        std::getline(file, line);
-        std::istringstream iss(line);
-        int idx;
-        while (iss >> idx) {
-            dihedral_indices.push_back(idx - 1);  // Convert to 0-based indexing
-        }
-    }
-
-    for (size_t i = 0; i < dihedral_indices.size(); i += 4) {
-        topology.add_dihedral(
-            dihedral_indices[i],
-            dihedral_indices[i + 1],
-            dihedral_indices[i + 2],
-            dihedral_indices[i + 3]
+        topology.add_angle(
+            angle_indices[i],
+            angle_indices[i + 1],
+            angle_indices[i + 2]
         );
     }
+
     return true;
 }
 
-bool PSFParser::parse_impropers(std::ifstream& file, model::Topology& topology) {
-    int num_impropers;
-    if (!read_section_header(file, "!NIMPHI", num_impropers)) return false;
-
-    auto indices = read_index_block(file, num_impropers, 4);
-    for (size_t i = 0; i < indices.size(); i += 4) {
-        topology.add_improper(indices[i], indices[i + 1], indices[i + 2], indices[i + 3]);
+bool PSFParser::parse_dihedrals_from_lines(const std::vector<std::string>& lines,
+                                         size_t& current_line,
+                                         model::Topology& topology) {
+    if (current_line >= lines.size()) {
+        std::cerr << "Invalid line number in parse_dihedrals_from_lines" << std::endl;
+        return false;
     }
-    return true;
-}
 
-bool PSFParser::parse_donors(std::ifstream& file, model::Topology& topology) {
-    int num_donors;
-    if (!read_section_header(file, "!NDON", num_donors)) return false;
-
-    auto indices = read_index_block(file, num_donors, 2);
-    for (size_t i = 0; i < indices.size(); i += 2) {
-        topology.add_donor(indices[i], indices[i + 1]);
+    // Parse number of dihedrals from the current line
+    std::istringstream iss(trim(lines[current_line]));
+    size_t num_dihedrals = 0;
+    if (!(iss >> num_dihedrals)) {
+        std::cerr << "Failed to parse number of dihedrals" << std::endl;
+        return false;
     }
-    return true;
-}
 
-bool PSFParser::parse_acceptors(std::ifstream& file, model::Topology& topology) {
-    int num_acceptors;
-    if (!read_section_header(file, "!NACC", num_acceptors)) return false;
-
-    auto indices = read_index_block(file, num_acceptors, 1);
-    for (const auto& idx : indices) {
-        topology.add_acceptor(idx);
+    if (num_dihedrals <= 0) {
+        return true;  // Dihedrals are optional
     }
-    return true;
-}
 
-bool PSFParser::parse_nonbonded_exclusions(std::ifstream& file, model::Topology& topology) {
-    int num_atoms;
-    if (!read_section_header(file, "!NNB", num_atoms)) return false;
+    size_t dihedrals_parsed = 0;
+    std::vector<int> buffer;
+    buffer.reserve(4);  // Each dihedral has 4 atoms
 
-    std::string line;
-    for (int i = 0; i < num_atoms; ++i) {
-        std::getline(file, line);
-        std::istringstream iss(line);
-        int atom_idx, num_exclusions;
-        iss >> atom_idx >> num_exclusions;
-        atom_idx--;  // Convert to 0-based indexing
-        
-        for (int j = 0; j < num_exclusions; ++j) {
-            int excluded_atom;
-            iss >> excluded_atom;
-            topology.add_nonbonded_exclusion(atom_idx, excluded_atom - 1);
+    // Calculate how many lines we need (assuming 8 indices per line = 2 dihedrals)
+    size_t min_lines_needed = (num_dihedrals * 4 + 7) / 8;  // Round up division
+    if (current_line + 1 + min_lines_needed > lines.size()) {
+        std::cerr << "Not enough lines for dihedrals: need " << min_lines_needed 
+                  << ", have " << (lines.size() - current_line - 1) << std::endl;
+        return false;
+    }
+
+    for (size_t i = current_line + 1; i < lines.size() && dihedrals_parsed < num_dihedrals; i++) {
+        std::istringstream iss_line(trim(lines[i]));
+        int idx;
+        while (iss_line >> idx) {
+            if (idx == 0) continue; // Skip placeholder zeros
+            idx--;  // Convert to 0-based indexing
+            if (idx < 0 || idx >= topology.get_num_atoms()) {
+                std::cerr << "Invalid atom index " << (idx + 1) << " in dihedral" << std::endl;
+                return false;
+            }
+            buffer.push_back(idx);
+            if (buffer.size() == 4) {
+                topology.add_dihedral(buffer[0], buffer[1], buffer[2], buffer[3], 1, 0.0, 0.0, false);
+                buffer.clear();
+                dihedrals_parsed++;
+                if (dihedrals_parsed == num_dihedrals) {
+                    break;
+                }
+            }
         }
     }
+
+    if (dihedrals_parsed != num_dihedrals) {
+        std::cerr << "Failed to parse all dihedrals: expected " << num_dihedrals 
+                  << ", got " << dihedrals_parsed << std::endl;
+        return false;
+    }
+
     return true;
 }
 
-bool PSFParser::parse_groups(std::ifstream& file, model::Topology& topology) {
-    int num_groups;
-    if (!read_section_header(file, "!NGRP", num_groups)) return false;
+bool PSFParser::parse_impropers_from_lines(const std::vector<std::string>& lines,
+                                         size_t& current_line,
+                                         model::Topology& topology) {
+    if (current_line >= lines.size()) {
+        std::cerr << "Invalid line number in parse_impropers_from_lines" << std::endl;
+        return false;
+    }
 
-    std::string line;
-    for (int i = 0; i < num_groups; ++i) {
-        std::getline(file, line);
-        std::istringstream iss(line);
-        int group_id;
-        std::vector<int> atoms;
-        std::string type;
-        
-        iss >> group_id;
-        int atom_idx;
-        while (iss >> atom_idx) {
-            atoms.push_back(atom_idx - 1);
+    std::istringstream iss(trim(lines[current_line]));
+    size_t num_impropers = 0;
+    if (!(iss >> num_impropers)) {
+        std::cerr << "Failed to parse number of impropers" << std::endl;
+        return false;
+    }
+
+    if (num_impropers <= 0) {
+        return true;  // Impropers are optional
+    }
+
+    size_t impropers_parsed = 0;
+    std::vector<int> buffer;
+    buffer.reserve(4);  // Each improper has 4 atoms
+
+    // Calculate how many lines we need (assuming 8 indices per line = 2 impropers)
+    size_t min_lines_needed = (num_impropers * 4 + 7) / 8;  // Round up division
+    if (current_line + 1 + min_lines_needed > lines.size()) {
+        std::cerr << "Not enough lines for impropers: need " << min_lines_needed 
+                  << ", have " << (lines.size() - current_line - 1) << std::endl;
+        return false;
+    }
+
+    for (size_t i = current_line + 1; i < lines.size() && impropers_parsed < num_impropers; i++) {
+        std::istringstream iss_line(trim(lines[i]));
+        int idx;
+        while (iss_line >> idx) {
+            if (idx == 0) continue; // Skip placeholder zeros
+            idx--;  // Convert to 0-based indexing
+            if (idx < 0 || idx >= topology.get_num_atoms()) {
+                std::cerr << "Invalid atom index " << (idx + 1) << " in improper" << std::endl;
+                return false;
+            }
+            buffer.push_back(idx);
+            if (buffer.size() == 4) {
+                topology.add_improper(buffer[0], buffer[1], buffer[2], buffer[3]);
+                buffer.clear();
+                impropers_parsed++;
+                if (impropers_parsed == num_impropers) {
+                    break;
+                }
+            }
         }
-        
-        topology.add_group(group_id, atoms, type);
     }
+
+    if (impropers_parsed != num_impropers) {
+        std::cerr << "Failed to parse all impropers: expected " << num_impropers 
+                  << ", got " << impropers_parsed << std::endl;
+        return false;
+    }
+
     return true;
 }
 
-bool PSFParser::parse_cmap(std::ifstream& file, model::Topology& topology) {
-    int num_cmap;
-    if (!read_section_header(file, "!NCRTERM", num_cmap)) return false;
-
-    auto indices = read_index_block(file, num_cmap, 8);
-    for (size_t i = 0; i < indices.size(); i += 8) {
-        std::array<int, 8> cmap_atoms;
-        std::copy(indices.begin() + i, indices.begin() + i + 8, cmap_atoms.begin());
-        topology.add_cmap(cmap_atoms);
+bool PSFParser::parse_donors_from_lines(const std::vector<std::string>& lines,
+                                      size_t& current_line,
+                                      model::Topology& topology) {
+    std::istringstream iss(trim(lines[current_line]));
+    size_t num_donors = 0;
+    if (!(iss >> num_donors)) {
+        std::cerr << "Failed to parse number of donors" << std::endl;
+        return false;
     }
-    return true;
+
+    size_t donors_parsed = 0;
+    for (size_t i = current_line + 1; i < lines.size() && donors_parsed < num_donors; i++) {
+        std::istringstream iss_line(trim(lines[i]));
+        int donor_idx, hydrogen_idx;
+        while (iss_line >> donor_idx >> hydrogen_idx) {
+            if (donor_idx == 0 || hydrogen_idx == 0) continue;
+            donor_idx--; // Convert to 0-based indexing
+            hydrogen_idx--;
+            topology.add_donor(donor_idx, hydrogen_idx);
+            donors_parsed++;
+            if (donors_parsed == num_donors) {
+                break;
+            }
+        }
+    }
+    return donors_parsed == num_donors;
+}
+
+bool PSFParser::parse_acceptors_from_lines(const std::vector<std::string>& lines,
+                                         size_t& current_line,
+                                         model::Topology& topology) {
+    std::istringstream iss(trim(lines[current_line]));
+    size_t num_acceptors = 0;
+    if (!(iss >> num_acceptors)) {
+        std::cerr << "Failed to parse number of acceptors" << std::endl;
+        return false;
+    }
+
+    size_t acceptors_parsed = 0;
+    for (size_t i = current_line + 1; i < lines.size() && acceptors_parsed < num_acceptors; i++) {
+        std::istringstream iss_line(trim(lines[i]));
+        int acceptor_idx;
+        while (iss_line >> acceptor_idx) {
+            if (acceptor_idx == 0) continue;
+            acceptor_idx--; // Convert to 0-based indexing
+            topology.add_acceptor(acceptor_idx);
+            acceptors_parsed++;
+            if (acceptors_parsed == num_acceptors) {
+                break;
+            }
+        }
+    }
+    return acceptors_parsed == num_acceptors;
+}
+
+bool PSFParser::parse_cmap_from_lines(const std::vector<std::string>& lines,
+                                    size_t& current_line,
+                                    model::Topology& topology) {
+    std::istringstream iss(trim(lines[current_line]));
+    size_t num_cmaps = 0;
+    if (!(iss >> num_cmaps)) {
+        std::cerr << "Failed to parse number of CMAP terms" << std::endl;
+        return false;
+    }
+
+    size_t cmaps_parsed = 0;
+    std::vector<int> buffer;
+    for (size_t i = current_line + 1; i < lines.size() && cmaps_parsed < num_cmaps; i++) {
+        std::istringstream iss_line(trim(lines[i]));
+        int idx;
+        while (iss_line >> idx) {
+            if (idx == 0) continue; // Skip placeholder zeros
+            buffer.push_back(idx - 1); // Convert to 0-based indexing
+            if (buffer.size() == 8) {
+                std::array<int, 8> cmap_array;
+                std::copy_n(buffer.begin(), 8, cmap_array.begin());
+                topology.add_cmap(cmap_array);
+                buffer.clear();
+                cmaps_parsed++;
+                if (cmaps_parsed == num_cmaps) {
+                    break;
+                }
+            }
+        }
+    }
+    return cmaps_parsed == num_cmaps;
+}
+
+bool PSFParser::parse_groups_from_lines(const std::vector<std::string>& lines,
+                                      size_t& current_line,
+                                      model::Topology& topology) {
+    std::istringstream iss(trim(lines[current_line]));
+    size_t num_groups = 0;
+    if (!(iss >> num_groups)) {
+        std::cerr << "Failed to parse number of groups" << std::endl;
+        return false;
+    }
+
+    size_t groups_parsed = 0;
+    std::vector<int> current_group;
+    int current_group_id = 1;  // Start with group ID 1
+
+    for (size_t i = current_line + 1; i < lines.size() && groups_parsed < num_groups; i++) {
+        std::istringstream iss_line(trim(lines[i]));
+        int idx;
+        while (iss_line >> idx) {
+            if (idx == 0) {
+                // Zero marks end of current group
+                if (!current_group.empty()) {
+                    topology.add_group(current_group_id++, current_group, "");  // Empty type string
+                    current_group.clear();
+                    groups_parsed++;
+                    if (groups_parsed == num_groups) {
+                        break;
+                    }
+                }
+                continue;
+            }
+            current_group.push_back(idx - 1); // Convert to 0-based indexing
+        }
+    }
+    // Add last group if not empty
+    if (!current_group.empty()) {
+        topology.add_group(current_group_id, current_group, "");
+        groups_parsed++;
+    }
+    return groups_parsed == num_groups;
 }
 
 } // namespace io

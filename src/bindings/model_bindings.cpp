@@ -1,3 +1,5 @@
+// src/bindings/model_bindings.cpp
+
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include "model/atom.hpp"
@@ -89,6 +91,22 @@ void init_model(py::module& m) {
         .def("get_num_atoms", &model::Topology::get_num_atoms)
         .def("get_num_residues", &model::Topology::get_num_residues)
         .def("get_num_segments", &model::Topology::get_num_segments)
+        .def("get_num_bonds", &model::Topology::get_num_bonds)
+        .def("get_num_angles", &model::Topology::get_num_angles)
+        .def("get_num_dihedrals", &model::Topology::get_num_dihedrals)
+        .def("get_num_impropers", &model::Topology::get_num_impropers)
+        .def("get_num_donors", &model::Topology::get_num_donors)
+        .def("get_num_acceptors", &model::Topology::get_num_acceptors)
+        .def("get_num_cmaps", &model::Topology::get_num_cmaps)
+        .def("get_num_groups", &model::Topology::get_num_groups)
+        .def("has_bond", &model::Topology::has_bond)
+        .def("has_angle", &model::Topology::has_angle)
+        .def("has_dihedral", &model::Topology::has_dihedral)
+        .def("has_improper", &model::Topology::has_improper)
+        .def("has_donor", &model::Topology::has_donor)
+        .def("has_acceptor", &model::Topology::has_acceptor)
+        .def("has_cmap", &model::Topology::has_cmap)
+        .def("has_group", &model::Topology::has_group)
         .def("get_residue", &model::Topology::get_residue, py::return_value_policy::reference_internal)
         .def("get_atom", &model::Topology::get_atom, py::return_value_policy::reference_internal)
         .def("find_residue", &model::Topology::find_residue);

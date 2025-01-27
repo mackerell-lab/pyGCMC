@@ -31,27 +31,27 @@ public:
 
 private:
     // Basic topology sections
-    bool parse_title(std::ifstream& file, model::Topology& topology);
-    bool parse_atoms(std::ifstream& file, model::Topology& topology);
-    bool parse_bonds(std::ifstream& file, model::Topology& topology);
-    bool parse_angles(std::ifstream& file, model::Topology& topology);
-    bool parse_dihedrals(std::ifstream& file, model::Topology& topology);
-    bool parse_impropers(std::ifstream& file, model::Topology& topology);
+    bool parse_title_from_lines(const std::vector<std::string>& lines, size_t& current_line, model::Topology& topology);
+    bool parse_atoms_from_lines(const std::vector<std::string>& lines, size_t& current_line, model::Topology& topology);
+    bool parse_bonds_from_lines(const std::vector<std::string>& lines, size_t& current_line, model::Topology& topology);
+    bool parse_angles_from_lines(const std::vector<std::string>& lines, size_t& current_line, model::Topology& topology);
+    bool parse_dihedrals_from_lines(const std::vector<std::string>& lines, size_t& current_line, model::Topology& topology);
+    bool parse_impropers_from_lines(const std::vector<std::string>& lines, size_t& current_line, model::Topology& topology);
     
     // Nonbonded sections
-    bool parse_donors(std::ifstream& file, model::Topology& topology);
-    bool parse_acceptors(std::ifstream& file, model::Topology& topology);
+    bool parse_donors_from_lines(const std::vector<std::string>& lines, size_t& current_line, model::Topology& topology);
+    bool parse_acceptors_from_lines(const std::vector<std::string>& lines, size_t& current_line, model::Topology& topology);
     bool parse_nonbonded_exclusions(std::ifstream& file, model::Topology& topology);
     
     // Additional sections
-    bool parse_groups(std::ifstream& file, model::Topology& topology);
-    bool parse_cmap(std::ifstream& file, model::Topology& topology);
+    bool parse_groups_from_lines(const std::vector<std::string>& lines, size_t& current_line, model::Topology& topology);
+    bool parse_cmap_from_lines(const std::vector<std::string>& lines, size_t& current_line, model::Topology& topology);
 
     // Helper functions
     bool read_section_header(std::ifstream& file, const std::string& expected_header, int& count);
     std::vector<int> read_index_block(std::ifstream& file, int expected_count, int indices_per_item);
-    std::string trim(const std::string& str);
+    static std::string trim(const std::string& str);
 };
 
 } // namespace io
-} // namespace pygcmc
+} // namespace pygcmc 

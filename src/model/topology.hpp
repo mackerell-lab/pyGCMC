@@ -11,6 +11,7 @@
 #include <array>
 #include <optional>
 #include <stdexcept>
+#include <iostream>
 
 namespace pygcmc {
 namespace model {
@@ -128,44 +129,74 @@ public:
     // Add elements to topology
     inline int add_atom(const std::string& name, const std::string& type, double charge, double mass,
                 const std::string& residue_name, int residue_number, const std::string& segment_name) {
-        // First ensure we have the segment
-        int segment_id;
-        auto segment_it = segment_map_.find(segment_name);
-        if (segment_it == segment_map_.end()) {
-            segment_id = add_segment(segment_name);
-        } else {
-            segment_id = segment_it->second;
+        try {
+            // First ensure we have the segment
+            int segment_id;
+            auto segment_it = segment_map_.find(segment_name);
+            if (segment_it == segment_map_.end()) {
+                // Create new segment
+                TopologySegment segment;
+                segment.id = static_cast<int>(segments_.size());  // 0-based indexing
+                segment.name = segment_name;
+                segment_id = segment.id;
+                segments_.push_back(segment);
+                segment_map_[segment_name] = segment_id;
+            } else {
+                segment_id = segment_it->second;
+            }
+
+            // Then ensure we have the residue
+            int residue_id;
+            auto residue_key = std::make_pair(residue_name, residue_number);
+            auto residue_it = residue_map_.find(residue_key);
+            if (residue_it == residue_map_.end()) {
+                // Create new residue
+                TopologyResidue residue;
+                residue.id = static_cast<int>(residues_.size());  // 0-based indexing
+                residue.name = residue_name;
+                residue.number = residue_number;
+                residue.segment = segment_name;
+                residue_id = residue.id;
+                residues_.push_back(residue);
+                residue_map_[residue_key] = residue_id;
+                
+                // Add residue to its segment
+                if (segment_id >= 0 && segment_id < static_cast<int>(segments_.size())) {
+                    segments_[segment_id].residues.push_back(residue_id);
+                } else {
+                    throw std::runtime_error("Invalid segment ID");
+                }
+            } else {
+                residue_id = residue_it->second;
+            }
+
+            // Create and add the atom
+            TopologyAtom atom;
+            atom.id = static_cast<int>(atoms_.size());  // 0-based indexing
+            atom.name = name;
+            atom.type = type;
+            atom.charge = charge;
+            atom.mass = mass;
+            atom.residue_id = residue_id;
+            atom.segment_id = segment_id;
+
+            // Add atom to the vectors and maps
+            int atom_id = static_cast<int>(atoms_.size());
+            atoms_.push_back(atom);
+            atom_map_[std::make_tuple(residue_name, residue_number, name)] = atom_id;
+
+            // Add atom to its residue
+            if (residue_id >= 0 && residue_id < static_cast<int>(residues_.size())) {
+                residues_[residue_id].atoms.push_back(atom_id);
+            } else {
+                throw std::runtime_error("Invalid residue ID");
+            }
+
+            return atom_id;
+        } catch (const std::exception& e) {
+            std::cerr << "Error in add_atom: " << e.what() << std::endl;
+            throw;
         }
-
-        // Then ensure we have the residue
-        int residue_id;
-        auto residue_key = std::make_pair(residue_name, residue_number);
-        auto residue_it = residue_map_.find(residue_key);
-        if (residue_it == residue_map_.end()) {
-            residue_id = add_residue(residue_name, residue_number, segment_name);
-        } else {
-            residue_id = residue_it->second;
-        }
-
-        // Create and add the atom
-        TopologyAtom atom;
-        atom.id = atoms_.size();  // 0-based indexing
-        atom.name = name;
-        atom.type = type;
-        atom.charge = charge;
-        atom.mass = mass;
-        atom.residue_id = residue_id;
-        atom.segment_id = segment_id;
-
-        // Add atom to the vectors and maps
-        int atom_id = atoms_.size();
-        atoms_.push_back(atom);
-        atom_map_[std::make_tuple(residue_name, residue_number, name)] = atom_id;
-
-        // Add atom to its residue
-        residues_[residue_id].atoms.push_back(atom_id);
-
-        return atom_id;
     }
 
     inline void add_bond(int atom1, int atom2, double length = 0.0, double force_constant = 0.0) {
@@ -404,26 +435,144 @@ public:
     const std::vector<TopologyCmap>& get_cmaps() const { return cmaps_; }
     const std::map<int, std::set<int>>& get_exclusions() const { return exclusions_; }
 
+    // Bond methods
+    inline size_t get_num_bonds() const { return bonds_.size(); }
+    inline bool has_bond(int atom1, int atom2) const {
+        for (const auto& bond : bonds_) {
+            if ((bond.atom1 == atom1 && bond.atom2 == atom2) ||
+                (bond.atom1 == atom2 && bond.atom2 == atom1)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Angle methods
+    inline size_t get_num_angles() const { return angles_.size(); }
+    inline bool has_angle(int atom1, int atom2, int atom3) const {
+        for (const auto& angle : angles_) {
+            if ((angle.atom1 == atom1 && angle.atom2 == atom2 && angle.atom3 == atom3) ||
+                (angle.atom1 == atom3 && angle.atom2 == atom2 && angle.atom3 == atom1)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Dihedral methods
+    inline size_t get_num_dihedrals() const { 
+        size_t count = 0;
+        for (const auto& dihedral : dihedrals_) {
+            if (!dihedral.improper) count++;
+        }
+        return count;
+    }
+
+    inline bool has_dihedral(int atom1, int atom2, int atom3, int atom4) const {
+        for (const auto& dihedral : dihedrals_) {
+            if (dihedral.improper) continue;  // Skip impropers
+            if ((dihedral.atom1 == atom1 && dihedral.atom2 == atom2 &&
+                 dihedral.atom3 == atom3 && dihedral.atom4 == atom4) ||
+                (dihedral.atom1 == atom4 && dihedral.atom2 == atom3 &&
+                 dihedral.atom3 == atom2 && dihedral.atom4 == atom1)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Improper methods
+    inline size_t get_num_impropers() const { 
+        size_t count = 0;
+        for (const auto& dihedral : dihedrals_) {
+            if (dihedral.improper) count++;
+        }
+        return count;
+    }
+
+    inline bool has_improper(int atom1, int atom2, int atom3, int atom4) const {
+        for (const auto& dihedral : dihedrals_) {
+            if (!dihedral.improper) continue;  // Skip regular dihedrals
+            if (dihedral.atom1 == atom1 && dihedral.atom2 == atom2 &&
+                dihedral.atom3 == atom3 && dihedral.atom4 == atom4) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Donor/Acceptor methods
+    inline size_t get_num_donors() const { return donors_.size(); }
+    inline size_t get_num_acceptors() const { return acceptors_.size(); }
+    inline bool has_donor(int donor_atom, int hydrogen_atom) const {
+        for (const auto& donor : donors_) {
+            if (donor.donor_atom == donor_atom && donor.hydrogen_atom == hydrogen_atom) {
+                return true;
+            }
+        }
+        return false;
+    }
+    inline bool has_acceptor(int acceptor_atom) const {
+        for (const auto& acceptor : acceptors_) {
+            if (acceptor.acceptor_atom == acceptor_atom) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // CMAP methods
+    inline size_t get_num_cmaps() const { return cmaps_.size(); }
+    inline bool has_cmap(const std::vector<int>& atoms) const {
+        if (atoms.size() != 6) return false;
+        for (const auto& cmap : cmaps_) {
+            bool match = true;
+            for (size_t i = 0; i < 6; ++i) {
+                if (cmap.atoms[i] != atoms[i]) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) return true;
+        }
+        return false;
+    }
+
+    // Group methods
+    inline size_t get_num_groups() const { return groups_.size(); }
+    inline bool has_group(const std::vector<int>& atoms) const {
+        for (const auto& group : groups_) {
+            if (group.atoms == atoms) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void reserve_atoms(size_t n) {
+        atoms_.reserve(n);
+    }
+
 private:
     std::vector<TopologyAtom> atoms_;
     std::vector<TopologyResidue> residues_;
     std::vector<TopologySegment> segments_;
     std::vector<TopologyBond> bonds_;
     std::vector<TopologyAngle> angles_;
-    std::vector<TopologyDihedral> dihedrals_;
+    std::vector<TopologyDihedral> dihedrals_;  // Contains both dihedrals and impropers
+    std::vector<TopologyDonor> donors_;
+    std::vector<TopologyAcceptor> acceptors_;
+    std::map<int, std::set<int>> exclusions_;  // atom_index -> set of excluded atom indices
+    std::vector<TopologyGroup> groups_;
+    std::vector<TopologyCmap> cmaps_;
 
     // Lookup maps for efficient searching
     std::unordered_map<std::string, int> segment_map_;  // segment_name -> index
     std::map<std::pair<std::string, int>, int> residue_map_;  // (residue_name, number) -> index
     std::map<std::tuple<std::string, int, std::string>, int> atom_map_;  // (residue_name, number, atom_name) -> index
 
-    // New members for additional PSF sections
+    // Additional PSF sections
     std::vector<std::string> titles_;
-    std::vector<TopologyDonor> donors_;
-    std::vector<TopologyAcceptor> acceptors_;
-    std::map<int, std::set<int>> exclusions_;  // atom_index -> set of excluded atom indices
-    std::vector<TopologyGroup> groups_;
-    std::vector<TopologyCmap> cmaps_;
 };
 
 } // namespace model

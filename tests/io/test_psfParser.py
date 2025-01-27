@@ -21,9 +21,13 @@ def test_parse_protein_psf(test_data_dir):
     assert parser.parse_to_topology(psf_file, topology), "Failed to parse protein PSF file"
     
     # Verify basic topology information
-    assert topology.get_num_atoms() > 0, "No atoms found in topology"
+    assert topology.get_num_atoms() == 129, "Wrong number of atoms"
     assert topology.get_num_residues() > 0, "No residues found in topology"
     assert topology.get_num_segments() > 0, "No segments found in topology"
+    assert topology.get_num_bonds() == 131, "Wrong number of bonds"
+    assert topology.get_num_angles() == 243, "Wrong number of angles"
+    assert topology.get_num_dihedrals() == 207, "Wrong number of dihedrals"
+    assert topology.get_num_impropers() == 12, "Wrong number of impropers"
     
     # Check specific residues
     residues = {"ALA", "VAL", "PRO", "ASN", "GLN"}
@@ -220,4 +224,283 @@ def test_parse_invalid_psf(test_data_dir, tmp_path):
     topology = Topology()
     
     assert not parser.parse_to_topology(str(invalid_psf), topology), "Should fail for invalid PSF file"
+
+def test_parse_bonds(test_data_dir):
+    """Test parsing bonds section from PSF file."""
+    psf_file = os.path.join(test_data_dir, "test_proa.psf")
+    parser = PSFParser()
+    topology = Topology()
+    
+    assert parser.parse_to_topology(psf_file, topology), "Failed to parse PSF file"
+    
+    # Check total number of bonds
+    assert topology.get_num_bonds() == 131, "Wrong number of bonds"
+    
+    # Check specific bonds in ALA-7 (N-terminal)
+    ala_id = topology.find_residue("ALA", 7)
+    ala = topology.get_residue(ala_id)
+    
+    # Find atom indices for N-terminal ALA
+    n_idx = None
+    ht_indices = []
+    ca_idx = None
+    
+    for atom_idx in ala.atoms:
+        atom = topology.get_atom(atom_idx)
+        if atom.name == "N":
+            n_idx = atom_idx
+        elif atom.name in ["HT1", "HT2", "HT3"]:
+            ht_indices.append(atom_idx)
+        elif atom.name == "CA":
+            ca_idx = atom_idx
+    
+    # Check N-H bonds
+    for ht_idx in ht_indices:
+        assert topology.has_bond(n_idx, ht_idx), f"Missing N-HT bond between atoms {n_idx} and {ht_idx}"
+    
+    # Check N-CA bond
+    assert topology.has_bond(n_idx, ca_idx), f"Missing N-CA bond between atoms {n_idx} and {ca_idx}"
+
+def test_parse_angles(test_data_dir):
+    """Test parsing angles section from PSF file."""
+    psf_file = os.path.join(test_data_dir, "test_proa.psf")
+    parser = PSFParser()
+    topology = Topology()
+    
+    assert parser.parse_to_topology(psf_file, topology), "Failed to parse PSF file"
+    
+    # Check total number of angles
+    assert topology.get_num_angles() == 243, "Wrong number of angles"
+    
+    # Check specific angles in ALA-7 (N-terminal)
+    ala_id = topology.find_residue("ALA", 7)
+    ala = topology.get_residue(ala_id)
+    
+    # Find atom indices for N-terminal ALA
+    n_idx = None
+    ht_indices = []
+    ca_idx = None
+    
+    for atom_idx in ala.atoms:
+        atom = topology.get_atom(atom_idx)
+        if atom.name == "N":
+            n_idx = atom_idx
+        elif atom.name in ["HT1", "HT2", "HT3"]:
+            ht_indices.append(atom_idx)
+        elif atom.name == "CA":
+            ca_idx = atom_idx
+    
+    # Check HT-N-HT angles
+    for i, ht1_idx in enumerate(ht_indices):
+        for ht2_idx in ht_indices[i+1:]:
+            assert topology.has_angle(ht1_idx, n_idx, ht2_idx), \
+                f"Missing HT-N-HT angle between atoms {ht1_idx}, {n_idx}, and {ht2_idx}"
+    
+    # Check HT-N-CA angles
+    for ht_idx in ht_indices:
+        assert topology.has_angle(ht_idx, n_idx, ca_idx), \
+            f"Missing HT-N-CA angle between atoms {ht_idx}, {n_idx}, and {ca_idx}"
+
+def test_parse_dihedrals(test_data_dir):
+    """Test parsing dihedrals section from PSF file."""
+    psf_file = os.path.join(test_data_dir, "test_proa.psf")
+    parser = PSFParser()
+    topology = Topology()
+    
+    assert parser.parse_to_topology(psf_file, topology), "Failed to parse PSF file"
+    
+    # Check total number of dihedrals
+    assert topology.get_num_dihedrals() == 207, "Wrong number of dihedrals"
+    
+    # Check backbone dihedrals in VAL-8
+    val_id = topology.find_residue("VAL", 8)
+    val = topology.get_residue(val_id)
+    
+    # Find backbone atoms for phi/psi angles
+    n_idx = None
+    ca_idx = None
+    c_idx = None
+    next_n_idx = None
+    
+    for atom_idx in val.atoms:
+        atom = topology.get_atom(atom_idx)
+        if atom.name == "N":
+            n_idx = atom_idx
+        elif atom.name == "CA":
+            ca_idx = atom_idx
+        elif atom.name == "C":
+            c_idx = atom_idx
+    
+    # Find next residue's N atom
+    pro_id = topology.find_residue("PRO", 9)
+    pro = topology.get_residue(pro_id)
+    for atom_idx in pro.atoms:
+        atom = topology.get_atom(atom_idx)
+        if atom.name == "N":
+            next_n_idx = atom_idx
+            break
+    
+    # Check phi/psi dihedrals
+    assert topology.has_dihedral(c_idx, n_idx, ca_idx, c_idx), "Missing phi dihedral"
+    assert topology.has_dihedral(n_idx, ca_idx, c_idx, next_n_idx), "Missing psi dihedral"
+
+def test_parse_impropers(test_data_dir):
+    """Test parsing improper dihedrals section from PSF file."""
+    psf_file = os.path.join(test_data_dir, "test_proa.psf")
+    parser = PSFParser()
+    topology = Topology()
+    
+    assert parser.parse_to_topology(psf_file, topology), "Failed to parse PSF file"
+    
+    # Check total number of impropers
+    assert topology.get_num_impropers() == 12, "Wrong number of impropers"
+    
+    # Check peptide impropers in VAL-8
+    val_id = topology.find_residue("VAL", 8)
+    val = topology.get_residue(val_id)
+    
+    # Find peptide atoms
+    n_idx = None
+    ca_idx = None
+    c_idx = None
+    o_idx = None
+    
+    for atom_idx in val.atoms:
+        atom = topology.get_atom(atom_idx)
+        if atom.name == "N":
+            n_idx = atom_idx
+        elif atom.name == "CA":
+            ca_idx = atom_idx
+        elif atom.name == "C":
+            c_idx = atom_idx
+        elif atom.name == "O":
+            o_idx = atom_idx
+    
+    # Check peptide plane improper
+    assert topology.has_improper(c_idx, ca_idx, n_idx, o_idx), "Missing peptide plane improper"
+
+def test_parse_donors_acceptors(test_data_dir):
+    """Test parsing hydrogen bond donors and acceptors from PSF file."""
+    psf_file = os.path.join(test_data_dir, "test_proa.psf")
+    parser = PSFParser()
+    topology = Topology()
+    
+    assert parser.parse_to_topology(psf_file, topology), "Failed to parse PSF file"
+    
+    # Check total numbers
+    assert topology.get_num_donors() > 0, "No donors found"
+    assert topology.get_num_acceptors() > 0, "No acceptors found"
+    
+    # Check ASN-12 sidechain donors/acceptors
+    asn_id = topology.find_residue("ASN", 12)
+    asn = topology.get_residue(asn_id)
+    
+    # Find relevant atoms
+    nd2_idx = None
+    hd21_idx = None
+    hd22_idx = None
+    od1_idx = None
+    
+    for atom_idx in asn.atoms:
+        atom = topology.get_atom(atom_idx)
+        if atom.name == "ND2":
+            nd2_idx = atom_idx
+        elif atom.name == "HD21":
+            hd21_idx = atom_idx
+        elif atom.name == "HD22":
+            hd22_idx = atom_idx
+        elif atom.name == "OD1":
+            od1_idx = atom_idx
+    
+    # Check donor-H pairs
+    assert topology.has_donor(nd2_idx, hd21_idx), "Missing ND2-HD21 donor"
+    assert topology.has_donor(nd2_idx, hd22_idx), "Missing ND2-HD22 donor"
+    
+    # Check acceptor
+    assert topology.has_acceptor(od1_idx), "Missing OD1 acceptor"
+
+def test_parse_cmap(test_data_dir):
+    """Test parsing CMAP (correction map) terms from PSF file."""
+    psf_file = os.path.join(test_data_dir, "test_proa.psf")
+    parser = PSFParser()
+    topology = Topology()
+    
+    assert parser.parse_to_topology(psf_file, topology), "Failed to parse PSF file"
+    
+    # Check total number of CMAP terms
+    assert topology.get_num_cmaps() > 0, "No CMAP terms found"
+    
+    # Check CMAP term for VAL-8 to PRO-9
+    val_id = topology.find_residue("VAL", 8)
+    pro_id = topology.find_residue("PRO", 9)
+    val = topology.get_residue(val_id)
+    pro = topology.get_residue(pro_id)
+    
+    # Find backbone atoms for CMAP
+    val_c_idx = None
+    val_ca_idx = None
+    val_n_idx = None
+    pro_n_idx = None
+    pro_ca_idx = None
+    pro_c_idx = None
+    
+    for atom_idx in val.atoms:
+        atom = topology.get_atom(atom_idx)
+        if atom.name == "C":
+            val_c_idx = atom_idx
+        elif atom.name == "CA":
+            val_ca_idx = atom_idx
+        elif atom.name == "N":
+            val_n_idx = atom_idx
+    
+    for atom_idx in pro.atoms:
+        atom = topology.get_atom(atom_idx)
+        if atom.name == "N":
+            pro_n_idx = atom_idx
+        elif atom.name == "CA":
+            pro_ca_idx = atom_idx
+        elif atom.name == "C":
+            pro_c_idx = atom_idx
+    
+    # Check CMAP term
+    assert topology.has_cmap([val_c_idx, val_ca_idx, val_n_idx, pro_n_idx, pro_ca_idx, pro_c_idx]), \
+        "Missing CMAP term between VAL-8 and PRO-9"
+
+def test_parse_groups(test_data_dir):
+    """Test parsing group definitions from PSF file."""
+    psf_file = os.path.join(test_data_dir, "test_proa.psf")
+    parser = PSFParser()
+    topology = Topology()
+    
+    assert parser.parse_to_topology(psf_file, topology), "Failed to parse PSF file"
+    
+    # Check total number of groups
+    assert topology.get_num_groups() > 0, "No groups found"
+    
+    # Check if each residue is a group
+    for i in range(topology.get_num_residues()):
+        res = topology.get_residue(i)
+        assert topology.has_group(res.atoms), f"Missing group for residue {res.name} {res.number}"
+
+def test_parse_out_of_order_psf(test_data_dir, tmp_path):
+    """Test parsing PSF file with sections in non-standard order."""
+    # Create a PSF file with reordered sections
+    reordered_psf = tmp_path / "reordered.psf"
+    with open(reordered_psf, "w") as f:
+        f.write("PSF EXT CMAP XPLOR\n\n")
+        f.write("         1 !NTITLE\n")
+        f.write("* REORDERED PSF FILE FOR TESTING\n\n")
+        f.write("       131 !NBOND: bonds\n")
+        f.write("         1         2         2         3         3         4\n")
+        f.write("       129 !NATOM\n")
+        f.write("         1 PROA     7        ALA      N        NH3     -0.300000       14.0070           0\n")
+        f.write("         2 PROA     7        ALA      HT1      HC       0.330000        1.0080           0\n")
+    
+    parser = PSFParser()
+    topology = Topology()
+    
+    # Should still parse correctly despite reordered sections
+    assert parser.parse_to_topology(str(reordered_psf), topology), "Failed to parse reordered PSF file"
+    assert topology.get_num_atoms() == 129, "Wrong number of atoms"
+    assert topology.get_num_bonds() == 131, "Wrong number of bonds"
 
