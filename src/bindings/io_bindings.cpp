@@ -4,6 +4,7 @@
 #include <pybind11/stl.h>
 #include "../io/pdbParser.hpp"
 #include "../io/psfParser.hpp"
+#include "../io/topParser.hpp"
 #include "model/atom.hpp"
 #include "model/residue.hpp"
 
@@ -58,6 +59,12 @@ void init_io(py::module& m) {
         .def(py::init<>())
         .def("parse_to_topology", &pygcmc::io::PSFParser::parse_to_topology);
     io.attr("PSFParser") = psf_parser;
+
+    // TopParser bindings
+    auto top_parser = py::class_<pygcmc::io::TopParser>(m, "TopParser")
+        .def(py::init<>())
+        .def("parse_to_topology", &pygcmc::io::TopParser::parse_to_topology);
+    io.attr("TopParser") = top_parser;
 }
 
 } // namespace bindings
