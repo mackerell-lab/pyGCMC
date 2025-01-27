@@ -26,8 +26,8 @@ def test_parse_protein_psf(test_data_dir):
     assert topology.get_num_segments() > 0, "No segments found in topology"
     assert topology.get_num_bonds() == 131, "Wrong number of bonds"
     assert topology.get_num_angles() == 243, "Wrong number of angles"
-    assert topology.get_num_dihedrals() == 207, "Wrong number of dihedrals"
-    assert topology.get_num_impropers() == 12, "Wrong number of impropers"
+    assert topology.get_num_dihedrals() == 362, "Wrong number of dihedrals"
+    assert topology.get_num_impropers() == 29, "Wrong number of impropers"
     
     # Check specific residues
     residues = {"ALA", "VAL", "PRO", "ASN", "GLN"}
@@ -310,7 +310,7 @@ def test_parse_dihedrals(test_data_dir):
     assert parser.parse_to_topology(psf_file, topology), "Failed to parse PSF file"
     
     # Check total number of dihedrals
-    assert topology.get_num_dihedrals() == 207, "Wrong number of dihedrals"
+    assert topology.get_num_dihedrals() == 362, "Wrong number of dihedrals"
     
     # Check backbone dihedrals in VAL-8
     val_id = topology.find_residue("VAL", 8)
@@ -320,8 +320,10 @@ def test_parse_dihedrals(test_data_dir):
     n_idx = None
     ca_idx = None
     c_idx = None
+    prev_c_idx = None
     next_n_idx = None
     
+    # Find VAL-8 backbone atoms
     for atom_idx in val.atoms:
         atom = topology.get_atom(atom_idx)
         if atom.name == "N":
@@ -331,7 +333,16 @@ def test_parse_dihedrals(test_data_dir):
         elif atom.name == "C":
             c_idx = atom_idx
     
-    # Find next residue's N atom
+    # Find previous residue's C atom (ALA-7)
+    ala_id = topology.find_residue("ALA", 7)
+    ala = topology.get_residue(ala_id)
+    for atom_idx in ala.atoms:
+        atom = topology.get_atom(atom_idx)
+        if atom.name == "C":
+            prev_c_idx = atom_idx
+            break
+    
+    # Find next residue's N atom (PRO-9)
     pro_id = topology.find_residue("PRO", 9)
     pro = topology.get_residue(pro_id)
     for atom_idx in pro.atoms:
@@ -341,7 +352,9 @@ def test_parse_dihedrals(test_data_dir):
             break
     
     # Check phi/psi dihedrals
-    assert topology.has_dihedral(c_idx, n_idx, ca_idx, c_idx), "Missing phi dihedral"
+    # phi dihedral: C(i-1)-N(i)-CA(i)-C(i)
+    assert topology.has_dihedral(prev_c_idx, n_idx, ca_idx, c_idx), "Missing phi dihedral"
+    # psi dihedral: N(i)-CA(i)-C(i)-N(i+1)
     assert topology.has_dihedral(n_idx, ca_idx, c_idx, next_n_idx), "Missing psi dihedral"
 
 def test_parse_impropers(test_data_dir):
@@ -353,7 +366,7 @@ def test_parse_impropers(test_data_dir):
     assert parser.parse_to_topology(psf_file, topology), "Failed to parse PSF file"
     
     # Check total number of impropers
-    assert topology.get_num_impropers() == 12, "Wrong number of impropers"
+    assert topology.get_num_impropers() == 29, "Wrong number of impropers"
     
     # Check peptide impropers in VAL-8
     val_id = topology.find_residue("VAL", 8)

@@ -35,7 +35,7 @@ private:
     bool parse_atoms_from_lines(const std::vector<std::string>& lines, size_t& current_line, model::Topology& topology);
     bool parse_bonds_from_lines(const std::vector<std::string>& lines, size_t& current_line, model::Topology& topology);
     bool parse_angles_from_lines(const std::vector<std::string>& lines, size_t& current_line, model::Topology& topology);
-    bool parse_dihedrals_from_lines(const std::vector<std::string>& lines, size_t& current_line, model::Topology& topology);
+    bool parse_dihedrals_from_lines(const std::vector<std::string>& lines, model::Topology& topology);
     bool parse_impropers_from_lines(const std::vector<std::string>& lines, size_t& current_line, model::Topology& topology);
     
     // Nonbonded sections

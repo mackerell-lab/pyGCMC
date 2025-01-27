@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <iostream>
 #include <unordered_map>
+#include <set>
 
 namespace pygcmc {
 namespace io {
@@ -145,7 +146,7 @@ bool PSFParser::parse_to_topology(const std::string& filename, model::Topology& 
 
     if (section_data.count("NPHI")) {
         current_line = 0;  // Reset for new section
-        if (!parse_dihedrals_from_lines(section_data["NPHI"], current_line, topology)) return false;
+        if (!parse_dihedrals_from_lines(section_data["NPHI"], topology)) return false;
     }
 
     if (section_data.count("NIMPHI")) {
@@ -371,128 +372,108 @@ bool PSFParser::parse_angles_from_lines(const std::vector<std::string>& lines, s
     return true;
 }
 
-bool PSFParser::parse_dihedrals_from_lines(const std::vector<std::string>& lines,
-                                         size_t& current_line,
-                                         model::Topology& topology) {
-    if (current_line >= lines.size()) {
-        std::cerr << "Invalid line number in parse_dihedrals_from_lines" << std::endl;
+bool PSFParser::parse_dihedrals_from_lines(const std::vector<std::string>& dihedral_lines,
+                                           model::Topology& topology)
+{
+    if (dihedral_lines.empty()) {
+        std::cerr << "No lines provided for dihedrals section." << std::endl;
         return false;
     }
 
-    // Parse number of dihedrals from the current line
-    std::istringstream iss(trim(lines[current_line]));
-    size_t num_dihedrals = 0;
+    // The first line should contain the number of dihedrals
+    std::istringstream iss(trim(dihedral_lines[0]));
+    int num_dihedrals = 0;
     if (!(iss >> num_dihedrals)) {
-        std::cerr << "Failed to parse number of dihedrals" << std::endl;
+        std::cerr << "Failed to parse dihedral count from line: " << dihedral_lines[0] << std::endl;
         return false;
     }
 
+    // If there's no dihedral to parse, nothing to do
     if (num_dihedrals <= 0) {
-        return true;  // Dihedrals are optional
+        return true;
     }
 
-    size_t dihedrals_parsed = 0;
-    std::vector<int> buffer;
-    buffer.reserve(4);  // Each dihedral has 4 atoms
+    // First collect all dihedral indices
+    std::vector<int> all_indices;
+    all_indices.reserve(num_dihedrals * 4);
 
-    // Calculate how many lines we need (assuming 8 indices per line = 2 dihedrals)
-    size_t min_lines_needed = (num_dihedrals * 4 + 7) / 8;  // Round up division
-    if (current_line + 1 + min_lines_needed > lines.size()) {
-        std::cerr << "Not enough lines for dihedrals: need " << min_lines_needed 
-                  << ", have " << (lines.size() - current_line - 1) << std::endl;
-        return false;
-    }
-
-    for (size_t i = current_line + 1; i < lines.size() && dihedrals_parsed < num_dihedrals; i++) {
-        std::istringstream iss_line(trim(lines[i]));
-        int idx;
-        while (iss_line >> idx) {
-            if (idx == 0) continue; // Skip placeholder zeros
-            idx--;  // Convert to 0-based indexing
-            if (idx < 0 || idx >= topology.get_num_atoms()) {
-                std::cerr << "Invalid atom index " << (idx + 1) << " in dihedral" << std::endl;
+    // Begin from line 1 because line 0 is the count
+    for (size_t line_idx = 1; line_idx < dihedral_lines.size(); ++line_idx) {
+        std::istringstream iss_line(trim(dihedral_lines[line_idx]));
+        int atom_idx;
+        while (iss_line >> atom_idx) {
+            if (atom_idx == 0) continue;  // Skip fillers
+            atom_idx--;  // Convert to 0-based
+            if (atom_idx < 0 || atom_idx >= topology.get_num_atoms()) {
+                std::cerr << "Invalid atom index in dihedral: " << (atom_idx + 1) << std::endl;
                 return false;
             }
-            buffer.push_back(idx);
-            if (buffer.size() == 4) {
-                topology.add_dihedral(buffer[0], buffer[1], buffer[2], buffer[3], 1, 0.0, 0.0, false);
-                buffer.clear();
-                dihedrals_parsed++;
-                if (dihedrals_parsed == num_dihedrals) {
-                    break;
-                }
-            }
+            all_indices.push_back(atom_idx);
         }
     }
 
-    if (dihedrals_parsed != num_dihedrals) {
-        std::cerr << "Failed to parse all dihedrals: expected " << num_dihedrals 
-                  << ", got " << dihedrals_parsed << std::endl;
+    // Check if we got the expected number of indices
+    const size_t expected_indices = static_cast<size_t>(num_dihedrals) * 4;
+    if (all_indices.size() != expected_indices) {
+        std::cerr << "Wrong number of dihedral indices: expected " << expected_indices
+                  << ", got " << all_indices.size() << std::endl;
         return false;
+    }
+
+    // Add all dihedrals to topology
+    for (size_t i = 0; i < all_indices.size(); i += 4) {
+        topology.add_dihedral(all_indices[i], all_indices[i+1], 
+                            all_indices[i+2], all_indices[i+3]);
     }
 
     return true;
 }
 
 bool PSFParser::parse_impropers_from_lines(const std::vector<std::string>& lines,
-                                         size_t& current_line,
-                                         model::Topology& topology) {
-    if (current_line >= lines.size()) {
-        std::cerr << "Invalid line number in parse_impropers_from_lines" << std::endl;
-        return false;
-    }
-
+                                           size_t& current_line,
+                                           model::Topology& topology)
+{
     std::istringstream iss(trim(lines[current_line]));
-    size_t num_impropers = 0;
+    int num_impropers = 0;
     if (!(iss >> num_impropers)) {
         std::cerr << "Failed to parse number of impropers" << std::endl;
         return false;
     }
-
     if (num_impropers <= 0) {
-        return true;  // Impropers are optional
+        // no impropers
+        return true;
     }
 
-    size_t impropers_parsed = 0;
-    std::vector<int> buffer;
-    buffer.reserve(4);  // Each improper has 4 atoms
+    int impropers_added = 0;
+    std::vector<int> tmp_indices;
 
-    // Calculate how many lines we need (assuming 8 indices per line = 2 impropers)
-    size_t min_lines_needed = (num_impropers * 4 + 7) / 8;  // Round up division
-    if (current_line + 1 + min_lines_needed > lines.size()) {
-        std::cerr << "Not enough lines for impropers: need " << min_lines_needed 
-                  << ", have " << (lines.size() - current_line - 1) << std::endl;
-        return false;
-    }
+    while (impropers_added < num_impropers) {
+        current_line++;
+        if (current_line >= lines.size()) {
+            std::cerr << "Unexpected EOF while reading impropers" << std::endl;
+            return false;
+        }
 
-    for (size_t i = current_line + 1; i < lines.size() && impropers_parsed < num_impropers; i++) {
-        std::istringstream iss_line(trim(lines[i]));
+        std::istringstream iss_line(lines[current_line]);
         int idx;
         while (iss_line >> idx) {
-            if (idx == 0) continue; // Skip placeholder zeros
-            idx--;  // Convert to 0-based indexing
+            if (idx == 0) continue;
+            idx--; // 0-based
             if (idx < 0 || idx >= topology.get_num_atoms()) {
-                std::cerr << "Invalid atom index " << (idx + 1) << " in improper" << std::endl;
+                std::cerr << "Invalid atom index in impropers" << std::endl;
                 return false;
             }
-            buffer.push_back(idx);
-            if (buffer.size() == 4) {
-                topology.add_improper(buffer[0], buffer[1], buffer[2], buffer[3]);
-                buffer.clear();
-                impropers_parsed++;
-                if (impropers_parsed == num_impropers) {
-                    break;
-                }
+            tmp_indices.push_back(idx);
+            if (tmp_indices.size() == 4) {
+                topology.add_improper(tmp_indices[0],
+                                      tmp_indices[1],
+                                      tmp_indices[2],
+                                      tmp_indices[3]);
+                tmp_indices.clear();
+                impropers_added++;
             }
         }
     }
-
-    if (impropers_parsed != num_impropers) {
-        std::cerr << "Failed to parse all impropers: expected " << num_impropers 
-                  << ", got " << impropers_parsed << std::endl;
-        return false;
-    }
-
     return true;
 }
 
