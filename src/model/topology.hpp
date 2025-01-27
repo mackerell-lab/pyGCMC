@@ -547,10 +547,12 @@ public:
     // CMAP methods
     inline size_t get_num_cmaps() const { return cmaps_.size(); }
     inline bool has_cmap(const std::vector<int>& atoms) const {
-        if (atoms.size() != 6) return false;
+        // CHARMM format requires 8 atoms for CMAP terms:
+        // C(i-1), N(i), CA(i), C(i), N(i+1), CA(i+1), C(i+1), N(i+2)
+        if (atoms.size() != 8) return false;
         for (const auto& cmap : cmaps_) {
             bool match = true;
-            for (size_t i = 0; i < 6; ++i) {
+            for (size_t i = 0; i < 8; ++i) {
                 if (cmap.atoms[i] != atoms[i]) {
                     match = false;
                     break;

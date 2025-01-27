@@ -430,40 +430,73 @@ def test_parse_cmap(test_data_dir):
     assert topology.get_num_cmaps() > 0, "No CMAP terms found"
     
     # Check CMAP term for VAL-8 to PRO-9
-    val_id = topology.find_residue("VAL", 8)
-    pro_id = topology.find_residue("PRO", 9)
-    val = topology.get_residue(val_id)
-    pro = topology.get_residue(pro_id)
+    # We need 8 atoms for a CMAP term in the following order (from PSF file):
+    # C(i), N(i+1), CA(i+1), C(i+1), N(i+1), CA(i+1), C(i+1), N(i+2)
     
-    # Find backbone atoms for CMAP
-    val_c_idx = None
-    val_ca_idx = None
-    val_n_idx = None
-    pro_n_idx = None
-    pro_ca_idx = None
-    pro_c_idx = None
+    # Get all required residues
+    ala7_id = topology.find_residue("ALA", 7)
+    val8_id = topology.find_residue("VAL", 8)
+    pro9_id = topology.find_residue("PRO", 9)
+    ala10_id = topology.find_residue("ALA", 10)
     
-    for atom_idx in val.atoms:
+    assert all(x is not None for x in [ala7_id, val8_id, pro9_id, ala10_id]), "Failed to find required residues"
+    
+    # Get residue objects
+    ala7 = topology.get_residue(ala7_id)
+    val8 = topology.get_residue(val8_id)
+    pro9 = topology.get_residue(pro9_id)
+    ala10 = topology.get_residue(ala10_id)
+    
+    # Initialize atom indices
+    val8_c_idx = None    # C(i)
+    pro9_n_idx = None    # N(i+1)
+    pro9_ca_idx = None   # CA(i+1)
+    pro9_c_idx = None    # C(i+1)
+    ala10_n_idx = None   # N(i+2)
+    
+    # Find VAL-8's C
+    for atom_idx in val8.atoms:
         atom = topology.get_atom(atom_idx)
         if atom.name == "C":
-            val_c_idx = atom_idx
-        elif atom.name == "CA":
-            val_ca_idx = atom_idx
-        elif atom.name == "N":
-            val_n_idx = atom_idx
+            val8_c_idx = atom_idx
+            break
     
-    for atom_idx in pro.atoms:
+    # Find PRO-9's N, CA, C
+    for atom_idx in pro9.atoms:
         atom = topology.get_atom(atom_idx)
         if atom.name == "N":
-            pro_n_idx = atom_idx
+            pro9_n_idx = atom_idx
         elif atom.name == "CA":
-            pro_ca_idx = atom_idx
+            pro9_ca_idx = atom_idx
         elif atom.name == "C":
-            pro_c_idx = atom_idx
+            pro9_c_idx = atom_idx
     
-    # Check CMAP term
-    assert topology.has_cmap([val_c_idx, val_ca_idx, val_n_idx, pro_n_idx, pro_ca_idx, pro_c_idx]), \
-        "Missing CMAP term between VAL-8 and PRO-9"
+    # Find ALA-10's N
+    for atom_idx in ala10.atoms:
+        atom = topology.get_atom(atom_idx)
+        if atom.name == "N":
+            ala10_n_idx = atom_idx
+            break
+    
+    # Verify we found all atoms
+    assert all(x is not None for x in [
+        val8_c_idx, pro9_n_idx, pro9_ca_idx, pro9_c_idx, ala10_n_idx
+    ]), "Failed to find all required atoms for CMAP"
+    
+    # Check CMAP term with atoms in PSF file order:
+    # C(i), N(i+1), CA(i+1), C(i+1), N(i+1), CA(i+1), C(i+1), N(i+2)
+    cmap_atoms = [
+        val8_c_idx,    # C(i)
+        pro9_n_idx,    # N(i+1)
+        pro9_ca_idx,   # CA(i+1)
+        pro9_c_idx,    # C(i+1)
+        pro9_n_idx,    # N(i+1) again
+        pro9_ca_idx,   # CA(i+1) again
+        pro9_c_idx,    # C(i+1) again
+        ala10_n_idx    # N(i+2)
+    ]
+    
+    assert topology.has_cmap(cmap_atoms), "Missing CMAP term between VAL-8 and PRO-9"
 
 def test_parse_groups(test_data_dir):
     """Test parsing group definitions from PSF file."""
