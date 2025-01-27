@@ -523,23 +523,90 @@ def test_parse_groups(test_data_dir):
 
 def test_parse_out_of_order_psf(test_data_dir, tmp_path):
     """Test parsing PSF file with sections in non-standard order."""
-    # Create a PSF file with reordered sections
+    # Read the original PSF file
+    original_psf = os.path.join(test_data_dir, "test_proa.psf")
+    with open(original_psf, "r") as f:
+        lines = f.readlines()
+
+    # Create sections dictionary
+    sections = {}
+    current_section = None
+    current_lines = []
+
+    # Collect sections
+    for line in lines:
+        if "!NTITLE" in line:
+            current_section = "NTITLE"
+            current_lines = [line]
+        elif "!NATOM" in line:
+            if current_section:
+                sections[current_section] = current_lines
+            current_section = "NATOM"
+            current_lines = [line]
+        elif "!NBOND" in line:
+            if current_section:
+                sections[current_section] = current_lines
+            current_section = "NBOND"
+            current_lines = [line]
+        elif "!NTHETA" in line:
+            if current_section:
+                sections[current_section] = current_lines
+            current_section = "NTHETA"
+            current_lines = [line]
+        elif "!NPHI" in line:
+            if current_section:
+                sections[current_section] = current_lines
+            current_section = "NPHI"
+            current_lines = [line]
+        elif "!NIMPHI" in line:
+            if current_section:
+                sections[current_section] = current_lines
+            current_section = "NIMPHI"
+            current_lines = [line]
+        elif "!NDON" in line:
+            if current_section:
+                sections[current_section] = current_lines
+            current_section = "NDON"
+            current_lines = [line]
+        elif "!NACC" in line:
+            if current_section:
+                sections[current_section] = current_lines
+            current_section = "NACC"
+            current_lines = [line]
+        else:
+            if current_section:
+                current_lines.append(line)
+
+    # Add the last section
+    if current_section:
+        sections[current_section] = current_lines
+
+    # Create reordered PSF file
     reordered_psf = tmp_path / "reordered.psf"
     with open(reordered_psf, "w") as f:
+        # Write header
         f.write("PSF EXT CMAP XPLOR\n\n")
-        f.write("         1 !NTITLE\n")
-        f.write("* REORDERED PSF FILE FOR TESTING\n\n")
-        f.write("       131 !NBOND: bonds\n")
-        f.write("         1         2         2         3         3         4\n")
-        f.write("       129 !NATOM\n")
-        f.write("         1 PROA     7        ALA      N        NH3     -0.300000       14.0070           0\n")
-        f.write("         2 PROA     7        ALA      HT1      HC       0.330000        1.0080           0\n")
-    
+        
+        # Write title section
+        f.writelines(sections["NTITLE"])
+        
+        # Write sections in non-standard order
+        section_order = ["NBOND", "NTHETA", "NATOM", "NPHI", "NIMPHI", "NDON", "NACC"]
+        for section in section_order:
+            if section in sections:
+                f.write("\n")  # Add spacing between sections
+                f.writelines(sections[section])
+
     parser = PSFParser()
     topology = Topology()
-    
+
     # Should still parse correctly despite reordered sections
     assert parser.parse_to_topology(str(reordered_psf), topology), "Failed to parse reordered PSF file"
+    
+    # Verify the topology has the correct content
     assert topology.get_num_atoms() == 129, "Wrong number of atoms"
     assert topology.get_num_bonds() == 131, "Wrong number of bonds"
+    assert topology.get_num_angles() == 243, "Wrong number of angles"
+    assert topology.get_num_dihedrals() == 362, "Wrong number of dihedrals"
+    assert topology.get_num_impropers() == 29, "Wrong number of impropers"
 
