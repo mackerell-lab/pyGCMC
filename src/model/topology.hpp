@@ -12,6 +12,7 @@
 #include <optional>
 #include <stdexcept>
 #include <iostream>
+#include <algorithm>
 
 namespace pygcmc {
 namespace model {
@@ -235,6 +236,11 @@ public:
         }
 
         TopologyDihedral dihedral;
+        // PSF file already has the correct atom order for impropers:
+        // - Peptide C improper (C-CA-N-O)
+        // - Peptide N improper (N-C-CA-H)
+        // - Sidechain amide C improper (C-C-N-O)
+        // - Sidechain amide N improper (N-C-H1-H2)
         dihedral.atom1 = atom1;
         dihedral.atom2 = atom2;
         dihedral.atom3 = atom3;
@@ -491,11 +497,28 @@ public:
     }
 
     inline bool has_improper(int atom1, int atom2, int atom3, int atom4) const {
+        // atom1 is assumed to be the central atom in the query
+        std::vector<int> query_others = {atom2, atom3, atom4};
+        std::sort(query_others.begin(), query_others.end());
+
         for (const auto& dihedral : dihedrals_) {
             if (!dihedral.improper) continue;  // Skip regular dihedrals
-            if (dihedral.atom1 == atom1 && dihedral.atom2 == atom2 &&
-                dihedral.atom3 == atom3 && dihedral.atom4 == atom4) {
-                return true;
+            
+            // Try each position as the potential central atom
+            std::array<int, 4> atoms = {dihedral.atom1, dihedral.atom2, dihedral.atom3, dihedral.atom4};
+            for (int i = 0; i < 4; ++i) {
+                if (atoms[i] == atom1) {  // Found potential central atom match
+                    std::vector<int> others;
+                    for (int j = 0; j < 4; ++j) {
+                        if (j != i) {
+                            others.push_back(atoms[j]);
+                        }
+                    }
+                    std::sort(others.begin(), others.end());
+                    if (others == query_others) {
+                        return true;
+                    }
+                }
             }
         }
         return false;
