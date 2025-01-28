@@ -36,37 +36,60 @@ public:
     bool parse_to_topology(const std::string& filename, model::Topology& topology);
 
 private:
+    // Structure to track line source information
+    struct LineInfo {
+        std::string content;      // The actual line content
+        std::string source_file;  // Source file path
+        int line_number;          // Line number in source file
+        
+        LineInfo(const std::string& content, const std::string& file, int line) 
+            : content(content), source_file(file), line_number(line) {}
+    };
+
+    // Preprocessor state
+    struct PreprocessorState {
+        std::map<std::string, std::string> defines;  // #define macros
+        std::vector<bool> ifdef_stack;               // Stack for #ifdef/#ifndef nesting
+        std::vector<bool> else_encountered;          // Track if #else was encountered at each nesting level
+        bool skip_section = false;                   // Whether to skip current section due to #ifdef
+        
+        bool should_skip() const {
+            // Skip if any level in the stack is false
+            for (bool val : ifdef_stack) {
+                if (!val) return true;
+            }
+            return false;
+        }
+    };
+
+    // New helper functions for flattened include processing
+    bool collect_all_lines(const std::string& filename, std::vector<LineInfo>& all_lines, 
+                          PreprocessorState& pp_state, bool is_main_file = true);
+    void parse_sections(const std::vector<LineInfo>& all_lines, 
+                       std::map<std::string, std::vector<LineInfo>>& sections);
+    bool process_preprocessor_line(const std::string& line, const std::string& parent_file,
+                                 std::vector<LineInfo>& all_lines, PreprocessorState& pp_state,
+                                 int line_number);
+
     // Basic topology sections
-    bool parse_defaults_section(const std::vector<std::string>& lines, model::Topology& topology);
-    bool parse_atomtypes_section(const std::vector<std::string>& lines, model::Topology& topology);
-    bool parse_moleculetype_section(const std::vector<std::string>& lines, model::Topology& topology);
-    bool parse_atoms_section(const std::vector<std::string>& lines, model::Topology& topology);
-    bool parse_bonds_section(const std::vector<std::string>& lines, model::Topology& topology);
-    bool parse_angles_section(const std::vector<std::string>& lines, model::Topology& topology);
-    bool parse_dihedrals_section(const std::vector<std::string>& lines, model::Topology& topology);
-    bool parse_impropers_section(const std::vector<std::string>& lines, model::Topology& topology);
-    bool parse_pairs_section(const std::vector<std::string>& lines, model::Topology& topology);
-    bool parse_exclusions_section(const std::vector<std::string>& lines, model::Topology& topology);
-    bool parse_cmap_section(const std::vector<std::string>& lines, model::Topology& topology);
-    bool parse_system_section(const std::vector<std::string>& lines, model::Topology& topology);
-    bool parse_molecules_section(const std::vector<std::string>& lines, model::Topology& topology);
+    bool parse_defaults_section(const std::vector<LineInfo>& lines, model::Topology& topology);
+    bool parse_atomtypes_section(const std::vector<LineInfo>& lines, model::Topology& topology);
+    bool parse_moleculetype_section(const std::vector<LineInfo>& lines, model::Topology& topology);
+    bool parse_atoms_section(const std::vector<LineInfo>& lines, model::Topology& topology);
+    bool parse_bonds_section(const std::vector<LineInfo>& lines, model::Topology& topology, int atom_offset = 0);
+    bool parse_angles_section(const std::vector<LineInfo>& lines, model::Topology& topology, int atom_offset = 0);
+    bool parse_dihedrals_section(const std::vector<LineInfo>& lines, model::Topology& topology, int atom_offset = 0);
+    bool parse_impropers_section(const std::vector<LineInfo>& lines, model::Topology& topology, int atom_offset = 0);
+    bool parse_system_section(const std::vector<LineInfo>& lines, model::Topology& topology);
+    bool parse_molecules_section(const std::vector<LineInfo>& lines, model::Topology& topology);
 
     // Include handling
-    bool process_includes(const std::string& filename, model::Topology& topology);
     std::string resolve_include_path(const std::string& include_path, const std::string& parent_file);
 
-    // Preprocessor handling
-    bool handle_preprocessor_line(const std::string& line);
-    bool evaluate_ifdef_condition(const std::string& condition);
-    bool should_process_line() const;
-
     // Helper functions
-    std::vector<std::string> read_section(const std::string& filename, const std::string& section_name);
     std::string trim(std::string& str);
     std::vector<std::string> split(const std::string& str);
-    void report_error(const std::string& message, bool critical);
-    bool validate_topology(const model::Topology& topology);
-    bool check_molecule_consistency(const model::Topology& topology);
+    std::string remove_comment(const std::string& line);  // New helper for comment handling
 
     // Internal state
     std::set<std::string> processed_files_;
@@ -74,16 +97,13 @@ private:
     int current_molecule_nrexcl_ = 3;
     std::vector<std::pair<std::string, int>> molecule_order_;
     std::map<std::string, std::string> molecule_to_segment_type_;
-    std::set<std::string> preprocessor_defines_;
-    bool strict_mode_ = true;
-
-    struct PreprocessorState {
-        bool in_ifdef = false;
-        bool in_else = false;
-        bool ifdef_condition_met = true;
-        int ifdef_depth = 0;
-        std::string current_ifdef;
-    } preproc_state_;
+    
+    // Store molecule definitions (now using LineInfo)
+    std::map<std::string, std::vector<LineInfo>> molecule_atoms_;
+    std::map<std::string, std::vector<LineInfo>> molecule_bonds_;
+    std::map<std::string, std::vector<LineInfo>> molecule_angles_;
+    std::map<std::string, std::vector<LineInfo>> molecule_dihedrals_;
+    std::map<std::string, std::vector<LineInfo>> molecule_impropers_;
 };
 
 } // namespace io
