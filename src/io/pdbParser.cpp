@@ -40,23 +40,23 @@ const std::map<std::string, double> PDBParser::ELEMENT_MASSES = {
     {"I", 126.904}, // Iodine
 };
 
-PDBParser::ParseResult PDBParser::parse_file(const std::string& filename) {
-    ParseResult result;
-    if (!parse_to_result(filename, result)) {
+model::Structure PDBParser::parse_file(const std::string& filename) {
+    model::Structure structure;
+    if (!parse_to_structure(filename, structure)) {
         throw std::runtime_error("Failed to parse PDB file: " + filename);
     }
-    return result;
+    return structure;
 }
 
-PDBParser::ParseResult PDBParser::parse_string(const std::string& pdbStr) {
-    ParseResult result;
-    if (!parse_string_to_result(pdbStr, result)) {
+model::Structure PDBParser::parse_string(const std::string& pdbStr) {
+    model::Structure structure;
+    if (!parse_string_to_structure(pdbStr, structure)) {
         throw std::runtime_error("Failed to parse PDB string");
     }
-    return result;
+    return structure;
 }
 
-bool PDBParser::parse_to_result(const std::string& filename, ParseResult& result) {
+bool PDBParser::parse_to_structure(const std::string& filename, model::Structure& structure) {
     std::ifstream file(filename);
     if (!file) {
         std::cerr << "Could not open PDB file: " << filename << std::endl;
@@ -64,41 +64,44 @@ bool PDBParser::parse_to_result(const std::string& filename, ParseResult& result
     }
     std::stringstream buffer;
     buffer << file.rdbuf();
-    return parse_string_to_result(buffer.str(), result);
+    return parse_string_to_structure(buffer.str(), structure);
 }
 
-bool PDBParser::parse_string_to_result(const std::string& pdbStr, ParseResult& result) {
+bool PDBParser::parse_string_to_structure(const std::string& pdbStr, model::Structure& structure) {
     std::istringstream iss(pdbStr);
     std::string line;
     
-    // Current chain tracking
-    std::string currentChain;
+    // Current residue tracking
     std::shared_ptr<model::Residue> currentResidue;
+    
+    // Clear existing data
+    structure.clear();
     
     while (std::getline(iss, line)) {
         if (line.length() < 6) continue;
         
         RecordType recordType = getRecordType(line);
         bool success = true;
+        
         switch (recordType) {
             case RecordType::ATOM:
             case RecordType::HETATM:
-                success = parseAtomRecord(line, recordType, result, currentResidue);
+                success = parseAtomRecord(line, recordType, structure, currentResidue);
                 break;
             case RecordType::TER:
-                success = parseTerRecord(line, currentResidue, result);
+                success = parseTerRecord(line, currentResidue, structure);
                 break;
             case RecordType::HELIX:
-                success = parseHelixRecord(line, result);
+                success = parseHelixRecord(line, structure);
                 break;
             case RecordType::SHEET:
-                success = parseSheetRecord(line, result);
+                success = parseSheetRecord(line, structure);
                 break;
             case RecordType::SSBOND:
-                success = parseSSBondRecord(line, result);
+                success = parseSSBondRecord(line, structure);
                 break;
             case RecordType::CRYST1:
-                success = parseCryst1Record(line, result);
+                success = parseCryst1Record(line, structure);
                 break;
             default:
                 continue;
@@ -130,7 +133,7 @@ PDBParser::RecordType PDBParser::getRecordType(const std::string& line) {
 }
 
 bool PDBParser::parseAtomRecord(const std::string& line, RecordType type,
-                              ParseResult& result,
+                              model::Structure& structure,
                               std::shared_ptr<model::Residue>& currentResidue) {
     try {
         // Parse atom fields according to PDB format
@@ -278,57 +281,27 @@ bool PDBParser::parseAtomRecord(const std::string& line, RecordType type,
         }
         atom->setMassCharge(mass, 0.0); // Set mass and default charge to 0
 
-        // Add to result
-        result.atoms.push_back(atom);
+        // Add atom to structure
+        structure.addAtom(atom);
 
         // Handle residue
         if (!currentResidue || 
             currentResidue->getChain() != chainId[0] ||
             currentResidue->getIres() != resSeq ||
             currentResidue->getInscode() != iCode[0]) {
-            // If we have a previous residue, calculate its center of mass before moving on
+            
             if (currentResidue) {
                 currentResidue->calculateCenterOfMass();
             }
             
-            // Check if residue already exists
-            bool found = false;
-            for (auto& res : result.residues) {
-                if (res->getChain() == chainId[0] &&
-                    res->getIres() == resSeq &&
-                    res->getInscode() == iCode[0]) {
-                    currentResidue = res;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                // Create new residue with current name and HETATM status
-                currentResidue = std::make_shared<model::Residue>(
-                    resName, resSeq, segId, 0, chainId[0], iCode[0]);
-                currentResidue->setHetatm(type == RecordType::HETATM);
-                result.residues.push_back(currentResidue);
-            } else if (currentResidue->getResname() != resName || 
-                      currentResidue->isHetatm() != (type == RecordType::HETATM)) {
-                // If residue exists but has different name/HETATM status,
-                // create a new one with updated properties
-                auto newResidue = std::make_shared<model::Residue>(
-                    resName, resSeq, segId, 0, chainId[0], iCode[0]);
-                newResidue->setHetatm(type == RecordType::HETATM);
-                // Copy existing atoms
-                for (const auto& existingAtom : currentResidue->getAtoms()) {
-                    newResidue->addAtom(existingAtom);
-                }
-                // Replace old residue with new one
-                auto it = std::find(result.residues.begin(), result.residues.end(), currentResidue);
-                if (it != result.residues.end()) {
-                    *it = newResidue;
-                }
-                currentResidue = newResidue;
-            }
+            // Create new residue
+            currentResidue = std::make_shared<model::Residue>(
+                resName, resSeq, segId, 0, chainId[0], iCode[0]);
+            currentResidue->setHetatm(type == RecordType::HETATM);
+            structure.addResidue(currentResidue);
         }
+        
         currentResidue->addAtom(atom);
-
         return true;
     } catch (const std::exception& e) {
         std::cerr << "Error parsing ATOM/HETATM record: " << e.what() << std::endl;
@@ -336,55 +309,23 @@ bool PDBParser::parseAtomRecord(const std::string& line, RecordType type,
     }
 }
 
-bool PDBParser::parseTerRecord(const std::string& line,
+bool PDBParser::parseTerRecord([[maybe_unused]] const std::string& line,
                              std::shared_ptr<model::Residue>& currentResidue,
-                             ParseResult& result) {
+                             model::Structure& structure) {
     try {
-        // Calculate center of mass for the last residue before TER
         if (currentResidue) {
             currentResidue->calculateCenterOfMass();
         }
+
+        model::Structure::TerminalInfo terminal{
+            currentResidue ? currentResidue->getChain() : ' ',
+            currentResidue ? currentResidue->getIres() : 0,
+            currentResidue ? currentResidue->getInscode() : ' ',
+            currentResidue ? currentResidue->getResname() : ""
+        };
         
-        std::string chainId = line.length() > 21 ? std::string(1, line[21]) : "";
-        if (!chainId.empty()) {
-            size_t start = chainId.find_first_not_of(" ");
-            if (start != std::string::npos) {
-                chainId = chainId.substr(start);
-            }
-        }
-        
-        int resSeq = 0;
-        std::string iCode = " ";
-        std::string resName;
-
-        // Get residue information from current residue if available
-        if (currentResidue) {
-            chainId = std::string(1, currentResidue->getChain());
-            resSeq = currentResidue->getIres();
-            iCode = std::string(1, currentResidue->getInscode());
-            resName = currentResidue->getResname();
-        }
-
-        // Try to parse residue sequence number if present
-        if (line.length() >= 26) {
-            try {
-                resSeq = std::stoi(line.substr(22, 4));
-            } catch (const std::exception&) {
-                // Use default or current residue value
-            }
-        }
-
-        // Store terminal information
-        result.terminals.push_back(TerminalInfo{
-            chainId.empty() ? ' ' : chainId[0], 
-            resSeq, 
-            iCode.empty() ? ' ' : iCode[0], 
-            resName
-        });
-
-        // Reset current residue pointer
+        structure.addTerminal(terminal);
         currentResidue = nullptr;
-
         return true;
     } catch (const std::exception& e) {
         std::cerr << "Error parsing TER record: " << e.what() << std::endl;
@@ -392,68 +333,22 @@ bool PDBParser::parseTerRecord(const std::string& line,
     }
 }
 
-bool PDBParser::parseHelixRecord(const std::string& line, ParseResult& result) {
+bool PDBParser::parseHelixRecord(const std::string& line, model::Structure& structure) {
     try {
-        std::string helixId = line.substr(11, 3);
-        if (!helixId.empty()) {
-            size_t start = helixId.find_first_not_of(" ");
-            size_t end = helixId.find_last_not_of(" ");
-            if (start != std::string::npos && end != std::string::npos) {
-                helixId = helixId.substr(start, end - start + 1);
-            } else {
-                helixId = "";
-            }
-        }
+        model::Structure::SecondaryStructure helix;
+        helix.id = line.substr(11, 3);
+        helix.initResName = line.substr(15, 3);
+        helix.initChainId = line[19];
+        helix.initSeqNum = std::stoi(line.substr(21, 4));
+        helix.initICode = line[25];
+        helix.endResName = line.substr(27, 3);
+        helix.endChainId = line[31];
+        helix.endSeqNum = std::stoi(line.substr(33, 4));
+        helix.endICode = line[37];
+        helix.structureClass = std::stoi(line.substr(38, 2));
         
-        std::string initResName = line.substr(15, 3);
-        if (!initResName.empty()) {
-            size_t start = initResName.find_first_not_of(" ");
-            size_t end = initResName.find_last_not_of(" ");
-            if (start != std::string::npos && end != std::string::npos) {
-                initResName = initResName.substr(start, end - start + 1);
-            } else {
-                initResName = "";
-            }
-        }
-        
-        char initChainId = line[19];
-        int initSeqNum = std::stoi(line.substr(21, 4));
-        char initICode = (line.length() > 25) ? line[25] : ' ';
-        
-        std::string endResName = line.substr(27, 3);
-        if (!endResName.empty()) {
-            size_t start = endResName.find_first_not_of(" ");
-            size_t end = endResName.find_last_not_of(" ");
-            if (start != std::string::npos && end != std::string::npos) {
-                endResName = endResName.substr(start, end - start + 1);
-            } else {
-                endResName = "";
-            }
-        }
-        
-        char endChainId = line[31];
-        int endSeqNum = std::stoi(line.substr(33, 4));
-        char endICode = (line.length() > 37) ? line[37] : ' ';
-        
-        int helixClass = std::stoi(line.substr(38, 2));
-        
-        // Create and store helix information
-        HelixInfo helixInfo{
-            helixId,
-            initResName,
-            initChainId,
-            initSeqNum,
-            initICode,
-            endResName,
-            endChainId,
-            endSeqNum,
-            endICode,
-            helixClass
-        };
-        
-        std::string chainKey(1, initChainId);
-        result.helices[chainKey].push_back(helixInfo);
-
+        std::string chainId(1, helix.initChainId);
+        structure.addHelix(chainId, helix);
         return true;
     } catch (const std::exception& e) {
         std::cerr << "Error parsing HELIX record: " << e.what() << std::endl;
@@ -461,7 +356,7 @@ bool PDBParser::parseHelixRecord(const std::string& line, ParseResult& result) {
     }
 }
 
-bool PDBParser::parseSheetRecord(const std::string& line, ParseResult& result) {
+bool PDBParser::parseSheetRecord(const std::string& line, model::Structure& structure) {
     try {
         if (line.length() < 38) {
             throw std::runtime_error("SHEET record too short");
@@ -522,10 +417,7 @@ bool PDBParser::parseSheetRecord(const std::string& line, ParseResult& result) {
             std::to_string(strandNum) + ":" + 
             std::to_string(sense);
         
-        if (result.sheets.find(initChainId) == result.sheets.end()) {
-            result.sheets[initChainId] = std::vector<std::string>();
-        }
-        result.sheets[initChainId].push_back(sheetInfo);
+        structure.addSheet(initChainId, sheetInfo);
 
         return true;
     } catch (const std::exception& e) {
@@ -534,7 +426,7 @@ bool PDBParser::parseSheetRecord(const std::string& line, ParseResult& result) {
     }
 }
 
-bool PDBParser::parseSSBondRecord(const std::string& line, ParseResult& result) {
+bool PDBParser::parseSSBondRecord(const std::string& line, model::Structure& structure) {
     try {
         std::string chain1 = std::string(1, line[15]);
         if (!chain1.empty()) {
@@ -577,7 +469,7 @@ bool PDBParser::parseSSBondRecord(const std::string& line, ParseResult& result) 
             chain2 + ":" + 
             std::to_string(resnum2) + inscode2;
         
-        result.ssbonds.push_back(bondInfo);
+        structure.addSSBond(bondInfo);
 
         return true;
     } catch (const std::exception& e) {
@@ -586,7 +478,7 @@ bool PDBParser::parseSSBondRecord(const std::string& line, ParseResult& result) 
     }
 }
 
-bool PDBParser::parseCryst1Record(const std::string& line, ParseResult& result) {
+bool PDBParser::parseCryst1Record(const std::string& line, model::Structure& structure) {
     try {
         // Parse unit cell parameters according to PDB format
         double a = std::stod(line.substr(6, 9));
@@ -596,8 +488,7 @@ bool PDBParser::parseCryst1Record(const std::string& line, ParseResult& result) 
         double beta = std::stod(line.substr(40, 7));
         double gamma = std::stod(line.substr(47, 7));
         
-        // Store box dimensions
-        result.boxDimensions = std::vector<double>{a, b, c, alpha, beta, gamma};
+        structure.setBoxDimensions(std::vector<double>{a, b, c, alpha, beta, gamma});
         
         return true;
     } catch (const std::exception& e) {

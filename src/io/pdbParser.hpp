@@ -10,6 +10,7 @@
 #include <optional>
 #include "model/atom.hpp"
 #include "model/residue.hpp"
+#include "model/structure.hpp"
 
 namespace pygcmc {
 namespace io {
@@ -31,89 +32,56 @@ public:
         CRYST1
     };
 
-    // Structure to hold helix information
-    struct HelixInfo {
-        std::string helixId;
-        std::string initResName;
-        char initChainId;
-        int initSeqNum;
-        char initICode;
-        std::string endResName;
-        char endChainId;
-        int endSeqNum;
-        char endICode;
-        int helixClass;
-    };
-
-    // Structure to hold terminal record information
-    struct TerminalInfo {
-        char chainId;
-        int resSeq;
-        char iCode;
-        std::string resName;
-    };
-
-    // Parse results
-    struct ParseResult {
-        std::vector<std::shared_ptr<model::Atom>> atoms;
-        std::vector<std::shared_ptr<model::Residue>> residues;
-        std::vector<TerminalInfo> terminals;
-        std::map<std::string, std::vector<HelixInfo>> helices;  // Map of chain ID to helix information
-        std::map<std::string, std::vector<std::string>> sheets;
-        std::vector<std::string> ssbonds;
-        std::vector<double> boxDimensions;
-    };
-
     /**
      * @brief Parse PDB file
      * @param filename Path to PDB file
-     * @return ParseResult containing atoms, residues and structure information
+     * @return Structure containing molecular structure information
      * @throws std::runtime_error if parsing fails
      */
-    static ParseResult parse_file(const std::string& filename);
+    static model::Structure parse_file(const std::string& filename);
 
     /**
      * @brief Parse PDB string
      * @param pdbStr String containing PDB data
-     * @return ParseResult containing atoms, residues and structure information
+     * @return Structure containing molecular structure information
      * @throws std::runtime_error if parsing fails
      */
-    static ParseResult parse_string(const std::string& pdbStr);
+    static model::Structure parse_string(const std::string& pdbStr);
 
     /**
-     * @brief Parse PDB file and populate a ParseResult object
+     * @brief Parse PDB file and populate a Structure object
      * @param filename Path to PDB file
-     * @param result ParseResult object to populate
+     * @param structure Structure object to populate
      * @return true if parsing was successful, false otherwise
      */
-    static bool parse_to_result(const std::string& filename, ParseResult& result);
+    static bool parse_to_structure(const std::string& filename, model::Structure& structure);
 
     /**
-     * @brief Parse PDB string and populate a ParseResult object
+     * @brief Parse PDB string and populate a Structure object
      * @param pdbStr String containing PDB data
-     * @param result ParseResult object to populate
+     * @param structure Structure object to populate
      * @return true if parsing was successful, false otherwise
      */
-    static bool parse_string_to_result(const std::string& pdbStr, ParseResult& result);
+    static bool parse_string_to_structure(const std::string& pdbStr, model::Structure& structure);
 
 private:
     static RecordType getRecordType(const std::string& line);
     
     static bool parseAtomRecord(const std::string& line, RecordType type,
-                              ParseResult& result,
+                              model::Structure& structure,
                               std::shared_ptr<model::Residue>& currentResidue);
     
     static bool parseTerRecord(const std::string& line,
                              std::shared_ptr<model::Residue>& currentResidue,
-                             ParseResult& result);
+                             model::Structure& structure);
     
-    static bool parseHelixRecord(const std::string& line, ParseResult& result);
+    static bool parseHelixRecord(const std::string& line, model::Structure& structure);
     
-    static bool parseSheetRecord(const std::string& line, ParseResult& result);
+    static bool parseSheetRecord(const std::string& line, model::Structure& structure);
     
-    static bool parseSSBondRecord(const std::string& line, ParseResult& result);
+    static bool parseSSBondRecord(const std::string& line, model::Structure& structure);
 
-    static bool parseCryst1Record(const std::string& line, ParseResult& result);
+    static bool parseCryst1Record(const std::string& line, model::Structure& structure);
 
     // Element mass table
     static const std::map<std::string, double> ELEMENT_MASSES;
