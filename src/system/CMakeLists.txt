@@ -1,3 +1,5 @@
+# src/system/CMakeLists.txt
+
 # Create system library
 add_library(pygcmc_system
     system.cpp

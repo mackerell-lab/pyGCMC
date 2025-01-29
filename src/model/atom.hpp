@@ -1,5 +1,7 @@
 // src/model/atom.hpp
 
+#pragma once
+
 #ifndef PYGCMC_MODEL_ATOM_HPP
 #define PYGCMC_MODEL_ATOM_HPP
 

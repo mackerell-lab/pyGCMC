@@ -1,3 +1,5 @@
+# src/model/CMakeLists.txt
+
 # Create header-only model library
 add_library(pygcmc_model INTERFACE)
 

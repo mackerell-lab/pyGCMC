@@ -1,3 +1,5 @@
+# src/simulation/CMakeLists.txt
+
 # Create simulation library
 add_library(pygcmc_simulation
     simulation.cpp

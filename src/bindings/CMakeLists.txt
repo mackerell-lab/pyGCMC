@@ -1,4 +1,4 @@
-# ./src/bindings/CMakeLists.txt
+# src/bindings/CMakeLists.txt
 
 # First try to find system-installed pybind11
 find_package(pybind11 CONFIG)

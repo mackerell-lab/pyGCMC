@@ -1,5 +1,7 @@
 // src/io/pdbParser.hpp
 
+#pragma once
+
 #ifndef PYGCMC_IO_PDBPARSER_HPP
 #define PYGCMC_IO_PDBPARSER_HPP
 

@@ -1,5 +1,6 @@
 // src/model/residue.hpp
 
+#pragma once
 #ifndef PYGCMC_MODEL_RESIDUE_HPP
 #define PYGCMC_MODEL_RESIDUE_HPP
 

@@ -1,5 +1,6 @@
 // src/model/structure.hpp
 
+#pragma once
 #ifndef PYGCMC_MODEL_STRUCTURE_HPP
 #define PYGCMC_MODEL_STRUCTURE_HPP
 
