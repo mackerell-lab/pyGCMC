@@ -26,8 +26,8 @@ def test_parse_protein_top(test_data_dir):
     assert topology.get_num_segments() > 0, "No segments found in topology"
     assert topology.get_num_bonds() == 163, "Wrong number of bonds (should be 163: protein + BENX + 2×PRPX)"
     assert topology.get_num_angles() == 297, "Wrong number of angles (should be 297: protein[243] + BENX + 2×PRPX[18×2])"
-    assert topology.get_num_dihedrals() == 451, "Wrong number of dihedrals (should be 451: protein[391] + BENX[24] + 2×PRPX[18×2])"
-    assert topology.get_num_impropers() == 0, "Wrong number of impropers (should be 0: type 2 dihedrals are now proper)"
+    assert topology.get_num_dihedrals() == 422, "Wrong number of dihedrals (should be 422: protein[362] + BENX[24] + 2×PRPX[18×2])"
+    assert topology.get_num_impropers() == 29, "Wrong number of impropers (all from protein)"
     assert topology.get_num_cmaps() == 7, "Wrong number of CMAPs (should be 7: one for each amino acid pair in protein except the last one)"
     
     # Check specific residues
@@ -291,7 +291,7 @@ def test_parse_dihedrals(test_data_dir):
     assert parser.parse_to_topology(top_file, topology), "Failed to parse topology file"
     
     # Check total number of dihedrals
-    assert topology.get_num_dihedrals() == 451, "Wrong number of dihedrals (should be 451: protein[391] + BENX[24] + 2×PRPX[18×2])"
+    assert topology.get_num_dihedrals() == 422, "Wrong number of dihedrals (should be 422: protein[362] + BENX[24] + 2×PRPX[18×2])"
     
     # Check specific dihedrals in ALA-7 (N-terminal)
     ala_id = topology.find_residue("ALA", 7)

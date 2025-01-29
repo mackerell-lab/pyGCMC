@@ -697,16 +697,12 @@ bool TopParser::parse_dihedrals_section(const std::vector<LineInfo>& lines, mode
             // Default to function type 1 (proper dihedral) if not specified
             int funcType = (tokens.size() >= 5) ? std::stoi(tokens[4]) : 1;
             
-            // Only type 4 is improper in CHARMM format
-            if (funcType == 4) {
+            if (funcType == 2 || funcType == 4) {
                 topology.add_improper(atom1, atom2, atom3, atom4);
                 improper_count++;
             } else {
-                // All other types (including type 2) are proper dihedrals
                 topology.add_dihedral(atom1, atom2, atom3, atom4);
                 proper_count++;
-                
-                // Handle type 9 multiplicity if present
                 if (funcType == 9 && tokens.size() >= 7) {
                     int multiplicity = std::stoi(tokens[6]);
                     for (int i = 1; i < multiplicity; i++) {
