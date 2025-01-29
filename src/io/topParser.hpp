@@ -80,6 +80,7 @@ private:
     bool parse_angles_section(const std::vector<LineInfo>& lines, model::Topology& topology, int atom_offset = 0);
     bool parse_dihedrals_section(const std::vector<LineInfo>& lines, model::Topology& topology, int atom_offset = 0);
     bool parse_impropers_section(const std::vector<LineInfo>& lines, model::Topology& topology, int atom_offset = 0);
+    bool parse_cmaps_section(const std::vector<LineInfo>& lines, model::Topology& topology, int atom_offset = 0);
     bool parse_system_section(const std::vector<LineInfo>& lines, model::Topology& topology);
     bool parse_molecules_section(const std::vector<LineInfo>& lines, model::Topology& topology);
 

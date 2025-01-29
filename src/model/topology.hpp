@@ -125,7 +125,8 @@ struct TopologyGroup {
  * @brief Represents a CMAP (correction map) term
  */
 struct TopologyCmap {
-    std::array<int, 8> atoms;  ///< 8 atoms involved in CMAP term
+    std::array<int, 8> atoms;  ///< 8 atoms involved in CHARMM CMAP term: C(i-1), N(i), CA(i), C(i), N(i+1), CA(i+1), C(i+1), N(i+2)
+    int function_type = 1;     ///< CMAP function type (default: 1)
 };
 
 /**
@@ -429,6 +430,7 @@ public:
         groups_.push_back(group);
     }
 
+    // Add CMAP with 8 atoms (CHARMM format)
     void add_cmap(const std::array<int, 8>& atoms) {
         for (int atom : atoms) {
             if (!has_atom(atom)) {
@@ -437,6 +439,31 @@ public:
         }
         TopologyCmap cmap;
         cmap.atoms = atoms;
+        cmap.function_type = 1;  // Default for CHARMM format
+        cmaps_.push_back(cmap);
+    }
+
+    // Add CMAP with 5 atoms (GROMACS format)
+    void add_cmap(const std::array<int, 5>& atoms, int function_type = 1) {
+        for (int atom : atoms) {
+            if (!has_atom(atom)) {
+                throw std::out_of_range("Invalid atom index in add_cmap");
+            }
+        }
+        // Convert 5-atom GROMACS format to 8-atom CHARMM format
+        // For now, we'll store the 5 atoms and pad with -1
+        // TODO: Implement proper conversion from GROMACS to CHARMM format if needed
+        std::array<int, 8> charmm_atoms;
+        for (int i = 0; i < 5; ++i) {
+            charmm_atoms[i] = atoms[i];
+        }
+        for (int i = 5; i < 8; ++i) {
+            charmm_atoms[i] = -1;  // Padding for unused atoms
+        }
+        
+        TopologyCmap cmap;
+        cmap.atoms = charmm_atoms;
+        cmap.function_type = function_type;
         cmaps_.push_back(cmap);
     }
 
@@ -554,18 +581,31 @@ public:
     // CMAP methods
     inline size_t get_num_cmaps() const { return cmaps_.size(); }
     inline bool has_cmap(const std::vector<int>& atoms) const {
-        // CHARMM format requires 8 atoms for CMAP terms:
-        // C(i-1), N(i), CA(i), C(i), N(i+1), CA(i+1), C(i+1), N(i+2)
-        if (atoms.size() != 8) return false;
-        for (const auto& cmap : cmaps_) {
-            bool match = true;
-            for (size_t i = 0; i < 8; ++i) {
-                if (cmap.atoms[i] != atoms[i]) {
-                    match = false;
-                    break;
+        if (atoms.size() == 8) {
+            // CHARMM format with 8 atoms
+            for (const auto& cmap : cmaps_) {
+                bool match = true;
+                for (size_t i = 0; i < 8; ++i) {
+                    if (cmap.atoms[i] != atoms[i]) {
+                        match = false;
+                        break;
+                    }
                 }
+                if (match) return true;
             }
-            if (match) return true;
+        }
+        else if (atoms.size() == 5) {
+            // GROMACS format with 5 atoms
+            for (const auto& cmap : cmaps_) {
+                bool match = true;
+                for (size_t i = 0; i < 5; ++i) {
+                    if (cmap.atoms[i] != atoms[i]) {
+                        match = false;
+                        break;
+                    }
+                }
+                if (match) return true;
+            }
         }
         return false;
     }

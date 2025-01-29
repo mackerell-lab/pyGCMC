@@ -20,6 +20,7 @@ bool TopParser::parse_to_topology(const std::string& filename, model::Topology& 
     std::map<std::string, std::vector<LineInfo>> molecule_angles_temp;
     std::map<std::string, std::vector<LineInfo>> molecule_dihedrals_temp;
     std::map<std::string, std::vector<LineInfo>> molecule_impropers_temp;
+    std::map<std::string, std::vector<LineInfo>> molecule_cmaps_temp;
     std::vector<LineInfo> molecules_lines;
 
     std::cerr << "\n=== Starting topology parsing of " << filename << " ===" << std::endl;
@@ -30,6 +31,7 @@ bool TopParser::parse_to_topology(const std::string& filename, model::Topology& 
     molecule_angles_temp.clear();
     molecule_dihedrals_temp.clear();
     molecule_impropers_temp.clear();
+    molecule_cmaps_temp.clear();
     molecule_types_order.clear();
     molecule_order_.clear();
     processed_files_.clear();
@@ -156,6 +158,11 @@ bool TopParser::parse_to_topology(const std::string& filename, model::Topology& 
                 }
                 else if (current_section == "impropers") {
                     molecule_impropers_temp[current_mol_type].push_back(line_info);
+                }
+                else if (current_section == "cmap") {
+                    molecule_cmaps_temp[current_mol_type].push_back(line_info);
+                    std::cerr << "Found CMAP entry for " << current_mol_type << ": " 
+                             << trimmed << std::endl;
                 }
             }
         }
@@ -301,6 +308,17 @@ bool TopParser::parse_to_topology(const std::string& filename, model::Topology& 
                     return false;
                 }
                 std::cerr << "  Added impropers for segment " << segment_name << std::endl;
+            }
+
+            // Add CMAPs for this molecule instance
+            if (molecule_cmaps_temp.find(mol_type) != molecule_cmaps_temp.end()) {
+                if (!parse_cmaps_section(molecule_cmaps_temp[mol_type], topology, atom_offset)) {
+                    const auto& line = molecule_cmaps_temp[mol_type].front();
+                    std::cerr << "Error parsing CMAPs for molecule " << mol_type 
+                             << " at " << line.source_file << ":" << line.line_number << std::endl;
+                    return false;
+                }
+                std::cerr << "  Added CMAPs for segment " << segment_name << std::endl;
             }
 
             // Update atom offset for next molecule instance
@@ -679,12 +697,16 @@ bool TopParser::parse_dihedrals_section(const std::vector<LineInfo>& lines, mode
             // Default to function type 1 (proper dihedral) if not specified
             int funcType = (tokens.size() >= 5) ? std::stoi(tokens[4]) : 1;
             
-            if (funcType == 2 || funcType == 4) {
+            // Only type 4 is improper in CHARMM format
+            if (funcType == 4) {
                 topology.add_improper(atom1, atom2, atom3, atom4);
                 improper_count++;
             } else {
+                // All other types (including type 2) are proper dihedrals
                 topology.add_dihedral(atom1, atom2, atom3, atom4);
                 proper_count++;
+                
+                // Handle type 9 multiplicity if present
                 if (funcType == 9 && tokens.size() >= 7) {
                     int multiplicity = std::stoi(tokens[6]);
                     for (int i = 1; i < multiplicity; i++) {
@@ -797,6 +819,42 @@ std::string TopParser::resolve_include_path(const std::string& include_path, con
               << "Tried path: " << resolved.string() << std::endl;
     
     return "";
+}
+
+bool TopParser::parse_cmaps_section(const std::vector<LineInfo>& lines, model::Topology& topology, int atom_offset) {
+    for (const auto& line_info : lines) {
+        const std::string& line = line_info.content;
+        auto tokens = split(remove_comment(line));
+        if (tokens.size() < 6) {  // Need 5 atoms + function type
+            std::cerr << "Warning: Skipping CMAP line with insufficient tokens: " << line << std::endl;
+            continue;
+        }
+
+        try {
+            // GROMACS format: ai aj ak al am funct
+            // These atoms define the two consecutive phi-psi dihedrals
+            std::array<int, 5> cmap_atoms;
+            for (int i = 0; i < 5; ++i) {
+                cmap_atoms[i] = std::stoi(tokens[i]) - 1 + atom_offset;  // Convert to 0-based indexing
+            }
+            int function_type = std::stoi(tokens[5]);
+            
+            // Add CMAP to topology using the GROMACS format overload
+            topology.add_cmap(cmap_atoms, function_type);
+            
+            std::cerr << "Added CMAP between atoms: ";
+            for (int idx : cmap_atoms) {
+                std::cerr << idx << " ";
+            }
+            std::cerr << " (function type " << function_type << ")" << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "Error parsing CMAP line: " << line << " at " 
+                     << line_info.source_file << ":" << line_info.line_number 
+                     << " - " << e.what() << std::endl;
+            return false;
+        }
+    }
+    return true;
 }
 
 } // namespace io
