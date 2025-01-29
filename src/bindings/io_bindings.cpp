@@ -8,6 +8,8 @@
 #include "io/topParser.hpp"
 #include "model/atom.hpp"
 #include "model/residue.hpp"
+#include "../model/forcefield.hpp"
+#include "../io/prmParser.hpp"
 
 namespace py = pybind11;
 
@@ -112,6 +114,41 @@ void init_io(py::module& m) {
         .def_static("is_debug_enabled", &io::TOPParser::is_debug_enabled,
             "Check if debug output is enabled");
     io.attr("TOPParser") = top_parser;
+}
+
+void init_forcefield(py::module& m) {
+    py::class_<pygcmc::NonbondedParams>(m, "NonbondedParams")
+        .def(py::init<>())
+        .def_readwrite("nbxmod", &pygcmc::NonbondedParams::nbxmod)
+        .def_readwrite("cdiel", &pygcmc::NonbondedParams::cdiel)
+        .def_readwrite("fshift", &pygcmc::NonbondedParams::fshift)
+        .def_readwrite("vatom", &pygcmc::NonbondedParams::vatom)
+        .def_readwrite("vdistance", &pygcmc::NonbondedParams::vdistance)
+        .def_readwrite("vfswitch", &pygcmc::NonbondedParams::vfswitch)
+        .def_readwrite("cutnb", &pygcmc::NonbondedParams::cutnb)
+        .def_readwrite("ctofnb", &pygcmc::NonbondedParams::ctofnb)
+        .def_readwrite("ctonnb", &pygcmc::NonbondedParams::ctonnb)
+        .def_readwrite("eps", &pygcmc::NonbondedParams::eps)
+        .def_readwrite("e14fac", &pygcmc::NonbondedParams::e14fac)
+        .def_readwrite("wmin", &pygcmc::NonbondedParams::wmin);
+
+    py::class_<pygcmc::LJParams>(m, "LJParams")
+        .def(py::init<>())
+        .def_readwrite("epsilon", &pygcmc::LJParams::epsilon)
+        .def_readwrite("rmin", &pygcmc::LJParams::rmin);
+
+    py::class_<pygcmc::ForceField>(m, "ForceField")
+        .def(py::init<>())
+        .def("get_nonbonded_params", static_cast<const pygcmc::NonbondedParams& (pygcmc::ForceField::*)() const>(&pygcmc::ForceField::get_nonbonded_params))
+        .def("get_lj_params", &pygcmc::ForceField::get_lj_params)
+        .def("get_nbfix", &pygcmc::ForceField::get_nbfix)
+        .def("add_lj_params", &pygcmc::ForceField::add_lj_params)
+        .def("add_nbfix", &pygcmc::ForceField::add_nbfix);
+
+    py::class_<pygcmc::PrmParser>(m, "PrmParser")
+        .def(py::init<>())
+        .def_static("parse_string", &pygcmc::PrmParser::parse_string)
+        .def_static("parse_file", &pygcmc::PrmParser::parse_file);
 }
 
 } // namespace bindings

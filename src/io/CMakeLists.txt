@@ -5,6 +5,7 @@ add_library(pygcmc_io STATIC
     pdbParser.cpp
     psfParser.cpp
     topParser.cpp
+    prmParser.cpp
 )
 
 # Set position independent code
