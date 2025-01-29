@@ -57,13 +57,30 @@ void init_io(py::module& m) {
     // PSFParser bindings
     auto psf_parser = py::class_<pygcmc::io::PSFParser>(m, "PSFParser")
         .def(py::init<>())
-        .def("parse_to_topology", &pygcmc::io::PSFParser::parse_to_topology);
+        .def("parse_to_topology", &pygcmc::io::PSFParser::parse_to_topology)
+        .def_static("parse_file", &pygcmc::io::PSFParser::parse_file,
+            py::arg("filename"),
+            "Parse a PSF file and return a new Topology object")
+        .def_static("parse_string", &pygcmc::io::PSFParser::parse_string,
+            py::arg("psf_str"),
+            "Parse a PSF string and return a new Topology object");
     io.attr("PSFParser") = psf_parser;
 
     // TopParser bindings
     auto top_parser = py::class_<pygcmc::io::TopParser>(m, "TopParser")
         .def(py::init<>())
-        .def("parse_to_topology", &pygcmc::io::TopParser::parse_to_topology);
+        .def("parse_to_topology", &pygcmc::io::TopParser::parse_to_topology)
+        .def_static("parse_file", &pygcmc::io::TopParser::parse_file,
+            py::arg("filename"),
+            "Parse a topology file and return a new Topology object")
+        .def_static("parse_string", &pygcmc::io::TopParser::parse_string,
+            py::arg("top_str"),
+            "Parse a topology string and return a new Topology object")
+        .def_static("enable_debug", &pygcmc::io::TopParser::enable_debug,
+            py::arg("enable"),
+            "Enable or disable debug output")
+        .def_static("is_debug_enabled", &pygcmc::io::TopParser::is_debug_enabled,
+            "Check if debug output is enabled");
     io.attr("TopParser") = top_parser;
 }
 

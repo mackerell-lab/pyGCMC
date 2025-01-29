@@ -12,6 +12,46 @@
 namespace pygcmc {
 namespace io {
 
+// Initialize static member
+bool TopParser::debug_enabled_ = false;
+
+model::Topology TopParser::parse_file(const std::string& filename) {
+    model::Topology topology;
+    TopParser parser;
+    if (!parser.parse_to_topology(filename, topology)) {
+        throw std::runtime_error("Failed to parse topology file: " + filename);
+    }
+    return topology;
+}
+
+model::Topology TopParser::parse_string(const std::string& top_str) {
+    // Create a temporary file to write the string to
+    std::filesystem::path temp_dir = std::filesystem::temp_directory_path();
+    std::filesystem::path temp_file = temp_dir / "temp_topology.top";
+    
+    // Write the string to the temporary file
+    std::ofstream out(temp_file);
+    if (!out) {
+        throw std::runtime_error("Failed to create temporary file for topology parsing");
+    }
+    out << top_str;
+    out.close();
+    
+    try {
+        // Parse the temporary file
+        model::Topology topology = parse_file(temp_file.string());
+        
+        // Clean up
+        std::filesystem::remove(temp_file);
+        
+        return topology;
+    } catch (const std::exception& e) {
+        // Clean up on error
+        std::filesystem::remove(temp_file);
+        throw;
+    }
+}
+
 bool TopParser::parse_to_topology(const std::string& filename, model::Topology& topology) {
     // Track molecule definitions in order of appearance
     std::vector<std::string> molecule_types_order;
@@ -23,7 +63,7 @@ bool TopParser::parse_to_topology(const std::string& filename, model::Topology& 
     std::map<std::string, std::vector<LineInfo>> molecule_cmaps_temp;
     std::vector<LineInfo> molecules_lines;
 
-    std::cerr << "\n=== Starting topology parsing of " << filename << " ===" << std::endl;
+    debug_print("\n=== Starting topology parsing of ", filename, " ===\n");
 
     // Clear any previous state
     molecule_atoms_temp.clear();
@@ -50,7 +90,7 @@ bool TopParser::parse_to_topology(const std::string& filename, model::Topology& 
     }
     
     if (all_lines.empty()) {
-        std::cerr << "Error: No valid content found in topology file" << std::endl;
+        debug_print("Error: No valid content found in topology file\n");
         return false;
     }
 
@@ -81,22 +121,22 @@ bool TopParser::parse_to_topology(const std::string& filename, model::Topology& 
                 current_mol_type.clear();
                 current_section = "moleculetype";
                 found_valid_section = true;  // Found a valid section
-                std::cerr << "\n=== Found [ moleculetype ] section at " << line_info.source_file 
-                         << ":" << line_info.line_number << " ===" << std::endl;
+                debug_print("\n=== Found [ moleculetype ] section at ", line_info.source_file, 
+                         ":" , line_info.line_number, " ===\n");
             }
             else if (section_name == "molecules") {
                 inside_molecule = false;
                 current_mol_type.clear();
                 current_section = "molecules";
                 found_valid_section = true;  // Found a valid section
-                std::cerr << "\n=== Found [ molecules ] section at " << line_info.source_file 
-                         << ":" << line_info.line_number << " ===" << std::endl;
+                debug_print("\n=== Found [ molecules ] section at ", line_info.source_file, 
+                         ":" , line_info.line_number, " ===\n");
             }
             else if (inside_molecule) {
                 current_section = section_name;
                 found_valid_section = true;  // Found a valid section
-                std::cerr << "Found [ " << section_name << " ] section for molecule " 
-                         << current_mol_type << std::endl;
+                debug_print("Found [ ", section_name, " ] section for molecule ", 
+                         current_mol_type, "\n");
             }
             else {
                 current_section.clear();
@@ -117,8 +157,8 @@ bool TopParser::parse_to_topology(const std::string& filename, model::Topology& 
                                       current_mol_type);
                     if (it != molecule_types_order.end()) {
                         molecule_types_order.erase(it);
-                        std::cerr << "Warning: Overriding previous definition of molecule type " 
-                                 << current_mol_type << std::endl;
+                        debug_print("Warning: Overriding previous definition of molecule type ", 
+                                 current_mol_type, "\n");
                     }
                     molecule_types_order.push_back(current_mol_type);
                     
@@ -129,8 +169,8 @@ bool TopParser::parse_to_topology(const std::string& filename, model::Topology& 
                     molecule_dihedrals_temp[current_mol_type].clear();
                     molecule_impropers_temp[current_mol_type].clear();
                     
-                    std::cerr << "Processing moleculetype: " << current_mol_type 
-                             << " (nrexcl=" << current_molecule_nrexcl_ << ")" << std::endl;
+                    debug_print("Processing moleculetype: ", current_mol_type, 
+                             "(nrexcl=", current_molecule_nrexcl_, ")\n");
                 }
             }
             else if (!current_mol_type.empty()) {
@@ -138,14 +178,14 @@ bool TopParser::parse_to_topology(const std::string& filename, model::Topology& 
                     molecule_atoms_temp[current_mol_type].push_back(line_info);
                     auto tokens = split(trimmed);
                     if (tokens.size() >= 4) {  // Assuming at least: nr type resnr resname
-                        std::cerr << "Added atom to " << current_mol_type << ": " 
-                                 << tokens[0] << " " << tokens[1] << " (residue " 
-                                 << tokens[3] << ")" << std::endl;
+                        debug_print("Added atom to ", current_mol_type, ": ", 
+                                 tokens[0], " ", tokens[1], " (residue ", 
+                                 tokens[3], ")\n");
                     }
                 }
                 else if (current_section == "settles") {
-                    std::cerr << "Found settles for " << current_mol_type << ": " 
-                             << trimmed << std::endl;
+                    debug_print("Found settles for ", current_mol_type, ": ", 
+                             trimmed, "\n");
                 }
                 else if (current_section == "bonds") {
                     molecule_bonds_temp[current_mol_type].push_back(line_info);
@@ -161,8 +201,8 @@ bool TopParser::parse_to_topology(const std::string& filename, model::Topology& 
                 }
                 else if (current_section == "cmap") {
                     molecule_cmaps_temp[current_mol_type].push_back(line_info);
-                    std::cerr << "Found CMAP entry for " << current_mol_type << ": " 
-                             << trimmed << std::endl;
+                    debug_print("Found CMAP entry for ", current_mol_type, ": ", 
+                             trimmed, "\n");
                 }
             }
         }
@@ -170,20 +210,20 @@ bool TopParser::parse_to_topology(const std::string& filename, model::Topology& 
             molecules_lines.push_back(line_info);
             auto tokens = split(trimmed);
             if (tokens.size() >= 2) {
-                std::cerr << "Found molecule in [ molecules ]: " << tokens[0] 
-                         << " count=" << tokens[1] << std::endl;
+                debug_print("Found molecule in [ molecules ]: ", tokens[0], 
+                         " count=", tokens[1], "\n");
             }
         }
     }
 
     // Return false if no valid sections were found
     if (!found_valid_section) {
-        std::cerr << "Error: No valid topology sections found in file" << std::endl;
+        debug_print("Error: No valid topology sections found in file\n");
         return false;
     }
 
     // After collecting all definitions, process the [ molecules ] section first
-    std::cerr << "\n=== Processing [ molecules ] section ===" << std::endl;
+    debug_print("\n=== Processing [ molecules ] section ===\n");
     std::set<std::string> used_molecule_types;
     if (!molecules_lines.empty()) {
         for (const auto& line_info : molecules_lines) {
@@ -197,7 +237,7 @@ bool TopParser::parse_to_topology(const std::string& filename, model::Topology& 
                 int count = std::stoi(tokens[1]);
                 molecule_order_.push_back(std::make_pair(mol_type, count));
                 used_molecule_types.insert(mol_type);
-                std::cerr << "Will add " << count << " copies of molecule " << mol_type << std::endl;
+                debug_print("Will add ", count, " copies of molecule ", mol_type, "\n");
             }
         }
     } else if (molecule_types_order.size() == 1) {
@@ -206,11 +246,11 @@ bool TopParser::parse_to_topology(const std::string& filename, model::Topology& 
         std::string mol_type = molecule_types_order[0];
         molecule_order_.push_back(std::make_pair(mol_type, 1));
         used_molecule_types.insert(mol_type);
-        std::cerr << "Single molecule type file detected: will add 1 copy of " << mol_type << std::endl;
+        debug_print("Single molecule type file detected: will add 1 copy of ", mol_type, "\n");
     }
 
     // Now we know which molecule types are actually used, we can write them to topology
-    std::cerr << "\n=== Counting atoms per molecule type ===" << std::endl;
+    debug_print("\n=== Counting atoms per molecule type ===\n");
     int atom_offset = 0;
     int mol_index = 0;
     std::map<std::string, int> atoms_per_molecule;
@@ -219,23 +259,23 @@ bool TopParser::parse_to_topology(const std::string& filename, model::Topology& 
     for (const auto& mol_type : used_molecule_types) {
         if (molecule_atoms_temp.find(mol_type) != molecule_atoms_temp.end()) {
             int atom_count = 0;
-            std::cerr << "Checking atoms for molecule type " << mol_type << ":" << std::endl;
+            debug_print("Checking atoms for molecule type ", mol_type, ":\n");
             for (const auto& line_info : molecule_atoms_temp[mol_type]) {
                 auto tokens = split(remove_comment(line_info.content));
                 if (tokens.size() >= 8) {
                     atom_count++;
-                    std::cerr << "  Atom " << tokens[0] << " (" << tokens[1] 
-                             << ") in residue " << tokens[3] << std::endl;
+                    debug_print("  Atom ", tokens[0], " (", tokens[1], 
+                             ") in residue ", tokens[3], "\n");
                 }
             }
             atoms_per_molecule[mol_type] = atom_count;
-            std::cerr << "Molecule " << mol_type << " has " << atom_count << " atoms" << std::endl;
+            debug_print("Molecule ", mol_type, " has ", atom_count, " atoms\n");
         } else {
-            std::cerr << "Warning: No atom definitions found for molecule type " << mol_type << std::endl;
+            debug_print("Warning: No atom definitions found for molecule type ", mol_type, "\n");
         }
     }
 
-    std::cerr << "\n=== Adding molecules to topology ===" << std::endl;
+    debug_print("\n=== Adding molecules to topology ===\n");
     // Then add molecules in order according to [ molecules ] section
     for (const auto& mol : molecule_order_) {
         const std::string& mol_type = mol.first;
@@ -243,11 +283,11 @@ bool TopParser::parse_to_topology(const std::string& filename, model::Topology& 
 
         // Skip if we don't have the molecule definition
         if (molecule_atoms_temp.find(mol_type) == molecule_atoms_temp.end()) {
-            std::cerr << "Warning: No definition found for molecule type " << mol_type << std::endl;
+            debug_print("Warning: No definition found for molecule type ", mol_type, "\n");
             continue;
         }
 
-        std::cerr << "Adding " << count << " copies of molecule " << mol_type << std::endl;
+        debug_print("Adding ", count, " copies of molecule ", mol_type, "\n");
 
         // Add 'count' copies of this molecule type
         for (int i = 0; i < count; i++) {
@@ -255,70 +295,70 @@ bool TopParser::parse_to_topology(const std::string& filename, model::Topology& 
             std::string segment_name = mol_type + "_" + std::to_string(mol_index++);
             topology.add_segment(segment_name);
             current_molecule_type_ = segment_name;
-            std::cerr << "  Creating segment " << segment_name << std::endl;
+            debug_print("  Creating segment ", segment_name, "\n");
 
             // Add atoms for this molecule instance
             if (!parse_atoms_section(molecule_atoms_temp[mol_type], topology)) {
                 const auto& line = molecule_atoms_temp[mol_type].front();
-                std::cerr << "Error parsing atoms for molecule " << mol_type 
-                         << " at " << line.source_file << ":" << line.line_number << std::endl;
+                debug_print("Error parsing atoms for molecule ", mol_type, 
+                         " at ", line.source_file, ":", line.line_number, "\n");
                 return false;
             }
-            std::cerr << "  Added atoms for segment " << segment_name << std::endl;
+            debug_print("  Added atoms for segment ", segment_name, "\n");
 
             // Add bonds for this molecule instance
             if (molecule_bonds_temp.find(mol_type) != molecule_bonds_temp.end()) {
                 if (!parse_bonds_section(molecule_bonds_temp[mol_type], topology, atom_offset)) {
                     const auto& line = molecule_bonds_temp[mol_type].front();
-                    std::cerr << "Error parsing bonds for molecule " << mol_type 
-                             << " at " << line.source_file << ":" << line.line_number << std::endl;
+                    debug_print("Error parsing bonds for molecule ", mol_type, 
+                             " at ", line.source_file, ":", line.line_number, "\n");
                     return false;
                 }
-                std::cerr << "  Added bonds for segment " << segment_name << std::endl;
+                debug_print("  Added bonds for segment ", segment_name, "\n");
             }
 
             // Add angles for this molecule instance
             if (molecule_angles_temp.find(mol_type) != molecule_angles_temp.end()) {
                 if (!parse_angles_section(molecule_angles_temp[mol_type], topology, atom_offset)) {
                     const auto& line = molecule_angles_temp[mol_type].front();
-                    std::cerr << "Error parsing angles for molecule " << mol_type 
-                             << " at " << line.source_file << ":" << line.line_number << std::endl;
+                    debug_print("Error parsing angles for molecule ", mol_type, 
+                             " at ", line.source_file, ":", line.line_number, "\n");
                     return false;
                 }
-                std::cerr << "  Added angles for segment " << segment_name << std::endl;
+                debug_print("  Added angles for segment ", segment_name, "\n");
             }
 
             // Add dihedrals for this molecule instance
             if (molecule_dihedrals_temp.find(mol_type) != molecule_dihedrals_temp.end()) {
                 if (!parse_dihedrals_section(molecule_dihedrals_temp[mol_type], topology, atom_offset)) {
                     const auto& line = molecule_dihedrals_temp[mol_type].front();
-                    std::cerr << "Error parsing dihedrals for molecule " << mol_type 
-                             << " at " << line.source_file << ":" << line.line_number << std::endl;
+                    debug_print("Error parsing dihedrals for molecule ", mol_type, 
+                             " at ", line.source_file, ":", line.line_number, "\n");
                     return false;
                 }
-                std::cerr << "  Added dihedrals for segment " << segment_name << std::endl;
+                debug_print("  Added dihedrals for segment ", segment_name, "\n");
             }
 
             // Add impropers for this molecule instance
             if (molecule_impropers_temp.find(mol_type) != molecule_impropers_temp.end()) {
                 if (!parse_impropers_section(molecule_impropers_temp[mol_type], topology, atom_offset)) {
                     const auto& line = molecule_impropers_temp[mol_type].front();
-                    std::cerr << "Error parsing impropers for molecule " << mol_type 
-                             << " at " << line.source_file << ":" << line.line_number << std::endl;
+                    debug_print("Error parsing impropers for molecule ", mol_type, 
+                             " at ", line.source_file, ":", line.line_number, "\n");
                     return false;
                 }
-                std::cerr << "  Added impropers for segment " << segment_name << std::endl;
+                debug_print("  Added impropers for segment ", segment_name, "\n");
             }
 
             // Add CMAPs for this molecule instance
             if (molecule_cmaps_temp.find(mol_type) != molecule_cmaps_temp.end()) {
                 if (!parse_cmaps_section(molecule_cmaps_temp[mol_type], topology, atom_offset)) {
                     const auto& line = molecule_cmaps_temp[mol_type].front();
-                    std::cerr << "Error parsing CMAPs for molecule " << mol_type 
-                             << " at " << line.source_file << ":" << line.line_number << std::endl;
+                    debug_print("Error parsing CMAPs for molecule ", mol_type, 
+                             " at ", line.source_file, ":", line.line_number, "\n");
                     return false;
                 }
-                std::cerr << "  Added CMAPs for segment " << segment_name << std::endl;
+                debug_print("  Added CMAPs for segment ", segment_name, "\n");
             }
 
             // Update atom offset for next molecule instance
@@ -326,14 +366,14 @@ bool TopParser::parse_to_topology(const std::string& filename, model::Topology& 
         }
     }
 
-    std::cerr << "\n=== Final topology statistics ===" << std::endl;
-    std::cerr << "Total atoms: " << topology.get_num_atoms() << std::endl;
-    std::cerr << "Total bonds: " << topology.get_num_bonds() << std::endl;
-    std::cerr << "Total angles: " << topology.get_num_angles() << std::endl;
-    std::cerr << "Total dihedrals: " << topology.get_num_dihedrals() << std::endl;
-    std::cerr << "Total impropers: " << topology.get_num_impropers() << std::endl;
-    std::cerr << "Total residues: " << topology.get_num_residues() << std::endl;
-    std::cerr << "Total segments: " << topology.get_num_segments() << std::endl;
+    debug_print("\n=== Final topology statistics ===\n");
+    debug_print("Total atoms: ", topology.get_num_atoms(), "\n");
+    debug_print("Total bonds: ", topology.get_num_bonds(), "\n");
+    debug_print("Total angles: ", topology.get_num_angles(), "\n");
+    debug_print("Total dihedrals: ", topology.get_num_dihedrals(), "\n");
+    debug_print("Total impropers: ", topology.get_num_impropers(), "\n");
+    debug_print("Total residues: ", topology.get_num_residues(), "\n");
+    debug_print("Total segments: ", topology.get_num_segments(), "\n");
 
     return true;
 }
@@ -349,10 +389,10 @@ bool TopParser::collect_all_lines(const std::string& filename, std::vector<LineI
     std::ifstream file(filename);
     if (!file.is_open()) {
         if (is_main_file) {
-            std::cerr << "Error: Cannot open main topology file '" << filename << "'" << std::endl;
+            debug_print("Error: Cannot open main topology file '", filename, "'\n");
             return false;
         }
-        std::cerr << "Warning: Cannot open included file '" << filename << "'" << std::endl;
+        debug_print("Warning: Cannot open included file '", filename, "'\n");
         return true;  // Continue for included files
     }
 
@@ -378,7 +418,7 @@ bool TopParser::collect_all_lines(const std::string& filename, std::vector<LineI
 
         // Skip lines if inside a false #ifdef/#ifndef block
         if (pp_state.skip_section) {
-            std::cerr << "Skipping line due to preprocessor: " << line << std::endl;
+            debug_print("Skipping line due to preprocessor: ", line, "\n");
             continue;
         }
 
@@ -414,8 +454,8 @@ bool TopParser::process_preprocessor_line(const std::string& line, const std::st
                     return false;
                 }
             } else {
-                std::cerr << "Warning: Include file not found: " << include_path 
-                          << " (referenced from " << parent_file << ":" << line_number << ")" << std::endl;
+                debug_print("Warning: Include file not found: ", include_path, 
+                         " (referenced from ", parent_file, ":", line_number, ")\n");
             }
         }
     }
@@ -436,13 +476,13 @@ bool TopParser::process_preprocessor_line(const std::string& line, const std::st
         
         pp_state.skip_section = pp_state.should_skip();
         
-        std::cerr << "Processing " << directive << " " << macro_name 
-                  << ": defined=" << is_defined << ", skip=" << pp_state.skip_section 
-                  << ", stack_size=" << pp_state.ifdef_stack.size() << std::endl;
+        debug_print("Processing ", directive, " ", macro_name, 
+                 ": defined=", is_defined, ", skip=", pp_state.skip_section, 
+                 ", stack_size=", pp_state.ifdef_stack.size(), "\n");
     }
     else if (directive == "#else") {
         if (pp_state.ifdef_stack.empty()) {
-            std::cerr << "Warning: Unmatched #else at " << parent_file << ":" << line_number << std::endl;
+            debug_print("Warning: Unmatched #else at ", parent_file, ":", line_number, "\n");
             return false;
         }
         
@@ -464,17 +504,17 @@ bool TopParser::process_preprocessor_line(const std::string& line, const std::st
             pp_state.else_encountered.back() = true;
             pp_state.skip_section = pp_state.should_skip();
             
-            std::cerr << "Processing #else: skip=" << pp_state.skip_section 
-                      << ", stack_size=" << pp_state.ifdef_stack.size() 
-                      << ", outer_skip=" << outer_skip << std::endl;
+            debug_print("Processing #else: skip=", pp_state.skip_section, 
+                     ", stack_size=", pp_state.ifdef_stack.size(), 
+                     ", outer_skip=", outer_skip, "\n");
         } else {
-            std::cerr << "Warning: Multiple #else directives at the same nesting level at "
-                      << parent_file << ":" << line_number << std::endl;
+            debug_print("Warning: Multiple #else directives at the same nesting level at ",
+                     parent_file, ":", line_number, "\n");
         }
     }
     else if (directive == "#endif") {
         if (pp_state.ifdef_stack.empty()) {
-            std::cerr << "Warning: Unmatched #endif at " << parent_file << ":" << line_number << std::endl;
+            debug_print("Warning: Unmatched #endif at ", parent_file, ":", line_number, "\n");
             return false;
         }
         
@@ -482,8 +522,8 @@ bool TopParser::process_preprocessor_line(const std::string& line, const std::st
         pp_state.else_encountered.pop_back();
         pp_state.skip_section = pp_state.should_skip();
         
-        std::cerr << "Processing #endif: skip=" << pp_state.skip_section 
-                  << ", stack_size=" << pp_state.ifdef_stack.size() << std::endl;
+        debug_print("Processing #endif: skip=", pp_state.skip_section, 
+                 ", stack_size=", pp_state.ifdef_stack.size(), "\n");
     }
     else if (directive == "#define") {
         if (!pp_state.should_skip()) {
@@ -493,7 +533,7 @@ bool TopParser::process_preprocessor_line(const std::string& line, const std::st
             std::getline(iss, macro_value);
             trim(macro_value);
             pp_state.defines[macro_name] = macro_value;
-            std::cerr << "Defined macro: " << macro_name << " = " << macro_value << std::endl;
+            debug_print("Defined macro: ", macro_name, " = ", macro_value, "\n");
         }
     }
     else if (directive == "#undef") {
@@ -501,7 +541,7 @@ bool TopParser::process_preprocessor_line(const std::string& line, const std::st
             std::string macro_name;
             iss >> macro_name;
             pp_state.defines.erase(macro_name);
-            std::cerr << "Undefined macro: " << macro_name << std::endl;
+            debug_print("Undefined macro: ", macro_name, "\n");
         }
     }
     
@@ -557,7 +597,7 @@ bool TopParser::parse_moleculetype_section(const std::vector<LineInfo>& lines, [
             current_molecule_nrexcl_ = std::stoi(tokens[1]);
             return true;
         } catch (const std::exception& e) {
-            std::cerr << "Error parsing moleculetype line: " << line << std::endl;
+            debug_print("Error parsing moleculetype line: ", line, "\n");
             return false;
         }
     }
@@ -590,7 +630,7 @@ bool TopParser::parse_atoms_section(const std::vector<LineInfo>& lines, model::T
                 current_molecule_type_
             );
         } catch (const std::exception& e) {
-            std::cerr << "Error parsing atom line: " << line << std::endl;
+            debug_print("Error parsing atom line: ", line, "\n");
             return false;
         }
     }
@@ -628,9 +668,9 @@ bool TopParser::parse_bonds_section(const std::vector<LineInfo>& lines, model::T
             // Add bond to topology
             topology.add_bond(atom1, atom2, length, force_const, func_type);
         } catch (const std::exception& e) {
-            std::cerr << "Warning: Error parsing bond line: " << line << " at " 
-                     << line_info.source_file << ":" << line_info.line_number 
-                     << " - " << e.what() << std::endl;
+            debug_print("Warning: Error parsing bond line: ", line, " at ", 
+                     line_info.source_file, ":", line_info.line_number, 
+                     " - ", e.what(), "\n");
             continue;  // Continue with next line instead of failing
         }
     }
@@ -669,9 +709,9 @@ bool TopParser::parse_angles_section(const std::vector<LineInfo>& lines, model::
             // Add angle to topology
             topology.add_angle(atom1, atom2, atom3, angle, force_const, func_type);
         } catch (const std::exception& e) {
-            std::cerr << "Warning: Error parsing angle line: " << line << " at "
-                     << line_info.source_file << ":" << line_info.line_number 
-                     << " - " << e.what() << std::endl;
+            debug_print("Warning: Error parsing angle line: ", line, " at ",
+                     line_info.source_file, ":", line_info.line_number, 
+                     " - ", e.what(), "\n");
             continue;  // Continue with next line instead of failing
         }
     }
@@ -679,7 +719,7 @@ bool TopParser::parse_angles_section(const std::vector<LineInfo>& lines, model::
 }
 
 bool TopParser::parse_dihedrals_section(const std::vector<LineInfo>& lines, model::Topology& topology, int atom_offset) {
-    std::cerr << "Parsing " << lines.size() << " dihedral lines" << std::endl;
+    debug_print("Parsing ", lines.size(), " dihedral lines\n");
     int proper_count = 0;
     int improper_count = 0;
 
@@ -712,13 +752,13 @@ bool TopParser::parse_dihedrals_section(const std::vector<LineInfo>& lines, mode
                 }
             }
         } catch (const std::exception& e) {
-            std::cerr << "Error parsing dihedral line: " << line << " - " << e.what() << std::endl;
+            debug_print("Error parsing dihedral line: ", line, " - ", e.what(), "\n");
             return false;
         }
     }
     
-    std::cerr << "Added " << proper_count << " proper dihedrals and " 
-              << improper_count << " improper dihedrals" << std::endl;
+    debug_print("Added ", proper_count, " proper dihedrals and ", 
+              improper_count, " improper dihedrals\n");
     return true;
 }
 
@@ -737,7 +777,7 @@ bool TopParser::parse_impropers_section(const std::vector<LineInfo>& lines, mode
             // Add improper to topology
             topology.add_improper(atom1, atom2, atom3, atom4);
         } catch (const std::exception& e) {
-            std::cerr << "Error parsing improper line: " << line << std::endl;
+            debug_print("Error parsing improper line: ", line, "\n");
             return false;
         }
     }
@@ -757,7 +797,7 @@ bool TopParser::parse_molecules_section(const std::vector<LineInfo>& lines, [[ma
             // Store molecule type and count
             molecule_order_.push_back(std::make_pair(mol_type, count));
         } catch (const std::exception& e) {
-            std::cerr << "Error parsing molecules line: " << line << std::endl;
+            debug_print("Error parsing molecules line: ", line, "\n");
             return false;
         }
     }
@@ -799,20 +839,20 @@ std::string TopParser::resolve_include_path(const std::string& include_path, con
     fs::path parent_dir = parent_path.parent_path();
     
     // Debug output
-    std::cerr << "Resolving include path: " << include_path << "\n"
-              << "Parent file: " << parent_file << "\n"
-              << "Parent dir: " << parent_dir.string() << std::endl;
+    debug_print("Resolving include path: ", include_path, "\n",
+             "Parent file: ", parent_file, "\n",
+             "Parent dir: ", parent_dir.string(), "\n");
     
     // Simply combine parent directory with include path
     fs::path resolved = parent_dir / include_path;
     if (fs::exists(resolved)) {
-        std::cerr << "Found include file at: " << resolved.string() << std::endl;
+        debug_print("Found include file at: ", resolved.string(), "\n");
         return resolved.string();
     }
     
     // If not found, provide error message
-    std::cerr << "Warning: Include file not found: " << include_path << "\n"
-              << "Tried path: " << resolved.string() << std::endl;
+    debug_print("Warning: Include file not found: ", include_path, "\n",
+             "Tried path: ", resolved.string(), "\n");
     
     return "";
 }
@@ -822,7 +862,7 @@ bool TopParser::parse_cmaps_section(const std::vector<LineInfo>& lines, model::T
         const std::string& line = line_info.content;
         auto tokens = split(remove_comment(line));
         if (tokens.size() < 6) {  // Need 5 atoms + function type
-            std::cerr << "Warning: Skipping CMAP line with insufficient tokens: " << line << std::endl;
+            debug_print("Warning: Skipping CMAP line with insufficient tokens: ", line, "\n");
             continue;
         }
 
@@ -838,15 +878,11 @@ bool TopParser::parse_cmaps_section(const std::vector<LineInfo>& lines, model::T
             // Add CMAP to topology using the GROMACS format overload
             topology.add_cmap(cmap_atoms, function_type);
             
-            std::cerr << "Added CMAP between atoms: ";
-            for (int idx : cmap_atoms) {
-                std::cerr << idx << " ";
-            }
-            std::cerr << " (function type " << function_type << ")" << std::endl;
+            debug_print("Added CMAP between atoms: ", cmap_atoms[0], " ", cmap_atoms[1], " ", cmap_atoms[2], " ", cmap_atoms[3], " ", cmap_atoms[4], " (function type ", function_type, ")\n");
         } catch (const std::exception& e) {
-            std::cerr << "Error parsing CMAP line: " << line << " at " 
-                     << line_info.source_file << ":" << line_info.line_number 
-                     << " - " << e.what() << std::endl;
+            debug_print("Error parsing CMAP line: ", line, " at ", 
+                     line_info.source_file, ":", line_info.line_number, 
+                     " - ", e.what(), "\n");
             return false;
         }
     }

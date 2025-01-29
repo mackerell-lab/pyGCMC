@@ -7,9 +7,47 @@
 #include <iostream>
 #include <unordered_map>
 #include <set>
+#include <filesystem>
 
 namespace pygcmc {
 namespace io {
+
+model::Topology PSFParser::parse_file(const std::string& filename) {
+    model::Topology topology;
+    PSFParser parser;
+    if (!parser.parse_to_topology(filename, topology)) {
+        throw std::runtime_error("Failed to parse PSF file: " + filename);
+    }
+    return topology;
+}
+
+model::Topology PSFParser::parse_string(const std::string& psf_str) {
+    // Create a temporary file to write the string to
+    std::filesystem::path temp_dir = std::filesystem::temp_directory_path();
+    std::filesystem::path temp_file = temp_dir / "temp_topology.psf";
+    
+    // Write the string to the temporary file
+    std::ofstream out(temp_file);
+    if (!out) {
+        throw std::runtime_error("Failed to create temporary file for PSF parsing");
+    }
+    out << psf_str;
+    out.close();
+    
+    try {
+        // Parse the temporary file
+        model::Topology topology = parse_file(temp_file.string());
+        
+        // Clean up
+        std::filesystem::remove(temp_file);
+        
+        return topology;
+    } catch (const std::exception& e) {
+        // Clean up on error
+        std::filesystem::remove(temp_file);
+        throw;
+    }
+}
 
 // Helper function to read file lines
 bool readFileToLines(const std::string& filename, std::vector<std::string>& lines) {

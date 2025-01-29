@@ -20,6 +20,24 @@ public:
     ~PSFParser() = default;
 
     /**
+     * @brief Parse a PSF file and return a new Topology object
+     * 
+     * @param filename Path to the PSF file
+     * @return model::Topology The parsed topology
+     * @throws std::runtime_error if parsing fails
+     */
+    static model::Topology parse_file(const std::string& filename);
+
+    /**
+     * @brief Parse a PSF string and return a new Topology object
+     * 
+     * @param psf_str String containing PSF data
+     * @return model::Topology The parsed topology
+     * @throws std::runtime_error if parsing fails
+     */
+    static model::Topology parse_string(const std::string& psf_str);
+
+    /**
      * @brief Parse a PSF file and populate a Topology object
      * 
      * @param filename Path to the PSF file

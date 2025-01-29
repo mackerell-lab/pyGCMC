@@ -26,6 +26,25 @@ public:
     ~TopParser() = default;
 
     /**
+     * @brief Enable or disable debug output
+     * 
+     * @param enable If true, enable debug output; if false, disable it
+     */
+    static void enable_debug(bool enable) {
+        debug_enabled_ = enable;
+    }
+
+    /**
+     * @brief Check if debug output is enabled
+     * 
+     * @return true if debug output is enabled
+     * @return false if debug output is disabled
+     */
+    static bool is_debug_enabled() {
+        return debug_enabled_;
+    }
+
+    /**
      * @brief Parse a topology file and populate a Topology object
      * 
      * @param filename Path to the topology file
@@ -35,7 +54,35 @@ public:
      */
     bool parse_to_topology(const std::string& filename, model::Topology& topology);
 
+    /**
+     * @brief Static method to parse a topology file and return a new Topology object
+     * 
+     * @param filename Path to the topology file
+     * @return model::Topology The parsed topology
+     * @throws std::runtime_error if parsing fails
+     */
+    static model::Topology parse_file(const std::string& filename);
+
+    /**
+     * @brief Static method to parse a topology string and return a new Topology object
+     * 
+     * @param top_str The topology file contents as a string
+     * @return model::Topology The parsed topology
+     * @throws std::runtime_error if parsing fails
+     */
+    static model::Topology parse_string(const std::string& top_str);
+
 private:
+    static bool debug_enabled_;  // Debug output control flag
+    
+    // Helper function for debug output
+    template<typename... Args>
+    static void debug_print(Args&&... args) {
+        if (debug_enabled_) {
+            (std::cerr << ... << std::forward<Args>(args));
+        }
+    }
+
     // Structure to track line source information
     struct LineInfo {
         std::string content;      // The actual line content
