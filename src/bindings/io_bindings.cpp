@@ -4,8 +4,8 @@
 #include <pybind11/stl.h>
 #include "io/pdbParser.hpp"
 #include "model/structure.hpp"
-#include "../io/psfParser.hpp"
-#include "../io/topParser.hpp"
+#include "io/psfParser.hpp"
+#include "io/topParser.hpp"
 #include "model/atom.hpp"
 #include "model/residue.hpp"
 

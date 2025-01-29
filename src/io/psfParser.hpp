@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../model/topology.hpp"
+#include "model/topology.hpp"
 #include <string>
 #include <vector>
 
