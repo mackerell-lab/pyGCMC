@@ -7,6 +7,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <iostream>
+#include <filesystem>
 
 namespace pygcmc {
 namespace io {
@@ -39,18 +40,34 @@ const std::map<std::string, double> PDBParser::ELEMENT_MASSES = {
     {"I", 126.904}, // Iodine
 };
 
-PDBParser::ParseResult PDBParser::parseFile(const std::string& filename) {
+PDBParser::ParseResult PDBParser::parse_file(const std::string& filename) {
+    ParseResult result;
+    if (!parse_to_result(filename, result)) {
+        throw std::runtime_error("Failed to parse PDB file: " + filename);
+    }
+    return result;
+}
+
+PDBParser::ParseResult PDBParser::parse_string(const std::string& pdbStr) {
+    ParseResult result;
+    if (!parse_string_to_result(pdbStr, result)) {
+        throw std::runtime_error("Failed to parse PDB string");
+    }
+    return result;
+}
+
+bool PDBParser::parse_to_result(const std::string& filename, ParseResult& result) {
     std::ifstream file(filename);
     if (!file) {
-        throw std::runtime_error("Could not open PDB file: " + filename);
+        std::cerr << "Could not open PDB file: " << filename << std::endl;
+        return false;
     }
     std::stringstream buffer;
     buffer << file.rdbuf();
-    return parseString(buffer.str());
+    return parse_string_to_result(buffer.str(), result);
 }
 
-PDBParser::ParseResult PDBParser::parseString(const std::string& pdbStr) {
-    ParseResult result;
+bool PDBParser::parse_string_to_result(const std::string& pdbStr, ParseResult& result) {
     std::istringstream iss(pdbStr);
     std::string line;
     
@@ -62,28 +79,33 @@ PDBParser::ParseResult PDBParser::parseString(const std::string& pdbStr) {
         if (line.length() < 6) continue;
         
         RecordType recordType = getRecordType(line);
+        bool success = true;
         switch (recordType) {
             case RecordType::ATOM:
             case RecordType::HETATM:
-                parseAtomRecord(line, recordType, result, currentResidue);
+                success = parseAtomRecord(line, recordType, result, currentResidue);
                 break;
             case RecordType::TER:
-                parseTerRecord(line, currentResidue, result);
+                success = parseTerRecord(line, currentResidue, result);
                 break;
             case RecordType::HELIX:
-                parseHelixRecord(line, result);
+                success = parseHelixRecord(line, result);
                 break;
             case RecordType::SHEET:
-                parseSheetRecord(line, result);
+                success = parseSheetRecord(line, result);
                 break;
             case RecordType::SSBOND:
-                parseSSBondRecord(line, result);
+                success = parseSSBondRecord(line, result);
                 break;
             case RecordType::CRYST1:
-                parseCryst1Record(line, result);
+                success = parseCryst1Record(line, result);
                 break;
             default:
                 continue;
+        }
+        
+        if (!success) {
+            return false;
         }
     }
     
@@ -92,7 +114,7 @@ PDBParser::ParseResult PDBParser::parseString(const std::string& pdbStr) {
         currentResidue->calculateCenterOfMass();
     }
     
-    return result;
+    return true;
 }
 
 PDBParser::RecordType PDBParser::getRecordType(const std::string& line) {
@@ -107,7 +129,7 @@ PDBParser::RecordType PDBParser::getRecordType(const std::string& line) {
     return RecordType::UNKNOWN;
 }
 
-void PDBParser::parseAtomRecord(const std::string& line, RecordType type,
+bool PDBParser::parseAtomRecord(const std::string& line, RecordType type,
                               ParseResult& result,
                               std::shared_ptr<model::Residue>& currentResidue) {
     try {
@@ -307,13 +329,14 @@ void PDBParser::parseAtomRecord(const std::string& line, RecordType type,
         }
         currentResidue->addAtom(atom);
 
+        return true;
     } catch (const std::exception& e) {
-        throw std::runtime_error("Error parsing ATOM/HETATM record: " + 
-                               std::string(e.what()));
+        std::cerr << "Error parsing ATOM/HETATM record: " << e.what() << std::endl;
+        return false;
     }
 }
 
-void PDBParser::parseTerRecord(const std::string& line,
+bool PDBParser::parseTerRecord(const std::string& line,
                              std::shared_ptr<model::Residue>& currentResidue,
                              ParseResult& result) {
     try {
@@ -361,12 +384,15 @@ void PDBParser::parseTerRecord(const std::string& line,
 
         // Reset current residue pointer
         currentResidue = nullptr;
+
+        return true;
     } catch (const std::exception& e) {
-        throw std::runtime_error("Error parsing TER record: " + std::string(e.what()));
+        std::cerr << "Error parsing TER record: " << e.what() << std::endl;
+        return false;
     }
 }
 
-void PDBParser::parseHelixRecord(const std::string& line, ParseResult& result) {
+bool PDBParser::parseHelixRecord(const std::string& line, ParseResult& result) {
     try {
         std::string helixId = line.substr(11, 3);
         if (!helixId.empty()) {
@@ -428,12 +454,14 @@ void PDBParser::parseHelixRecord(const std::string& line, ParseResult& result) {
         std::string chainKey(1, initChainId);
         result.helices[chainKey].push_back(helixInfo);
 
+        return true;
     } catch (const std::exception& e) {
-        throw std::runtime_error("Error parsing HELIX record: " + std::string(e.what()));
+        std::cerr << "Error parsing HELIX record: " << e.what() << std::endl;
+        return false;
     }
 }
 
-void PDBParser::parseSheetRecord(const std::string& line, ParseResult& result) {
+bool PDBParser::parseSheetRecord(const std::string& line, ParseResult& result) {
     try {
         if (line.length() < 38) {
             throw std::runtime_error("SHEET record too short");
@@ -499,12 +527,14 @@ void PDBParser::parseSheetRecord(const std::string& line, ParseResult& result) {
         }
         result.sheets[initChainId].push_back(sheetInfo);
 
+        return true;
     } catch (const std::exception& e) {
-        throw std::runtime_error("Error parsing SHEET record: " + std::string(e.what()));
+        std::cerr << "Error parsing SHEET record: " << e.what() << std::endl;
+        return false;
     }
 }
 
-void PDBParser::parseSSBondRecord(const std::string& line, ParseResult& result) {
+bool PDBParser::parseSSBondRecord(const std::string& line, ParseResult& result) {
     try {
         std::string chain1 = std::string(1, line[15]);
         if (!chain1.empty()) {
@@ -549,12 +579,14 @@ void PDBParser::parseSSBondRecord(const std::string& line, ParseResult& result) 
         
         result.ssbonds.push_back(bondInfo);
 
+        return true;
     } catch (const std::exception& e) {
-        throw std::runtime_error("Error parsing SSBOND record: " + std::string(e.what()));
+        std::cerr << "Error parsing SSBOND record: " << e.what() << std::endl;
+        return false;
     }
 }
 
-void PDBParser::parseCryst1Record(const std::string& line, ParseResult& result) {
+bool PDBParser::parseCryst1Record(const std::string& line, ParseResult& result) {
     try {
         // Parse unit cell parameters according to PDB format
         double a = std::stod(line.substr(6, 9));
@@ -567,9 +599,10 @@ void PDBParser::parseCryst1Record(const std::string& line, ParseResult& result) 
         // Store box dimensions
         result.boxDimensions = std::vector<double>{a, b, c, alpha, beta, gamma};
         
+        return true;
     } catch (const std::exception& e) {
-        throw std::runtime_error("Error parsing CRYST1 record: " + 
-                               std::string(e.what()));
+        std::cerr << "Error parsing CRYST1 record: " << e.what() << std::endl;
+        return false;
     }
 }
 

@@ -13,18 +13,18 @@ namespace pygcmc {
 namespace io {
 
 // Initialize static member
-bool TopParser::debug_enabled_ = false;
+bool TOPParser::debug_enabled_ = false;
 
-model::Topology TopParser::parse_file(const std::string& filename) {
+model::Topology TOPParser::parse_file(const std::string& filename) {
     model::Topology topology;
-    TopParser parser;
+    TOPParser parser;
     if (!parser.parse_to_topology(filename, topology)) {
         throw std::runtime_error("Failed to parse topology file: " + filename);
     }
     return topology;
 }
 
-model::Topology TopParser::parse_string(const std::string& top_str) {
+model::Topology TOPParser::parse_string(const std::string& top_str) {
     // Create a temporary file to write the string to
     std::filesystem::path temp_dir = std::filesystem::temp_directory_path();
     std::filesystem::path temp_file = temp_dir / "temp_topology.top";
@@ -52,7 +52,7 @@ model::Topology TopParser::parse_string(const std::string& top_str) {
     }
 }
 
-bool TopParser::parse_to_topology(const std::string& filename, model::Topology& topology) {
+bool TOPParser::parse_to_topology(const std::string& filename, model::Topology& topology) {
     // Track molecule definitions in order of appearance
     std::vector<std::string> molecule_types_order;
     std::map<std::string, std::vector<LineInfo>> molecule_atoms_temp;
@@ -378,7 +378,7 @@ bool TopParser::parse_to_topology(const std::string& filename, model::Topology& 
     return true;
 }
 
-bool TopParser::collect_all_lines(const std::string& filename, std::vector<LineInfo>& all_lines,
+bool TOPParser::collect_all_lines(const std::string& filename, std::vector<LineInfo>& all_lines,
                                 PreprocessorState& pp_state, bool is_main_file) {
     // Check if we've already processed this file
     if (processed_files_.find(filename) != processed_files_.end()) {
@@ -429,7 +429,7 @@ bool TopParser::collect_all_lines(const std::string& filename, std::vector<LineI
     return true;
 }
 
-bool TopParser::process_preprocessor_line(const std::string& line, const std::string& parent_file,
+bool TOPParser::process_preprocessor_line(const std::string& line, const std::string& parent_file,
                                         std::vector<LineInfo>& all_lines, PreprocessorState& pp_state,
                                         int line_number) {
     std::istringstream iss(line);
@@ -548,7 +548,7 @@ bool TopParser::process_preprocessor_line(const std::string& line, const std::st
     return true;
 }
 
-void TopParser::parse_sections(const std::vector<LineInfo>& all_lines,
+void TOPParser::parse_sections(const std::vector<LineInfo>& all_lines,
                              std::map<std::string, std::vector<LineInfo>>& sections) {
     std::string current_section;
     for (const auto& line_info : all_lines) {
@@ -578,7 +578,7 @@ void TopParser::parse_sections(const std::vector<LineInfo>& all_lines,
     }
 }
 
-std::string TopParser::remove_comment(const std::string& line) {
+std::string TOPParser::remove_comment(const std::string& line) {
     size_t comment_pos = line.find(';');
     if (comment_pos != std::string::npos) {
         return line.substr(0, comment_pos);
@@ -586,7 +586,7 @@ std::string TopParser::remove_comment(const std::string& line) {
     return line;
 }
 
-bool TopParser::parse_moleculetype_section(const std::vector<LineInfo>& lines, [[maybe_unused]] model::Topology& topology) {
+bool TOPParser::parse_moleculetype_section(const std::vector<LineInfo>& lines, [[maybe_unused]] model::Topology& topology) {
     for (const auto& line_info : lines) {
         const std::string& line = line_info.content;
         auto tokens = split(remove_comment(line));
@@ -604,7 +604,7 @@ bool TopParser::parse_moleculetype_section(const std::vector<LineInfo>& lines, [
     return true;
 }
 
-bool TopParser::parse_atoms_section(const std::vector<LineInfo>& lines, model::Topology& topology) {
+bool TOPParser::parse_atoms_section(const std::vector<LineInfo>& lines, model::Topology& topology) {
     for (const auto& line_info : lines) {
         const std::string& line = line_info.content;
         auto tokens = split(remove_comment(line));
@@ -637,7 +637,7 @@ bool TopParser::parse_atoms_section(const std::vector<LineInfo>& lines, model::T
     return true;
 }
 
-bool TopParser::parse_bonds_section(const std::vector<LineInfo>& lines, model::Topology& topology, int atom_offset) {
+bool TOPParser::parse_bonds_section(const std::vector<LineInfo>& lines, model::Topology& topology, int atom_offset) {
     for (const auto& line_info : lines) {
         const std::string& line = line_info.content;
         auto tokens = split(remove_comment(line));
@@ -677,7 +677,7 @@ bool TopParser::parse_bonds_section(const std::vector<LineInfo>& lines, model::T
     return true;  // Return true if we processed all lines (even with some warnings)
 }
 
-bool TopParser::parse_angles_section(const std::vector<LineInfo>& lines, model::Topology& topology, int atom_offset) {
+bool TOPParser::parse_angles_section(const std::vector<LineInfo>& lines, model::Topology& topology, int atom_offset) {
     for (const auto& line_info : lines) {
         const std::string& line = line_info.content;
         auto tokens = split(remove_comment(line));
@@ -718,7 +718,7 @@ bool TopParser::parse_angles_section(const std::vector<LineInfo>& lines, model::
     return true;
 }
 
-bool TopParser::parse_dihedrals_section(const std::vector<LineInfo>& lines, model::Topology& topology, int atom_offset) {
+bool TOPParser::parse_dihedrals_section(const std::vector<LineInfo>& lines, model::Topology& topology, int atom_offset) {
     debug_print("Parsing ", lines.size(), " dihedral lines\n");
     int proper_count = 0;
     int improper_count = 0;
@@ -762,7 +762,7 @@ bool TopParser::parse_dihedrals_section(const std::vector<LineInfo>& lines, mode
     return true;
 }
 
-bool TopParser::parse_impropers_section(const std::vector<LineInfo>& lines, model::Topology& topology, int atom_offset) {
+bool TOPParser::parse_impropers_section(const std::vector<LineInfo>& lines, model::Topology& topology, int atom_offset) {
     for (const auto& line_info : lines) {
         const std::string& line = line_info.content;
         auto tokens = split(remove_comment(line));
@@ -784,7 +784,7 @@ bool TopParser::parse_impropers_section(const std::vector<LineInfo>& lines, mode
     return true;
 }
 
-bool TopParser::parse_molecules_section(const std::vector<LineInfo>& lines, [[maybe_unused]] model::Topology& topology) {
+bool TOPParser::parse_molecules_section(const std::vector<LineInfo>& lines, [[maybe_unused]] model::Topology& topology) {
     for (const auto& line_info : lines) {
         const std::string& line = line_info.content;
         auto tokens = split(remove_comment(line));
@@ -804,7 +804,7 @@ bool TopParser::parse_molecules_section(const std::vector<LineInfo>& lines, [[ma
     return true;
 }
 
-std::string TopParser::trim(std::string& str) {
+std::string TOPParser::trim(std::string& str) {
     // Trim leading spaces
     str.erase(str.begin(), std::find_if(str.begin(), str.end(), [](unsigned char ch) {
         return !std::isspace(ch);
@@ -818,7 +818,7 @@ std::string TopParser::trim(std::string& str) {
     return str;
 }
 
-std::vector<std::string> TopParser::split(const std::string& str) {
+std::vector<std::string> TOPParser::split(const std::string& str) {
     std::vector<std::string> tokens;
     std::istringstream iss(str);
     std::string token;
@@ -831,7 +831,7 @@ std::vector<std::string> TopParser::split(const std::string& str) {
     return tokens;
 }
 
-std::string TopParser::resolve_include_path(const std::string& include_path, const std::string& parent_file) {
+std::string TOPParser::resolve_include_path(const std::string& include_path, const std::string& parent_file) {
     namespace fs = std::filesystem;
     
     // Convert parent path to absolute and get its directory
@@ -857,7 +857,7 @@ std::string TopParser::resolve_include_path(const std::string& include_path, con
     return "";
 }
 
-bool TopParser::parse_cmaps_section(const std::vector<LineInfo>& lines, model::Topology& topology, int atom_offset) {
+bool TOPParser::parse_cmaps_section(const std::vector<LineInfo>& lines, model::Topology& topology, int atom_offset) {
     for (const auto& line_info : lines) {
         const std::string& line = line_info.content;
         auto tokens = split(remove_comment(line));

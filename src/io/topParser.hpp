@@ -20,10 +20,10 @@ namespace io {
  * The topology file contains structural information about a molecular system,
  * including atoms, bonds, angles, dihedrals, improper dihedrals, and more.
  */
-class TopParser {
+class TOPParser {
 public:
-    TopParser() = default;
-    ~TopParser() = default;
+    TOPParser() = default;
+    ~TOPParser() = default;
 
     /**
      * @brief Enable or disable debug output

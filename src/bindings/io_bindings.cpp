@@ -46,12 +46,20 @@ void init_io(py::module& m) {
 
     // Bind PDBParser class in both main module and io submodule
     auto parser = py::class_<pygcmc::io::PDBParser>(m, "PDBParser")
-        .def_static("parse_file", &pygcmc::io::PDBParser::parseFile,
+        .def_static("parse_file", &pygcmc::io::PDBParser::parse_file,
             py::arg("filename"),
             "Parse a PDB file and return the parsed data")
-        .def_static("parse_string", &pygcmc::io::PDBParser::parseString,
+        .def_static("parse_string", &pygcmc::io::PDBParser::parse_string,
             py::arg("pdb_str"),
-            "Parse a PDB string and return the parsed data");
+            "Parse a PDB string and return the parsed data")
+        .def_static("parse_to_result", &pygcmc::io::PDBParser::parse_to_result,
+            py::arg("filename"),
+            py::arg("result"),
+            "Parse a PDB file and populate a ParseResult object")
+        .def_static("parse_string_to_result", &pygcmc::io::PDBParser::parse_string_to_result,
+            py::arg("pdb_str"),
+            py::arg("result"),
+            "Parse a PDB string and populate a ParseResult object");
     io.attr("PDBParser") = parser;
 
     // PSFParser bindings
@@ -66,22 +74,22 @@ void init_io(py::module& m) {
             "Parse a PSF string and return a new Topology object");
     io.attr("PSFParser") = psf_parser;
 
-    // TopParser bindings
-    auto top_parser = py::class_<pygcmc::io::TopParser>(m, "TopParser")
+    // TOPParser bindings
+    auto top_parser = py::class_<pygcmc::io::TOPParser>(m, "TOPParser")
         .def(py::init<>())
-        .def("parse_to_topology", &pygcmc::io::TopParser::parse_to_topology)
-        .def_static("parse_file", &pygcmc::io::TopParser::parse_file,
+        .def("parse_to_topology", &pygcmc::io::TOPParser::parse_to_topology)
+        .def_static("parse_file", &pygcmc::io::TOPParser::parse_file,
             py::arg("filename"),
             "Parse a topology file and return a new Topology object")
-        .def_static("parse_string", &pygcmc::io::TopParser::parse_string,
+        .def_static("parse_string", &pygcmc::io::TOPParser::parse_string,
             py::arg("top_str"),
             "Parse a topology string and return a new Topology object")
-        .def_static("enable_debug", &pygcmc::io::TopParser::enable_debug,
+        .def_static("enable_debug", &pygcmc::io::TOPParser::enable_debug,
             py::arg("enable"),
             "Enable or disable debug output")
-        .def_static("is_debug_enabled", &pygcmc::io::TopParser::is_debug_enabled,
+        .def_static("is_debug_enabled", &pygcmc::io::TOPParser::is_debug_enabled,
             "Check if debug output is enabled");
-    io.attr("TopParser") = top_parser;
+    io.attr("TOPParser") = top_parser;
 }
 
 } // namespace bindings

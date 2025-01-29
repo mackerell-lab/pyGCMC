@@ -2,7 +2,7 @@
 
 import os
 import pytest
-from pygcmc.io import TopParser
+from pygcmc.io import TOPParser
 from pygcmc.model import Topology, TopologyResidue, TopologyAtom
 
 @pytest.fixture
@@ -14,7 +14,7 @@ def test_data_dir():
 def test_parse_protein_top(test_data_dir):
     """Test parsing protein topology file (test.top)."""
     top_file = os.path.join(test_data_dir, "test.top")
-    parser = TopParser()
+    parser = TOPParser()
     topology = Topology()
     
     # Parse the topology file
@@ -66,7 +66,7 @@ def test_parse_protein_top(test_data_dir):
 def test_parse_solvent_top(test_data_dir):
     """Test parsing solvent topology file (sol.itp)."""
     top_file = os.path.join(test_data_dir, "mols", "sol.itp")
-    parser = TopParser()
+    parser = TOPParser()
     topology = Topology()
     
     # Parse the topology file
@@ -113,7 +113,7 @@ def test_parse_solvent_top(test_data_dir):
 def test_parse_benzene_top(test_data_dir):
     """Test parsing benzene topology file (benx.itp)."""
     top_file = os.path.join(test_data_dir, "mols", "benx.itp")
-    parser = TopParser()
+    parser = TOPParser()
     topology = Topology()
     
     # Parse the topology file
@@ -159,7 +159,7 @@ def test_parse_benzene_top(test_data_dir):
 def test_parse_propane_top(test_data_dir):
     """Test parsing propane topology file (prpx.itp)."""
     top_file = os.path.join(test_data_dir, "mols", "prpx.itp")
-    parser = TopParser()
+    parser = TOPParser()
     topology = Topology()
     
     # Parse the topology file
@@ -209,7 +209,7 @@ def test_parse_propane_top(test_data_dir):
 def test_parse_bonds(test_data_dir):
     """Test parsing bonds section from topology file."""
     top_file = os.path.join(test_data_dir, "test.top")
-    parser = TopParser()
+    parser = TOPParser()
     topology = Topology()
     
     assert parser.parse_to_topology(top_file, topology), "Failed to parse topology file"
@@ -245,7 +245,7 @@ def test_parse_bonds(test_data_dir):
 def test_parse_angles(test_data_dir):
     """Test parsing angles section from topology file."""
     top_file = os.path.join(test_data_dir, "test.top")
-    parser = TopParser()
+    parser = TOPParser()
     topology = Topology()
     
     assert parser.parse_to_topology(top_file, topology), "Failed to parse topology file"
@@ -285,7 +285,7 @@ def test_parse_angles(test_data_dir):
 def test_parse_dihedrals(test_data_dir):
     """Test parsing dihedrals section from topology file."""
     top_file = os.path.join(test_data_dir, "test.top")
-    parser = TopParser()
+    parser = TOPParser()
     topology = Topology()
     
     assert parser.parse_to_topology(top_file, topology), "Failed to parse topology file"
@@ -342,7 +342,7 @@ def test_parse_dihedrals(test_data_dir):
 def test_parse_nonexistent_file(test_data_dir):
     """Test parsing a non-existent topology file."""
     top_file = os.path.join(test_data_dir, "nonexistent.top")
-    parser = TopParser()
+    parser = TOPParser()
     topology = Topology()
     
     assert not parser.parse_to_topology(top_file, topology), "Should fail for non-existent file"
@@ -354,7 +354,7 @@ def test_parse_invalid_top(test_data_dir, tmp_path):
     with open(invalid_top, "w") as f:
         f.write("This is not a topology file\n")
     
-    parser = TopParser()
+    parser = TOPParser()
     topology = Topology()
     assert not parser.parse_to_topology(str(invalid_top), topology), "Should fail for invalid topology file"
 
