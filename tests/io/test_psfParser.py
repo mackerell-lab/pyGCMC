@@ -591,7 +591,7 @@ def test_parse_out_of_order_psf(test_data_dir, tmp_path):
         f.writelines(sections["NTITLE"])
         
         # Write sections in non-standard order
-        section_order = ["NBOND", "NTHETA", "NATOM", "NPHI", "NIMPHI", "NDON", "NACC"]
+        section_order = ["NBOND", "NTHETA", "NATOM", "NPHI", "NIMPHI", "NDON", "NACC", "CMAP"]
         for section in section_order:
             if section in sections:
                 f.write("\n")  # Add spacing between sections
@@ -609,4 +609,67 @@ def test_parse_out_of_order_psf(test_data_dir, tmp_path):
     assert topology.get_num_angles() == 243, "Wrong number of angles"
     assert topology.get_num_dihedrals() == 362, "Wrong number of dihedrals"
     assert topology.get_num_impropers() == 29, "Wrong number of impropers"
+    assert topology.get_num_cmaps() == 7, "Wrong number of CMAP terms"
+
+def test_parse_all_cmaps(test_data_dir):
+    """Test parsing all CMAP terms from PSF file."""
+    psf_file = os.path.join(test_data_dir, "test_proa.psf")
+    parser = PSFParser()
+    topology = Topology()
+    
+    assert parser.parse_to_topology(psf_file, topology), "Failed to parse PSF file"
+    
+    # Verify total number of CMAP terms
+    assert topology.get_num_cmaps() == 7, "Expected 7 CMAP terms, got {}".format(topology.get_num_cmaps())
+    
+    # Expected CMAP terms (1-based indices from PSF file)
+    expected_cmaps = [
+        [11, 13, 15, 27, 13, 15, 27, 29],
+        [27, 29, 33, 41, 29, 33, 41, 43],
+        [41, 43, 45, 51, 43, 45, 51, 53],
+        [51, 53, 57, 65, 53, 57, 65, 67],
+        [65, 67, 69, 79, 67, 69, 79, 81],
+        [79, 81, 83, 96, 81, 83, 96, 98],
+        [96, 98, 100, 113, 98, 100, 113, 115]
+    ]
+    
+    # Convert to 0-based indices and verify each CMAP term
+    for i, expected_cmap in enumerate(expected_cmaps):
+        expected_0based = [idx - 1 for idx in expected_cmap]
+        assert topology.has_cmap(expected_0based), f"Missing CMAP term {i+1}: {expected_cmap}"
+    
+    # Verify these correspond to the protein backbone
+    # Each CMAP should connect four consecutive residues through their backbone atoms
+    residue_sequences = [
+        ["ALA", "VAL", "PRO"],           # First CMAP
+        ["VAL", "PRO", "ALA"],           # Second CMAP
+        ["PRO", "ALA", "PRO"],           # Third CMAP
+        ["ALA", "PRO", "ASN"],           # Fourth CMAP
+        ["PRO", "ASN", "GLN"],           # Fifth CMAP
+        ["ASN", "GLN", "GLN"],           # Sixth CMAP
+        ["GLN", "GLN", "PRO"]            # Seventh CMAP
+    ]
+    
+    for i, residues in enumerate(residue_sequences):
+        # For each residue sequence, verify the residues exist and are connected
+        for j in range(len(residues)-1):
+            res1_id = topology.find_residue(residues[j], 7+i+j)
+            res2_id = topology.find_residue(residues[j+1], 8+i+j)
+            assert res1_id is not None, f"Could not find residue {residues[j]} {7+i+j}"
+            assert res2_id is not None, f"Could not find residue {residues[j+1]} {8+i+j}"
+            
+            # Get the residues
+            res1 = topology.get_residue(res1_id)
+            res2 = topology.get_residue(res2_id)
+            
+            # Verify they share at least one bond (they should be connected)
+            found_connection = False
+            for atom1_idx in res1.atoms:
+                for atom2_idx in res2.atoms:
+                    if topology.has_bond(atom1_idx, atom2_idx):
+                        found_connection = True
+                        break
+                if found_connection:
+                    break
+            assert found_connection, f"No connection found between {residues[j]} and {residues[j+1]}"
 
