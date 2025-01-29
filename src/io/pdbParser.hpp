@@ -96,6 +96,9 @@ private:
     static void parseSSBondRecord(const std::string& line, ParseResult& result);
 
     static void parseCryst1Record(const std::string& line, ParseResult& result);
+
+    // Element mass table
+    static const std::map<std::string, double> ELEMENT_MASSES;
 };
 
 } // namespace io

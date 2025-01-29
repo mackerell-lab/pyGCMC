@@ -142,8 +142,9 @@ public:
                           });
     }
 
-    std::array<double, 3> centerOfMass() const {
-        std::array<double, 3> com = {0.0, 0.0, 0.0};
+    // Center of mass calculation and storage
+    void calculateCenterOfMass() {
+        com = {0.0, 0.0, 0.0};
         double totalMass = 0.0;
 
         for (const auto& atom : atoms) {
@@ -159,7 +160,9 @@ public:
         if (totalMass > 0.0) {
             for (double& x : com) x /= totalMass;
         }
+    }
 
+    const std::array<double, 3>& getCenterOfMass() const noexcept {
         return com;
     }
 
@@ -274,6 +277,9 @@ private:
     SecondaryStructure secStruct{SecondaryStructure::NONE};
     SheetStrand sheetInfo;
     SSBond ssbond;
+
+    // Center of mass calculation and storage
+    std::array<double, 3> com{0.0, 0.0, 0.0};  // Center of mass
 };
 
 } // namespace model

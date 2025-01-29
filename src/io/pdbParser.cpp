@@ -11,6 +11,34 @@
 namespace pygcmc {
 namespace io {
 
+// Define the element mass table
+const std::map<std::string, double> PDBParser::ELEMENT_MASSES = {
+    {"H", 1.008},   // Hydrogen
+    {"He", 4.003},  // Helium
+    {"Li", 6.941},  // Lithium
+    {"Be", 9.012},  // Beryllium
+    {"B", 10.811},  // Boron
+    {"C", 12.011},  // Carbon
+    {"N", 14.007},  // Nitrogen
+    {"O", 15.999},  // Oxygen
+    {"F", 18.998},  // Fluorine
+    {"Ne", 20.180}, // Neon
+    {"Na", 22.990}, // Sodium
+    {"Mg", 24.305}, // Magnesium
+    {"Al", 26.982}, // Aluminum
+    {"Si", 28.086}, // Silicon
+    {"P", 30.974},  // Phosphorus
+    {"S", 32.065},  // Sulfur
+    {"Cl", 35.453}, // Chlorine
+    {"K", 39.098},  // Potassium
+    {"Ca", 40.078}, // Calcium
+    {"Fe", 55.845}, // Iron
+    {"Cu", 63.546}, // Copper
+    {"Zn", 65.380}, // Zinc
+    {"Br", 79.904}, // Bromine
+    {"I", 126.904}, // Iodine
+};
+
 PDBParser::ParseResult PDBParser::parseFile(const std::string& filename) {
     std::ifstream file(filename);
     if (!file) {
@@ -57,6 +85,11 @@ PDBParser::ParseResult PDBParser::parseString(const std::string& pdbStr) {
             default:
                 continue;
         }
+    }
+    
+    // Calculate center of mass for the last residue if not already done
+    if (currentResidue) {
+        currentResidue->calculateCenterOfMass();
     }
     
     return result;
@@ -194,6 +227,35 @@ void PDBParser::parseAtomRecord(const std::string& line, RecordType type,
         atom->setChargeString(charge);
         atom->setHetatm(type == RecordType::HETATM);
 
+        // Set default mass based on element
+        if (element.empty()) {
+            // If element is not specified, guess from atom name
+            std::string guessedElement = atomName;
+            if (!guessedElement.empty()) {
+                // Remove numbers and special characters
+                guessedElement.erase(
+                    std::remove_if(guessedElement.begin(), guessedElement.end(),
+                                 [](char c) { return !std::isalpha(c); }),
+                    guessedElement.end());
+                if (!guessedElement.empty()) {
+                    // Take first character and capitalize it
+                    guessedElement = std::toupper(guessedElement[0]);
+                    if (guessedElement.length() > 1) {
+                        guessedElement += std::tolower(guessedElement[1]);
+                    }
+                }
+            }
+            element = guessedElement;
+        }
+        
+        // Set mass based on element using the mass table
+        double mass = 12.0; // Default to carbon mass if element not found
+        auto it = ELEMENT_MASSES.find(element);
+        if (it != ELEMENT_MASSES.end()) {
+            mass = it->second;
+        }
+        atom->setMassCharge(mass, 0.0); // Set mass and default charge to 0
+
         // Add to result
         result.atoms.push_back(atom);
 
@@ -202,6 +264,11 @@ void PDBParser::parseAtomRecord(const std::string& line, RecordType type,
             currentResidue->getChain() != chainId[0] ||
             currentResidue->getIres() != resSeq ||
             currentResidue->getInscode() != iCode[0]) {
+            // If we have a previous residue, calculate its center of mass before moving on
+            if (currentResidue) {
+                currentResidue->calculateCenterOfMass();
+            }
+            
             // Check if residue already exists
             bool found = false;
             for (auto& res : result.residues) {
@@ -250,6 +317,11 @@ void PDBParser::parseTerRecord(const std::string& line,
                              std::shared_ptr<model::Residue>& currentResidue,
                              ParseResult& result) {
     try {
+        // Calculate center of mass for the last residue before TER
+        if (currentResidue) {
+            currentResidue->calculateCenterOfMass();
+        }
+        
         std::string chainId = line.length() > 21 ? std::string(1, line[21]) : "";
         if (!chainId.empty()) {
             size_t start = chainId.find_first_not_of(" ");
