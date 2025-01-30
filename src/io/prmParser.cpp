@@ -436,17 +436,24 @@ void PRMParser::parseImproperSection(std::istream& input, ForceField& ff) {
         
         auto tokens = tokenize(line);
         if (tokens.size() >= 6) {
-            // Format: type1 type2 type3 type4 Kpsi psi0
-            std::string type1 = tokens[0];
-            std::string type2 = tokens[1];
-            std::string type3 = tokens[2];
-            std::string type4 = tokens[3];
-            double kpsi = safe_stod(tokens[4], "improper Kpsi for " + type1 + "-" + type2 + "-" + type3 + "-" + type4);
-            double psi0 = safe_stod(tokens[5], "improper psi0 for " + type1 + "-" + type2 + "-" + type3 + "-" + type4);
-            
-            auto key = make_type_quad(type1, type2, type3, type4);
-            ImproperParams params{kpsi, psi0};
-            ff.improper_params[key] = params;
+            try {
+                // Format: type1 type2 type3 type4 Kpsi psi0
+                std::string type1 = tokens[0];
+                std::string type2 = tokens[1];
+                std::string type3 = tokens[2];
+                std::string type4 = tokens[3];
+                // Only try to convert the last two tokens to numbers
+                double kpsi = safe_stod(tokens[4], "improper Kpsi");
+                double psi0 = safe_stod(tokens[5], "improper psi0");
+                
+                auto key = make_type_quad(type1, type2, type3, type4);
+                ImproperParams params{kpsi, psi0};
+                ff.improper_params[key] = params;
+            } catch (const std::exception& e) {
+                // Skip lines that can't be parsed properly
+                std::cerr << "Warning: Skipping improper line due to parsing error: " << line << std::endl;
+                continue;
+            }
         }
     }
 }
@@ -469,21 +476,28 @@ void PRMParser::parseNBFixSection(std::istream& input, ForceField& ff) {
         }
         
         auto tokens = tokenize(line);
+        // Skip special directive lines like "HBOND CUTHB 0.5"
+        if (tokens.size() >= 1 && (tokens[0] == "HBOND" || tokens[0] == "NBFIX")) {
+            continue;
+        }
+        
         if (tokens.size() >= 4) {
-            std::string type1 = tokens[0];
-            std::string type2 = tokens[1];
             try {
+                std::string type1 = tokens[0];
+                std::string type2 = tokens[1];
                 double epsilon = safe_stod(tokens[2], "NBFIX epsilon for " + type1 + "-" + type2);
                 // Store both directions to ensure symmetric lookup
                 auto key = make_type_pair(type1, type2);
                 ff.nbfix[key] = epsilon;
+                key = make_type_pair(type2, type1);
+                ff.nbfix[key] = epsilon;
                 
                 std::cerr << "Stored NBFIX for " << type1 << "-" << type2 << ": epsilon = " << epsilon << std::endl;
             } catch (const std::exception& e) {
-                throw std::runtime_error("Failed to parse NBFIX line: " + line + "\nError: " + e.what());
+                // Skip lines that can't be parsed properly
+                std::cerr << "Warning: Skipping NBFIX line due to parsing error: " << line << std::endl;
+                continue;
             }
-        } else if (!tokens.empty()) {  // Only throw if line has some tokens but not enough
-            throw std::runtime_error("Invalid NBFIX format in line: " + line);
         }
     }
 }
