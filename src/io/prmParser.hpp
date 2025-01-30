@@ -13,6 +13,9 @@ namespace pygcmc {
 
 class PRMParser {
 public:
+    // Static debug flag
+    static bool debug_output;
+
     PRMParser() = default;
     ~PRMParser() = default;
 
