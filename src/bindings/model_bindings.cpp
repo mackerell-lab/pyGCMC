@@ -190,35 +190,46 @@ void init_model(py::module& m) {
     // ForceField
     py::class_<ForceField>(m, "ForceField")
         .def(py::init<>())
-        .def_readwrite("atom_masses", &ForceField::atom_masses)
-        .def_readwrite("lj_params", &ForceField::lj_params)
-        .def_readwrite("nbfix", &ForceField::nbfix)
-        .def_readwrite("bond_params", &ForceField::bond_params)
-        .def_readwrite("angle_params", &ForceField::angle_params)
-        .def_readwrite("dihedral_params", &ForceField::dihedral_params)
-        .def_readwrite("improper_params", &ForceField::improper_params)
-        .def_readwrite("nonbonded_params", &ForceField::nonbonded_params)
-        .def("get_nonbonded_params", [](const ForceField& self) -> const NonbondedParams& {
-            return self.nonbonded_params;
-        })
-        .def("get_lj_params", [](const ForceField& self, const std::string& type) -> const LJParams& {
-            auto it = self.lj_params.find(type);
-            if (it == self.lj_params.end()) {
-                throw py::key_error("No LJ parameters found for atom type: " + type);
-            }
-            return it->second;
-        })
-        .def("get_nbfix", [](const ForceField& self, const std::string& type1, const std::string& type2) -> py::tuple {
-            auto key = std::make_pair(type1 < type2 ? type1 : type2, type1 < type2 ? type2 : type1);
-            auto it = self.nbfix.find(key);
-            if (it == self.nbfix.end()) {
-                return py::make_tuple(0.0, false);
-            }
-            return py::make_tuple(it->second, true);
-        })
+        .def("add_atom_mass", &ForceField::add_atom_mass)
+        .def("add_lj_params", &ForceField::add_lj_params)
+        .def("add_nbfix", &ForceField::add_nbfix)
+        .def("add_bond_params", &ForceField::add_bond_params)
+        .def("add_angle_params", &ForceField::add_angle_params)
+        .def("add_dihedral_params", &ForceField::add_dihedral_params)
+        .def("add_improper_params", &ForceField::add_improper_params)
+        .def("get_atom_mass", &ForceField::get_atom_mass)
+        .def("get_lj_params", static_cast<const LJParams& (ForceField::*)(const std::string&) const>(&ForceField::get_lj_params))
+        .def("get_nbfix", static_cast<std::pair<double, bool> (ForceField::*)(const std::string&, const std::string&) const>(&ForceField::get_nbfix))
+        .def("get_bond_params", static_cast<const BondParams& (ForceField::*)(const std::string&, const std::string&) const>(&ForceField::get_bond_params))
+        .def("get_angle_params", static_cast<const AngleParams& (ForceField::*)(const std::string&, const std::string&, const std::string&) const>(&ForceField::get_angle_params))
+        .def("get_dihedral_params", static_cast<const std::vector<DihedralParams>& (ForceField::*)(const std::string&, const std::string&, const std::string&, const std::string&) const>(&ForceField::get_dihedral_params))
+        .def("get_improper_params", static_cast<const ImproperParams& (ForceField::*)(const std::string&, const std::string&, const std::string&, const std::string&) const>(&ForceField::get_improper_params))
+        .def("has_atom_mass", &ForceField::has_atom_mass)
+        .def("has_lj_params", &ForceField::has_lj_params)
+        .def("has_nbfix", &ForceField::has_nbfix)
+        .def("has_bond_params", &ForceField::has_bond_params)
+        .def("has_angle_params", &ForceField::has_angle_params)
+        .def("has_dihedral_params", &ForceField::has_dihedral_params)
+        .def("has_improper_params", &ForceField::has_improper_params)
+        .def("get_num_atom_types", &ForceField::get_num_atom_types)
+        .def("get_num_lj_params", &ForceField::get_num_lj_params)
+        .def("get_num_nbfix", &ForceField::get_num_nbfix)
+        .def("get_num_bond_types", &ForceField::get_num_bond_types)
+        .def("get_num_angle_types", &ForceField::get_num_angle_types)
+        .def("get_num_dihedral_types", &ForceField::get_num_dihedral_types)
+        .def("get_num_improper_types", &ForceField::get_num_improper_types)
+        .def("get_nonbonded_params", static_cast<const NonbondedParams& (ForceField::*)() const>(&ForceField::get_nonbonded_params))
         .def_static("makeTypePair", &ForceField::makeTypePair)
         .def_static("makeTypeTriple", &ForceField::makeTypeTriple)
-        .def_static("makeTypeQuad", &ForceField::makeTypeQuad);
+        .def_static("makeTypeQuad", &ForceField::makeTypeQuad)
+        // Add property accessors for the maps
+        .def_property_readonly("atom_masses", static_cast<const std::map<std::string, double>& (ForceField::*)() const>(&ForceField::get_atom_masses))
+        .def_property_readonly("lj_params", static_cast<const std::map<std::string, LJParams>& (ForceField::*)() const>(&ForceField::get_lj_params))
+        .def_property_readonly("nbfix", static_cast<const std::map<std::pair<std::string, std::string>, double>& (ForceField::*)() const>(&ForceField::get_nbfix))
+        .def_property_readonly("bond_params", static_cast<const std::map<std::pair<std::string, std::string>, BondParams>& (ForceField::*)() const>(&ForceField::get_bond_params))
+        .def_property_readonly("angle_params", static_cast<const std::map<std::tuple<std::string, std::string, std::string>, AngleParams>& (ForceField::*)() const>(&ForceField::get_angle_params))
+        .def_property_readonly("dihedral_params", static_cast<const std::map<std::tuple<std::string, std::string, std::string, std::string>, std::vector<DihedralParams>>& (ForceField::*)() const>(&ForceField::get_dihedral_params))
+        .def_property_readonly("improper_params", static_cast<const std::map<std::tuple<std::string, std::string, std::string, std::string>, ImproperParams>& (ForceField::*)() const>(&ForceField::get_improper_params));
 }
 
 } // namespace bindings

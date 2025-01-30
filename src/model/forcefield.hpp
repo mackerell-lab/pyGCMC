@@ -7,11 +7,19 @@
 #include <vector>
 #include <tuple>
 #include <stdexcept>
-#include <algorithm>  // for std::min_element
+#include <algorithm>
+#include <optional>
+#include <memory>
+#include <set>
 
 namespace pygcmc {
 
-// 非键相互作用参数
+// Forward declarations
+class ForceField;
+
+/**
+ * @brief Parameters for non-bonded interactions
+ */
 struct NonbondedParams {
     int nbxmod = 5;
     bool cdiel = false;
@@ -27,105 +35,272 @@ struct NonbondedParams {
     double wmin = 1.5;
 };
 
-// LJ参数
+/**
+ * @brief Parameters for Lennard-Jones interactions
+ */
 struct LJParams {
-    double epsilon = 0.0;
-    double rmin = 0.0;
+    double epsilon = 0.0;  ///< Well depth
+    double rmin = 0.0;     ///< Distance at minimum energy
 };
 
-// 键参数
+/**
+ * @brief Parameters for bond interactions
+ */
 struct BondParams {
-    double kb = 0.0;    // force constant
-    double b0 = 0.0;    // equilibrium length
+    double kb = 0.0;    ///< Force constant
+    double b0 = 0.0;    ///< Equilibrium length
 };
 
-// 角度参数
+/**
+ * @brief Parameters for angle interactions
+ */
 struct AngleParams {
-    double ktheta = 0.0;  // force constant
-    double theta0 = 0.0;  // equilibrium angle
-    double kub = 0.0;     // Urey-Bradley force constant
-    double s0 = 0.0;      // Urey-Bradley equilibrium distance
+    double ktheta = 0.0;  ///< Force constant
+    double theta0 = 0.0;  ///< Equilibrium angle
+    double kub = 0.0;     ///< Urey-Bradley force constant
+    double s0 = 0.0;      ///< Urey-Bradley equilibrium distance
 };
 
-// 二面角参数
+/**
+ * @brief Parameters for dihedral interactions
+ */
 struct DihedralParams {
-    double kchi = 0.0;   // force constant
-    int n = 1;           // multiplicity
-    double delta = 0.0;  // phase shift
+    double kchi = 0.0;   ///< Force constant
+    int n = 1;           ///< Multiplicity
+    double delta = 0.0;  ///< Phase shift
 };
 
-// 非正常二面角参数
+/**
+ * @brief Parameters for improper dihedral interactions
+ */
 struct ImproperParams {
-    double kpsi = 0.0;   // force constant
-    double psi0 = 0.0;   // equilibrium angle
+    double kpsi = 0.0;   ///< Force constant
+    double psi0 = 0.0;   ///< Equilibrium angle
 };
 
+/**
+ * @brief Main force field class that holds all force field parameters
+ */
 class ForceField {
 public:
-    // 存储结构
-    std::map<std::string, double> atom_masses;                    // 原子质量
-    std::map<std::string, LJParams> lj_params;                    // LJ参数
-    std::map<std::pair<std::string, std::string>, double> nbfix;  // NBFIX参数
-    std::map<std::pair<std::string, std::string>, BondParams> bond_params;  // 键参数
-    std::map<std::tuple<std::string, std::string, std::string>, AngleParams> angle_params;  // 角度参数
-    std::map<std::tuple<std::string, std::string, std::string, std::string>, 
-            std::vector<DihedralParams>> dihedral_params;  // 二面角参数
-    std::map<std::tuple<std::string, std::string, std::string, std::string>, 
-            ImproperParams> improper_params;  // 非正常二面角参数
-    NonbondedParams nonbonded_params;  // 非键相互作用参数
+    ForceField() = default;
+    ~ForceField() = default;
 
-    // Helper functions for making keys
-    static std::pair<std::string, std::string> makeTypePair(const std::string& type1, const std::string& type2) {
-        return type1 < type2 ? std::make_pair(type1, type2) : std::make_pair(type2, type1);
+    // Add methods
+    void add_atom_mass(const std::string& type, double mass) {
+        atom_masses_[type] = mass;
     }
 
-    static std::tuple<std::string, std::string, std::string> makeTypeTriple(
-        const std::string& type1, const std::string& type2, const std::string& type3) {
-        // For angle parameters, we need to handle both symmetric and alternative representations
-        // Create a vector of all possible representations
-        std::vector<std::tuple<std::string, std::string, std::string>> keys = {
-            std::make_tuple(type1, type2, type3),  // original order
-            std::make_tuple(type3, type2, type1),  // symmetric order
-            std::make_tuple(type2, type1, type3),  // alternative representation
-            std::make_tuple(type2, type3, type1)   // symmetric alternative representation
-        };
-        
-        // Return the lexicographically smallest key to ensure consistency
-        return *std::min_element(keys.begin(), keys.end());
+    void add_lj_params(const std::string& type, double epsilon, double rmin) {
+        LJParams params{epsilon, rmin};
+        lj_params_[type] = params;
     }
 
-    static std::tuple<std::string, std::string, std::string, std::string> makeTypeQuad(
-        const std::string& type1, const std::string& type2, const std::string& type3, const std::string& type4) {
-        // For dihedral parameters in CHARMM, we need to preserve the order as defined in the parameter file
-        // The order in the parameter file is the correct one, we should not change it
-        return std::make_tuple(type1, type2, type3, type4);
+    void add_nbfix(const std::string& type1, const std::string& type2, double epsilon) {
+        auto key = makeTypePair(type1, type2);
+        nbfix_[key] = epsilon;
     }
 
-    // Getter methods
-    const NonbondedParams& getNonbondedParams() const {
-        return nonbonded_params;
+    void add_bond_params(const std::string& type1, const std::string& type2, double kb, double b0) {
+        auto key = makeTypePair(type1, type2);
+        BondParams params{kb, b0};
+        bond_params_[key] = params;
     }
 
-    const LJParams& getLJParams(const std::string& type) const {
-        auto it = lj_params.find(type);
-        if (it == lj_params.end()) {
+    void add_angle_params(const std::string& type1, const std::string& type2, const std::string& type3,
+                         double ktheta, double theta0, double kub = 0.0, double s0 = 0.0) {
+        auto key = makeTypeTriple(type1, type2, type3);
+        AngleParams params{ktheta, theta0, kub, s0};
+        angle_params_[key] = params;
+    }
+
+    void add_dihedral_params(const std::string& type1, const std::string& type2,
+                            const std::string& type3, const std::string& type4,
+                            double kchi, int n, double delta) {
+        auto key = makeTypeQuad(type1, type2, type3, type4);
+        DihedralParams params{kchi, n, delta};
+        dihedral_params_[key].push_back(params);
+    }
+
+    void add_improper_params(const std::string& type1, const std::string& type2,
+                            const std::string& type3, const std::string& type4,
+                            double kpsi, double psi0) {
+        auto key = makeTypeQuad(type1, type2, type3, type4);
+        ImproperParams params{kpsi, psi0};
+        improper_params_[key] = params;
+    }
+
+    // Getter methods with error checking
+    double get_atom_mass(const std::string& type) const {
+        auto it = atom_masses_.find(type);
+        if (it == atom_masses_.end()) {
+            throw std::runtime_error("Atom mass not found for type: " + type);
+        }
+        return it->second;
+    }
+
+    const LJParams& get_lj_params(const std::string& type) const {
+        auto it = lj_params_.find(type);
+        if (it == lj_params_.end()) {
             throw std::runtime_error("LJ parameters not found for type: " + type);
         }
         return it->second;
     }
 
-    std::pair<double, bool> getNbfix(const std::string& type1, const std::string& type2) const {
+    std::pair<double, bool> get_nbfix(const std::string& type1, const std::string& type2) const {
         auto key = makeTypePair(type1, type2);
-        auto it = nbfix.find(key);
-        if (it == nbfix.end()) {
-            key = makeTypePair(type2, type1);  // Try reverse order
-            it = nbfix.find(key);
-            if (it == nbfix.end()) {
-                return std::make_pair(0.0, false);
-            }
+        auto it = nbfix_.find(key);
+        if (it == nbfix_.end()) {
+            return std::make_pair(0.0, false);
         }
         return std::make_pair(it->second, true);
     }
+
+    const BondParams& get_bond_params(const std::string& type1, const std::string& type2) const {
+        auto key = makeTypePair(type1, type2);
+        auto it = bond_params_.find(key);
+        if (it == bond_params_.end()) {
+            throw std::runtime_error("Bond parameters not found for types: " + type1 + "-" + type2);
+        }
+        return it->second;
+    }
+
+    const AngleParams& get_angle_params(const std::string& type1,
+                                      const std::string& type2,
+                                      const std::string& type3) const {
+        // Try both orientations of the outer atoms while keeping the middle atom fixed
+        auto key1 = std::make_tuple(type1, type2, type3);
+        auto it = angle_params_.find(key1);
+        if (it != angle_params_.end()) {
+            return it->second;
+        }
+
+        // Try the reverse orientation
+        auto key2 = std::make_tuple(type3, type2, type1);
+        it = angle_params_.find(key2);
+        if (it != angle_params_.end()) {
+            return it->second;
+        }
+
+        throw std::runtime_error("Angle parameters not found for types: " + 
+                               type1 + "-" + type2 + "-" + type3);
+    }
+
+    const std::vector<DihedralParams>& get_dihedral_params(const std::string& type1,
+                                                          const std::string& type2,
+                                                          const std::string& type3,
+                                                          const std::string& type4) const {
+        auto key = makeTypeQuad(type1, type2, type3, type4);
+        auto it = dihedral_params_.find(key);
+        if (it == dihedral_params_.end()) {
+            throw std::runtime_error("Dihedral parameters not found for types: " +
+                                   type1 + "-" + type2 + "-" + type3 + "-" + type4);
+        }
+        return it->second;
+    }
+
+    const ImproperParams& get_improper_params(const std::string& type1, const std::string& type2,
+                                            const std::string& type3, const std::string& type4) const {
+        auto key = makeTypeQuad(type1, type2, type3, type4);
+        auto it = improper_params_.find(key);
+        if (it == improper_params_.end()) {
+            throw std::runtime_error("Improper parameters not found for types: " +
+                                   type1 + "-" + type2 + "-" + type3 + "-" + type4);
+        }
+        return it->second;
+    }
+
+    // Existence check methods
+    bool has_atom_mass(const std::string& type) const {
+        return atom_masses_.find(type) != atom_masses_.end();
+    }
+
+    bool has_lj_params(const std::string& type) const {
+        return lj_params_.find(type) != lj_params_.end();
+    }
+
+    bool has_nbfix(const std::string& type1, const std::string& type2) const {
+        auto key = makeTypePair(type1, type2);
+        return nbfix_.find(key) != nbfix_.end();
+    }
+
+    bool has_bond_params(const std::string& type1, const std::string& type2) const {
+        auto key = makeTypePair(type1, type2);
+        return bond_params_.find(key) != bond_params_.end();
+    }
+
+    bool has_angle_params(const std::string& type1, const std::string& type2,
+                         const std::string& type3) const {
+        auto key = makeTypeTriple(type1, type2, type3);
+        return angle_params_.find(key) != angle_params_.end();
+    }
+
+    bool has_dihedral_params(const std::string& type1, const std::string& type2,
+                            const std::string& type3, const std::string& type4) const {
+        auto key = makeTypeQuad(type1, type2, type3, type4);
+        return dihedral_params_.find(key) != dihedral_params_.end();
+    }
+
+    bool has_improper_params(const std::string& type1, const std::string& type2,
+                            const std::string& type3, const std::string& type4) const {
+        auto key = makeTypeQuad(type1, type2, type3, type4);
+        return improper_params_.find(key) != improper_params_.end();
+    }
+
+    // Size methods
+    size_t get_num_atom_types() const { return atom_masses_.size(); }
+    size_t get_num_lj_params() const { return lj_params_.size(); }
+    size_t get_num_nbfix() const { return nbfix_.size(); }
+    size_t get_num_bond_types() const { return bond_params_.size(); }
+    size_t get_num_angle_types() const { return angle_params_.size(); }
+    size_t get_num_dihedral_types() const { return dihedral_params_.size(); }
+    size_t get_num_improper_types() const { return improper_params_.size(); }
+
+    // Access to nonbonded parameters
+    const NonbondedParams& get_nonbonded_params() const { return nonbonded_params_; }
+    NonbondedParams& get_nonbonded_params() { return nonbonded_params_; }
+
+    // Static helper methods for making parameter keys
+    static std::pair<std::string, std::string> makeTypePair(const std::string& type1,
+                                                           const std::string& type2) {
+        return type1 < type2 ? std::make_pair(type1, type2) : std::make_pair(type2, type1);
+    }
+
+    static std::tuple<std::string, std::string, std::string> makeTypeTriple(
+        const std::string& type1, const std::string& type2, const std::string& type3) {
+        // For angle parameters in CHARMM force field:
+        // 1. The middle atom (type2) must stay in the middle
+        // 2. Try both orientations of the outer atoms
+        // Return both (type1, type2, type3) and (type3, type2, type1)
+        // This ensures we find the parameter regardless of how it's stored in the force field
+        return std::make_tuple(type1, type2, type3);
+    }
+
+    static std::tuple<std::string, std::string, std::string, std::string> makeTypeQuad(
+        const std::string& type1, const std::string& type2,
+        const std::string& type3, const std::string& type4) {
+        return std::make_tuple(type1, type2, type3, type4);
+    }
+
+    // Direct access to parameter maps (for Python bindings)
+    const std::map<std::string, double>& get_atom_masses() const { return atom_masses_; }
+    const std::map<std::string, LJParams>& get_lj_params() const { return lj_params_; }
+    const std::map<std::pair<std::string, std::string>, double>& get_nbfix() const { return nbfix_; }
+    const std::map<std::pair<std::string, std::string>, BondParams>& get_bond_params() const { return bond_params_; }
+    const std::map<std::tuple<std::string, std::string, std::string>, AngleParams>& get_angle_params() const { return angle_params_; }
+    const std::map<std::tuple<std::string, std::string, std::string, std::string>, std::vector<DihedralParams>>& get_dihedral_params() const { return dihedral_params_; }
+    const std::map<std::tuple<std::string, std::string, std::string, std::string>, ImproperParams>& get_improper_params() const { return improper_params_; }
+
+private:
+    // Parameter storage
+    std::map<std::string, double> atom_masses_;
+    std::map<std::string, LJParams> lj_params_;
+    std::map<std::pair<std::string, std::string>, double> nbfix_;
+    std::map<std::pair<std::string, std::string>, BondParams> bond_params_;
+    std::map<std::tuple<std::string, std::string, std::string>, AngleParams> angle_params_;
+    std::map<std::tuple<std::string, std::string, std::string, std::string>, std::vector<DihedralParams>> dihedral_params_;
+    std::map<std::tuple<std::string, std::string, std::string, std::string>, ImproperParams> improper_params_;
+    NonbondedParams nonbonded_params_;
 };
 
 } // namespace pygcmc

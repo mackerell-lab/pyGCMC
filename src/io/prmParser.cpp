@@ -323,7 +323,7 @@ void PRMParser::parseAtomsSection(std::istream& input, ForceField& ff) {
         if (tokens.size() >= 4 && tokens[0] == "MASS") {
             std::string atomType = tokens[2];
             double mass = safe_stod(tokens[3], "atom mass for type " + atomType);
-            ff.atom_masses[atomType] = mass;
+            ff.add_atom_mass(atomType, mass);
             if (debug_output) std::cerr << "Added atom mass: " << atomType << " = " << mass << std::endl;
         } else {
             if (debug_output) std::cerr << "Skipping line: not a valid MASS entry" << std::endl;
@@ -332,9 +332,9 @@ void PRMParser::parseAtomsSection(std::istream& input, ForceField& ff) {
     
     if (debug_output) {
         std::cerr << "\n=== Finished ATOMS/MASS section parsing ===" << std::endl;
-        std::cerr << "Final atom_masses size: " << ff.atom_masses.size() << std::endl;
+        std::cerr << "Final atom_masses size: " << ff.get_num_atom_types() << std::endl;
         std::cerr << "\nStored atom masses:" << std::endl;
-        for (const auto& pair : ff.atom_masses) {
+        for (const auto& pair : ff.get_atom_masses()) {
             std::cerr << pair.first << " = " << pair.second << std::endl;
         }
     }
@@ -364,7 +364,6 @@ void PRMParser::parseBondsSection(std::istream& input, ForceField& ff) {
             isDihedralsSection(line) || isImproperSection(line) || 
             isNonbondedSection(line) || isNBFixSection(line)) {
             if (debug_output) std::cerr << "Found section end marker in bonds: " << line << std::endl;
-            // Put the line back so it can be read by the next section parser
             input.seekg(-static_cast<std::streamoff>(line.length() + 1), std::ios::cur);
             break;
         }
@@ -379,7 +378,6 @@ void PRMParser::parseBondsSection(std::istream& input, ForceField& ff) {
         }
         
         if (tokens.size() >= 4) {
-            // Format: type1 type2 Kb b0
             std::string type1 = tokens[0];
             std::string type2 = tokens[1];
             double kb = safe_stod(tokens[2], "bond Kb for " + type1 + "-" + type2);
@@ -390,24 +388,17 @@ void PRMParser::parseBondsSection(std::istream& input, ForceField& ff) {
                 std::cerr << "  kb = " << kb << ", b0 = " << b0 << std::endl;
             }
             
-            // Store bond parameters in a consistent order
-            auto key = ForceField::makeTypePair(type1, type2);
-            if (debug_output) {
-                std::cerr << "  Storing with key: (" << key.first << ", " << key.second << ")" << std::endl;
-            }
-            
-            BondParams params{kb, b0};
-            ff.bond_params[key] = params;
+            ff.add_bond_params(type1, type2, kb, b0);
             
             if (debug_output) {
-                std::cerr << "  Current bond_params size: " << ff.bond_params.size() << std::endl;
+                std::cerr << "  Current bond_params size: " << ff.get_num_bond_types() << std::endl;
             }
         }
     }
     
     if (debug_output) {
         std::cerr << "\n=== Finished BONDS section parsing ===" << std::endl;
-        std::cerr << "Final bond_params size: " << ff.bond_params.size() << std::endl;
+        std::cerr << "Final bond_params size: " << ff.get_num_bond_types() << std::endl;
     }
 }
 
@@ -431,7 +422,6 @@ void PRMParser::parseAnglesSection(std::istream& input, ForceField& ff) {
         if (line == "END" || isAtomsSection(line) || isBondsSection(line) || 
             isDihedralsSection(line) || isImproperSection(line) || 
             isNonbondedSection(line) || isNBFixSection(line)) {
-            // Put the line back so it can be read by the next section parser
             input.seekg(-static_cast<std::streamoff>(line.length() + 1), std::ios::cur);
             break;
         }
@@ -456,42 +446,17 @@ void PRMParser::parseAnglesSection(std::istream& input, ForceField& ff) {
                 std::cerr << "  ktheta = " << ktheta << ", theta0 = " << theta0 << std::endl;
             }
             
-            AngleParams params{ktheta, theta0, kub, s0};
-            
-            // Store all possible permutations
-            std::vector<std::tuple<std::string, std::string, std::string>> keys = {
-                make_type_triple(type1, type2, type3),
-                make_type_triple(type3, type2, type1),
-                std::make_tuple(type2, type1, type3),
-                std::make_tuple(type2, type3, type1)
-            };
-            
-            for (const auto& key : keys) {
-                ff.angle_params[key] = params;
-                if (debug_output) {
-                    std::cerr << "  Storing with key: (" 
-                             << std::get<0>(key) << ", "
-                             << std::get<1>(key) << ", "
-                             << std::get<2>(key) << ")" << std::endl;
-                }
-            }
+            ff.add_angle_params(type1, type2, type3, ktheta, theta0, kub, s0);
             
             if (debug_output) {
-                std::cerr << "  Current angle_params size: " << ff.angle_params.size() << std::endl;
+                std::cerr << "  Current angle_params size: " << ff.get_num_angle_types() << std::endl;
             }
         }
     }
     
     if (debug_output) {
         std::cerr << "\n=== Finished ANGLES section parsing ===" << std::endl;
-        std::cerr << "Final angle_params size: " << ff.angle_params.size() << std::endl;
-        std::cerr << "\nStored angle parameter keys:" << std::endl;
-        for (const auto& pair : ff.angle_params) {
-            const auto& key = pair.first;
-            std::cerr << "(" << std::get<0>(key) << ", "
-                     << std::get<1>(key) << ", "
-                     << std::get<2>(key) << ")" << std::endl;
-        }
+        std::cerr << "Final angle_params size: " << ff.get_num_angle_types() << std::endl;
     }
 }
 
@@ -508,14 +473,12 @@ void PRMParser::parseDihedralsSection(std::istream& input, ForceField& ff) {
         if (line == "END" || isAtomsSection(line) || isBondsSection(line) || 
             isAnglesSection(line) || isImproperSection(line) || 
             isNonbondedSection(line) || isNBFixSection(line)) {
-            // Put the line back so it can be read by the next section parser
             input.seekg(-static_cast<std::streamoff>(line.length() + 1), std::ios::cur);
             break;
         }
         
         auto tokens = tokenize(line);
         if (tokens.size() >= 7) {
-            // Format: type1 type2 type3 type4 Kchi n delta
             std::string type1 = tokens[0];
             std::string type2 = tokens[1];
             std::string type3 = tokens[2];
@@ -524,12 +487,7 @@ void PRMParser::parseDihedralsSection(std::istream& input, ForceField& ff) {
             int n = safe_stoi(tokens[5], "dihedral n for " + type1 + "-" + type2 + "-" + type3 + "-" + type4);
             double delta = safe_stod(tokens[6], "dihedral delta for " + type1 + "-" + type2 + "-" + type3 + "-" + type4);
             
-            auto key = make_type_quad(type1, type2, type3, type4);
-            DihedralParams params{kchi, n, delta};
-            ff.dihedral_params[key].push_back(params);
-            // Add symmetric quad
-            key = make_type_quad(type4, type3, type2, type1);
-            ff.dihedral_params[key].push_back(params);
+            ff.add_dihedral_params(type1, type2, type3, type4, kchi, n, delta);
         }
     }
 }
@@ -547,7 +505,6 @@ void PRMParser::parseImproperSection(std::istream& input, ForceField& ff) {
         if (line == "END" || isAtomsSection(line) || isBondsSection(line) || 
             isAnglesSection(line) || isDihedralsSection(line) || 
             isNonbondedSection(line) || isNBFixSection(line)) {
-            // Put the line back so it can be read by the next section parser
             input.seekg(-static_cast<std::streamoff>(line.length() + 1), std::ios::cur);
             break;
         }
@@ -555,20 +512,15 @@ void PRMParser::parseImproperSection(std::istream& input, ForceField& ff) {
         auto tokens = tokenize(line);
         if (tokens.size() >= 6) {
             try {
-                // Format: type1 type2 type3 type4 Kpsi psi0
                 std::string type1 = tokens[0];
                 std::string type2 = tokens[1];
                 std::string type3 = tokens[2];
                 std::string type4 = tokens[3];
-                // Only try to convert the last two tokens to numbers
                 double kpsi = safe_stod(tokens[4], "improper Kpsi");
                 double psi0 = safe_stod(tokens[5], "improper psi0");
                 
-                auto key = make_type_quad(type1, type2, type3, type4);
-                ImproperParams params{kpsi, psi0};
-                ff.improper_params[key] = params;
+                ff.add_improper_params(type1, type2, type3, type4, kpsi, psi0);
             } catch (const std::exception& e) {
-                // Skip lines that can't be parsed properly
                 if (debug_output) std::cerr << "Warning: Skipping improper line due to parsing error: " << line << std::endl;
                 continue;
             }
@@ -590,7 +542,6 @@ void PRMParser::parseNBFixSection(std::istream& input, ForceField& ff) {
             isAnglesSection(line) || isDihedralsSection(line) || 
             isImproperSection(line) || isNonbondedSection(line) || 
             line == "BOMLEV" || line == "WRNLEV" || line == "return") {
-            // Put the line back so it can be read by the next section parser
             input.seekg(-static_cast<std::streamoff>(line.length() + 1), std::ios::cur);
             break;
         }
@@ -606,15 +557,10 @@ void PRMParser::parseNBFixSection(std::istream& input, ForceField& ff) {
                 std::string type1 = tokens[0];
                 std::string type2 = tokens[1];
                 double epsilon = safe_stod(tokens[2], "NBFIX epsilon for " + type1 + "-" + type2);
-                // Store both directions to ensure symmetric lookup
-                auto key = make_type_pair(type1, type2);
-                ff.nbfix[key] = epsilon;
-                key = make_type_pair(type2, type1);
-                ff.nbfix[key] = epsilon;
+                ff.add_nbfix(type1, type2, epsilon);
                 
                 if (debug_output) std::cerr << "Stored NBFIX for " << type1 << "-" << type2 << ": epsilon = " << epsilon << std::endl;
             } catch (const std::exception& e) {
-                // Skip lines that can't be parsed properly
                 if (debug_output) std::cerr << "Warning: Skipping NBFIX line due to parsing error: " << line << std::endl;
                 continue;
             }
@@ -647,51 +593,52 @@ void PRMParser::parseNonbondedSection(std::istream& input, ForceField& ff, const
         }
         
         // Process parameters
+        NonbondedParams& params = ff.get_nonbonded_params();
         for (size_t i = 0; i < tokens.size(); ++i) {
             if (debug_output) std::cerr << "Processing parameter token: [" << tokens[i] << "]" << std::endl;
             
             if (tokens[i] == "nbxmod" && i + 1 < tokens.size()) {
-                ff.nonbonded_params.nbxmod = safe_stoi(tokens[++i], "nbxmod");
-                if (debug_output) std::cerr << "Set nbxmod = " << ff.nonbonded_params.nbxmod << std::endl;
+                params.nbxmod = safe_stoi(tokens[++i], "nbxmod");
+                if (debug_output) std::cerr << "Set nbxmod = " << params.nbxmod << std::endl;
             } else if (tokens[i] == "cutnb" && i + 1 < tokens.size()) {
-                ff.nonbonded_params.cutnb = safe_stod(tokens[++i], "cutnb");
-                if (debug_output) std::cerr << "Set cutnb = " << ff.nonbonded_params.cutnb << std::endl;
+                params.cutnb = safe_stod(tokens[++i], "cutnb");
+                if (debug_output) std::cerr << "Set cutnb = " << params.cutnb << std::endl;
             } else if (tokens[i] == "ctofnb" && i + 1 < tokens.size()) {
-                ff.nonbonded_params.ctofnb = safe_stod(tokens[++i], "ctofnb");
-                if (debug_output) std::cerr << "Set ctofnb = " << ff.nonbonded_params.ctofnb << std::endl;
+                params.ctofnb = safe_stod(tokens[++i], "ctofnb");
+                if (debug_output) std::cerr << "Set ctofnb = " << params.ctofnb << std::endl;
             } else if (tokens[i] == "ctonnb" && i + 1 < tokens.size()) {
-                ff.nonbonded_params.ctonnb = safe_stod(tokens[++i], "ctonnb");
-                if (debug_output) std::cerr << "Set ctonnb = " << ff.nonbonded_params.ctonnb << std::endl;
+                params.ctonnb = safe_stod(tokens[++i], "ctonnb");
+                if (debug_output) std::cerr << "Set ctonnb = " << params.ctonnb << std::endl;
             } else if (tokens[i] == "eps" && i + 1 < tokens.size()) {
-                ff.nonbonded_params.eps = safe_stod(tokens[++i], "eps");
-                if (debug_output) std::cerr << "Set eps = " << ff.nonbonded_params.eps << std::endl;
+                params.eps = safe_stod(tokens[++i], "eps");
+                if (debug_output) std::cerr << "Set eps = " << params.eps << std::endl;
             } else if (tokens[i] == "e14fac" && i + 1 < tokens.size()) {
-                ff.nonbonded_params.e14fac = safe_stod(tokens[++i], "e14fac");
-                if (debug_output) std::cerr << "Set e14fac = " << ff.nonbonded_params.e14fac << std::endl;
+                params.e14fac = safe_stod(tokens[++i], "e14fac");
+                if (debug_output) std::cerr << "Set e14fac = " << params.e14fac << std::endl;
             } else if (tokens[i] == "wmin" && i + 1 < tokens.size()) {
-                ff.nonbonded_params.wmin = safe_stod(tokens[++i], "wmin");
-                if (debug_output) std::cerr << "Set wmin = " << ff.nonbonded_params.wmin << std::endl;
+                params.wmin = safe_stod(tokens[++i], "wmin");
+                if (debug_output) std::cerr << "Set wmin = " << params.wmin << std::endl;
             } else if (tokens[i] == "cdiel") {
-                ff.nonbonded_params.cdiel = true;
+                params.cdiel = true;
                 if (debug_output) std::cerr << "Set cdiel = true" << std::endl;
             } else if (tokens[i] == "fshift") {
-                ff.nonbonded_params.fshift = true;
+                params.fshift = true;
                 if (debug_output) std::cerr << "Set fshift = true" << std::endl;
             } else if (tokens[i] == "vatom") {
-                ff.nonbonded_params.vatom = true;
+                params.vatom = true;
                 if (debug_output) std::cerr << "Set vatom = true" << std::endl;
             } else if (tokens[i] == "vdistance") {
-                ff.nonbonded_params.vdistance = true;
+                params.vdistance = true;
                 if (debug_output) std::cerr << "Set vdistance = true" << std::endl;
             } else if (tokens[i] == "vfswitch") {
-                ff.nonbonded_params.vfswitch = true;
+                params.vfswitch = true;
                 if (debug_output) std::cerr << "Set vfswitch = true" << std::endl;
             }
         }
     }
     
     if (debug_output) std::cerr << "\n=== Starting atom type parameters parsing ===" << std::endl;
-    if (debug_output) std::cerr << "Current lj_params map size: " << ff.lj_params.size() << std::endl;
+    if (debug_output) std::cerr << "Current lj_params map size: " << ff.get_num_lj_params() << std::endl;
     
     // Parse atom type parameters
     while (std::getline(input, line)) {
@@ -745,28 +692,23 @@ void PRMParser::parseNonbondedSection(std::istream& input, ForceField& ff, const
                     std::cerr << "  rmin = " << rmin << std::endl;
                 }
                 
-                // Store the parameters
-                LJParams params{epsilon, rmin};
-                ff.lj_params[atomType] = params;
+                ff.add_lj_params(atomType, epsilon, rmin);
                 
                 if (debug_output) {
-                    std::cerr << "Successfully stored " << atomType << " parameters:" << std::endl;
-                    std::cerr << "  Stored epsilon = " << ff.lj_params[atomType].epsilon << std::endl;
-                    std::cerr << "  Stored rmin = " << ff.lj_params[atomType].rmin << std::endl;
-                    std::cerr << "Current lj_params map size: " << ff.lj_params.size() << std::endl;
+                    std::cerr << "Successfully stored " << atomType << " parameters" << std::endl;
+                    std::cerr << "Current lj_params map size: " << ff.get_num_lj_params() << std::endl;
                 }
             } catch (const std::exception& e) {
                 throw std::runtime_error("Failed to parse LJ parameters for " + atomType + ": " + e.what());
             }
         } else if (!tokens.empty() && !isCommentLine(line)) {
-            // If we have tokens but not enough, and it's not a comment line, throw ValueError
             throw std::runtime_error("Malformed NONBONDED parameters in line: " + line + 
                                    "\nExpected at least 4 tokens, got " + std::to_string(tokens.size()));
         }
     }
     
     if (debug_output) std::cerr << "\n=== Finished NONBONDED section parsing ===" << std::endl;
-    if (debug_output) std::cerr << "Final lj_params map size: " << ff.lj_params.size() << std::endl;
+    if (debug_output) std::cerr << "Final lj_params map size: " << ff.get_num_lj_params() << std::endl;
 }
 
 // Helper functions for parameter processing
@@ -779,17 +721,11 @@ std::pair<std::string, std::string> PRMParser::make_type_pair(
 
 std::tuple<std::string, std::string, std::string> PRMParser::make_type_triple(
     const std::string& type1, const std::string& type2, const std::string& type3) const {
-    // For angle parameters, we need to handle both symmetric and alternative representations
-    // Create a vector of all possible representations
-    std::vector<std::tuple<std::string, std::string, std::string>> keys = {
-        std::make_tuple(type1, type2, type3),  // original order
-        std::make_tuple(type3, type2, type1),  // symmetric order
-        std::make_tuple(type2, type1, type3),  // alternative representation
-        std::make_tuple(type2, type3, type1)   // symmetric alternative representation
-    };
-    
-    // Return the lexicographically smallest key to ensure consistency
-    return *std::min_element(keys.begin(), keys.end());
+    // For angle parameters in CHARMM force field:
+    // 1. The middle atom (type2) must stay in the middle
+    // 2. Store parameters in the order they appear in the parameter file
+    // This ensures we store the parameters exactly as they appear in the force field
+    return std::make_tuple(type1, type2, type3);
 }
 
 std::tuple<std::string, std::string, std::string, std::string> PRMParser::make_type_quad(
