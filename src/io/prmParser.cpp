@@ -584,8 +584,10 @@ void PrmParser::parseNonbondedSection(std::istream& input, ForceField& ff, const
             } catch (const std::exception& e) {
                 throw std::runtime_error("Failed to parse LJ parameters for " + atomType + ": " + e.what());
             }
-        } else {
-            std::cerr << "Line has insufficient tokens (" << tokens.size() << " < 4), skipping" << std::endl;
+        } else if (!tokens.empty() && !isCommentLine(line)) {
+            // If we have tokens but not enough, and it's not a comment line, throw ValueError
+            throw std::runtime_error("Malformed NONBONDED parameters in line: " + line + 
+                                   "\nExpected at least 4 tokens, got " + std::to_string(tokens.size()));
         }
     }
     

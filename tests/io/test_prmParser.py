@@ -183,7 +183,7 @@ END
 
 def test_malformed_parameters():
     # Missing value
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         content = """
 NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -
 cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
@@ -195,7 +195,7 @@ END
         pygcmc.PrmParser.parse_string(content, ff)
 
     # Invalid number format
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         content = """
 NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -
 cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
@@ -207,7 +207,7 @@ END
         pygcmc.PrmParser.parse_string(content, ff)
 
     # Invalid NBFIX format
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         content = """
 NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -
 cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
