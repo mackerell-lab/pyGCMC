@@ -27,7 +27,7 @@ private:
     std::vector<std::string> tokenize(const std::string& line);
     bool isNonbondedSection(const std::string& line);
     bool isNBFixSection(const std::string& line);
-    void parseNonbondedSection(std::istream& input, ForceField& ff);
+    void parseNonbondedSection(std::istream& input, ForceField& ff, const std::string& firstLine);
     void parseNBFixSection(std::istream& input, ForceField& ff);
     void parseStream(std::istream& input, ForceField& ff);
 };

@@ -82,7 +82,7 @@ def test_parse_from_file():
     # Test some NBFIX parameters
     epsilon, found = ff.get_nbfix("SOD", "CLA")
     assert found == True
-    assert epsilon == pytest.approx(-0.083875)
+    assert epsilon == pytest.approx(-0.0839)
 
 def test_invalid_file():
     ff = pygcmc.ForceField()

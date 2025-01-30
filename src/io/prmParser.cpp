@@ -1,6 +1,7 @@
 #include "prmParser.hpp"
 #include <algorithm>
 #include <cctype>
+#include <iomanip>
 
 namespace pygcmc {
 
@@ -26,10 +27,14 @@ void PrmParser::parse(const std::string& filename, ForceField& ff) {
 void PrmParser::parseStream(std::istream& input, ForceField& ff) {
     std::string line;
     while (std::getline(input, line)) {
-        skipComments(input);
+        if (line.empty() || line[0] == '!' || line[0] == '*' || line[0] == '#') {
+            continue;
+        }
         
         if (isNonbondedSection(line)) {
-            parseNonbondedSection(input, ff);
+            // Include the NONBONDED line in parsing
+            std::string fullLine = line;
+            parseNonbondedSection(input, ff, fullLine);
         } else if (isNBFixSection(line)) {
             parseNBFixSection(input, ff);
         }
@@ -37,8 +42,8 @@ void PrmParser::parseStream(std::istream& input, ForceField& ff) {
 }
 
 void PrmParser::skipComments(std::istream& input) {
-    std::string line;
-    while (input.peek() == '!' || input.peek() == '*' || input.peek() == '#') {
+    while (input.peek() == '!' || input.peek() == '*' || input.peek() == '#' || input.peek() == '\n') {
+        std::string line;
         std::getline(input, line);
     }
 }
@@ -50,6 +55,7 @@ std::vector<std::string> PrmParser::tokenize(const std::string& line) {
     
     while (iss >> token) {
         if (token[0] == '!' || token[0] == '#') break;  // Stop at comments
+        if (token == "-") continue;  // Skip continuation character
         tokens.push_back(token);
     }
     
@@ -64,36 +70,110 @@ bool PrmParser::isNBFixSection(const std::string& line) {
     return line.find("NBFIX") != std::string::npos;
 }
 
-void PrmParser::parseNonbondedSection(std::istream& input, ForceField& ff) {
+void PrmParser::parseNonbondedSection(std::istream& input, ForceField& ff, const std::string& firstLine) {
     NonbondedParams& params = ff.get_nonbonded_params();
-    std::string line;
+    // Initialize boolean parameters to false
+    params.cdiel = false;
+    params.fshift = false;
+    params.vatom = false;
+    params.vdistance = false;
+    params.vfswitch = false;
     
-    // Parse header line
-    std::getline(input, line);
-    auto tokens = tokenize(line);
+    std::string fullLine = firstLine;  // Start with the NONBONDED line
+    bool hasContinuation = false;
+    
+    // Check if first line has continuation
+    if (!fullLine.empty()) {
+        size_t commentPos = fullLine.find_first_of("!*#");
+        if (commentPos != std::string::npos) {
+            fullLine = fullLine.substr(0, commentPos);
+        }
+        
+        // Trim right whitespace
+        while (!fullLine.empty() && std::isspace(fullLine.back())) {
+            fullLine.pop_back();
+        }
+        
+        if (!fullLine.empty() && fullLine.back() == '-') {
+            fullLine.pop_back();  // Remove continuation character
+            hasContinuation = true;
+        }
+    }
+    
+    // Read continuation lines if any
+    std::string line;
+    while (hasContinuation && std::getline(input, line)) {
+        if (line.empty() || line[0] == '!' || line[0] == '*' || line[0] == '#') {
+            continue;
+        }
+        
+        // Remove comments
+        size_t commentPos = line.find_first_of("!*#");
+        if (commentPos != std::string::npos) {
+            line = line.substr(0, commentPos);
+        }
+        
+        // Trim right whitespace
+        while (!line.empty() && std::isspace(line.back())) {
+            line.pop_back();
+        }
+        
+        hasContinuation = false;
+        if (!line.empty() && line.back() == '-') {
+            line.pop_back();  // Remove continuation character
+            hasContinuation = true;
+        }
+        
+        fullLine += " " + line;
+    }
+    
+    auto tokens = tokenize(fullLine);
+    
+    // Skip the NONBONDED keyword if present
+    size_t startIdx = 0;
+    if (!tokens.empty() && tokens[0] == "NONBONDED") {
+        startIdx = 1;
+    }
     
     // Parse parameters
-    for (size_t i = 0; i < tokens.size(); ++i) {
-        if (tokens[i] == "nbxmod") params.nbxmod = std::stoi(tokens[i+1]);
-        else if (tokens[i] == "cdiel") params.cdiel = true;
-        else if (tokens[i] == "fshift") params.fshift = true;
-        else if (tokens[i] == "vatom") params.vatom = true;
-        else if (tokens[i] == "vdistance") params.vdistance = true;
-        else if (tokens[i] == "vfswitch") params.vfswitch = true;
-        else if (tokens[i] == "cutnb") params.cutnb = std::stod(tokens[i+1]);
-        else if (tokens[i] == "ctofnb") params.ctofnb = std::stod(tokens[i+1]);
-        else if (tokens[i] == "ctonnb") params.ctonnb = std::stod(tokens[i+1]);
-        else if (tokens[i] == "eps") params.eps = std::stod(tokens[i+1]);
-        else if (tokens[i] == "e14fac") params.e14fac = std::stod(tokens[i+1]);
-        else if (tokens[i] == "wmin") params.wmin = std::stod(tokens[i+1]);
+    for (size_t i = startIdx; i < tokens.size(); ++i) {
+        const std::string& token = tokens[i];
+        if (token == "nbxmod" && i + 1 < tokens.size()) 
+            params.nbxmod = std::stoi(tokens[i+1]);
+        else if (token == "cdiel") 
+            params.cdiel = true;
+        else if (token == "fshift") 
+            params.fshift = true;
+        else if (token == "vatom") 
+            params.vatom = true;
+        else if (token == "vdistance") 
+            params.vdistance = true;
+        else if (token == "vfswitch") 
+            params.vfswitch = true;
+        else if (token == "cutnb" && i + 1 < tokens.size()) 
+            params.cutnb = std::stod(tokens[i+1]);
+        else if (token == "ctofnb" && i + 1 < tokens.size()) 
+            params.ctofnb = std::stod(tokens[i+1]);
+        else if (token == "ctonnb" && i + 1 < tokens.size()) 
+            params.ctonnb = std::stod(tokens[i+1]);
+        else if (token == "eps" && i + 1 < tokens.size()) 
+            params.eps = std::stod(tokens[i+1]);
+        else if (token == "e14fac" && i + 1 < tokens.size()) 
+            params.e14fac = std::stod(tokens[i+1]);
+        else if (token == "wmin" && i + 1 < tokens.size()) 
+            params.wmin = std::stod(tokens[i+1]);
     }
     
     // Parse atom type parameters
     while (std::getline(input, line)) {
-        skipComments(input);
-        tokens = tokenize(line);
+        if (line.empty() || line[0] == '!' || line[0] == '*' || line[0] == '#') {
+            continue;
+        }
         
-        if (tokens.empty() || tokens[0] == "END" || tokens[0] == "NBFIX") break;
+        tokens = tokenize(line);
+        if (tokens.empty()) continue;
+        
+        if (tokens[0] == "END" || tokens[0] == "NBFIX") break;
         
         if (tokens.size() >= 4) {
             std::string atomType = tokens[0];
@@ -109,10 +189,14 @@ void PrmParser::parseNBFixSection(std::istream& input, ForceField& ff) {
     std::string line;
     
     while (std::getline(input, line)) {
-        skipComments(input);
-        auto tokens = tokenize(line);
+        if (line.empty() || line[0] == '!' || line[0] == '*' || line[0] == '#') {
+            continue;
+        }
         
-        if (tokens.empty() || tokens[0] == "END") break;
+        auto tokens = tokenize(line);
+        if (tokens.empty()) continue;
+        
+        if (tokens[0] == "END") break;
         
         if (tokens.size() >= 4) {
             std::string type1 = tokens[0];
