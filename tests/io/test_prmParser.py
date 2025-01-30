@@ -237,9 +237,8 @@ END
         ff = pygcmc.ForceField()
         pygcmc.PRMParser.parse_string(content, ff)
 
-    # Invalid NBFIX format
-    with pytest.raises(RuntimeError):
-        content = """
+    # Test that invalid NBFIX lines are skipped with warning
+    content = """
 NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -
 cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
 
@@ -250,8 +249,20 @@ NBFIX
 SOD    CLA    invalid    3.731
 END
 """
-        ff = pygcmc.ForceField()
-        pygcmc.PRMParser.parse_string(content, ff)
+    ff = pygcmc.ForceField()
+    pygcmc.PRMParser.parse_string(content, ff)
+    # Verify that SOD and CLA parameters were still parsed correctly
+    sod_params = ff.get_lj_params("SOD")
+    assert sod_params.epsilon == pytest.approx(-0.0469)
+    assert sod_params.rmin == pytest.approx(1.41075)
+
+    cla_params = ff.get_lj_params("CLA")
+    assert cla_params.epsilon == pytest.approx(-0.150)
+    assert cla_params.rmin == pytest.approx(2.27)
+
+    # Verify that no NBFIX parameters were added
+    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    assert found == False
 
 def test_special_formatting():
     content = """
