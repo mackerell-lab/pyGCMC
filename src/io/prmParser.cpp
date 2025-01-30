@@ -47,7 +47,9 @@ void PrmParser::parse(const std::string& filename, ForceField& ff) {
 
 void PrmParser::parseStream(std::istream& input, ForceField& ff) {
     std::string line;
-    bool inNonbondedSection = false;
+    bool inSection = false;
+    std::string currentSection;
+    
     while (std::getline(input, line)) {
         std::cerr << "Raw line: [" << line << "]" << std::endl;
         
@@ -62,38 +64,58 @@ void PrmParser::parseStream(std::istream& input, ForceField& ff) {
         
         if (cleanLine.empty()) continue;
         
+        if (cleanLine == "END") {
+            inSection = false;
+            currentSection.clear();
+            continue;
+        }
+        
         if (isAtomsSection(cleanLine)) {
             std::cerr << "Found ATOMS section" << std::endl;
+            inSection = true;
+            currentSection = "ATOMS";
             parseAtomsSection(input, ff);
         } else if (isBondsSection(cleanLine)) {
             std::cerr << "Found BONDS section" << std::endl;
+            inSection = true;
+            currentSection = "BONDS";
             parseBondsSection(input, ff);
         } else if (isAnglesSection(cleanLine)) {
             std::cerr << "Found ANGLES section" << std::endl;
+            inSection = true;
+            currentSection = "ANGLES";
             parseAnglesSection(input, ff);
         } else if (isDihedralsSection(cleanLine)) {
             std::cerr << "Found DIHEDRALS section" << std::endl;
+            inSection = true;
+            currentSection = "DIHEDRALS";
             parseDihedralsSection(input, ff);
         } else if (isImproperSection(cleanLine)) {
             std::cerr << "Found IMPROPER section" << std::endl;
+            inSection = true;
+            currentSection = "IMPROPER";
             parseImproperSection(input, ff);
         } else if (isNonbondedSection(cleanLine)) {
             std::cerr << "Found NONBONDED section" << std::endl;
+            inSection = true;
+            currentSection = "NONBONDED";
             parseNonbondedSection(input, ff, cleanLine);
         } else if (isNBFixSection(cleanLine)) {
             std::cerr << "Found NBFIX section" << std::endl;
+            inSection = true;
+            currentSection = "NBFIX";
             parseNBFixSection(input, ff);
-        } else if (inNonbondedSection) {
+        } else if (!inSection) {
+            // Handle non-section content if needed
             auto tokens = tokenize(cleanLine);
             if (!tokens.empty()) {
-                if (tokens[0] == "NBFIX" || tokens[0] == "END") {
-                    std::cerr << "End of NONBONDED section" << std::endl;
-                    inNonbondedSection = false;
-                } else if (tokens.size() >= 4) {
-                    // 这里处理参数...
+                // Process any standalone parameters or commands
+                if (tokens[0] == "set" || tokens[0] == "if" || tokens[0] == "read" || 
+                    tokens[0] == "return" || tokens[0] == "BOMLEV" || tokens[0] == "WRNLEV") {
+                    // Skip CHARMM control statements
+                    continue;
                 }
             }
-            continue;
         }
     }
 }
@@ -397,107 +419,115 @@ void PrmParser::parseImproperSection(std::istream& input, ForceField& ff) {
     }
 }
 
+void PrmParser::parseNBFixSection(std::istream& input, ForceField& ff) {
+    std::string line;
+    while (std::getline(input, line)) {
+        if (isCommentLine(line)) continue;
+        
+        line = removeComments(line);
+        line = trim(line);
+        if (line.empty()) continue;
+        
+        // Check for section end or new section
+        if (line == "END" || isAtomsSection(line) || isBondsSection(line) || 
+            isAnglesSection(line) || isDihedralsSection(line) || 
+            isImproperSection(line) || isNonbondedSection(line) || 
+            line == "BOMLEV" || line == "WRNLEV" || line == "return") {
+            break;
+        }
+        
+        auto tokens = tokenize(line);
+        if (tokens.size() >= 4) {
+            std::string type1 = tokens[0];
+            std::string type2 = tokens[1];
+            try {
+                double epsilon = safe_stod(tokens[2], "NBFIX epsilon for " + type1 + "-" + type2);
+                // Store both directions to ensure symmetric lookup
+                auto key = make_type_pair(type1, type2);
+                ff.nbfix[key] = epsilon;
+                
+                std::cerr << "Stored NBFIX for " << type1 << "-" << type2 << ": epsilon = " << epsilon << std::endl;
+            } catch (const std::exception& e) {
+                throw std::runtime_error("Failed to parse NBFIX line: " + line + "\nError: " + e.what());
+            }
+        } else if (!tokens.empty()) {  // Only throw if line has some tokens but not enough
+            throw std::runtime_error("Invalid NBFIX format in line: " + line);
+        }
+    }
+}
+
 void PrmParser::parseNonbondedSection(std::istream& input, ForceField& ff, const std::string& firstLine) {
-    std::cerr << "\n=== Entering NONBONDED section parsing ===" << std::endl;
+    std::string line = firstLine;
+    std::string fullLine = readContinuationLine(input, line);
+    
+    std::cerr << "=== Entering NONBONDED section parsing ===" << std::endl;
     std::cerr << "First line: [" << firstLine << "]" << std::endl;
     
-    // Initialize boolean parameters to false
-    ff.nonbonded_params.cdiel = false;
-    ff.nonbonded_params.fshift = false;
-    ff.nonbonded_params.vatom = false;
-    ff.nonbonded_params.vdistance = false;
-    ff.nonbonded_params.vfswitch = false;
-    
-    // Parse the first line which contains the NONBONDED parameters
-    std::string fullLine = readContinuationLine(input, firstLine);
-    std::cerr << "After continuation, full line: [" << fullLine << "]" << std::endl;
-    
+    // Parse header parameters
     auto tokens = tokenize(fullLine);
-    std::cerr << "Initial tokens:";
-    for (const auto& token : tokens) {
-        std::cerr << " [" << token << "]";
-    }
-    std::cerr << std::endl;
-    
-    // Skip the NONBONDED keyword if present
-    size_t startIdx = 0;
-    if (!tokens.empty() && tokens[0] == "NONBONDED") {
-        startIdx = 1;
-        std::cerr << "Skipping NONBONDED keyword" << std::endl;
-    }
-    
-    // Parse parameters
-    for (size_t i = startIdx; i < tokens.size(); ++i) {
-        const std::string& token = tokens[i];
-        std::cerr << "Processing parameter token: [" << token << "]" << std::endl;
-        if (token == "nbxmod" && i + 1 < tokens.size()) {
-            ff.nonbonded_params.nbxmod = safe_stoi(tokens[i+1], "nbxmod");
-            std::cerr << "Set nbxmod = " << ff.nonbonded_params.nbxmod << std::endl;
+    if (!tokens.empty()) {
+        std::cerr << "Initial tokens:";
+        for (const auto& token : tokens) {
+            std::cerr << " [" << token << "]";
         }
-        else if (token == "cdiel") {
-            ff.nonbonded_params.cdiel = true;
-            std::cerr << "Set cdiel = true" << std::endl;
+        std::cerr << std::endl;
+        
+        // Skip the NONBONDED keyword
+        if (tokens[0] == "NONBONDED") {
+            std::cerr << "Skipping NONBONDED keyword" << std::endl;
+            tokens.erase(tokens.begin());
         }
-        else if (token == "fshift") {
-            ff.nonbonded_params.fshift = true;
-            std::cerr << "Set fshift = true" << std::endl;
-        }
-        else if (token == "vatom") {
-            ff.nonbonded_params.vatom = true;
-            std::cerr << "Set vatom = true" << std::endl;
-        }
-        else if (token == "vdistance") {
-            ff.nonbonded_params.vdistance = true;
-            std::cerr << "Set vdistance = true" << std::endl;
-        }
-        else if (token == "vfswitch") {
-            ff.nonbonded_params.vfswitch = true;
-            std::cerr << "Set vfswitch = true" << std::endl;
-        }
-        else if (token == "cutnb" && i + 1 < tokens.size()) {
-            ff.nonbonded_params.cutnb = safe_stod(tokens[i+1], "cutnb");
-            std::cerr << "Set cutnb = " << ff.nonbonded_params.cutnb << std::endl;
-        }
-        else if (token == "ctofnb" && i + 1 < tokens.size()) {
-            ff.nonbonded_params.ctofnb = safe_stod(tokens[i+1], "ctofnb");
-            std::cerr << "Set ctofnb = " << ff.nonbonded_params.ctofnb << std::endl;
-        }
-        else if (token == "ctonnb" && i + 1 < tokens.size()) {
-            ff.nonbonded_params.ctonnb = safe_stod(tokens[i+1], "ctonnb");
-            std::cerr << "Set ctonnb = " << ff.nonbonded_params.ctonnb << std::endl;
-        }
-        else if (token == "eps" && i + 1 < tokens.size()) {
-            ff.nonbonded_params.eps = safe_stod(tokens[i+1], "eps");
-            std::cerr << "Set eps = " << ff.nonbonded_params.eps << std::endl;
-        }
-        else if (token == "e14fac" && i + 1 < tokens.size()) {
-            ff.nonbonded_params.e14fac = safe_stod(tokens[i+1], "e14fac");
-            std::cerr << "Set e14fac = " << ff.nonbonded_params.e14fac << std::endl;
-        }
-        else if (token == "wmin" && i + 1 < tokens.size()) {
-            ff.nonbonded_params.wmin = safe_stod(tokens[i+1], "wmin");
-            std::cerr << "Set wmin = " << ff.nonbonded_params.wmin << std::endl;
+        
+        // Process parameters
+        for (size_t i = 0; i < tokens.size(); ++i) {
+            std::cerr << "Processing parameter token: [" << tokens[i] << "]" << std::endl;
+            
+            if (tokens[i] == "nbxmod" && i + 1 < tokens.size()) {
+                ff.nonbonded_params.nbxmod = safe_stoi(tokens[++i], "nbxmod");
+                std::cerr << "Set nbxmod = " << ff.nonbonded_params.nbxmod << std::endl;
+            } else if (tokens[i] == "cutnb" && i + 1 < tokens.size()) {
+                ff.nonbonded_params.cutnb = safe_stod(tokens[++i], "cutnb");
+                std::cerr << "Set cutnb = " << ff.nonbonded_params.cutnb << std::endl;
+            } else if (tokens[i] == "ctofnb" && i + 1 < tokens.size()) {
+                ff.nonbonded_params.ctofnb = safe_stod(tokens[++i], "ctofnb");
+                std::cerr << "Set ctofnb = " << ff.nonbonded_params.ctofnb << std::endl;
+            } else if (tokens[i] == "ctonnb" && i + 1 < tokens.size()) {
+                ff.nonbonded_params.ctonnb = safe_stod(tokens[++i], "ctonnb");
+                std::cerr << "Set ctonnb = " << ff.nonbonded_params.ctonnb << std::endl;
+            } else if (tokens[i] == "eps" && i + 1 < tokens.size()) {
+                ff.nonbonded_params.eps = safe_stod(tokens[++i], "eps");
+                std::cerr << "Set eps = " << ff.nonbonded_params.eps << std::endl;
+            } else if (tokens[i] == "e14fac" && i + 1 < tokens.size()) {
+                ff.nonbonded_params.e14fac = safe_stod(tokens[++i], "e14fac");
+                std::cerr << "Set e14fac = " << ff.nonbonded_params.e14fac << std::endl;
+            } else if (tokens[i] == "wmin" && i + 1 < tokens.size()) {
+                ff.nonbonded_params.wmin = safe_stod(tokens[++i], "wmin");
+                std::cerr << "Set wmin = " << ff.nonbonded_params.wmin << std::endl;
+            } else if (tokens[i] == "cdiel") {
+                ff.nonbonded_params.cdiel = true;
+                std::cerr << "Set cdiel = true" << std::endl;
+            } else if (tokens[i] == "fshift") {
+                ff.nonbonded_params.fshift = true;
+                std::cerr << "Set fshift = true" << std::endl;
+            } else if (tokens[i] == "vatom") {
+                ff.nonbonded_params.vatom = true;
+                std::cerr << "Set vatom = true" << std::endl;
+            } else if (tokens[i] == "vdistance") {
+                ff.nonbonded_params.vdistance = true;
+                std::cerr << "Set vdistance = true" << std::endl;
+            } else if (tokens[i] == "vfswitch") {
+                ff.nonbonded_params.vfswitch = true;
+                std::cerr << "Set vfswitch = true" << std::endl;
+            }
         }
     }
     
-    // Parse atom type parameters
-    std::string line;
     std::cerr << "\n=== Starting atom type parameters parsing ===" << std::endl;
     std::cerr << "Current lj_params map size: " << ff.lj_params.size() << std::endl;
     
+    // Parse atom type parameters
     while (std::getline(input, line)) {
-        std::cerr << "\nReading line: [" << line << "]" << std::endl;
-        if (isCommentLine(line)) {
-            std::cerr << "Skipping comment line" << std::endl;
-            continue;
-        }
-        
-        // Handle continuation lines
-        std::string originalLine = line;
-        line = readContinuationLine(input, line);
-        if (line != originalLine) {
-            std::cerr << "After continuation processing: [" << line << "]" << std::endl;
-        }
+        if (isCommentLine(line)) continue;
         
         line = removeComments(line);
         line = trim(line);
@@ -516,12 +546,18 @@ void PrmParser::parseNonbondedSection(std::istream& input, ForceField& ff, const
         
         if (tokens.empty()) continue;
         
-        // Check for section end
-        if (tokens[0] == "END" || tokens[0] == "NBFIX" || 
-            isAtomsSection(line) || isBondsSection(line) || 
+        // Check for section end or new section
+        if (line == "END" || isAtomsSection(line) || isBondsSection(line) || 
             isAnglesSection(line) || isDihedralsSection(line) || 
-            isImproperSection(line) || isNonbondedSection(line)) {
+            isImproperSection(line)) {
             std::cerr << "Found section end marker: " << tokens[0] << std::endl;
+            break;
+        }
+        
+        // If we find NBFIX, parse it as a new section
+        if (isNBFixSection(line)) {
+            std::cerr << "Found NBFIX section" << std::endl;
+            parseNBFixSection(input, ff);
             break;
         }
         
@@ -529,63 +565,32 @@ void PrmParser::parseNonbondedSection(std::istream& input, ForceField& ff, const
         if (tokens.size() >= 4) {
             std::string atomType = tokens[0];
             // Skip the ignored value (usually 0.0)
-            double epsilon = safe_stod(tokens[2], "LJ epsilon for " + atomType);
-            double rmin = safe_stod(tokens[3], "LJ rmin for " + atomType);
-            
-            std::cerr << "\n*** Parsing atom type: " << atomType << " ***" << std::endl;
-            std::cerr << "  epsilon = " << epsilon << std::endl;
-            std::cerr << "  rmin = " << rmin << std::endl;
-            
-            LJParams ljParams;
-            ljParams.epsilon = epsilon;
-            ljParams.rmin = rmin;
-            ff.lj_params[atomType] = ljParams;
-            
-            // Verify storage
-            auto it = ff.lj_params.find(atomType);
-            if (it != ff.lj_params.end()) {
+            try {
+                double epsilon = safe_stod(tokens[2], "LJ epsilon for " + atomType);
+                double rmin = safe_stod(tokens[3], "LJ Rmin for " + atomType);
+                
+                std::cerr << "\n*** Parsing atom type: " << atomType << " ***" << std::endl;
+                std::cerr << "  epsilon = " << epsilon << std::endl;
+                std::cerr << "  rmin = " << rmin << std::endl;
+                
+                // Store the parameters
+                LJParams params{epsilon, rmin};
+                ff.lj_params[atomType] = params;
+                
                 std::cerr << "Successfully stored " << atomType << " parameters:" << std::endl;
-                std::cerr << "  Stored epsilon = " << it->second.epsilon << std::endl;
-                std::cerr << "  Stored rmin = " << it->second.rmin << std::endl;
+                std::cerr << "  Stored epsilon = " << ff.lj_params[atomType].epsilon << std::endl;
+                std::cerr << "  Stored rmin = " << ff.lj_params[atomType].rmin << std::endl;
                 std::cerr << "Current lj_params map size: " << ff.lj_params.size() << std::endl;
-            } else {
-                std::cerr << "WARNING: Failed to store " << atomType << " in map!" << std::endl;
+            } catch (const std::exception& e) {
+                throw std::runtime_error("Failed to parse LJ parameters for " + atomType + ": " + e.what());
             }
         } else {
             std::cerr << "Line has insufficient tokens (" << tokens.size() << " < 4), skipping" << std::endl;
         }
     }
+    
     std::cerr << "\n=== Finished NONBONDED section parsing ===" << std::endl;
     std::cerr << "Final lj_params map size: " << ff.lj_params.size() << std::endl;
-}
-
-void PrmParser::parseNBFixSection(std::istream& input, ForceField& ff) {
-    std::string line;
-    while (std::getline(input, line)) {
-        if (isCommentLine(line)) continue;
-        
-        line = removeComments(line);
-        line = trim(line);
-        if (line.empty()) continue;
-        
-        auto tokens = tokenize(line);
-        if (tokens.empty()) continue;
-        
-        if (tokens[0] == "END") break;
-        
-        if (tokens.size() >= 4) {
-            std::string type1 = tokens[0];
-            std::string type2 = tokens[1];
-            double epsilon = safe_stod(tokens[2], "NBFIX epsilon for " + type1 + "-" + type2);
-            // rmin is not used in current implementation
-            
-            auto key = make_type_pair(type1, type2);
-            ff.nbfix[key] = epsilon;
-            // Add symmetric pair
-            key = make_type_pair(type2, type1);
-            ff.nbfix[key] = epsilon;
-        }
-    }
 }
 
 // Helper functions for parameter processing

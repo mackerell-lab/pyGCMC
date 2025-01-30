@@ -95,3 +95,206 @@ def test_invalid_atom_type():
     ff = pygcmc.ForceField()
     with pytest.raises(KeyError):
         _ = ff.lj_params["INVALID"]
+
+def test_parse_comments_and_empty_lines():
+    content = """
+! This is a comment
+   ! This is an indented comment
+
+NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+! Comment between sections
+SOD      0.0       -0.0469    1.41075  ! inline comment
+CLA      0.0       -0.150      2.27    ! another comment
+   
+NBFIX
+! Another comment
+SOD    CLA      -0.083875   3.731 ! inline comment
+"""
+    ff = pygcmc.ForceField()
+    pygcmc.PrmParser.parse_string(content, ff)
+    
+    # Test that comments didn't affect parsing
+    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    assert found == True
+    assert epsilon == pytest.approx(-0.083875)
+
+    # Test that atom parameters were parsed correctly
+    sod_params = ff.get_lj_params("SOD")
+    assert sod_params.epsilon == pytest.approx(-0.0469)
+    assert sod_params.rmin == pytest.approx(1.41075)
+
+def test_multiple_nbfix_combinations():
+    content = """
+NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+SOD      0.0       -0.0469    1.41075
+POT      0.0       -0.0870    1.76375
+CAL      0.0       -0.120     1.367
+CLA      0.0       -0.150     2.27
+O2L      0.0       -0.120     1.700
+
+NBFIX
+SOD    CLA      -0.083875   3.731
+POT    CLA      -0.114236   4.081
+CAL    CLA      -0.134164   3.727
+CAL    O2L      -0.12       3.256
+END
+"""
+    ff = pygcmc.ForceField()
+    pygcmc.PrmParser.parse_string(content, ff)
+
+    # First verify LJ parameters are correctly parsed
+    sod_params = ff.get_lj_params("SOD")
+    assert sod_params.epsilon == pytest.approx(-0.0469)
+    assert sod_params.rmin == pytest.approx(1.41075)
+
+    cla_params = ff.get_lj_params("CLA")
+    assert cla_params.epsilon == pytest.approx(-0.150)
+    assert cla_params.rmin == pytest.approx(2.27)
+
+    # Then test NBFIX combinations
+    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    assert found == True
+    assert epsilon == pytest.approx(-0.083875)
+
+    # Test reverse order - should still work
+    epsilon, found = ff.get_nbfix("CLA", "SOD")
+    assert found == True
+    assert epsilon == pytest.approx(-0.083875)
+
+    epsilon, found = ff.get_nbfix("POT", "CLA")
+    assert found == True
+    assert epsilon == pytest.approx(-0.114236)
+
+    epsilon, found = ff.get_nbfix("CAL", "CLA")
+    assert found == True
+    assert epsilon == pytest.approx(-0.134164)
+
+    epsilon, found = ff.get_nbfix("CAL", "O2L")
+    assert found == True
+    assert epsilon == pytest.approx(-0.12)
+
+    # Test non-existent combinations
+    epsilon, found = ff.get_nbfix("SOD", "POT")
+    assert found == False
+
+def test_malformed_parameters():
+    # Missing value
+    with pytest.raises(ValueError):
+        content = """
+NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+HT       0.0       -0.046
+END
+"""
+        ff = pygcmc.ForceField()
+        pygcmc.PrmParser.parse_string(content, ff)
+
+    # Invalid number format
+    with pytest.raises(ValueError):
+        content = """
+NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+HT       0.0       -0.046     abc
+END
+"""
+        ff = pygcmc.ForceField()
+        pygcmc.PrmParser.parse_string(content, ff)
+
+    # Invalid NBFIX format
+    with pytest.raises(ValueError):
+        content = """
+NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+SOD      0.0       -0.0469    1.41075
+CLA      0.0       -0.150     2.27
+
+NBFIX
+SOD    CLA    invalid    3.731
+END
+"""
+        ff = pygcmc.ForceField()
+        pygcmc.PrmParser.parse_string(content, ff)
+
+def test_special_formatting():
+    content = """
+NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+!Values with scientific notation and different spacing
+HT          0.0    -4.6e-2     0.2245
+OT     0.0         -0.1521        1.7682
+"""
+    ff = pygcmc.ForceField()
+    pygcmc.PrmParser.parse_string(content, ff)
+
+    # Test scientific notation parsing
+    ht_params = ff.get_lj_params("HT")
+    assert ht_params.epsilon == pytest.approx(-0.046)
+    assert ht_params.rmin == pytest.approx(0.2245)
+
+    # Test irregular spacing parsing
+    ot_params = ff.get_lj_params("OT")
+    assert ot_params.epsilon == pytest.approx(-0.1521)
+    assert ot_params.rmin == pytest.approx(1.7682)
+
+def test_multiple_file_parsing():
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(os.path.dirname(test_dir), "data")
+    water_ions_file = os.path.join(data_dir, "toppar_water_ions.str")
+    silcs_file = os.path.join(data_dir, "silcs.str")
+
+    ff = pygcmc.ForceField()
+    
+    # Parse water_ions file first
+    pygcmc.PrmParser.parse_file(water_ions_file, ff)
+    
+    # Test parameters from water_ions file
+    sod_params = ff.get_lj_params("SOD")
+    assert sod_params.epsilon == pytest.approx(-0.0469)
+    assert sod_params.rmin == pytest.approx(1.41075)
+
+    cla_params = ff.get_lj_params("CLA")
+    assert cla_params.epsilon == pytest.approx(-0.150)
+    assert cla_params.rmin == pytest.approx(2.27)
+
+    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    assert found == True
+    assert epsilon == pytest.approx(-0.0839)
+    
+    # Parse silcs file
+    pygcmc.PrmParser.parse_file(silcs_file, ff)
+
+    # Test that original parameters are preserved
+    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    assert found == True
+    assert epsilon == pytest.approx(-0.0839)
+
+    # Test new parameters from silcs file
+    lp_params = ff.get_lj_params("LP")
+    assert lp_params.epsilon == pytest.approx(0.0)
+    assert lp_params.rmin == pytest.approx(0.0)
+
+    lq_params = ff.get_lj_params("LQ")
+    assert lq_params.epsilon == pytest.approx(0.0)
+    assert lq_params.rmin == pytest.approx(0.0)
+
+    # Test NBFIX parameters from silcs file
+    epsilon, found = ff.get_nbfix("LP", "LP")
+    assert found == True
+    assert epsilon == pytest.approx(-0.01)
+
+    epsilon, found = ff.get_nbfix("LQ", "LQ")
+    assert found == True
+    assert epsilon == pytest.approx(-0.01)
+
+    # Test reverse order access
+    epsilon, found = ff.get_nbfix("LP", "LP")
+    assert found == True
+    assert epsilon == pytest.approx(-0.01)
