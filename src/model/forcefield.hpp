@@ -72,6 +72,47 @@ public:
     std::map<std::tuple<std::string, std::string, std::string, std::string>, 
             ImproperParams> improper_params;  // 非正常二面角参数
     NonbondedParams nonbonded_params;  // 非键相互作用参数
+
+    // Helper functions for making keys
+    static std::pair<std::string, std::string> makeTypePair(const std::string& type1, const std::string& type2) {
+        return type1 < type2 ? std::make_pair(type1, type2) : std::make_pair(type2, type1);
+    }
+
+    static std::tuple<std::string, std::string, std::string> makeTypeTriple(
+        const std::string& type1, const std::string& type2, const std::string& type3) {
+        return std::make_tuple(type1, type2, type3);
+    }
+
+    static std::tuple<std::string, std::string, std::string, std::string> makeTypeQuad(
+        const std::string& type1, const std::string& type2, const std::string& type3, const std::string& type4) {
+        return std::make_tuple(type1, type2, type3, type4);
+    }
+
+    // Getter methods
+    const NonbondedParams& getNonbondedParams() const {
+        return nonbonded_params;
+    }
+
+    const LJParams& getLJParams(const std::string& type) const {
+        auto it = lj_params.find(type);
+        if (it == lj_params.end()) {
+            throw std::runtime_error("LJ parameters not found for type: " + type);
+        }
+        return it->second;
+    }
+
+    std::pair<double, bool> getNbfix(const std::string& type1, const std::string& type2) const {
+        auto key = makeTypePair(type1, type2);
+        auto it = nbfix.find(key);
+        if (it == nbfix.end()) {
+            key = makeTypePair(type2, type1);  // Try reverse order
+            it = nbfix.find(key);
+            if (it == nbfix.end()) {
+                return std::make_pair(0.0, false);
+            }
+        }
+        return std::make_pair(it->second, true);
+    }
 };
 
 } // namespace pygcmc

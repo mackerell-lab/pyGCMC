@@ -254,7 +254,11 @@ bool PRMParser::isAtomsSection(const std::string& line) {
 }
 
 bool PRMParser::isBondsSection(const std::string& line) {
-    return line.find("BONDS") != std::string::npos;
+    bool result = line.find("BONDS") != std::string::npos;
+    if (result) {
+        std::cerr << "Found BONDS section marker: [" << line << "]" << std::endl;
+    }
+    return result;
 }
 
 bool PRMParser::isAnglesSection(const std::string& line) {
@@ -291,6 +295,8 @@ void PRMParser::parseAtomsSection(std::istream& input, ForceField& ff) {
         if (line == "END" || isBondsSection(line) || isAnglesSection(line) || 
             isDihedralsSection(line) || isImproperSection(line) || 
             isNonbondedSection(line) || isNBFixSection(line)) {
+            // Put the line back so it can be read by the next section parser
+            input.seekg(-static_cast<std::streamoff>(line.length() + 1), std::ios::cur);
             break;
         }
         
@@ -307,21 +313,40 @@ void PRMParser::parseAtomsSection(std::istream& input, ForceField& ff) {
 
 void PRMParser::parseBondsSection(std::istream& input, ForceField& ff) {
     std::string line;
+    std::cerr << "\n=== Entering BONDS section parsing ===" << std::endl;
+    
     while (std::getline(input, line)) {
-        if (isCommentLine(line)) continue;
+        std::cerr << "Raw bond line: [" << line << "]" << std::endl;
+        
+        if (isCommentLine(line)) {
+            std::cerr << "Skipping comment line in bonds section" << std::endl;
+            continue;
+        }
         
         line = removeComments(line);
         line = trim(line);
-        if (line.empty()) continue;
+        if (line.empty()) {
+            std::cerr << "Skipping empty line in bonds section" << std::endl;
+            continue;
+        }
         
         // Check for section end
         if (line == "END" || isAtomsSection(line) || isAnglesSection(line) || 
             isDihedralsSection(line) || isImproperSection(line) || 
             isNonbondedSection(line) || isNBFixSection(line)) {
+            std::cerr << "Found section end marker in bonds: " << line << std::endl;
+            // Put the line back so it can be read by the next section parser
+            input.seekg(-static_cast<std::streamoff>(line.length() + 1), std::ios::cur);
             break;
         }
         
         auto tokens = tokenize(line);
+        std::cerr << "Bond tokens:";
+        for (const auto& token : tokens) {
+            std::cerr << " [" << token << "]";
+        }
+        std::cerr << std::endl;
+        
         if (tokens.size() >= 4) {
             // Format: type1 type2 Kb b0
             std::string type1 = tokens[0];
@@ -329,14 +354,22 @@ void PRMParser::parseBondsSection(std::istream& input, ForceField& ff) {
             double kb = safe_stod(tokens[2], "bond Kb for " + type1 + "-" + type2);
             double b0 = safe_stod(tokens[3], "bond b0 for " + type1 + "-" + type2);
             
-            auto key = make_type_pair(type1, type2);
+            std::cerr << "\nProcessing bond: " << type1 << "-" << type2 << std::endl;
+            std::cerr << "  kb = " << kb << ", b0 = " << b0 << std::endl;
+            
+            // Store bond parameters in a consistent order
+            auto key = ForceField::makeTypePair(type1, type2);
+            std::cerr << "  Storing with key: (" << key.first << ", " << key.second << ")" << std::endl;
+            
             BondParams params{kb, b0};
             ff.bond_params[key] = params;
-            // Add symmetric pair
-            key = make_type_pair(type2, type1);
-            ff.bond_params[key] = params;
+            
+            std::cerr << "  Current bond_params size: " << ff.bond_params.size() << std::endl;
         }
     }
+    
+    std::cerr << "\n=== Finished BONDS section parsing ===" << std::endl;
+    std::cerr << "Final bond_params size: " << ff.bond_params.size() << std::endl;
 }
 
 void PRMParser::parseAnglesSection(std::istream& input, ForceField& ff) {
@@ -352,6 +385,8 @@ void PRMParser::parseAnglesSection(std::istream& input, ForceField& ff) {
         if (line == "END" || isAtomsSection(line) || isBondsSection(line) || 
             isDihedralsSection(line) || isImproperSection(line) || 
             isNonbondedSection(line) || isNBFixSection(line)) {
+            // Put the line back so it can be read by the next section parser
+            input.seekg(-static_cast<std::streamoff>(line.length() + 1), std::ios::cur);
             break;
         }
         
@@ -394,6 +429,8 @@ void PRMParser::parseDihedralsSection(std::istream& input, ForceField& ff) {
         if (line == "END" || isAtomsSection(line) || isBondsSection(line) || 
             isAnglesSection(line) || isImproperSection(line) || 
             isNonbondedSection(line) || isNBFixSection(line)) {
+            // Put the line back so it can be read by the next section parser
+            input.seekg(-static_cast<std::streamoff>(line.length() + 1), std::ios::cur);
             break;
         }
         
@@ -431,6 +468,8 @@ void PRMParser::parseImproperSection(std::istream& input, ForceField& ff) {
         if (line == "END" || isAtomsSection(line) || isBondsSection(line) || 
             isAnglesSection(line) || isDihedralsSection(line) || 
             isNonbondedSection(line) || isNBFixSection(line)) {
+            // Put the line back so it can be read by the next section parser
+            input.seekg(-static_cast<std::streamoff>(line.length() + 1), std::ios::cur);
             break;
         }
         
@@ -472,6 +511,8 @@ void PRMParser::parseNBFixSection(std::istream& input, ForceField& ff) {
             isAnglesSection(line) || isDihedralsSection(line) || 
             isImproperSection(line) || isNonbondedSection(line) || 
             line == "BOMLEV" || line == "WRNLEV" || line == "return") {
+            // Put the line back so it can be read by the next section parser
+            input.seekg(-static_cast<std::streamoff>(line.length() + 1), std::ios::cur);
             break;
         }
         

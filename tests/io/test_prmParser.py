@@ -678,3 +678,243 @@ def test_prm_and_str_files():
     assert params.eps == pytest.approx(1.0)
     assert params.e14fac == pytest.approx(1.0)
     assert params.wmin == pytest.approx(1.5)
+
+def test_charmm_prm_files():
+    """Test parsing of CHARMM force field files (par_all36m_prot.prm)."""
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(os.path.dirname(test_dir), "data")
+    prm_file = os.path.join(data_dir, "par_all36m_prot.prm")
+
+    ff = pygcmc.ForceField()
+    pygcmc.PRMParser.parse_file_to_forcefield(prm_file, ff)
+
+    # Test header section (ATOMS/MASS)
+    # Test some hydrogen atoms
+    assert ff.atom_masses["H"] == pytest.approx(1.00800)    # polar H
+    assert ff.atom_masses["HC"] == pytest.approx(1.00800)   # N-ter H
+    assert ff.atom_masses["HA"] == pytest.approx(1.00800)   # nonpolar H
+    assert ff.atom_masses["HP"] == pytest.approx(1.00800)   # aromatic H
+    assert ff.atom_masses["HB1"] == pytest.approx(1.00800)  # backbone H
+    assert ff.atom_masses["HB2"] == pytest.approx(1.00800)  # aliphatic backbone H
+
+    # Test some carbon atoms
+    assert ff.atom_masses["C"] == pytest.approx(12.01100)    # carbonyl C, peptide backbone
+    assert ff.atom_masses["CA"] == pytest.approx(12.01100)   # aromatic C
+    assert ff.atom_masses["CT1"] == pytest.approx(12.01100)  # aliphatic sp3 C for CH
+    assert ff.atom_masses["CT2"] == pytest.approx(12.01100)  # aliphatic sp3 C for CH2
+    assert ff.atom_masses["CT3"] == pytest.approx(12.01100)  # aliphatic sp3 C for CH3
+    assert ff.atom_masses["CPH1"] == pytest.approx(12.01100) # his CG and CD2 carbons
+
+    # Test some nitrogen atoms
+    assert ff.atom_masses["N"] == pytest.approx(14.00700)    # proline N
+    assert ff.atom_masses["NH1"] == pytest.approx(14.00700)  # peptide nitrogen
+    assert ff.atom_masses["NH2"] == pytest.approx(14.00700)  # amide nitrogen
+    assert ff.atom_masses["NH3"] == pytest.approx(14.00700)  # ammonium nitrogen
+    assert ff.atom_masses["NR1"] == pytest.approx(14.00700)  # neutral his protonated ring nitrogen
+
+    # Test some oxygen atoms
+    assert ff.atom_masses["O"] == pytest.approx(15.99940)    # carbonyl oxygen
+    assert ff.atom_masses["OB"] == pytest.approx(15.99940)   # carbonyl oxygen in acetic acid
+    assert ff.atom_masses["OC"] == pytest.approx(15.99940)   # carboxylate oxygen
+    assert ff.atom_masses["OH1"] == pytest.approx(15.99940)  # hydroxyl oxygen
+
+    # Test sulfur atoms
+    assert ff.atom_masses["S"] == pytest.approx(32.06000)    # sulphur
+    assert ff.atom_masses["SM"] == pytest.approx(32.06000)   # sulfur C-S-S-C type
+    assert ff.atom_masses["SS"] == pytest.approx(32.06000)   # thiolate sulfur
+
+    # Test BONDS section
+    # Test some peptide backbone bonds
+    key = ff.makeTypePair("N", "C")
+    print("\nTesting bond N-C")
+    print(f"Generated key: {key}")
+    print(f"Available keys in bond_params: {list(ff.bond_params.keys())}")
+    bond_params = ff.bond_params[key]
+    assert bond_params.kb == pytest.approx(260.000)
+    assert bond_params.b0 == pytest.approx(1.3000)
+
+    bond_params = ff.bond_params[ff.makeTypePair("C", "O")]
+    assert bond_params.kb == pytest.approx(620.000)
+    assert bond_params.b0 == pytest.approx(1.2300)
+
+    # Test some side chain bonds
+    bond_params = ff.bond_params[ff.makeTypePair("CA", "CA")]
+    assert bond_params.kb == pytest.approx(305.000)
+    assert bond_params.b0 == pytest.approx(1.3750)
+
+    bond_params = ff.bond_params[ff.makeTypePair("CT2", "OH1")]
+    assert bond_params.kb == pytest.approx(428.000)
+    assert bond_params.b0 == pytest.approx(1.4200)
+
+    # Test some hydrogen bonds
+    bond_params = ff.bond_params[ff.makeTypePair("CT3", "HA3")]
+    assert bond_params.kb == pytest.approx(322.000)
+    assert bond_params.b0 == pytest.approx(1.1110)
+
+    # Test ANGLES section
+    # Test some peptide backbone angles
+    angle_params = ff.angle_params[ff.makeTypeTriple("C", "N", "CT1")]
+    assert angle_params.ktheta == pytest.approx(60.000)
+    assert angle_params.theta0 == pytest.approx(117.0000)
+
+    angle_params = ff.angle_params[ff.makeTypeTriple("N", "C", "O")]
+    assert angle_params.ktheta == pytest.approx(80.000)
+    assert angle_params.theta0 == pytest.approx(122.5000)
+
+    # Test some side chain angles
+    angle_params = ff.angle_params[ff.makeTypeTriple("CA", "CA", "CA")]
+    assert angle_params.ktheta == pytest.approx(40.000)
+    assert angle_params.theta0 == pytest.approx(120.0000)
+
+    # Test DIHEDRALS section
+    # Test some peptide backbone dihedrals
+    dihedral_params = ff.dihedral_params[ff.makeTypeQuad("C", "N", "CT1", "C")]
+    assert len(dihedral_params) > 0
+    assert dihedral_params[0].kchi == pytest.approx(0.4000)
+    assert dihedral_params[0].n == 1
+    assert dihedral_params[0].delta == pytest.approx(0.00)
+
+    # Test some side chain dihedrals
+    dihedral_params = ff.dihedral_params[ff.makeTypeQuad("CA", "CA", "CA", "CA")]
+    assert len(dihedral_params) > 0
+    assert dihedral_params[0].kchi == pytest.approx(3.1000)
+    assert dihedral_params[0].n == 2
+    assert dihedral_params[0].delta == pytest.approx(180.00)
+
+    # Test NONBONDED parameters
+    params = ff.get_nonbonded_params()
+    assert params.nbxmod == 5
+    assert params.cdiel == True
+    assert params.fshift == True
+    assert params.vatom == True
+    assert params.vdistance == True
+    assert params.vfswitch == True
+    assert params.cutnb == pytest.approx(14.0)
+    assert params.ctofnb == pytest.approx(12.0)
+    assert params.ctonnb == pytest.approx(10.0)
+    assert params.eps == pytest.approx(1.0)
+    assert params.e14fac == pytest.approx(1.0)
+    assert params.wmin == pytest.approx(1.5)
+
+    # Test some LJ parameters
+    # Test some hydrogen LJ parameters
+    h_params = ff.get_lj_params("H")
+    assert h_params.epsilon == pytest.approx(-0.0460)
+    assert h_params.rmin == pytest.approx(0.2245)
+
+    # Test some carbon LJ parameters
+    c_params = ff.get_lj_params("C")
+    assert c_params.epsilon == pytest.approx(-0.1100)
+    assert c_params.rmin == pytest.approx(2.0000)
+
+    # Test some nitrogen LJ parameters
+    n_params = ff.get_lj_params("N")
+    assert n_params.epsilon == pytest.approx(-0.2000)
+    assert n_params.rmin == pytest.approx(1.8500)
+
+    # Test some oxygen LJ parameters
+    o_params = ff.get_lj_params("O")
+    assert o_params.epsilon == pytest.approx(-0.1200)
+    assert o_params.rmin == pytest.approx(1.7000)
+
+    # Test NBFIX parameters if present
+    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    assert found == False  # Should be false if no NBFIX in the file
+
+def test_cgenff_prm_file():
+    """Test parsing of CHARMM General Force Field file (par_all36_cgenff.prm)."""
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(os.path.dirname(test_dir), "data")
+    prm_file = os.path.join(data_dir, "par_all36_cgenff.prm")
+
+    ff = pygcmc.ForceField()
+    pygcmc.PRMParser.parse_file_to_forcefield(prm_file, ff)
+
+    # Test header section (ATOMS/MASS)
+    # Test some hydrogen atoms
+    assert ff.atom_masses["HGA1"] == pytest.approx(1.00800)  # alphatic proton, CH
+    assert ff.atom_masses["HGA2"] == pytest.approx(1.00800)  # alphatic proton, CH2
+    assert ff.atom_masses["HGA3"] == pytest.approx(1.00800)  # alphatic proton, CH3
+    assert ff.atom_masses["HGR61"] == pytest.approx(1.00800) # aromatic H
+    assert ff.atom_masses["HGP1"] == pytest.approx(1.00800)  # polar H
+
+    # Test some carbon atoms
+    assert ff.atom_masses["CG2R61"] == pytest.approx(12.01100)  # 6-mem aromatic C
+    assert ff.atom_masses["CG2O1"] == pytest.approx(12.01100)   # carbonyl C: amides
+    assert ff.atom_masses["CG321"] == pytest.approx(12.01100)   # aliphatic C for CH2
+    assert ff.atom_masses["CG331"] == pytest.approx(12.01100)   # aliphatic C for methyl group
+
+    # Test some nitrogen atoms
+    assert ff.atom_masses["NG2S1"] == pytest.approx(14.00700)  # peptide nitrogen
+    assert ff.atom_masses["NG2S2"] == pytest.approx(14.00700)  # terminal amide nitrogen
+    assert ff.atom_masses["NG301"] == pytest.approx(14.00700)  # neutral trimethylamine nitrogen
+
+    # Test some oxygen atoms
+    assert ff.atom_masses["OG2D1"] == pytest.approx(15.99940)  # carbonyl O: amides
+    assert ff.atom_masses["OG2D2"] == pytest.approx(15.99940)  # carbonyl O: negative groups
+    assert ff.atom_masses["OG2D3"] == pytest.approx(15.99940)  # carbonyl O: ketones
+
+    # Test BONDS section
+    # Test some typical CGenFF bonds
+    bond_params = ff.bond_params[ff.makeTypePair("CG2R61", "CG2R61")]
+    assert bond_params.kb == pytest.approx(305.000)
+    assert bond_params.b0 == pytest.approx(1.3750)
+
+    bond_params = ff.bond_params[ff.makeTypePair("CG2R61", "HGR61")]
+    assert bond_params.kb == pytest.approx(340.000)
+    assert bond_params.b0 == pytest.approx(1.0800)
+
+    bond_params = ff.bond_params[ff.makeTypePair("CG2O1", "OG2D1")]
+    assert bond_params.kb == pytest.approx(620.000)
+    assert bond_params.b0 == pytest.approx(1.2300)
+
+    # Test ANGLES section
+    # Test some typical CGenFF angles
+    angle_params = ff.angle_params[ff.makeTypeTriple("CG2R61", "CG2R61", "CG2R61")]
+    assert angle_params.ktheta == pytest.approx(40.000)
+    assert angle_params.theta0 == pytest.approx(120.0000)
+
+    angle_params = ff.angle_params[ff.makeTypeTriple("HGR61", "CG2R61", "CG2R61")]
+    assert angle_params.ktheta == pytest.approx(30.000)
+    assert angle_params.theta0 == pytest.approx(120.0000)
+
+    # Test DIHEDRALS section
+    # Test some typical CGenFF dihedrals
+    dihedral_params = ff.dihedral_params[ff.makeTypeQuad("CG2R61", "CG2R61", "CG2R61", "CG2R61")]
+    assert len(dihedral_params) > 0
+    assert dihedral_params[0].kchi == pytest.approx(3.1000)
+    assert dihedral_params[0].n == 2
+    assert dihedral_params[0].delta == pytest.approx(180.00)
+
+    # Test NONBONDED parameters
+    params = ff.get_nonbonded_params()
+    assert params.nbxmod == 5
+    assert params.cdiel == True
+    assert params.fshift == True
+    assert params.vatom == True
+    assert params.vdistance == True
+    assert params.vfswitch == True
+    assert params.cutnb == pytest.approx(14.0)
+    assert params.ctofnb == pytest.approx(12.0)
+    assert params.ctonnb == pytest.approx(10.0)
+    assert params.eps == pytest.approx(1.0)
+    assert params.e14fac == pytest.approx(1.0)
+    assert params.wmin == pytest.approx(1.5)
+
+    # Test some LJ parameters
+    # Test some typical CGenFF LJ parameters
+    cg2r61_params = ff.get_lj_params("CG2R61")
+    assert cg2r61_params.epsilon == pytest.approx(-0.0700)
+    assert cg2r61_params.rmin == pytest.approx(1.9924)
+
+    hgr61_params = ff.get_lj_params("HGR61")
+    assert hgr61_params.epsilon == pytest.approx(-0.0300)
+    assert hgr61_params.rmin == pytest.approx(1.3582)
+
+    og2d1_params = ff.get_lj_params("OG2D1")
+    assert og2d1_params.epsilon == pytest.approx(-0.1200)
+    assert og2d1_params.rmin == pytest.approx(1.7000)
+
+    # Test NBFIX parameters if present
+    epsilon, found = ff.get_nbfix("CG2R61", "OG2D1")
+    assert found == False  # Should be false if no NBFIX in the file

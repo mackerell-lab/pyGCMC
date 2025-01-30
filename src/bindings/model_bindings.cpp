@@ -137,9 +137,7 @@ void init_model(py::module& m) {
         .def_readonly("id", &model::TopologyGroup::id)
         .def_readonly("atoms", &model::TopologyGroup::atoms)
         .def_readonly("type", &model::TopologyGroup::type);
-}
 
-void init_model_bindings(py::module& m) {
     // NonbondedParams
     py::class_<NonbondedParams>(m, "NonbondedParams")
         .def(py::init<>())
@@ -192,7 +190,6 @@ void init_model_bindings(py::module& m) {
     // ForceField
     py::class_<ForceField>(m, "ForceField")
         .def(py::init<>())
-        // 数据成员
         .def_readwrite("atom_masses", &ForceField::atom_masses)
         .def_readwrite("lj_params", &ForceField::lj_params)
         .def_readwrite("nbfix", &ForceField::nbfix)
@@ -200,7 +197,28 @@ void init_model_bindings(py::module& m) {
         .def_readwrite("angle_params", &ForceField::angle_params)
         .def_readwrite("dihedral_params", &ForceField::dihedral_params)
         .def_readwrite("improper_params", &ForceField::improper_params)
-        .def_readwrite("nonbonded_params", &ForceField::nonbonded_params);
+        .def_readwrite("nonbonded_params", &ForceField::nonbonded_params)
+        .def("get_nonbonded_params", [](const ForceField& self) -> const NonbondedParams& {
+            return self.nonbonded_params;
+        })
+        .def("get_lj_params", [](const ForceField& self, const std::string& type) -> const LJParams& {
+            auto it = self.lj_params.find(type);
+            if (it == self.lj_params.end()) {
+                throw py::key_error("No LJ parameters found for atom type: " + type);
+            }
+            return it->second;
+        })
+        .def("get_nbfix", [](const ForceField& self, const std::string& type1, const std::string& type2) -> py::tuple {
+            auto key = std::make_pair(type1 < type2 ? type1 : type2, type1 < type2 ? type2 : type1);
+            auto it = self.nbfix.find(key);
+            if (it == self.nbfix.end()) {
+                return py::make_tuple(0.0, false);
+            }
+            return py::make_tuple(it->second, true);
+        })
+        .def_static("makeTypePair", &ForceField::makeTypePair)
+        .def_static("makeTypeTriple", &ForceField::makeTypeTriple)
+        .def_static("makeTypeQuad", &ForceField::makeTypeQuad);
 }
 
 } // namespace bindings
