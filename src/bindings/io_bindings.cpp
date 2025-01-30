@@ -114,41 +114,102 @@ void init_io(py::module& m) {
         .def_static("is_debug_enabled", &io::TOPParser::is_debug_enabled,
             "Check if debug output is enabled");
     io.attr("TOPParser") = top_parser;
+
+    // Add PrmParser bindings
+    auto prm_parser = py::class_<PrmParser>(m, "PrmParser")
+        .def(py::init<>())
+        .def_static("parse_string", &PrmParser::parse_string,
+            py::arg("content"), py::arg("ff"),
+            "Parse parameter content from string and populate ForceField object")
+        .def_static("parse_file", &PrmParser::parse_file,
+            py::arg("filename"), py::arg("ff"),
+            "Parse parameter file and populate ForceField object")
+        .def("parse", &PrmParser::parse,
+            py::arg("filename"), py::arg("ff"),
+            "Parse parameter file and populate ForceField object (instance method)");
+    m.attr("PrmParser") = prm_parser;  // Add to main module as well
+    io.attr("PrmParser") = prm_parser;  // Add to io submodule
 }
 
 void init_forcefield(py::module& m) {
-    py::class_<pygcmc::NonbondedParams>(m, "NonbondedParams")
+    // NonbondedParams
+    py::class_<NonbondedParams>(m, "NonbondedParams")
         .def(py::init<>())
-        .def_readwrite("nbxmod", &pygcmc::NonbondedParams::nbxmod)
-        .def_readwrite("cdiel", &pygcmc::NonbondedParams::cdiel)
-        .def_readwrite("fshift", &pygcmc::NonbondedParams::fshift)
-        .def_readwrite("vatom", &pygcmc::NonbondedParams::vatom)
-        .def_readwrite("vdistance", &pygcmc::NonbondedParams::vdistance)
-        .def_readwrite("vfswitch", &pygcmc::NonbondedParams::vfswitch)
-        .def_readwrite("cutnb", &pygcmc::NonbondedParams::cutnb)
-        .def_readwrite("ctofnb", &pygcmc::NonbondedParams::ctofnb)
-        .def_readwrite("ctonnb", &pygcmc::NonbondedParams::ctonnb)
-        .def_readwrite("eps", &pygcmc::NonbondedParams::eps)
-        .def_readwrite("e14fac", &pygcmc::NonbondedParams::e14fac)
-        .def_readwrite("wmin", &pygcmc::NonbondedParams::wmin);
+        .def_readwrite("nbxmod", &NonbondedParams::nbxmod)
+        .def_readwrite("cdiel", &NonbondedParams::cdiel)
+        .def_readwrite("fshift", &NonbondedParams::fshift)
+        .def_readwrite("vatom", &NonbondedParams::vatom)
+        .def_readwrite("vdistance", &NonbondedParams::vdistance)
+        .def_readwrite("vfswitch", &NonbondedParams::vfswitch)
+        .def_readwrite("cutnb", &NonbondedParams::cutnb)
+        .def_readwrite("ctofnb", &NonbondedParams::ctofnb)
+        .def_readwrite("ctonnb", &NonbondedParams::ctonnb)
+        .def_readwrite("eps", &NonbondedParams::eps)
+        .def_readwrite("e14fac", &NonbondedParams::e14fac)
+        .def_readwrite("wmin", &NonbondedParams::wmin);
 
-    py::class_<pygcmc::LJParams>(m, "LJParams")
+    // LJParams
+    py::class_<LJParams>(m, "LJParams")
         .def(py::init<>())
-        .def_readwrite("epsilon", &pygcmc::LJParams::epsilon)
-        .def_readwrite("rmin", &pygcmc::LJParams::rmin);
+        .def_readwrite("epsilon", &LJParams::epsilon)
+        .def_readwrite("rmin", &LJParams::rmin);
 
-    py::class_<pygcmc::ForceField>(m, "ForceField")
+    // BondParams
+    py::class_<BondParams>(m, "BondParams")
         .def(py::init<>())
-        .def("get_nonbonded_params", static_cast<const pygcmc::NonbondedParams& (pygcmc::ForceField::*)() const>(&pygcmc::ForceField::get_nonbonded_params))
-        .def("get_lj_params", &pygcmc::ForceField::get_lj_params)
-        .def("get_nbfix", &pygcmc::ForceField::get_nbfix)
-        .def("add_lj_params", &pygcmc::ForceField::add_lj_params)
-        .def("add_nbfix", &pygcmc::ForceField::add_nbfix);
+        .def_readwrite("kb", &BondParams::kb)
+        .def_readwrite("b0", &BondParams::b0);
 
-    py::class_<pygcmc::PrmParser>(m, "PrmParser")
+    // AngleParams
+    py::class_<AngleParams>(m, "AngleParams")
         .def(py::init<>())
-        .def_static("parse_string", &pygcmc::PrmParser::parse_string)
-        .def_static("parse_file", &pygcmc::PrmParser::parse_file);
+        .def_readwrite("ktheta", &AngleParams::ktheta)
+        .def_readwrite("theta0", &AngleParams::theta0)
+        .def_readwrite("kub", &AngleParams::kub)
+        .def_readwrite("s0", &AngleParams::s0);
+
+    // DihedralParams
+    py::class_<DihedralParams>(m, "DihedralParams")
+        .def(py::init<>())
+        .def_readwrite("kchi", &DihedralParams::kchi)
+        .def_readwrite("n", &DihedralParams::n)
+        .def_readwrite("delta", &DihedralParams::delta);
+
+    // ImproperParams
+    py::class_<ImproperParams>(m, "ImproperParams")
+        .def(py::init<>())
+        .def_readwrite("kpsi", &ImproperParams::kpsi)
+        .def_readwrite("psi0", &ImproperParams::psi0);
+
+    // ForceField
+    py::class_<ForceField>(m, "ForceField")
+        .def(py::init<>())
+        .def_readwrite("atom_masses", &ForceField::atom_masses)
+        .def_readwrite("lj_params", &ForceField::lj_params)
+        .def_readwrite("nbfix", &ForceField::nbfix)
+        .def_readwrite("bond_params", &ForceField::bond_params)
+        .def_readwrite("angle_params", &ForceField::angle_params)
+        .def_readwrite("dihedral_params", &ForceField::dihedral_params)
+        .def_readwrite("improper_params", &ForceField::improper_params)
+        .def_readwrite("nonbonded_params", &ForceField::nonbonded_params)
+        .def("get_nonbonded_params", [](const ForceField& self) -> const NonbondedParams& {
+            return self.nonbonded_params;
+        })
+        .def("get_lj_params", [](const ForceField& self, const std::string& type) -> const LJParams& {
+            auto it = self.lj_params.find(type);
+            if (it == self.lj_params.end()) {
+                throw py::key_error("No LJ parameters found for atom type: " + type);
+            }
+            return it->second;
+        })
+        .def("get_nbfix", [](const ForceField& self, const std::string& type1, const std::string& type2) -> py::tuple {
+            auto key = std::make_pair(type1 < type2 ? type1 : type2, type1 < type2 ? type2 : type1);
+            auto it = self.nbfix.find(key);
+            if (it == self.nbfix.end()) {
+                return py::make_tuple(0.0, false);
+            }
+            return py::make_tuple(it->second, true);
+        });
 }
 
 } // namespace bindings

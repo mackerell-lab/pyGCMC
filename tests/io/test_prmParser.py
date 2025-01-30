@@ -1,3 +1,5 @@
+# tests/io/test_prmParser.py
+
 import os
 import pytest
 import pygcmc
@@ -91,5 +93,5 @@ def test_invalid_file():
 
 def test_invalid_atom_type():
     ff = pygcmc.ForceField()
-    with pytest.raises(RuntimeError):
-        ff.get_lj_params("INVALID")
+    with pytest.raises(KeyError):
+        _ = ff.lj_params["INVALID"]

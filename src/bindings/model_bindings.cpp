@@ -5,8 +5,10 @@
 #include "model/atom.hpp"
 #include "model/residue.hpp"
 #include "model/topology.hpp"
+#include "../model/forcefield.hpp"
 
 namespace py = pybind11;
+using namespace pygcmc;
 
 namespace pygcmc {
 namespace bindings {
@@ -135,6 +137,70 @@ void init_model(py::module& m) {
         .def_readonly("id", &model::TopologyGroup::id)
         .def_readonly("atoms", &model::TopologyGroup::atoms)
         .def_readonly("type", &model::TopologyGroup::type);
+}
+
+void init_model_bindings(py::module& m) {
+    // NonbondedParams
+    py::class_<NonbondedParams>(m, "NonbondedParams")
+        .def(py::init<>())
+        .def_readwrite("nbxmod", &NonbondedParams::nbxmod)
+        .def_readwrite("cdiel", &NonbondedParams::cdiel)
+        .def_readwrite("fshift", &NonbondedParams::fshift)
+        .def_readwrite("vatom", &NonbondedParams::vatom)
+        .def_readwrite("vdistance", &NonbondedParams::vdistance)
+        .def_readwrite("vfswitch", &NonbondedParams::vfswitch)
+        .def_readwrite("cutnb", &NonbondedParams::cutnb)
+        .def_readwrite("ctofnb", &NonbondedParams::ctofnb)
+        .def_readwrite("ctonnb", &NonbondedParams::ctonnb)
+        .def_readwrite("eps", &NonbondedParams::eps)
+        .def_readwrite("e14fac", &NonbondedParams::e14fac)
+        .def_readwrite("wmin", &NonbondedParams::wmin);
+
+    // LJParams
+    py::class_<LJParams>(m, "LJParams")
+        .def(py::init<>())
+        .def_readwrite("epsilon", &LJParams::epsilon)
+        .def_readwrite("rmin", &LJParams::rmin);
+
+    // BondParams
+    py::class_<BondParams>(m, "BondParams")
+        .def(py::init<>())
+        .def_readwrite("kb", &BondParams::kb)
+        .def_readwrite("b0", &BondParams::b0);
+
+    // AngleParams
+    py::class_<AngleParams>(m, "AngleParams")
+        .def(py::init<>())
+        .def_readwrite("ktheta", &AngleParams::ktheta)
+        .def_readwrite("theta0", &AngleParams::theta0)
+        .def_readwrite("kub", &AngleParams::kub)
+        .def_readwrite("s0", &AngleParams::s0);
+
+    // DihedralParams
+    py::class_<DihedralParams>(m, "DihedralParams")
+        .def(py::init<>())
+        .def_readwrite("kchi", &DihedralParams::kchi)
+        .def_readwrite("n", &DihedralParams::n)
+        .def_readwrite("delta", &DihedralParams::delta);
+
+    // ImproperParams
+    py::class_<ImproperParams>(m, "ImproperParams")
+        .def(py::init<>())
+        .def_readwrite("kpsi", &ImproperParams::kpsi)
+        .def_readwrite("psi0", &ImproperParams::psi0);
+
+    // ForceField
+    py::class_<ForceField>(m, "ForceField")
+        .def(py::init<>())
+        // 数据成员
+        .def_readwrite("atom_masses", &ForceField::atom_masses)
+        .def_readwrite("lj_params", &ForceField::lj_params)
+        .def_readwrite("nbfix", &ForceField::nbfix)
+        .def_readwrite("bond_params", &ForceField::bond_params)
+        .def_readwrite("angle_params", &ForceField::angle_params)
+        .def_readwrite("dihedral_params", &ForceField::dihedral_params)
+        .def_readwrite("improper_params", &ForceField::improper_params)
+        .def_readwrite("nonbonded_params", &ForceField::nonbonded_params);
 }
 
 } // namespace bindings
