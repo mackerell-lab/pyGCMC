@@ -11,10 +11,10 @@
 
 namespace pygcmc {
 
-class PrmParser {
+class PRMParser {
 public:
-    PrmParser() = default;
-    ~PrmParser() = default;
+    PRMParser() = default;
+    ~PRMParser() = default;
 
     // Static methods for parsing
     static void parse_string(const std::string& content, ForceField& ff);

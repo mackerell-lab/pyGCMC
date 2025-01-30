@@ -26,26 +26,26 @@ namespace {
     }
 }
 
-void PrmParser::parse_string(const std::string& content, ForceField& ff) {
+void PRMParser::parse_string(const std::string& content, ForceField& ff) {
     std::istringstream iss(content);
-    PrmParser parser;
+    PRMParser parser;
     parser.parseStream(iss, ff);
 }
 
-void PrmParser::parse_file(const std::string& filename, ForceField& ff) {
+void PRMParser::parse_file(const std::string& filename, ForceField& ff) {
     std::ifstream file(filename);
     if (!file.is_open()) {
         throw std::runtime_error("Failed to open parameter file: " + filename);
     }
-    PrmParser parser;
+    PRMParser parser;
     parser.parseStream(file, ff);
 }
 
-void PrmParser::parse(const std::string& filename, ForceField& ff) {
+void PRMParser::parse(const std::string& filename, ForceField& ff) {
     parse_file(filename, ff);
 }
 
-void PrmParser::parseStream(std::istream& input, ForceField& ff) {
+void PRMParser::parseStream(std::istream& input, ForceField& ff) {
     std::string line;
     bool inSection = false;
     std::string currentSection;
@@ -146,14 +146,14 @@ void PrmParser::parseStream(std::istream& input, ForceField& ff) {
     }
 }
 
-void PrmParser::skipComments(std::istream& input) {
+void PRMParser::skipComments(std::istream& input) {
     while (input.peek() == '!' || input.peek() == '*' || input.peek() == '#' || input.peek() == '\n') {
         std::string line;
         std::getline(input, line);
     }
 }
 
-std::vector<std::string> PrmParser::tokenize(const std::string& line) {
+std::vector<std::string> PRMParser::tokenize(const std::string& line) {
     std::vector<std::string> tokens;
     std::istringstream iss(line);
     std::string token;
@@ -167,11 +167,11 @@ std::vector<std::string> PrmParser::tokenize(const std::string& line) {
     return tokens;
 }
 
-bool PrmParser::isCommentLine(const std::string& line) {
+bool PRMParser::isCommentLine(const std::string& line) {
     return line.empty() || line[0] == '!' || line[0] == '*' || line[0] == '#';
 }
 
-std::string PrmParser::removeComments(const std::string& line) {
+std::string PRMParser::removeComments(const std::string& line) {
     size_t commentPos = line.find_first_of("!*#");
     if (commentPos != std::string::npos) {
         return line.substr(0, commentPos);
@@ -179,14 +179,14 @@ std::string PrmParser::removeComments(const std::string& line) {
     return line;
 }
 
-std::string PrmParser::trim(const std::string& str) {
+std::string PRMParser::trim(const std::string& str) {
     size_t first = str.find_first_not_of(" \t\r\n");
     if (first == std::string::npos) return "";
     size_t last = str.find_last_not_of(" \t\r\n");
     return str.substr(first, last - first + 1);
 }
 
-std::string PrmParser::readContinuationLine(std::istream& input, std::string firstLine) {
+std::string PRMParser::readContinuationLine(std::istream& input, std::string firstLine) {
     std::cerr << "Reading continuation line starting with: [" << firstLine << "]" << std::endl;
     std::string fullLine = firstLine;  // Initialize with the first line
     std::string currentLine;
@@ -243,36 +243,36 @@ std::string PrmParser::readContinuationLine(std::istream& input, std::string fir
     return fullLine;
 }
 
-bool PrmParser::isAtomsSection(const std::string& line) {
+bool PRMParser::isAtomsSection(const std::string& line) {
     return line.find("ATOMS") != std::string::npos || line.find("MASS") != std::string::npos;
 }
 
-bool PrmParser::isBondsSection(const std::string& line) {
+bool PRMParser::isBondsSection(const std::string& line) {
     return line.find("BONDS") != std::string::npos;
 }
 
-bool PrmParser::isAnglesSection(const std::string& line) {
+bool PRMParser::isAnglesSection(const std::string& line) {
     return line.find("ANGLES") != std::string::npos;
 }
 
-bool PrmParser::isDihedralsSection(const std::string& line) {
+bool PRMParser::isDihedralsSection(const std::string& line) {
     return line.find("DIHEDRALS") != std::string::npos;
 }
 
-bool PrmParser::isImproperSection(const std::string& line) {
+bool PRMParser::isImproperSection(const std::string& line) {
     return line.find("IMPROPER") != std::string::npos;
 }
 
-bool PrmParser::isNonbondedSection(const std::string& line) {
+bool PRMParser::isNonbondedSection(const std::string& line) {
     return line.find("NONBONDED") != std::string::npos || 
            line.find("cutnb") != std::string::npos;
 }
 
-bool PrmParser::isNBFixSection(const std::string& line) {
+bool PRMParser::isNBFixSection(const std::string& line) {
     return line.find("NBFIX") != std::string::npos;
 }
 
-void PrmParser::parseAtomsSection(std::istream& input, ForceField& ff) {
+void PRMParser::parseAtomsSection(std::istream& input, ForceField& ff) {
     std::string line;
     while (std::getline(input, line)) {
         if (isCommentLine(line)) continue;
@@ -299,7 +299,7 @@ void PrmParser::parseAtomsSection(std::istream& input, ForceField& ff) {
     }
 }
 
-void PrmParser::parseBondsSection(std::istream& input, ForceField& ff) {
+void PRMParser::parseBondsSection(std::istream& input, ForceField& ff) {
     std::string line;
     while (std::getline(input, line)) {
         if (isCommentLine(line)) continue;
@@ -333,7 +333,7 @@ void PrmParser::parseBondsSection(std::istream& input, ForceField& ff) {
     }
 }
 
-void PrmParser::parseAnglesSection(std::istream& input, ForceField& ff) {
+void PRMParser::parseAnglesSection(std::istream& input, ForceField& ff) {
     std::string line;
     while (std::getline(input, line)) {
         if (isCommentLine(line)) continue;
@@ -375,7 +375,7 @@ void PrmParser::parseAnglesSection(std::istream& input, ForceField& ff) {
     }
 }
 
-void PrmParser::parseDihedralsSection(std::istream& input, ForceField& ff) {
+void PRMParser::parseDihedralsSection(std::istream& input, ForceField& ff) {
     std::string line;
     while (std::getline(input, line)) {
         if (isCommentLine(line)) continue;
@@ -412,7 +412,7 @@ void PrmParser::parseDihedralsSection(std::istream& input, ForceField& ff) {
     }
 }
 
-void PrmParser::parseImproperSection(std::istream& input, ForceField& ff) {
+void PRMParser::parseImproperSection(std::istream& input, ForceField& ff) {
     std::string line;
     while (std::getline(input, line)) {
         if (isCommentLine(line)) continue;
@@ -445,7 +445,7 @@ void PrmParser::parseImproperSection(std::istream& input, ForceField& ff) {
     }
 }
 
-void PrmParser::parseNBFixSection(std::istream& input, ForceField& ff) {
+void PRMParser::parseNBFixSection(std::istream& input, ForceField& ff) {
     std::string line;
     while (std::getline(input, line)) {
         if (isCommentLine(line)) continue;
@@ -482,7 +482,7 @@ void PrmParser::parseNBFixSection(std::istream& input, ForceField& ff) {
     }
 }
 
-void PrmParser::parseNonbondedSection(std::istream& input, ForceField& ff, const std::string& firstLine) {
+void PRMParser::parseNonbondedSection(std::istream& input, ForceField& ff, const std::string& firstLine) {
     std::string line = firstLine;
     std::string fullLine = readContinuationLine(input, line);
     
@@ -622,19 +622,19 @@ void PrmParser::parseNonbondedSection(std::istream& input, ForceField& ff, const
 }
 
 // Helper functions for parameter processing
-std::pair<std::string, std::string> PrmParser::make_type_pair(
+std::pair<std::string, std::string> PRMParser::make_type_pair(
     const std::string& type1, const std::string& type2) const {
     return type1 < type2 ? 
         std::make_pair(type1, type2) : 
         std::make_pair(type2, type1);
 }
 
-std::tuple<std::string, std::string, std::string> PrmParser::make_type_triple(
+std::tuple<std::string, std::string, std::string> PRMParser::make_type_triple(
     const std::string& type1, const std::string& type2, const std::string& type3) const {
     return std::make_tuple(type1, type2, type3);
 }
 
-std::tuple<std::string, std::string, std::string, std::string> PrmParser::make_type_quad(
+std::tuple<std::string, std::string, std::string, std::string> PRMParser::make_type_quad(
     const std::string& type1, const std::string& type2, 
     const std::string& type3, const std::string& type4) const {
     return std::make_tuple(type1, type2, type3, type4);
