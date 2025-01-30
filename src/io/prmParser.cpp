@@ -99,6 +99,32 @@ void PrmParser::parseStream(std::istream& input, ForceField& ff) {
             std::cerr << "Found NONBONDED section" << std::endl;
             inSection = true;
             currentSection = "NONBONDED";
+            
+            // If the line starts with cutnb, we need to look for the previous NONBONDED line
+            if (cleanLine.find("NONBONDED") == std::string::npos && cleanLine.find("cutnb") != std::string::npos) {
+                // Store current position
+                auto currentPos = input.tellg();
+                std::string prevLine;
+                
+                // Go back to beginning of file
+                input.seekg(0);
+                
+                // Read lines until we reach our current position
+                while (input.tellg() < currentPos && std::getline(input, prevLine)) {
+                    if (isCommentLine(prevLine)) continue;
+                    prevLine = removeComments(prevLine);
+                    prevLine = trim(prevLine);
+                    if (prevLine.find("NONBONDED") != std::string::npos) {
+                        // Found the NONBONDED line, combine it with current line
+                        cleanLine = prevLine + " " + cleanLine;
+                        break;
+                    }
+                }
+                
+                // Restore position
+                input.seekg(currentPos);
+            }
+            
             parseNonbondedSection(input, ff, cleanLine);
         } else if (isNBFixSection(cleanLine)) {
             std::cerr << "Found NBFIX section" << std::endl;
@@ -162,42 +188,18 @@ std::string PrmParser::trim(const std::string& str) {
 
 std::string PrmParser::readContinuationLine(std::istream& input, std::string firstLine) {
     std::cerr << "Reading continuation line starting with: [" << firstLine << "]" << std::endl;
-    std::string fullLine;
-    std::string currentLine = firstLine;
+    std::string fullLine = firstLine;  // Initialize with the first line
+    std::string currentLine;
     
-    while (true) {
-        // Remove comments and trim the current line
-        currentLine = removeComments(currentLine);
-        currentLine = trim(currentLine);
-        
-        if (currentLine.empty()) {
-            if (fullLine.empty()) {
-                fullLine = currentLine;
-            }
-            break;
-        }
-        
-        // Check if line ends with continuation character
-        bool hasContinuation = false;
-        if (!currentLine.empty() && currentLine.back() == '-') {
-            hasContinuation = true;
-            currentLine.pop_back();  // Remove the continuation character
-            currentLine = trim(currentLine);  // Trim again after removing '-'
-        }
-        
-        // Add the current line to the full line
-        if (!fullLine.empty() && !currentLine.empty()) {
-            fullLine += " ";  // Add space between continued lines
-        }
-        fullLine += currentLine;
-        
-        std::cerr << "Current full line: [" << fullLine << "]" << std::endl;
-        
-        // If no continuation character, we're done
-        if (!hasContinuation) {
-            break;
-        }
-        
+    // Check if first line ends with continuation character
+    bool hasContinuation = false;
+    if (!fullLine.empty() && fullLine.back() == '-') {
+        hasContinuation = true;
+        fullLine.pop_back();  // Remove the continuation character
+        fullLine = trim(fullLine);  // Trim after removing '-'
+    }
+    
+    while (hasContinuation) {
         // Read next line
         if (!std::getline(input, currentLine)) {
             break;  // End of file
@@ -211,6 +213,30 @@ std::string PrmParser::readContinuationLine(std::istream& input, std::string fir
             }
             std::cerr << "Skipping comment in continuation: [" << currentLine << "]" << std::endl;
         }
+        
+        // Remove comments and trim the current line
+        currentLine = removeComments(currentLine);
+        currentLine = trim(currentLine);
+        
+        if (currentLine.empty()) {
+            break;
+        }
+        
+        // Check if current line ends with continuation character
+        hasContinuation = false;
+        if (!currentLine.empty() && currentLine.back() == '-') {
+            hasContinuation = true;
+            currentLine.pop_back();  // Remove the continuation character
+            currentLine = trim(currentLine);  // Trim again after removing '-'
+        }
+        
+        // Add the current line to the full line
+        if (!fullLine.empty() && !currentLine.empty()) {
+            fullLine += " ";  // Add space between continued lines
+        }
+        fullLine += currentLine;
+        
+        std::cerr << "Current full line: [" << fullLine << "]" << std::endl;
     }
     
     std::cerr << "Final combined line: [" << fullLine << "]" << std::endl;

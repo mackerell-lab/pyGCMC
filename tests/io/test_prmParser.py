@@ -314,12 +314,12 @@ def test_random_parameter_combinations():
 
     # Test nonbonded parameters from water_ions file
     params = ff.get_nonbonded_params()
-    # assert params.nbxmod == 5
-    # assert params.cdiel == True
-    # assert params.fshift == True
-    # assert params.vatom == True
-    # assert params.vdistance == True
-    # assert params.vfswitch == True
+    assert params.nbxmod == 5
+    assert params.cdiel == True
+    assert params.fshift == True
+    assert params.vatom == True
+    assert params.vdistance == True
+    assert params.vfswitch == True
     assert params.cutnb == pytest.approx(14.0)
     assert params.ctofnb == pytest.approx(12.0)
     assert params.ctonnb == pytest.approx(10.0)
