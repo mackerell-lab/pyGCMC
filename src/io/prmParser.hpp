@@ -18,7 +18,8 @@ public:
 
     // Static methods for parsing
     static void parse_string(const std::string& content, ForceField& ff);
-    static void parse_file(const std::string& filename, ForceField& ff);
+    static void parse_file_to_forcefield(const std::string& filename, ForceField& ff);
+    static ForceField parse_file(const std::string& filename);
 
     // Instance method for backward compatibility
     void parse(const std::string& filename, ForceField& ff);

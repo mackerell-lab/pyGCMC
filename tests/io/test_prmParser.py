@@ -4,6 +4,30 @@ import os
 import pytest
 import pygcmc
 
+def test_parse_file_direct():
+    """Test the new parse_file method that returns a ForceField object directly."""
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(os.path.dirname(test_dir), "data")
+    param_file = os.path.join(data_dir, "toppar_water_ions.str")
+
+    # Test direct parsing
+    ff = pygcmc.PRMParser.parse_file(param_file)
+
+    # Test some known values from the file
+    params = ff.get_nonbonded_params()
+    assert params.nbxmod == 5
+    assert params.cutnb == pytest.approx(14.0)
+
+    # Test some LJ parameters
+    sod_params = ff.get_lj_params("SOD")
+    assert sod_params.epsilon == pytest.approx(-0.0469)
+    assert sod_params.rmin == pytest.approx(1.41075)
+
+    # Test some NBFIX parameters
+    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    assert found == True
+    assert epsilon == pytest.approx(-0.0839)
+
 def test_parse_nonbonded_from_string():
     content = """
 NONBONDED nbxmod 5 cdiel fshift vatom vdistance vfswitch -
@@ -64,12 +88,13 @@ POT    CLA      -0.114236   4.081
     assert epsilon == pytest.approx(-0.114236)
 
 def test_parse_from_file():
+    """Test the original parse_file method that takes a ForceField object."""
     test_dir = os.path.dirname(os.path.abspath(__file__))
     data_dir = os.path.join(os.path.dirname(test_dir), "data")
     param_file = os.path.join(data_dir, "toppar_water_ions.str")
 
     ff = pygcmc.ForceField()
-    pygcmc.PRMParser.parse_file(param_file, ff)
+    pygcmc.PRMParser.parse_file_to_forcefield(param_file, ff)  # Changed from parse_file to parse_file_to_forcefield
 
     # Test some known values from the file
     params = ff.get_nonbonded_params()
@@ -87,9 +112,15 @@ def test_parse_from_file():
     assert epsilon == pytest.approx(-0.0839)
 
 def test_invalid_file():
+    """Test invalid file handling with new API."""
+    with pytest.raises(RuntimeError):
+        _ = pygcmc.PRMParser.parse_file("nonexistent.str")
+
+def test_invalid_file_old_api():
+    """Test invalid file handling with old API."""
     ff = pygcmc.ForceField()
     with pytest.raises(RuntimeError):
-        pygcmc.PRMParser.parse_file("nonexistent.str", ff)
+        pygcmc.PRMParser.parse_file_to_forcefield("nonexistent.str", ff)
 
 def test_invalid_atom_type():
     ff = pygcmc.ForceField()
@@ -253,7 +284,7 @@ def test_multiple_file_parsing():
     ff = pygcmc.ForceField()
     
     # Parse water_ions file first
-    pygcmc.PRMParser.parse_file(water_ions_file, ff)
+    pygcmc.PRMParser.parse_file_to_forcefield(water_ions_file, ff)
     
     # Test parameters from water_ions file
     sod_params = ff.get_lj_params("SOD")
@@ -269,7 +300,7 @@ def test_multiple_file_parsing():
     assert epsilon == pytest.approx(-0.0839)
     
     # Parse silcs file
-    pygcmc.PRMParser.parse_file(silcs_file, ff)
+    pygcmc.PRMParser.parse_file_to_forcefield(silcs_file, ff)
 
     # Test that original parameters are preserved
     epsilon, found = ff.get_nbfix("SOD", "CLA")
@@ -309,8 +340,8 @@ def test_random_parameter_combinations():
     ff = pygcmc.ForceField()
     
     # Parse both files
-    pygcmc.PRMParser.parse_file(water_ions_file, ff)
-    pygcmc.PRMParser.parse_file(silcs_file, ff)
+    pygcmc.PRMParser.parse_file_to_forcefield(water_ions_file, ff)
+    pygcmc.PRMParser.parse_file_to_forcefield(silcs_file, ff)
 
     # Test nonbonded parameters from water_ions file
     params = ff.get_nonbonded_params()
@@ -384,7 +415,7 @@ def test_random_parameter_combinations():
 
     # Test parameter overriding
     # Parse water_ions file again to ensure parameters are not duplicated or corrupted
-    pygcmc.PRMParser.parse_file(water_ions_file, ff)
+    pygcmc.PRMParser.parse_file_to_forcefield(water_ions_file, ff)
     
     # Verify parameters remain consistent
     sod_params = ff.get_lj_params("SOD")
@@ -405,8 +436,8 @@ def test_multiple_parameter_files():
     ff = pygcmc.ForceField()
     
     # Parse all files
-    pygcmc.PRMParser.parse_file(water_ions_file, ff)
-    pygcmc.PRMParser.parse_file(silcs_file, ff)
+    pygcmc.PRMParser.parse_file_to_forcefield(water_ions_file, ff)
+    pygcmc.PRMParser.parse_file_to_forcefield(silcs_file, ff)
 
     # 1. Verify nonbonded parameters (from water_ions.str)
     params = ff.get_nonbonded_params()
@@ -502,7 +533,7 @@ def test_multiple_parameter_files():
 
     # 7. Verify parameter overriding behavior
     # Parse water_ions file again to ensure parameters are not duplicated or corrupted
-    pygcmc.PRMParser.parse_file(water_ions_file, ff)
+    pygcmc.PRMParser.parse_file_to_forcefield(water_ions_file, ff)
     
     # Verify parameters remain consistent
     sod_params = ff.get_lj_params("SOD")
@@ -527,9 +558,9 @@ def test_prm_and_str_files():
     
     # Parse files in a specific order
     # First load water and ion parameters
-    pygcmc.PRMParser.parse_file(water_ions_file, ff)
+    pygcmc.PRMParser.parse_file_to_forcefield(water_ions_file, ff)
     # Then load SILCS parameters
-    pygcmc.PRMParser.parse_file(silcs_file, ff)
+    pygcmc.PRMParser.parse_file_to_forcefield(silcs_file, ff)
 
     # 1. Verify water parameters (from water_ions.str)
     # TIP3P water
@@ -610,7 +641,7 @@ def test_prm_and_str_files():
 
     # 6. Test parameter overriding and coexistence
     # Parse water_ions file again to ensure parameters are not duplicated or corrupted
-    pygcmc.PRMParser.parse_file(water_ions_file, ff)
+    pygcmc.PRMParser.parse_file_to_forcefield(water_ions_file, ff)
     
     # Water parameters should remain unchanged
     ht_params = ff.get_lj_params("HT")

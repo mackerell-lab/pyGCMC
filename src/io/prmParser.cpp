@@ -32,7 +32,7 @@ void PRMParser::parse_string(const std::string& content, ForceField& ff) {
     parser.parseStream(iss, ff);
 }
 
-void PRMParser::parse_file(const std::string& filename, ForceField& ff) {
+void PRMParser::parse_file_to_forcefield(const std::string& filename, ForceField& ff) {
     std::ifstream file(filename);
     if (!file.is_open()) {
         throw std::runtime_error("Failed to open parameter file: " + filename);
@@ -41,8 +41,14 @@ void PRMParser::parse_file(const std::string& filename, ForceField& ff) {
     parser.parseStream(file, ff);
 }
 
+ForceField PRMParser::parse_file(const std::string& filename) {
+    ForceField ff;
+    parse_file_to_forcefield(filename, ff);
+    return ff;
+}
+
 void PRMParser::parse(const std::string& filename, ForceField& ff) {
-    parse_file(filename, ff);
+    parse_file_to_forcefield(filename, ff);
 }
 
 void PRMParser::parseStream(std::istream& input, ForceField& ff) {
