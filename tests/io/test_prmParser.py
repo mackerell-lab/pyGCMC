@@ -768,10 +768,36 @@ def test_charmm_prm_files():
 
     # Test DIHEDRALS section
     # Test some peptide backbone dihedrals
+    # Test 1: Neutral N-terminus dihedral
+    dihedral_params = ff.dihedral_params[ff.makeTypeQuad("NH2", "CT1", "C", "O")]
+    assert len(dihedral_params) == 1
+    assert dihedral_params[0].kchi == pytest.approx(0.0000)
+    assert dihedral_params[0].n == 1
+    assert dihedral_params[0].delta == pytest.approx(0.00)
+
+    # Test 2: Proline ring dihedral
     dihedral_params = ff.dihedral_params[ff.makeTypeQuad("CT1", "C", "N", "CP1")]
-    assert dihedral_params[0].kchi == pytest.approx(2.7500)  # CT1-C-N-CP1 dihedral force constant
-    assert dihedral_params[0].n == 2  # CT1-C-N-CP1 multiplicity
-    assert dihedral_params[0].delta == pytest.approx(180.00)  # CT1-C-N-CP1 phase shift
+    assert len(dihedral_params) == 2  # This dihedral has two terms
+    assert dihedral_params[0].kchi == pytest.approx(2.7500)
+    assert dihedral_params[0].n == 2
+    assert dihedral_params[0].delta == pytest.approx(180.00)
+    assert dihedral_params[1].kchi == pytest.approx(0.3000)
+    assert dihedral_params[1].n == 4
+    assert dihedral_params[1].delta == pytest.approx(0.00)
+
+    # Test 3: Histidine ring dihedral
+    dihedral_params = ff.dihedral_params[ff.makeTypeQuad("CPH2", "NR1", "CPH1", "CPH1")]
+    assert len(dihedral_params) == 1
+    assert dihedral_params[0].kchi == pytest.approx(14.0000)
+    assert dihedral_params[0].n == 2
+    assert dihedral_params[0].delta == pytest.approx(180.00)
+
+    # Test 4: Generic dihedral with wildcard (X)
+    dihedral_params = ff.dihedral_params[ff.makeTypeQuad("X", "CP1", "C", "X")]
+    assert len(dihedral_params) == 1
+    assert dihedral_params[0].kchi == pytest.approx(0.0000)
+    assert dihedral_params[0].n == 6
+    assert dihedral_params[0].delta == pytest.approx(180.00)
 
     # Test NONBONDED parameters
     params = ff.get_nonbonded_params()
