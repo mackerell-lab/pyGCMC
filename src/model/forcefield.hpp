@@ -7,6 +7,7 @@
 #include <vector>
 #include <tuple>
 #include <stdexcept>
+#include <algorithm>  // for std::min_element
 
 namespace pygcmc {
 
@@ -80,11 +81,23 @@ public:
 
     static std::tuple<std::string, std::string, std::string> makeTypeTriple(
         const std::string& type1, const std::string& type2, const std::string& type3) {
-        return std::make_tuple(type1, type2, type3);
+        // For angle parameters, we need to handle both symmetric and alternative representations
+        // Create a vector of all possible representations
+        std::vector<std::tuple<std::string, std::string, std::string>> keys = {
+            std::make_tuple(type1, type2, type3),  // original order
+            std::make_tuple(type3, type2, type1),  // symmetric order
+            std::make_tuple(type2, type1, type3),  // alternative representation
+            std::make_tuple(type2, type3, type1)   // symmetric alternative representation
+        };
+        
+        // Return the lexicographically smallest key to ensure consistency
+        return *std::min_element(keys.begin(), keys.end());
     }
 
     static std::tuple<std::string, std::string, std::string, std::string> makeTypeQuad(
         const std::string& type1, const std::string& type2, const std::string& type3, const std::string& type4) {
+        // For dihedral parameters in CHARMM, we need to preserve the order as defined in the parameter file
+        // The order in the parameter file is the correct one, we should not change it
         return std::make_tuple(type1, type2, type3, type4);
     }
 

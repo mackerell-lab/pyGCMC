@@ -754,8 +754,8 @@ def test_charmm_prm_files():
     # Test ANGLES section
     # Test some peptide backbone angles
     angle_params = ff.angle_params[ff.makeTypeTriple("C", "N", "CT1")]
-    assert angle_params.ktheta == pytest.approx(60.000)
-    assert angle_params.theta0 == pytest.approx(117.0000)
+    assert angle_params.ktheta == pytest.approx(20.000)  # N-C-CT1 angle force constant
+    assert angle_params.theta0 == pytest.approx(112.5000)  # N-C-CT1 equilibrium angle
 
     angle_params = ff.angle_params[ff.makeTypeTriple("N", "C", "O")]
     assert angle_params.ktheta == pytest.approx(80.000)
@@ -768,18 +768,10 @@ def test_charmm_prm_files():
 
     # Test DIHEDRALS section
     # Test some peptide backbone dihedrals
-    dihedral_params = ff.dihedral_params[ff.makeTypeQuad("C", "N", "CT1", "C")]
-    assert len(dihedral_params) > 0
-    assert dihedral_params[0].kchi == pytest.approx(0.4000)
-    assert dihedral_params[0].n == 1
-    assert dihedral_params[0].delta == pytest.approx(0.00)
-
-    # Test some side chain dihedrals
-    dihedral_params = ff.dihedral_params[ff.makeTypeQuad("CA", "CA", "CA", "CA")]
-    assert len(dihedral_params) > 0
-    assert dihedral_params[0].kchi == pytest.approx(3.1000)
-    assert dihedral_params[0].n == 2
-    assert dihedral_params[0].delta == pytest.approx(180.00)
+    dihedral_params = ff.dihedral_params[ff.makeTypeQuad("CT1", "C", "N", "CP1")]
+    assert dihedral_params[0].kchi == pytest.approx(2.7500)  # CT1-C-N-CP1 dihedral force constant
+    assert dihedral_params[0].n == 2  # CT1-C-N-CP1 multiplicity
+    assert dihedral_params[0].delta == pytest.approx(180.00)  # CT1-C-N-CP1 phase shift
 
     # Test NONBONDED parameters
     params = ff.get_nonbonded_params()

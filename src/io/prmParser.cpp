@@ -284,30 +284,62 @@ bool PRMParser::isNBFixSection(const std::string& line) {
 
 void PRMParser::parseAtomsSection(std::istream& input, ForceField& ff) {
     std::string line;
+    std::cerr << "\n=== Entering ATOMS/MASS section parsing ===" << std::endl;
+    
     while (std::getline(input, line)) {
-        if (isCommentLine(line)) continue;
+        std::cerr << "Raw atom line: [" << line << "]" << std::endl;
         
-        line = removeComments(line);
-        line = trim(line);
-        if (line.empty()) continue;
+        if (isCommentLine(line)) {
+            std::cerr << "Skipping comment line in atoms section" << std::endl;
+            continue;
+        }
+        
+        // Handle continuation lines
+        std::string fullLine = readContinuationLine(input, line);
+        fullLine = removeComments(fullLine);
+        fullLine = trim(fullLine);
+        
+        if (fullLine.empty()) {
+            std::cerr << "Skipping empty line in atoms section" << std::endl;
+            continue;
+        }
+        
+        std::cerr << "Processed line: [" << fullLine << "]" << std::endl;
         
         // Check for section end
-        if (line == "END" || isBondsSection(line) || isAnglesSection(line) || 
-            isDihedralsSection(line) || isImproperSection(line) || 
-            isNonbondedSection(line) || isNBFixSection(line)) {
-            // Put the line back so it can be read by the next section parser
+        if (fullLine == "END" || isBondsSection(fullLine) || isAnglesSection(fullLine) || 
+            isDihedralsSection(fullLine) || isImproperSection(fullLine) || 
+            isNonbondedSection(fullLine) || isNBFixSection(fullLine)) {
+            std::cerr << "Found section end marker: " << fullLine << std::endl;
             input.seekg(-static_cast<std::streamoff>(line.length() + 1), std::ios::cur);
             break;
         }
         
-        auto tokens = tokenize(line);
+        auto tokens = tokenize(fullLine);
+        std::cerr << "Tokens:";
+        for (const auto& token : tokens) {
+            std::cerr << " [" << token << "]";
+        }
+        std::cerr << std::endl;
+        
         // Only process lines that start with MASS and have the correct number of tokens
         if (tokens.size() >= 4 && tokens[0] == "MASS") {
-            // Format: MASS -1 type mass [comment]
             std::string atomType = tokens[2];
             double mass = safe_stod(tokens[3], "atom mass for type " + atomType);
             ff.atom_masses[atomType] = mass;
+            std::cerr << "Added atom mass: " << atomType << " = " << mass << std::endl;
+        } else {
+            std::cerr << "Skipping line: not a valid MASS entry" << std::endl;
         }
+    }
+    
+    std::cerr << "\n=== Finished ATOMS/MASS section parsing ===" << std::endl;
+    std::cerr << "Final atom_masses size: " << ff.atom_masses.size() << std::endl;
+    
+    // Print all stored masses for debugging
+    std::cerr << "\nStored atom masses:" << std::endl;
+    for (const auto& pair : ff.atom_masses) {
+        std::cerr << pair.first << " = " << pair.second << std::endl;
     }
 }
 
@@ -374,8 +406,15 @@ void PRMParser::parseBondsSection(std::istream& input, ForceField& ff) {
 
 void PRMParser::parseAnglesSection(std::istream& input, ForceField& ff) {
     std::string line;
+    std::cerr << "\n=== Entering ANGLES section parsing ===" << std::endl;
+    
     while (std::getline(input, line)) {
-        if (isCommentLine(line)) continue;
+        std::cerr << "Raw angle line: [" << line << "]" << std::endl;
+        
+        if (isCommentLine(line)) {
+            std::cerr << "Skipping comment line in angles section" << std::endl;
+            continue;
+        }
         
         line = removeComments(line);
         line = trim(line);
@@ -392,7 +431,6 @@ void PRMParser::parseAnglesSection(std::istream& input, ForceField& ff) {
         
         auto tokens = tokenize(line);
         if (tokens.size() >= 5) {
-            // Format: type1 type2 type3 Ktheta Theta0 [Kub S0]
             std::string type1 = tokens[0];
             std::string type2 = tokens[1];
             std::string type3 = tokens[2];
@@ -406,13 +444,41 @@ void PRMParser::parseAnglesSection(std::istream& input, ForceField& ff) {
                 s0 = safe_stod(tokens[6], "angle S0 for " + type1 + "-" + type2 + "-" + type3);
             }
             
-            auto key = make_type_triple(type1, type2, type3);
+            std::cerr << "\nProcessing angle: " << type1 << "-" << type2 << "-" << type3 << std::endl;
+            std::cerr << "  ktheta = " << ktheta << ", theta0 = " << theta0 << std::endl;
+            
             AngleParams params{ktheta, theta0, kub, s0};
-            ff.angle_params[key] = params;
-            // Add symmetric triple
-            key = make_type_triple(type3, type2, type1);
-            ff.angle_params[key] = params;
+            
+            // Store all possible permutations
+            std::vector<std::tuple<std::string, std::string, std::string>> keys = {
+                make_type_triple(type1, type2, type3),
+                make_type_triple(type3, type2, type1),
+                std::make_tuple(type2, type1, type3),
+                std::make_tuple(type2, type3, type1)
+            };
+            
+            for (const auto& key : keys) {
+                ff.angle_params[key] = params;
+                std::cerr << "  Storing with key: (" 
+                         << std::get<0>(key) << ", "
+                         << std::get<1>(key) << ", "
+                         << std::get<2>(key) << ")" << std::endl;
+            }
+            
+            std::cerr << "  Current angle_params size: " << ff.angle_params.size() << std::endl;
         }
+    }
+    
+    std::cerr << "\n=== Finished ANGLES section parsing ===" << std::endl;
+    std::cerr << "Final angle_params size: " << ff.angle_params.size() << std::endl;
+    
+    // Print all stored keys for debugging
+    std::cerr << "\nStored angle parameter keys:" << std::endl;
+    for (const auto& pair : ff.angle_params) {
+        const auto& key = pair.first;
+        std::cerr << "(" << std::get<0>(key) << ", "
+                 << std::get<1>(key) << ", "
+                 << std::get<2>(key) << ")" << std::endl;
     }
 }
 
@@ -692,7 +758,17 @@ std::pair<std::string, std::string> PRMParser::make_type_pair(
 
 std::tuple<std::string, std::string, std::string> PRMParser::make_type_triple(
     const std::string& type1, const std::string& type2, const std::string& type3) const {
-    return std::make_tuple(type1, type2, type3);
+    // For angle parameters, we need to handle both symmetric and alternative representations
+    // Create a vector of all possible representations
+    std::vector<std::tuple<std::string, std::string, std::string>> keys = {
+        std::make_tuple(type1, type2, type3),  // original order
+        std::make_tuple(type3, type2, type1),  // symmetric order
+        std::make_tuple(type2, type1, type3),  // alternative representation
+        std::make_tuple(type2, type3, type1)   // symmetric alternative representation
+    };
+    
+    // Return the lexicographically smallest key to ensure consistency
+    return *std::min_element(keys.begin(), keys.end());
 }
 
 std::tuple<std::string, std::string, std::string, std::string> PRMParser::make_type_quad(
