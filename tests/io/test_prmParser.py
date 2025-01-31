@@ -1047,3 +1047,53 @@ def test_cross_forcefield_compatibility():
     cg2o1 = ff.get_lj_params("CG2O1") # CGenFF carbonyl carbon
     assert abs(c_prot.epsilon - cg2o1.epsilon) < 0.01  # Should be similar
     assert abs(c_prot.rmin - cg2o1.rmin) < 0.1  # Should be similar
+
+def test_parse_multiple_files():
+    """Test parsing multiple parameter files at once."""
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(os.path.dirname(test_dir), "data")
+    
+    # Define the files to parse
+    water_ions_file = os.path.join(data_dir, "toppar_water_ions.str")
+    silcs_file = os.path.join(data_dir, "silcs.str")
+    cgenff_file = os.path.join(data_dir, "par_all36_cgenff.prm")
+    
+    # Parse all files at once
+    ff = pygcmc.PRMParser.parse_files([water_ions_file, silcs_file, cgenff_file])
+    
+    # Test parameters from water_ions.str
+    # Test water parameters
+    ht_params = ff.get_lj_params("HT")
+    assert ht_params.epsilon == pytest.approx(-0.046)
+    assert ht_params.rmin == pytest.approx(0.2245)
+    
+    # Test ion parameters
+    sod_params = ff.get_lj_params("SOD")
+    assert sod_params.epsilon == pytest.approx(-0.0469)
+    assert sod_params.rmin == pytest.approx(1.41075)
+    
+    # Test NBFIX parameters
+    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    assert found == True
+    assert epsilon == pytest.approx(-0.0839)
+    
+    # Test parameters from silcs.str
+    lp_params = ff.get_lj_params("LP")
+    assert lp_params.epsilon == pytest.approx(0.0)
+    assert lp_params.rmin == pytest.approx(0.0)
+    
+    # Test parameters from par_all36_cgenff.prm
+    # Test some CGenFF specific parameters
+    assert ff.get_atom_mass("HGA1") == pytest.approx(1.00800)  # alphatic proton, CH
+    assert ff.get_atom_mass("CG2R61") == pytest.approx(12.01100)  # 6-mem aromatic C
+    assert ff.get_atom_mass("NG2S1") == pytest.approx(14.00700)  # peptide nitrogen
+
+def test_parse_multiple_files_with_invalid():
+    """Test parsing multiple files with an invalid file."""
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(os.path.dirname(test_dir), "data")
+    water_ions_file = os.path.join(data_dir, "toppar_water_ions.str")
+    
+    # Try to parse with a non-existent file
+    with pytest.raises(RuntimeError):
+        _ = pygcmc.PRMParser.parse_files([water_ions_file, "nonexistent.str"])

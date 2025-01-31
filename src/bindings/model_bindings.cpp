@@ -9,7 +9,7 @@
 #include "model/forcefield.hpp"
 
 namespace py = pybind11;
-using namespace pygcmc;
+// using namespace pygcmc;
 
 namespace pygcmc {
 namespace bindings {

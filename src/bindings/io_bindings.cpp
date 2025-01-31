@@ -70,6 +70,9 @@ void init_io(py::module& m) {
         .def_static("parse_file", &PRMParser::parse_file,
             "Parse parameter content from a file and return a new ForceField object",
             py::arg("filename"))
+        .def_static("parse_files", &PRMParser::parse_files,
+            "Parse parameter content from multiple files and return a new ForceField object",
+            py::arg("filenames"))
         .def_static("parse_file_to_forcefield", &PRMParser::parse_file_to_forcefield,
             "Parse parameter content from a file into an existing ForceField object",
             py::arg("filename"), py::arg("ff"))

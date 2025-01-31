@@ -50,6 +50,14 @@ ForceField PRMParser::parse_file(const std::string& filename) {
     return ff;
 }
 
+ForceField PRMParser::parse_files(const std::vector<std::string>& filenames) {
+    ForceField ff;
+    for (const auto& filename : filenames) {
+        parse_file_to_forcefield(filename, ff);
+    }
+    return ff;
+}
+
 void PRMParser::parse(const std::string& filename, ForceField& ff) {
     parse_file_to_forcefield(filename, ff);
 }
