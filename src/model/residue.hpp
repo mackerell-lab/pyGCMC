@@ -92,66 +92,66 @@ public:
     {}
 
     // CHARMM standard getters
-    const std::string& getResname() const noexcept { return resname; }
-    int getIres() const noexcept { return ires; }
-    const std::string& getSegid() const noexcept { return segid; }
-    int getIseg() const noexcept { return iseg; }
-    char getChain() const noexcept { return chain; }
-    char getInscode() const noexcept { return inscode; }
+    const std::string& get_resname() const noexcept { return resname; }
+    int get_ires() const noexcept { return ires; }
+    const std::string& get_segid() const noexcept { return segid; }
+    int get_iseg() const noexcept { return iseg; }
+    char get_chain() const noexcept { return chain; }
+    char get_inscode() const noexcept { return inscode; }
     
     // Atom management
-    void addAtom(const Atom& atom) {
+    void add_atom(const Atom& atom) {
         // Verify atom belongs to this residue
-        if (atom.getResname() != resname || atom.getIres() != ires ||
-            atom.getSegid() != segid || atom.getIseg() != iseg) {
+        if (atom.get_resname() != resname || atom.get_ires() != ires ||
+            atom.get_segid() != segid || atom.get_iseg() != iseg) {
             throw std::invalid_argument("Atom does not belong to this residue");
         }
         atoms.push_back(std::make_shared<Atom>(atom));
     }
 
-    void addAtom(std::shared_ptr<Atom> atom) {
+    void add_atom(std::shared_ptr<Atom> atom) {
         if (!atom) return;
-        if (atom->getResname() != resname || atom->getIres() != ires ||
-            atom->getSegid() != segid || atom->getIseg() != iseg) {
+        if (atom->get_resname() != resname || atom->get_ires() != ires ||
+            atom->get_segid() != segid || atom->get_iseg() != iseg) {
             throw std::invalid_argument("Atom does not belong to this residue");
         }
         atoms.push_back(atom);
     }
 
-    const std::vector<std::shared_ptr<Atom>>& getAtoms() const noexcept { 
+    const std::vector<std::shared_ptr<Atom>>& get_atoms() const noexcept { 
         return atoms; 
     }
 
-    std::shared_ptr<Atom> findAtom(const std::string& type) const {
+    std::shared_ptr<Atom> find_atom(const std::string& type) const {
         auto it = std::find_if(atoms.begin(), atoms.end(),
             [&type](const std::shared_ptr<Atom>& atom) {
-                return atom && atom->getType() == type;
+                return atom && atom->get_type() == type;
             });
         return (it != atoms.end()) ? *it : nullptr;
     }
 
     // Utility methods
-    size_t atomCount() const noexcept {
+    size_t atom_count() const noexcept {
         return atoms.size();
     }
 
-    bool isValid() const {
+    bool is_valid() const {
         return !resname.empty() && ires > 0 && !segid.empty() &&
                std::all_of(atoms.begin(), atoms.end(),
                           [](const std::shared_ptr<Atom>& atom) {
-                              return atom && atom->isValid();
+                              return atom && atom->is_valid();
                           });
     }
 
     // Center of mass calculation and storage
-    void calculateCenterOfMass() {
+    void calculate_center_of_mass() {
         com = {0.0, 0.0, 0.0};
         double totalMass = 0.0;
 
         for (const auto& atom : atoms) {
             if (!atom) continue;
-            double mass = atom->getMass();
-            const auto& coor = atom->getCoor();
+            double mass = atom->get_mass();
+            const auto& coor = atom->get_coor();
             for (int i = 0; i < 3; ++i) {
                 com[i] += mass * coor[i];
             }
@@ -163,19 +163,19 @@ public:
         }
     }
 
-    const std::array<double, 3>& getCenterOfMass() const noexcept {
+    const std::array<double, 3>& get_center_of_mass() const noexcept {
         return com;
     }
 
     // Selection methods for CHARMM compatibility
-    bool hasAtomType(const std::string& type) const {
+    bool has_atom_type(const std::string& type) const {
         return std::any_of(atoms.begin(), atoms.end(),
             [&type](const std::shared_ptr<Atom>& atom) {
-                return atom && atom->getType() == type;
+                return atom && atom->get_type() == type;
             });
     }
 
-    std::vector<std::shared_ptr<Atom>> selectAtoms(
+    std::vector<std::shared_ptr<Atom>> select_atoms(
         const std::function<bool(const Atom&)>& predicate) const {
         std::vector<std::shared_ptr<Atom>> selected;
         for (const auto& atom : atoms) {
@@ -187,17 +187,17 @@ public:
     }
 
     // Additional getters
-    SecondaryStructure getSecondaryStructure() const noexcept { return secStruct; }
-    const SheetStrand& getSheetInfo() const noexcept { return sheetInfo; }
-    const SSBond& getSSBond() const noexcept { return ssbond; }
+    SecondaryStructure get_secondary_structure() const noexcept { return secStruct; }
+    const SheetStrand& get_sheet_info() const noexcept { return sheetInfo; }
+    const SSBond& get_ssbond() const noexcept { return ssbond; }
 
     // Additional setters
-    void setSecondaryStructure(SecondaryStructure ss) { secStruct = ss; }
-    void setSheetInfo(const SheetStrand& si) { sheetInfo = si; }
-    void setSSBond(const SSBond& sb) { ssbond = sb; }
+    void set_secondary_structure(SecondaryStructure ss) { secStruct = ss; }
+    void set_sheet_info(const SheetStrand& si) { sheetInfo = si; }
+    void set_ssbond(const SSBond& sb) { ssbond = sb; }
 
     // PDB format utilities
-    std::string getResidueID() const {
+    std::string get_residue_id() const {
         // Combine residue number and insertion code (e.g., "153A")
         if (inscode == ' ') {
             return std::to_string(ires);
@@ -205,7 +205,7 @@ public:
         return std::to_string(ires) + inscode;
     }
 
-    void setResidueID(const std::string& resid) {
+    void set_residue_id(const std::string& resid) {
         // Parse residue ID (e.g., "153A" -> ires=153, inscode='A')
         size_t numLen = 0;
         try {
@@ -222,36 +222,36 @@ public:
     }
 
     // Enhanced atom lookup methods
-    std::shared_ptr<Atom> findAtomByPDBName(const std::string& pdbName) const {
+    std::shared_ptr<Atom> find_atom_by_pdb_name(const std::string& pdbName) const {
         // Find atom by PDB formatted name
         return std::find_if(atoms.begin(), atoms.end(),
             [&pdbName](const std::shared_ptr<Atom>& atom) {
-                return atom && atom->getFormattedAtomName() == pdbName;
+                return atom && atom->get_formatted_atom_name() == pdbName;
             }) != atoms.end() ? *std::find_if(atoms.begin(), atoms.end(),
             [&pdbName](const std::shared_ptr<Atom>& atom) {
-                return atom && atom->getFormattedAtomName() == pdbName;
+                return atom && atom->get_formatted_atom_name() == pdbName;
             }) : nullptr;
     }
 
-    void updateAtomMap() {
+    void update_atom_map() {
         atomMap.clear();
         for (const auto& atom : atoms) {
             if (atom) {
                 // Store both raw and PDB-formatted names
-                atomMap[atom->getType()] = atom;
-                atomMap[atom->getFormattedAtomName()] = atom;
+                atomMap[atom->get_type()] = atom;
+                atomMap[atom->get_formatted_atom_name()] = atom;
             }
         }
     }
 
     // CHARMM-style atom range
-    std::pair<size_t, size_t> getAtomRange() const {
+    std::pair<size_t, size_t> get_atom_range() const {
         return {0, atoms.size()};  // Equivalent to IBASE(IRES) to IBASE(IRES+1)
     }
 
     // HETATM support
-    bool isHetatm() const noexcept { return hetatm; }
-    void setHetatm(bool het) noexcept { hetatm = het; }
+    bool is_hetatm() const noexcept { return hetatm; }
+    void set_hetatm(bool het) noexcept { hetatm = het; }
 
 private:
     // CHARMM standard fields

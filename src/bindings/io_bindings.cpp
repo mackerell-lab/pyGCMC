@@ -8,8 +8,8 @@
 #include "io/topParser.hpp"
 #include "model/atom.hpp"
 #include "model/residue.hpp"
-#include "../model/forcefield.hpp"
-#include "../io/prmParser.hpp"
+#include "model/forcefield.hpp"
+#include "io/prmParser.hpp"
 
 namespace py = pybind11;
 
@@ -46,28 +46,28 @@ void init_io(py::module& m) {
     auto structure = py::class_<model::Structure>(m, "Structure")
         .def(py::init<>())
         // 直接暴露内部成员作为属性
-        .def_property_readonly("atoms", [](const model::Structure& s) { return s.getAtoms(); },
+        .def_property_readonly("atoms", [](const model::Structure& s) { return s.get_atoms(); },
             "List of atoms in the structure")
-        .def_property_readonly("residues", [](const model::Structure& s) { return s.getResidues(); },
+        .def_property_readonly("residues", [](const model::Structure& s) { return s.get_residues(); },
             "List of residues in the structure")
-        .def_property_readonly("terminals", [](const model::Structure& s) { return s.getTerminals(); },
+        .def_property_readonly("terminals", [](const model::Structure& s) { return s.get_terminals(); },
             "List of terminal records")
-        .def_property_readonly("helices", [](const model::Structure& s) { return s.getHelices(); },
+        .def_property_readonly("helices", [](const model::Structure& s) { return s.get_helices(); },
             "Map of chain IDs to helix information")
-        .def_property_readonly("sheets", [](const model::Structure& s) { return s.getSheets(); },
+        .def_property_readonly("sheets", [](const model::Structure& s) { return s.get_sheets(); },
             "Map of chain IDs to sheet information")
-        .def_property_readonly("ssbonds", [](const model::Structure& s) { return s.getSSBonds(); },
+        .def_property_readonly("ssbonds", [](const model::Structure& s) { return s.get_ssbonds(); },
             "List of disulfide bonds")
-        .def_property_readonly("boxDimensions", [](const model::Structure& s) { return s.getBoxDimensions(); },
+        .def_property_readonly("box_dimensions", [](const model::Structure& s) { return s.get_box_dimensions(); },
             "Box dimensions and angles")
         // 保留原有方法
-        .def("addAtom", &model::Structure::addAtom)
-        .def("addResidue", &model::Structure::addResidue)
-        .def("addTerminal", &model::Structure::addTerminal)
-        .def("addHelix", &model::Structure::addHelix)
-        .def("addSheet", &model::Structure::addSheet)
-        .def("addSSBond", &model::Structure::addSSBond)
-        .def("setBoxDimensions", &model::Structure::setBoxDimensions)
+        .def("add_atom", &model::Structure::add_atom)
+        .def("add_residue", &model::Structure::add_residue)
+        .def("add_terminal", &model::Structure::add_terminal)
+        .def("add_helix", &model::Structure::add_helix)
+        .def("add_sheet", &model::Structure::add_sheet)
+        .def("add_ssbond", &model::Structure::add_ssbond)
+        .def("set_box_dimensions", &model::Structure::set_box_dimensions)
         .def("clear", &model::Structure::clear);
 
     // Bind PDBParser to io submodule

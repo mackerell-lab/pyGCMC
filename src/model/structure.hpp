@@ -44,26 +44,26 @@ public:
     Structure() = default;
 
     // Getters
-    const std::vector<std::shared_ptr<Atom>>& getAtoms() const { return atoms_; }
-    const std::vector<std::shared_ptr<Residue>>& getResidues() const { return residues_; }
-    const std::vector<TerminalInfo>& getTerminals() const { return terminals_; }
-    const std::map<std::string, std::vector<SecondaryStructure>>& getHelices() const { return helices_; }
-    const std::map<std::string, std::vector<std::string>>& getSheets() const { return sheets_; }
-    const std::vector<std::string>& getSSBonds() const { return ssbonds_; }
-    const std::vector<double>& getBoxDimensions() const { return boxDimensions_; }
+    const std::vector<std::shared_ptr<Atom>>& get_atoms() const { return atoms_; }
+    const std::vector<std::shared_ptr<Residue>>& get_residues() const { return residues_; }
+    const std::vector<TerminalInfo>& get_terminals() const { return terminals_; }
+    const std::map<std::string, std::vector<SecondaryStructure>>& get_helices() const { return helices_; }
+    const std::map<std::string, std::vector<std::string>>& get_sheets() const { return sheets_; }
+    const std::vector<std::string>& get_ssbonds() const { return ssbonds_; }
+    const std::vector<double>& get_box_dimensions() const { return boxDimensions_; }
 
     // Setters
-    void addAtom(const std::shared_ptr<Atom>& atom) { atoms_.push_back(atom); }
-    void addResidue(const std::shared_ptr<Residue>& residue) { residues_.push_back(residue); }
-    void addTerminal(const TerminalInfo& terminal) { terminals_.push_back(terminal); }
-    void addHelix(const std::string& chainId, const SecondaryStructure& helix) { 
+    void add_atom(const std::shared_ptr<Atom>& atom) { atoms_.push_back(atom); }
+    void add_residue(const std::shared_ptr<Residue>& residue) { residues_.push_back(residue); }
+    void add_terminal(const TerminalInfo& terminal) { terminals_.push_back(terminal); }
+    void add_helix(const std::string& chainId, const SecondaryStructure& helix) { 
         helices_[chainId].push_back(helix); 
     }
-    void addSheet(const std::string& chainId, const std::string& sheetInfo) {
+    void add_sheet(const std::string& chainId, const std::string& sheetInfo) {
         sheets_[chainId].push_back(sheetInfo);
     }
-    void addSSBond(const std::string& ssbond) { ssbonds_.push_back(ssbond); }
-    void setBoxDimensions(const std::vector<double>& dimensions) { boxDimensions_ = dimensions; }
+    void add_ssbond(const std::string& ssbond) { ssbonds_.push_back(ssbond); }
+    void set_box_dimensions(const std::vector<double>& dimensions) { boxDimensions_ = dimensions; }
 
     // 清除所有数据
     void clear() {

@@ -114,7 +114,7 @@ bool PDBParser::parse_string_to_structure(const std::string& pdbStr, model::Stru
     
     // Calculate center of mass for the last residue if not already done
     if (currentResidue) {
-        currentResidue->calculateCenterOfMass();
+        currentResidue->calculate_center_of_mass();
     }
     
     return true;
@@ -237,20 +237,20 @@ bool PDBParser::parseAtomRecord(const std::string& line, RecordType type,
 
         // Create atom with stripped values
         auto atom = std::make_shared<model::Atom>();
-        atom->setBynu(serialNum);
-        atom->setType(atomName);
-        atom->setAltloc(altLoc.empty() ? ' ' : altLoc[0]);
-        atom->setResname(resName);
-        atom->setChain(chainId.empty() ? ' ' : chainId[0]);
-        atom->setIres(resSeq);
-        atom->setInscode(iCode.empty() ? ' ' : iCode[0]);
-        atom->setCoor(x, y, z);
-        atom->setOccupancy(occupancy);
-        atom->setTempfactor(tempFactor);
-        atom->setSegid(segId);
-        atom->setElement(element);
-        atom->setChargeString(charge);
-        atom->setHetatm(type == RecordType::HETATM);
+        atom->set_bynu(serialNum);
+        atom->set_type(atomName);
+        atom->set_altloc(altLoc.empty() ? ' ' : altLoc[0]);
+        atom->set_resname(resName);
+        atom->set_chain(chainId.empty() ? ' ' : chainId[0]);
+        atom->set_ires(resSeq);
+        atom->set_inscode(iCode.empty() ? ' ' : iCode[0]);
+        atom->set_coor(x, y, z);
+        atom->set_occupancy(occupancy);
+        atom->set_tempfactor(tempFactor);
+        atom->set_segid(segId);
+        atom->set_element(element);
+        atom->set_charge_string(charge);
+        atom->set_hetatm(type == RecordType::HETATM);
 
         // Set default mass based on element
         if (element.empty()) {
@@ -279,29 +279,29 @@ bool PDBParser::parseAtomRecord(const std::string& line, RecordType type,
         if (it != ELEMENT_MASSES.end()) {
             mass = it->second;
         }
-        atom->setMassCharge(mass, 0.0); // Set mass and default charge to 0
+        atom->set_mass_charge(mass, 0.0); // Set mass and default charge to 0
 
         // Add atom to structure
-        structure.addAtom(atom);
+        structure.add_atom(atom);
 
         // Handle residue
         if (!currentResidue || 
-            currentResidue->getChain() != chainId[0] ||
-            currentResidue->getIres() != resSeq ||
-            currentResidue->getInscode() != iCode[0]) {
+            currentResidue->get_chain() != chainId[0] ||
+            currentResidue->get_ires() != resSeq ||
+            currentResidue->get_inscode() != iCode[0]) {
             
             if (currentResidue) {
-                currentResidue->calculateCenterOfMass();
+                currentResidue->calculate_center_of_mass();
             }
             
             // Create new residue
             currentResidue = std::make_shared<model::Residue>(
                 resName, resSeq, segId, 0, chainId[0], iCode[0]);
-            currentResidue->setHetatm(type == RecordType::HETATM);
-            structure.addResidue(currentResidue);
+            currentResidue->set_hetatm(type == RecordType::HETATM);
+            structure.add_residue(currentResidue);
         }
         
-        currentResidue->addAtom(atom);
+        currentResidue->add_atom(atom);
         return true;
     } catch (const std::exception& e) {
         std::cerr << "Error parsing ATOM/HETATM record: " << e.what() << std::endl;
@@ -314,17 +314,17 @@ bool PDBParser::parseTerRecord([[maybe_unused]] const std::string& line,
                              model::Structure& structure) {
     try {
         if (currentResidue) {
-            currentResidue->calculateCenterOfMass();
+            currentResidue->calculate_center_of_mass();
         }
 
         model::Structure::TerminalInfo terminal{
-            currentResidue ? currentResidue->getChain() : ' ',
-            currentResidue ? currentResidue->getIres() : 0,
-            currentResidue ? currentResidue->getInscode() : ' ',
-            currentResidue ? currentResidue->getResname() : ""
+            currentResidue ? currentResidue->get_chain() : ' ',
+            currentResidue ? currentResidue->get_ires() : 0,
+            currentResidue ? currentResidue->get_inscode() : ' ',
+            currentResidue ? currentResidue->get_resname() : ""
         };
         
-        structure.addTerminal(terminal);
+        structure.add_terminal(terminal);
         currentResidue = nullptr;
         return true;
     } catch (const std::exception& e) {
@@ -348,7 +348,7 @@ bool PDBParser::parseHelixRecord(const std::string& line, model::Structure& stru
         helix.structureClass = std::stoi(line.substr(38, 2));
         
         std::string chainId(1, helix.initChainId);
-        structure.addHelix(chainId, helix);
+        structure.add_helix(chainId, helix);
         return true;
     } catch (const std::exception& e) {
         std::cerr << "Error parsing HELIX record: " << e.what() << std::endl;
@@ -417,7 +417,7 @@ bool PDBParser::parseSheetRecord(const std::string& line, model::Structure& stru
             std::to_string(strandNum) + ":" + 
             std::to_string(sense);
         
-        structure.addSheet(initChainId, sheetInfo);
+        structure.add_sheet(initChainId, sheetInfo);
 
         return true;
     } catch (const std::exception& e) {
@@ -469,7 +469,7 @@ bool PDBParser::parseSSBondRecord(const std::string& line, model::Structure& str
             chain2 + ":" + 
             std::to_string(resnum2) + inscode2;
         
-        structure.addSSBond(bondInfo);
+        structure.add_ssbond(bondInfo);
 
         return true;
     } catch (const std::exception& e) {
@@ -488,7 +488,7 @@ bool PDBParser::parseCryst1Record(const std::string& line, model::Structure& str
         double beta = std::stod(line.substr(40, 7));
         double gamma = std::stod(line.substr(47, 7));
         
-        structure.setBoxDimensions(std::vector<double>{a, b, c, alpha, beta, gamma});
+        structure.set_box_dimensions(std::vector<double>{a, b, c, alpha, beta, gamma});
         
         return true;
     } catch (const std::exception& e) {

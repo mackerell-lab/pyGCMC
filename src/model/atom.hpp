@@ -74,49 +74,49 @@ public:
         hetatm(hetatm) {}
 
     // CHARMM standard getters
-    int getBynu() const noexcept { return bynu; }              // Atom number
-    const std::string& getType() const noexcept { return type; }    // Atom type
-    const std::string& getResname() const noexcept { return resname; } // Residue name
-    int getIres() const noexcept { return ires; }              // Residue number
-    const std::string& getSegid() const noexcept { return segid; }   // Segment ID
-    int getIseg() const noexcept { return iseg; }              // Segment number
-    int getIgro() const noexcept { return igro; }              // Group number
-    const std::string& getChem() const noexcept { return chem; }     // Chemical type
-    double getWmain() const noexcept { return wmain; }         // Main weight
-    double getMass() const noexcept { return mass; }           // Mass
-    double getCharge() const noexcept { return charge; }       // Charge
+    int get_bynu() const noexcept { return bynu; }              // Atom number
+    const std::string& get_type() const noexcept { return type; }    // Atom type
+    const std::string& get_resname() const noexcept { return resname; } // Residue name
+    int get_ires() const noexcept { return ires; }              // Residue number
+    const std::string& get_segid() const noexcept { return segid; }   // Segment ID
+    int get_iseg() const noexcept { return iseg; }              // Segment number
+    int get_igro() const noexcept { return igro; }              // Group number
+    const std::string& get_chem() const noexcept { return chem; }     // Chemical type
+    double get_wmain() const noexcept { return wmain; }         // Main weight
+    double get_mass() const noexcept { return mass; }           // Mass
+    double get_charge() const noexcept { return charge; }       // Charge
     
     // Coordinate access
-    const std::array<double, 3>& getCoor() const noexcept { return coor; }
-    double getX() const noexcept { return coor[0]; }
-    double getY() const noexcept { return coor[1]; }
-    double getZ() const noexcept { return coor[2]; }
+    const std::array<double, 3>& get_coor() const noexcept { return coor; }
+    double get_x() const noexcept { return coor[0]; }
+    double get_y() const noexcept { return coor[1]; }
+    double get_z() const noexcept { return coor[2]; }
 
     // Force field parameters
-    double getEps() const noexcept { return eps; }    // LJ well depth
-    double getRmin() const noexcept { return rmin; }  // LJ Rmin/2
+    double get_eps() const noexcept { return eps; }    // LJ well depth
+    double get_rmin() const noexcept { return rmin; }  // LJ Rmin/2
 
     // PDB specific getters
-    char getAltloc() const noexcept { return altloc; }
-    char getInscode() const noexcept { return inscode; }
-    char getChain() const noexcept { return chain; }
-    bool isHetatm() const noexcept { return hetatm; }
+    char get_altloc() const noexcept { return altloc; }
+    char get_inscode() const noexcept { return inscode; }
+    char get_chain() const noexcept { return chain; }
+    bool is_hetatm() const noexcept { return hetatm; }
 
     // Additional getters for PDB compatibility
-    double getOccupancy() const noexcept { return occupancy; }
-    double getTempfactor() const noexcept { return tempfactor; }
-    const std::string& getElement() const noexcept { return element; }
-    const std::string& getChargeString() const noexcept { return chargestr; }
+    double get_occupancy() const noexcept { return occupancy; }
+    double get_tempfactor() const noexcept { return tempfactor; }
+    const std::string& get_element() const noexcept { return element; }
+    const std::string& get_charge_string() const noexcept { return chargestr; }
 
     // Setters with validation
-    void setCoor(double x, double y, double z) {
+    void set_coor(double x, double y, double z) {
         if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
             throw std::invalid_argument("Invalid coordinates");
         }
         coor = {x, y, z};
     }
 
-    void setMassCharge(double m, double q) {
+    void set_mass_charge(double m, double q) {
         if (!std::isfinite(m) || m < 0.0 || !std::isfinite(q)) {
             throw std::invalid_argument("Invalid mass or charge");
         }
@@ -124,7 +124,7 @@ public:
         charge = q;
     }
 
-    void setLJParams(double epsilon, double r) {
+    void set_lj_params(double epsilon, double r) {
         if (!std::isfinite(epsilon) || !std::isfinite(r) || r < 0.0) {
             throw std::invalid_argument("Invalid LJ parameters");
         }
@@ -133,64 +133,64 @@ public:
     }
 
     // Additional setters for PDB compatibility
-    void setOccupancy(double occ) {
+    void set_occupancy(double occ) {
         if (occ < 0.0 || occ > 1.0) {
             throw std::invalid_argument("Occupancy must be between 0 and 1");
         }
         occupancy = occ;
     }
 
-    void setTempfactor(double temp) {
+    void set_tempfactor(double temp) {
         if (!std::isfinite(temp)) {
             throw std::invalid_argument("Invalid temperature factor");
         }
         tempfactor = temp;
     }
 
-    void setElement(const std::string& elem) {
+    void set_element(const std::string& elem) {
         element = elem;
     }
 
-    void setChargeString(const std::string& chg) {
+    void set_charge_string(const std::string& chg) {
         chargestr = chg;
     }
 
     // Additional PDB setters
-    void setChain(char ch) { chain = ch; }
-    void setHetatm(bool het) { hetatm = het; }
+    void set_chain(char ch) { chain = ch; }
+    void set_hetatm(bool het) { hetatm = het; }
 
     // Additional setters
-    void setBynu(int bn) { 
+    void set_bynu(int bn) { 
         if (bn <= 0) throw std::invalid_argument("Invalid atom number");
         bynu = bn; 
     }
     
-    void setType(const std::string& t) { 
+    void set_type(const std::string& t) { 
         if (t.empty()) throw std::invalid_argument("Empty atom type");
         type = t; 
     }
     
-    void setResname(const std::string& rn) { 
+    void set_resname(const std::string& rn) { 
         if (rn.empty()) throw std::invalid_argument("Empty residue name");
         resname = rn; 
     }
     
-    void setIres(int ir) { 
+    void set_ires(int ir) { 
         if (ir <= 0) throw std::invalid_argument("Invalid residue number");
         ires = ir; 
     }
     
-    void setSegid(const std::string& sid) { segid = sid; }
+    void set_segid(const std::string& sid) { segid = sid; }
     
-    void setAltloc(char alt) { altloc = alt; }
-    void setInscode(char ins) { inscode = ins; }
+    void set_altloc(char alt) { altloc = alt; }
+    void set_inscode(char ins) { inscode = ins; }
 
     // Utility methods
-    bool hasLJParams() const {
+    bool has_lj_params() const {
         return std::isfinite(eps) && std::isfinite(rmin);
     }
 
-    bool isValid() const {
+    bool is_valid() const {
         return bynu > 0 && !type.empty() && !resname.empty() &&
                ires > 0 && std::isfinite(mass) && std::isfinite(charge) &&
                std::all_of(coor.begin(), coor.end(), 
@@ -199,7 +199,7 @@ public:
     }
 
     // PDB format utilities
-    static std::string formatPDBAtomName(const std::string& name) {
+    static std::string format_pdb_atom_name(const std::string& name) {
         // Left align atom name according to PDB format
         // Element symbols are right-justified in columns 13-14
         if (name.length() >= 4) return name;
@@ -226,11 +226,11 @@ public:
         return result;
     }
 
-    std::string getFormattedAtomName() const {
-        return formatPDBAtomName(type);
+    std::string get_formatted_atom_name() const {
+        return format_pdb_atom_name(type);
     }
 
-    std::string getResidueID() const {
+    std::string get_residue_id() const {
         // Combine residue number and insertion code (e.g., "153A")
         if (inscode == ' ') {
             return std::to_string(ires);
@@ -238,7 +238,7 @@ public:
         return std::to_string(ires) + inscode;
     }
 
-    void setResidueID(const std::string& resid) {
+    void set_residue_id(const std::string& resid) {
         // Parse residue ID (e.g., "153A" -> ires=153, inscode='A')
         size_t numLen = 0;
         try {
