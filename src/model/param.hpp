@@ -17,6 +17,13 @@ namespace model {
 
 /**
  * @brief GCMC参数类，用于存储所有计算所需的参数
+ * @details 包含了GCMC模拟所需的所有参数，包括：
+ * - 力场与分子拓扑参数：定义分子间相互作用
+ * - 系统几何参数：定义模拟空间
+ * - 溶质与溶剂参数：定义化学环境
+ * - 算法控制参数：定义采样策略
+ * - 模拟控制参数：定义运行条件
+ * - 输入输出参数：定义文件路径
  */
 class Param {
 public:
@@ -30,7 +37,7 @@ public:
          * - 1: 输出详细运行信息
          * - 2: 输出调试信息
          */
-        int verbosity = 0;                        // verbose
+        int verbosity = 0;                        // verbose, 控制程序输出的详细程度
 
         /**
          * @brief 调试级别 (debug)
@@ -39,16 +46,16 @@ public:
          * - 1: 基本调试信息
          * - 2: 详细调试信息
          */
-        int debug = 0;                           // debug
+        int debug = 0;                           // debug, 控制调试信息的输出级别
 
-        bool print_logfile = false;              // logfile, 是否输出日志文件
-        std::string param_file;                  // paramfile, 参数文件路径
-        std::string log_file;                    // logfile, 日志文件路径
+        bool print_logfile = false;              // logfile, 是否输出日志文件，用于监控模拟进程
+        std::string param_file;                  // paramfile, 参数文件路径，定义模拟的所有参数
+        std::string log_file;                    // logfile, 日志文件路径，记录模拟过程
         unsigned int random_seed = 0;            // random_seed, 随机数种子，用于复现性
-        int num_threads = 1;                     // nthreads, 并行线程数
-        bool is_box = false;                     // box_size定义标志，是否定义了模拟盒子
-        bool init_cycle = false;                 // initcycle, 是否进行初始化循环
-        bool conserve_fragments = false;         // conserve_frags, 是否保持片段数量守恒
+        int num_threads = 1;                     // nthreads, 并行线程数，用于CPU并行计算
+        bool is_box = false;                     // box_size定义标志，定义周期性边界条件范围
+        bool init_cycle = false;                 // initcycle, 是否从初始构型开始模拟，如能量最小化后的结构
+        bool conserve_fragments = false;         // conserve_frags, 是否固定溶质数量，控制GCMC是否允许动态调整溶质数目
     };
 
     // 体系空间结构体 - 对应系综参数中的空间参数
@@ -58,24 +65,24 @@ public:
          * @details 用于空穴偏置采样的网格大小，通常设置为1Å
          * 影响空穴检测的精度和计算效率
          */
-        float grid_spacing = 1.0;                // grid_dx, 网格间距，用于空穴偏置采样
+        float grid_spacing = 1.0;                // grid_dx, 空穴检测网格分辨率(Å)，用于空穴偏置采样的空间划分
 
         /**
          * @brief GCMC区域中心坐标
          * @details 定义大正则蒙特卡洛模拟的活性区域中心
          * 用于限制分子插入/删除的空间范围
          */
-        std::array<float, 3> gc_center = {0.0, 0.0, 0.0};    // gc_center, GCMC区域中心
+        std::array<float, 3> gc_center = {0.0, 0.0, 0.0};    // gc_center, GCMC活性区域中心，定义分子插入/删除的空间范围
 
-        std::array<float, 3> sys_center = {0.0, 0.0, 0.0};   // sys_center, 系统中心
-        std::array<float, 3> crystal_dim = {0.0, 0.0, 0.0};  // crystal_dim, 晶胞维度
+        std::array<float, 3> sys_center = {0.0, 0.0, 0.0};   // sys_center, 系统中心坐标
+        std::array<float, 3> crystal_dim = {0.0, 0.0, 0.0};  // crystal_dim, 晶胞维度参数
         
         /**
          * @brief 模拟盒子大小 (V参数)
          * @details 定义周期性边界条件下的模拟体系大小
          * 对应GCMC系综中的V参数，影响系统的密度和压力
          */
-        std::array<float, 3> box_size = {0.0, 0.0, 0.0};     // box_size, 模拟盒子大小
+        std::array<float, 3> box_size = {0.0, 0.0, 0.0};     // box_size, 模拟盒子尺寸(Å)，定义周期性边界条件范围
 
         float volume = 0.0;                      // 计算得到的总体积
         float target_volume = 0.0;               // target_volume, 目标体积
@@ -90,9 +97,9 @@ public:
          * - exclude_hydrogens_from_grid: 是否在网格中排除氢原子
          * - exclude_protein_volume: 是否排除蛋白质体积
          */
-        bool use_vdw_radius_for_grid = false;    // use_vdw_radius_for_grid
-        bool exclude_hydrogens_from_grid = false; // exclude_hydrogens_from_grid
-        bool exclude_protein_volume = false;      // exclude_protein_volume
+        bool use_vdw_radius_for_grid = false;    // use_vdw_radius_for_grid, 是否使用范德华半径进行网格划分
+        bool exclude_hydrogens_from_grid = false; // exclude_hydrogens_from_grid, 是否在网格中排除氢原子
+        bool exclude_protein_volume = false;      // exclude_protein_volume, 是否排除蛋白质体积
         
         float tmp_prob = 0.0;                    // 临时概率变量
         
@@ -101,7 +108,7 @@ public:
          * @details 定义范德华力和静电相互作用的计算截断，通常设为12Å
          * 影响能量计算的精度和效率
          */
-        float cutoff = 12.0;                     // cutoff, 非键相互作用截断距离
+        float cutoff = 12.0;                     // cutoff, 非键相互作用截断距离(Å)，影响能量计算精度和效率
     };
 
     // 蒙特卡洛参数结构体 - 对应运动参数和系综参数
@@ -113,9 +120,9 @@ public:
          * - current_step: 当前步数
          * - print_freq: 输出频率
          */
-        int mc_steps = 1;                        // mcsteps, MC总步数
+        int mc_steps = 1;                        // mcsteps, MC总步数，若启用系统分区，等效步数=实际步数×分区数
         int current_step = 0;                    // 当前MC步数
-        int print_freq = 1;                      // nprint, 输出频率
+        int print_freq = 1;                      // nprint, 输出频率，每隔多少步输出一次日志信息
 
         /**
          * @brief 热力学参数
@@ -123,7 +130,7 @@ public:
          * - temperature: 温度T，单位K
          * - beta: β = 1/(kB*T)，用于Metropolis准则
          */
-        float temperature = 300.0;               // temperature, 温度T
+        float temperature = 300.0;               // temperature, 模拟温度(K)，影响Metropolis准则
         float beta = 1.0;                        // 由temperature计算得到，β = 1/(kB*T)
 
         /**
@@ -133,7 +140,7 @@ public:
          * - translation_rotation_frac: 平移/旋转操作比例
          */
         float insertion_deletion_frac = 0.5;     // insdel_frac, 插入/删除操作比例
-        float translation_rotation_frac = 0.5;    // 由insdel_frac计算得到，平移/旋转操作比例
+        float translation_rotation_frac = 0.5;    // 平移/旋转操作比例，由insdel_frac计算得到
 
         /**
          * @brief MC移动参数
@@ -141,8 +148,8 @@ public:
          * - max_translation_dist: 最大平移距离，单位Å
          * - max_rotation_angle: 最大旋转角度，单位度
          */
-        float max_translation_dist = 1.0;        // 最大平移距离
-        float max_rotation_angle = 30.0;         // 最大旋转角度
+        float max_translation_dist = 1.0;        // 最大平移距离(Å)，控制分子移动步长
+        float max_rotation_angle = 30.0;         // 最大旋转角度(度)，控制分子旋转步长
 
         // MC操作类型列表
         std::vector<std::string> operation_types = {"Ins", "Del", "Trn", "Rot"};  // MC操作类型
@@ -153,8 +160,8 @@ public:
          * - mc_time_list: 各类型移动的时间权重
          * - mc_time_cumulative: 累积时间，用于移动类型的选择
          */
-        std::vector<float> mc_time_list;         // mctime, MC时间列表
-        std::vector<float> mc_time_cumulative;   // 累积MC时间
+        std::vector<float> mc_time_list;         // mctime, MC时间列表，控制不同类型移动的时间分配
+        std::vector<float> mc_time_cumulative;   // 累积MC时间，用于移动类型的选择
 
         /**
          * @brief 操作概率参数
@@ -177,8 +184,8 @@ public:
          * - BOLTZMANN: 玻尔兹曼常数kB，单位kcal/mol/K
          * - KCAL_TO_KJ: 能量单位转换因子
          */
-        float BOLTZMANN = 0.001987f;             // 玻尔兹曼常数kB
-        float KCAL_TO_KJ = 4.184f;               // 能量单位转换因子
+        float BOLTZMANN = 0.001987f;             // 玻尔兹曼常数kB (kcal/mol/K)
+        float KCAL_TO_KJ = 4.184f;               // 能量单位转换因子 (kcal/mol -> kJ/mol)
     };
 
     // 能量计算参数结构体 - 对应力场参数
@@ -190,9 +197,9 @@ public:
          * - fragment_cutoff: 片段能量截断距离
          * - protein_cutoff: 蛋白质能量截断距离
          */
-        bool use_group_cutoff = true;            // use_group_cutoff, 是否使用组截断
-        float fragment_cutoff = 10.0;            // energy_cutoff_frag, 片段能量截断
-        float protein_cutoff = 10.0;             // energy_cutoff_prot, 蛋白质能量截断
+        bool use_group_cutoff = true;            // use_group_cutoff, 是否使用组截断，优化非键相互作用计算
+        float fragment_cutoff = 10.0;            // energy_cutoff_frag, 片段能量截断(Å)
+        float protein_cutoff = 10.0;             // energy_cutoff_prot, 蛋白质能量截断(Å)
         float fragment_cutoff_squared = 100.0;   // energy_cutoff_frag的平方
         float protein_cutoff_squared = 100.0;    // energy_cutoff_prot的平方
 
@@ -202,7 +209,7 @@ public:
          * - pairlist_cutoff: 配对列表截断距离
          * - pairlist_freq: 配对列表更新频率
          */
-        float pairlist_cutoff = 0.0;            // 配对列表截断
+        float pairlist_cutoff = 0.0;            // 配对列表截断(Å)，优化非键相互作用计算
         float pairlist_cutoff_squared = 0.0;     // 配对列表截断平方
         unsigned int pairlist_freq = 1000;       // pairlist_freq, 配对列表更新频率
 
@@ -213,9 +220,9 @@ public:
          * - switch_dist_fragment: 片段切换距离
          * - switch_dist_protein: 蛋白质切换距离
          */
-        bool use_switching = false;              // use_switching, 是否使用切换函数
-        float switch_dist_fragment = 0.0;        // switch_dist_frag, 片段切换距离
-        float switch_dist_protein = 0.0;         // switch_dist_prot, 蛋白质切换距离
+        bool use_switching = false;              // use_switching, 是否使用切换函数平滑非键相互作用截断
+        float switch_dist_fragment = 0.0;        // switch_dist_frag, 片段切换距离(Å)
+        float switch_dist_protein = 0.0;         // switch_dist_prot, 蛋白质切换距离(Å)
         float switch_dist_fragment_squared = 0.0; // switch_dist_frag的平方
         float switch_dist_protein_squared = 0.0;  // switch_dist_prot的平方
 
@@ -242,8 +249,8 @@ public:
          * @brief 配对列表参数
          * @details 用于优化非键相互作用计算的配对列表参数
          */
-        float pair_list_cutoff_fragment = 0.0;   // pair_list_cutoff_frag, 片段配对列表截断
-        float pair_list_cutoff_protein = 0.0;    // pair_list_cutoff_prot, 蛋白质配对列表截断
+        float pair_list_cutoff_fragment = 0.0;   // pair_list_cutoff_frag, 片段配对列表截断(Å)
+        float pair_list_cutoff_protein = 0.0;    // pair_list_cutoff_prot, 蛋白质配对列表截断(Å)
         float pair_list_cutoff_fragment_squared = 0.0;  // pair_list_cutoff_frag的平方
         float pair_list_cutoff_protein_squared = 0.0;   // pair_list_cutoff_prot的平方
     };
@@ -257,18 +264,18 @@ public:
          * - num_waters: 当前水分子数，对应Ncurrent
          * - target_num_waters: 目标水分子数，对应Ntarget
          */
-        float water_density = 55.0;              // sol片段的fragconc值，水密度 (对应Ntarget水)
+        float water_density = 55.0;              // 水密度(M)，通常为55.0 M，用于控制水分子数量
         float epsilon = 1.0;                     // epsilon, ε参数
-        int num_waters = 0;                      // numwaters, 当前水分子数 (对应Ncurrent)
-        int target_num_waters = 0;               // target_numwaters, 目标水分子数 (对应Ntarget)
-        int water_index = 0;                     // sol片段的索引，水分子索引
+        int num_waters = 0;                      // numwaters, 当前水分子数(对应Ncurrent)
+        int target_num_waters = 0;               // target_numwaters, 目标水分子数(对应Ntarget)
+        int water_index = 0;                     // sol片段的索引
 
         /**
          * @brief 过量参数
          * @details 控制分子数量的波动范围：
          * - excess_threshold: 允许的最大偏差比例，对应L参数
          */
-        float excess_threshold = 1.0;            // excess_fragments_threshold, 过量阈值 (对应L参数)
+        float excess_threshold = 1.0;            // excess_fragments_threshold, 过量阈值(对应L参数)，允许的最大偏差比例
 
         /**
          * @brief 水分子数均值参数
@@ -287,10 +294,10 @@ public:
          * - init_cutoff: 初始化截断距离
          * - gcmc_cutoff: GCMC区域截断距离
          */
-        float init_cutoff = 0.0;                 // initial_fragments_cutoff, 初始化截断
+        float init_cutoff = 0.0;                 // initial_fragments_cutoff, 初始化截断距离(Å)
         float init_cutoff_squared = 0.0;         // initial_fragments_cutoff的平方
         bool use_gcmc_cutoff = false;            // use_gcmc_cutoff, 是否使用GCMC截断
-        float gcmc_cutoff = 0.0;                 // gcmc_cutoff, GCMC截断
+        float gcmc_cutoff = 0.0;                 // gcmc_cutoff, GCMC区域截断距离(Å)
         float gcmc_cutoff_squared = 0.0;         // gcmc_cutoff的平方
 
         /**
@@ -309,9 +316,9 @@ public:
          * - cavity_index_list: 空腔索引列表
          * - cavity_list: 空腔列表
          */
-        std::vector<int> confs_list;             // 构型列表
-        std::vector<int> cavity_index_list;      // 空腔索引列表
-        std::vector<float> cavity_list;          // 空腔列表
+        std::vector<int> confs_list;             // 可用构型列表
+        std::vector<int> cavity_index_list;      // 空腔索引列表，用于空穴偏置采样
+        std::vector<float> cavity_list;          // 空腔列表，存储空腔大小
 
         /**
          * @brief 化学势和浓度参数
@@ -320,11 +327,11 @@ public:
          * - muex_list: 过量化学势列表，对应μₑₓ
          * - radius_list: 分子半径列表
          */
-        std::vector<float> conc_list;            // fragconc, 浓度列表
-        std::vector<float> muex_list;            // fragmuex, 过量化学势列表 (对应μₑₓ)
-        std::vector<float> radius_list;          // fragradius, 半径列表
+        std::vector<float> conc_list;            // fragconc, 目标浓度列表(M)，如溶质(0.25 M)和溶剂(55 M)
+        std::vector<float> muex_list;            // fragmuex, 过量化学势列表(kcal/mol)，用于控制插入/删除概率
+        std::vector<float> radius_list;          // fragradius, 分子半径列表(Å)
 
-        std::vector<int> conf_list;              // 构型列表
+        std::vector<int> conf_list;              // 构型列表，用于构型偏置采样
         int flag_remove_init = 0;                // remove_init标志，初始移除标志
         int flag_remove_excess = 0;              // remove_excess标志，过量移除标志
         int total_protitp_size = 0;              // protitp文件总数，蛋白质拓扑文件总数
@@ -339,8 +346,8 @@ public:
          * - use_cavity_bias: 是否使用空穴偏置采样
          * - sigma: 空穴大小参数
          */
-        bool use_cavity_bias = false;            // use_cavity_bias, 是否使用空穴偏置 (对应Cavity-Bias)
-        float sigma = 2.4;                       // sigma, σ参数
+        bool use_cavity_bias = false;            // use_cavity_bias, 是否使用空穴偏置采样，仅向空腔区域尝试插入以提升接受率
+        float sigma = 2.4;                       // sigma, σ参数，空穴大小参数(Å)
         float sigma_squared = 5.76;              // sigma的平方，σ²参数
 
         /**
@@ -349,8 +356,8 @@ public:
          * - use_conf_bias: 是否使用构型偏置采样
          * - num_conf_bias_trials: 每次尝试的构型数，对应n参数
          */
-        bool use_conf_bias = false;              // use_conf_bias, 是否使用构型偏置 (对应Configurational-Bias)
-        unsigned int num_conf_bias_trials = 10;   // num_conf_bias_trial, 构型偏置尝试次数 (对应n参数)
+        bool use_conf_bias = false;              // use_conf_bias, 是否使用构型偏置采样，每次插入尝试多构型并按能量权重选择
+        unsigned int num_conf_bias_trials = 10;   // num_conf_bias_trial, 构型偏置尝试次数(对应n参数)
     };
 
     // 文件路径参数结构体 - 对应模拟控制参数
@@ -362,9 +369,9 @@ public:
          * - input_pdb_file: 初始构型文件
          * - output_pdb_file: 轨迹输出文件
          */
-        std::string topology_file;               // top, 拓扑文件
-        std::string input_pdb_file;              // pdb, 输入PDB文件
-        std::string output_pdb_file;             // op_pdb, 输出PDB文件
+        std::string topology_file;               // top, 系统拓扑文件，包含分子类型、原子列表、力场参数
+        std::string input_pdb_file;              // pdb, 初始构型文件，定义原子坐标和分子排布
+        std::string output_pdb_file;             // op_pdb, 轨迹输出文件，保存模拟后的构型
         std::string output_top_file;             // op_top, 输出拓扑文件
 
         /**
@@ -373,11 +380,11 @@ public:
          * - atomtype_file: 原子类型定义文件
          * - par_files: 力场参数文件列表
          */
-        std::string atomtype_file;               // atomtypes, 原子类型文件
+        std::string atomtype_file;               // atomtypes, 原子类型定义文件，映射原子名称到力场类型
         std::string monomer_dir;                 // monomerdir, 单体目录
         std::string conc_norm = "water";         // conc_norm, 浓度归一化方式
         std::string conc_region = "total";       // conc_region, 浓度计算区域
-        std::vector<std::string> par_files;      // par, 力场参数文件
+        std::vector<std::string> par_files;      // par, 力场参数文件，定义非键相互作用参数
 
         /**
          * @brief 拓扑文件
@@ -387,8 +394,8 @@ public:
          * - fragment_names: 片段名称列表
          */
         std::vector<std::string> protein_top_files;  // protitp, 蛋白质拓扑文件
-        std::vector<std::string> fragment_top_files; // fragitp, 片段拓扑文件
-        std::vector<std::string> fragment_names;     // fragname, 片段名称
+        std::vector<std::string> fragment_top_files; // fragitp, 溶质分子拓扑文件，包含原子类型、电荷、键合参数
+        std::vector<std::string> fragment_names;     // fragname, 溶质和溶剂名称列表
         std::vector<std::string> fragment_mqtr_files;// fragmqtr, 片段MQTR文件
         std::string tmp_frag_name;               // 临时片段名称
 
@@ -398,8 +405,8 @@ public:
          * - generate_maps: 是否生成映射文件
          * - map_prefix: 映射文件名前缀
          */
-        bool generate_maps = false;              // map_generation, 是否生成映射
-        std::string map_prefix = "gc_maps";      // map_filename_prefix, 映射文件前缀
+        bool generate_maps = false;              // map_generation, 是否生成空间映射文件
+        std::string map_prefix = "gc_maps";      // map_filename_prefix, 映射文件名前缀
     };
 
     // 构造函数
