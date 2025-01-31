@@ -5,6 +5,9 @@ add_library(pygcmc_system
     system.cpp
 )
 
+# Set position independent code property
+set_property(TARGET pygcmc_system PROPERTY POSITION_INDEPENDENT_CODE ON)
+
 # Link dependencies - system depends on model
 target_link_libraries(pygcmc_system
     PUBLIC 

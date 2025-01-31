@@ -31,7 +31,7 @@ add_subdirectory(src/model)
 add_subdirectory(src/io)
 
 # 3. System (depends on model and forcefield)
-# add_subdirectory(src/system)      # Not implemented yet
+add_subdirectory(src/system)      # Implemented
 
 # 4. Simulation (depends on system)
 # add_subdirectory(src/simulation)  # Not implemented yet
