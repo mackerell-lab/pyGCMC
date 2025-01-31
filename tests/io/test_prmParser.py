@@ -443,12 +443,14 @@ def test_multiple_parameter_files():
     data_dir = os.path.join(os.path.dirname(test_dir), "data")
     water_ions_file = os.path.join(data_dir, "toppar_water_ions.str")
     silcs_file = os.path.join(data_dir, "silcs.str")
+    prot_file = os.path.join(data_dir, "par_all36m_prot.prm")
 
     ff = pygcmc.ForceField()
     
     # Parse all files
     pygcmc.PRMParser.parse_file_to_forcefield(water_ions_file, ff)
     pygcmc.PRMParser.parse_file_to_forcefield(silcs_file, ff)
+    pygcmc.PRMParser.parse_file_to_forcefield(prot_file, ff)
 
     # 1. Verify nonbonded parameters (from water_ions.str)
     params = ff.get_nonbonded_params()
@@ -530,7 +532,12 @@ def test_multiple_parameter_files():
     assert found == True
     assert epsilon == pytest.approx(-0.01)
 
-    # 6. Verify non-existent combinations
+    # 6. Verify additional NBFIX parameters
+    epsilon, found = ff.get_nbfix("NC2", "OC")
+    assert found == True
+    assert epsilon == pytest.approx(-0.154919, abs=1e-5)  # From par_all36m_prot.prm
+
+    # 7. Verify non-existent combinations
     # Between SILCS and ions
     epsilon, found = ff.get_nbfix("LP", "SOD")
     assert found == False
@@ -542,7 +549,7 @@ def test_multiple_parameter_files():
     epsilon, found = ff.get_nbfix("SOD", "POT")
     assert found == False
 
-    # 7. Verify parameter overriding behavior
+    # 8. Verify parameter overriding behavior
     # Parse water_ions file again to ensure parameters are not duplicated or corrupted
     pygcmc.PRMParser.parse_file_to_forcefield(water_ions_file, ff)
     
@@ -779,7 +786,7 @@ def test_charmm_prm_files():
     dihedral_params = ff.get_dihedral_params("CT1", "C", "N", "CP1")
     assert len(dihedral_params) == 2  # This dihedral has two terms
     assert dihedral_params[0].kchi == pytest.approx(2.7500)
-    assert dihedral_params[0].n == 2  # Changed from 4 to 2 to match the parameter file
+    assert dihedral_params[0].n == 2  # Changed from 4 to 2 to match parameter file
     assert dihedral_params[1].kchi == pytest.approx(0.3000)
     assert dihedral_params[1].n == 4
     assert dihedral_params[1].delta == pytest.approx(0.00)
@@ -1097,3 +1104,37 @@ def test_parse_multiple_files_with_invalid():
     # Try to parse with a non-existent file
     with pytest.raises(RuntimeError):
         _ = pygcmc.PRMParser.parse_files([water_ions_file, "nonexistent.str"])
+
+# def test_atom_priority_ordering():
+#     """测试参数排序规则是否符合CHARMM规范"""
+#     ff = pygcmc.ForceField()
+    
+#     # 测试键参数排序 - 使用正确的 CHARMM 格式
+#     content = """
+# BONDS
+# !V(bond) = Kb(b - b0)**2
+# !
+# !Kb: kcal/mole/A**2
+# !b0: A
+# !
+# !atom type Kb          b0
+# CT1  CS    222.500   1.5380 ! 
+# """
+#     pygcmc.PRMParser.parse_string(content, ff)
+#     assert ff.get_bond_params("CT1", "CS") is not None
+#     assert ff.get_bond_params("CS", "CT1") is None  # 应自动排序存储
+    
+#     # 测试二面角反转规则
+#     content = """
+# DIHEDRALS
+# !V(dihedral) = Kchi(1 + cos(n(chi) - delta))
+# !
+# !Kchi: kcal/mole
+# !n: multiplicity
+# !delta: degrees
+# !
+# !atom types             Kchi    n   delta
+# CS   CT1  CT2  HA2    0.200   3     0.00 ! 
+# """
+#     pygcmc.PRMParser.parse_string(content, ff)
+#     assert ff.get_dihedral_params("HA2", "CT2", "CT1", "CS") is not None

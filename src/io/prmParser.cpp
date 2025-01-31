@@ -722,9 +722,9 @@ void PRMParser::parseNonbondedSection(std::istream& input, ForceField& ff, const
 // Helper functions for parameter processing
 std::pair<std::string, std::string> PRMParser::make_type_pair(
     const std::string& type1, const std::string& type2) const {
-    return type1 < type2 ? 
-        std::make_pair(type1, type2) : 
-        std::make_pair(type2, type1);
+    // In CHARMM parameter files, bond parameters are stored in the order they appear
+    // Do not reorder them based on string comparison
+    return std::make_pair(type1, type2);
 }
 
 std::tuple<std::string, std::string, std::string> PRMParser::make_type_triple(
