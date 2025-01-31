@@ -85,21 +85,21 @@ void init_io(py::module& m) {
     m.attr("PRMParser") = prm_parser;  // Add to main module as well
     io.attr("PRMParser") = prm_parser;  // Add to io submodule
 
-    // Add InpParser bindings
-    auto inp_parser = py::class_<io::InpParser>(io, "InpParser")
-        .def_static("parse_file", &io::InpParser::parse_file,
+    // Add INPParser bindings
+    auto inp_parser = py::class_<io::INPParser>(io, "INPParser")
+        .def_static("parse_file", &io::INPParser::parse_file,
             py::arg("filename"),
             "Parse an input file and return a new Param object")
-        .def_static("parse_string", &io::InpParser::parse_string,
+        .def_static("parse_string", &io::INPParser::parse_string,
             py::arg("content"),
             "Parse an input string and return a new Param object")
-        .def_static("parse_to_param", &io::InpParser::parse_to_param,
+        .def_static("parse_to_param", &io::INPParser::parse_to_param,
             py::arg("filename"), py::arg("param"),
             "Parse an input file into an existing Param object")
-        .def_static("parse_string_to_param", &io::InpParser::parse_string_to_param,
+        .def_static("parse_string_to_param", &io::INPParser::parse_string_to_param,
             py::arg("content"), py::arg("param"),
             "Parse an input string into an existing Param object");
-    m.attr("InpParser") = inp_parser;  // Add to main module as well
+    m.attr("INPParser") = inp_parser;  // Add to main module as well
 }
 
 } // namespace bindings

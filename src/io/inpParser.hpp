@@ -18,7 +18,7 @@ namespace io {
  * - 模拟控制参数：nprint, mcsteps等
  * - 偏置采样参数：use_cavity_bias, use_conf_bias
  */
-class InpParser {
+class INPParser {
 public:
     /**
      * @brief 解析输入文件并返回新的Param对象

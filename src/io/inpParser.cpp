@@ -65,7 +65,7 @@ std::vector<float> parse_float_vector(const std::string& str) {
     return result;
 }
 
-void InpParser::parse_to_param(const std::string& filename, model::Param& param) {
+void INPParser::parse_to_param(const std::string& filename, model::Param& param) {
     std::ifstream file(filename);
     if (!file.is_open()) {
         throw std::runtime_error("Failed to open input file: " + filename);
@@ -93,7 +93,7 @@ void InpParser::parse_to_param(const std::string& filename, model::Param& param)
     validate_parameters(param);
 }
 
-void InpParser::parse_string_to_param(const std::string& content, model::Param& param) {
+void INPParser::parse_string_to_param(const std::string& content, model::Param& param) {
     std::istringstream iss(content);
     std::string line;
     while (std::getline(iss, line)) {
@@ -117,7 +117,7 @@ void InpParser::parse_string_to_param(const std::string& content, model::Param& 
     validate_parameters(param);
 }
 
-void InpParser::parse_line(const std::string& key, const std::string& value, model::Param& param) {
+void INPParser::parse_line(const std::string& key, const std::string& value, model::Param& param) {
     auto& file_info = param.get_file_info();
     auto& space_info = param.get_space_info();
     auto& fragment_info = param.get_fragment_info();
@@ -190,7 +190,7 @@ void InpParser::parse_line(const std::string& key, const std::string& value, mod
     }
 }
 
-void InpParser::validate_parameters(model::Param& param) {
+void INPParser::validate_parameters(model::Param& param) {
     auto& file_info = param.get_file_info();
     auto& fragment_info = param.get_fragment_info();
     auto& space_info = param.get_space_info();
@@ -223,13 +223,13 @@ void InpParser::validate_parameters(model::Param& param) {
     }
 }
 
-model::Param InpParser::parse_file(const std::string& filename) {
+model::Param INPParser::parse_file(const std::string& filename) {
     model::Param param;
     parse_to_param(filename, param);
     return param;
 }
 
-model::Param InpParser::parse_string(const std::string& content) {
+model::Param INPParser::parse_string(const std::string& content) {
     model::Param param;
     parse_string_to_param(content, param);
     return param;

@@ -5,6 +5,75 @@ import os
 import pytest
 import pygcmc
 
+def test_read_gcmc_inp():
+    """Test reading the actual gcmc.inp file"""
+    # Get the path to the test data directory
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    gcmc_inp_path = os.path.join(current_dir, "..", "data", "gcmc.inp")
+    
+    # Parse the file
+    param = pygcmc.io.INPParser.parse_file(gcmc_inp_path)
+
+    # Test file paths
+    assert len(param.file_info.par_files) == 3
+    assert param.file_info.par_files == ["ffnonbonded.itp", "silcs.itp", "nbfix.itp"]
+    assert len(param.file_info.fragment_top_files) == 9
+    assert param.file_info.fragment_top_files == [
+        "mol/benx.itp", "mol/prpx.itp", "mol/dmee.itp", 
+        "mol/meoh.itp", "mol/form.itp", "mol/imia.itp",
+        "mol/acey.itp", "mol/mamy.itp", "mol/sol.itp"
+    ]
+    assert param.file_info.atomtype_file == "atomtypes.atp"
+    assert param.file_info.monomer_dir == "mol"
+    assert param.file_info.topology_file == "test.top"
+    assert param.file_info.input_pdb_file == "test.pdb"
+    assert param.file_info.output_top_file == "test.1.gc.0.top"
+    assert param.file_info.output_pdb_file == "test.1.gc.0.pdb"
+    assert param.file_info.map_prefix == "test_silcs.gc.1.0"
+
+    # Test space parameters
+    assert param.space_info.grid_spacing == pytest.approx(1.0)
+    assert param.space_info.box_size[0] == pytest.approx(36.736)
+    assert param.space_info.box_size[1] == pytest.approx(40.850)
+    assert param.space_info.box_size[2] == pytest.approx(49.379)
+    assert param.space_info.cutoff == pytest.approx(12.0)
+    assert param.space_info.gc_center[0] == pytest.approx(33.368)
+    assert param.space_info.gc_center[1] == pytest.approx(35.425)
+    assert param.space_info.gc_center[2] == pytest.approx(39.690)
+    assert param.space_info.sys_center[0] == pytest.approx(33.368)
+    assert param.space_info.sys_center[1] == pytest.approx(35.425)
+    assert param.space_info.sys_center[2] == pytest.approx(39.690)
+
+    # Test fragment parameters
+    assert len(param.file_info.fragment_names) == 9
+    assert param.file_info.fragment_names == [
+        "benx", "prpx", "dmee", "meoh", "form", 
+        "imia", "acey", "mamy", "sol"
+    ]
+    assert len(param.fragment_info.conc_list) == 9
+    assert param.fragment_info.conc_list == pytest.approx([
+        0.25, 0.25, 0.25, 0.25, 0.25, 
+        0.25, 0.25, 0.25, 55.00
+    ])
+    assert len(param.fragment_info.muex_list) == 9
+    assert param.fragment_info.muex_list == pytest.approx([
+        -0.79, 1.96, -1.79, -5.36, -10.92,
+        -14.18, -97.31, -68.49, -5.60
+    ])
+
+    # Test MC parameters
+    assert param.mc_info.print_freq == 1000
+    assert param.mc_info.mc_steps == 10000
+
+    # Test bias parameters
+    assert not param.bias_info.use_cavity_bias
+    assert not param.bias_info.use_conf_bias
+
+    # Test basic info parameters
+    assert param.basic_info.init_cycle
+    assert not param.basic_info.conserve_fragments
+    assert not param.file_info.generate_maps
+
 def test_inp_parser_file(tmp_path):
     # Create a temporary input file
     inp_content = """par:ffnonbonded.itp
@@ -41,7 +110,7 @@ use_conf_bias:no"""
     inp_file.write_text(inp_content)
 
     # Parse the file
-    param = pygcmc.io.InpParser.parse_file(str(inp_file))
+    param = pygcmc.io.INPParser.parse_file(str(inp_file))
 
     # Test file info parameters
     assert len(param.file_info.par_files) == 3
@@ -104,7 +173,7 @@ fragconc:0.25 0.25
 fragmuex:-0.79 1.96
 mcsteps:1000"""
 
-    param = pygcmc.io.InpParser.parse_string(inp_content)
+    param = pygcmc.io.INPParser.parse_string(inp_content)
 
     assert param.file_info.topology_file == "test.top"
     assert param.file_info.input_pdb_file == "test.pdb"
@@ -118,14 +187,14 @@ mcsteps:1000"""
 def test_inp_parser_validation():
     # Test missing required parameters
     with pytest.raises(RuntimeError, match="Missing required parameter: top"):
-        pygcmc.io.InpParser.parse_string("pdb:test.pdb")
+        pygcmc.io.INPParser.parse_string("pdb:test.pdb")
 
     with pytest.raises(RuntimeError, match="Missing required parameter: pdb"):
-        pygcmc.io.InpParser.parse_string("top:test.top")
+        pygcmc.io.INPParser.parse_string("top:test.top")
 
     # Test inconsistent fragment parameters
     with pytest.raises(RuntimeError, match="Inconsistent fragment parameters"):
-        pygcmc.io.InpParser.parse_string("""
+        pygcmc.io.INPParser.parse_string("""
 top:test.top
 pdb:test.pdb
 fragname:benx prpx
@@ -135,14 +204,14 @@ fragmuex:-0.79 1.96
 
     # Test invalid space parameters
     with pytest.raises(RuntimeError, match="Invalid grid_dx"):
-        pygcmc.io.InpParser.parse_string("""
+        pygcmc.io.INPParser.parse_string("""
 top:test.top
 pdb:test.pdb
 grid_dx:-1.0
 """)
 
     with pytest.raises(RuntimeError, match="Invalid cutoff"):
-        pygcmc.io.InpParser.parse_string("""
+        pygcmc.io.INPParser.parse_string("""
 top:test.top
 pdb:test.pdb
 cutoff:-12.0
