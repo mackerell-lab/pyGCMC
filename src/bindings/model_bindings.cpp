@@ -7,6 +7,7 @@
 #include "model/topology.hpp"
 #include "model/structure.hpp"
 #include "model/forcefield.hpp"
+#include "model/param.hpp"
 
 namespace py = pybind11;
 // using namespace pygcmc;
@@ -281,6 +282,182 @@ void init_model(py::module& m) {
         .def_property_readonly("angle_params", static_cast<const std::map<std::tuple<std::string, std::string, std::string>, AngleParams>& (ForceField::*)() const>(&ForceField::get_angle_params))
         .def_property_readonly("dihedral_params", static_cast<const std::map<std::tuple<std::string, std::string, std::string, std::string>, std::vector<DihedralParams>>& (ForceField::*)() const>(&ForceField::get_dihedral_params))
         .def_property_readonly("improper_params", static_cast<const std::map<std::tuple<std::string, std::string, std::string, std::string>, ImproperParams>& (ForceField::*)() const>(&ForceField::get_improper_params));
+
+    // Bind Param class and its nested structs
+    auto param = py::class_<model::Param>(model, "Param")
+        .def(py::init<>())
+        // Basic info
+        .def_property("basic_info",
+            py::overload_cast<>(&model::Param::get_basic_info, py::const_),
+            py::overload_cast<>(&model::Param::get_basic_info))
+        // Space info
+        .def_property("space_info",
+            py::overload_cast<>(&model::Param::get_space_info, py::const_),
+            py::overload_cast<>(&model::Param::get_space_info))
+        // MC info
+        .def_property("mc_info",
+            py::overload_cast<>(&model::Param::get_mc_info, py::const_),
+            py::overload_cast<>(&model::Param::get_mc_info))
+        // Energy info
+        .def_property("energy_info",
+            py::overload_cast<>(&model::Param::get_energy_info, py::const_),
+            py::overload_cast<>(&model::Param::get_energy_info))
+        // Fragment info
+        .def_property("fragment_info",
+            py::overload_cast<>(&model::Param::get_fragment_info, py::const_),
+            py::overload_cast<>(&model::Param::get_fragment_info))
+        // Bias info
+        .def_property("bias_info",
+            py::overload_cast<>(&model::Param::get_bias_info, py::const_),
+            py::overload_cast<>(&model::Param::get_bias_info))
+        // File info
+        .def_property("file_info",
+            py::overload_cast<>(&model::Param::get_file_info, py::const_),
+            py::overload_cast<>(&model::Param::get_file_info))
+        .def("clear", &model::Param::clear);
+
+    // Bind BasicInfo struct
+    py::class_<model::Param::BasicInfo>(param, "BasicInfo")
+        .def(py::init<>())
+        .def_readwrite("version", &model::Param::BasicInfo::version)
+        .def_readwrite("verbosity", &model::Param::BasicInfo::verbosity)
+        .def_readwrite("debug", &model::Param::BasicInfo::debug)
+        .def_readwrite("print_logfile", &model::Param::BasicInfo::print_logfile)
+        .def_readwrite("param_file", &model::Param::BasicInfo::param_file)
+        .def_readwrite("log_file", &model::Param::BasicInfo::log_file)
+        .def_readwrite("random_seed", &model::Param::BasicInfo::random_seed)
+        .def_readwrite("num_threads", &model::Param::BasicInfo::num_threads)
+        .def_readwrite("is_box", &model::Param::BasicInfo::is_box)
+        .def_readwrite("init_cycle", &model::Param::BasicInfo::init_cycle)
+        .def_readwrite("conserve_fragments", &model::Param::BasicInfo::conserve_fragments);
+
+    // Bind SpaceInfo struct
+    py::class_<model::Param::SpaceInfo>(param, "SpaceInfo")
+        .def(py::init<>())
+        .def_readwrite("grid_spacing", &model::Param::SpaceInfo::grid_spacing)
+        .def_readwrite("gc_center", &model::Param::SpaceInfo::gc_center)
+        .def_readwrite("sys_center", &model::Param::SpaceInfo::sys_center)
+        .def_readwrite("crystal_dim", &model::Param::SpaceInfo::crystal_dim)
+        .def_readwrite("box_size", &model::Param::SpaceInfo::box_size)
+        .def_readwrite("volume", &model::Param::SpaceInfo::volume)
+        .def_readwrite("target_volume", &model::Param::SpaceInfo::target_volume)
+        .def_readwrite("sys_box_volume", &model::Param::SpaceInfo::sys_box_volume)
+        .def_readwrite("gcmc_volume", &model::Param::SpaceInfo::gcmc_volume)
+        .def_readwrite("protein_volume", &model::Param::SpaceInfo::protein_volume)
+        .def_readwrite("use_vdw_radius_for_grid", &model::Param::SpaceInfo::use_vdw_radius_for_grid)
+        .def_readwrite("exclude_hydrogens_from_grid", &model::Param::SpaceInfo::exclude_hydrogens_from_grid)
+        .def_readwrite("exclude_protein_volume", &model::Param::SpaceInfo::exclude_protein_volume)
+        .def_readwrite("tmp_prob", &model::Param::SpaceInfo::tmp_prob)
+        .def_readwrite("cutoff", &model::Param::SpaceInfo::cutoff);
+
+    // Bind MCInfo struct
+    py::class_<model::Param::MCInfo>(param, "MCInfo")
+        .def(py::init<>())
+        .def_readwrite("mc_steps", &model::Param::MCInfo::mc_steps)
+        .def_readwrite("current_step", &model::Param::MCInfo::current_step)
+        .def_readwrite("print_freq", &model::Param::MCInfo::print_freq)
+        .def_readwrite("temperature", &model::Param::MCInfo::temperature)
+        .def_readwrite("beta", &model::Param::MCInfo::beta)
+        .def_readwrite("insertion_deletion_frac", &model::Param::MCInfo::insertion_deletion_frac)
+        .def_readwrite("translation_rotation_frac", &model::Param::MCInfo::translation_rotation_frac)
+        .def_readwrite("max_translation_dist", &model::Param::MCInfo::max_translation_dist)
+        .def_readwrite("max_rotation_angle", &model::Param::MCInfo::max_rotation_angle)
+        .def_readwrite("operation_types", &model::Param::MCInfo::operation_types)
+        .def_readwrite("mc_time_list", &model::Param::MCInfo::mc_time_list)
+        .def_readwrite("mc_time_cumulative", &model::Param::MCInfo::mc_time_cumulative)
+        .def_readwrite("fragment_prob", &model::Param::MCInfo::fragment_prob)
+        .def_readwrite("water_prob", &model::Param::MCInfo::water_prob)
+        .def_readwrite("atom_prob", &model::Param::MCInfo::atom_prob)
+        .def_readwrite("test_prob", &model::Param::MCInfo::test_prob)
+        .def_readwrite("rotate_dih_status", &model::Param::MCInfo::rotate_dih_status)
+        .def_readonly("BOLTZMANN", &model::Param::MCInfo::BOLTZMANN)
+        .def_readonly("KCAL_TO_KJ", &model::Param::MCInfo::KCAL_TO_KJ);
+
+    // Bind EnergyInfo struct
+    py::class_<model::Param::EnergyInfo>(param, "EnergyInfo")
+        .def(py::init<>())
+        .def_readwrite("use_group_cutoff", &model::Param::EnergyInfo::use_group_cutoff)
+        .def_readwrite("fragment_cutoff", &model::Param::EnergyInfo::fragment_cutoff)
+        .def_readwrite("protein_cutoff", &model::Param::EnergyInfo::protein_cutoff)
+        .def_readwrite("fragment_cutoff_squared", &model::Param::EnergyInfo::fragment_cutoff_squared)
+        .def_readwrite("protein_cutoff_squared", &model::Param::EnergyInfo::protein_cutoff_squared)
+        .def_readwrite("pairlist_cutoff", &model::Param::EnergyInfo::pairlist_cutoff)
+        .def_readwrite("pairlist_cutoff_squared", &model::Param::EnergyInfo::pairlist_cutoff_squared)
+        .def_readwrite("pairlist_freq", &model::Param::EnergyInfo::pairlist_freq)
+        .def_readwrite("use_switching", &model::Param::EnergyInfo::use_switching)
+        .def_readwrite("switch_dist_fragment", &model::Param::EnergyInfo::switch_dist_fragment)
+        .def_readwrite("switch_dist_protein", &model::Param::EnergyInfo::switch_dist_protein)
+        .def_readwrite("switch_dist_fragment_squared", &model::Param::EnergyInfo::switch_dist_fragment_squared)
+        .def_readwrite("switch_dist_protein_squared", &model::Param::EnergyInfo::switch_dist_protein_squared)
+        .def_readwrite("energy_sw_ref", &model::Param::EnergyInfo::energy_sw_ref)
+        .def_readwrite("energy_sw_scale", &model::Param::EnergyInfo::energy_sw_scale)
+        .def_readwrite("test_sw_filters", &model::Param::EnergyInfo::test_sw_filters)
+        .def_readwrite("apply_sw_filters", &model::Param::EnergyInfo::apply_sw_filters)
+        .def_readwrite("test_energy", &model::Param::EnergyInfo::test_energy)
+        .def_readwrite("pair_list_cutoff_fragment", &model::Param::EnergyInfo::pair_list_cutoff_fragment)
+        .def_readwrite("pair_list_cutoff_protein", &model::Param::EnergyInfo::pair_list_cutoff_protein)
+        .def_readwrite("pair_list_cutoff_fragment_squared", &model::Param::EnergyInfo::pair_list_cutoff_fragment_squared)
+        .def_readwrite("pair_list_cutoff_protein_squared", &model::Param::EnergyInfo::pair_list_cutoff_protein_squared);
+
+    // Bind FragmentInfo struct
+    py::class_<model::Param::FragmentInfo>(param, "FragmentInfo")
+        .def(py::init<>())
+        .def_readwrite("water_density", &model::Param::FragmentInfo::water_density)
+        .def_readwrite("epsilon", &model::Param::FragmentInfo::epsilon)
+        .def_readwrite("num_waters", &model::Param::FragmentInfo::num_waters)
+        .def_readwrite("target_num_waters", &model::Param::FragmentInfo::target_num_waters)
+        .def_readwrite("water_index", &model::Param::FragmentInfo::water_index)
+        .def_readwrite("excess_threshold", &model::Param::FragmentInfo::excess_threshold)
+        .def_readwrite("use_number_water_nbar", &model::Param::FragmentInfo::use_number_water_nbar)
+        .def_readwrite("use_const_water_nbar", &model::Param::FragmentInfo::use_const_water_nbar)
+        .def_readwrite("const_water_nbar", &model::Param::FragmentInfo::const_water_nbar)
+        .def_readwrite("init_cutoff", &model::Param::FragmentInfo::init_cutoff)
+        .def_readwrite("init_cutoff_squared", &model::Param::FragmentInfo::init_cutoff_squared)
+        .def_readwrite("use_gcmc_cutoff", &model::Param::FragmentInfo::use_gcmc_cutoff)
+        .def_readwrite("gcmc_cutoff", &model::Param::FragmentInfo::gcmc_cutoff)
+        .def_readwrite("gcmc_cutoff_squared", &model::Param::FragmentInfo::gcmc_cutoff_squared)
+        .def_readwrite("remove_init", &model::Param::FragmentInfo::remove_init)
+        .def_readwrite("remove_excess", &model::Param::FragmentInfo::remove_excess)
+        .def_readwrite("confs_list", &model::Param::FragmentInfo::confs_list)
+        .def_readwrite("cavity_index_list", &model::Param::FragmentInfo::cavity_index_list)
+        .def_readwrite("cavity_list", &model::Param::FragmentInfo::cavity_list)
+        .def_readwrite("conc_list", &model::Param::FragmentInfo::conc_list)
+        .def_readwrite("muex_list", &model::Param::FragmentInfo::muex_list)
+        .def_readwrite("radius_list", &model::Param::FragmentInfo::radius_list)
+        .def_readwrite("conf_list", &model::Param::FragmentInfo::conf_list)
+        .def_readwrite("flag_remove_init", &model::Param::FragmentInfo::flag_remove_init)
+        .def_readwrite("flag_remove_excess", &model::Param::FragmentInfo::flag_remove_excess)
+        .def_readwrite("total_protitp_size", &model::Param::FragmentInfo::total_protitp_size)
+        .def_readwrite("fragconf_list", &model::Param::FragmentInfo::fragconf_list);
+
+    // Bind BiasInfo struct
+    py::class_<model::Param::BiasInfo>(param, "BiasInfo")
+        .def(py::init<>())
+        .def_readwrite("use_cavity_bias", &model::Param::BiasInfo::use_cavity_bias)
+        .def_readwrite("sigma", &model::Param::BiasInfo::sigma)
+        .def_readwrite("sigma_squared", &model::Param::BiasInfo::sigma_squared)
+        .def_readwrite("use_conf_bias", &model::Param::BiasInfo::use_conf_bias)
+        .def_readwrite("num_conf_bias_trials", &model::Param::BiasInfo::num_conf_bias_trials);
+
+    // Bind FileInfo struct
+    py::class_<model::Param::FileInfo>(param, "FileInfo")
+        .def(py::init<>())
+        .def_readwrite("topology_file", &model::Param::FileInfo::topology_file)
+        .def_readwrite("input_pdb_file", &model::Param::FileInfo::input_pdb_file)
+        .def_readwrite("output_pdb_file", &model::Param::FileInfo::output_pdb_file)
+        .def_readwrite("output_top_file", &model::Param::FileInfo::output_top_file)
+        .def_readwrite("atomtype_file", &model::Param::FileInfo::atomtype_file)
+        .def_readwrite("monomer_dir", &model::Param::FileInfo::monomer_dir)
+        .def_readwrite("conc_norm", &model::Param::FileInfo::conc_norm)
+        .def_readwrite("conc_region", &model::Param::FileInfo::conc_region)
+        .def_readwrite("par_files", &model::Param::FileInfo::par_files)
+        .def_readwrite("protein_top_files", &model::Param::FileInfo::protein_top_files)
+        .def_readwrite("fragment_top_files", &model::Param::FileInfo::fragment_top_files)
+        .def_readwrite("fragment_names", &model::Param::FileInfo::fragment_names)
+        .def_readwrite("fragment_mqtr_files", &model::Param::FileInfo::fragment_mqtr_files)
+        .def_readwrite("tmp_frag_name", &model::Param::FileInfo::tmp_frag_name)
+        .def_readwrite("generate_maps", &model::Param::FileInfo::generate_maps)
+        .def_readwrite("map_prefix", &model::Param::FileInfo::map_prefix);
 }
 
 } // namespace bindings

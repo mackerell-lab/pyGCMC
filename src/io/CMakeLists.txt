@@ -6,6 +6,7 @@ add_library(pygcmc_io STATIC
     psfParser.cpp
     topParser.cpp
     prmParser.cpp
+    inpParser.cpp
 )
 
 # Set position independent code

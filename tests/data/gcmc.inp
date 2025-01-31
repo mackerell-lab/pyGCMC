@@ -1,21 +1,21 @@
 
-par:charmm36.ff/ffnonbonded.itp
-par:charmm36.ff/silcs.itp
-par:charmm36.ff/nbfix.itp
-fragitp:charmm36.ff/mol/benx.itp
-fragitp:charmm36.ff/mol/prpx.itp
-fragitp:charmm36.ff/mol/dmee.itp
-fragitp:charmm36.ff/mol/meoh.itp
-fragitp:charmm36.ff/mol/form.itp
-fragitp:charmm36.ff/mol/imia.itp
-fragitp:charmm36.ff/mol/acey.itp
-fragitp:charmm36.ff/mol/mamy.itp
-fragitp:charmm36.ff/mol/sol.itp
-atomtypes:charmm36.ff/atomtypes.atp
-monomerdir:charmm36.ff/mol
-top:181L_apo_silcs.1.top
-pdb:181L_apo_silcs.1.pdb
-protitp:181L_apo_silcs.1.top
+par:ffnonbonded.itp
+par:silcs.itp
+par:nbfix.itp
+fragitp:mol/benx.itp
+fragitp:mol/prpx.itp
+fragitp:mol/dmee.itp
+fragitp:mol/meoh.itp
+fragitp:mol/form.itp
+fragitp:mol/imia.itp
+fragitp:mol/acey.itp
+fragitp:mol/mamy.itp
+fragitp:mol/sol.itp
+atomtypes:atomtypes.atp
+monomerdir:mol
+top:test.top
+pdb:test.pdb
+protitp:test.top
 grid_dx:   1.000
 box_size:  36.736   40.850   49.379
 cutoff:  12.000
@@ -27,10 +27,10 @@ fragmuex:    -0.79   1.96  -1.79  -5.36 -10.92 -14.18 -97.31 -68.49  -5.60
 nprint:1000
 conserve_frags:no
 map_generation:no
-op_top:examples/lysozyme/181L_apo_silcs.1.gc.0.top
-op_pdb:examples/lysozyme/181L_apo_silcs.1.gc.0.pdb
+op_top:test.1.gc.0.top
+op_pdb:test.1.gc.0.pdb
 initcycle:yes
-map_filename_prefix:gc_maps/181L_apo_silcs.gc.1.0
+map_filename_prefix:test_silcs.gc.1.0
 mcsteps:10000
 use_cavity_bias:no
 use_conf_bias:no
