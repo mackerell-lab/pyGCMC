@@ -412,6 +412,10 @@ std::shared_ptr<model::Molecular> MolecularSystem::combine(
     molecular_->exclusions = topology->get_exclusions();
     molecular_->groups = topology->get_groups();
     molecular_->cmaps = topology->get_cmaps();
+    // Add standardized CMAPs
+    for (const auto& cmap : topology->get_cmaps()) {
+        molecular_->add_standard_cmap(cmap);
+    }
     molecular_->titles = topology->get_titles();
 
     // 复制查找映射
@@ -607,6 +611,36 @@ void MolecularSystem::merge_topologies(
             new_angle.atom2 += atom_offset;
             new_angle.atom3 += atom_offset;
             molecular->angles.push_back(new_angle);
+        }
+        
+        // 复制二面角信息
+        for (const auto& dihedral : topology->get_dihedrals()) {
+            model::TopologyDihedral new_dihedral = dihedral;
+            new_dihedral.atom1 += atom_offset;
+            new_dihedral.atom2 += atom_offset;
+            new_dihedral.atom3 += atom_offset;
+            new_dihedral.atom4 += atom_offset;
+            molecular->dihedrals.push_back(new_dihedral);
+        }
+        
+        // 复制CMAP信息
+        for (const auto& cmap : topology->get_cmaps()) {
+            model::TopologyCmap new_cmap = cmap;
+            
+            // 首先更新所有8个原子的索引
+            for (size_t i = 0; i < new_cmap.atoms.size(); ++i) {
+                if (new_cmap.atoms[i] >= 0) {
+                    const auto& atom = topology->get_atom(new_cmap.atoms[i]);
+                    const auto& res = topology->get_residue(atom.residue_id);
+                    if (res.name != "SOL") {
+                        new_cmap.atoms[i] += atom_offset;
+                    }
+                }
+            }
+            
+            molecular->cmaps.push_back(new_cmap);
+            // 添加标准化的CMAP
+            molecular->add_standard_cmap(new_cmap);
         }
         
         // 更新偏移量

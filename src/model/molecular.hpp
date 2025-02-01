@@ -7,6 +7,7 @@
 #include <map>
 #include <string>
 #include <unordered_map>
+#include <array>
 #include "model/atom.hpp"
 #include "model/residue.hpp"
 #include "model/structure.hpp"
@@ -14,6 +15,16 @@
 
 namespace pygcmc {
 namespace model {
+
+/**
+ * @brief 标准化的CMAP结构，用于统一处理PSF和TOP格式
+ */
+struct StandardCmap {
+    std::array<int, 5> atoms;     ///< 标准化的5个原子索引
+    std::array<int, 8> raw_atoms; ///< 原始格式的原子索引（8个for PSF，5个+3个-1 for TOP）
+    bool is_psf_format;           ///< 是否是PSF格式
+    int function_type = 1;        ///< CMAP函数类型
+};
 
 /**
  * @brief 分子类，合并Structure和Topology的数据用于后续计算
@@ -43,7 +54,8 @@ public:
     std::vector<TopologyAcceptor> acceptors;  // 氢键受体
     std::map<int, std::set<int>> exclusions;  // 非键排除
     std::vector<TopologyGroup> groups;  // 原子组
-    std::vector<TopologyCmap> cmaps;  // CMAP项
+    std::vector<TopologyCmap> cmaps;  // 原始CMAP项
+    std::vector<StandardCmap> standard_cmaps;  // 标准化的CMAP项
     std::vector<std::string> titles;  // PSF文件的标题信息
 
     // 查找映射
@@ -84,6 +96,32 @@ public:
         return count;
     }
 
+    // 标准化CMAP相关方法
+    void add_standard_cmap(const TopologyCmap& cmap) {
+        StandardCmap std_cmap;
+        std_cmap.raw_atoms = cmap.atoms;
+        std_cmap.is_psf_format = (cmap.atoms[5] != -1);  // 判断是否为PSF格式
+        
+        // 设置标准化的5个原子
+        if (std_cmap.is_psf_format) {
+            // PSF格式：使用第1-4个原子和第8个原子
+            for (int i = 0; i < 4; ++i) {
+                std_cmap.atoms[i] = cmap.atoms[i];
+            }
+            std_cmap.atoms[4] = cmap.atoms[7];  // 使用第8个原子作为第5个原子
+        } else {
+            // TOP格式：直接使用前5个原子
+            for (int i = 0; i < 5; ++i) {
+                std_cmap.atoms[i] = cmap.atoms[i];
+            }
+        }
+        std_cmap.function_type = cmap.function_type;
+        standard_cmaps.push_back(std_cmap);
+    }
+
+    // 获取标准化CMAP数量
+    size_t get_num_standard_cmaps() const { return standard_cmaps.size(); }
+
     // 清除所有数据
     void clear() {
         // Structure数据
@@ -107,6 +145,7 @@ public:
         exclusions.clear();
         groups.clear();
         cmaps.clear();
+        standard_cmaps.clear();
         titles.clear();
 
         // 查找映射

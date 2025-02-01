@@ -129,6 +129,14 @@ void init_model(py::module& m) {
         .def_readwrite("atoms", &model::TopologyCmap::atoms)
         .def_readwrite("function_type", &model::TopologyCmap::function_type);
 
+    // Bind StandardCmap
+    py::class_<model::StandardCmap>(model, "StandardCmap")
+        .def(py::init<>())
+        .def_readwrite("atoms", &model::StandardCmap::atoms)
+        .def_readwrite("raw_atoms", &model::StandardCmap::raw_atoms)
+        .def_readwrite("is_psf_format", &model::StandardCmap::is_psf_format)
+        .def_readwrite("function_type", &model::StandardCmap::function_type);
+
     // Bind Structure to main module
     auto structure = py::class_<model::Structure>(m, "Structure")
         .def(py::init<>())
@@ -245,6 +253,8 @@ void init_model(py::module& m) {
         .def("get_num_acceptors", &model::Topology::get_num_acceptors)
         .def("get_num_cmaps", &model::Topology::get_num_cmaps)
         .def("get_num_groups", &model::Topology::get_num_groups)
+        .def("get_cmaps", &model::Topology::get_cmaps, py::return_value_policy::reference_internal)
+        .def_property_readonly("cmaps", &model::Topology::get_cmaps, py::return_value_policy::reference_internal)
         .def("get_group", &model::Topology::get_group, py::return_value_policy::reference_internal)
         .def("has_atom", &model::Topology::has_atom)
         .def("has_group", &model::Topology::has_group)
@@ -562,6 +572,7 @@ void init_model(py::module& m) {
         .def_readwrite("exclusions", &model::Molecular::exclusions)
         .def_readwrite("groups", &model::Molecular::groups)
         .def_readwrite("cmaps", &model::Molecular::cmaps)
+        .def_readwrite("standard_cmaps", &model::Molecular::standard_cmaps)
         .def_readwrite("titles", &model::Molecular::titles)
         .def_readwrite("segment_map", &model::Molecular::segment_map)
         .def_readwrite("residue_map", &model::Molecular::residue_map)
@@ -573,6 +584,8 @@ void init_model(py::module& m) {
         .def("get_num_angles", &model::Molecular::get_num_angles)
         .def("get_num_dihedrals", &model::Molecular::get_num_dihedrals)
         .def("get_num_impropers", &model::Molecular::get_num_impropers)
+        .def("get_num_standard_cmaps", &model::Molecular::get_num_standard_cmaps)
+        .def("add_standard_cmap", &model::Molecular::add_standard_cmap)
         .def("clear", &model::Molecular::clear);
 }
 
