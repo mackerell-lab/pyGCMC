@@ -174,6 +174,7 @@ void init_model(py::module& m) {
         .def("get_formatted_atom_name", &model::Atom::get_formatted_atom_name)
         .def("get_residue_id", &model::Atom::get_residue_id)
         .def("get_mass", &model::Atom::get_mass)
+        .def("get_charge", &model::Atom::get_charge)
         .def("set_residue_id", &model::Atom::set_residue_id)
         .def("set_coor", &model::Atom::set_coor)
         .def("set_mass_charge", &model::Atom::set_mass_charge)

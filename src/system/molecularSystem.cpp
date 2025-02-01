@@ -594,14 +594,20 @@ void MolecularSystem::merge_topologies(
         
         // 复制键合信息
         for (const auto& bond : topology->get_bonds()) {
-            model::TopologyBond new_bond = bond;  // 使用正确的类型
+            model::TopologyBond new_bond = bond;
             new_bond.atom1 += atom_offset;
             new_bond.atom2 += atom_offset;
             molecular->bonds.push_back(new_bond);
         }
         
-        // 复制其他拓扑信息...
-        // TODO: 添加其他拓扑信息的合并
+        // 复制角度信息
+        for (const auto& angle : topology->get_angles()) {
+            model::TopologyAngle new_angle = angle;
+            new_angle.atom1 += atom_offset;
+            new_angle.atom2 += atom_offset;
+            new_angle.atom3 += atom_offset;
+            molecular->angles.push_back(new_angle);
+        }
         
         // 更新偏移量
         atom_offset += topology->get_num_atoms();
