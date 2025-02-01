@@ -42,6 +42,93 @@ void init_model(py::module& m) {
         .def_readwrite("iCode", &model::Structure::TerminalInfo::iCode)
         .def_readwrite("resName", &model::Structure::TerminalInfo::resName);
 
+    // Bind TopologyAtom
+    py::class_<model::TopologyAtom>(model, "TopologyAtom")
+        .def(py::init<>())
+        .def_readwrite("id", &model::TopologyAtom::id)
+        .def_readwrite("name", &model::TopologyAtom::name)
+        .def_readwrite("type", &model::TopologyAtom::type)
+        .def_readwrite("charge", &model::TopologyAtom::charge)
+        .def_readwrite("mass", &model::TopologyAtom::mass)
+        .def_readwrite("residue_id", &model::TopologyAtom::residue_id)
+        .def_readwrite("segment_id", &model::TopologyAtom::segment_id)
+        .def_readwrite("typeB", &model::TopologyAtom::typeB)
+        .def_readwrite("chargeB", &model::TopologyAtom::chargeB)
+        .def_readwrite("massB", &model::TopologyAtom::massB)
+        .def_readwrite("has_b_state", &model::TopologyAtom::has_b_state);
+
+    // Bind TopologySegment
+    py::class_<model::TopologySegment>(model, "TopologySegment")
+        .def(py::init<>())
+        .def_readwrite("id", &model::TopologySegment::id)
+        .def_readwrite("name", &model::TopologySegment::name)
+        .def_readwrite("residues", &model::TopologySegment::residues);
+
+    // Bind TopologyBond
+    py::class_<model::TopologyBond>(model, "TopologyBond")
+        .def(py::init<>())
+        .def_readwrite("atom1", &model::TopologyBond::atom1)
+        .def_readwrite("atom2", &model::TopologyBond::atom2)
+        .def_readwrite("length", &model::TopologyBond::length)
+        .def_readwrite("force_constant", &model::TopologyBond::force_constant)
+        .def_readwrite("function_type", &model::TopologyBond::function_type)
+        .def("__len__", [](const model::TopologyBond&) { return 2; })  // Bond always connects 2 atoms
+        .def("__getitem__", [](const model::TopologyBond& bond, size_t i) {
+            if (i == 0) return bond.atom1;
+            if (i == 1) return bond.atom2;
+            throw py::index_error("Bond index out of range");
+        });
+
+    // Bind TopologyAngle
+    py::class_<model::TopologyAngle>(model, "TopologyAngle")
+        .def(py::init<>())
+        .def_readwrite("atom1", &model::TopologyAngle::atom1)
+        .def_readwrite("atom2", &model::TopologyAngle::atom2)
+        .def_readwrite("atom3", &model::TopologyAngle::atom3)
+        .def_readwrite("angle", &model::TopologyAngle::angle)
+        .def_readwrite("force_constant", &model::TopologyAngle::force_constant)
+        .def_readwrite("function_type", &model::TopologyAngle::function_type)
+        .def_readwrite("ub_length", &model::TopologyAngle::ub_length)
+        .def_readwrite("ub_constant", &model::TopologyAngle::ub_constant)
+        .def_readwrite("has_ub", &model::TopologyAngle::has_ub)
+        .def("__len__", [](const model::TopologyAngle&) { return 3; })  // Angle always involves 3 atoms
+        .def("__getitem__", [](const model::TopologyAngle& angle, size_t i) {
+            if (i == 0) return angle.atom1;
+            if (i == 1) return angle.atom2;
+            if (i == 2) return angle.atom3;
+            throw py::index_error("Angle index out of range");
+        });
+
+    // Bind TopologyDihedral
+    py::class_<model::TopologyDihedral>(model, "TopologyDihedral")
+        .def(py::init<>())
+        .def_readwrite("atom1", &model::TopologyDihedral::atom1)
+        .def_readwrite("atom2", &model::TopologyDihedral::atom2)
+        .def_readwrite("atom3", &model::TopologyDihedral::atom3)
+        .def_readwrite("atom4", &model::TopologyDihedral::atom4)
+        .def_readwrite("multiplicity", &model::TopologyDihedral::multiplicity)
+        .def_readwrite("angle", &model::TopologyDihedral::angle)
+        .def_readwrite("force_constant", &model::TopologyDihedral::force_constant)
+        .def_readwrite("improper", &model::TopologyDihedral::improper)
+        .def_readwrite("function_type", &model::TopologyDihedral::function_type);
+
+    // Bind TopologyDonor
+    py::class_<model::TopologyDonor>(model, "TopologyDonor")
+        .def(py::init<>())
+        .def_readwrite("donor_atom", &model::TopologyDonor::donor_atom)
+        .def_readwrite("hydrogen_atom", &model::TopologyDonor::hydrogen_atom);
+
+    // Bind TopologyAcceptor
+    py::class_<model::TopologyAcceptor>(model, "TopologyAcceptor")
+        .def(py::init<>())
+        .def_readwrite("acceptor_atom", &model::TopologyAcceptor::acceptor_atom);
+
+    // Bind TopologyCmap
+    py::class_<model::TopologyCmap>(model, "TopologyCmap")
+        .def(py::init<>())
+        .def_readwrite("atoms", &model::TopologyCmap::atoms)
+        .def_readwrite("function_type", &model::TopologyCmap::function_type);
+
     // Bind Structure to main module
     auto structure = py::class_<model::Structure>(m, "Structure")
         .def(py::init<>())
@@ -177,13 +264,6 @@ void init_model(py::module& m) {
         .def_readonly("number", &model::TopologyResidue::number)
         .def_readonly("atoms", &model::TopologyResidue::atoms)
         .def_readonly("segment", &model::TopologyResidue::segment);
-
-    // Bind TopologyAtom
-    py::class_<model::TopologyAtom>(model, "TopologyAtom")
-        .def_readonly("name", &model::TopologyAtom::name)
-        .def_readonly("type", &model::TopologyAtom::type)
-        .def_readonly("charge", &model::TopologyAtom::charge)
-        .def_readonly("mass", &model::TopologyAtom::mass);
 
     // Bind TopologyGroup
     py::class_<model::TopologyGroup>(model, "TopologyGroup")

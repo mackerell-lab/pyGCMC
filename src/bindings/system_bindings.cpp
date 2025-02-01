@@ -18,10 +18,33 @@ void init_system(py::module& m) {
         .def("initialize_mc_time_list", &system::System::initialize_mc_time_list,
              "Initialize Monte Carlo time list");
 
-    py::class_<system::MolecularSystem>(m, "MolecularSystem")
+    py::class_<system::MolecularSystem, std::shared_ptr<system::MolecularSystem>>(m, "MolecularSystem")
         .def(py::init<>())
-        .def("combine", &system::MolecularSystem::combine,
-             py::arg("structure").none(false), py::arg("topology").none(false),
+        .def("combine", 
+             [](system::MolecularSystem& self, 
+                py::object structure, 
+                py::object topology) {
+                 // First check for None values
+                 if (structure.is_none() || topology.is_none()) {
+                     throw py::value_error("Structure and Topology cannot be None");
+                 }
+                 
+                 // Then try to convert to the correct types
+                 const model::Structure* struct_ptr = structure.cast<const model::Structure*>();
+                 const model::Topology* top_ptr = topology.cast<const model::Topology*>();
+                 
+                 // Create shared_ptr without ownership
+                 auto struct_shared = std::shared_ptr<model::Structure>(
+                     const_cast<model::Structure*>(struct_ptr), 
+                     [](model::Structure*){});
+                 auto top_shared = std::shared_ptr<model::Topology>(
+                     const_cast<model::Topology*>(top_ptr), 
+                     [](model::Topology*){});
+                 
+                 return self.combine(struct_shared, top_shared);
+             },
+             py::arg("structure"), 
+             py::arg("topology"),
              py::return_value_policy::move,
              "Combine Structure and Topology data into a Molecular object");
 }

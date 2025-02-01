@@ -25,6 +25,11 @@ model::Topology TOPParser::parse_file(const std::string& filename) {
 }
 
 model::Topology TOPParser::parse_string(const std::string& top_str) {
+    // Handle empty string case
+    if (top_str.empty()) {
+        return model::Topology();
+    }
+    
     // Create a temporary file to write the string to
     std::filesystem::path temp_dir = std::filesystem::temp_directory_path();
     std::filesystem::path temp_file = temp_dir / "temp_topology.top";
@@ -605,6 +610,32 @@ bool TOPParser::parse_moleculetype_section(const std::vector<LineInfo>& lines, [
 }
 
 bool TOPParser::parse_atoms_section(const std::vector<LineInfo>& lines, model::Topology& topology) {
+    // Get current residue number offset from segment name
+    int segment_index = 0;
+    size_t underscore_pos = current_molecule_type_.find_last_of('_');
+    if (underscore_pos != std::string::npos) {
+        try {
+            segment_index = std::stoi(current_molecule_type_.substr(underscore_pos + 1));
+        } catch (...) {
+            segment_index = 0;
+        }
+    }
+
+    // Find the maximum residue number in this molecule definition
+    int max_resnum = 0;
+    for (const auto& line_info : lines) {
+        const std::string& line = line_info.content;
+        auto tokens = split(remove_comment(line));
+        if (tokens.size() < 8) continue;
+        try {
+            int resnum = std::stoi(tokens[2]);
+            max_resnum = std::max(max_resnum, resnum);
+        } catch (...) {
+            continue;
+        }
+    }
+
+    // Now parse atoms with adjusted residue numbers
     for (const auto& line_info : lines) {
         const std::string& line = line_info.content;
         auto tokens = split(remove_comment(line));
@@ -619,6 +650,9 @@ bool TOPParser::parse_atoms_section(const std::vector<LineInfo>& lines, model::T
             double charge = std::stod(tokens[6]);
             double mass = std::stod(tokens[7]);
 
+            // Adjust residue number based on segment index
+            int adjusted_resnum = residue_number + (segment_index * max_resnum);
+
             // Add atom to topology using current_molecule_type_ as segment
             topology.add_atom(
                 atom_name,
@@ -626,7 +660,7 @@ bool TOPParser::parse_atoms_section(const std::vector<LineInfo>& lines, model::T
                 charge,
                 mass,
                 residue_name,
-                residue_number,
+                adjusted_resnum,
                 current_molecule_type_
             );
         } catch (const std::exception& e) {

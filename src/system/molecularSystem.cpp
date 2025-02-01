@@ -1,5 +1,8 @@
 #include "system/molecularSystem.hpp"
 #include <stdexcept>
+#include <sstream>
+#include <iostream>
+#include <map>
 
 namespace pygcmc {
 namespace system {
@@ -29,6 +32,44 @@ std::shared_ptr<model::Molecular> MolecularSystem::combine(
     const auto num_atoms = static_cast<size_t>(topology->get_num_atoms());
     const auto num_residues = static_cast<size_t>(topology->get_num_residues());
     const auto num_segments = static_cast<size_t>(topology->get_num_segments());
+
+    // 统计Structure中每种残基类型的原子数
+    std::map<std::string, size_t> struct_res_atoms;
+    for (const auto& res : molecular_->residues) {
+        struct_res_atoms[res->get_resname()] += res->get_atoms().size();
+    }
+
+    // 统计Topology中每种残基类型的原子数
+    std::map<std::string, size_t> top_res_atoms;
+    for (size_t i = 0; i < num_residues; ++i) {
+        const auto& res = topology->get_residue(static_cast<int>(i));
+        top_res_atoms[res.name] += res.atoms.size();
+    }
+
+    // 输出Structure中的残基信息
+    std::cout << "\nStructure Residues (" << molecular_->residues.size() << " total):" << std::endl;
+    for (const auto& res : molecular_->residues) {
+        std::cout << "  " << res->get_resname() << " " << res->get_ires() 
+                 << " Chain:" << res->get_chain() 
+                 << " Atoms:" << res->get_atoms().size() << std::endl;
+    }
+    std::cout << "\nStructure residue type atom counts:" << std::endl;
+    for (const auto& [resname, count] : struct_res_atoms) {
+        std::cout << "  " << resname << ": " << count << " atoms" << std::endl;
+    }
+
+    // 输出Topology中的残基信息
+    std::cout << "\nTopology Residues (" << num_residues << " total):" << std::endl;
+    for (size_t i = 0; i < num_residues; ++i) {
+        const auto& res = topology->get_residue(static_cast<int>(i));
+        std::cout << "  " << res.name << " " << res.number 
+                 << " Segment:" << res.segment 
+                 << " Atoms:" << res.atoms.size() << std::endl;
+    }
+    std::cout << "\nTopology residue type atom counts:" << std::endl;
+    for (const auto& [resname, count] : top_res_atoms) {
+        std::cout << "  " << resname << ": " << count << " atoms" << std::endl;
+    }
 
     molecular_->topology_atoms.reserve(num_atoms);
     molecular_->topology_residues.reserve(num_residues);
@@ -72,13 +113,24 @@ std::shared_ptr<model::Molecular> MolecularSystem::combine(
         molecular_->atom_map[std::make_tuple(residue.name, residue.number, atom.name)] = atom.id;
     }
 
-    // 验证数据一致性
-    if (molecular_->atoms.size() != num_atoms) {
-        throw std::runtime_error("Inconsistent number of atoms between Structure and Topology");
+    // 验证数据一致性：检查每种残基类型的原子总数
+    for (const auto& [resname, count] : struct_res_atoms) {
+        if (top_res_atoms[resname] != count) {
+            std::stringstream ss;
+            ss << "Inconsistent number of atoms for residue type " << resname 
+               << ": Structure has " << count << " atoms, but Topology has " 
+               << top_res_atoms[resname] << " atoms";
+            throw std::runtime_error(ss.str());
+        }
     }
 
-    if (molecular_->residues.size() != num_residues) {
-        throw std::runtime_error("Inconsistent number of residues between Structure and Topology");
+    // 验证总原子数
+    if (molecular_->atoms.size() != num_atoms) {
+        std::stringstream ss;
+        ss << "Inconsistent total number of atoms: Structure has " 
+           << molecular_->atoms.size() << " atoms, but Topology has " 
+           << num_atoms << " atoms";
+        throw std::runtime_error(ss.str());
     }
 
     return molecular_;
