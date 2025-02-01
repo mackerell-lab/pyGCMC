@@ -142,3 +142,24 @@ def test_combine_empty_data():
     assert len(molecular.residue_map) == 0
     assert len(molecular.atom_map) == 0
 
+def test_combine_incompatible_files():
+    """Test error handling when combining incompatible structure and topology files."""
+    # Load test.pdb which contains protein, BENX, PRPX, and SOL
+    pdb_path = os.path.join(TEST_DATA_DIR, "test.pdb")
+    structure = pygcmc.PDBParser.parse_file(pdb_path)
+    
+    # Load test_proa.psf which only contains protein chain
+    psf_path = os.path.join(TEST_DATA_DIR, "test_proa.psf")
+    topology = pygcmc.io.PSFParser.parse_file(psf_path)
+    
+    # Attempt to combine should raise an error
+    mol_system = pygcmc.MolecularSystem()
+    with pytest.raises(RuntimeError) as excinfo:
+        molecular = mol_system.combine(structure, topology)
+    
+    # Check that the error message is descriptive
+    error_msg = str(excinfo.value)
+    assert "Inconsistent total number of" in error_msg
+    assert "Structure has" in error_msg
+    assert "but Topology has" in error_msg
+

@@ -1,4 +1,5 @@
 #include "system/molecularSystem.hpp"
+#include "system/system.hpp"
 #include <stdexcept>
 #include <sstream>
 #include <iostream>
@@ -8,6 +9,9 @@
 
 namespace pygcmc {
 namespace system {
+
+using System = pygcmc::system::System;
+using LogLevel = pygcmc::system::LogLevel;
 
 std::shared_ptr<model::Molecular> MolecularSystem::combine(
     const std::shared_ptr<model::Structure>& structure,
@@ -251,10 +255,10 @@ std::shared_ptr<model::Molecular> MolecularSystem::combine(
             const std::string& resname = res->get_resname();
             auto it = mol_type_indices.find(resname);
             if (it != mol_type_indices.end()) {
-                std::cout << "Found " << it->second.size() << " instances of " << resname 
-                         << " in topology, current index: " << current_mol_index[resname] << std::endl;
+                System::log(LogLevel::DEBUG, "Found ", it->second.size(), " instances of ", 
+                          resname, " in topology, current index: ", current_mol_index[resname]);
             } else {
-                std::cout << "No instances of " << resname << " found in topology" << std::endl;
+                System::log(LogLevel::DEBUG, "No instances of ", resname, " found in topology");
             }
             
             if (it != mol_type_indices.end() && current_mol_index[resname] < it->second.size()) {
