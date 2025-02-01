@@ -33,42 +33,89 @@ std::shared_ptr<model::Molecular> MolecularSystem::combine(
     const auto num_residues = static_cast<size_t>(topology->get_num_residues());
     const auto num_segments = static_cast<size_t>(topology->get_num_segments());
 
-    // 统计Structure中每种残基类型的原子数
-    std::map<std::string, size_t> struct_res_atoms;
+    // 验证原子总数
+    if (molecular_->atoms.size() != num_atoms) {
+        std::stringstream ss;
+        ss << "Inconsistent total number of atoms: Structure has " 
+           << molecular_->atoms.size() << " atoms, but Topology has " 
+           << num_atoms << " atoms";
+        throw std::runtime_error(ss.str());
+    }
+
+    // 验证每个残基的原子数和类型
     for (const auto& res : molecular_->residues) {
-        struct_res_atoms[res->get_resname()] += res->get_atoms().size();
-    }
+        const auto& res_atoms = res->get_atoms();
+        bool found_matching_res = false;
+        
+        // 在topology中查找匹配的残基
+        for (size_t i = 0; i < num_residues; ++i) {
+            const auto& top_res = topology->get_residue(static_cast<int>(i));
+            
+            // 检查是否是蛋白质残基
+            const std::string& resname = res->get_resname();
+            bool is_protein = (resname.length() == 3) && 
+                            (resname != "SOL") && (resname != "WAT") && (resname != "HOH") &&  // 水分子
+                            (resname != "ION") && (resname != "CLA") && (resname != "SOD") &&  // 离子
+                            (resname != "TIP") && (resname != "SPC");  // 其他水模型
+            
+            bool residue_matches;
+            if (is_protein) {
+                residue_matches = (top_res.name == resname && top_res.number == res->get_ires());
+            } else {
+                residue_matches = (top_res.name == resname);
+            }
+            
+            if (residue_matches) {
+                found_matching_res = true;
+                
+                // 检查原子数量
+                if (res_atoms.size() != top_res.atoms.size()) {
+                    std::stringstream ss;
+                    ss << "Inconsistent number of atoms in residue " << res->get_resname() 
+                       << " " << res->get_ires() << ": Structure has " 
+                       << res_atoms.size() << " atoms, but Topology has " 
+                       << top_res.atoms.size() << " atoms";
+                    throw std::runtime_error(ss.str());
+                }
 
-    // 统计Topology中每种残基类型的原子数
-    std::map<std::string, size_t> top_res_atoms;
-    for (size_t i = 0; i < num_residues; ++i) {
-        const auto& res = topology->get_residue(static_cast<int>(i));
-        top_res_atoms[res.name] += res.atoms.size();
-    }
-
-    // 输出Structure中的残基信息
-    std::cout << "\nStructure Residues (" << molecular_->residues.size() << " total):" << std::endl;
-    for (const auto& res : molecular_->residues) {
-        std::cout << "  " << res->get_resname() << " " << res->get_ires() 
-                 << " Chain:" << res->get_chain() 
-                 << " Atoms:" << res->get_atoms().size() << std::endl;
-    }
-    std::cout << "\nStructure residue type atom counts:" << std::endl;
-    for (const auto& [resname, count] : struct_res_atoms) {
-        std::cout << "  " << resname << ": " << count << " atoms" << std::endl;
-    }
-
-    // 输出Topology中的残基信息
-    std::cout << "\nTopology Residues (" << num_residues << " total):" << std::endl;
-    for (size_t i = 0; i < num_residues; ++i) {
-        const auto& res = topology->get_residue(static_cast<int>(i));
-        std::cout << "  " << res.name << " " << res.number 
-                 << " Segment:" << res.segment 
-                 << " Atoms:" << res.atoms.size() << std::endl;
-    }
-    std::cout << "\nTopology residue type atom counts:" << std::endl;
-    for (const auto& [resname, count] : top_res_atoms) {
-        std::cout << "  " << resname << ": " << count << " atoms" << std::endl;
+                // 检查原子类型
+                for (size_t j = 0; j < res_atoms.size(); ++j) {
+                    const auto& pdb_atom = res_atoms[j];
+                    const auto& top_atom = topology->get_atom(top_res.atoms[j]);
+                    
+                    // 从PDB原子名称中提取元素
+                    std::string pdb_element = pdb_atom->get_element();
+                    if (pdb_element.empty()) {
+                        pdb_element = pdb_atom->get_type();
+                    }
+                    
+                    // 从topology原子类型中提取元素
+                    std::string top_element = top_atom.type;
+                    
+                    // 比较第一个字母（转为大写）
+                    char pdb_first = std::toupper(pdb_element[0]);
+                    char top_first = std::toupper(top_element[0]);
+                    
+                    if (pdb_first != top_first) {
+                        std::stringstream ss;
+                        ss << "Mismatched atom elements in residue " << res->get_resname() 
+                           << " " << res->get_ires() << ": Structure has " 
+                           << pdb_first << " (from " << pdb_atom->get_type() 
+                           << "), but Topology has " << top_first 
+                           << " (from " << top_atom.type << ")";
+                        throw std::runtime_error(ss.str());
+                    }
+                }
+                break;
+            }
+        }
+        
+        if (!found_matching_res) {
+            std::stringstream ss;
+            ss << "Could not find matching residue in topology for " 
+               << res->get_resname() << " " << res->get_ires();
+            throw std::runtime_error(ss.str());
+        }
     }
 
     molecular_->topology_atoms.reserve(num_atoms);
@@ -111,26 +158,6 @@ std::shared_ptr<model::Molecular> MolecularSystem::combine(
         const auto& atom = topology->get_atom(static_cast<int>(i));
         const auto& residue = topology->get_residue(atom.residue_id);
         molecular_->atom_map[std::make_tuple(residue.name, residue.number, atom.name)] = atom.id;
-    }
-
-    // 验证数据一致性：检查每种残基类型的原子总数
-    for (const auto& [resname, count] : struct_res_atoms) {
-        if (top_res_atoms[resname] != count) {
-            std::stringstream ss;
-            ss << "Inconsistent number of atoms for residue type " << resname 
-               << ": Structure has " << count << " atoms, but Topology has " 
-               << top_res_atoms[resname] << " atoms";
-            throw std::runtime_error(ss.str());
-        }
-    }
-
-    // 验证总原子数
-    if (molecular_->atoms.size() != num_atoms) {
-        std::stringstream ss;
-        ss << "Inconsistent total number of atoms: Structure has " 
-           << molecular_->atoms.size() << " atoms, but Topology has " 
-           << num_atoms << " atoms";
-        throw std::runtime_error(ss.str());
     }
 
     return molecular_;
