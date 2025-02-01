@@ -3,6 +3,7 @@
 # Create system library
 add_library(pygcmc_system
     system.cpp
+    molecularSystem.cpp
 )
 
 # Set position independent code property

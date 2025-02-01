@@ -9,7 +9,7 @@ namespace bindings {
 // Forward declarations of submodule initialization functions
 void init_model(py::module& m);
 void init_io(py::module& m);
-void bind_system(py::module&);
+void init_system(py::module& m);
 
 PYBIND11_MODULE(pygcmc, m) {
     m.doc() = "Python bindings for GCMC simulation library"; // optional module docstring
@@ -17,7 +17,7 @@ PYBIND11_MODULE(pygcmc, m) {
     // Initialize submodules
     init_model(m);
     init_io(m);
-    bind_system(m);
+    init_system(m);
 }
 
 } // namespace bindings

@@ -8,6 +8,7 @@
 #include "model/structure.hpp"
 #include "model/forcefield.hpp"
 #include "model/param.hpp"
+#include "model/molecular.hpp"
 
 namespace py = pybind11;
 // using namespace pygcmc;
@@ -458,6 +459,40 @@ void init_model(py::module& m) {
         .def_readwrite("tmp_frag_name", &model::Param::FileInfo::tmp_frag_name)
         .def_readwrite("generate_maps", &model::Param::FileInfo::generate_maps)
         .def_readwrite("map_prefix", &model::Param::FileInfo::map_prefix);
+
+    // Bind Molecular class
+    py::class_<model::Molecular, std::shared_ptr<model::Molecular>>(model, "Molecular")
+        .def(py::init<>())
+        .def_readwrite("atoms", &model::Molecular::atoms)
+        .def_readwrite("residues", &model::Molecular::residues)
+        .def_readwrite("terminals", &model::Molecular::terminals)
+        .def_readwrite("helices", &model::Molecular::helices)
+        .def_readwrite("sheets", &model::Molecular::sheets)
+        .def_readwrite("ssbonds", &model::Molecular::ssbonds)
+        .def_readwrite("boxDimensions", &model::Molecular::boxDimensions)
+        .def_readwrite("topology_atoms", &model::Molecular::topology_atoms)
+        .def_readwrite("topology_residues", &model::Molecular::topology_residues)
+        .def_readwrite("segments", &model::Molecular::segments)
+        .def_readwrite("bonds", &model::Molecular::bonds)
+        .def_readwrite("angles", &model::Molecular::angles)
+        .def_readwrite("dihedrals", &model::Molecular::dihedrals)
+        .def_readwrite("donors", &model::Molecular::donors)
+        .def_readwrite("acceptors", &model::Molecular::acceptors)
+        .def_readwrite("exclusions", &model::Molecular::exclusions)
+        .def_readwrite("groups", &model::Molecular::groups)
+        .def_readwrite("cmaps", &model::Molecular::cmaps)
+        .def_readwrite("titles", &model::Molecular::titles)
+        .def_readwrite("segment_map", &model::Molecular::segment_map)
+        .def_readwrite("residue_map", &model::Molecular::residue_map)
+        .def_readwrite("atom_map", &model::Molecular::atom_map)
+        .def("get_num_atoms", &model::Molecular::get_num_atoms)
+        .def("get_num_residues", &model::Molecular::get_num_residues)
+        .def("get_num_segments", &model::Molecular::get_num_segments)
+        .def("get_num_bonds", &model::Molecular::get_num_bonds)
+        .def("get_num_angles", &model::Molecular::get_num_angles)
+        .def("get_num_dihedrals", &model::Molecular::get_num_dihedrals)
+        .def("get_num_impropers", &model::Molecular::get_num_impropers)
+        .def("clear", &model::Molecular::clear);
 }
 
 } // namespace bindings
