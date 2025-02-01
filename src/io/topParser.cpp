@@ -25,8 +25,10 @@ model::Topology TOPParser::parse_file(const std::string& filename) {
 }
 
 model::Topology TOPParser::parse_string(const std::string& top_str) {
-    // Handle empty string case
-    if (top_str.empty()) {
+    // Handle empty string case - first trim whitespace
+    std::string trimmed_str = top_str;
+    trim(trimmed_str);
+    if (trimmed_str.empty()) {
         return model::Topology();
     }
     
@@ -39,7 +41,7 @@ model::Topology TOPParser::parse_string(const std::string& top_str) {
     if (!out) {
         throw std::runtime_error("Failed to create temporary file for topology parsing");
     }
-    out << top_str;
+    out << top_str;  // Write original string to preserve formatting
     out.close();
     
     try {

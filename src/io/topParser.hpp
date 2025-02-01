@@ -135,7 +135,7 @@ private:
     std::string resolve_include_path(const std::string& include_path, const std::string& parent_file);
 
     // Helper functions
-    std::string trim(std::string& str);
+    static std::string trim(std::string& str);
     std::vector<std::string> split(const std::string& str);
     std::string remove_comment(const std::string& line);  // New helper for comment handling
 
