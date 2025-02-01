@@ -43,7 +43,44 @@ std::shared_ptr<model::Molecular> MolecularSystem::combine(
         std::stringstream ss;
         ss << "Inconsistent total number of atoms: Structure has " 
            << molecular_->atoms.size() << " atoms, but Topology has " 
-           << num_atoms << " atoms";
+           << num_atoms << " atoms\n"
+           << "This mismatch suggests that the structure file contains additional molecules "
+           << "that are not present in the topology file.\n"
+           << "Structure residues (in PDB order):";
+        
+        // 按PDB顺序列出结构文件中的残基
+        for (const auto& res : molecular_->residues) {
+            ss << "\n  " << res->get_resname() << " " << res->get_ires();
+        }
+        
+        ss << "\n\nTopology residues:";
+        // 按顺序列出拓扑文件中的残基
+        for (size_t i = 0; i < num_residues; ++i) {
+            const auto& res = topology->get_residue(static_cast<int>(i));
+            ss << "\n  " << res.name << " " << res.number;
+        }
+        
+        // 添加残基统计信息
+        ss << "\n\nResidue count summary:";
+        ss << "\nStructure:";
+        std::map<std::string, int> struct_res_count;
+        for (const auto& res : molecular_->residues) {
+            struct_res_count[res->get_resname()]++;
+        }
+        for (const auto& [resname, count] : struct_res_count) {
+            ss << "\n  " << resname << ": " << count;
+        }
+        
+        ss << "\nTopology:";
+        std::map<std::string, int> top_res_count;
+        for (size_t i = 0; i < num_residues; ++i) {
+            const auto& res = topology->get_residue(static_cast<int>(i));
+            top_res_count[res.name]++;
+        }
+        for (const auto& [resname, count] : top_res_count) {
+            ss << "\n  " << resname << ": " << count;
+        }
+        
         throw std::runtime_error(ss.str());
     }
 
@@ -52,7 +89,44 @@ std::shared_ptr<model::Molecular> MolecularSystem::combine(
         std::stringstream ss;
         ss << "Inconsistent total number of residues: Structure has " 
            << molecular_->residues.size() << " residues, but Topology has " 
-           << num_residues << " residues";
+           << num_residues << " residues\n"
+           << "This mismatch suggests that the structure file contains additional residues "
+           << "that are not present in the topology file.\n"
+           << "Structure residues (in PDB order):";
+        
+        // 按PDB顺序列出结构文件中的残基
+        for (const auto& res : molecular_->residues) {
+            ss << "\n  " << res->get_resname() << " " << res->get_ires();
+        }
+        
+        ss << "\n\nTopology residues:";
+        // 按顺序列出拓扑文件中的残基
+        for (size_t i = 0; i < num_residues; ++i) {
+            const auto& res = topology->get_residue(static_cast<int>(i));
+            ss << "\n  " << res.name << " " << res.number;
+        }
+        
+        // 添加残基统计信息
+        ss << "\n\nResidue count summary:";
+        ss << "\nStructure:";
+        std::map<std::string, int> struct_res_count;
+        for (const auto& res : molecular_->residues) {
+            struct_res_count[res->get_resname()]++;
+        }
+        for (const auto& [resname, count] : struct_res_count) {
+            ss << "\n  " << resname << ": " << count;
+        }
+        
+        ss << "\nTopology:";
+        std::map<std::string, int> top_res_count;
+        for (size_t i = 0; i < num_residues; ++i) {
+            const auto& res = topology->get_residue(static_cast<int>(i));
+            top_res_count[res.name]++;
+        }
+        for (const auto& [resname, count] : top_res_count) {
+            ss << "\n  " << resname << ": " << count;
+        }
+        
         throw std::runtime_error(ss.str());
     }
 
