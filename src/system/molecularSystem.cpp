@@ -434,5 +434,224 @@ std::shared_ptr<model::Molecular> MolecularSystem::combine(
     return molecular_;
 }
 
+std::shared_ptr<model::Molecular> MolecularSystem::combine_multiple(
+    const std::shared_ptr<model::Structure>& structure,
+    const std::vector<std::shared_ptr<model::Topology>>& topologies) {
+    
+    if (!structure || topologies.empty()) {
+        throw std::invalid_argument("Structure and Topologies cannot be null/empty");
+    }
+
+    // 创建新的Molecular对象
+    molecular_ = std::make_shared<model::Molecular>();
+
+    // 从Structure复制数据
+    molecular_->atoms = structure->get_atoms();
+    molecular_->residues = structure->get_residues();
+    molecular_->terminals = structure->get_terminals();
+    molecular_->helices = structure->get_helices();
+    molecular_->sheets = structure->get_sheets();
+    molecular_->ssbonds = structure->get_ssbonds();
+    molecular_->boxDimensions = structure->get_box_dimensions();
+
+    // 尝试匹配每个topology
+    std::vector<bool> residue_matched(molecular_->residues.size(), false);
+    std::vector<std::shared_ptr<model::Topology>> matched_topologies;
+    
+    // 首先尝试匹配最长的残基序列
+    for (size_t start_idx = 0; start_idx < molecular_->residues.size(); ++start_idx) {
+        if (residue_matched[start_idx]) continue;
+        
+        for (const auto& topology : topologies) {
+            size_t matched_count = 0;
+            if (match_residue_sequence(molecular_->residues, topology, start_idx, matched_count)) {
+                // 标记匹配的残基
+                for (size_t i = 0; i < matched_count; ++i) {
+                    residue_matched[start_idx + i] = true;
+                }
+                matched_topologies.push_back(topology);
+                break;
+            }
+        }
+    }
+    
+    // 检查是否所有残基都已匹配
+    for (size_t i = 0; i < residue_matched.size(); ++i) {
+        if (!residue_matched[i]) {
+            std::stringstream ss;
+            ss << "Could not find matching topology for residue " 
+               << molecular_->residues[i]->get_resname()
+               << " " << molecular_->residues[i]->get_ires();
+            throw std::runtime_error(ss.str());
+        }
+    }
+    
+    // 合并所有匹配的topology
+    merge_topologies(molecular_, matched_topologies);
+    
+    return molecular_;
+}
+
+bool MolecularSystem::match_residue_sequence(
+    const std::vector<std::shared_ptr<model::Residue>>& pdb_residues,
+    const std::shared_ptr<model::Topology>& topology,
+    size_t start_idx,
+    size_t& matched_count) {
+    
+    matched_count = 0;
+    const size_t top_num_residues = topology->get_num_residues();
+    
+    // 如果剩余的残基数量不足，直接返回false
+    if (start_idx + top_num_residues > pdb_residues.size()) {
+        return false;
+    }
+    
+    // 检查残基序列是否匹配
+    for (size_t i = 0; i < top_num_residues; ++i) {
+        const auto& pdb_res = pdb_residues[start_idx + i];
+        const auto& top_res = topology->get_residue(static_cast<int>(i));
+        
+        if (pdb_res->get_resname() != top_res.name) {
+            return false;
+        }
+        
+        try {
+            verify_atom_types(pdb_res, top_res, topology);
+        } catch (const std::runtime_error&) {
+            return false;
+        }
+        
+        matched_count++;
+    }
+    
+    return true;
+}
+
+void MolecularSystem::merge_topologies(
+    std::shared_ptr<model::Molecular>& molecular,
+    const std::vector<std::shared_ptr<model::Topology>>& topologies) {
+    
+    size_t total_atoms = 0;
+    size_t total_residues = 0;
+    
+    // 计算总数
+    for (const auto& topology : topologies) {
+        total_atoms += topology->get_num_atoms();
+        total_residues += topology->get_num_residues();
+    }
+    
+    // 验证总数是否匹配
+    if (molecular->atoms.size() != total_atoms) {
+        std::stringstream ss;
+        ss << "Total number of atoms mismatch: Structure has "
+           << molecular->atoms.size() << " atoms, but combined topologies have "
+           << total_atoms << " atoms";
+        throw std::runtime_error(ss.str());
+    }
+    
+    if (molecular->residues.size() != total_residues) {
+        std::stringstream ss;
+        ss << "Total number of residues mismatch: Structure has "
+           << molecular->residues.size() << " residues, but combined topologies have "
+           << total_residues << " residues";
+        throw std::runtime_error(ss.str());
+    }
+    
+    // 合并topology数据
+    molecular->topology_atoms.clear();
+    molecular->topology_residues.clear();
+    molecular->segments.clear();
+    molecular->bonds.clear();
+    molecular->angles.clear();
+    molecular->dihedrals.clear();
+    molecular->donors.clear();
+    molecular->acceptors.clear();
+    molecular->exclusions.clear();
+    molecular->groups.clear();
+    molecular->cmaps.clear();
+    
+    size_t atom_offset = 0;
+    size_t residue_offset = 0;
+    
+    for (const auto& topology : topologies) {
+        // 复制原子
+        for (int i = 0; i < topology->get_num_atoms(); ++i) {
+            auto atom = topology->get_atom(i);
+            atom.id += atom_offset;
+            atom.residue_id += residue_offset;
+            molecular->topology_atoms.push_back(atom);
+        }
+        
+        // 复制残基
+        for (int i = 0; i < topology->get_num_residues(); ++i) {
+            auto residue = topology->get_residue(i);
+            residue.id += residue_offset;
+            for (auto& atom_id : residue.atoms) {
+                atom_id += atom_offset;
+            }
+            molecular->topology_residues.push_back(residue);
+        }
+        
+        // 复制键合信息
+        for (const auto& bond : topology->get_bonds()) {
+            model::TopologyBond new_bond = bond;  // 使用正确的类型
+            new_bond.atom1 += atom_offset;
+            new_bond.atom2 += atom_offset;
+            molecular->bonds.push_back(new_bond);
+        }
+        
+        // 复制其他拓扑信息...
+        // TODO: 添加其他拓扑信息的合并
+        
+        // 更新偏移量
+        atom_offset += topology->get_num_atoms();
+        residue_offset += topology->get_num_residues();
+    }
+}
+
+void MolecularSystem::verify_atom_types(
+    const std::shared_ptr<model::Residue>& pdb_res,
+    const model::TopologyResidue& top_res,
+    const std::shared_ptr<model::Topology>& topology) {
+    
+    const auto& pdb_atoms = pdb_res->get_atoms();
+    if (pdb_atoms.size() != top_res.atoms.size()) {
+        std::stringstream ss;
+        ss << "Inconsistent number of atoms in residue " << pdb_res->get_resname()
+           << " " << pdb_res->get_ires() << ": Structure has "
+           << pdb_atoms.size() << " atoms, but Topology has "
+           << top_res.atoms.size() << " atoms";
+        throw std::runtime_error(ss.str());
+    }
+    
+    for (size_t i = 0; i < pdb_atoms.size(); ++i) {
+        const auto& pdb_atom = pdb_atoms[i];
+        const auto& top_atom = topology->get_atom(static_cast<int>(top_res.atoms[i]));
+        
+        // 从PDB原子名称中提取元素
+        std::string pdb_element = pdb_atom->get_element();
+        if (pdb_element.empty()) {
+            pdb_element = pdb_atom->get_type();
+        }
+        
+        // 从topology原子类型中提取元素
+        std::string top_element = top_atom.type;
+        
+        // 比较第一个字母（转为大写）
+        char pdb_first = std::toupper(pdb_element[0]);
+        char top_first = std::toupper(top_element[0]);
+        
+        if (pdb_first != top_first) {
+            std::stringstream ss;
+            ss << "Mismatched atom elements in residue " << pdb_res->get_resname()
+               << " " << pdb_res->get_ires() << ": Structure has "
+               << pdb_first << " (from " << pdb_atom->get_type()
+               << "), but Topology has " << top_first
+               << " (from " << top_atom.type << ")";
+            throw std::runtime_error(ss.str());
+        }
+    }
+}
+
 } // namespace system
 } // namespace pygcmc

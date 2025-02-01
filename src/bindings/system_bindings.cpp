@@ -57,7 +57,37 @@ void init_system(py::module& m) {
              py::arg("structure"), 
              py::arg("topology"),
              py::return_value_policy::move,
-             "Combine Structure and Topology data into a Molecular object");
+             "Combine Structure and Topology data into a Molecular object")
+        .def("combine_multiple",
+             [](system::MolecularSystem& self,
+                py::object structure,
+                py::list topologies) {
+                 // Check for None values
+                 if (structure.is_none() || topologies.is_none()) {
+                     throw py::value_error("Structure and topologies list cannot be None");
+                 }
+                 
+                 // Convert structure to shared_ptr
+                 const model::Structure* struct_ptr = structure.cast<const model::Structure*>();
+                 auto struct_shared = std::shared_ptr<model::Structure>(
+                     const_cast<model::Structure*>(struct_ptr),
+                     [](model::Structure*){});
+                 
+                 // Convert list of topologies to vector of shared_ptr
+                 std::vector<std::shared_ptr<model::Topology>> top_vec;
+                 for (const auto& top : topologies) {
+                     const model::Topology* top_ptr = top.cast<const model::Topology*>();
+                     top_vec.push_back(std::shared_ptr<model::Topology>(
+                         const_cast<model::Topology*>(top_ptr),
+                         [](model::Topology*){}));
+                 }
+                 
+                 return self.combine_multiple(struct_shared, top_vec);
+             },
+             py::arg("structure"),
+             py::arg("topologies"),
+             py::return_value_policy::move,
+             "Combine Structure with multiple Topology files into a Molecular object");
 
     // Add direct Combine function
     m.def("Combine", 
@@ -88,6 +118,37 @@ void init_system(py::module& m) {
           py::arg("topology"),
           py::return_value_policy::move,
           "Directly combine Structure and Topology data into a Molecular object");
+
+    // Add direct Combine function with multiple topologies
+    m.def("Combine", 
+          [](py::object structure, 
+             py::args topologies) {
+              // First check for None values
+              if (structure.is_none() || topologies.empty()) {
+                  throw py::value_error("Structure and at least one Topology must be provided");
+              }
+              
+              // Convert structure to shared_ptr
+              const model::Structure* struct_ptr = structure.cast<const model::Structure*>();
+              auto struct_shared = std::shared_ptr<model::Structure>(
+                  const_cast<model::Structure*>(struct_ptr), 
+                  [](model::Structure*){});
+              
+              // Convert topologies to vector of shared_ptr
+              std::vector<std::shared_ptr<model::Topology>> top_vec;
+              for (const auto& top : topologies) {
+                  const model::Topology* top_ptr = top.cast<const model::Topology*>();
+                  top_vec.push_back(std::shared_ptr<model::Topology>(
+                      const_cast<model::Topology*>(top_ptr),
+                      [](model::Topology*){}));
+              }
+              
+              // Create MolecularSystem and combine
+              auto mol_system = std::make_shared<system::MolecularSystem>();
+              return mol_system->combine_multiple(struct_shared, top_vec);
+          },
+          py::return_value_policy::move,
+          "Directly combine Structure with multiple Topology files into a Molecular object");
 }
 
 } // namespace bindings
