@@ -572,6 +572,9 @@ void MolecularSystem::merge_topologies(
     molecular->acceptors.clear();
     molecular->exclusions.clear();
     molecular->groups.clear();
+    
+    // 保存现有的CMAP
+    std::vector<model::TopologyCmap> existing_cmaps = molecular->cmaps;
     molecular->cmaps.clear();
     
     size_t atom_offset = 0;
@@ -641,6 +644,12 @@ void MolecularSystem::merge_topologies(
             molecular->cmaps.push_back(new_cmap);
             // 添加标准化的CMAP
             molecular->add_standard_cmap(new_cmap);
+        }
+        
+        // 重新添加之前保存的CMAP
+        for (const auto& cmap : existing_cmaps) {
+            molecular->cmaps.push_back(cmap);
+            molecular->add_standard_cmap(cmap);
         }
         
         // 更新偏移量
