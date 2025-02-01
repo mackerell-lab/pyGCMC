@@ -416,28 +416,6 @@ std::shared_ptr<model::Molecular> MolecularSystem::combine(
     for (const auto& cmap : topology->get_cmaps()) {
         molecular_->add_standard_cmap(cmap);
     }
-    
-    // 验证CMAP
-    for (const auto& cmap : molecular_->cmaps) {
-        // 检查原子索引是否有效
-        for (size_t i = 0; i < cmap.atoms.size(); ++i) {
-            if (cmap.atoms[i] >= 0) {
-                if (cmap.atoms[i] >= static_cast<int>(molecular_->topology_atoms.size())) {
-                    std::stringstream ss;
-                    ss << "Invalid atom index " << cmap.atoms[i] << " in CMAP";
-                    throw std::runtime_error(ss.str());
-                }
-                // 检查原子所属的残基
-                const auto& atom = molecular_->topology_atoms[cmap.atoms[i]];
-                if (atom.residue_id >= static_cast<int>(molecular_->topology_residues.size())) {
-                    std::stringstream ss;
-                    ss << "Invalid residue index " << atom.residue_id << " for atom " << cmap.atoms[i] << " in CMAP";
-                    throw std::runtime_error(ss.str());
-                }
-            }
-        }
-    }
-    
     molecular_->titles = topology->get_titles();
 
     // 复制查找映射
@@ -672,27 +650,6 @@ void MolecularSystem::merge_topologies(
         for (const auto& cmap : existing_cmaps) {
             molecular->cmaps.push_back(cmap);
             molecular->add_standard_cmap(cmap);
-        }
-        
-        // 验证CMAP
-        for (const auto& cmap : molecular->cmaps) {
-            // 检查原子索引是否有效
-            for (size_t i = 0; i < cmap.atoms.size(); ++i) {
-                if (cmap.atoms[i] >= 0) {
-                    if (cmap.atoms[i] >= static_cast<int>(molecular->topology_atoms.size())) {
-                        std::stringstream ss;
-                        ss << "Invalid atom index " << cmap.atoms[i] << " in CMAP";
-                        throw std::runtime_error(ss.str());
-                    }
-                    // 检查原子所属的残基
-                    const auto& atom = molecular->topology_atoms[cmap.atoms[i]];
-                    if (atom.residue_id >= static_cast<int>(molecular->topology_residues.size())) {
-                        std::stringstream ss;
-                        ss << "Invalid residue index " << atom.residue_id << " for atom " << cmap.atoms[i] << " in CMAP";
-                        throw std::runtime_error(ss.str());
-                    }
-                }
-            }
         }
         
         // 更新偏移量
