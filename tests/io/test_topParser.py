@@ -358,3 +358,52 @@ def test_parse_invalid_top(test_data_dir, tmp_path):
     topology = Topology()
     assert not parser.parse_to_topology(str(invalid_top), topology), "Should fail for invalid topology file"
 
+def test_parse_step1_top(test_data_dir):
+    """Test parsing step1_pdbreader.top file (which includes step1_pdbreader.itp)."""
+    top_file = os.path.join(test_data_dir, "step1_pdbreader.top")
+    parser = TOPParser()
+    topology = Topology()
+    
+    # Parse the "step1_pdbreader.top" file
+    assert parser.parse_to_topology(top_file, topology), "Failed to parse step1_pdbreader.top"
+
+    # In the [molecules] section, there are 11 repeats of:
+    #   rna1 1
+    #   MG 5
+    #   TIP3 50
+    #
+    # So there should be:
+    #   - 11 RNA segments (we won't check residue counts within each segment, but you could expand to do so)
+    #   - 11 × 5 = 55 total MG residues
+    #   - 11 × 50 = 550 total TIP3 residues
+    
+    mg_count = 0
+    tip3_count = 0
+    rna_segments = 0
+
+    # Count how many residues are named "MG" or "TIP3"
+    for i in range(topology.get_num_residues()):
+        res = topology.get_residue(i)
+        if res.name == "MG":
+            mg_count += 1
+        elif res.name == "TIP3":
+            tip3_count += 1
+
+    # Count RNA segments by looking at residue segment names
+    # We'll consider a new RNA segment starts when we see a residue with a different segment name
+    current_segment = None
+    for i in range(topology.get_num_residues()):
+        res = topology.get_residue(i)
+        if res.segment != current_segment and res.name not in ["MG", "TIP3"]:
+            rna_segments += 1
+            current_segment = res.segment
+
+    assert mg_count == 60, f"Expected 60 MG residues, found {mg_count}"
+    assert tip3_count == 600, f"Expected 600 TIP3 residues, found {tip3_count}"
+    assert rna_segments == 12, f"Expected 12 RNA segments, found {rna_segments}"
+    
+    # You can add additional checks (bonds, angles, dihedrals, charges) as desired.
+    # For example, check total atom count or partial checks:
+    # assert topology.get_num_atoms() == <some_expected_number>
+    # ...
+
