@@ -99,6 +99,9 @@ public:
     char get_chain() const noexcept { return chain; }
     char get_inscode() const noexcept { return inscode; }
     
+    // CHARMM standard setters
+    void set_resname(const std::string& name) noexcept { resname = name; }
+    
     // Atom management
     void add_atom(const Atom& atom) {
         // Verify atom belongs to this residue

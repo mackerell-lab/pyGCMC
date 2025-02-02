@@ -207,6 +207,7 @@ void init_model(py::module& m) {
     py::class_<model::Residue, std::shared_ptr<model::Residue>>(model, "PDBResidue")
         .def(py::init<>())
         .def("get_resname", &model::Residue::get_resname)
+        .def("set_resname", &model::Residue::set_resname)
         .def("get_ires", &model::Residue::get_ires)
         .def("get_segid", &model::Residue::get_segid)
         .def("get_iseg", &model::Residue::get_iseg)
