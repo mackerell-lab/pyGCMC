@@ -673,3 +673,57 @@ def test_parse_all_cmaps(test_data_dir):
                     break
             assert found_connection, f"No connection found between {residues[j]} and {residues[j+1]}"
 
+def test_parse_step1_psf(test_data_dir):
+    """Test parsing step1_pdbreader.psf file (which includes MG and TIP3 molecules) using PSFParser."""
+    psf_file = os.path.join(test_data_dir, "step1_pdbreader.psf")
+    parser = PSFParser()
+    topology = Topology()
+    
+    # Parse the PSF file
+    assert parser.parse_to_topology(psf_file, topology), "Failed to parse step1_pdbreader.psf"
+    
+    # Verify the total number of atoms according to the PSF header (e.g., 22068 atoms)
+    expected_atoms = 22068
+    actual_atoms = topology.get_num_atoms()
+    assert actual_atoms == expected_atoms, f"Expected {expected_atoms} atoms, found {actual_atoms}"
+    
+    mg_count = 0
+    tip3_count = 0
+    rna_segments = 0
+    
+    # Print all segments and their residues for debugging
+    print("\nSegments and their residues:")
+    for i in range(topology.get_num_segments()):
+        segment = topology.get_segment(i)
+        print(f"\nSegment {segment.name}:")
+        for res_idx in segment.residues:
+            res = topology.get_residue(res_idx)
+            print(f"  Residue {res.name} {res.number} (segment: {res.segment})")
+            if res.name == "MG":
+                mg_count += 1
+            elif res.name == "TIP3":
+                tip3_count += 1
+    
+    # Print total counts
+    print(f"\nTotal counts:")
+    print(f"MG residues: {mg_count}")
+    print(f"TIP3 residues: {tip3_count}")
+    print(f"Total residues: {topology.get_num_residues()}")
+    print(f"Total segments: {topology.get_num_segments()}")
+    
+    # Count RNA segments
+    current_segment = None
+    for i in range(topology.get_num_residues()):
+        res = topology.get_residue(i)
+        if res.name not in {"MG", "TIP3"} and res.segment != current_segment:
+            rna_segments += 1
+            current_segment = res.segment
+    
+    print(f"RNA segments: {rna_segments}")
+    
+    # Based on the system setup (as in the TOP test):
+    # Expected RNA segments: 12, MG residues: 60, TIP3 residues: 600
+    assert mg_count == 60, f"Expected 60 MG residues, found {mg_count}"
+    assert tip3_count == 600, f"Expected 600 TIP3 residues, found {tip3_count}"
+    assert rna_segments == 12, f"Expected 12 RNA segments, found {rna_segments}"
+

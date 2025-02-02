@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <iostream>
 #include <algorithm>
+#include <tuple>
 
 namespace pygcmc {
 namespace model {
@@ -158,7 +159,7 @@ public:
 
             // Then ensure we have the residue
             int residue_id;
-            auto residue_key = std::make_pair(residue_name, residue_number);
+            auto residue_key = std::make_tuple(residue_name, residue_number, segment_name);  // Include segment in key
             auto residue_it = residue_map_.find(residue_key);
             if (residue_it == residue_map_.end()) {
                 // Create new residue
@@ -194,7 +195,7 @@ public:
             // Add atom to the vectors and maps
             int atom_id = static_cast<int>(atoms_.size());
             atoms_.push_back(atom);
-            atom_map_[std::make_tuple(residue_name, residue_number, name)] = atom_id;
+            atom_map_[std::make_tuple(residue_name, residue_number, segment_name, name)] = atom_id;  // Include segment in key
 
             // Add atom to its residue
             if (residue_id >= 0 && residue_id < static_cast<int>(residues_.size())) {
@@ -280,7 +281,7 @@ public:
         // Add residue to the vectors and maps
         int residue_id = residues_.size();
         residues_.push_back(residue);
-        residue_map_[std::make_pair(name, number)] = residue_id;
+        residue_map_[std::make_tuple(name, number, segment)] = residue_id;
 
         // Add residue to its segment
         segments_[segment_id].residues.push_back(residue_id);
@@ -347,17 +348,23 @@ public:
     // Find elements
     inline std::optional<int> find_atom(const std::string& residue_name, int residue_number,
                                 const std::string& atom_name) const {
-        auto it = atom_map_.find(std::make_tuple(residue_name, residue_number, atom_name));
-        if (it != atom_map_.end()) {
-            return it->second;
+        // Try to find the atom in any segment
+        for (const auto& segment : segments_) {
+            auto it = atom_map_.find(std::make_tuple(residue_name, residue_number, segment.name, atom_name));
+            if (it != atom_map_.end()) {
+                return it->second;
+            }
         }
         return std::nullopt;
     }
 
     inline std::optional<int> find_residue(const std::string& name, int number) const {
-        auto it = residue_map_.find(std::make_pair(name, number));
-        if (it != residue_map_.end()) {
-            return it->second;
+        // Try to find the residue in any segment
+        for (const auto& segment : segments_) {
+            auto it = residue_map_.find(std::make_tuple(name, number, segment.name));
+            if (it != residue_map_.end()) {
+                return it->second;
+            }
         }
         return std::nullopt;
     }
@@ -645,12 +652,11 @@ private:
     std::vector<TopologyGroup> groups_;
     std::vector<TopologyCmap> cmaps_;
 
-    // Lookup maps for efficient searching
+    // Maps for fast lookup
     std::unordered_map<std::string, int> segment_map_;  // segment_name -> index
-    std::map<std::pair<std::string, int>, int> residue_map_;  // (residue_name, number) -> index
-    std::map<std::tuple<std::string, int, std::string>, int> atom_map_;  // (residue_name, number, atom_name) -> index
+    std::map<std::tuple<std::string, int, std::string>, int> residue_map_;  // (residue_name, number, segment) -> index
+    std::map<std::tuple<std::string, int, std::string, std::string>, int> atom_map_;  // (residue_name, number, segment, atom_name) -> index
 
-    // Additional PSF sections
     std::vector<std::string> titles_;
 };
 

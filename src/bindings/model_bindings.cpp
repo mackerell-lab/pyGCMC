@@ -253,11 +253,9 @@ void init_model(py::module& m) {
         .def("get_num_acceptors", &model::Topology::get_num_acceptors)
         .def("get_num_cmaps", &model::Topology::get_num_cmaps)
         .def("get_num_groups", &model::Topology::get_num_groups)
-        .def("get_cmaps", &model::Topology::get_cmaps, py::return_value_policy::reference_internal)
-        .def_property_readonly("cmaps", &model::Topology::get_cmaps, py::return_value_policy::reference_internal)
-        .def("get_group", &model::Topology::get_group, py::return_value_policy::reference_internal)
         .def("has_atom", &model::Topology::has_atom)
-        .def("has_group", &model::Topology::has_group)
+        .def("has_residue", &model::Topology::has_residue)
+        .def("has_segment", &model::Topology::has_segment)
         .def("has_bond", &model::Topology::has_bond)
         .def("has_angle", &model::Topology::has_angle)
         .def("has_dihedral", &model::Topology::has_dihedral)
@@ -265,9 +263,16 @@ void init_model(py::module& m) {
         .def("has_donor", &model::Topology::has_donor)
         .def("has_acceptor", &model::Topology::has_acceptor)
         .def("has_cmap", &model::Topology::has_cmap)
-        .def("get_residue", &model::Topology::get_residue, py::return_value_policy::reference_internal)
-        .def("get_atom", &model::Topology::get_atom, py::return_value_policy::reference_internal)
-        .def("find_residue", &model::Topology::find_residue);
+        .def("has_group", &model::Topology::has_group)
+        .def("get_atom", &model::Topology::get_atom, py::return_value_policy::reference_internal, "Get atom by index")
+        .def("get_residue", &model::Topology::get_residue, py::return_value_policy::reference_internal, "Get residue by index")
+        .def("get_segment", &model::Topology::get_segment, py::return_value_policy::reference_internal, "Get segment by index")
+        .def("get_group", &model::Topology::get_group, py::return_value_policy::reference_internal, "Get group by index")
+        .def("find_atom", &model::Topology::find_atom)
+        .def("find_residue", &model::Topology::find_residue)
+        .def("find_segment", &model::Topology::find_segment)
+        .def("get_cmaps", &model::Topology::get_cmaps, py::return_value_policy::reference_internal, "Get all CMAP terms")
+        .def_property_readonly("cmaps", [](const model::Topology& t) { return t.get_cmaps(); }, "Get all CMAP terms");
 
     // Bind TopologyResidue
     py::class_<model::TopologyResidue>(model, "TopologyResidue")
