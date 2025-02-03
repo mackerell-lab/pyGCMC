@@ -80,6 +80,8 @@ void MonteCarloSystem::translateResidue(int resIdx, float dx, float dy, float dz
 }
 
 float MonteCarloSystem::calcNonBondedEnergy(const MCResidue& res1, const MCResidue& res2) const {
+    (void)res1;  // Suppress unused parameter warning
+    (void)res2;  // Suppress unused parameter warning
     float energy = 0.0f;
     // TODO: Implement LJ + Coulomb with periodic boundary conditions
     return energy;
