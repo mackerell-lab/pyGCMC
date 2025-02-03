@@ -48,10 +48,10 @@ struct TypeMaps {
 // 1) GCMCInfo: Global MC parameters
 // ------------------------------------------------------------
 struct GCMCInfo {
-    int    mcSteps;       ///< Monte Carlo steps
-    float  box[3];        ///< Box dimensions (x, y, z)
-    float  cutoff;        ///< Cutoff distance (Å)
-    float  beta;          ///< 1/(kB*T)
+    int    mcSteps{0};       ///< Monte Carlo steps
+    float  box[3]{-1.0f};        ///< Box dimensions (Å)
+    float  cutoff{15.0f};       ///< Cutoff distance for non-bonded interactions (Å)
+    float  beta{0.0f};          ///< 1/(kB*T) (mol/kcal) - will be set based on temperature
     
     // Reserved max capacity
     int    maxResidues;   
@@ -64,13 +64,25 @@ struct GCMCInfo {
 
     // Statistics
     struct Statistics {
-        int totalMoves;           ///< Total number of moves attempted
-        int acceptedMoves;        ///< Number of accepted moves
-        int insertionAttempts;    ///< Number of insertion attempts
-        int acceptedInsertions;   ///< Number of accepted insertions
-        int deletionAttempts;     ///< Number of deletion attempts
-        int acceptedDeletions;    ///< Number of accepted deletions
+        int totalMoves{0};           ///< Total number of moves attempted
+        int acceptedMoves{0};        ///< Number of accepted moves
+        int insertionAttempts{0};    ///< Number of insertion attempts
+        int acceptedInsertions{0};   ///< Number of accepted insertions
+        int deletionAttempts{0};     ///< Number of deletion attempts
+        int acceptedDeletions{0};    ///< Number of accepted deletions
     } stats;
+
+    // Constants (CHARMM units)
+    static constexpr float BOLTZMANN = 0.0019881f;  ///< Boltzmann constant (kcal/mol/K)
+    static constexpr float KCAL_TO_KJ = 4.184f;     ///< Convert kcal/mol to kJ/mol
+    static constexpr float KJ_TO_KCAL = 0.239f;     ///< Convert kJ/mol to kcal/mol
+    static constexpr float MOLES_TO_MOLECULES = 0.0006023f;  ///< Convert mol/L to molecules/Å³
+    static constexpr float MOLECULES_TO_MOLES = 1660.539f;   ///< Convert molecules/Å³ to mol/L
+
+    // Set temperature and calculate beta
+    void setTemperature(float temperature) {  // temperature in Kelvin
+        beta = 1.0f / (BOLTZMANN * temperature);
+    }
 };
 
 // ------------------------------------------------------------
