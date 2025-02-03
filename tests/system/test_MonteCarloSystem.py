@@ -164,60 +164,60 @@ def test_residue_atom_properties():
     # Get initial state
     state = mc_system.get_state()
     
-    # Get a residue to verify
-    res_idx = 0
-    test_res = state.residues[res_idx]
-    
-    # Verify state of the residue
-    assert test_res.active == True, "Residue should be active"
-    assert test_res.atom_count > 0, "Residue should have atoms"
-    assert test_res.atom_start >= 0, "Residue should have valid atom_start"
-    
-    # Store atom properties for verification
-    atoms = []
-    for i in range(test_res.atom_count):
-        atom = state.atoms[test_res.atom_start + i]
-        atoms.append({
-            'coords': [atom.x, atom.y, atom.z],
-            'charge': atom.charge,
-            'type': atom.type
-        })
-    
-    # Calculate and verify center of mass
-    expected_com = [0.0, 0.0, 0.0]
-    for i in range(test_res.atom_count):
-        atom = state.atoms[test_res.atom_start + i]
-        expected_com[0] += atom.x
-        expected_com[1] += atom.y
-        expected_com[2] += atom.z
-    
-    if test_res.atom_count > 0:
-        expected_com = [x / test_res.atom_count for x in expected_com]
-    
-    assert_arrays_almost_equal(test_res.com, expected_com), "Residue should have correct center of mass"
-    
-    # Verify atom properties match with molecular system
-    mol_res = molecular.residues[res_idx]
-    mol_atoms = mol_res.get_atoms()
-    
-    for i in range(test_res.atom_count):
-        mc_atom = state.atoms[test_res.atom_start + i]
-        mol_atom = mol_atoms[i]
+    # Verify all residues
+    expected_atom_start = 0
+    for res_idx in range(state.activeResidueCount):
+        mc_res = state.residues[res_idx]
+        mol_res = molecular.residues[res_idx]
+        mol_atoms = mol_res.get_atoms()
         
-        # Test atom type
-        atom_type_name = mc_system.get_type_maps().get_type_name(mc_atom.type)
-        assert atom_type_name == mol_atom.get_type(), \
-            f"Atom {i} has incorrect type: {atom_type_name} != {mol_atom.get_type()}"
+        # Verify residue properties
+        assert mc_res.active == True, f"Residue {res_idx} should be active"
+        assert mc_res.atom_count == len(mol_atoms), \
+            f"Residue {res_idx} has incorrect atom count: {mc_res.atom_count} != {len(mol_atoms)}"
+        assert mc_res.atom_start == expected_atom_start, \
+            f"Residue {res_idx} has incorrect atom_start: {mc_res.atom_start} != {expected_atom_start}"
         
-        # Test atom charge
-        assert abs(mc_atom.charge - mol_atom.get_charge()) < 1e-6, \
-            f"Atom {i} has incorrect charge"
+        # Store and verify atom properties
+        for atom_idx in range(mc_res.atom_count):
+            mc_atom = state.atoms[mc_res.atom_start + atom_idx]
+            mol_atom = mol_atoms[atom_idx]
+            
+            # Verify atom type
+            atom_type_name = mc_system.get_type_maps().get_type_name(mc_atom.type)
+            assert atom_type_name == mol_atom.get_type(), \
+                f"Atom {atom_idx} in residue {res_idx} has incorrect type: {atom_type_name} != {mol_atom.get_type()}"
+            
+            # Verify atom charge
+            assert abs(mc_atom.charge - mol_atom.get_charge()) < 1e-6, \
+                f"Atom {atom_idx} in residue {res_idx} has incorrect charge"
+            
+            # Verify atom coordinates
+            assert_arrays_almost_equal(
+                [mc_atom.x, mc_atom.y, mc_atom.z],
+                [mol_atom.get_x(), mol_atom.get_y(), mol_atom.get_z()]
+            ), f"Atom {atom_idx} in residue {res_idx} has incorrect coordinates"
         
-        # Test atom coordinates
-        assert_arrays_almost_equal(
-            [mc_atom.x, mc_atom.y, mc_atom.z],
-            [mol_atom.get_x(), mol_atom.get_y(), mol_atom.get_z()]
-        ), f"Atom {i} has incorrect coordinates"
+        # Calculate and verify center of mass
+        expected_com = [0.0, 0.0, 0.0]
+        for atom_idx in range(mc_res.atom_count):
+            atom = state.atoms[mc_res.atom_start + atom_idx]
+            expected_com[0] += atom.x
+            expected_com[1] += atom.y
+            expected_com[2] += atom.z
+        
+        if mc_res.atom_count > 0:
+            expected_com = [x / mc_res.atom_count for x in expected_com]
+        
+        assert_arrays_almost_equal(mc_res.com, expected_com), \
+            f"Residue {res_idx} has incorrect center of mass"
+        
+        # Update expected_atom_start for next residue
+        expected_atom_start += mc_res.atom_count
+    
+    # Verify total atom count
+    assert expected_atom_start == state.activeAtomCount, \
+        f"Total atom count mismatch: {expected_atom_start} != {state.activeAtomCount}"
 
 def test_residue_atom_properties_empty():
     """Test residue and atom properties with empty molecular system."""
