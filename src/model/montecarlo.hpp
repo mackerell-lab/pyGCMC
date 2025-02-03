@@ -101,7 +101,7 @@ struct Residue {
     int   atomStart;    ///< Starting index in global atom array
     int   atomCount;    ///< Number of atoms
     bool  active;       ///< Whether in use
-    float com[3];       ///< Center of mass
+    float center[3];    ///< Geometric center
     
     // GCMC parameters
     float concentration; ///< Target concentration

@@ -76,7 +76,7 @@ public:
 
 private:
     // Helper methods
-    void updateCenterOfMass(Residue& res);
+    void updateGeometricCenter(Residue& res);
 
     // System state
     MonteCarloState state;

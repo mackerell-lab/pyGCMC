@@ -75,7 +75,7 @@ void MonteCarloSystem::translateResidue(int resIdx, float dx, float dy, float dz
             atom.z += dz;
             applyPBC(atom.x, atom.y, atom.z);
         }
-        updateCenterOfMass(res);
+        updateGeometricCenter(res);
     }
 }
 
@@ -104,21 +104,21 @@ float MonteCarloSystem::getMinImageDistSqr(float dx, float dy, float dz) const {
     return dx*dx + dy*dy + dz*dz;
 }
 
-void MonteCarloSystem::updateCenterOfMass(Residue& res) {
-    res.com[0] = res.com[1] = res.com[2] = 0.0f;
+void MonteCarloSystem::updateGeometricCenter(Residue& res) {
+    res.center[0] = res.center[1] = res.center[2] = 0.0f;
     
     for (int i = 0; i < res.atomCount; ++i) {
         const Atom& atom = state.atoms[res.atomStart + i];
-        res.com[0] += atom.x;
-        res.com[1] += atom.y;
-        res.com[2] += atom.z;
+        res.center[0] += atom.x;
+        res.center[1] += atom.y;
+        res.center[2] += atom.z;
     }
     
     if (res.atomCount > 0) {
         float invCount = 1.0f / res.atomCount;
-        res.com[0] *= invCount;
-        res.com[1] *= invCount;
-        res.com[2] *= invCount;
+        res.center[0] *= invCount;
+        res.center[1] *= invCount;
+        res.center[2] *= invCount;
     }
 }
 
@@ -165,19 +165,18 @@ void MonteCarloSystem::initializeFromMolecular(const std::shared_ptr<pygcmc::mod
         mcRes.type = state.residueTypes.getOrAddType(molRes->get_resname());
 
         // Calculate center of mass
-        mcRes.com[0] = mcRes.com[1] = mcRes.com[2] = 0.0f;
-        for (size_t j = 0; j < static_cast<size_t>(mcRes.atomCount); ++j) {
-            const auto& atom = tempAtoms[atomStart + j];
-            mcRes.com[0] += atom.x;
-            mcRes.com[1] += atom.y;
-            mcRes.com[2] += atom.z;
+        mcRes.center[0] = mcRes.center[1] = mcRes.center[2] = 0.0f;
+        for (const auto& atom : molAtoms) {
+            mcRes.center[0] += atom->get_x();
+            mcRes.center[1] += atom->get_y();
+            mcRes.center[2] += atom->get_z();
         }
         
         if (mcRes.atomCount > 0) {
             float invCount = 1.0f / mcRes.atomCount;
-            mcRes.com[0] *= invCount;
-            mcRes.com[1] *= invCount;
-            mcRes.com[2] *= invCount;
+            mcRes.center[0] *= invCount;
+            mcRes.center[1] *= invCount;
+            mcRes.center[2] *= invCount;
         }
         
         tempResidues.push_back(mcRes);

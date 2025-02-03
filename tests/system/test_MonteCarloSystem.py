@@ -82,7 +82,7 @@ def test_initialize_from_molecular(molecular_system):
         if mc_res.atom_count > 0:
             com = [x / mc_res.atom_count for x in com]
         
-        assert_arrays_almost_equal(mc_res.com, com)
+        assert_arrays_almost_equal(mc_res.center, com)
 
 def test_initialize_from_molecular_empty():
     """Test conversion with empty molecular system."""
@@ -209,8 +209,8 @@ def test_residue_atom_properties():
         if mc_res.atom_count > 0:
             expected_com = [x / mc_res.atom_count for x in expected_com]
         
-        assert_arrays_almost_equal(mc_res.com, expected_com), \
-            f"Residue {res_idx} has incorrect center of mass"
+        assert_arrays_almost_equal(mc_res.center, expected_com), \
+            f"Residue {res_idx} has incorrect geometric center"
         
         # Update expected_atom_start for next residue
         expected_atom_start += mc_res.atom_count

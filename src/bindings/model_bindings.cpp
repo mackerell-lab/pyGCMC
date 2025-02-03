@@ -638,15 +638,17 @@ void init_model(py::module& m) {
         .def_readwrite("atomCount", &gcmc::Residue::atomCount)
         .def_property_readonly("atom_count", [](const gcmc::Residue& r) { return r.atomCount; })
         .def_readwrite("active", &gcmc::Residue::active)
-        .def_property("com",
-            [](const gcmc::Residue& res) {
-                return std::vector<float>{res.com[0], res.com[1], res.com[2]};
+        .def_property("center",
+            [](const gcmc::Residue& res) -> std::vector<float> {
+                return {res.center[0], res.center[1], res.center[2]};
             },
-            [](gcmc::Residue& res, const std::vector<float>& com) {
-                if (com.size() != 3) throw std::runtime_error("COM must have 3 dimensions");
-                res.com[0] = com[0];
-                res.com[1] = com[1];
-                res.com[2] = com[2];
+            [](gcmc::Residue& res, const std::vector<float>& center) {
+                if (center.size() != 3) {
+                    throw std::runtime_error("Center must be a vector of 3 floats");
+                }
+                res.center[0] = center[0];
+                res.center[1] = center[1];
+                res.center[2] = center[2];
             })
         .def_readwrite("concentration", &gcmc::Residue::concentration)
         .def_readwrite("chemPot", &gcmc::Residue::chemPot)
