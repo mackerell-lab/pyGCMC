@@ -38,23 +38,30 @@ bool MonteCarloSystem::removeResidue(int resIdx) {
         return false;
     }
 
-    const auto& res = state.residues[resIdx];
+    // Get residue info and mark it as inactive
+    Residue& res = state.residues[resIdx];
+    res.active = false;
     int atomStart = res.atomStart;
     int atomCount = res.atomCount;
 
+    // Move atoms if needed
     if (atomStart != state.activeAtomCount - atomCount) {
         for (int i = 0; i < atomCount; ++i) {
             state.atoms[atomStart + i] = state.atoms[state.activeAtomCount - atomCount + i];
         }
-        state.residues[state.activeResidueCount - 1].atomStart = atomStart;
     }
     state.activeAtomCount -= atomCount;
 
+    // If this is not the last residue, move the last active one to this position
     if (resIdx != state.activeResidueCount - 1) {
         state.residues[resIdx] = state.residues[state.activeResidueCount - 1];
+        // Update the moved residue's atom start position if needed
+        if (atomStart != state.activeAtomCount) {
+            state.residues[resIdx].atomStart = atomStart;
+        }
     }
+    
     state.activeResidueCount--;
-
     return true;
 }
 

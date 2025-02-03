@@ -137,3 +137,174 @@ def test_type_mapping():
     assert mc_system.get_type_maps().get_type_name(-1) == ""
     assert mc_system.get_type_maps().get_type_name(1000) == ""
 
+def test_residue_atom_properties():
+    """Test detailed properties of residues and atoms in MonteCarloSystem."""
+    # Create Monte Carlo system and initialize it
+    mc_system = pygcmc.MonteCarloSystem()
+    info = pygcmc.GCMCInfo()
+    info.max_residues = 1000
+    info.max_atoms = 10000
+    mc_system.initialize(info)
+    
+    # Get test data paths
+    pdb_path = os.path.join(TEST_DATA_DIR, "test.pdb")
+    top_path = os.path.join(TEST_DATA_DIR, "test.top")
+    
+    # Parse PDB and TOP files
+    structure = pygcmc.PDBParser.parse_file(pdb_path)
+    topology = pygcmc.TOPParser.parse_file(top_path)
+    
+    # Create molecular system and combine structure with topology
+    mol_system = pygcmc.MolecularSystem()
+    molecular = mol_system.combine(structure, topology)
+    
+    # Initialize Monte Carlo system from molecular system
+    mc_system.initialize_from_molecular(molecular)
+    
+    # Get initial state
+    state = mc_system.get_state()
+    
+    # Get a residue to verify
+    res_idx = 0
+    test_res = state.residues[res_idx]
+    
+    # Verify state of the residue
+    assert test_res.active == True, "Residue should be active"
+    assert test_res.atom_count > 0, "Residue should have atoms"
+    assert test_res.atom_start >= 0, "Residue should have valid atom_start"
+    
+    # Store atom properties for verification
+    atoms = []
+    for i in range(test_res.atom_count):
+        atom = state.atoms[test_res.atom_start + i]
+        atoms.append({
+            'coords': [atom.x, atom.y, atom.z],
+            'charge': atom.charge,
+            'type': atom.type
+        })
+    
+    # Calculate and verify center of mass
+    expected_com = [0.0, 0.0, 0.0]
+    for i in range(test_res.atom_count):
+        atom = state.atoms[test_res.atom_start + i]
+        expected_com[0] += atom.x
+        expected_com[1] += atom.y
+        expected_com[2] += atom.z
+    
+    if test_res.atom_count > 0:
+        expected_com = [x / test_res.atom_count for x in expected_com]
+    
+    assert_arrays_almost_equal(test_res.com, expected_com), "Residue should have correct center of mass"
+    
+    # Verify atom properties match with molecular system
+    mol_res = molecular.residues[res_idx]
+    mol_atoms = mol_res.get_atoms()
+    
+    for i in range(test_res.atom_count):
+        mc_atom = state.atoms[test_res.atom_start + i]
+        mol_atom = mol_atoms[i]
+        
+        # Test atom type
+        atom_type_name = mc_system.get_type_maps().get_type_name(mc_atom.type)
+        assert atom_type_name == mol_atom.get_type(), \
+            f"Atom {i} has incorrect type: {atom_type_name} != {mol_atom.get_type()}"
+        
+        # Test atom charge
+        assert abs(mc_atom.charge - mol_atom.get_charge()) < 1e-6, \
+            f"Atom {i} has incorrect charge"
+        
+        # Test atom coordinates
+        assert_arrays_almost_equal(
+            [mc_atom.x, mc_atom.y, mc_atom.z],
+            [mol_atom.get_x(), mol_atom.get_y(), mol_atom.get_z()]
+        ), f"Atom {i} has incorrect coordinates"
+
+def test_residue_atom_properties_empty():
+    """Test residue and atom properties with empty molecular system."""
+    mol_system = pygcmc.MolecularSystem()
+    mc_system = pygcmc.MonteCarloSystem()
+    
+    # Set reasonable max capacity
+    info = pygcmc.GCMCInfo()
+    info.max_residues = 1000
+    info.max_atoms = 10000
+    mc_system.initialize(info)
+    
+    # Should raise an exception
+    with pytest.raises(RuntimeError, match="MolecularSystem has no molecular data"):
+        mc_system.initialize_from_molecular(mol_system)
+
+def test_type_mapping_from_molecular():
+    """Test that type mapping is correctly created when initializing from molecular system."""
+    # Create Monte Carlo system and initialize it
+    mc_system = pygcmc.MonteCarloSystem()
+    info = pygcmc.GCMCInfo()
+    info.max_residues = 1000
+    info.max_atoms = 10000
+    mc_system.initialize(info)
+    
+    # Get test data paths
+    pdb_path = os.path.join(TEST_DATA_DIR, "test.pdb")
+    top_path = os.path.join(TEST_DATA_DIR, "test.top")
+    
+    # Parse PDB and TOP files
+    structure = pygcmc.PDBParser.parse_file(pdb_path)
+    topology = pygcmc.TOPParser.parse_file(top_path)
+    
+    # Create molecular system and combine structure with topology
+    mol_system = pygcmc.MolecularSystem()
+    molecular = mol_system.combine(structure, topology)
+    
+    # Initialize Monte Carlo system from molecular system
+    mc_system.initialize_from_molecular(molecular)
+    
+    # Get state and type maps
+    state = mc_system.get_state()
+    type_maps = mc_system.get_type_maps()
+    
+    # Create a set of all unique atom types in molecular system
+    mol_types = set()
+    for residue in molecular.residues:
+        for atom in residue.get_atoms():
+            mol_types.add(atom.get_type())
+    
+    # Create a set of all unique atom types in monte carlo system
+    mc_types = set()
+    for i in range(state.activeAtomCount):
+        atom = state.atoms[i]
+        type_name = type_maps.get_type_name(atom.type)
+        mc_types.add(type_name)
+    
+    # Verify that both systems have the same atom types
+    assert mol_types == mc_types, f"Type mismatch: molecular types {mol_types} != monte carlo types {mc_types}"
+    
+    # Verify that each atom's type is correctly mapped
+    for res_idx in range(state.activeResidueCount):
+        mc_res = state.residues[res_idx]
+        mol_res = molecular.residues[res_idx]
+        mol_atoms = mol_res.get_atoms()
+        
+        for atom_idx in range(mc_res.atom_count):
+            mc_atom = state.atoms[mc_res.atom_start + atom_idx]
+            mol_atom = mol_atoms[atom_idx]
+            
+            mc_type = type_maps.get_type_name(mc_atom.type)
+            mol_type = mol_atom.get_type()
+            
+            assert mc_type == mol_type, \
+                f"Type mismatch in residue {res_idx}, atom {atom_idx}: {mc_type} != {mol_type}"
+            
+            # Verify that the type index is consistent
+            assert mc_atom.type == type_maps.get_or_add_type(mol_type), \
+                f"Type index mismatch in residue {res_idx}, atom {atom_idx}"
+    
+    # Verify that type indices are continuous and start from 0
+    type_indices = set()
+    for atom_type in mol_types:
+        idx = type_maps.get_or_add_type(atom_type)
+        type_indices.add(idx)
+    
+    assert len(type_indices) == len(mol_types), "Number of type indices doesn't match number of types"
+    assert min(type_indices) == 0, "Type indices should start from 0"
+    assert max(type_indices) == len(mol_types) - 1, "Type indices should be continuous"
+
