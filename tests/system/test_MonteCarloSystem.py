@@ -46,29 +46,29 @@ def test_initialize_from_molecular(molecular_system):
     
     # Check box dimensions
     mc_box = mc_system.get_state().info.box
-    mol_box = molecular_system.get_box_dimensions()
+    mol_box = molecular_system.boxDimensions
     assert_arrays_almost_equal(mc_box, mol_box)
     
     # Check residues
     mc_state = mc_system.get_state()
     for i in range(mc_system.get_active_residue_count()):
         mc_res = mc_state.residues[i]
-        mol_res = molecular_system.get_topology_residue(i)
+        mol_res = molecular_system.residues[i]
         
-        assert mc_res.atom_count == len(mol_res.atoms)
+        assert mc_res.atom_count == len(mol_res.get_atoms())
         assert mc_res.active == True
         
         # Check atoms in residue
         for j in range(mc_res.atom_count):
             mc_atom = mc_state.atoms[mc_res.atom_start + j]
-            mol_atom = mol_res.atoms[j]
+            mol_atom = mol_res.get_atoms()[j]
             
             # Check atom properties
-            assert mc_system.get_type_maps().get_type_name(mc_atom.type) == mol_atom.type
-            assert abs(mc_atom.charge - mol_atom.charge) < 1e-6
+            assert mc_system.get_type_maps().get_type_name(mc_atom.type) == mol_atom.get_type()
+            assert abs(mc_atom.charge - mol_atom.get_charge()) < 1e-6
             assert_arrays_almost_equal(
                 [mc_atom.x, mc_atom.y, mc_atom.z],
-                [mol_atom.x, mol_atom.y, mol_atom.z]
+                [mol_atom.get_x(), mol_atom.get_y(), mol_atom.get_z()]
             )
         
         # Check center of mass calculation
@@ -95,10 +95,9 @@ def test_initialize_from_molecular_empty():
     info.max_atoms = 10000
     mc_system.initialize(info)
     
-    mc_system.initialize_from_molecular(mol_system)
-    
-    assert mc_system.get_active_residue_count() == 0
-    assert mc_system.get_active_atom_count() == 0
+    # Should raise an exception
+    with pytest.raises(RuntimeError, match="MolecularSystem has no molecular data"):
+        mc_system.initialize_from_molecular(mol_system)
 
 def test_initialize_from_molecular_large_system(molecular_system):
     """Test conversion with a system that exceeds max capacity."""

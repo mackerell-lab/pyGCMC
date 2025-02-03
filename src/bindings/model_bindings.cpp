@@ -175,6 +175,9 @@ void init_model(py::module& m) {
         .def("get_ires", &model::Atom::get_ires)
         .def("get_chain", &model::Atom::get_chain)
         .def("get_coor", &model::Atom::get_coor)
+        .def("get_x", &model::Atom::get_x)
+        .def("get_y", &model::Atom::get_y)
+        .def("get_z", &model::Atom::get_z)
         .def("is_hetatm", &model::Atom::is_hetatm)
         .def("get_occupancy", &model::Atom::get_occupancy)
         .def("get_tempfactor", &model::Atom::get_tempfactor)
@@ -627,11 +630,58 @@ void init_model(py::module& m) {
         .def_readwrite("deletionAttempts", &gcmc::GCMCInfo::Statistics::deletionAttempts)
         .def_readwrite("acceptedDeletions", &gcmc::GCMCInfo::Statistics::acceptedDeletions);
 
+    // Bind gcmc::Residue
+    py::class_<gcmc::Residue>(m, "MCResidue")
+        .def(py::init<>())
+        .def_readwrite("atomStart", &gcmc::Residue::atomStart)
+        .def_property_readonly("atom_start", [](const gcmc::Residue& r) { return r.atomStart; })
+        .def_readwrite("atomCount", &gcmc::Residue::atomCount)
+        .def_property_readonly("atom_count", [](const gcmc::Residue& r) { return r.atomCount; })
+        .def_readwrite("active", &gcmc::Residue::active)
+        .def_property("com",
+            [](const gcmc::Residue& res) {
+                return std::vector<float>{res.com[0], res.com[1], res.com[2]};
+            },
+            [](gcmc::Residue& res, const std::vector<float>& com) {
+                if (com.size() != 3) throw std::runtime_error("COM must have 3 dimensions");
+                res.com[0] = com[0];
+                res.com[1] = com[1];
+                res.com[2] = com[2];
+            })
+        .def_readwrite("concentration", &gcmc::Residue::concentration)
+        .def_readwrite("chemPot", &gcmc::Residue::chemPot)
+        .def_property_readonly("chem_pot", [](const gcmc::Residue& r) { return r.chemPot; })
+        .def_readwrite("type", &gcmc::Residue::type)
+        .def_readwrite("radius", &gcmc::Residue::radius);
+
+    // Bind gcmc::Atom
+    py::class_<gcmc::Atom>(m, "MCAtom")
+        .def(py::init<>())
+        .def_readwrite("x", &gcmc::Atom::x)
+        .def_readwrite("y", &gcmc::Atom::y)
+        .def_readwrite("z", &gcmc::Atom::z)
+        .def_readwrite("charge", &gcmc::Atom::charge)
+        .def_readwrite("type", &gcmc::Atom::type);
+
     // Bind SystemState
     py::class_<gcmc::SystemState>(m, "SystemState")
         .def(py::init<>())
-        .def_readwrite("atoms", &gcmc::SystemState::atoms)
-        .def_readwrite("residues", &gcmc::SystemState::residues)
+        .def_property("atoms",
+            [](const gcmc::SystemState& state) {
+                return std::vector<gcmc::Atom>(state.atoms.begin(), 
+                    state.atoms.begin() + state.activeAtomCount);
+            },
+            [](gcmc::SystemState& state, const std::vector<gcmc::Atom>& atoms) {
+                state.atoms = atoms;
+            })
+        .def_property("residues",
+            [](const gcmc::SystemState& state) {
+                return std::vector<gcmc::Residue>(state.residues.begin(), 
+                    state.residues.begin() + state.activeResidueCount);
+            },
+            [](gcmc::SystemState& state, const std::vector<gcmc::Residue>& residues) {
+                state.residues = residues;
+            })
         .def_readwrite("activeAtomCount", &gcmc::SystemState::activeAtomCount)
         .def_readwrite("activeResidueCount", &gcmc::SystemState::activeResidueCount)
         .def_readwrite("info", &gcmc::SystemState::info)

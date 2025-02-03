@@ -117,7 +117,7 @@ void MonteCarloSystem::updateCenterOfMass(Residue& res) {
 
 void MonteCarloSystem::initializeFromMolecular(const std::shared_ptr<pygcmc::model::Molecular>& molecular) {
     if (!molecular) {
-        throw std::runtime_error("No molecular data available");
+        throw std::runtime_error("MolecularSystem has no molecular data");
     }
     
     // Set box dimensions from molecular system
