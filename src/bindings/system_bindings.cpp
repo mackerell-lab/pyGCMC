@@ -187,6 +187,13 @@ void init_system(py::module& m) {
             
             throw py::type_error("Argument must be either MolecularSystem or Molecular");
         })
+        .def("add_movement_molecules", [](pygcmc::system::MonteCarloSystem& self, py::list molecules) {
+            std::vector<pygcmc::system::MonteCarloSystem::MovementMolecularInfo> mol_vec;
+            for (const auto& mol : molecules) {
+                mol_vec.push_back(mol.cast<pygcmc::system::MonteCarloSystem::MovementMolecularInfo>());
+            }
+            self.addMovementMolecules(mol_vec);
+        }, py::arg("molecules"), "Add movement molecules for GCMC simulation")
         .def("get_type_maps", &pygcmc::system::MonteCarloSystem::getTypeMaps, py::return_value_policy::reference)
         .def("insert_residue", &pygcmc::system::MonteCarloSystem::insertResidue)
         .def("remove_residue", &pygcmc::system::MonteCarloSystem::removeResidue)
@@ -196,6 +203,14 @@ void init_system(py::module& m) {
         .def("get_state", (const pygcmc::model::MCState& (pygcmc::system::MonteCarloSystem::*)() const) &pygcmc::system::MonteCarloSystem::getState, py::return_value_policy::reference)
         .def("get_active_atom_count", &pygcmc::system::MonteCarloSystem::getActiveAtomCount)
         .def("get_active_residue_count", &pygcmc::system::MonteCarloSystem::getActiveResidueCount);
+
+    // Bind MovementMolecularInfo
+    py::class_<pygcmc::system::MonteCarloSystem::MovementMolecularInfo>(m, "MovementMolecularInfo")
+        .def(py::init<std::shared_ptr<pygcmc::model::Molecular>, int>(),
+             py::arg("molecular"),
+             py::arg("maxCopies"))
+        .def_readwrite("molecular", &pygcmc::system::MonteCarloSystem::MovementMolecularInfo::molecular)
+        .def_readwrite("maxCopies", &pygcmc::system::MonteCarloSystem::MovementMolecularInfo::maxCopies);
 }
 
 } // namespace bindings

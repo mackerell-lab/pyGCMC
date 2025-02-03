@@ -49,6 +49,9 @@ public:
     struct MovementMolecularInfo {
         std::shared_ptr<model::Molecular> molecular;
         int maxCopies;
+
+        MovementMolecularInfo(std::shared_ptr<model::Molecular> mol, int max)
+            : molecular(mol), maxCopies(max) {}
     };
     void addMovementMolecules(const std::vector<MovementMolecularInfo>& molecules);
 

@@ -377,3 +377,169 @@ def test_residue_type_mapping_from_molecular():
     assert min(type_indices) == 0, "Residue type indices should start from 0"
     assert max(type_indices) == len(mol_res_types) - 1, "Residue type indices should be continuous"
 
+def test_add_movement_molecules():
+    """Test adding movement molecules (benx, imia, sol) to MonteCarloSystem."""
+    # Create Monte Carlo system and initialize it
+    mc_system = pygcmc.MonteCarloSystem()
+    info = pygcmc.MCInfo()
+    info.max_residues = 10000  # Large enough for base system + movement molecules
+    info.max_atoms = 100000
+    mc_system.initialize(info)
+    
+    # Load base system
+    pdb_path = os.path.join(TEST_DATA_DIR, "test.pdb")
+    top_path = os.path.join(TEST_DATA_DIR, "test.top")
+    structure = pygcmc.PDBParser.parse_file(pdb_path)
+    topology = pygcmc.TOPParser.parse_file(top_path)
+    mol_system = pygcmc.MolecularSystem()
+    base_molecular = mol_system.combine(structure, topology)
+    
+    # Initialize base system
+    mc_system.initialize_from_molecular(base_molecular)
+    
+    # Store initial state
+    initial_res_count = mc_system.get_active_residue_count()
+    initial_atom_count = mc_system.get_active_atom_count()
+    
+    # Load movement molecules
+    MOLS_DIR = os.path.join(TEST_DATA_DIR, "mols")
+    benx_pdb = os.path.join(MOLS_DIR, "benx.pdb")
+    benx_psf = os.path.join(MOLS_DIR, "benx.psf")
+    imia_pdb = os.path.join(MOLS_DIR, "imia.pdb")
+    imia_psf = os.path.join(MOLS_DIR, "imia.psf")
+    sol_pdb = os.path.join(MOLS_DIR, "sol.pdb")
+    sol_itp = os.path.join(MOLS_DIR, "sol.itp")
+    
+    # Verify test files exist
+    for test_file in [benx_pdb, benx_psf, imia_pdb, imia_psf, sol_pdb, sol_itp]:
+        if not os.path.exists(test_file):
+            pytest.skip(f"Test file not found: {test_file}")
+    
+    # Create molecular systems for movement molecules
+    benx_structure = pygcmc.PDBParser.parse_file(benx_pdb)
+    benx_topology = pygcmc.PSFParser.parse_file(benx_psf)
+    benx_molecular = pygcmc.MolecularSystem().combine(benx_structure, benx_topology)
+    
+    imia_structure = pygcmc.PDBParser.parse_file(imia_pdb)
+    imia_topology = pygcmc.PSFParser.parse_file(imia_psf)
+    imia_molecular = pygcmc.MolecularSystem().combine(imia_structure, imia_topology)
+    
+    sol_structure = pygcmc.PDBParser.parse_file(sol_pdb)
+    sol_topology = pygcmc.TOPParser.parse_file(sol_itp)
+    sol_molecular = pygcmc.MolecularSystem().combine(sol_structure, sol_topology)
+    
+    # Create movement molecule info list
+    movement_mols = [
+        pygcmc.MovementMolecularInfo(benx_molecular, 1000),
+        pygcmc.MovementMolecularInfo(imia_molecular, 1000),
+        pygcmc.MovementMolecularInfo(sol_molecular, 1000)
+    ]
+    
+    # Add movement molecules
+    mc_system.add_movement_molecules(movement_mols)
+    
+    # Get final state
+    state = mc_system.get_state()
+    
+    # Test 1: Check movement residue info
+    assert len(state.movementResidues) == 3, "Should have info for all three movement molecule types"
+    
+    # Helper function to test each movement molecule type
+    def verify_movement_info(molecular, name):
+        info = next((info for info in state.movementResidues 
+                    if info.resName == molecular.residues[0].get_resname()), None)
+        assert info is not None, f"Should have {name} movement info"
+        
+        # Count actual residues in base system
+        count = sum(1 for i in range(initial_res_count) 
+                   if state.residueTypes.get_type_name(state.residues[i].type) == info.resName)
+        
+        assert info.activeCount == count, \
+               f"Active {name} count mismatch: {info.activeCount} != {count}"
+        assert info.totalCount == count + 1000, \
+               f"Total {name} count should be active + 1000"
+        return info
+    
+    # Test each movement molecule
+    benx_info = verify_movement_info(benx_molecular, "benx")
+    imia_info = verify_movement_info(imia_molecular, "imia")
+    sol_info = verify_movement_info(sol_molecular, "sol")
+    
+    # Test 2: Verify residue organization
+    # Check that active movement residues are contiguous and at the end of active residues
+    for info in state.movementResidues:
+        # Check that residues from startIndex to startIndex + activeCount are all of correct type
+        for i in range(info.startIndex, info.startIndex + info.activeCount):
+            res = state.residues[i]
+            assert res.active == True, f"Residue at {i} should be active"
+            assert res.fixed == False, f"Residue at {i} should not be fixed"
+            assert state.residueTypes.get_type_name(res.type) == info.resName, \
+                   f"Residue at {i} has wrong type"
+        
+        # Check inactive residues
+        for i in range(info.startIndex + info.activeCount, 
+                      info.startIndex + info.totalCount):
+            res = state.residues[i]
+            assert res.active == False, f"Residue at {i} should be inactive"
+            assert res.fixed == False, f"Residue at {i} should not be fixed"
+            assert state.residueTypes.get_type_name(res.type) == info.resName, \
+                   f"Residue at {i} has wrong type"
+    
+    # Test 3: Verify atom organization
+    # Check that atoms for each residue are contiguous
+    for i in range(state.activeResidueCount):
+        res = state.residues[i]
+        # Verify atom indices are within bounds
+        assert res.atomStart >= 0 and res.atomStart + res.atomCount <= len(state.atoms), \
+               f"Residue {i} has invalid atom range"
+        
+        if i > 0:
+            prev_res = state.residues[i-1]
+            # Verify atoms are contiguous
+            assert res.atomStart == prev_res.atomStart + prev_res.atomCount, \
+                   f"Gap in atom indices between residues {i-1} and {i}"
+    
+    # Test 4: Verify type mappings
+    type_maps = mc_system.get_type_maps()
+    
+    # Helper function to check atom types
+    def verify_atom_types(molecular, name):
+        for atom in molecular.residues[0].get_atoms():
+            atom_type = atom.get_type()
+            type_idx = type_maps.get_or_add_type(atom_type)
+            assert type_maps.get_type_name(type_idx) == atom_type, \
+                   f"Type mapping mismatch for {name} atom type {atom_type}"
+    
+    # Check atom types for all molecules
+    verify_atom_types(benx_molecular, "benx")
+    verify_atom_types(imia_molecular, "imia")
+    verify_atom_types(sol_molecular, "sol")
+    
+    # Test 5: Verify total counts
+    final_active_res = mc_system.get_active_residue_count()
+    final_active_atoms = mc_system.get_active_atom_count()
+    
+    expected_new_res = sum(info.totalCount - info.activeCount for info in state.movementResidues)
+    expected_new_atoms = sum(res.atomCount for res in state.residues[initial_res_count:])
+    
+    assert final_active_res == initial_res_count + expected_new_res, \
+           "Final residue count mismatch"
+    assert final_active_atoms == initial_atom_count + expected_new_atoms, \
+           "Final atom count mismatch"
+    
+    # Test 6: Verify movement residues are properly ordered
+    # Movement residues should be at the end of active residues in the order they were added
+    movement_start_indices = [info.startIndex for info in state.movementResidues]
+    assert sorted(movement_start_indices) == movement_start_indices, \
+           "Movement residue sections should be ordered as they were added"
+    
+    # Test 7: Verify geometric centers are calculated
+    for info in state.movementResidues:
+        for i in range(info.startIndex, info.startIndex + info.totalCount):
+            res = state.residues[i]
+            # Check that center is not all zeros (unless the residue actually is centered at origin)
+            center_sum = abs(res.center[0]) + abs(res.center[1]) + abs(res.center[2])
+            assert center_sum > 0 or all(atom.x == 0 and atom.y == 0 and atom.z == 0 
+                                       for atom in state.atoms[res.atomStart:res.atomStart + res.atomCount]), \
+                   f"Residue at {i} should have its geometric center calculated"
+

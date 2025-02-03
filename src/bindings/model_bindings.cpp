@@ -638,6 +638,7 @@ void init_model(py::module& m) {
         .def_readwrite("atomCount", &pygcmc::model::MCResidue::atomCount)
         .def_property_readonly("atom_count", [](const pygcmc::model::MCResidue& r) { return r.atomCount; })
         .def_readwrite("active", &pygcmc::model::MCResidue::active)
+        .def_readwrite("fixed", &pygcmc::model::MCResidue::fixed)
         .def_property("center",
             [](const pygcmc::model::MCResidue& res) -> std::vector<float> {
                 return {res.center[0], res.center[1], res.center[2]};
@@ -665,6 +666,14 @@ void init_model(py::module& m) {
         .def_readwrite("charge", &pygcmc::model::MCAtom::charge)
         .def_readwrite("type", &pygcmc::model::MCAtom::type);
 
+    // Bind MCMovementResidueInfo
+    py::class_<pygcmc::model::MCMovementResidueInfo>(m, "MCMovementResidueInfo")
+        .def(py::init<>())
+        .def_readwrite("startIndex", &pygcmc::model::MCMovementResidueInfo::startIndex)
+        .def_readwrite("activeCount", &pygcmc::model::MCMovementResidueInfo::activeCount)
+        .def_readwrite("totalCount", &pygcmc::model::MCMovementResidueInfo::totalCount)
+        .def_readwrite("resName", &pygcmc::model::MCMovementResidueInfo::resName);
+
     // Bind MCState
     py::class_<pygcmc::model::MCState>(m, "MCState")
         .def(py::init<>())
@@ -688,7 +697,14 @@ void init_model(py::module& m) {
         .def_readwrite("activeAtomCount", &pygcmc::model::MCState::activeAtomCount)
         .def_readwrite("activeResidueCount", &pygcmc::model::MCState::activeResidueCount)
         .def_readwrite("info", &pygcmc::model::MCState::info)
-        .def_readwrite("forcefield", &pygcmc::model::MCState::forcefield);
+        .def_readwrite("forcefield", &pygcmc::model::MCState::forcefield)
+        .def_property("movementResidues",
+            [](const pygcmc::model::MCState& state) {
+                return state.movementResidues;
+            },
+            [](pygcmc::model::MCState& state, const std::vector<pygcmc::model::MCMovementResidueInfo>& movementResidues) {
+                state.movementResidues = movementResidues;
+            });
 }
 
 } // namespace bindings
