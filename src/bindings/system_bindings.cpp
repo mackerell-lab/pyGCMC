@@ -152,17 +152,17 @@ void init_system(py::module& m) {
           "Directly combine Structure with multiple Topology files into a Molecular object");
 
     // Bind TypeMaps
-    py::class_<gcmc::TypeMaps>(m, "TypeMaps")
-        .def("get_or_add_type", &gcmc::TypeMaps::getOrAddType)
-        .def("get_type_name", &gcmc::TypeMaps::getTypeName)
-        .def_readonly("atom_types", &gcmc::TypeMaps::atomTypes);
+    py::class_<pygcmc::model::TypeMaps>(m, "TypeMaps")
+        .def("get_or_add_type", &pygcmc::model::TypeMaps::getOrAddType)
+        .def("get_type_name", &pygcmc::model::TypeMaps::getTypeName)
+        .def_readonly("atom_types", &pygcmc::model::TypeMaps::atomTypes);
 
     // Bind MonteCarloSystem
-    py::class_<gcmc::MonteCarloSystem>(m, "MonteCarloSystem")
+    py::class_<pygcmc::system::MonteCarloSystem>(m, "MonteCarloSystem")
         .def(py::init<>())
-        .def("initialize", &gcmc::MonteCarloSystem::initialize)
-        .def("set_force_field", &gcmc::MonteCarloSystem::setForceField)
-        .def("initialize_from_molecular", [](gcmc::MonteCarloSystem& self, py::object molecular) {
+        .def("initialize", &pygcmc::system::MonteCarloSystem::initialize)
+        .def("set_force_field", &pygcmc::system::MonteCarloSystem::setForceField)
+        .def("initialize_from_molecular", [](pygcmc::system::MonteCarloSystem& self, py::object molecular) {
             if (molecular.is_none()) {
                 throw py::value_error("Molecular object cannot be None");
             }
@@ -187,15 +187,15 @@ void init_system(py::module& m) {
             
             throw py::type_error("Argument must be either MolecularSystem or Molecular");
         })
-        .def("get_type_maps", &gcmc::MonteCarloSystem::getTypeMaps, py::return_value_policy::reference)
-        .def("insert_residue", &gcmc::MonteCarloSystem::insertResidue)
-        .def("remove_residue", &gcmc::MonteCarloSystem::removeResidue)
-        .def("translate_residue", &gcmc::MonteCarloSystem::translateResidue)
-        .def("calc_non_bonded_energy", &gcmc::MonteCarloSystem::calcNonBondedEnergy)
-        .def("calc_total_energy", &gcmc::MonteCarloSystem::calcTotalEnergy)
-        .def("get_state", (const gcmc::MCState& (gcmc::MonteCarloSystem::*)() const) &gcmc::MonteCarloSystem::getState, py::return_value_policy::reference)
-        .def("get_active_atom_count", &gcmc::MonteCarloSystem::getActiveAtomCount)
-        .def("get_active_residue_count", &gcmc::MonteCarloSystem::getActiveResidueCount);
+        .def("get_type_maps", &pygcmc::system::MonteCarloSystem::getTypeMaps, py::return_value_policy::reference)
+        .def("insert_residue", &pygcmc::system::MonteCarloSystem::insertResidue)
+        .def("remove_residue", &pygcmc::system::MonteCarloSystem::removeResidue)
+        .def("translate_residue", &pygcmc::system::MonteCarloSystem::translateResidue)
+        .def("calc_non_bonded_energy", &pygcmc::system::MonteCarloSystem::calcNonBondedEnergy)
+        .def("calc_total_energy", &pygcmc::system::MonteCarloSystem::calcTotalEnergy)
+        .def("get_state", (const pygcmc::model::MCState& (pygcmc::system::MonteCarloSystem::*)() const) &pygcmc::system::MonteCarloSystem::getState, py::return_value_policy::reference)
+        .def("get_active_atom_count", &pygcmc::system::MonteCarloSystem::getActiveAtomCount)
+        .def("get_active_residue_count", &pygcmc::system::MonteCarloSystem::getActiveResidueCount);
 }
 
 } // namespace bindings

@@ -8,7 +8,8 @@
 #include "model/montecarlo.hpp"
 #include "model/molecular.hpp"
 
-namespace gcmc {
+namespace pygcmc {
+namespace system {
 
 class MonteCarloSystem {
 public:
@@ -29,41 +30,41 @@ public:
     // ------------------------------------------------------------
     // System initialization and setup
     // ------------------------------------------------------------
-    void initialize(const MCInfo& info) {
+    void initialize(const model::MCInfo& info) {
         state.info = info;
         state.atoms.resize(info.maxAtoms);
         state.residues.resize(info.maxResidues);
     }
 
-    void setForceField(const MCForceField& ff) {
+    void setForceField(const model::MCForceField& ff) {
         state.forcefield = ff;
     }
 
-    void addInitialResidues(const MCResidue* resVec, int resCount,
-                           const MCAtom* atomVec, int atomCount);
+    void addInitialResidues(const model::MCResidue* resVec, int resCount,
+                           const model::MCAtom* atomVec, int atomCount);
 
-    void initializeFromMolecular(const std::shared_ptr<pygcmc::model::Molecular>& molecular);
+    void initializeFromMolecular(const std::shared_ptr<model::Molecular>& molecular);
 
     // Movement residue management
     struct MovementMolecularInfo {
-        std::shared_ptr<pygcmc::model::Molecular> molecular;
+        std::shared_ptr<model::Molecular> molecular;
         int maxCopies;
     };
     void addMovementMolecules(const std::vector<MovementMolecularInfo>& molecules);
 
-    const TypeMaps& getTypeMaps() const { return typeMaps; }
+    const model::TypeMaps& getTypeMaps() const { return typeMaps; }
 
     // ------------------------------------------------------------
     // Core GCMC operations
     // ------------------------------------------------------------
-    int insertResidue(const MCResidue& res, const MCAtom* atoms);
+    int insertResidue(const model::MCResidue& res, const model::MCAtom* atoms);
     bool removeResidue(int resIdx);
     void translateResidue(int resIdx, float dx, float dy, float dz);
 
     // ------------------------------------------------------------
     // Energy calculation
     // ------------------------------------------------------------
-    float calcNonBondedEnergy(const MCResidue& res1, const MCResidue& res2) const;
+    float calcNonBondedEnergy(const model::MCResidue& res1, const model::MCResidue& res2) const;
     float calcTotalEnergy() const;
 
     // ------------------------------------------------------------
@@ -75,20 +76,21 @@ public:
     // ------------------------------------------------------------
     // System state access
     // ------------------------------------------------------------
-    const MCState& getState() const { return state; }
-    MCState& getState() { return state; }
+    const model::MCState& getState() const { return state; }
+    model::MCState& getState() { return state; }
 
     int getActiveAtomCount() const { return state.activeAtomCount; }
     int getActiveResidueCount() const { return state.activeResidueCount; }
 
 private:
     // Helper methods
-    void updateGeometricCenter(MCResidue& res);
+    void updateGeometricCenter(model::MCResidue& res);
 
     // System state
-    MCState state;
-    TypeMaps typeMaps;
+    model::MCState state;
+    model::TypeMaps typeMaps;
 };
 
-} // namespace gcmc
+} // namespace system
+} // namespace pygcmc
 

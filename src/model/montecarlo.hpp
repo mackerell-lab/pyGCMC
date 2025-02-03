@@ -16,7 +16,8 @@
  *                Provides interfaces for allocation, deallocation, download, upload
  */
 
-namespace gcmc {
+namespace pygcmc {
+namespace model {
 
 // ------------------------------------------------------------
 // 0) TypeMaps: Atom type mapping system
@@ -160,4 +161,5 @@ struct MCState {
     MCState() : activeAtomCount(0), activeResidueCount(0) {}
 };
 
-} // namespace gcmc
+} // namespace model
+} // namespace pygcmc
