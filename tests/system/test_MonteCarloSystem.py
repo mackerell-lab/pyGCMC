@@ -308,3 +308,72 @@ def test_type_mapping_from_molecular():
     assert min(type_indices) == 0, "Type indices should start from 0"
     assert max(type_indices) == len(mol_types) - 1, "Type indices should be continuous"
 
+def test_residue_type_mapping_from_molecular():
+    """Test that residue type mapping is correctly created when initializing from molecular system."""
+    # Create Monte Carlo system and initialize it
+    mc_system = pygcmc.MonteCarloSystem()
+    info = pygcmc.GCMCInfo()
+    info.max_residues = 1000
+    info.max_atoms = 10000
+    mc_system.initialize(info)
+    
+    # Get test data paths
+    pdb_path = os.path.join(TEST_DATA_DIR, "test.pdb")
+    top_path = os.path.join(TEST_DATA_DIR, "test.top")
+    
+    # Parse PDB and TOP files
+    structure = pygcmc.PDBParser.parse_file(pdb_path)
+    topology = pygcmc.TOPParser.parse_file(top_path)
+    
+    # Create molecular system and combine structure with topology
+    mol_system = pygcmc.MolecularSystem()
+    molecular = mol_system.combine(structure, topology)
+    
+    # Initialize Monte Carlo system from molecular system
+    mc_system.initialize_from_molecular(molecular)
+    
+    # Get state and type maps
+    state = mc_system.get_state()
+    residue_type_maps = state.residueTypes
+    
+    # Create a set of all unique residue types in molecular system
+    mol_res_types = set()
+    for residue in molecular.residues:
+        mol_res_types.add(residue.get_type())
+    
+    # Create a set of all unique residue types in monte carlo system
+    mc_res_types = set()
+    for i in range(state.activeResidueCount):
+        residue = state.residues[i]
+        type_name = residue_type_maps.get_type_name(residue.type)
+        mc_res_types.add(type_name)
+    
+    # Verify that both systems have the same residue types
+    assert mol_res_types == mc_res_types, \
+        f"Type mismatch: molecular residue types {mol_res_types} != monte carlo residue types {mc_res_types}"
+    
+    # Verify that each residue's type is correctly mapped
+    for res_idx in range(state.activeResidueCount):
+        mc_res = state.residues[res_idx]
+        mol_res = molecular.residues[res_idx]
+        
+        mc_type = residue_type_maps.get_type_name(mc_res.type)
+        mol_type = mol_res.get_type()
+        
+        assert mc_type == mol_type, \
+            f"Type mismatch for residue {res_idx}: {mc_type} != {mol_type}"
+        
+        # Verify that the type index is consistent
+        assert mc_res.type == residue_type_maps.get_or_add_type(mol_type), \
+            f"Type index mismatch for residue {res_idx}"
+    
+    # Verify that type indices are continuous and start from 0
+    type_indices = set()
+    for res_type in mol_res_types:
+        idx = residue_type_maps.get_or_add_type(res_type)
+        type_indices.add(idx)
+    
+    assert len(type_indices) == len(mol_res_types), "Number of residue type indices doesn't match number of types"
+    assert min(type_indices) == 0, "Residue type indices should start from 0"
+    assert max(type_indices) == len(mol_res_types) - 1, "Residue type indices should be continuous"
+

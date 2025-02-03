@@ -161,6 +161,9 @@ void MonteCarloSystem::initializeFromMolecular(const std::shared_ptr<pygcmc::mod
             tempAtoms.push_back(mcAtom);
         }
 
+        // Set residue type
+        mcRes.type = state.residueTypes.getOrAddType(molRes->get_resname());
+
         // Calculate center of mass
         mcRes.com[0] = mcRes.com[1] = mcRes.com[2] = 0.0f;
         for (size_t j = 0; j < static_cast<size_t>(mcRes.atomCount); ++j) {

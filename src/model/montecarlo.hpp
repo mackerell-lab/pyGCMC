@@ -118,6 +118,9 @@ struct SystemState {
     std::vector<Atom>    atoms;      ///< Global atom array
     std::vector<Residue> residues;   ///< Global residue array
 
+    // Type mappings
+    TypeMaps residueTypes;  ///< Residue type mappings
+
     // Active counts for swap-and-pop management
     int activeAtomCount;     ///< Current active atom count
     int activeResidueCount;  ///< Current active residue count
