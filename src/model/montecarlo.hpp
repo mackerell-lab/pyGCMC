@@ -49,28 +49,28 @@ struct TypeMaps {
 // 1) GCMCInfo: Global MC parameters
 // ------------------------------------------------------------
 struct MCInfo {
-    int    mcSteps{0};       ///< Monte Carlo steps
-    float  box[3]{-1.0f};        ///< Box dimensions (Å)
-    float  cutoff{15.0f};       ///< Cutoff distance for non-bonded interactions (Å)
-    float  beta{0.0f};          ///< 1/(kB*T) (mol/kcal) - will be set based on temperature
+    int    mcSteps{0};       ///< Monte Carlo steps (dimensionless)
+    float  box[3]{-1.0f};    ///< Box dimensions (Å)
+    float  cutoff{15.0f};    ///< Cutoff distance for non-bonded interactions (Å)
+    float  beta{0.0f};       ///< 1/(kB*T) (mol/kcal) - inverse temperature
     
     // Reserved max capacity
-    int    maxResidues;   
-    int    maxAtoms;
-    int    maxTypes;      ///< Maximum number of atom types
+    int    maxResidues;      ///< Maximum number of residues (dimensionless)
+    int    maxAtoms;         ///< Maximum number of atoms (dimensionless)
+    int    maxTypes;         ///< Maximum number of atom types (dimensionless)
 
     // Global parameters
-    float  volume;        ///< System volume
-    uint64_t seed;       ///< Random seed
+    float  volume;           ///< System volume (Å³)
+    uint64_t seed;          ///< Random seed (dimensionless)
 
     // Statistics
     struct Statistics {
-        int totalMoves{0};           ///< Total number of moves attempted
-        int acceptedMoves{0};        ///< Number of accepted moves
-        int insertionAttempts{0};    ///< Number of insertion attempts
-        int acceptedInsertions{0};   ///< Number of accepted insertions
-        int deletionAttempts{0};     ///< Number of deletion attempts
-        int acceptedDeletions{0};    ///< Number of accepted deletions
+        int totalMoves{0};           ///< Total number of moves attempted (dimensionless)
+        int acceptedMoves{0};        ///< Number of accepted moves (dimensionless)
+        int insertionAttempts{0};    ///< Number of insertion attempts (dimensionless)
+        int acceptedInsertions{0};   ///< Number of accepted insertions (dimensionless)
+        int deletionAttempts{0};     ///< Number of deletion attempts (dimensionless)
+        int acceptedDeletions{0};    ///< Number of accepted deletions (dimensionless)
     } stats;
 
     // Constants (CHARMM units)
@@ -82,6 +82,8 @@ struct MCInfo {
 
     // Set temperature and calculate beta
     void setTemperature(float temperature) {  // temperature in Kelvin
+        // beta = 1/(kB*T) where kB is BOLTZMANN in kcal/mol/K and T is in K
+        // This gives beta in mol/kcal units
         beta = 1.0f / (BOLTZMANN * temperature);
     }
 };
@@ -116,7 +118,10 @@ struct MCResidue {
     bool  active;       ///< Whether in use
     bool  fixed;        ///< Whether fixed  
     float center[3];    ///< Geometric center
-    
+
+    float energy_vdw;   ///< Lennard-Jones energy
+    float energy_elec;  ///< Coulomb energy 
+        
     // GCMC parameters
     float concentration; ///< Target concentration
     float chemPot;      ///< Chemical potential
