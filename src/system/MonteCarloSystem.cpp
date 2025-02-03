@@ -115,11 +115,9 @@ void MonteCarloSystem::updateCenterOfMass(Residue& res) {
     }
 }
 
-void MonteCarloSystem::initializeFromMolecular(const pygcmc::system::MolecularSystem& molSys) {
-    // Get the molecular object from MolecularSystem
-    const auto& molecular = molSys.get_molecular();
+void MonteCarloSystem::initializeFromMolecular(const std::shared_ptr<pygcmc::model::Molecular>& molecular) {
     if (!molecular) {
-        throw std::runtime_error("No molecular data available in MolecularSystem");
+        throw std::runtime_error("No molecular data available");
     }
     
     // Set box dimensions from molecular system
@@ -174,6 +172,12 @@ void MonteCarloSystem::initializeFromMolecular(const pygcmc::system::MolecularSy
         
         tempResidues.push_back(mcRes);
         atomStart += mcRes.atomCount;
+    }
+
+    // Check capacity
+    if (tempResidues.size() > static_cast<size_t>(state.info.maxResidues) ||
+        tempAtoms.size() > static_cast<size_t>(state.info.maxAtoms)) {
+        throw std::runtime_error("Initial system exceeds max capacity");
     }
 
     // Initialize the system with converted data

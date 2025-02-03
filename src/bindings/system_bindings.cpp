@@ -162,7 +162,31 @@ void init_system(py::module& m) {
         .def(py::init<>())
         .def("initialize", &gcmc::MonteCarloSystem::initialize)
         .def("set_force_field", &gcmc::MonteCarloSystem::setForceField)
-        .def("initialize_from_molecular", &gcmc::MonteCarloSystem::initializeFromMolecular)
+        .def("initialize_from_molecular", [](gcmc::MonteCarloSystem& self, py::object molecular) {
+            if (molecular.is_none()) {
+                throw py::value_error("Molecular object cannot be None");
+            }
+            
+            try {
+                // First try MolecularSystem
+                auto* molSys = molecular.cast<pygcmc::system::MolecularSystem*>();
+                if (molSys) {
+                    self.initializeFromMolecular(molSys->get_molecular());
+                    return;
+                }
+            } catch (py::cast_error&) {}
+            
+            try {
+                // Then try Molecular directly
+                auto mol = molecular.cast<std::shared_ptr<pygcmc::model::Molecular>>();
+                if (mol) {
+                    self.initializeFromMolecular(mol);
+                    return;
+                }
+            } catch (py::cast_error&) {}
+            
+            throw py::type_error("Argument must be either MolecularSystem or Molecular");
+        })
         .def("get_type_maps", &gcmc::MonteCarloSystem::getTypeMaps, py::return_value_policy::reference)
         .def("insert_residue", &gcmc::MonteCarloSystem::insertResidue)
         .def("remove_residue", &gcmc::MonteCarloSystem::removeResidue)

@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <string>
 #include "model/montecarlo.hpp"
-#include "system/molecularSystem.hpp"
+#include "model/molecular.hpp"
 
 namespace gcmc {
 
@@ -66,7 +66,8 @@ public:
     void addInitialResidues(const Residue* resVec, int resCount,
                            const Atom* atomVec, int atomCount);
 
-    void initializeFromMolecular(const pygcmc::system::MolecularSystem& molSys);
+    void initializeFromMolecular(const std::shared_ptr<pygcmc::model::Molecular>& molecular);
+
     const TypeMaps& getTypeMaps() const { return typeMaps; }
 
     // ------------------------------------------------------------
