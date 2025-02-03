@@ -663,30 +663,30 @@ void init_model(py::module& m) {
         .def_readwrite("charge", &gcmc::Atom::charge)
         .def_readwrite("type", &gcmc::Atom::type);
 
-    // Bind SystemState
-    py::class_<gcmc::SystemState>(m, "SystemState")
+    // Bind MonteCarloState
+    py::class_<gcmc::MonteCarloState>(m, "MonteCarloState")
         .def(py::init<>())
         .def_property("atoms",
-            [](const gcmc::SystemState& state) {
+            [](const gcmc::MonteCarloState& state) {
                 return std::vector<gcmc::Atom>(state.atoms.begin(), 
                     state.atoms.begin() + state.activeAtomCount);
             },
-            [](gcmc::SystemState& state, const std::vector<gcmc::Atom>& atoms) {
+            [](gcmc::MonteCarloState& state, const std::vector<gcmc::Atom>& atoms) {
                 state.atoms = atoms;
             })
         .def_property("residues",
-            [](const gcmc::SystemState& state) {
+            [](const gcmc::MonteCarloState& state) {
                 return std::vector<gcmc::Residue>(state.residues.begin(), 
                     state.residues.begin() + state.activeResidueCount);
             },
-            [](gcmc::SystemState& state, const std::vector<gcmc::Residue>& residues) {
+            [](gcmc::MonteCarloState& state, const std::vector<gcmc::Residue>& residues) {
                 state.residues = residues;
             })
-        .def_readwrite("residueTypes", &gcmc::SystemState::residueTypes)
-        .def_readwrite("activeAtomCount", &gcmc::SystemState::activeAtomCount)
-        .def_readwrite("activeResidueCount", &gcmc::SystemState::activeResidueCount)
-        .def_readwrite("info", &gcmc::SystemState::info)
-        .def_readwrite("forcefield", &gcmc::SystemState::forcefield);
+        .def_readwrite("residueTypes", &gcmc::MonteCarloState::residueTypes)
+        .def_readwrite("activeAtomCount", &gcmc::MonteCarloState::activeAtomCount)
+        .def_readwrite("activeResidueCount", &gcmc::MonteCarloState::activeResidueCount)
+        .def_readwrite("info", &gcmc::MonteCarloState::info)
+        .def_readwrite("forcefield", &gcmc::MonteCarloState::forcefield);
 }
 
 } // namespace bindings

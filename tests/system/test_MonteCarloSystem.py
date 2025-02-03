@@ -339,7 +339,7 @@ def test_residue_type_mapping_from_molecular():
     # Create a set of all unique residue types in molecular system
     mol_res_types = set()
     for residue in molecular.residues:
-        mol_res_types.add(residue.get_type())
+        mol_res_types.add(residue.get_resname())
     
     # Create a set of all unique residue types in monte carlo system
     mc_res_types = set()
@@ -358,7 +358,7 @@ def test_residue_type_mapping_from_molecular():
         mol_res = molecular.residues[res_idx]
         
         mc_type = residue_type_maps.get_type_name(mc_res.type)
-        mol_type = mol_res.get_type()
+        mol_type = mol_res.get_resname()
         
         assert mc_type == mol_type, \
             f"Type mismatch for residue {res_idx}: {mc_type} != {mol_type}"

@@ -113,7 +113,7 @@ struct Residue {
 // ------------------------------------------------------------
 // 5) System State: Current state of the MC system
 // ------------------------------------------------------------
-struct SystemState {
+struct MonteCarloState {
     // Arrays
     std::vector<Atom>    atoms;      ///< Global atom array
     std::vector<Residue> residues;   ///< Global residue array
@@ -130,7 +130,7 @@ struct SystemState {
     ForceField forcefield;  ///< Force field parameters
 
     // Constructor to initialize counts
-    SystemState() : activeAtomCount(0), activeResidueCount(0) {}
+    MonteCarloState() : activeAtomCount(0), activeResidueCount(0) {}
 };
 
 } // namespace gcmc

@@ -193,7 +193,7 @@ void init_system(py::module& m) {
         .def("translate_residue", &gcmc::MonteCarloSystem::translateResidue)
         .def("calc_non_bonded_energy", &gcmc::MonteCarloSystem::calcNonBondedEnergy)
         .def("calc_total_energy", &gcmc::MonteCarloSystem::calcTotalEnergy)
-        .def("get_state", (const gcmc::SystemState& (gcmc::MonteCarloSystem::*)() const) &gcmc::MonteCarloSystem::getState, py::return_value_policy::reference)
+        .def("get_state", (const gcmc::MonteCarloState& (gcmc::MonteCarloSystem::*)() const) &gcmc::MonteCarloSystem::getState, py::return_value_policy::reference)
         .def("get_active_atom_count", &gcmc::MonteCarloSystem::getActiveAtomCount)
         .def("get_active_residue_count", &gcmc::MonteCarloSystem::getActiveResidueCount);
 }

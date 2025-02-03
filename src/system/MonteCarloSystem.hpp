@@ -68,8 +68,8 @@ public:
     // ------------------------------------------------------------
     // System state access
     // ------------------------------------------------------------
-    const SystemState& getState() const { return state; }
-    SystemState& getState() { return state; }
+    const MonteCarloState& getState() const { return state; }
+    MonteCarloState& getState() { return state; }
 
     int getActiveAtomCount() const { return state.activeAtomCount; }
     int getActiveResidueCount() const { return state.activeResidueCount; }
@@ -79,7 +79,7 @@ private:
     void updateCenterOfMass(Residue& res);
 
     // System state
-    SystemState state;
+    MonteCarloState state;
     TypeMaps typeMaps;
 };
 
