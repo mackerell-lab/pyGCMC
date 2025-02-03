@@ -32,7 +32,7 @@ def test_initialize_from_molecular(molecular_system):
     mc_system = pygcmc.MonteCarloSystem()
     
     # Set reasonable max capacity
-    info = pygcmc.GCMCInfo()
+    info = pygcmc.MCInfo()
     info.max_residues = 1000
     info.max_atoms = 10000
     mc_system.initialize(info)
@@ -90,7 +90,7 @@ def test_initialize_from_molecular_empty():
     mc_system = pygcmc.MonteCarloSystem()
     
     # Set reasonable max capacity
-    info = pygcmc.GCMCInfo()
+    info = pygcmc.MCInfo()
     info.max_residues = 1000
     info.max_atoms = 10000
     mc_system.initialize(info)
@@ -104,7 +104,7 @@ def test_initialize_from_molecular_large_system(molecular_system):
     mc_system = pygcmc.MonteCarloSystem()
     
     # Set small max capacity
-    info = pygcmc.GCMCInfo()
+    info = pygcmc.MCInfo()
     info.max_residues = 1
     info.max_atoms = 1
     mc_system.initialize(info)
@@ -141,7 +141,7 @@ def test_residue_atom_properties():
     """Test detailed properties of residues and atoms in MonteCarloSystem."""
     # Create Monte Carlo system and initialize it
     mc_system = pygcmc.MonteCarloSystem()
-    info = pygcmc.GCMCInfo()
+    info = pygcmc.MCInfo()
     info.max_residues = 1000
     info.max_atoms = 10000
     mc_system.initialize(info)
@@ -225,7 +225,7 @@ def test_residue_atom_properties_empty():
     mc_system = pygcmc.MonteCarloSystem()
     
     # Set reasonable max capacity
-    info = pygcmc.GCMCInfo()
+    info = pygcmc.MCInfo()
     info.max_residues = 1000
     info.max_atoms = 10000
     mc_system.initialize(info)
@@ -238,7 +238,7 @@ def test_type_mapping_from_molecular():
     """Test that type mapping is correctly created when initializing from molecular system."""
     # Create Monte Carlo system and initialize it
     mc_system = pygcmc.MonteCarloSystem()
-    info = pygcmc.GCMCInfo()
+    info = pygcmc.MCInfo()
     info.max_residues = 1000
     info.max_atoms = 10000
     mc_system.initialize(info)
@@ -312,7 +312,7 @@ def test_residue_type_mapping_from_molecular():
     """Test that residue type mapping is correctly created when initializing from molecular system."""
     # Create Monte Carlo system and initialize it
     mc_system = pygcmc.MonteCarloSystem()
-    info = pygcmc.GCMCInfo()
+    info = pygcmc.MCInfo()
     info.max_residues = 1000
     info.max_atoms = 10000
     mc_system.initialize(info)

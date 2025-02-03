@@ -29,18 +29,18 @@ public:
     // ------------------------------------------------------------
     // System initialization and setup
     // ------------------------------------------------------------
-    void initialize(const GCMCInfo& info) {
+    void initialize(const MCInfo& info) {
         state.info = info;
         state.atoms.resize(info.maxAtoms);
         state.residues.resize(info.maxResidues);
     }
 
-    void setForceField(const ForceField& ff) {
+    void setForceField(const MCForceField& ff) {
         state.forcefield = ff;
     }
 
-    void addInitialResidues(const Residue* resVec, int resCount,
-                           const Atom* atomVec, int atomCount);
+    void addInitialResidues(const MCResidue* resVec, int resCount,
+                           const MCAtom* atomVec, int atomCount);
 
     void initializeFromMolecular(const std::shared_ptr<pygcmc::model::Molecular>& molecular);
 
@@ -56,14 +56,14 @@ public:
     // ------------------------------------------------------------
     // Core GCMC operations
     // ------------------------------------------------------------
-    int insertResidue(const Residue& res, const Atom* atoms);
+    int insertResidue(const MCResidue& res, const MCAtom* atoms);
     bool removeResidue(int resIdx);
     void translateResidue(int resIdx, float dx, float dy, float dz);
 
     // ------------------------------------------------------------
     // Energy calculation
     // ------------------------------------------------------------
-    float calcNonBondedEnergy(const Residue& res1, const Residue& res2) const;
+    float calcNonBondedEnergy(const MCResidue& res1, const MCResidue& res2) const;
     float calcTotalEnergy() const;
 
     // ------------------------------------------------------------
@@ -75,18 +75,18 @@ public:
     // ------------------------------------------------------------
     // System state access
     // ------------------------------------------------------------
-    const MonteCarloState& getState() const { return state; }
-    MonteCarloState& getState() { return state; }
+    const MCState& getState() const { return state; }
+    MCState& getState() { return state; }
 
     int getActiveAtomCount() const { return state.activeAtomCount; }
     int getActiveResidueCount() const { return state.activeResidueCount; }
 
 private:
     // Helper methods
-    void updateGeometricCenter(Residue& res);
+    void updateGeometricCenter(MCResidue& res);
 
     // System state
-    MonteCarloState state;
+    MCState state;
     TypeMaps typeMaps;
 };
 

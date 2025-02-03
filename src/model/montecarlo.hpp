@@ -47,7 +47,7 @@ struct TypeMaps {
 // ------------------------------------------------------------
 // 1) GCMCInfo: Global MC parameters
 // ------------------------------------------------------------
-struct GCMCInfo {
+struct MCInfo {
     int    mcSteps{0};       ///< Monte Carlo steps
     float  box[3]{-1.0f};        ///< Box dimensions (Å)
     float  cutoff{15.0f};       ///< Cutoff distance for non-bonded interactions (Å)
@@ -88,7 +88,7 @@ struct GCMCInfo {
 // ------------------------------------------------------------
 // 2) ForceField: Force field parameters
 // ------------------------------------------------------------
-struct ForceField {
+struct MCForceField {
     int maxTypes;  ///< Actual number of atom types in use
 
     // Lennard-Jones parameters
@@ -99,7 +99,7 @@ struct ForceField {
 // ------------------------------------------------------------
 // 3) Atom: Basic atomic properties
 // ------------------------------------------------------------
-struct Atom {
+struct MCAtom {
     float x, y, z;      ///< Position
     float charge;       ///< Charge
     int   type;        ///< Type index
@@ -108,7 +108,7 @@ struct Atom {
 // ------------------------------------------------------------
 // 4) Residue: Molecular unit for GCMC
 // ------------------------------------------------------------
-struct Residue {
+struct MCResidue {
     // Basic properties
     int   atomStart;    ///< Starting index in global atom array
     int   atomCount;    ///< Number of atoms
@@ -126,7 +126,7 @@ struct Residue {
 // ------------------------------------------------------------
 // 4.5) Movement Residue Info: Track GCMC movement residues
 // ------------------------------------------------------------
-struct MovementResidueInfo {
+struct MCMovementResidueInfo {
     int startIndex;         ///< Starting index of movement residues in global residue array
     int activeCount;        ///< Number of active movement residues
     int totalCount;         ///< Total number of movement residues (active + inactive)
@@ -136,10 +136,10 @@ struct MovementResidueInfo {
 // ------------------------------------------------------------
 // 5) System State: Current state of the MC system
 // ------------------------------------------------------------
-struct MonteCarloState {
+struct MCState {
     // Arrays
-    std::vector<Atom>    atoms;      ///< Global atom array
-    std::vector<Residue> residues;   ///< Global residue array
+    std::vector<MCAtom>    atoms;      ///< Global atom array
+    std::vector<MCResidue> residues;   ///< Global residue array
 
     // Type mappings
     TypeMaps residueTypes;  ///< Residue type mappings
@@ -150,14 +150,14 @@ struct MonteCarloState {
     int activeResidueCount;  ///< Current active residue count
 
     // Movement residue tracking
-    std::vector<MovementResidueInfo> movementResidues;  ///< Info for each type of movement residue
+    std::vector<MCMovementResidueInfo> movementResidues;  ///< Info for each type of movement residue
 
     // Parameters
-    GCMCInfo   info;        ///< Global MC parameters
-    ForceField forcefield;  ///< Force field parameters
+    MCInfo   info;        ///< Global MC parameters
+    MCForceField forcefield;  ///< Force field parameters
 
     // Constructor to initialize counts
-    MonteCarloState() : activeAtomCount(0), activeResidueCount(0) {}
+    MCState() : activeAtomCount(0), activeResidueCount(0) {}
 };
 
 } // namespace gcmc

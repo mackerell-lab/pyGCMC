@@ -3,8 +3,8 @@
 
 namespace gcmc {
 
-void MonteCarloSystem::addInitialResidues(const Residue* resVec, int resCount,
-                                         const Atom* atomVec, int atomCount) {
+void MonteCarloSystem::addInitialResidues(const MCResidue* resVec, int resCount,
+                                         const MCAtom* atomVec, int atomCount) {
     if (resCount > state.info.maxResidues || atomCount > state.info.maxAtoms) {
         throw std::runtime_error("Initial system exceeds max capacity");
     }
@@ -16,7 +16,7 @@ void MonteCarloSystem::addInitialResidues(const Residue* resVec, int resCount,
     state.activeAtomCount = atomCount;
 }
 
-int MonteCarloSystem::insertResidue(const Residue& res, const Atom* atoms) {
+int MonteCarloSystem::insertResidue(const MCResidue& res, const MCAtom* atoms) {
     if (state.activeResidueCount >= state.info.maxResidues ||
         state.activeAtomCount + res.atomCount > state.info.maxAtoms) {
         return -1;
@@ -39,7 +39,7 @@ bool MonteCarloSystem::removeResidue(int resIdx) {
     }
 
     // Get residue info and mark it as inactive
-    Residue& res = state.residues[resIdx];
+    MCResidue& res = state.residues[resIdx];
     res.active = false;
     int atomStart = res.atomStart;
     int atomCount = res.atomCount;
@@ -67,9 +67,9 @@ bool MonteCarloSystem::removeResidue(int resIdx) {
 
 void MonteCarloSystem::translateResidue(int resIdx, float dx, float dy, float dz) {
     if (resIdx >= 0 && resIdx < state.activeResidueCount) {
-        Residue& res = state.residues[resIdx];
+        MCResidue& res = state.residues[resIdx];
         for (int i = 0; i < res.atomCount; ++i) {
-            Atom& atom = state.atoms[res.atomStart + i];
+            MCAtom& atom = state.atoms[res.atomStart + i];
             atom.x += dx;
             atom.y += dy;
             atom.z += dz;
@@ -79,7 +79,7 @@ void MonteCarloSystem::translateResidue(int resIdx, float dx, float dy, float dz
     }
 }
 
-float MonteCarloSystem::calcNonBondedEnergy([[maybe_unused]] const Residue& res1, [[maybe_unused]] const Residue& res2) const {
+float MonteCarloSystem::calcNonBondedEnergy(const MCResidue& res1, const MCResidue& res2) const {
     float energy = 0.0f;
     // TODO: Implement LJ + Coulomb with periodic boundary conditions
     return energy;
@@ -104,11 +104,11 @@ float MonteCarloSystem::getMinImageDistSqr(float dx, float dy, float dz) const {
     return dx*dx + dy*dy + dz*dz;
 }
 
-void MonteCarloSystem::updateGeometricCenter(Residue& res) {
+void MonteCarloSystem::updateGeometricCenter(MCResidue& res) {
     res.center[0] = res.center[1] = res.center[2] = 0.0f;
     
     for (int i = 0; i < res.atomCount; ++i) {
-        const Atom& atom = state.atoms[res.atomStart + i];
+        const MCAtom& atom = state.atoms[res.atomStart + i];
         res.center[0] += atom.x;
         res.center[1] += atom.y;
         res.center[2] += atom.z;
@@ -134,8 +134,8 @@ void MonteCarloSystem::initializeFromMolecular(const std::shared_ptr<pygcmc::mod
     state.info.volume = state.info.box[0] * state.info.box[1] * state.info.box[2];
 
     // Convert residues and atoms
-    std::vector<Residue> tempResidues;
-    std::vector<Atom> tempAtoms;
+    std::vector<MCResidue> tempResidues;
+    std::vector<MCAtom> tempAtoms;
     
     size_t atomStart = 0;
     const size_t numResidues = molecular->get_num_residues();
@@ -143,7 +143,7 @@ void MonteCarloSystem::initializeFromMolecular(const std::shared_ptr<pygcmc::mod
     for (size_t i = 0; i < numResidues; ++i) {
         const auto& molRes = molecular->residues[i];
         
-        Residue mcRes;
+        MCResidue mcRes;
         mcRes.atomStart = atomStart;
         mcRes.atomCount = molRes->atom_count();
         mcRes.active = true;
@@ -151,7 +151,7 @@ void MonteCarloSystem::initializeFromMolecular(const std::shared_ptr<pygcmc::mod
         // Convert atoms for this residue
         const auto& molAtoms = molRes->get_atoms();
         for (const auto& molAtom : molAtoms) {
-            Atom mcAtom;
+            MCAtom mcAtom;
             mcAtom.x = molAtom->get_x();
             mcAtom.y = molAtom->get_y();
             mcAtom.z = molAtom->get_z();
