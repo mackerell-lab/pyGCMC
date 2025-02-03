@@ -44,6 +44,13 @@ public:
 
     void initializeFromMolecular(const std::shared_ptr<pygcmc::model::Molecular>& molecular);
 
+    // Movement residue management
+    struct MovementMolecularInfo {
+        std::shared_ptr<pygcmc::model::Molecular> molecular;
+        int maxCopies;
+    };
+    void addMovementMolecules(const std::vector<MovementMolecularInfo>& molecules);
+
     const TypeMaps& getTypeMaps() const { return typeMaps; }
 
     // ------------------------------------------------------------

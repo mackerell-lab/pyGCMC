@@ -113,6 +113,7 @@ struct Residue {
     int   atomStart;    ///< Starting index in global atom array
     int   atomCount;    ///< Number of atoms
     bool  active;       ///< Whether in use
+    bool  fixed;        ///< Whether fixed  
     float center[3];    ///< Geometric center
     
     // GCMC parameters
@@ -120,6 +121,16 @@ struct Residue {
     float chemPot;      ///< Chemical potential
     int   type;         ///< Residue type
     float radius;       ///< Approximate radius
+};
+
+// ------------------------------------------------------------
+// 4.5) Movement Residue Info: Track GCMC movement residues
+// ------------------------------------------------------------
+struct MovementResidueInfo {
+    int startIndex;         ///< Starting index of movement residues in global residue array
+    int activeCount;        ///< Number of active movement residues
+    int totalCount;         ///< Total number of movement residues (active + inactive)
+    std::string resName;    ///< Residue name for this movement group
 };
 
 // ------------------------------------------------------------
@@ -132,10 +143,14 @@ struct MonteCarloState {
 
     // Type mappings
     TypeMaps residueTypes;  ///< Residue type mappings
+    TypeMaps atomTypes;     ///< Atom type mappings
 
     // Active counts for swap-and-pop management
     int activeAtomCount;     ///< Current active atom count
     int activeResidueCount;  ///< Current active residue count
+
+    // Movement residue tracking
+    std::vector<MovementResidueInfo> movementResidues;  ///< Info for each type of movement residue
 
     // Parameters
     GCMCInfo   info;        ///< Global MC parameters
