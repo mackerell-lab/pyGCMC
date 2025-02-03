@@ -682,6 +682,7 @@ void init_model(py::module& m) {
             [](gcmc::SystemState& state, const std::vector<gcmc::Residue>& residues) {
                 state.residues = residues;
             })
+        .def_readwrite("residueTypes", &gcmc::SystemState::residueTypes)
         .def_readwrite("activeAtomCount", &gcmc::SystemState::activeAtomCount)
         .def_readwrite("activeResidueCount", &gcmc::SystemState::activeResidueCount)
         .def_readwrite("info", &gcmc::SystemState::info)
