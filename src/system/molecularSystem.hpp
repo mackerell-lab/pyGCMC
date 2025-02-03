@@ -39,6 +39,12 @@ public:
         const std::shared_ptr<model::Structure>& structure,
         const std::vector<std::shared_ptr<model::Topology>>& topologies);
 
+    /**
+     * @brief 获取当前的Molecular对象
+     * @return 当前的Molecular对象
+     */
+    const std::shared_ptr<model::Molecular>& get_molecular() const { return molecular_; }
+
 private:
     std::shared_ptr<model::Molecular> molecular_;
 

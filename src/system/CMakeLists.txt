@@ -4,6 +4,7 @@
 add_library(pygcmc_system
     system.cpp
     molecularSystem.cpp
+    MonteCarloSystem.cpp
 )
 
 # Set position independent code property

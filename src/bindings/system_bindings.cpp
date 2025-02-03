@@ -2,6 +2,7 @@
 #include <pybind11/stl.h>
 #include "system/system.hpp"
 #include "system/molecularSystem.hpp"
+#include "system/MonteCarloSystem.hpp"
 
 namespace py = pybind11;
 
@@ -149,6 +150,28 @@ void init_system(py::module& m) {
           },
           py::return_value_policy::move,
           "Directly combine Structure with multiple Topology files into a Molecular object");
+
+    // Bind TypeMaps
+    py::class_<gcmc::MonteCarloSystem::TypeMaps>(m, "TypeMaps")
+        .def("get_or_add_type", &gcmc::MonteCarloSystem::TypeMaps::getOrAddType)
+        .def("get_type_name", &gcmc::MonteCarloSystem::TypeMaps::getTypeName)
+        .def_readonly("atom_types", &gcmc::MonteCarloSystem::TypeMaps::atomTypes);
+
+    // Bind MonteCarloSystem
+    py::class_<gcmc::MonteCarloSystem>(m, "MonteCarloSystem")
+        .def(py::init<>())
+        .def("initialize", &gcmc::MonteCarloSystem::initialize)
+        .def("set_force_field", &gcmc::MonteCarloSystem::setForceField)
+        .def("initialize_from_molecular", &gcmc::MonteCarloSystem::initializeFromMolecular)
+        .def("get_type_maps", &gcmc::MonteCarloSystem::getTypeMaps, py::return_value_policy::reference)
+        .def("insert_residue", &gcmc::MonteCarloSystem::insertResidue)
+        .def("remove_residue", &gcmc::MonteCarloSystem::removeResidue)
+        .def("translate_residue", &gcmc::MonteCarloSystem::translateResidue)
+        .def("calc_non_bonded_energy", &gcmc::MonteCarloSystem::calcNonBondedEnergy)
+        .def("calc_total_energy", &gcmc::MonteCarloSystem::calcTotalEnergy)
+        .def("get_state", (const gcmc::SystemState& (gcmc::MonteCarloSystem::*)() const) &gcmc::MonteCarloSystem::getState, py::return_value_policy::reference)
+        .def("get_active_atom_count", &gcmc::MonteCarloSystem::getActiveAtomCount)
+        .def("get_active_residue_count", &gcmc::MonteCarloSystem::getActiveResidueCount);
 }
 
 } // namespace bindings

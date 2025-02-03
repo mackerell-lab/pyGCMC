@@ -9,6 +9,7 @@
 #include "model/forcefield.hpp"
 #include "model/param.hpp"
 #include "model/molecular.hpp"
+#include "model/montecarlo.hpp"
 
 namespace py = pybind11;
 // using namespace pygcmc;
@@ -593,6 +594,48 @@ void init_model(py::module& m) {
         .def("get_num_standard_cmaps", &model::Molecular::get_num_standard_cmaps)
         .def("add_standard_cmap", &model::Molecular::add_standard_cmap)
         .def("clear", &model::Molecular::clear);
+
+    // Bind GCMCInfo
+    py::class_<gcmc::GCMCInfo>(m, "GCMCInfo")
+        .def(py::init<>())
+        .def_readwrite("mc_steps", &gcmc::GCMCInfo::mcSteps)
+        .def_property("box",
+            [](const gcmc::GCMCInfo& info) {
+                return std::vector<float>{info.box[0], info.box[1], info.box[2]};
+            },
+            [](gcmc::GCMCInfo& info, const std::vector<float>& box) {
+                if (box.size() != 3) throw std::runtime_error("Box must have 3 dimensions");
+                info.box[0] = box[0];
+                info.box[1] = box[1];
+                info.box[2] = box[2];
+            })
+        .def_readwrite("cutoff", &gcmc::GCMCInfo::cutoff)
+        .def_readwrite("beta", &gcmc::GCMCInfo::beta)
+        .def_readwrite("max_residues", &gcmc::GCMCInfo::maxResidues)
+        .def_readwrite("max_atoms", &gcmc::GCMCInfo::maxAtoms)
+        .def_readwrite("max_types", &gcmc::GCMCInfo::maxTypes)
+        .def_readwrite("volume", &gcmc::GCMCInfo::volume)
+        .def_readwrite("seed", &gcmc::GCMCInfo::seed);
+
+    // Bind GCMCInfo::Statistics
+    py::class_<gcmc::GCMCInfo::Statistics>(m, "GCMCStatistics")
+        .def(py::init<>())
+        .def_readwrite("totalMoves", &gcmc::GCMCInfo::Statistics::totalMoves)
+        .def_readwrite("acceptedMoves", &gcmc::GCMCInfo::Statistics::acceptedMoves)
+        .def_readwrite("insertionAttempts", &gcmc::GCMCInfo::Statistics::insertionAttempts)
+        .def_readwrite("acceptedInsertions", &gcmc::GCMCInfo::Statistics::acceptedInsertions)
+        .def_readwrite("deletionAttempts", &gcmc::GCMCInfo::Statistics::deletionAttempts)
+        .def_readwrite("acceptedDeletions", &gcmc::GCMCInfo::Statistics::acceptedDeletions);
+
+    // Bind SystemState
+    py::class_<gcmc::SystemState>(m, "SystemState")
+        .def(py::init<>())
+        .def_readwrite("atoms", &gcmc::SystemState::atoms)
+        .def_readwrite("residues", &gcmc::SystemState::residues)
+        .def_readwrite("activeAtomCount", &gcmc::SystemState::activeAtomCount)
+        .def_readwrite("activeResidueCount", &gcmc::SystemState::activeResidueCount)
+        .def_readwrite("info", &gcmc::SystemState::info)
+        .def_readwrite("forcefield", &gcmc::SystemState::forcefield);
 }
 
 } // namespace bindings
