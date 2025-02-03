@@ -12,30 +12,6 @@ namespace gcmc {
 
 class MonteCarloSystem {
 public:
-    // Type mapping system
-    struct TypeMaps {
-        std::vector<std::string> atomTypes;  // Index -> Type string mapping
-        std::unordered_map<std::string, int> atomTypeIndices;  // Type string -> Index mapping
-        
-        int getOrAddType(const std::string& type) {
-            auto it = atomTypeIndices.find(type);
-            if (it != atomTypeIndices.end()) {
-                return it->second;
-            }
-            int newIndex = atomTypes.size();
-            atomTypes.push_back(type);
-            atomTypeIndices[type] = newIndex;
-            return newIndex;
-        }
-        
-        std::string getTypeName(int index) const {
-            if (index >= 0 && static_cast<size_t>(index) < atomTypes.size()) {
-                return atomTypes[index];
-            }
-            return "";
-        }
-    };
-
     // ------------------------------------------------------------
     // Constructor / Destructor
     // ------------------------------------------------------------

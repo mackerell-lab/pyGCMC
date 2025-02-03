@@ -152,10 +152,10 @@ void init_system(py::module& m) {
           "Directly combine Structure with multiple Topology files into a Molecular object");
 
     // Bind TypeMaps
-    py::class_<gcmc::MonteCarloSystem::TypeMaps>(m, "TypeMaps")
-        .def("get_or_add_type", &gcmc::MonteCarloSystem::TypeMaps::getOrAddType)
-        .def("get_type_name", &gcmc::MonteCarloSystem::TypeMaps::getTypeName)
-        .def_readonly("atom_types", &gcmc::MonteCarloSystem::TypeMaps::atomTypes);
+    py::class_<gcmc::TypeMaps>(m, "TypeMaps")
+        .def("get_or_add_type", &gcmc::TypeMaps::getOrAddType)
+        .def("get_type_name", &gcmc::TypeMaps::getTypeName)
+        .def_readonly("atom_types", &gcmc::TypeMaps::atomTypes);
 
     // Bind MonteCarloSystem
     py::class_<gcmc::MonteCarloSystem>(m, "MonteCarloSystem")
