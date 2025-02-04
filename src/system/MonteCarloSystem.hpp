@@ -55,7 +55,7 @@ public:
     };
     void addMovementMolecules(const std::vector<MovementMolecularInfo>& molecules);
 
-    const model::TypeMaps& getTypeMaps() const { return typeMaps; }
+    const model::TypeMaps& getTypeMaps() const { return state.atomTypes; }
 
     // ------------------------------------------------------------
     // Core GCMC operations
@@ -63,35 +63,28 @@ public:
     int insertResidue(const model::MCResidue& res, const model::MCAtom* atoms);
     bool removeResidue(int resIdx);
     void translateResidue(int resIdx, float dx, float dy, float dz);
-
-    // ------------------------------------------------------------
-    // Energy calculation
-    // ------------------------------------------------------------
     float calcNonBondedEnergy(const model::MCResidue& res1, const model::MCResidue& res2) const;
     float calcTotalEnergy() const;
 
     // ------------------------------------------------------------
-    // Periodic boundary conditions
+    // State access
+    // ------------------------------------------------------------
+    const model::MCState& getState() const { return state; }
+    int getActiveResidueCount() const { return state.activeResidueCount; }
+    int getActiveAtomCount() const { return state.activeAtomCount; }
+
+private:
+    // ------------------------------------------------------------
+    // Private helper functions
     // ------------------------------------------------------------
     void applyPBC(float& x, float& y, float& z) const;
     float getMinImageDistSqr(float dx, float dy, float dz) const;
-
-    // ------------------------------------------------------------
-    // System state access
-    // ------------------------------------------------------------
-    const model::MCState& getState() const { return state; }
-    model::MCState& getState() { return state; }
-
-    int getActiveAtomCount() const { return state.activeAtomCount; }
-    int getActiveResidueCount() const { return state.activeResidueCount; }
-
-private:
-    // Helper methods
     void updateGeometricCenter(model::MCResidue& res);
 
-    // System state
+    // ------------------------------------------------------------
+    // Member variables
+    // ------------------------------------------------------------
     model::MCState state;
-    model::TypeMaps typeMaps;
 };
 
 } // namespace system

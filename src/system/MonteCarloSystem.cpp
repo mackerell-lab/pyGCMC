@@ -169,7 +169,7 @@ void MonteCarloSystem::initializeFromMolecular(const std::shared_ptr<model::Mole
             mcAtom.y = molAtom->get_y();
             mcAtom.z = molAtom->get_z();
             mcAtom.charge = topAtom.charge;  // 使用 topology 中的电荷
-            mcAtom.type = typeMaps.getOrAddType(topAtom.type);  // 使用 topology 中的类型
+            mcAtom.type = state.atomTypes.getOrAddType(topAtom.type);  // 使用 topology 中的类型
             
             tempAtoms.push_back(mcAtom);
         }
@@ -322,7 +322,7 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
         for (int j = 0; j < oldRes.atomCount; j++) {
             auto oldAtom = state.atoms[oldRes.atomStart + j];
             // 去旧系统里拿 atom type 字符串
-            std::string oldAtomTypeName = typeMaps.getTypeName(oldAtom.type);
+            std::string oldAtomTypeName = state.atomTypes.getTypeName(oldAtom.type);
             // 在新的 typeMaps 下找对应的新索引
             int newAtomTypeIdx = newState.atomTypes.getOrAddType(oldAtomTypeName);
             oldAtom.type = newAtomTypeIdx;
@@ -543,9 +543,6 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
     }
 
     // Update the class member typeMaps with the new atom types
-    typeMaps = newState.atomTypes;
-
-    // 最后，将 newState 替换进当前对象
     state = std::move(newState);
 }
 
