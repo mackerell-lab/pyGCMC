@@ -613,8 +613,8 @@ void MonteCarloSystem::initializeForceField(const ForceField& ff) {
                 // Use NBFIX parameters
                 const auto& lj1 = ff.get_lj_params(type1);
                 const auto& lj2 = ff.get_lj_params(type2);
-                const float sigma1 = static_cast<float>(lj1.rmin / std::pow(2.0, 1.0/6.0));
-                const float sigma2 = static_cast<float>(lj2.rmin / std::pow(2.0, 1.0/6.0));
+                const float sigma1 = static_cast<float>(lj1.rmin_half / std::pow(2.0, 1.0/6.0));
+                const float sigma2 = static_cast<float>(lj2.rmin_half / std::pow(2.0, 1.0/6.0));
                 
                 // Calculate combined sigma (Lorentz-Berthelot)
                 const float sigma_avg = 0.5f * (sigma1 + sigma2);
@@ -629,8 +629,8 @@ void MonteCarloSystem::initializeForceField(const ForceField& ff) {
                     const auto& lj2 = ff.get_lj_params(type2);
                     
                     // Convert Rmin to sigma (σ = Rmin/2^(1/6))
-                    const float sigma1 = static_cast<float>(lj1.rmin / std::pow(2.0, 1.0/6.0));
-                    const float sigma2 = static_cast<float>(lj2.rmin / std::pow(2.0, 1.0/6.0));
+                    const float sigma1 = static_cast<float>(lj1.rmin_half / std::pow(2.0, 1.0/6.0));
+                    const float sigma2 = static_cast<float>(lj2.rmin_half / std::pow(2.0, 1.0/6.0));
                     
                     // Lorentz-Berthelot combining rules
                     const float sigma_avg = 0.5f * (sigma1 + sigma2);

@@ -21,7 +21,7 @@ def test_parse_file_direct():
     # Test some LJ parameters
     sod_params = ff.get_lj_params("SOD")
     assert sod_params.epsilon == pytest.approx(-0.0469)
-    assert sod_params.rmin == pytest.approx(1.41075)
+    assert sod_params.rmin_half == pytest.approx(1.41075)
 
     # Test some NBFIX parameters
     epsilon, found = ff.get_nbfix("SOD", "CLA")
@@ -58,11 +58,11 @@ OT       0.0       -0.1521    1.7682
     # Test LJ parameters
     ht_params = ff.get_lj_params("HT")
     assert ht_params.epsilon == pytest.approx(-0.046)
-    assert ht_params.rmin == pytest.approx(0.2245)
+    assert ht_params.rmin_half == pytest.approx(0.2245)
 
     ot_params = ff.get_lj_params("OT")
     assert ot_params.epsilon == pytest.approx(-0.1521)
-    assert ot_params.rmin == pytest.approx(1.7682)
+    assert ot_params.rmin_half == pytest.approx(1.7682)
 
 def test_parse_nbfix_from_string():
     content = """
@@ -104,7 +104,7 @@ def test_parse_from_file():
     # Test some LJ parameters
     sod_params = ff.get_lj_params("SOD")
     assert sod_params.epsilon == pytest.approx(-0.0469)
-    assert sod_params.rmin == pytest.approx(1.41075)
+    assert sod_params.rmin_half == pytest.approx(1.41075)
 
     # Test some NBFIX parameters
     epsilon, found = ff.get_nbfix("SOD", "CLA")
@@ -154,7 +154,7 @@ SOD    CLA      -0.083875   3.731 ! inline comment
     # Test that atom parameters were parsed correctly
     sod_params = ff.get_lj_params("SOD")
     assert sod_params.epsilon == pytest.approx(-0.0469)
-    assert sod_params.rmin == pytest.approx(1.41075)
+    assert sod_params.rmin_half == pytest.approx(1.41075)
 
 def test_multiple_nbfix_combinations():
     content = """
@@ -180,11 +180,11 @@ END
     # First verify LJ parameters are correctly parsed
     sod_params = ff.get_lj_params("SOD")
     assert sod_params.epsilon == pytest.approx(-0.0469)
-    assert sod_params.rmin == pytest.approx(1.41075)
+    assert sod_params.rmin_half == pytest.approx(1.41075)
 
     cla_params = ff.get_lj_params("CLA")
     assert cla_params.epsilon == pytest.approx(-0.150)
-    assert cla_params.rmin == pytest.approx(2.27)
+    assert cla_params.rmin_half == pytest.approx(2.27)
 
     # Then test NBFIX combinations
     epsilon, found = ff.get_nbfix("SOD", "CLA")
@@ -254,11 +254,11 @@ END
     # Verify that SOD and CLA parameters were still parsed correctly
     sod_params = ff.get_lj_params("SOD")
     assert sod_params.epsilon == pytest.approx(-0.0469)
-    assert sod_params.rmin == pytest.approx(1.41075)
+    assert sod_params.rmin_half == pytest.approx(1.41075)
 
     cla_params = ff.get_lj_params("CLA")
     assert cla_params.epsilon == pytest.approx(-0.150)
-    assert cla_params.rmin == pytest.approx(2.27)
+    assert cla_params.rmin_half == pytest.approx(2.27)
 
     # Verify that no NBFIX parameters were added
     epsilon, found = ff.get_nbfix("SOD", "CLA")
@@ -279,12 +279,12 @@ OT     0.0         -0.1521        1.7682
     # Test scientific notation parsing
     ht_params = ff.get_lj_params("HT")
     assert ht_params.epsilon == pytest.approx(-0.046)
-    assert ht_params.rmin == pytest.approx(0.2245)
+    assert ht_params.rmin_half == pytest.approx(0.2245)
 
     # Test irregular spacing parsing
     ot_params = ff.get_lj_params("OT")
     assert ot_params.epsilon == pytest.approx(-0.1521)
-    assert ot_params.rmin == pytest.approx(1.7682)
+    assert ot_params.rmin_half == pytest.approx(1.7682)
 
 def test_multiple_file_parsing():
     test_dir = os.path.dirname(os.path.abspath(__file__))
@@ -300,11 +300,11 @@ def test_multiple_file_parsing():
     # Test parameters from water_ions file
     sod_params = ff.get_lj_params("SOD")
     assert sod_params.epsilon == pytest.approx(-0.0469)
-    assert sod_params.rmin == pytest.approx(1.41075)
+    assert sod_params.rmin_half == pytest.approx(1.41075)
 
     cla_params = ff.get_lj_params("CLA")
     assert cla_params.epsilon == pytest.approx(-0.150)
-    assert cla_params.rmin == pytest.approx(2.27)
+    assert cla_params.rmin_half == pytest.approx(2.27)
 
     epsilon, found = ff.get_nbfix("SOD", "CLA")
     assert found == True
@@ -321,11 +321,11 @@ def test_multiple_file_parsing():
     # Test new parameters from silcs file
     lp_params = ff.get_lj_params("LP")
     assert lp_params.epsilon == pytest.approx(0.0)
-    assert lp_params.rmin == pytest.approx(0.0)
+    assert lp_params.rmin_half == pytest.approx(0.0)
 
     lq_params = ff.get_lj_params("LQ")
     assert lq_params.epsilon == pytest.approx(0.0)
-    assert lq_params.rmin == pytest.approx(0.0)
+    assert lq_params.rmin_half == pytest.approx(0.0)
 
     # Test NBFIX parameters from silcs file
     epsilon, found = ff.get_nbfix("LP", "LP")
@@ -373,24 +373,24 @@ def test_random_parameter_combinations():
     # Test water parameters
     ht_params = ff.get_lj_params("HT")
     assert ht_params.epsilon == pytest.approx(-0.046)
-    assert ht_params.rmin == pytest.approx(0.2245)
+    assert ht_params.rmin_half == pytest.approx(0.2245)
 
     ot_params = ff.get_lj_params("OT")
     assert ot_params.epsilon == pytest.approx(-0.1521)
-    assert ot_params.rmin == pytest.approx(1.7682)
+    assert ot_params.rmin_half == pytest.approx(1.7682)
 
     # Test ion parameters
     sod_params = ff.get_lj_params("SOD")
     assert sod_params.epsilon == pytest.approx(-0.0469)
-    assert sod_params.rmin == pytest.approx(1.41075)
+    assert sod_params.rmin_half == pytest.approx(1.41075)
 
     cal_params = ff.get_lj_params("CAL")
     assert cal_params.epsilon == pytest.approx(-0.120)
-    assert cal_params.rmin == pytest.approx(1.367)
+    assert cal_params.rmin_half == pytest.approx(1.367)
 
     cla_params = ff.get_lj_params("CLA")
     assert cla_params.epsilon == pytest.approx(-0.150)
-    assert cla_params.rmin == pytest.approx(2.27)
+    assert cla_params.rmin_half == pytest.approx(2.27)
 
     # Test random NBFIX parameters from water_ions file
     # Test ion-ion interactions
@@ -410,7 +410,7 @@ def test_random_parameter_combinations():
     # Test LJ parameters
     lp_params = ff.get_lj_params("LP")
     assert lp_params.epsilon == pytest.approx(0.0)
-    assert lp_params.rmin == pytest.approx(0.0)
+    assert lp_params.rmin_half == pytest.approx(0.0)
 
     # Test NBFIX parameters
     epsilon, found = ff.get_nbfix("LP", "LP")
@@ -431,7 +431,7 @@ def test_random_parameter_combinations():
     # Verify parameters remain consistent
     sod_params = ff.get_lj_params("SOD")
     assert sod_params.epsilon == pytest.approx(-0.0469)
-    assert sod_params.rmin == pytest.approx(1.41075)
+    assert sod_params.rmin_half == pytest.approx(1.41075)
 
     epsilon, found = ff.get_nbfix("LP", "LP")
     assert found == True
@@ -471,27 +471,27 @@ def test_multiple_parameter_files():
     # TIP3P water
     ht_params = ff.get_lj_params("HT")
     assert ht_params.epsilon == pytest.approx(-0.046)
-    assert ht_params.rmin == pytest.approx(0.2245)
+    assert ht_params.rmin_half == pytest.approx(0.2245)
 
     ot_params = ff.get_lj_params("OT")
     assert ot_params.epsilon == pytest.approx(-0.1521)
-    assert ot_params.rmin == pytest.approx(1.7682)
+    assert ot_params.rmin_half == pytest.approx(1.7682)
 
     # 3. Verify ion parameters (from water_ions.str)
     # Sodium
     sod_params = ff.get_lj_params("SOD")
     assert sod_params.epsilon == pytest.approx(-0.0469)
-    assert sod_params.rmin == pytest.approx(1.41075)
+    assert sod_params.rmin_half == pytest.approx(1.41075)
 
     # Calcium
     cal_params = ff.get_lj_params("CAL")
     assert cal_params.epsilon == pytest.approx(-0.120)
-    assert cal_params.rmin == pytest.approx(1.367)
+    assert cal_params.rmin_half == pytest.approx(1.367)
 
     # Chloride
     cla_params = ff.get_lj_params("CLA")
     assert cla_params.epsilon == pytest.approx(-0.150)
-    assert cla_params.rmin == pytest.approx(2.27)
+    assert cla_params.rmin_half == pytest.approx(2.27)
 
     # 4. Verify NBFIX parameters (from water_ions.str)
     # Ion-ion interactions
@@ -516,12 +516,12 @@ def test_multiple_parameter_files():
     # LP parameters
     lp_params = ff.get_lj_params("LP")
     assert lp_params.epsilon == pytest.approx(0.0)
-    assert lp_params.rmin == pytest.approx(0.0)
+    assert lp_params.rmin_half == pytest.approx(0.0)
 
     # LQ parameters
     lq_params = ff.get_lj_params("LQ")
     assert lq_params.epsilon == pytest.approx(0.0)
-    assert lq_params.rmin == pytest.approx(0.0)
+    assert lq_params.rmin_half == pytest.approx(0.0)
 
     # SILCS NBFIX parameters
     epsilon, found = ff.get_nbfix("LP", "LP")
@@ -556,7 +556,7 @@ def test_multiple_parameter_files():
     # Verify parameters remain consistent
     sod_params = ff.get_lj_params("SOD")
     assert sod_params.epsilon == pytest.approx(-0.0469)
-    assert sod_params.rmin == pytest.approx(1.41075)
+    assert sod_params.rmin_half == pytest.approx(1.41075)
 
     # SILCS parameters should still be present
     epsilon, found = ff.get_nbfix("LP", "LP")
@@ -584,27 +584,27 @@ def test_prm_and_str_files():
     # TIP3P water
     ht_params = ff.get_lj_params("HT")
     assert ht_params.epsilon == pytest.approx(-0.046)
-    assert ht_params.rmin == pytest.approx(0.2245)
+    assert ht_params.rmin_half == pytest.approx(0.2245)
 
     ot_params = ff.get_lj_params("OT")
     assert ot_params.epsilon == pytest.approx(-0.1521)
-    assert ot_params.rmin == pytest.approx(1.7682)
+    assert ot_params.rmin_half == pytest.approx(1.7682)
 
     # 2. Verify ion parameters (from water_ions.str)
     # Sodium
     sod_params = ff.get_lj_params("SOD")
     assert sod_params.epsilon == pytest.approx(-0.0469)
-    assert sod_params.rmin == pytest.approx(1.41075)
+    assert sod_params.rmin_half == pytest.approx(1.41075)
 
     # Calcium
     cal_params = ff.get_lj_params("CAL")
     assert cal_params.epsilon == pytest.approx(-0.120)
-    assert cal_params.rmin == pytest.approx(1.367)
+    assert cal_params.rmin_half == pytest.approx(1.367)
 
     # Chloride
     cla_params = ff.get_lj_params("CLA")
     assert cla_params.epsilon == pytest.approx(-0.150)
-    assert cla_params.rmin == pytest.approx(2.27)
+    assert cla_params.rmin_half == pytest.approx(2.27)
 
     # 3. Verify NBFIX parameters from water_ions.str
     # Ion-ion interactions
@@ -629,12 +629,12 @@ def test_prm_and_str_files():
     # LP parameters
     lp_params = ff.get_lj_params("LP")
     assert lp_params.epsilon == pytest.approx(0.0)
-    assert lp_params.rmin == pytest.approx(0.0)
+    assert lp_params.rmin_half == pytest.approx(0.0)
 
     # LQ parameters
     lq_params = ff.get_lj_params("LQ")
     assert lq_params.epsilon == pytest.approx(0.0)
-    assert lq_params.rmin == pytest.approx(0.0)
+    assert lq_params.rmin_half == pytest.approx(0.0)
 
     # SILCS NBFIX parameters
     epsilon, found = ff.get_nbfix("LP", "LP")
@@ -664,7 +664,7 @@ def test_prm_and_str_files():
     # Water parameters should remain unchanged
     ht_params = ff.get_lj_params("HT")
     assert ht_params.epsilon == pytest.approx(-0.046)
-    assert ht_params.rmin == pytest.approx(0.2245)
+    assert ht_params.rmin_half == pytest.approx(0.2245)
     
     # SILCS parameters should still be present
     epsilon, found = ff.get_nbfix("LP", "LP")
@@ -824,22 +824,22 @@ def test_charmm_prm_files():
     # Test some hydrogen LJ parameters
     h_params = ff.get_lj_params("H")
     assert h_params.epsilon == pytest.approx(-0.0460)
-    assert h_params.rmin == pytest.approx(0.2245)
+    assert h_params.rmin_half == pytest.approx(0.2245)
 
     # Test some carbon LJ parameters
     c_params = ff.get_lj_params("C")
     assert c_params.epsilon == pytest.approx(-0.1100)
-    assert c_params.rmin == pytest.approx(2.0000)
+    assert c_params.rmin_half == pytest.approx(2.0000)
 
     # Test some nitrogen LJ parameters
     n_params = ff.get_lj_params("N")
     assert n_params.epsilon == pytest.approx(-0.2000)
-    assert n_params.rmin == pytest.approx(1.8500)
+    assert n_params.rmin_half == pytest.approx(1.8500)
 
     # Test some oxygen LJ parameters
     o_params = ff.get_lj_params("O")
     assert o_params.epsilon == pytest.approx(-0.1200)
-    assert o_params.rmin == pytest.approx(1.7000)
+    assert o_params.rmin_half == pytest.approx(1.7000)
 
     # Test NBFIX parameters if present
     epsilon, found = ff.get_nbfix("SOD", "CLA")
@@ -929,15 +929,15 @@ def test_cgenff_prm_file():
     # Test some typical CGenFF LJ parameters
     cg2r61_params = ff.get_lj_params("CG2R61")
     assert cg2r61_params.epsilon == pytest.approx(-0.0700)
-    assert cg2r61_params.rmin == pytest.approx(1.9924)
+    assert cg2r61_params.rmin_half == pytest.approx(1.9924)
 
     hgr61_params = ff.get_lj_params("HGR61")
     assert hgr61_params.epsilon == pytest.approx(-0.0300)
-    assert hgr61_params.rmin == pytest.approx(1.3582)
+    assert hgr61_params.rmin_half == pytest.approx(1.3582)
 
     og2d1_params = ff.get_lj_params("OG2D1")
     assert og2d1_params.epsilon == pytest.approx(-0.1200)
-    assert og2d1_params.rmin == pytest.approx(1.7000)
+    assert og2d1_params.rmin_half == pytest.approx(1.7000)
 
     # Test NBFIX parameters if present
     epsilon, found = ff.get_nbfix("CG2R61", "OG2D1")
@@ -970,11 +970,11 @@ def test_ion_ligand_nbfix():
     # Test special water parameters
     hper_params = ff.get_lj_params("HPER")
     assert hper_params.epsilon == pytest.approx(-0.046)
-    assert hper_params.rmin == pytest.approx(0.2245)
+    assert hper_params.rmin_half == pytest.approx(0.2245)
 
     oper_params = ff.get_lj_params("OPER")
     assert oper_params.epsilon == pytest.approx(-0.20384)
-    assert oper_params.rmin == pytest.approx(1.67423)
+    assert oper_params.rmin_half == pytest.approx(1.67423)
 
 def test_heterocyclic_parameters():
     """Test parameters for heterocyclic compounds from par_all36_cgenff.prm."""
@@ -1040,20 +1040,20 @@ def test_cross_forcefield_compatibility():
     # Test CT2A parameters (special carbon type in GLU/HSP)
     ct2a_params = ff.get_lj_params("CT2A")
     assert ct2a_params.epsilon == pytest.approx(-0.0560)
-    assert ct2a_params.rmin == pytest.approx(2.010)
+    assert ct2a_params.rmin_half == pytest.approx(2.010)
 
     # Test compatibility of common atom types between force fields
     # Aromatic carbon parameters should be consistent
     ca_prot = ff.get_lj_params("CA")
     cg2r61 = ff.get_lj_params("CG2R61")
     assert abs(ca_prot.epsilon - cg2r61.epsilon) < 0.01  # Should be similar
-    assert abs(ca_prot.rmin - cg2r61.rmin) < 0.1  # Should be similar
+    assert abs(ca_prot.rmin_half - cg2r61.rmin_half) < 0.1  # Should be similar
 
     # Test compatibility of peptide backbone parameters
     c_prot = ff.get_lj_params("C")    # Protein carbonyl carbon
     cg2o1 = ff.get_lj_params("CG2O1") # CGenFF carbonyl carbon
     assert abs(c_prot.epsilon - cg2o1.epsilon) < 0.01  # Should be similar
-    assert abs(c_prot.rmin - cg2o1.rmin) < 0.1  # Should be similar
+    assert abs(c_prot.rmin_half - cg2o1.rmin_half) < 0.1  # Should be similar
 
 def test_parse_multiple_files():
     """Test parsing multiple parameter files at once."""
@@ -1072,12 +1072,12 @@ def test_parse_multiple_files():
     # Test water parameters
     ht_params = ff.get_lj_params("HT")
     assert ht_params.epsilon == pytest.approx(-0.046)
-    assert ht_params.rmin == pytest.approx(0.2245)
+    assert ht_params.rmin_half == pytest.approx(0.2245)
     
     # Test ion parameters
     sod_params = ff.get_lj_params("SOD")
     assert sod_params.epsilon == pytest.approx(-0.0469)
-    assert sod_params.rmin == pytest.approx(1.41075)
+    assert sod_params.rmin_half == pytest.approx(1.41075)
     
     # Test NBFIX parameters
     epsilon, found = ff.get_nbfix("SOD", "CLA")
@@ -1087,7 +1087,7 @@ def test_parse_multiple_files():
     # Test parameters from silcs.str
     lp_params = ff.get_lj_params("LP")
     assert lp_params.epsilon == pytest.approx(0.0)
-    assert lp_params.rmin == pytest.approx(0.0)
+    assert lp_params.rmin_half == pytest.approx(0.0)
     
     # Test parameters from par_all36_cgenff.prm
     # Test some CGenFF specific parameters

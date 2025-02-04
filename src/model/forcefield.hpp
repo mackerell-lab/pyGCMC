@@ -36,11 +36,52 @@ struct NonbondedParams {
 };
 
 /**
+ * @brief Detailed explanation of nonbonded parameters in CHARMM force field
+ * 
+ * The nonbonded energy function in CHARMM consists of Lennard-Jones (LJ) and electrostatic terms:
+ * 
+ * V(Lennard-Jones) = Eps,i,j[(Rmin,i,j/ri,j)**12 - 2(Rmin,i,j/ri,j)**6]
+ * where:
+ * - epsilon (Eps,i,j) = sqrt(eps,i * eps,j) [kcal/mole]
+ * - Rmin,i,j = Rmin/2,i + Rmin/2,j [Angstroms]
+ * - ri,j is the distance between atoms i and j
+ * 
+ * Parameters:
+ * @param nbxmod   Nonbonded exclusion model (5 = use switching functions)
+ * @param cdiel    Use constant dielectric (true/false)
+ * @param fshift   Use force shifting (true/false)
+ * @param vatom    Use atom-based potential (true/false)
+ * @param vdistance Use distance-based potential (true/false)
+ * @param vfswitch Use force switching (true/false)
+ * @param cutnb    Nonbonded cutoff distance [Angstroms]
+ * @param ctofnb   Distance at which switching function takes effect for nonbonded [Angstroms]
+ * @param ctonnb   Distance at which switching function takes effect for 1-4 interactions [Angstroms]
+ * @param eps      Dielectric constant
+ * @param e14fac   Scaling factor for 1-4 interactions
+ * @param wmin     Minimum weighting in switching function
+ * 
+ * Units:
+ * - Distances in Angstroms
+ * - Energies in kcal/mole
+ * - Dielectric constant is dimensionless
+ */
+
+/**
  * @brief Parameters for Lennard-Jones interactions
+ * 
+ * The Lennard-Jones potential is defined as:
+ * V(Lennard-Jones) = Eps,i,j[(Rmin,i,j/ri,j)**12 - 2(Rmin,i,j/ri,j)**6]
+ * where:
+ * - Eps,i,j = sqrt(eps,i * eps,j)
+ * - Rmin,i,j = Rmin/2,i + Rmin/2,j
+ * 
+ * Units:
+ * - epsilon: kcal/mole
+ * - rmin_half: Angstroms (Rmin/2: HALF of the distance at minimum energy)
  */
 struct LJParams {
-    double epsilon = 0.0;  ///< Well depth
-    double rmin = 0.0;     ///< Distance at minimum energy
+    double epsilon = 0.0;     ///< Well depth (kcal/mole)
+    double rmin_half = 0.0;   ///< Rmin/2: HALF of the distance at minimum energy (Angstroms)
 };
 
 /**
@@ -91,8 +132,14 @@ public:
         atom_masses_[type] = mass;
     }
 
-    void add_lj_params(const std::string& type, double epsilon, double rmin) {
-        LJParams params{epsilon, rmin};
+    /**
+     * @brief Add Lennard-Jones parameters for an atom type
+     * @param type The atom type
+     * @param epsilon Well depth (kcal/mole)
+     * @param rmin_half Rmin/2: HALF of the distance at minimum energy (Angstroms)
+     */
+    void add_lj_params(const std::string& type, double epsilon, double rmin_half) {
+        LJParams params{epsilon, rmin_half};
         lj_params_[type] = params;
     }
 

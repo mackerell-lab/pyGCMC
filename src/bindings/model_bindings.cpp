@@ -312,7 +312,7 @@ void init_model(py::module& m) {
     py::class_<LJParams>(m, "LJParams")
         .def(py::init<>())
         .def_readwrite("epsilon", &LJParams::epsilon)
-        .def_readwrite("rmin", &LJParams::rmin);
+        .def_readwrite("rmin_half", &LJParams::rmin_half);
 
     // BondParams
     py::class_<BondParams>(m, "BondParams")

@@ -692,15 +692,15 @@ void PRMParser::parseNonbondedSection(std::istream& input, ForceField& ff, const
             // Skip the ignored value (usually 0.0)
             try {
                 double epsilon = safe_stod(tokens[2], "LJ epsilon for " + atomType);
-                double rmin = safe_stod(tokens[3], "LJ Rmin for " + atomType);
+                double rmin_half = safe_stod(tokens[3], "LJ Rmin/2 for " + atomType);
                 
                 if (debug_output) {
                     std::cerr << "\n*** Parsing atom type: " << atomType << " ***" << std::endl;
                     std::cerr << "  epsilon = " << epsilon << std::endl;
-                    std::cerr << "  rmin = " << rmin << std::endl;
+                    std::cerr << "  rmin_half = " << rmin_half << std::endl;
                 }
                 
-                ff.add_lj_params(atomType, epsilon, rmin);
+                ff.add_lj_params(atomType, epsilon, rmin_half);
                 
                 if (debug_output) {
                     std::cerr << "Successfully stored " << atomType << " parameters" << std::endl;
