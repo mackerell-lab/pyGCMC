@@ -419,6 +419,13 @@ def test_add_movement_molecules():
     benx_topology = pygcmc.PSFParser.parse_file(benx_psf)
     benx_molecular = pygcmc.MolecularSystem().combine(benx_structure, benx_topology)
     
+    # Get expected atom types from BENX
+    benx_types = set()
+    for res in benx_molecular.topology_residues:
+        for atom_idx in res.atoms:
+            benx_types.add(benx_molecular.topology_atoms[atom_idx].type)
+    print("\nBENX atom types:", sorted(list(benx_types)))
+    
     # Create movement molecule info list with only benx
     movement_mols = [
         pygcmc.MovementMolecularInfo(benx_molecular, 20)
@@ -432,6 +439,13 @@ def test_add_movement_molecules():
     
     # Test 1: Check movement residue info
     assert len(state.movementResidues) == 1, "Should have info for benx movement molecule"
+    
+    # Verify movement atom types
+    print("\nMovement atom types:", sorted(list(state.movementAtomTypes)))
+    assert state.numMovementAtomTypes == len(benx_types), \
+           f"Wrong number of movement atom types: {state.numMovementAtomTypes} != {len(benx_types)}"
+    assert set(state.atomTypes.get_type_name(t) for t in state.movementAtomTypes) == benx_types, \
+           "Movement atom types do not match BENX types"
     
     # Verify benx movement info
     benx_info = state.movementResidues[0]
@@ -551,6 +565,19 @@ def test_add_two_movement_molecules():
     sol_structure = pygcmc.PDBParser.parse_file(sol_pdb)
     sol_topology = pygcmc.TOPParser.parse_file(sol_itp)
     sol_molecular = pygcmc.MolecularSystem().combine(sol_structure, sol_topology)
+    
+    # Get expected atom types from each molecule
+    benx_types = set()
+    for res in benx_molecular.topology_residues:
+        for atom_idx in res.atoms:
+            benx_types.add(benx_molecular.topology_atoms[atom_idx].type)
+    print("\nBENX atom types:", sorted(list(benx_types)))
+    
+    sol_types = set()
+    for res in sol_molecular.topology_residues:
+        for atom_idx in res.atoms:
+            sol_types.add(sol_molecular.topology_atoms[atom_idx].type)
+    print("\nSOL atom types:", sorted(list(sol_types)))
     
     # Create movement molecule info list
     movement_mols = [
@@ -718,6 +745,25 @@ def test_add_three_movement_molecules():
     imia_structure = pygcmc.PDBParser.parse_file(imia_pdb)
     imia_topology = pygcmc.PSFParser.parse_file(imia_psf)
     imia_molecular = pygcmc.MolecularSystem().combine(imia_structure, imia_topology)
+    
+    # Get expected atom types from each molecule
+    benx_types = set()
+    for res in benx_molecular.topology_residues:
+        for atom_idx in res.atoms:
+            benx_types.add(benx_molecular.topology_atoms[atom_idx].type)
+    print("\nBENX atom types:", sorted(list(benx_types)))
+    
+    sol_types = set()
+    for res in sol_molecular.topology_residues:
+        for atom_idx in res.atoms:
+            sol_types.add(sol_molecular.topology_atoms[atom_idx].type)
+    print("\nSOL atom types:", sorted(list(sol_types)))
+    
+    imia_types = set()
+    for res in imia_molecular.topology_residues:
+        for atom_idx in res.atoms:
+            imia_types.add(imia_molecular.topology_atoms[atom_idx].type)
+    print("\nIMIA atom types:", sorted(list(imia_types)))
     
     # Create movement molecule info list
     movement_mols = [
@@ -1000,6 +1046,19 @@ def test_compare_add_molecules_together_vs_separate():
     imia_topology = pygcmc.PSFParser.parse_file(imia_psf)
     imia_molecular = pygcmc.MolecularSystem().combine(imia_structure, imia_topology)
 
+    # Get expected atom types from each molecule
+    benx_types = set()
+    for res in benx_molecular.topology_residues:
+        for atom_idx in res.atoms:
+            benx_types.add(benx_molecular.topology_atoms[atom_idx].type)
+    print("\nBENX atom types:", sorted(list(benx_types)))
+
+    imia_types = set()
+    for res in imia_molecular.topology_residues:
+        for atom_idx in res.atoms:
+            imia_types.add(imia_molecular.topology_atoms[atom_idx].type)
+    print("\nIMIA atom types:", sorted(list(imia_types)))
+
     # System 1: Add both molecules together
     movement_mols = [
         pygcmc.MovementMolecularInfo(benx_molecular, 20),
@@ -1015,26 +1074,20 @@ def test_compare_add_molecules_together_vs_separate():
     state1 = mc_system1.get_state()
     state2 = mc_system2.get_state()
 
-    # Print debug info
-    print("\nSystem 1 (added together):")
-    print("Movement Residues:")
-    for info in state1.movementResidues:
-        print(f"  {info.resName}: start={info.startIndex}, active={info.activeCount}, total={info.totalCount}")
-    print("\nResidues:")
-    for i in range(state1.activeResidueCount):
-        res = state1.residues[i]
-        name = state1.residueTypes.get_type_name(res.type)
-        print(f"  {i}: {name} (active={res.active})")
-
-    print("\nSystem 2 (added separately):")
-    print("Movement Residues:")
-    for info in state2.movementResidues:
-        print(f"  {info.resName}: start={info.startIndex}, active={info.activeCount}, total={info.totalCount}")
-    print("\nResidues:")
-    for i in range(state2.activeResidueCount):
-        res = state2.residues[i]
-        name = state2.residueTypes.get_type_name(res.type)
-        print(f"  {i}: {name} (active={res.active})")
+    # Compare movement atom types
+    print("\nSystem 1 movement atom types:", sorted(list(state1.movementAtomTypes)))
+    print("System 2 movement atom types:", sorted(list(state2.movementAtomTypes)))
+    
+    expected_types = benx_types | imia_types
+    assert state1.numMovementAtomTypes == len(expected_types), \
+           f"System 1: Wrong number of movement atom types: {state1.numMovementAtomTypes} != {len(expected_types)}"
+    assert state2.numMovementAtomTypes == len(expected_types), \
+           f"System 2: Wrong number of movement atom types: {state2.numMovementAtomTypes} != {len(expected_types)}"
+    
+    assert set(state1.atomTypes.get_type_name(t) for t in state1.movementAtomTypes) == expected_types, \
+           "System 1: Movement atom types do not match expected types"
+    assert set(state2.atomTypes.get_type_name(t) for t in state2.movementAtomTypes) == expected_types, \
+           "System 2: Movement atom types do not match expected types"
 
     # Test 1: Compare basic counts and box info
     assert state1.activeResidueCount == state2.activeResidueCount, \

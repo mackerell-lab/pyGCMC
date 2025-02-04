@@ -694,6 +694,7 @@ void init_model(py::module& m) {
                 state.residues = residues;
             })
         .def_readwrite("residueTypes", &pygcmc::model::MCState::residueTypes)
+        .def_readwrite("atomTypes", &pygcmc::model::MCState::atomTypes)
         .def_readwrite("activeAtomCount", &pygcmc::model::MCState::activeAtomCount)
         .def_readwrite("activeResidueCount", &pygcmc::model::MCState::activeResidueCount)
         .def_readwrite("info", &pygcmc::model::MCState::info)
@@ -704,7 +705,9 @@ void init_model(py::module& m) {
             },
             [](pygcmc::model::MCState& state, const std::vector<pygcmc::model::MCMovementResidueInfo>& movementResidues) {
                 state.movementResidues = movementResidues;
-            });
+            })
+        .def_readwrite("movementAtomTypes", &pygcmc::model::MCState::movementAtomTypes)
+        .def_readwrite("numMovementAtomTypes", &pygcmc::model::MCState::numMovementAtomTypes);
 }
 
 } // namespace bindings

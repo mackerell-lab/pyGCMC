@@ -153,15 +153,17 @@ struct MCState {
     TypeMaps residueTypes;  ///< Residue type mappings
     TypeMaps atomTypes;     ///< Atom type mappings
 
+    // Movement molecule info
+    std::vector<MCMovementResidueInfo> movementResidues;  ///< Info for movement residues
+    std::vector<int> movementAtomTypes;  ///< Atom types belonging to movement molecules
+    int numMovementAtomTypes;  ///< Number of atom types from movement molecules
+
     // Active counts for swap-and-pop management
     int activeAtomCount;     ///< Current active atom count
     int activeResidueCount;  ///< Current active residue count
 
-    // Movement residue tracking
-    std::vector<MCMovementResidueInfo> movementResidues;  ///< Info for each type of movement residue
-
-    // Parameters
-    MCInfo   info;        ///< Global MC parameters
+    // System info and force field
+    MCInfo info;            ///< System information
     MCForceField forcefield;  ///< Force field parameters
 
     // Constructor to initialize counts

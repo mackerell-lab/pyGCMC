@@ -228,6 +228,10 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
     pygcmc::model::TypeMaps preResidueTypes = state.residueTypes;
     pygcmc::model::TypeMaps preAtomTypes = state.atomTypes;
 
+    // 记录运动分子的原子类型
+    std::vector<int> newMovementAtomTypes;
+    int numNewMovementTypes = 0;
+
     // 添加新分子的类型
     for (const auto& info : molecules) {
         if (!info.molecular) {
@@ -243,10 +247,14 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
         // 将该新 residue 名字放到 map 里
         preResidueTypes.getOrAddType(resName);
 
-        // 将该新 residue 的 atom type 放到 map 里
+        // 将该新 residue 的 atom type 放到 map 里，并记录其索引
         const auto& topology_atoms = info.molecular->topology_atoms;
         for (const auto& top_atom : topology_atoms) {
-            preAtomTypes.getOrAddType(top_atom.type);
+            int typeIdx = preAtomTypes.getOrAddType(top_atom.type);
+            if (std::find(newMovementAtomTypes.begin(), newMovementAtomTypes.end(), typeIdx) == newMovementAtomTypes.end()) {
+                newMovementAtomTypes.push_back(typeIdx);
+                numNewMovementTypes++;
+            }
         }
 
         System::log(LogLevel::DEBUG, "Expected movement residue name for molecule: '", 
@@ -266,6 +274,16 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
     
     // 保留之前的 movement residues 信息
     newState.movementResidues = state.movementResidues;
+    newState.movementAtomTypes = state.movementAtomTypes;
+    newState.numMovementAtomTypes = state.numMovementAtomTypes;
+
+    // 添加新的 movement atom types
+    for (int typeIdx : newMovementAtomTypes) {
+        if (std::find(newState.movementAtomTypes.begin(), newState.movementAtomTypes.end(), typeIdx) == newState.movementAtomTypes.end()) {
+            newState.movementAtomTypes.push_back(typeIdx);
+        }
+    }
+    newState.numMovementAtomTypes = newState.movementAtomTypes.size();
 
     // --------------------------------------------------------------------
     // [4] 重新索引现有的 residues 和 atoms
