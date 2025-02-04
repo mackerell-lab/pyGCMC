@@ -155,9 +155,10 @@ void init_system(py::module& m) {
 
     // Bind TypeMaps
     py::class_<pygcmc::model::TypeMaps>(m, "TypeMaps")
+        .def(py::init<>())
         .def("get_or_add_type", &pygcmc::model::TypeMaps::getOrAddType)
         .def("get_type_name", &pygcmc::model::TypeMaps::getTypeName)
-        .def_readonly("atom_types", &pygcmc::model::TypeMaps::atomTypes);
+        .def_readonly("atomTypes", &pygcmc::model::TypeMaps::atomTypes);
 
     // Bind MonteCarloSystem
     py::class_<pygcmc::system::MonteCarloSystem>(m, "MonteCarloSystem")
