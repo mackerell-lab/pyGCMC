@@ -542,6 +542,9 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
                    " total=", info.totalCount);
     }
 
+    // Update the class member typeMaps with the new atom types
+    typeMaps = newState.atomTypes;
+
     // 最后，将 newState 替换进当前对象
     state = std::move(newState);
 }
