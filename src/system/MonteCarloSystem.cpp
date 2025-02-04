@@ -210,89 +210,166 @@ static inline std::string trim(const std::string &s) {
     }
     return std::string(start, end);
 }
-void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularInfo>& molecules) {
-    // 打印初始状态的 residue types 映射
-    std::cerr << "\n[DEBUG EXTRA] Initial ResidueTypes mapping:" << std::endl;
-    for (size_t idx = 0; idx < state.residueTypes.atomTypes.size(); idx++) {
-        std::cerr << "  index=" << idx 
-                  << " name='" << state.residueTypes.atomTypes[idx] << "'" << std::endl;
-    }
 
-    // 打印初始状态的所有残基及其类型
-    std::cerr << "\n[DEBUG EXTRA] Initial Residues:" << std::endl;
-    for (int i = 0; i < state.activeResidueCount; i++) {
-        const model::MCResidue& oldRes = state.residues[i];
-        std::string typeName = state.residueTypes.getTypeName(oldRes.type);
-        std::cerr << "  Residue " << i
-                  << " has type index " << oldRes.type
-                  << " => type name '" << typeName << "'"
-                  << (oldRes.active ? " (ACTIVE)" : " (INACTIVE)") << std::endl;
-    }
+void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularInfo>& molecules)
+{
+    // --------------------------------------------------------------------
+    // [1] 首先先收集"新分子"中的 residue types 和 atom types
+    // --------------------------------------------------------------------
+    pygcmc::model::TypeMaps preResidueTypes;
+    pygcmc::model::TypeMaps preAtomTypes;
 
-    // 创建一个新的状态来构造最终结果
-    model::MCState newState;
-    newState.info = state.info;
-    newState.forcefield = state.forcefield;
-    newState.atomTypes = state.atomTypes;
-    newState.residueTypes = state.residueTypes;
-
-    // 取出运动分子对应的残基名称（先 trim，再转大写）
-    std::vector<std::string> insertionResNames;
-    insertionResNames.reserve(molecules.size());
-    
-    // 预先将所有新的分子类型添加到类型映射中
+    // 先把所有新的分子类型加进去，这样它们的 index 会排在前面
     for (const auto& info : molecules) {
         if (!info.molecular) {
             throw std::runtime_error("Movement molecular data is null");
         }
-        // 添加残基类型
+        // 只拿第一个 residue，当做"分子模板"
+        // （你的代码里默认一个 MovementMolecularInfo 里只放了一个 residue）
         const auto& molRes = info.molecular->residues[0];
         std::string rawName = molRes->get_resname();
         std::string nameTrimmed = trim(rawName);
         std::string resName = nameTrimmed;
         std::transform(resName.begin(), resName.end(), resName.begin(),
-                      [](unsigned char c){ return std::toupper(c); });
-        insertionResNames.push_back(resName);
-        
-        // 确保残基类型已添加到映射中
-        newState.residueTypes.getOrAddType(resName);
-        
-        // 添加原子类型
+                       [](unsigned char c){ return std::toupper(c); });
+
+        // 将该新 residue 名字放到新的 map 里
+        preResidueTypes.getOrAddType(resName);
+
+        // 将该新 residue 的 atom type 放到新的 map 里
         const auto& molAtoms = molRes->get_atoms();
         for (const auto& molAtom : molAtoms) {
-            typeMaps.getOrAddType(molAtom->get_type());
+            preAtomTypes.getOrAddType(molAtom->get_type());
         }
-        
-        std::cerr << "[DEBUG] Expected movement residue name for molecule: '" << resName << "'" << std::endl;
+
+        std::cerr << "[DEBUG] Expected movement residue name for molecule: '"
+                  << resName << "'" << std::endl;
         std::cerr << "[DEBUG EXTRA] Movement molecule residues:" << std::endl;
         std::cerr << "  resname='" << resName << "'" << std::endl;
     }
 
-    // 第一遍：遍历基础系统中所有活跃残基，将它们按照类型分组
-    std::vector<std::vector<model::MCResidue>> matchingResidues(molecules.size());
-    std::vector<std::vector<std::vector<model::MCAtom>>> matchingAtoms(molecules.size());
-    std::vector<model::MCResidue> otherResidues;
-    std::vector<std::vector<model::MCAtom>> otherAtoms;
+    // --------------------------------------------------------------------
+    // [2] 再把原系统（state）里已经有的 residue types 和 atom types 放进来
+    // --------------------------------------------------------------------
+    // 注意：这里使用的是 state.residueTypes.atomTypes 来遍历残基类型字符串数组
+    //       你原本的命名里 "residueTypes.atomTypes" 存储的是 residue mapping。
+    //       如果工程里还有别的存储逻辑，请根据实际情况调整。
+    for (const auto& t : state.residueTypes.atomTypes) {
+        preResidueTypes.getOrAddType(t);
+    }
+    for (const auto& t : state.atomTypes.atomTypes) {
+        preAtomTypes.getOrAddType(t);
+    }
+
+    // --------------------------------------------------------------------
+    // [3] 新建一个新的 MCState，用上述新的 type maps
+    // --------------------------------------------------------------------
+    pygcmc::model::MCState newState;
+    newState.info        = state.info;
+    newState.forcefield  = state.forcefield;
+    newState.residueTypes = preResidueTypes;  // 用我们收集好的"新顺序" residue type
+    newState.atomTypes    = preAtomTypes;     // 用我们收集好的"新顺序" atom type
+
+    // --------------------------------------------------------------------
+    // [4] 先将旧系统的所有 residue/atom 重新索引到新 type maps
+    //     并先保存到临时数据结构 oldResidues/oldResidueAtoms
+    // --------------------------------------------------------------------
+    std::vector<pygcmc::model::MCResidue> oldResidues;
+    oldResidues.reserve(state.activeResidueCount);
+    std::vector<std::vector<pygcmc::model::MCAtom>> oldResidueAtoms;
+    oldResidueAtoms.reserve(state.activeResidueCount);
+
+    // 调试输出：先打印旧系统的 residue type 及残基
+    std::cerr << "\n[DEBUG EXTRA] Original (old) active Residues before reindex:" << std::endl;
+    for (int i = 0; i < state.activeResidueCount; i++) {
+        const auto& oldRes = state.residues[i];
+        if (!oldRes.active) {
+            std::cerr << "[DEBUG EXTRA]   Residue " << i << " inactive, skipping.\n";
+            continue;
+        }
+        std::string oldTypeName = state.residueTypes.getTypeName(oldRes.type);
+        std::cerr << "[DEBUG EXTRA]   Residue " << i
+                  << " old type index " << oldRes.type
+                  << " => type name '" << oldTypeName << "'\n";
+    }
 
     for (int i = 0; i < state.activeResidueCount; i++) {
-        const model::MCResidue& oldRes = state.residues[i];
+        const auto& oldRes = state.residues[i];
+        // 如果不想拷贝 inactive，可以自行判断。但你原先代码是一起拷过去再处理的
+        // 这里就不分是否 active。
+        // 取得旧名字
+        std::string oldResName = state.residueTypes.getTypeName(oldRes.type);
+        std::string oldResNameTrimmed = trim(oldResName);
+        std::string oldResNameUpper   = oldResNameTrimmed;
+        std::transform(
+            oldResNameUpper.begin(), oldResNameUpper.end(), oldResNameUpper.begin(),
+            [](unsigned char c){ return std::toupper(c); }
+        );
+
+        // 构造一个新的 Residue，里面 type 改成在 newState.residueTypes 下的 index
+        pygcmc::model::MCResidue newRes = oldRes;
+        newRes.type = newState.residueTypes.getOrAddType(oldResNameUpper);
+
+        // 把它压到临时数组
+        oldResidues.push_back(newRes);
+
+        // 下面收集它的 atoms，并重新映射 atom type
+        std::vector<pygcmc::model::MCAtom> theseAtoms;
+        theseAtoms.reserve(newRes.atomCount);
+        for (int j = 0; j < oldRes.atomCount; j++) {
+            auto oldAtom = state.atoms[oldRes.atomStart + j];
+            // 去旧系统里拿 atom type 字符串
+            std::string oldAtomTypeName = typeMaps.getTypeName(oldAtom.type);
+            // 在新的 typeMaps 下找对应的新索引
+            int newAtomTypeIdx = newState.atomTypes.getOrAddType(oldAtomTypeName);
+            oldAtom.type = newAtomTypeIdx;
+            theseAtoms.push_back(oldAtom);
+        }
+        oldResidueAtoms.push_back(std::move(theseAtoms));
+    }
+
+    // --------------------------------------------------------------------
+    // [5] 原函数的逻辑：把旧系统的活跃残基分组到 matchingResidues 里，
+    //                  没匹配的丢到 otherResidues 里
+    //    注意：我们这时候要用 oldResidues / oldResidueAtoms 来做"旧系统"的来源
+    // --------------------------------------------------------------------
+    // 取出运动分子对应的残基名称（先 trim，再转大写）
+    std::vector<std::string> insertionResNames;
+    insertionResNames.reserve(molecules.size());
+
+    for (const auto& info : molecules) {
+        if (!info.molecular) {
+            throw std::runtime_error("Movement molecular data is null");
+        }
+        const auto& molRes = info.molecular->residues[0];
+        std::string rawName = molRes->get_resname();
+        std::string nameTrimmed = trim(rawName);
+        std::string resName = nameTrimmed;
+        std::transform(resName.begin(), resName.end(), resName.begin(),
+                       [](unsigned char c){ return std::toupper(c); });
+        insertionResNames.push_back(resName);
+    }
+
+    // 用来收集和分组
+    std::vector<std::vector<pygcmc::model::MCResidue>> matchingResidues(molecules.size());
+    std::vector<std::vector<std::vector<pygcmc::model::MCAtom>>> matchingAtoms(molecules.size());
+    std::vector<pygcmc::model::MCResidue> otherResidues;
+    std::vector<std::vector<pygcmc::model::MCAtom>> otherAtoms;
+
+    // 第一遍：遍历 oldResidues，把 active 的 residue 做匹配
+    for (int i = 0; i < static_cast<int>(oldResidues.size()); i++) {
+        const auto& oldRes = oldResidues[i];
         if (!oldRes.active) {
             std::cerr << "[DEBUG EXTRA] Skipping inactive residue " << i << std::endl;
             continue;
         }
 
-        std::string rawOldResName = state.residueTypes.getTypeName(oldRes.type);
-        std::string oldResNameTrimmed = trim(rawOldResName);
-        std::string oldResNameUpper = oldResNameTrimmed;
-        std::transform(oldResNameUpper.begin(), oldResNameUpper.end(), oldResNameUpper.begin(),
-                       [](unsigned char c){ return std::toupper(c); });
-
+        std::string oldResNameUpper = newState.residueTypes.getTypeName(oldRes.type);
+        // 这里我们之前已经在上面转把 name 转成大写并 getOrAddType 了
+        // 故此处 oldResNameUpper 应该已经是大写，但为了保持调试输出一致，还是留着
         std::cerr << "[DEBUG EXTRA] Processing residue " << i 
-                  << ": raw='" << rawOldResName 
-                  << "', trimmed='" << oldResNameTrimmed
-                  << "', upper='" << oldResNameUpper << "'" << std::endl;
+                  << ": upper='" << oldResNameUpper << "'" << std::endl;
 
-        // 判断该残基是否匹配任一运动分子
         bool found = false;
         for (size_t m = 0; m < molecules.size(); m++) {
             std::cerr << "[DEBUG]   Comparing with insertionResNames[" << m << "]: '" 
@@ -300,10 +377,10 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
             if (oldResNameUpper == insertionResNames[m]) {
                 std::cerr << "[DEBUG]   Residue " << i << " matched movement molecule index " << m << std::endl;
                 matchingResidues[m].push_back(oldRes);
-                std::vector<model::MCAtom> atoms;
+                std::vector<pygcmc::model::MCAtom> atoms;
                 atoms.reserve(oldRes.atomCount);
                 for (int j = 0; j < oldRes.atomCount; j++) {
-                    atoms.push_back(state.atoms[oldRes.atomStart + j]);
+                    atoms.push_back(oldResidueAtoms[i][j]);
                 }
                 matchingAtoms[m].push_back(atoms);
                 found = true;
@@ -313,12 +390,12 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
         if (!found) {
             std::cerr << "[DEBUG] Residue " << i << " did not match any movement molecule; adding to others." << std::endl;
             otherResidues.push_back(oldRes);
-            std::vector<model::MCAtom> atoms;
+            std::vector<pygcmc::model::MCAtom> atoms;
             atoms.reserve(oldRes.atomCount);
             for (int j = 0; j < oldRes.atomCount; j++) {
-                atoms.push_back(state.atoms[oldRes.atomStart + j]);
+                atoms.push_back(oldResidueAtoms[i][j]);
             }
-            otherAtoms.push_back(atoms);
+            otherAtoms.push_back(std::move(atoms));
         }
     }
 
@@ -328,16 +405,18 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
                   << "') collected " << matchingResidues[m].size() << " active residues." << std::endl;
     }
 
-    // 第二遍：构造新状态
+    // --------------------------------------------------------------------
+    // [6] 第二遍：构造 newState 的 residues 和 atoms
+    // --------------------------------------------------------------------
     newState.atoms.reserve(state.atoms.size());
     newState.residues.reserve(state.residues.size());
     
     int newAtomStart = 0;
     int newResIdx = 0;
 
-    // 先添加未匹配的（非运动）残基
+    // 先把未匹配到的残基（otherResidues）放进 newState
     for (size_t i = 0; i < otherResidues.size(); i++) {
-        model::MCResidue newRes = otherResidues[i];
+        pygcmc::model::MCResidue newRes = otherResidues[i];
         newRes.atomStart = newAtomStart;
         const auto& atoms = otherAtoms[i];
         for (const auto& atom : atoms) {
@@ -348,7 +427,7 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
         newResIdx++;
     }
 
-    // 再处理每种运动分子类型
+    // 再把各个 molecules 匹配到的旧残基，以及新的不活跃拷贝加进去
     for (size_t m = 0; m < molecules.size(); m++) {
         const auto& molInfo = molecules[m];
         const auto& matches = matchingResidues[m];
@@ -357,12 +436,12 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
         int startIndexForThisGroup = newResIdx;
         int activeCountForThisGroup = static_cast<int>(matches.size());
 
-        // 添加从基础系统中匹配到的活跃残基
+        // 添加"旧系统"里匹配到的活跃残基
         for (size_t r = 0; r < matches.size(); r++) {
-            model::MCResidue newRes = matches[r];
+            pygcmc::model::MCResidue newRes = matches[r];
             newRes.atomStart = newAtomStart;
             newRes.active = true;
-            newRes.fixed = false;
+            newRes.fixed  = false;
             const auto& atoms = matchAtoms[r];
             for (const auto& atom : atoms) {
                 newState.atoms.push_back(atom);
@@ -372,25 +451,36 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
             newResIdx++;
         }
 
-        // 添加不活跃的拷贝
+        // 添加不活跃拷贝
         const auto& molRes = molInfo.molecular->residues[0];
         const auto& molAtoms = molRes->get_atoms();
         int atomsPerResidue = static_cast<int>(molAtoms.size());
         
         for (int c = 0; c < molInfo.maxCopies; c++) {
-            model::MCResidue newRes;
+            pygcmc::model::MCResidue newRes;
             newRes.atomStart = newAtomStart;
             newRes.atomCount = atomsPerResidue;
             newRes.active = false;
-            newRes.fixed = false;
-            newRes.type = state.residueTypes.getOrAddType(molRes->get_resname());
+            newRes.fixed  = false;
+            // 新分子的 residue type 索引
+            std::string rawName = molRes->get_resname();
+            std::string nameTrimmed = trim(rawName);
+            std::string resName = nameTrimmed;
+            std::transform(
+                resName.begin(), resName.end(), resName.begin(),
+                [](unsigned char c){ return std::toupper(c); }
+            );
+            newRes.type = newState.residueTypes.getOrAddType(resName);
+
+            // 新分子的 atom type 索引
             for (const auto& molAtom : molAtoms) {
-                model::MCAtom mcAtom;
+                pygcmc::model::MCAtom mcAtom;
                 mcAtom.x = molAtom->get_x();
                 mcAtom.y = molAtom->get_y();
                 mcAtom.z = molAtom->get_z();
                 mcAtom.charge = molAtom->get_charge();
-                mcAtom.type = typeMaps.getOrAddType(molAtom->get_type());
+                // 在 newState 的 atomTypes 里拿新的 index
+                mcAtom.type = newState.atomTypes.getOrAddType(molAtom->get_type());
                 newState.atoms.push_back(mcAtom);
             }
             newAtomStart += atomsPerResidue;
@@ -398,7 +488,8 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
             newResIdx++;
         }
 
-        model::MCMovementResidueInfo moveInfo;
+        // 记录在 movementResidues 里的信息
+        pygcmc::model::MCMovementResidueInfo moveInfo;
         moveInfo.startIndex = startIndexForThisGroup;
         moveInfo.activeCount = activeCountForThisGroup;
         moveInfo.totalCount = activeCountForThisGroup + molInfo.maxCopies;
@@ -406,24 +497,28 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
         newState.movementResidues.push_back(moveInfo);
     }
 
+    // 更新 newState 的活跃计数
     newState.activeResidueCount = newResIdx;
-    newState.activeAtomCount = newAtomStart;
+    newState.activeAtomCount    = newAtomStart;
 
+    // 检查容量
     if (newState.activeResidueCount > newState.info.maxResidues ||
         newState.activeAtomCount > newState.info.maxAtoms) {
         throw std::runtime_error("New state exceeds max capacity after movement insertion");
     }
 
-    // 在构建新状态后，打印最终的映射和残基信息
-    std::cerr << "\n[DEBUG EXTRA] Final ResidueTypes mapping:" << std::endl;
+    // --------------------------------------------------------------------
+    // [7] 打印最终映射和残基信息
+    // --------------------------------------------------------------------
+    std::cerr << "\n[DEBUG EXTRA] Final ResidueTypes mapping (newState):" << std::endl;
     for (size_t idx = 0; idx < newState.residueTypes.atomTypes.size(); idx++) {
         std::cerr << "  index=" << idx 
                   << " name='" << newState.residueTypes.atomTypes[idx] << "'" << std::endl;
     }
 
-    std::cerr << "\n[DEBUG EXTRA] Final Residues:" << std::endl;
+    std::cerr << "\n[DEBUG EXTRA] Final Residues (newState):" << std::endl;
     for (int i = 0; i < newState.activeResidueCount; i++) {
-        const model::MCResidue& newRes = newState.residues[i];
+        const pygcmc::model::MCResidue& newRes = newState.residues[i];
         std::string typeName = newState.residueTypes.getTypeName(newRes.type);
         std::cerr << "  Residue " << i
                   << " has type index " << newRes.type
@@ -432,7 +527,7 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
     }
 
     // 打印 movement residues 信息
-    std::cerr << "\n[DEBUG EXTRA] Movement Residues Info:" << std::endl;
+    std::cerr << "\n[DEBUG EXTRA] Movement Residues Info (newState):" << std::endl;
     for (const auto& info : newState.movementResidues) {
         std::cerr << "  Movement group: name='" << info.resName
                   << "' start=" << info.startIndex
@@ -440,6 +535,7 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
                   << " total=" << info.totalCount << std::endl;
     }
 
+    // 最后，将 newState 替换进当前对象
     state = std::move(newState);
 }
 
