@@ -151,6 +151,7 @@ void MonteCarloSystem::initializeFromMolecular(const std::shared_ptr<model::Mole
     
     for (size_t i = 0; i < numResidues; ++i) {
         const auto& molRes = molecular->residues[i];
+        const auto& topRes = molecular->topology_residues[i];
         
         model::MCResidue mcRes;
         mcRes.atomStart = atomStart;
@@ -159,13 +160,16 @@ void MonteCarloSystem::initializeFromMolecular(const std::shared_ptr<model::Mole
         
         // Convert atoms for this residue
         const auto& molAtoms = molRes->get_atoms();
-        for (const auto& molAtom : molAtoms) {
+        for (size_t j = 0; j < molAtoms.size(); j++) {
+            const auto& molAtom = molAtoms[j];
+            const auto& topAtom = molecular->topology_atoms[topRes.atoms[j]];
+            
             model::MCAtom mcAtom;
             mcAtom.x = molAtom->get_x();
             mcAtom.y = molAtom->get_y();
             mcAtom.z = molAtom->get_z();
-            mcAtom.charge = molAtom->get_charge();
-            mcAtom.type = typeMaps.getOrAddType(molAtom->get_type());
+            mcAtom.charge = topAtom.charge;  // 使用 topology 中的电荷
+            mcAtom.type = typeMaps.getOrAddType(topAtom.type);  // 使用 topology 中的类型
             
             tempAtoms.push_back(mcAtom);
         }
@@ -239,9 +243,9 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
         preResidueTypes.getOrAddType(resName);
 
         // 将该新 residue 的 atom type 放到新的 map 里
-        const auto& molAtoms = molRes->get_atoms();
-        for (const auto& molAtom : molAtoms) {
-            preAtomTypes.getOrAddType(molAtom->get_type());
+        const auto& topology_atoms = info.molecular->topology_atoms;
+        for (const auto& top_atom : topology_atoms) {
+            preAtomTypes.getOrAddType(top_atom.type);
         }
 
         System::log(LogLevel::DEBUG, "Expected movement residue name for molecule: '", 
@@ -454,6 +458,7 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
         // 添加不活跃拷贝
         const auto& molRes = molInfo.molecular->residues[0];
         const auto& molAtoms = molRes->get_atoms();
+        const auto& topRes = molInfo.molecular->topology_residues[0];  // 获取第一个残基的 topology
         int atomsPerResidue = static_cast<int>(molAtoms.size());
         
         for (int c = 0; c < molInfo.maxCopies; c++) {
@@ -473,14 +478,16 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
             newRes.type = newState.residueTypes.getOrAddType(resName);
 
             // 新分子的 atom type 索引
-            for (const auto& molAtom : molAtoms) {
+            for (size_t i = 0; i < molAtoms.size(); i++) {
+                const auto& molAtom = molAtoms[i];
+                const auto& topAtom = molInfo.molecular->topology_atoms[topRes.atoms[i]];
+                
                 pygcmc::model::MCAtom mcAtom;
                 mcAtom.x = molAtom->get_x();
                 mcAtom.y = molAtom->get_y();
                 mcAtom.z = molAtom->get_z();
-                mcAtom.charge = molAtom->get_charge();
-                // 在 newState 的 atomTypes 里拿新的 index
-                mcAtom.type = newState.atomTypes.getOrAddType(molAtom->get_type());
+                mcAtom.charge = topAtom.charge;  // 使用 topology 中的电荷
+                mcAtom.type = newState.atomTypes.getOrAddType(topAtom.type);  // 使用 topology 中的类型
                 newState.atoms.push_back(mcAtom);
             }
             newAtomStart += atomsPerResidue;

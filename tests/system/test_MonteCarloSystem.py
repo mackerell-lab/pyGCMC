@@ -54,6 +54,7 @@ def test_initialize_from_molecular(molecular_system):
     for i in range(mc_system.get_active_residue_count()):
         mc_res = mc_state.residues[i]
         mol_res = molecular_system.residues[i]
+        top_res = molecular_system.topology_residues[i]
         
         assert mc_res.atom_count == len(mol_res.get_atoms())
         assert mc_res.active == True
@@ -62,10 +63,11 @@ def test_initialize_from_molecular(molecular_system):
         for j in range(mc_res.atom_count):
             mc_atom = mc_state.atoms[mc_res.atom_start + j]
             mol_atom = mol_res.get_atoms()[j]
+            top_atom = molecular_system.topology_atoms[top_res.atoms[j]]
             
             # Check atom properties
-            assert mc_system.get_type_maps().get_type_name(mc_atom.type) == mol_atom.get_type()
-            assert abs(mc_atom.charge - mol_atom.get_charge()) < 1e-6
+            assert mc_system.get_type_maps().get_type_name(mc_atom.type) == top_atom.type
+            assert abs(mc_atom.charge - top_atom.charge) < 1e-6
             assert_arrays_almost_equal(
                 [mc_atom.x, mc_atom.y, mc_atom.z],
                 [mol_atom.get_x(), mol_atom.get_y(), mol_atom.get_z()]
@@ -169,6 +171,7 @@ def test_residue_atom_properties():
     for res_idx in range(state.activeResidueCount):
         mc_res = state.residues[res_idx]
         mol_res = molecular.residues[res_idx]
+        top_res = molecular.topology_residues[res_idx]
         mol_atoms = mol_res.get_atoms()
         
         # Verify residue properties
@@ -182,14 +185,15 @@ def test_residue_atom_properties():
         for atom_idx in range(mc_res.atom_count):
             mc_atom = state.atoms[mc_res.atom_start + atom_idx]
             mol_atom = mol_atoms[atom_idx]
+            top_atom = molecular.topology_atoms[top_res.atoms[atom_idx]]
             
             # Verify atom type
             atom_type_name = mc_system.get_type_maps().get_type_name(mc_atom.type)
-            assert atom_type_name == mol_atom.get_type(), \
-                f"Atom {atom_idx} in residue {res_idx} has incorrect type: {atom_type_name} != {mol_atom.get_type()}"
+            assert atom_type_name == top_atom.type, \
+                f"Atom {atom_idx} in residue {res_idx} has incorrect type: {atom_type_name} != {top_atom.type}"
             
             # Verify atom charge
-            assert abs(mc_atom.charge - mol_atom.get_charge()) < 1e-6, \
+            assert abs(mc_atom.charge - top_atom.charge) < 1e-6, \
                 f"Atom {atom_idx} in residue {res_idx} has incorrect charge"
             
             # Verify atom coordinates
@@ -264,9 +268,9 @@ def test_type_mapping_from_molecular():
     
     # Create a set of all unique atom types in molecular system
     mol_types = set()
-    for residue in molecular.residues:
-        for atom in residue.get_atoms():
-            mol_types.add(atom.get_type())
+    for res in molecular.topology_residues:
+        for atom_idx in res.atoms:
+            mol_types.add(molecular.topology_atoms[atom_idx].type)
     
     # Create a set of all unique atom types in monte carlo system
     mc_types = set()
@@ -281,21 +285,20 @@ def test_type_mapping_from_molecular():
     # Verify that each atom's type is correctly mapped
     for res_idx in range(state.activeResidueCount):
         mc_res = state.residues[res_idx]
-        mol_res = molecular.residues[res_idx]
-        mol_atoms = mol_res.get_atoms()
+        top_res = molecular.topology_residues[res_idx]
         
         for atom_idx in range(mc_res.atom_count):
             mc_atom = state.atoms[mc_res.atom_start + atom_idx]
-            mol_atom = mol_atoms[atom_idx]
+            top_atom = molecular.topology_atoms[top_res.atoms[atom_idx]]
             
             mc_type = type_maps.get_type_name(mc_atom.type)
-            mol_type = mol_atom.get_type()
+            top_type = top_atom.type
             
-            assert mc_type == mol_type, \
-                f"Type mismatch in residue {res_idx}, atom {atom_idx}: {mc_type} != {mol_type}"
+            assert mc_type == top_type, \
+                f"Type mismatch in residue {res_idx}, atom {atom_idx}: {mc_type} != {top_type}"
             
             # Verify that the type index is consistent
-            assert mc_atom.type == type_maps.get_or_add_type(mol_type), \
+            assert mc_atom.type == type_maps.get_or_add_type(top_type), \
                 f"Type index mismatch in residue {res_idx}, atom {atom_idx}"
     
     # Verify that type indices are continuous and start from 0
