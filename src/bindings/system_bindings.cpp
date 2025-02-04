@@ -165,6 +165,7 @@ void init_system(py::module& m) {
         .def(py::init<>())
         .def("initialize", &pygcmc::system::MonteCarloSystem::initialize)
         .def("set_force_field", &pygcmc::system::MonteCarloSystem::setForceField)
+        .def("initialize_force_field", &pygcmc::system::MonteCarloSystem::initializeForceField)
         .def("initialize_from_molecular", [](pygcmc::system::MonteCarloSystem& self, py::object molecular) {
             if (molecular.is_none()) {
                 throw py::value_error("Molecular object cannot be None");

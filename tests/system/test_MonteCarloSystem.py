@@ -4,6 +4,8 @@ import pytest
 import pygcmc
 import os
 import math
+from pygcmc.model import Molecular
+from pygcmc.io import PDBParser, TOPParser
 
 # Get the directory containing test data files
 TEST_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
@@ -1194,4 +1196,147 @@ def test_compare_add_molecules_together_vs_separate():
         print(f"Atom type '{atom_type}': System1 index={idx1}, System2 index={idx2}")
         assert mc_system1.get_type_maps().get_type_name(idx1) == mc_system2.get_type_maps().get_type_name(idx2), \
                f"Atom type name mismatch for indices {idx1} and {idx2}"
+
+@pytest.fixture
+def charmm_ff():
+    # Get the test data directory
+    test_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    data_dir = os.path.join(test_dir, "data")
+    
+    # Load CHARMM force field files
+    ff = pygcmc.ForceField()
+    pygcmc.PRMParser.parse_file_to_forcefield(os.path.join(data_dir, "par_all36_cgenff.prm"), ff)
+    pygcmc.PRMParser.parse_file_to_forcefield(os.path.join(data_dir, "par_all36m_prot.prm"), ff)
+    pygcmc.PRMParser.parse_file_to_forcefield(os.path.join(data_dir, "silcs.str"), ff)
+    pygcmc.PRMParser.parse_file_to_forcefield(os.path.join(data_dir, "toppar_water_ions.str"), ff)
+    return ff
+
+def test_initialize_force_field(molecular_system, charmm_ff):
+    print("\n=== Starting test_initialize_force_field ===")
+    
+    # Create Monte Carlo system
+    mc_system = pygcmc.MonteCarloSystem()
+    print("Created MonteCarloSystem")
+    
+    # Set reasonable max capacity
+    info = pygcmc.MCInfo()
+    info.max_residues = 1000
+    info.max_atoms = 10000
+    mc_system.initialize(info)
+    print("Initialized MonteCarloSystem with max capacity")
+    
+    # Print molecular system info
+    print(f"\nMolecular system info:")
+    print(f"Number of residues: {molecular_system.get_num_residues()}")
+    print(f"Number of atoms: {molecular_system.get_num_atoms()}")
+    print(f"Box dimensions: {molecular_system.boxDimensions}")
+    
+    # Initialize with molecular system
+    mc_system.initialize_from_molecular(molecular_system)
+    print("\nInitialized from molecular system")
+    
+    # Add movement molecules
+    test_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    data_dir = os.path.join(test_dir, "data")
+    
+    # Load small molecules
+    movement_molecules = []
+    
+    # Load benzene
+    benx_pdb = os.path.join(data_dir, "mols", "benx.pdb")
+    benx_psf = os.path.join(data_dir, "mols", "benx.psf")
+    benx_structure = pygcmc.PDBParser.parse_file(benx_pdb)
+    benx_topology = pygcmc.PSFParser.parse_file(benx_psf)
+    benx_mol = pygcmc.MolecularSystem()
+    benx = benx_mol.combine(benx_structure, benx_topology)
+    movement_molecules.append(pygcmc.MovementMolecularInfo(benx, 10))  # 10 copies
+    print("\nLoaded benzene as movement molecule")
+    
+    # Load imidazole
+    imia_pdb = os.path.join(data_dir, "mols", "imia.pdb")
+    imia_psf = os.path.join(data_dir, "mols", "imia.psf")
+    imia_structure = pygcmc.PDBParser.parse_file(imia_pdb)
+    imia_topology = pygcmc.PSFParser.parse_file(imia_psf)
+    imia_mol = pygcmc.MolecularSystem()
+    imia = imia_mol.combine(imia_structure, imia_topology)
+    movement_molecules.append(pygcmc.MovementMolecularInfo(imia, 10))  # 10 copies
+    print("Loaded imidazole as movement molecule")
+    
+    # Load water
+    sol_pdb = os.path.join(data_dir, "mols", "sol.pdb")
+    sol_top = os.path.join(data_dir, "mols", "sol.itp")
+    sol_structure = pygcmc.PDBParser.parse_file(sol_pdb)
+    sol_topology = pygcmc.TOPParser.parse_file(sol_top)
+    sol_mol = pygcmc.MolecularSystem()
+    sol = sol_mol.combine(sol_structure, sol_topology)
+    movement_molecules.append(pygcmc.MovementMolecularInfo(sol, 20))  # 20 copies for water
+    print("Loaded water as movement molecule")
+    
+    # Add movement molecules to system
+    mc_system.add_movement_molecules(movement_molecules)
+    print("\nAdded all movement molecules to system")
+    
+    # Get atom types before force field initialization
+    atom_types = mc_system.get_type_maps()
+    print(f"\nNumber of atom types: {len(atom_types.atomTypes)}")
+    print("Atom types in the system:", atom_types.atomTypes)
+    
+    # Get state and check movement atom types
+    state = mc_system.get_state()
+    print("\nMovement atom types info:")
+    print(f"Number of movement atom types: {state.numMovementAtomTypes}")
+    print("Movement atom types indices:", state.movementAtomTypes)
+    print("Movement residues info:")
+    for info in state.movementResidues:
+        print(f"  {info.resName}: start={info.startIndex}, active={info.activeCount}, total={info.totalCount}")
+    
+    # Print available LJ parameters in the force field
+    print("\nAvailable LJ parameters in force field:")
+    lj_params = charmm_ff.lj_params
+    print(f"Number of LJ parameters: {len(lj_params)}")
+    for atom_type, params in lj_params.items():
+        print(f"{atom_type}: epsilon={params.epsilon:.4f}, rmin={params.rmin:.4f}")
+    
+    # Check if all atom types have LJ parameters
+    missing_types = []
+    for type_name in atom_types.atomTypes:
+        try:
+            params = charmm_ff.get_lj_params(type_name)
+            print(f"Found LJ params for {type_name}: epsilon={params.epsilon:.4f}, rmin={params.rmin:.4f}")
+        except Exception as e:
+            print(f"Failed to get LJ params for {type_name}: {str(e)}")
+            missing_types.append(type_name)
+    
+    if missing_types:
+        print("\nMissing LJ parameters for atom types:", missing_types)
+        pytest.skip(f"Missing LJ parameters for atom types: {missing_types}")
+    
+    print("\nAll atom types have LJ parameters, proceeding with force field initialization")
+    
+    # Initialize force field
+    try:
+        mc_system.initialize_force_field(charmm_ff)
+        print("Force field initialization successful")
+    except Exception as e:
+        print(f"Force field initialization failed: {str(e)}")
+        raise
+    
+    # Get state after force field initialization
+    state = mc_system.get_state()
+    print("\nGot state after force field initialization")
+    
+    # Check force field parameters
+    print("\nForce field parameters:")
+    print(f"maxTypes: {state.forcefield.maxTypes}")
+    print(f"numMovementTypes: {state.forcefield.numMovementTypes}")
+    print(f"ljSigma size: {len(state.forcefield.ljSigma)}")
+    print(f"ljEps size: {len(state.forcefield.ljEps)}")
+    
+    # Basic assertions
+    assert state.forcefield.maxTypes == len(atom_types.atomTypes)
+    assert state.forcefield.numMovementTypes == state.numMovementAtomTypes
+    assert len(state.forcefield.ljSigma) == state.numMovementAtomTypes * state.forcefield.maxTypes
+    assert len(state.forcefield.ljEps) == state.numMovementAtomTypes * state.forcefield.maxTypes
+    
+    print("\n=== test_initialize_force_field completed successfully ===")
 

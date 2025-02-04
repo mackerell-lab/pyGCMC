@@ -708,6 +708,14 @@ void init_model(py::module& m) {
             })
         .def_readwrite("movementAtomTypes", &pygcmc::model::MCState::movementAtomTypes)
         .def_readwrite("numMovementAtomTypes", &pygcmc::model::MCState::numMovementAtomTypes);
+
+    // Bind MCForceField
+    py::class_<pygcmc::model::MCForceField>(m, "MCForceField")
+        .def(py::init<>())
+        .def_readwrite("maxTypes", &pygcmc::model::MCForceField::maxTypes)
+        .def_readwrite("numMovementTypes", &pygcmc::model::MCForceField::numMovementTypes)
+        .def_readwrite("ljSigma", &pygcmc::model::MCForceField::ljSigma)
+        .def_readwrite("ljEps", &pygcmc::model::MCForceField::ljEps);
 }
 
 } // namespace bindings

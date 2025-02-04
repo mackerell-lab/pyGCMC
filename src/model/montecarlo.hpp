@@ -95,10 +95,12 @@ struct MCInfo {
 // ------------------------------------------------------------
 struct MCForceField {
     int maxTypes;  ///< Actual number of atom types in use
+    int numMovementTypes;  ///< Number of movement atom types
 
-    // Lennard-Jones parameters
-    std::vector<float> ljSigma;   ///< [maxTypes] sigma parameters
-    std::vector<float> ljEps;     ///< [maxTypes] epsilon parameters
+    // Lennard-Jones parameters for interactions between movement atoms and all atoms
+    // Size: numMovementTypes * maxTypes
+    std::vector<float> ljSigma;   ///< sigma[i * maxTypes + j] gives sigma for movement type i and any type j
+    std::vector<float> ljEps;     ///< eps[i * maxTypes + j] gives epsilon for movement type i and any type j
 };
 
 // ------------------------------------------------------------

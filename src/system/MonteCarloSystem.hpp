@@ -7,6 +7,7 @@
 #include <string>
 #include "model/montecarlo.hpp"
 #include "model/molecular.hpp"
+#include "model/forcefield.hpp"
 
 namespace pygcmc {
 namespace system {
@@ -39,6 +40,8 @@ public:
     void setForceField(const model::MCForceField& ff) {
         state.forcefield = ff;
     }
+
+    void initializeForceField(const ForceField& ff);
 
     void addInitialResidues(const model::MCResidue* resVec, int resCount,
                            const model::MCAtom* atomVec, int atomCount);

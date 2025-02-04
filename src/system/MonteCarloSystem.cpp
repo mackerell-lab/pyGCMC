@@ -568,6 +568,85 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
     state = std::move(newState);
 }
 
+void MonteCarloSystem::initializeForceField(const ForceField& ff) {
+    const auto& atomTypes = state.atomTypes;
+    const int numTypes = atomTypes.atomTypes.size();
+    const auto& movementTypes = state.movementAtomTypes;
+    const int numMovementTypes = state.numMovementAtomTypes;
+    
+    if (numTypes == 0) {
+        throw std::runtime_error("No atom types found in the system");
+    }
+    
+    // Initialize force field parameters
+    state.forcefield.maxTypes = numTypes;
+    state.forcefield.numMovementTypes = numMovementTypes;
+    
+    // If there are no movement types, we don't need to store any parameters
+    if (numMovementTypes == 0) {
+        state.forcefield.ljSigma.clear();
+        state.forcefield.ljEps.clear();
+        return;
+    }
+    
+    // Resize arrays to hold all type pairs (movement_type, any_type)
+    state.forcefield.ljSigma.resize(numMovementTypes * numTypes);
+    state.forcefield.ljEps.resize(numMovementTypes * numTypes);
+
+    // For each movement type
+    for (int mi = 0; mi < numMovementTypes; ++mi) {
+        int movementTypeIdx = movementTypes[mi];
+        if (movementTypeIdx < 0 || movementTypeIdx >= numTypes) {
+            throw std::runtime_error("Invalid movement atom type index: " + std::to_string(movementTypeIdx));
+        }
+        const std::string& type1 = atomTypes.atomTypes[movementTypeIdx];
+        
+        // For each possible interaction partner
+        for (int j = 0; j < numTypes; ++j) {
+            const std::string& type2 = atomTypes.atomTypes[j];
+            const int pairIdx = mi * numTypes + j;  // Index into the parameter arrays
+            
+            // First try to get NBFIX parameters
+            auto [eps, has_nbfix] = ff.get_nbfix(type1, type2);
+            
+            if (has_nbfix) {
+                // Use NBFIX parameters
+                const auto& lj1 = ff.get_lj_params(type1);
+                const auto& lj2 = ff.get_lj_params(type2);
+                const float sigma1 = static_cast<float>(lj1.rmin / std::pow(2.0, 1.0/6.0));
+                const float sigma2 = static_cast<float>(lj2.rmin / std::pow(2.0, 1.0/6.0));
+                
+                // Calculate combined sigma (Lorentz-Berthelot)
+                const float sigma_avg = 0.5f * (sigma1 + sigma2);
+                
+                // Store parameters
+                state.forcefield.ljSigma[pairIdx] = sigma_avg;
+                state.forcefield.ljEps[pairIdx] = static_cast<float>(eps);
+            } else {
+                // Use standard LJ combining rules
+                try {
+                    const auto& lj1 = ff.get_lj_params(type1);
+                    const auto& lj2 = ff.get_lj_params(type2);
+                    
+                    // Convert Rmin to sigma (σ = Rmin/2^(1/6))
+                    const float sigma1 = static_cast<float>(lj1.rmin / std::pow(2.0, 1.0/6.0));
+                    const float sigma2 = static_cast<float>(lj2.rmin / std::pow(2.0, 1.0/6.0));
+                    
+                    // Lorentz-Berthelot combining rules
+                    const float sigma_avg = 0.5f * (sigma1 + sigma2);
+                    const float eps_avg = std::sqrt(lj1.epsilon * lj2.epsilon);
+                    
+                    // Store parameters
+                    state.forcefield.ljSigma[pairIdx] = sigma_avg;
+                    state.forcefield.ljEps[pairIdx] = static_cast<float>(eps_avg);
+                } catch (const std::exception& e) {
+                    throw std::runtime_error("Missing LJ parameters for atom type pair '" + 
+                                          type1 + "'-'" + type2 + "'");
+                }
+            }
+        }
+    }
+}
 
 } // namespace system
 } // namespace pygcmc 
