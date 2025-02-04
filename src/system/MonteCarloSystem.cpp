@@ -346,21 +346,16 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
     std::vector<pygcmc::model::MCResidue> otherResidues;
     std::vector<std::vector<pygcmc::model::MCAtom>> otherAtoms;
 
-    // 第一遍：遍历 oldResidues，把 active 的 residue 做匹配
+    // 第一遍：遍历 oldResidues，把所有残基（包括非活跃的）做匹配
     for (int i = 0; i < static_cast<int>(oldResidues.size()); i++) {
         const auto& oldRes = oldResidues[i];
-        if (!oldRes.active) {
-            System::log(LogLevel::DEBUG, "Skipping inactive residue ", i);
-            continue;
-        }
-
         std::string oldResNameUpper = newState.residueTypes.getTypeName(oldRes.type);
-        // 这里我们之前已经在上面转把 name 转成大写并 getOrAddType 了
-        // 故此处 oldResNameUpper 应该已经是大写，但为了保持调试输出一致，还是留着
-        System::log(LogLevel::DEBUG, "Processing residue ", i, 
-                   ": upper='", oldResNameUpper, "'");
 
-        bool found = false;
+        System::log(LogLevel::DEBUG, "Processing residue ", i, 
+                   ": upper='", oldResNameUpper, "'",
+                   oldRes.active ? " (active)" : " (inactive)");
+
+        bool matched = false;
         for (size_t m = 0; m < molecules.size(); m++) {
             System::log(LogLevel::DEBUG, "   Comparing with insertionResNames[", m, "]: '", 
                        insertionResNames[m], "'");
@@ -373,11 +368,11 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
                     atoms.push_back(oldResidueAtoms[i][j]);
                 }
                 matchingAtoms[m].push_back(atoms);
-                found = true;
+                matched = true;
                 break;
             }
         }
-        if (!found) {
+        if (!matched) {
             System::log(LogLevel::DEBUG, "Residue ", i, " did not match any movement molecule; adding to others.");
             otherResidues.push_back(oldRes);
             std::vector<pygcmc::model::MCAtom> atoms;
@@ -443,61 +438,70 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
             newResIdx++;
         }
 
-        // 添加不活跃拷贝
-        const auto& molRes = molInfo.molecular->residues[0];
-        const auto& molAtoms = molRes->get_atoms();
-        const auto& topRes = molInfo.molecular->topology_residues[0];  // 获取第一个残基的 topology
-        int atomsPerResidue = static_cast<int>(molAtoms.size());
-        
-        for (int c = 0; c < molInfo.maxCopies; c++) {
-            pygcmc::model::MCResidue newRes;
-            newRes.atomStart = newAtomStart;
-            newRes.atomCount = atomsPerResidue;
-            newRes.active = false;
-            newRes.fixed  = false;
-            // 新分子的 residue type 索引
-            std::string rawName = molRes->get_resname();
-            std::string nameTrimmed = trim(rawName);
-            std::string resName = nameTrimmed;
-            std::transform(
-                resName.begin(), resName.end(), resName.begin(),
-                [](unsigned char c){ return std::toupper(c); }
-            );
-            newRes.type = newState.residueTypes.getOrAddType(resName);
-
-            // 新分子的 atom type 索引
-            for (size_t i = 0; i < molAtoms.size(); i++) {
-                const auto& molAtom = molAtoms[i];
-                const auto& topAtom = molInfo.molecular->topology_atoms[topRes.atoms[i]];
-                
-                pygcmc::model::MCAtom mcAtom;
-                mcAtom.x = molAtom->get_x();
-                mcAtom.y = molAtom->get_y();
-                mcAtom.z = molAtom->get_z();
-                mcAtom.charge = topAtom.charge;  // 使用 topology 中的电荷
-                mcAtom.type = newState.atomTypes.getOrAddType(topAtom.type);  // 使用 topology 中的类型
-                newState.atoms.push_back(mcAtom);
-            }
-            newAtomStart += atomsPerResidue;
-            newState.residues.push_back(newRes);
-            newResIdx++;
-        }
-
         // 检查这个类型是否已经存在于 movement residues 中
         bool typeExists = false;
         std::string resName = insertionResNames[m];
-        for (const auto& existing : newState.movementResidues) {
-            if (existing.resName == resName) {
+        int existingIndex = -1;
+        for (size_t i = 0; i < newState.movementResidues.size(); i++) {
+            if (newState.movementResidues[i].resName == resName) {
                 typeExists = true;
+                existingIndex = i;
                 break;
             }
         }
 
-        if (!typeExists) {
-            // 只有当这个类型不存在时，才添加新的 movement residue 信息
+        if (typeExists) {
+            // 如果类型已存在，我们需要保持原有的非活跃拷贝
+            const auto& existingInfo = newState.movementResidues[existingIndex];
+            // 从原有的非活跃拷贝开始位置继续添加
+            startIndexForThisGroup = existingInfo.startIndex;
+            activeCountForThisGroup = existingInfo.activeCount;
+            // 不需要添加新的 movement residue info
+        } else {
+            // 添加不活跃拷贝
+            const auto& molRes = molInfo.molecular->residues[0];
+            const auto& molAtoms = molRes->get_atoms();
+            const auto& topRes = molInfo.molecular->topology_residues[0];
+            int atomsPerResidue = static_cast<int>(molAtoms.size());
+            
+            for (int c = 0; c < molInfo.maxCopies; c++) {
+                pygcmc::model::MCResidue newRes;
+                newRes.atomStart = newAtomStart;
+                newRes.atomCount = atomsPerResidue;
+                newRes.active = false;
+                newRes.fixed  = false;
+                // 新分子的 residue type 索引
+                std::string rawName = molRes->get_resname();
+                std::string nameTrimmed = trim(rawName);
+                std::string resName = nameTrimmed;
+                std::transform(
+                    resName.begin(), resName.end(), resName.begin(),
+                    [](unsigned char c){ return std::toupper(c); }
+                );
+                newRes.type = newState.residueTypes.getOrAddType(resName);
+
+                // 新分子的 atom type 索引
+                for (size_t i = 0; i < molAtoms.size(); i++) {
+                    const auto& molAtom = molAtoms[i];
+                    const auto& topAtom = molInfo.molecular->topology_atoms[topRes.atoms[i]];
+                    
+                    pygcmc::model::MCAtom mcAtom;
+                    mcAtom.x = molAtom->get_x();
+                    mcAtom.y = molAtom->get_y();
+                    mcAtom.z = molAtom->get_z();
+                    mcAtom.charge = topAtom.charge;
+                    mcAtom.type = newState.atomTypes.getOrAddType(topAtom.type);
+                    newState.atoms.push_back(mcAtom);
+                }
+                newAtomStart += atomsPerResidue;
+                newState.residues.push_back(newRes);
+                newResIdx++;
+            }
+
+            // 添加新的 movement residue 信息
             pygcmc::model::MCMovementResidueInfo moveInfo;
-            moveInfo.startIndex = startIndexForThisGroup;  // 使用记录的起始位置
-            moveInfo.activeCount = activeCountForThisGroup;  // 使用记录的活跃数量
+            moveInfo.startIndex = startIndexForThisGroup;
+            moveInfo.activeCount = activeCountForThisGroup;
             moveInfo.totalCount = activeCountForThisGroup + molInfo.maxCopies;
             moveInfo.resName = resName;
             newState.movementResidues.push_back(moveInfo);
