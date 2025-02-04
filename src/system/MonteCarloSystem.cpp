@@ -239,23 +239,33 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
     // 取出运动分子对应的残基名称（先 trim，再转大写）
     std::vector<std::string> insertionResNames;
     insertionResNames.reserve(molecules.size());
+    
+    // 预先将所有新的分子类型添加到类型映射中
     for (const auto& info : molecules) {
         if (!info.molecular) {
             throw std::runtime_error("Movement molecular data is null");
         }
-        std::string rawName = info.molecular->residues[0]->get_resname();
+        // 添加残基类型
+        const auto& molRes = info.molecular->residues[0];
+        std::string rawName = molRes->get_resname();
         std::string nameTrimmed = trim(rawName);
         std::string resName = nameTrimmed;
         std::transform(resName.begin(), resName.end(), resName.begin(),
-                       [](unsigned char c){ return std::toupper(c); });
+                      [](unsigned char c){ return std::toupper(c); });
         insertionResNames.push_back(resName);
-        std::cerr << "[DEBUG] Expected movement residue name for molecule: '" << resName << "'" << std::endl;
         
-        // 打印该分子的所有残基类型
-        std::cerr << "[DEBUG EXTRA] Movement molecule residues:" << std::endl;
-        for (const auto& res : info.molecular->residues) {
-            std::cerr << "  resname='" << res->get_resname() << "'" << std::endl;
+        // 确保残基类型已添加到映射中
+        newState.residueTypes.getOrAddType(resName);
+        
+        // 添加原子类型
+        const auto& molAtoms = molRes->get_atoms();
+        for (const auto& molAtom : molAtoms) {
+            typeMaps.getOrAddType(molAtom->get_type());
         }
+        
+        std::cerr << "[DEBUG] Expected movement residue name for molecule: '" << resName << "'" << std::endl;
+        std::cerr << "[DEBUG EXTRA] Movement molecule residues:" << std::endl;
+        std::cerr << "  resname='" << resName << "'" << std::endl;
     }
 
     // 第一遍：遍历基础系统中所有活跃残基，将它们按照类型分组
