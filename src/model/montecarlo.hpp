@@ -93,14 +93,32 @@ struct MCInfo {
 // ------------------------------------------------------------
 // 2) ForceField: Force field parameters
 // ------------------------------------------------------------
+/**
+ * @brief Force field parameters for Monte Carlo simulation
+ * 
+ * The Lennard-Jones potential is defined as:
+ * V(Lennard-Jones) = Eps,i,j[(Rmin,i,j/ri,j)**12 - 2(Rmin,i,j/ri,j)**6]
+ * where:
+ * - Eps,i,j = sqrt(eps,i * eps,j)
+ * - Rmin,i,j = Rmin/2,i + Rmin/2,j
+ * 
+ * In this implementation:
+ * - ljEps stores epsilon values in kcal/mole
+ * - ljSigma stores sigma values in Angstroms, where sigma = Rmin/2 * 2^(1/6)
+ *   (sigma is the distance at which the potential is zero)
+ * 
+ * The parameters are stored in 1D arrays of size (numMovementTypes * maxTypes),
+ * where the value for movement type i and any type j is accessed as:
+ * index = i * maxTypes + j
+ */
 struct MCForceField {
     int maxTypes;  ///< Actual number of atom types in use
     int numMovementTypes;  ///< Number of movement atom types
 
     // Lennard-Jones parameters for interactions between movement atoms and all atoms
     // Size: numMovementTypes * maxTypes
-    std::vector<float> ljSigma;   ///< sigma[i * maxTypes + j] gives sigma for movement type i and any type j
-    std::vector<float> ljEps;     ///< eps[i * maxTypes + j] gives epsilon for movement type i and any type j
+    std::vector<float> ljSigma;   ///< sigma[i * maxTypes + j] gives sigma (Å) for movement type i and any type j
+    std::vector<float> ljEps;     ///< eps[i * maxTypes + j] gives epsilon (kcal/mole) for movement type i and any type j
 };
 
 // ------------------------------------------------------------
@@ -121,16 +139,17 @@ struct MCResidue {
     int   atomCount;    ///< Number of atoms
     bool  active;       ///< Whether in use
     bool  fixed;        ///< Whether fixed  
-    float center[3];    ///< Geometric center
+    float center[3];    ///< Geometric center (Å): arithmetic mean of all atom coordinates in this residue
 
-    float energy_vdw;   ///< Lennard-Jones energy
-    float energy_elec;  ///< Coulomb energy 
+    // Energy components
+    float energy_vdw;   ///< Lennard-Jones energy (kcal/mole)
+    float energy_elec;  ///< Coulomb energy (kcal/mole)
         
     // GCMC parameters
-    float concentration; ///< Target concentration
-    float chemPot;      ///< Chemical potential
-    int   type;         ///< Residue type
-    float radius;       ///< Approximate radius
+    float concentration; ///< Target concentration (mol/L)
+    float chemPot;      ///< Chemical potential (kcal/mole)
+    int   type;         ///< Residue type index in residueTypes map
+    float radius;       ///< Approximate radius (Å)
 };
 
 // ------------------------------------------------------------

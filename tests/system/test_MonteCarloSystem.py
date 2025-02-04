@@ -205,18 +205,17 @@ def test_residue_atom_properties():
             ), f"Atom {atom_idx} in residue {res_idx} has incorrect coordinates"
         
         # Calculate and verify center of mass
-        expected_com = [0.0, 0.0, 0.0]
+        com = [0.0, 0.0, 0.0]
         for atom_idx in range(mc_res.atom_count):
             atom = state.atoms[mc_res.atom_start + atom_idx]
-            expected_com[0] += atom.x
-            expected_com[1] += atom.y
-            expected_com[2] += atom.z
+            com[0] += atom.x
+            com[1] += atom.y
+            com[2] += atom.z
         
         if mc_res.atom_count > 0:
-            expected_com = [x / mc_res.atom_count for x in expected_com]
+            com = [x / mc_res.atom_count for x in com]
         
-        assert_arrays_almost_equal(mc_res.center, expected_com), \
-            f"Residue {res_idx} has incorrect geometric center"
+        assert_arrays_almost_equal(mc_res.center, com)
         
         # Update expected_atom_start for next residue
         expected_atom_start += mc_res.atom_count
@@ -844,6 +843,20 @@ def test_add_three_movement_molecules():
             assert res.fixed == False, f"{name} residue at {i} should not be fixed"
             assert state.residueTypes.get_type_name(res.type) == name, \
                    f"Residue at {i} should be {name}"
+            
+            # Verify geometric center calculation
+            expected_center = [0.0, 0.0, 0.0]
+            for j in range(res.atom_count):
+                atom = state.atoms[res.atom_start + j]
+                expected_center[0] += atom.x
+                expected_center[1] += atom.y
+                expected_center[2] += atom.z
+            
+            if res.atom_count > 0:
+                expected_center = [x / res.atom_count for x in expected_center]
+            
+            assert_arrays_almost_equal(res.center, expected_center), \
+                   f"Residue {i} ({name}) has incorrect geometric center: expected {expected_center}, got {res.center}"
         
         # Check inactive residues
         for i in range(info.startIndex + info.activeCount, 
@@ -853,6 +866,20 @@ def test_add_three_movement_molecules():
             assert res.fixed == False, f"{name} residue at {i} should not be fixed"
             assert state.residueTypes.get_type_name(res.type) == name, \
                    f"Residue at {i} should be {name}"
+            
+            # Verify geometric center calculation for inactive residues too
+            expected_center = [0.0, 0.0, 0.0]
+            for j in range(res.atom_count):
+                atom = state.atoms[res.atom_start + j]
+                expected_center[0] += atom.x
+                expected_center[1] += atom.y
+                expected_center[2] += atom.z
+            
+            if res.atom_count > 0:
+                expected_center = [x / res.atom_count for x in expected_center]
+            
+            assert_arrays_almost_equal(res.center, expected_center), \
+                   f"Inactive residue {i} ({name}) has incorrect geometric center: expected {expected_center}, got {res.center}"
     
     verify_residue_range(sol_info, sol_name)
     verify_residue_range(imia_info, imia_name)
