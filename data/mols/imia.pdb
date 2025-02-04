@@ -1,5 +1,5 @@
 REMARK  FOO                                                                           
-REMARK   DATE:    10/ 1/13     18: 4:39      CREATED BY USER: prabhu                  
+REMARK   DATE:    10/ 1/13     18: 4:39      CREATED BY USER: prabhu   tests/data/mols/imia.pdb               
 ATOM      1  CG  IMIA    1      -0.052  -0.082   0.076  1.00  0.00      IMIA
 ATOM      2  HG  IMIA    1      -0.739  -0.913   0.001  1.00  0.00      IMIA
 ATOM      3  CD2 IMIA    1       1.306  -0.083   0.169  1.00  0.00      IMIA

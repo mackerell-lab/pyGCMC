@@ -450,8 +450,22 @@ def test_add_movement_molecules():
                     if info.resName == molecular.residues[0].get_resname()), None)
         assert info is not None, f"Should have {name} movement info"
         
-        # Count actual residues in base system
-        count = sum(1 for i in range(initial_res_count) 
+        # 打印residue type map的内容
+        print("\nResidue Type Map contents:")
+        for i in range(len(state.residueTypes.atom_types)):
+            print(f"Index {i}: {state.residueTypes.get_type_name(i)}")
+        
+        # 打印要查找的residue type
+        print(f"\nLooking for residue type: {info.resName}")
+        
+        # 检查每个residue的type index和对应的name
+        print("\nChecking all residues:")
+        for i in range(initial_res_count):
+            res = state.residues[i]
+            type_name = state.residueTypes.get_type_name(res.type)
+            print(f"Residue {i}: type_index={res.type}, type_name={type_name}")
+        
+        count = sum(1 for i in range(initial_res_count)
                    if state.residueTypes.get_type_name(state.residues[i].type) == info.resName)
         
         assert info.activeCount == count, \
