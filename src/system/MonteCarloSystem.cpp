@@ -1,10 +1,14 @@
 #include "MonteCarloSystem.hpp"
+#include "system/system.hpp"
 #include <cmath>
 #include <algorithm>
 #include <cctype>
 
 namespace pygcmc {
 namespace system {
+
+using System = pygcmc::system::System;
+using LogLevel = pygcmc::system::LogLevel;
 
 void MonteCarloSystem::addInitialResidues(const model::MCResidue* resVec, int resCount,
                                          const model::MCAtom* atomVec, int atomCount) {
@@ -224,8 +228,6 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
         if (!info.molecular) {
             throw std::runtime_error("Movement molecular data is null");
         }
-        // 只拿第一个 residue，当做"分子模板"
-        // （你的代码里默认一个 MovementMolecularInfo 里只放了一个 residue）
         const auto& molRes = info.molecular->residues[0];
         std::string rawName = molRes->get_resname();
         std::string nameTrimmed = trim(rawName);
@@ -242,18 +244,15 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
             preAtomTypes.getOrAddType(molAtom->get_type());
         }
 
-        std::cerr << "[DEBUG] Expected movement residue name for molecule: '"
-                  << resName << "'" << std::endl;
-        std::cerr << "[DEBUG EXTRA] Movement molecule residues:" << std::endl;
-        std::cerr << "  resname='" << resName << "'" << std::endl;
+        System::log(LogLevel::DEBUG, "Expected movement residue name for molecule: '", 
+                   resName, "'");
+        System::log(LogLevel::DEBUG, "Movement molecule residues:\n  resname='", 
+                   resName, "'");
     }
 
     // --------------------------------------------------------------------
     // [2] 再把原系统（state）里已经有的 residue types 和 atom types 放进来
     // --------------------------------------------------------------------
-    // 注意：这里使用的是 state.residueTypes.atomTypes 来遍历残基类型字符串数组
-    //       你原本的命名里 "residueTypes.atomTypes" 存储的是 residue mapping。
-    //       如果工程里还有别的存储逻辑，请根据实际情况调整。
     for (const auto& t : state.residueTypes.atomTypes) {
         preResidueTypes.getOrAddType(t);
     }
@@ -280,17 +279,17 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
     oldResidueAtoms.reserve(state.activeResidueCount);
 
     // 调试输出：先打印旧系统的 residue type 及残基
-    std::cerr << "\n[DEBUG EXTRA] Original (old) active Residues before reindex:" << std::endl;
+    System::log(LogLevel::DEBUG, "\nOriginal (old) active Residues before reindex:");
     for (int i = 0; i < state.activeResidueCount; i++) {
         const auto& oldRes = state.residues[i];
         if (!oldRes.active) {
-            std::cerr << "[DEBUG EXTRA]   Residue " << i << " inactive, skipping.\n";
+            System::log(LogLevel::DEBUG, "  Residue ", i, " inactive, skipping.");
             continue;
         }
         std::string oldTypeName = state.residueTypes.getTypeName(oldRes.type);
-        std::cerr << "[DEBUG EXTRA]   Residue " << i
-                  << " old type index " << oldRes.type
-                  << " => type name '" << oldTypeName << "'\n";
+        System::log(LogLevel::DEBUG, "  Residue ", i,
+                   " old type index ", oldRes.type,
+                   " => type name '", oldTypeName, "'");
     }
 
     for (int i = 0; i < state.activeResidueCount; i++) {
@@ -360,22 +359,22 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
     for (int i = 0; i < static_cast<int>(oldResidues.size()); i++) {
         const auto& oldRes = oldResidues[i];
         if (!oldRes.active) {
-            std::cerr << "[DEBUG EXTRA] Skipping inactive residue " << i << std::endl;
+            System::log(LogLevel::DEBUG, "Skipping inactive residue ", i);
             continue;
         }
 
         std::string oldResNameUpper = newState.residueTypes.getTypeName(oldRes.type);
         // 这里我们之前已经在上面转把 name 转成大写并 getOrAddType 了
         // 故此处 oldResNameUpper 应该已经是大写，但为了保持调试输出一致，还是留着
-        std::cerr << "[DEBUG EXTRA] Processing residue " << i 
-                  << ": upper='" << oldResNameUpper << "'" << std::endl;
+        System::log(LogLevel::DEBUG, "Processing residue ", i, 
+                   ": upper='", oldResNameUpper, "'");
 
         bool found = false;
         for (size_t m = 0; m < molecules.size(); m++) {
-            std::cerr << "[DEBUG]   Comparing with insertionResNames[" << m << "]: '" 
-                      << insertionResNames[m] << "'" << std::endl;
+            System::log(LogLevel::DEBUG, "   Comparing with insertionResNames[", m, "]: '", 
+                       insertionResNames[m], "'");
             if (oldResNameUpper == insertionResNames[m]) {
-                std::cerr << "[DEBUG]   Residue " << i << " matched movement molecule index " << m << std::endl;
+                System::log(LogLevel::DEBUG, "   Residue ", i, " matched movement molecule index ", m);
                 matchingResidues[m].push_back(oldRes);
                 std::vector<pygcmc::model::MCAtom> atoms;
                 atoms.reserve(oldRes.atomCount);
@@ -388,7 +387,7 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
             }
         }
         if (!found) {
-            std::cerr << "[DEBUG] Residue " << i << " did not match any movement molecule; adding to others." << std::endl;
+            System::log(LogLevel::DEBUG, "Residue ", i, " did not match any movement molecule; adding to others.");
             otherResidues.push_back(oldRes);
             std::vector<pygcmc::model::MCAtom> atoms;
             atoms.reserve(oldRes.atomCount);
@@ -401,8 +400,9 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
 
     // 输出每种运动分子匹配到的残基数目
     for (size_t m = 0; m < molecules.size(); m++) {
-        std::cerr << "[DEBUG] Movement molecule index " << m << " ('" << insertionResNames[m]
-                  << "') collected " << matchingResidues[m].size() << " active residues." << std::endl;
+        System::log(LogLevel::DEBUG, "Movement molecule index ", m, " ('", 
+                   insertionResNames[m], "') collected ", 
+                   matchingResidues[m].size(), " active residues.");
     }
 
     // --------------------------------------------------------------------
@@ -510,29 +510,29 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
     // --------------------------------------------------------------------
     // [7] 打印最终映射和残基信息
     // --------------------------------------------------------------------
-    std::cerr << "\n[DEBUG EXTRA] Final ResidueTypes mapping (newState):" << std::endl;
+    System::log(LogLevel::DEBUG, "\nFinal ResidueTypes mapping (newState):");
     for (size_t idx = 0; idx < newState.residueTypes.atomTypes.size(); idx++) {
-        std::cerr << "  index=" << idx 
-                  << " name='" << newState.residueTypes.atomTypes[idx] << "'" << std::endl;
+        System::log(LogLevel::DEBUG, "  index=", idx, 
+                   " name='", newState.residueTypes.atomTypes[idx], "'");
     }
 
-    std::cerr << "\n[DEBUG EXTRA] Final Residues (newState):" << std::endl;
+    System::log(LogLevel::DEBUG, "\nFinal Residues (newState):");
     for (int i = 0; i < newState.activeResidueCount; i++) {
         const pygcmc::model::MCResidue& newRes = newState.residues[i];
         std::string typeName = newState.residueTypes.getTypeName(newRes.type);
-        std::cerr << "  Residue " << i
-                  << " has type index " << newRes.type
-                  << " => type name '" << typeName << "'"
-                  << (newRes.active ? " (ACTIVE)" : " (INACTIVE)") << std::endl;
+        System::log(LogLevel::DEBUG, "  Residue ", i,
+                   " has type index ", newRes.type,
+                   " => type name '", typeName, "'",
+                   (newRes.active ? " (ACTIVE)" : " (INACTIVE)"));
     }
 
     // 打印 movement residues 信息
-    std::cerr << "\n[DEBUG EXTRA] Movement Residues Info (newState):" << std::endl;
+    System::log(LogLevel::DEBUG, "\nMovement Residues Info (newState):");
     for (const auto& info : newState.movementResidues) {
-        std::cerr << "  Movement group: name='" << info.resName
-                  << "' start=" << info.startIndex
-                  << " active=" << info.activeCount
-                  << " total=" << info.totalCount << std::endl;
+        System::log(LogLevel::DEBUG, "  Movement group: name='", info.resName,
+                   "' start=", info.startIndex,
+                   " active=", info.activeCount,
+                   " total=", info.totalCount);
     }
 
     // 最后，将 newState 替换进当前对象
