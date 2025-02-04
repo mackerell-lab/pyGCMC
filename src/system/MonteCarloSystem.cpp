@@ -1,5 +1,7 @@
 #include "MonteCarloSystem.hpp"
 #include <cmath>
+#include <algorithm>
+#include <cctype>
 
 namespace pygcmc {
 namespace system {
@@ -197,96 +199,181 @@ void MonteCarloSystem::initializeFromMolecular(const std::shared_ptr<model::Mole
                       tempAtoms.data(), tempAtoms.size());
 }
 
+static inline std::string trim(const std::string &s) {
+    auto start = s.begin();
+    while (start != s.end() && std::isspace(*start)) {
+        ++start;
+    }
+    auto end = s.end();
+    while (end != start && std::isspace(*(end - 1))) {
+        --end;
+    }
+    return std::string(start, end);
+}
 void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularInfo>& molecules) {
-    // 对每种移动分子类型进行处理
-    for (const auto& molInfo : molecules) {
-        const auto& molecular = molInfo.molecular;
-        if (!molecular) {
+    // 打印初始状态的 residue types 映射
+    std::cerr << "\n[DEBUG EXTRA] Initial ResidueTypes mapping:" << std::endl;
+    for (size_t idx = 0; idx < state.residueTypes.atomTypes.size(); idx++) {
+        std::cerr << "  index=" << idx 
+                  << " name='" << state.residueTypes.atomTypes[idx] << "'" << std::endl;
+    }
+
+    // 打印初始状态的所有残基及其类型
+    std::cerr << "\n[DEBUG EXTRA] Initial Residues:" << std::endl;
+    for (int i = 0; i < state.activeResidueCount; i++) {
+        const model::MCResidue& oldRes = state.residues[i];
+        std::string typeName = state.residueTypes.getTypeName(oldRes.type);
+        std::cerr << "  Residue " << i
+                  << " has type index " << oldRes.type
+                  << " => type name '" << typeName << "'"
+                  << (oldRes.active ? " (ACTIVE)" : " (INACTIVE)") << std::endl;
+    }
+
+    // 创建一个新的状态来构造最终结果
+    model::MCState newState;
+    newState.info = state.info;
+    newState.forcefield = state.forcefield;
+    newState.atomTypes = state.atomTypes;
+    newState.residueTypes = state.residueTypes;
+
+    // 取出运动分子对应的残基名称（先 trim，再转大写）
+    std::vector<std::string> insertionResNames;
+    insertionResNames.reserve(molecules.size());
+    for (const auto& info : molecules) {
+        if (!info.molecular) {
             throw std::runtime_error("Movement molecular data is null");
         }
+        std::string rawName = info.molecular->residues[0]->get_resname();
+        std::string nameTrimmed = trim(rawName);
+        std::string resName = nameTrimmed;
+        std::transform(resName.begin(), resName.end(), resName.begin(),
+                       [](unsigned char c){ return std::toupper(c); });
+        insertionResNames.push_back(resName);
+        std::cerr << "[DEBUG] Expected movement residue name for molecule: '" << resName << "'" << std::endl;
         
-        // 1. 获取当前分子类型的残基名称
-        std::string resName = molecular->residues[0]->get_resname();
-        
-        // 2. 用于临时保存匹配残基及其原子数据
-        std::vector<model::MCResidue> movedResidues;
-        std::vector<std::vector<model::MCAtom>> movedResidueAtoms;  // 每个残基对应一组原子
-        
-        // 3. 扫描当前活性残基（索引 [0, activeResidueCount)），
-        //    对于匹配 resName 的残基，采用 swap‐and‐pop 方式删除，并保存其数据
-        int i = 0;
-        while (i < state.activeResidueCount) {
-            if (state.residueTypes.getTypeName(state.residues[i].type) == resName) {
-                // 保存当前匹配残基及对应的原子数据
-                model::MCResidue removedRes = state.residues[i];
-                std::vector<model::MCAtom> savedAtoms;
-                savedAtoms.reserve(removedRes.atomCount);
-                for (int j = 0; j < removedRes.atomCount; ++j) {
-                    savedAtoms.push_back(state.atoms[removedRes.atomStart + j]);
+        // 打印该分子的所有残基类型
+        std::cerr << "[DEBUG EXTRA] Movement molecule residues:" << std::endl;
+        for (const auto& res : info.molecular->residues) {
+            std::cerr << "  resname='" << res->get_resname() << "'" << std::endl;
+        }
+    }
+
+    // 第一遍：遍历基础系统中所有活跃残基，将它们按照类型分组
+    std::vector<std::vector<model::MCResidue>> matchingResidues(molecules.size());
+    std::vector<std::vector<std::vector<model::MCAtom>>> matchingAtoms(molecules.size());
+    std::vector<model::MCResidue> otherResidues;
+    std::vector<std::vector<model::MCAtom>> otherAtoms;
+
+    for (int i = 0; i < state.activeResidueCount; i++) {
+        const model::MCResidue& oldRes = state.residues[i];
+        if (!oldRes.active) {
+            std::cerr << "[DEBUG EXTRA] Skipping inactive residue " << i << std::endl;
+            continue;
+        }
+
+        std::string rawOldResName = state.residueTypes.getTypeName(oldRes.type);
+        std::string oldResNameTrimmed = trim(rawOldResName);
+        std::string oldResNameUpper = oldResNameTrimmed;
+        std::transform(oldResNameUpper.begin(), oldResNameUpper.end(), oldResNameUpper.begin(),
+                       [](unsigned char c){ return std::toupper(c); });
+
+        std::cerr << "[DEBUG EXTRA] Processing residue " << i 
+                  << ": raw='" << rawOldResName 
+                  << "', trimmed='" << oldResNameTrimmed
+                  << "', upper='" << oldResNameUpper << "'" << std::endl;
+
+        // 判断该残基是否匹配任一运动分子
+        bool found = false;
+        for (size_t m = 0; m < molecules.size(); m++) {
+            std::cerr << "[DEBUG]   Comparing with insertionResNames[" << m << "]: '" 
+                      << insertionResNames[m] << "'" << std::endl;
+            if (oldResNameUpper == insertionResNames[m]) {
+                std::cerr << "[DEBUG]   Residue " << i << " matched movement molecule index " << m << std::endl;
+                matchingResidues[m].push_back(oldRes);
+                std::vector<model::MCAtom> atoms;
+                atoms.reserve(oldRes.atomCount);
+                for (int j = 0; j < oldRes.atomCount; j++) {
+                    atoms.push_back(state.atoms[oldRes.atomStart + j]);
                 }
-                movedResidues.push_back(removedRes);
-                movedResidueAtoms.push_back(savedAtoms);
-                
-                // 采用 swap-and-pop 删除残基 i
-                int atomStart = state.residues[i].atomStart;
-                int atomCount = state.residues[i].atomCount;
-                // 将活性原子区域末尾的这块原子拷贝填入当前位置（如果不在目标位置的话）
-                if (atomStart != state.activeAtomCount - atomCount) {
-                    for (int j = 0; j < atomCount; ++j) {
-                        state.atoms[atomStart + j] = state.atoms[state.activeAtomCount - atomCount + j];
-                    }
-                }
-                state.activeAtomCount -= atomCount;
-                
-                // 如果当前残基不是最后一个，则用最后一个残基来填补空缺
-                if (i != state.activeResidueCount - 1) {
-                    state.residues[i] = state.residues[state.activeResidueCount - 1];
-                    // 注意：交换过来的残基原来的 atomStart 已经指向正确的原子块
-                }
-                state.activeResidueCount--;
-                // 删除后当前 i 处新来的残基还未检测，因此不自增 i
-            } else {
-                ++i;
+                matchingAtoms[m].push_back(atoms);
+                found = true;
+                break;
             }
         }
-        
-        // 4. 将之前保存的匹配残基追加到活性区域末尾
-        //    此处，新残基将依次占用从 state.activeAtomCount 开始的原子区域
-        int newResStart = state.activeResidueCount;
-        int newAtomStart = state.activeAtomCount;
-        for (size_t idx = 0; idx < movedResidues.size(); ++idx) {
-            model::MCResidue movedRes = movedResidues[idx];
-            // 重设原子起始位置
-            movedRes.atomStart = newAtomStart;
-            // 为保险起见，确保该残基原子数与模板一致
-            movedRes.atomCount = static_cast<int>(molecular->residues[0]->get_atoms().size());
-            movedRes.fixed = false; // 标记为可移动
-            movedRes.active = true; // 保持活性
-            
-            // 将保存的原子数据复制到新区域
-            const std::vector<model::MCAtom>& savedAtoms = movedResidueAtoms[idx];
-            for (int j = 0; j < movedRes.atomCount; ++j) {
-                state.atoms[newAtomStart + j] = savedAtoms[j];
+        if (!found) {
+            std::cerr << "[DEBUG] Residue " << i << " did not match any movement molecule; adding to others." << std::endl;
+            otherResidues.push_back(oldRes);
+            std::vector<model::MCAtom> atoms;
+            atoms.reserve(oldRes.atomCount);
+            for (int j = 0; j < oldRes.atomCount; j++) {
+                atoms.push_back(state.atoms[oldRes.atomStart + j]);
             }
-            newAtomStart += movedRes.atomCount;
-            state.residues[newResStart++] = movedRes;
+            otherAtoms.push_back(atoms);
         }
-        
-        // 5. 添加新的非活动副本（用于后续 gcmc 插入）
-        int inactiveStart = newResStart;  // 非活动副本开始的索引
-        int numInactiveToAdd = molInfo.maxCopies;  // 要添加的非活动副本数量
-        const auto& molRes = molecular->residues[0];
+    }
+
+    // 输出每种运动分子匹配到的残基数目
+    for (size_t m = 0; m < molecules.size(); m++) {
+        std::cerr << "[DEBUG] Movement molecule index " << m << " ('" << insertionResNames[m]
+                  << "') collected " << matchingResidues[m].size() << " active residues." << std::endl;
+    }
+
+    // 第二遍：构造新状态
+    newState.atoms.reserve(state.atoms.size());
+    newState.residues.reserve(state.residues.size());
+    
+    int newAtomStart = 0;
+    int newResIdx = 0;
+
+    // 先添加未匹配的（非运动）残基
+    for (size_t i = 0; i < otherResidues.size(); i++) {
+        model::MCResidue newRes = otherResidues[i];
+        newRes.atomStart = newAtomStart;
+        const auto& atoms = otherAtoms[i];
+        for (const auto& atom : atoms) {
+            newState.atoms.push_back(atom);
+        }
+        newAtomStart += static_cast<int>(atoms.size());
+        newState.residues.push_back(newRes);
+        newResIdx++;
+    }
+
+    // 再处理每种运动分子类型
+    for (size_t m = 0; m < molecules.size(); m++) {
+        const auto& molInfo = molecules[m];
+        const auto& matches = matchingResidues[m];
+        const auto& matchAtoms = matchingAtoms[m];
+
+        int startIndexForThisGroup = newResIdx;
+        int activeCountForThisGroup = static_cast<int>(matches.size());
+
+        // 添加从基础系统中匹配到的活跃残基
+        for (size_t r = 0; r < matches.size(); r++) {
+            model::MCResidue newRes = matches[r];
+            newRes.atomStart = newAtomStart;
+            newRes.active = true;
+            newRes.fixed = false;
+            const auto& atoms = matchAtoms[r];
+            for (const auto& atom : atoms) {
+                newState.atoms.push_back(atom);
+            }
+            newAtomStart += static_cast<int>(atoms.size());
+            newState.residues.push_back(newRes);
+            newResIdx++;
+        }
+
+        // 添加不活跃的拷贝
+        const auto& molRes = molInfo.molecular->residues[0];
         const auto& molAtoms = molRes->get_atoms();
         int atomsPerResidue = static_cast<int>(molAtoms.size());
-        for (int i = 0; i < numInactiveToAdd; ++i) {
+        
+        for (int c = 0; c < molInfo.maxCopies; c++) {
             model::MCResidue newRes;
             newRes.atomStart = newAtomStart;
             newRes.atomCount = atomsPerResidue;
-            newRes.active = false;  // 非活动标记
-            newRes.fixed = false;   // 非固定状态（后续可移动）
-            newRes.type = state.residueTypes.getOrAddType(resName);
-            
-            // 复制每个原子
+            newRes.active = false;
+            newRes.fixed = false;
+            newRes.type = state.residueTypes.getOrAddType(molRes->get_resname());
             for (const auto& molAtom : molAtoms) {
                 model::MCAtom mcAtom;
                 mcAtom.x = molAtom->get_x();
@@ -294,25 +381,56 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
                 mcAtom.z = molAtom->get_z();
                 mcAtom.charge = molAtom->get_charge();
                 mcAtom.type = typeMaps.getOrAddType(molAtom->get_type());
-                state.atoms[newAtomStart++] = mcAtom;
+                newState.atoms.push_back(mcAtom);
             }
-            
-            state.residues[newResStart++] = newRes;
+            newAtomStart += atomsPerResidue;
+            newState.residues.push_back(newRes);
+            newResIdx++;
         }
-        
-        // 6. 记录这种类型移动分子的相关信息
+
         model::MCMovementResidueInfo moveInfo;
-        // movedResidues.size() 为原来匹配的活性残基数
-        moveInfo.startIndex = inactiveStart - movedResidues.size();  // 活性残基的起始位置
-        moveInfo.activeCount = static_cast<int>(movedResidues.size());
-        moveInfo.totalCount = moveInfo.activeCount + numInactiveToAdd;  // 总计：原活性 + 新 inactive 副本
-        moveInfo.resName = resName;
-        state.movementResidues.push_back(moveInfo);
-        
-        // 7. 更新全局计数器，保证后续操作中 active 残基与原子区域连续
-        state.activeAtomCount = newAtomStart;
-        state.activeResidueCount = newResStart;
+        moveInfo.startIndex = startIndexForThisGroup;
+        moveInfo.activeCount = activeCountForThisGroup;
+        moveInfo.totalCount = activeCountForThisGroup + molInfo.maxCopies;
+        moveInfo.resName = molRes->get_resname();
+        newState.movementResidues.push_back(moveInfo);
     }
+
+    newState.activeResidueCount = newResIdx;
+    newState.activeAtomCount = newAtomStart;
+
+    if (newState.activeResidueCount > newState.info.maxResidues ||
+        newState.activeAtomCount > newState.info.maxAtoms) {
+        throw std::runtime_error("New state exceeds max capacity after movement insertion");
+    }
+
+    // 在构建新状态后，打印最终的映射和残基信息
+    std::cerr << "\n[DEBUG EXTRA] Final ResidueTypes mapping:" << std::endl;
+    for (size_t idx = 0; idx < newState.residueTypes.atomTypes.size(); idx++) {
+        std::cerr << "  index=" << idx 
+                  << " name='" << newState.residueTypes.atomTypes[idx] << "'" << std::endl;
+    }
+
+    std::cerr << "\n[DEBUG EXTRA] Final Residues:" << std::endl;
+    for (int i = 0; i < newState.activeResidueCount; i++) {
+        const model::MCResidue& newRes = newState.residues[i];
+        std::string typeName = newState.residueTypes.getTypeName(newRes.type);
+        std::cerr << "  Residue " << i
+                  << " has type index " << newRes.type
+                  << " => type name '" << typeName << "'"
+                  << (newRes.active ? " (ACTIVE)" : " (INACTIVE)") << std::endl;
+    }
+
+    // 打印 movement residues 信息
+    std::cerr << "\n[DEBUG EXTRA] Movement Residues Info:" << std::endl;
+    for (const auto& info : newState.movementResidues) {
+        std::cerr << "  Movement group: name='" << info.resName
+                  << "' start=" << info.startIndex
+                  << " active=" << info.activeCount
+                  << " total=" << info.totalCount << std::endl;
+    }
+
+    state = std::move(newState);
 }
 
 

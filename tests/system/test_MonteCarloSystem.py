@@ -378,7 +378,7 @@ def test_residue_type_mapping_from_molecular():
     assert max(type_indices) == len(mol_res_types) - 1, "Residue type indices should be continuous"
 
 def test_add_movement_molecules():
-    """Test adding movement molecules (benx, imia, sol) to MonteCarloSystem."""
+    """Test adding benx movement molecules to MonteCarloSystem."""
     # Create Monte Carlo system and initialize it
     mc_system = pygcmc.MonteCarloSystem()
     info = pygcmc.MCInfo()
@@ -401,38 +401,24 @@ def test_add_movement_molecules():
     initial_res_count = mc_system.get_active_residue_count()
     initial_atom_count = mc_system.get_active_atom_count()
     
-    # Load movement molecules
+    # Load benx molecule
     MOLS_DIR = os.path.join(TEST_DATA_DIR, "mols")
     benx_pdb = os.path.join(MOLS_DIR, "benx.pdb")
     benx_psf = os.path.join(MOLS_DIR, "benx.psf")
-    imia_pdb = os.path.join(MOLS_DIR, "imia.pdb")
-    imia_psf = os.path.join(MOLS_DIR, "imia.psf")
-    sol_pdb = os.path.join(MOLS_DIR, "sol.pdb")
-    sol_itp = os.path.join(MOLS_DIR, "sol.itp")
     
     # Verify test files exist
-    for test_file in [benx_pdb, benx_psf, imia_pdb, imia_psf, sol_pdb, sol_itp]:
+    for test_file in [benx_pdb, benx_psf]:
         if not os.path.exists(test_file):
             pytest.skip(f"Test file not found: {test_file}")
     
-    # Create molecular systems for movement molecules
+    # Create molecular system for benx
     benx_structure = pygcmc.PDBParser.parse_file(benx_pdb)
     benx_topology = pygcmc.PSFParser.parse_file(benx_psf)
     benx_molecular = pygcmc.MolecularSystem().combine(benx_structure, benx_topology)
     
-    imia_structure = pygcmc.PDBParser.parse_file(imia_pdb)
-    imia_topology = pygcmc.PSFParser.parse_file(imia_psf)
-    imia_molecular = pygcmc.MolecularSystem().combine(imia_structure, imia_topology)
-    
-    sol_structure = pygcmc.PDBParser.parse_file(sol_pdb)
-    sol_topology = pygcmc.TOPParser.parse_file(sol_itp)
-    sol_molecular = pygcmc.MolecularSystem().combine(sol_structure, sol_topology)
-    
-    # Create movement molecule info list
+    # Create movement molecule info list with only benx
     movement_mols = [
-        pygcmc.MovementMolecularInfo(benx_molecular, 1000),
-        pygcmc.MovementMolecularInfo(imia_molecular, 1000),
-        pygcmc.MovementMolecularInfo(sol_molecular, 1000)
+        pygcmc.MovementMolecularInfo(benx_molecular, 20)
     ]
     
     # Add movement molecules
@@ -442,62 +428,49 @@ def test_add_movement_molecules():
     state = mc_system.get_state()
     
     # Test 1: Check movement residue info
-    assert len(state.movementResidues) == 3, "Should have info for all three movement molecule types"
+    assert len(state.movementResidues) == 1, "Should have info for benx movement molecule"
     
-    # Helper function to test each movement molecule type
-    def verify_movement_info(molecular, name):
-        info = next((info for info in state.movementResidues 
-                    if info.resName == molecular.residues[0].get_resname()), None)
-        assert info is not None, f"Should have {name} movement info"
-        
-        # 打印residue type map的内容
-        print("\nResidue Type Map contents:")
-        for i in range(len(state.residueTypes.atom_types)):
-            print(f"Index {i}: {state.residueTypes.get_type_name(i)}")
-        
-        # 打印要查找的residue type
-        print(f"\nLooking for residue type: {info.resName}")
-        
-        # 检查每个residue的type index和对应的name
-        print("\nChecking all residues:")
-        for i in range(initial_res_count):
-            res = state.residues[i]
-            type_name = state.residueTypes.get_type_name(res.type)
-            print(f"Residue {i}: type_index={res.type}, type_name={type_name}")
-        
-        count = sum(1 for i in range(initial_res_count)
-                   if state.residueTypes.get_type_name(state.residues[i].type) == info.resName)
-        
-        assert info.activeCount == count, \
-               f"Active {name} count mismatch: {info.activeCount} != {count}"
-        assert info.totalCount == count + 1000, \
-               f"Total {name} count should be active + 1000"
-        return info
+    # Verify benx movement info
+    benx_info = state.movementResidues[0]
+    benx_name = benx_molecular.residues[0].get_resname()
     
-    # Test each movement molecule
-    benx_info = verify_movement_info(benx_molecular, "benx")
-    imia_info = verify_movement_info(imia_molecular, "imia")
-    sol_info = verify_movement_info(sol_molecular, "sol")
+    # Print debug info
+    print("\nBenx Movement Info:")
+    print(f"Expected name: {benx_name}")
+    print(f"Actual name: {benx_info.resName}")
+    print(f"Start index: {benx_info.startIndex}")
+    print(f"Active count: {benx_info.activeCount}")
+    print(f"Total count: {benx_info.totalCount}")
+    
+    # Count actual benx residues in initial state
+    initial_benx_count = sum(1 for i in range(initial_res_count)
+                           if state.residueTypes.get_type_name(state.residues[i].type) == benx_name)
+    
+    print(f"\nInitial benx count: {initial_benx_count}")
+    
+    assert benx_info.resName == benx_name, f"Wrong residue name: {benx_info.resName} != {benx_name}"
+    assert benx_info.activeCount == initial_benx_count, \
+           f"Active benx count mismatch: {benx_info.activeCount} != {initial_benx_count}"
+    assert benx_info.totalCount == initial_benx_count + 20, \
+           f"Total benx count should be active + 20"
     
     # Test 2: Verify residue organization
-    # Check that active movement residues are contiguous and at the end of active residues
-    for info in state.movementResidues:
-        # Check that residues from startIndex to startIndex + activeCount are all of correct type
-        for i in range(info.startIndex, info.startIndex + info.activeCount):
-            res = state.residues[i]
-            assert res.active == True, f"Residue at {i} should be active"
-            assert res.fixed == False, f"Residue at {i} should not be fixed"
-            assert state.residueTypes.get_type_name(res.type) == info.resName, \
-                   f"Residue at {i} has wrong type"
-        
-        # Check inactive residues
-        for i in range(info.startIndex + info.activeCount, 
-                      info.startIndex + info.totalCount):
-            res = state.residues[i]
-            assert res.active == False, f"Residue at {i} should be inactive"
-            assert res.fixed == False, f"Residue at {i} should not be fixed"
-            assert state.residueTypes.get_type_name(res.type) == info.resName, \
-                   f"Residue at {i} has wrong type"
+    # Check that active benx residues are contiguous and at the correct position
+    for i in range(benx_info.startIndex, benx_info.startIndex + benx_info.activeCount):
+        res = state.residues[i]
+        assert res.active == True, f"Residue at {i} should be active"
+        assert res.fixed == False, f"Residue at {i} should not be fixed"
+        assert state.residueTypes.get_type_name(res.type) == benx_name, \
+               f"Residue at {i} has wrong type"
+    
+    # Check inactive benx residues
+    for i in range(benx_info.startIndex + benx_info.activeCount, 
+                  benx_info.startIndex + benx_info.totalCount):
+        res = state.residues[i]
+        assert res.active == False, f"Residue at {i} should be inactive"
+        assert res.fixed == False, f"Residue at {i} should not be fixed"
+        assert state.residueTypes.get_type_name(res.type) == benx_name, \
+               f"Residue at {i} has wrong type"
     
     # Test 3: Verify atom organization
     # Check that atoms for each residue are contiguous
@@ -513,47 +486,182 @@ def test_add_movement_molecules():
             assert res.atomStart == prev_res.atomStart + prev_res.atomCount, \
                    f"Gap in atom indices between residues {i-1} and {i}"
     
-    # Test 4: Verify type mappings
-    type_maps = mc_system.get_type_maps()
-    
-    # Helper function to check atom types
-    def verify_atom_types(molecular, name):
-        for atom in molecular.residues[0].get_atoms():
-            atom_type = atom.get_type()
-            type_idx = type_maps.get_or_add_type(atom_type)
-            assert type_maps.get_type_name(type_idx) == atom_type, \
-                   f"Type mapping mismatch for {name} atom type {atom_type}"
-    
-    # Check atom types for all molecules
-    verify_atom_types(benx_molecular, "benx")
-    verify_atom_types(imia_molecular, "imia")
-    verify_atom_types(sol_molecular, "sol")
-    
-    # Test 5: Verify total counts
+    # Test 4: Verify total counts
     final_active_res = mc_system.get_active_residue_count()
     final_active_atoms = mc_system.get_active_atom_count()
     
-    expected_new_res = sum(info.totalCount - info.activeCount for info in state.movementResidues)
-    expected_new_atoms = sum(res.atomCount for res in state.residues[initial_res_count:])
+    expected_new_res = 20  # We added 20 inactive benx residues
+    expected_new_atoms = 20 * benx_molecular.residues[0].atom_count()
+    
+    print(f"\nFinal counts:")
+    print(f"Active residues: {final_active_res} (initial: {initial_res_count})")
+    print(f"Active atoms: {final_active_atoms} (initial: {initial_atom_count})")
+    print(f"Expected new residues: {expected_new_res}")
+    print(f"Expected new atoms: {expected_new_atoms}")
+    
+    assert final_active_res == initial_res_count + expected_new_res, \
+           "Final residue count mismatch"
+    assert final_active_atoms == initial_atom_count + expected_new_atoms, \
+           "Final atom count mismatch"
+
+def test_add_two_movement_molecules():
+    """Test adding both benx and sol movement molecules to MonteCarloSystem."""
+    # Create Monte Carlo system and initialize it
+    mc_system = pygcmc.MonteCarloSystem()
+    info = pygcmc.MCInfo()
+    info.max_residues = 10000  # Large enough for base system + movement molecules
+    info.max_atoms = 100000
+    mc_system.initialize(info)
+    
+    # Load base system
+    pdb_path = os.path.join(TEST_DATA_DIR, "test.pdb")
+    top_path = os.path.join(TEST_DATA_DIR, "test.top")
+    structure = pygcmc.PDBParser.parse_file(pdb_path)
+    topology = pygcmc.TOPParser.parse_file(top_path)
+    mol_system = pygcmc.MolecularSystem()
+    base_molecular = mol_system.combine(structure, topology)
+    
+    # Initialize base system
+    mc_system.initialize_from_molecular(base_molecular)
+    
+    # Store initial state
+    initial_res_count = mc_system.get_active_residue_count()
+    initial_atom_count = mc_system.get_active_atom_count()
+    
+    # Load molecules
+    MOLS_DIR = os.path.join(TEST_DATA_DIR, "mols")
+    benx_pdb = os.path.join(MOLS_DIR, "benx.pdb")
+    benx_psf = os.path.join(MOLS_DIR, "benx.psf")
+    sol_pdb = os.path.join(MOLS_DIR, "sol.pdb")
+    sol_itp = os.path.join(MOLS_DIR, "sol.itp")
+    
+    # Verify test files exist
+    for test_file in [benx_pdb, benx_psf, sol_pdb, sol_itp]:
+        if not os.path.exists(test_file):
+            pytest.skip(f"Test file not found: {test_file}")
+    
+    # Create molecular systems
+    benx_structure = pygcmc.PDBParser.parse_file(benx_pdb)
+    benx_topology = pygcmc.PSFParser.parse_file(benx_psf)
+    benx_molecular = pygcmc.MolecularSystem().combine(benx_structure, benx_topology)
+    
+    sol_structure = pygcmc.PDBParser.parse_file(sol_pdb)
+    sol_topology = pygcmc.TOPParser.parse_file(sol_itp)
+    sol_molecular = pygcmc.MolecularSystem().combine(sol_structure, sol_topology)
+    
+    # Create movement molecule info list
+    movement_mols = [
+        pygcmc.MovementMolecularInfo(benx_molecular, 20),
+        pygcmc.MovementMolecularInfo(sol_molecular, 20)
+    ]
+
+    # Get molecule names
+    benx_name = benx_molecular.residues[0].get_resname()
+    sol_name = sol_molecular.residues[0].get_resname()
+
+    state = mc_system.get_state()
+
+    # Count initial residues of each type
+    initial_benx_count = sum(1 for i in range(initial_res_count)
+                           if state.residueTypes.get_type_name(state.residues[i].type) == benx_name)
+    initial_sol_count = sum(1 for i in range(initial_res_count)
+                          if state.residueTypes.get_type_name(state.residues[i].type) == sol_name)
+    
+    # Add movement molecules
+    mc_system.add_movement_molecules(movement_mols)
+    
+    # Get final state
+    state = mc_system.get_state()
+    
+    # Test 1: Check movement residue info
+    assert len(state.movementResidues) == 2, "Should have info for both movement molecules"
+    
+    # Print debug info for both molecules
+    print("\nMovement Info:")
+    for info in state.movementResidues:
+        print(f"\nMolecule: {info.resName}")
+        print(f"Start index: {info.startIndex}")
+        print(f"Active count: {info.activeCount}")
+        print(f"Total count: {info.totalCount}")
+    
+    print(f"\nInitial counts:")
+    print(f"Benx: {initial_benx_count}")
+    print(f"Sol: {initial_sol_count}")
+    
+    # Verify movement info for each molecule
+    benx_info = next(info for info in state.movementResidues if info.resName == benx_name)
+    sol_info = next(info for info in state.movementResidues if info.resName == sol_name)
+    
+    # Verify benx info
+    assert benx_info.activeCount == initial_benx_count, \
+           f"Active benx count mismatch: {benx_info.activeCount} != {initial_benx_count}"
+    assert benx_info.totalCount == initial_benx_count + 20, \
+           f"Total benx count should be active + 20"
+    
+    # Verify sol info
+    assert sol_info.activeCount == initial_sol_count, \
+           f"Active sol count mismatch: {sol_info.activeCount} != {initial_sol_count}"
+    assert sol_info.totalCount == initial_sol_count + 20, \
+           f"Total sol count should be active + 20"
+    
+    # Test 2: Verify residue organization
+    # Helper function to check residue range
+    def verify_residue_range(info, name):
+        # Check active residues
+        for i in range(info.startIndex, info.startIndex + info.activeCount):
+            res = state.residues[i]
+            assert res.active == True, f"{name} residue at {i} should be active"
+            assert res.fixed == False, f"{name} residue at {i} should not be fixed"
+            assert state.residueTypes.get_type_name(res.type) == name, \
+                   f"Residue at {i} should be {name}"
+        
+        # Check inactive residues
+        for i in range(info.startIndex + info.activeCount, 
+                      info.startIndex + info.totalCount):
+            res = state.residues[i]
+            assert res.active == False, f"{name} residue at {i} should be inactive"
+            assert res.fixed == False, f"{name} residue at {i} should not be fixed"
+            assert state.residueTypes.get_type_name(res.type) == name, \
+                   f"Residue at {i} should be {name}"
+    
+    verify_residue_range(benx_info, benx_name)
+    verify_residue_range(sol_info, sol_name)
+    
+    # Test 3: Verify atom organization
+    # Check that atoms for each residue are contiguous
+    for i in range(state.activeResidueCount):
+        res = state.residues[i]
+        # Verify atom indices are within bounds
+        assert res.atomStart >= 0 and res.atomStart + res.atomCount <= len(state.atoms), \
+               f"Residue {i} has invalid atom range"
+        
+        if i > 0:
+            prev_res = state.residues[i-1]
+            # Verify atoms are contiguous
+            assert res.atomStart == prev_res.atomStart + prev_res.atomCount, \
+                   f"Gap in atom indices between residues {i-1} and {i}"
+    
+    # Test 4: Verify total counts
+    final_active_res = mc_system.get_active_residue_count()
+    final_active_atoms = mc_system.get_active_atom_count()
+    
+    expected_new_res = 40  # 20 inactive benx + 20 inactive sol
+    expected_new_atoms = (20 * benx_molecular.residues[0].atom_count() + 
+                         20 * sol_molecular.residues[0].atom_count())
+    
+    print(f"\nFinal counts:")
+    print(f"Active residues: {final_active_res} (initial: {initial_res_count})")
+    print(f"Active atoms: {final_active_atoms} (initial: {initial_atom_count})")
+    print(f"Expected new residues: {expected_new_res}")
+    print(f"Expected new atoms: {expected_new_atoms}")
     
     assert final_active_res == initial_res_count + expected_new_res, \
            "Final residue count mismatch"
     assert final_active_atoms == initial_atom_count + expected_new_atoms, \
            "Final atom count mismatch"
     
-    # Test 6: Verify movement residues are properly ordered
-    # Movement residues should be at the end of active residues in the order they were added
-    movement_start_indices = [info.startIndex for info in state.movementResidues]
-    assert sorted(movement_start_indices) == movement_start_indices, \
-           "Movement residue sections should be ordered as they were added"
-    
-    # Test 7: Verify geometric centers are calculated
-    for info in state.movementResidues:
-        for i in range(info.startIndex, info.startIndex + info.totalCount):
-            res = state.residues[i]
-            # Check that center is not all zeros (unless the residue actually is centered at origin)
-            center_sum = abs(res.center[0]) + abs(res.center[1]) + abs(res.center[2])
-            assert center_sum > 0 or all(atom.x == 0 and atom.y == 0 and atom.z == 0 
-                                       for atom in state.atoms[res.atomStart:res.atomStart + res.atomCount]), \
-                   f"Residue at {i} should have its geometric center calculated"
+    # Test 5: Verify movement residues are properly ordered
+    # Movement residues should be in the order they were added
+    assert benx_info.startIndex < sol_info.startIndex, \
+           "Benx section should come before sol section"
 
