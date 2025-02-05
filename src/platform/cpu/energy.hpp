@@ -13,18 +13,17 @@ namespace cpu {
  *        considering only active movement molecules and all other active molecules.
  *
  * This implementation uses a simplified approach: 
- * - It assumes the distance r = 1.0 for all pairs (i.e. no distance dependence).
- * - It neglects periodic boundary conditions.
- * - For a pair of residues, the Lennard-Jones interaction is computed using the forcefield parameters:
- *      V = eps * [ (Rmin / r)^12  - 2 * (Rmin / r)^6 ]
- *   where:
- *      - eps is obtained from ljEps using index = moveType * maxTypes + residueType
- *      - For simplicity, we assume Rmin = sigma
+ * - It computes actual distances between atoms
+ * - For each atom pair, computes both vdw and electrostatic energies:
+ *   - vdw: V = eps * [(sigma/r)^12 - 2*(sigma/r)^6]
+ *   - elec: V = q1*q2/r
+ * - Accumulates energies into each residue's energy_vdw and energy_elec parameters
  * 
  * @param state The current MC state containing residues and force field parameters.
- * @return The computed nonbonded energy.
+ *              The residues' energy parameters will be modified.
+ * @return The total energy (sum of all residue energies divided by 2).
  */
-float computeNaiveNonbondedEnergy(const model::MCState& state);
+float computeNaiveNonbondedEnergy(model::MCState& state);
 
 } // namespace cpu
 } // namespace platform

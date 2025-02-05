@@ -33,8 +33,9 @@ public:
         return platform_->computeTotalEnergy();
     }
 
-    // Compute naive nonbonded energy (fixed r=1.0, no PBC) between active movement residues and all other active residues
-    static float computeNaiveNonbondedEnergy(const model::MCState& state);
+    // Compute naive nonbonded energy between active movement residues and all other active residues
+    // Note: This function modifies the energy_vdw and energy_elec parameters of residues in the state
+    static float computeNaiveNonbondedEnergy(model::MCState& state);
 
     // Finalize the simulation and (optionally) download final data
     void finalize() {

@@ -6,7 +6,7 @@
 namespace pygcmc {
 namespace simulation {
 
-float Simulation::computeNaiveNonbondedEnergy(const model::MCState& state) {
+float Simulation::computeNaiveNonbondedEnergy(model::MCState& state) {
     return platform::cpu::computeNaiveNonbondedEnergy(state);
 }
 
