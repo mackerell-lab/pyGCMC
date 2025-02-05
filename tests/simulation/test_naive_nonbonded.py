@@ -23,8 +23,11 @@ def test_attractive_interaction():
     state.forcefield.numMovementTypes = 1  # One movement type
     
     # Initialize force field parameters for attractive interaction
-    state.forcefield.ljEps = [1.0]    # eps = 1.0 for the interaction
-    state.forcefield.ljSigma = [1.0]  # sigma = 1.0 for the interaction
+    # For movement type 0:
+    #   - interaction with type 0: index = 0 * 2 + 0 = 0
+    #   - interaction with type 1: index = 0 * 2 + 1 = 1
+    state.forcefield.ljEps = [1.0, 1.0]    # eps = 1.0 for both interactions
+    state.forcefield.ljSigma = [1.0, 1.0]  # sigma = 1.0 for both interactions
     
     # 2. Set up residues
     movement_res = pygcmc.MCResidue()
