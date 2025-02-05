@@ -3,6 +3,7 @@
 #pragma once
 
 #include "../../model/montecarlo.hpp"
+#include "../platform.hpp"
 
 namespace pygcmc {
 namespace platform {
@@ -21,9 +22,8 @@ namespace cpu {
  * 
  * @param state The current MC state containing residues and force field parameters.
  *              The residues' energy parameters will be modified.
- * @return The total energy (sum of all residue energies divided by 2).
  */
-float computeNaiveNonbondedEnergy(model::MCState& state);
+void computeNaiveNonbondedEnergy(model::MCState& state);
 
 } // namespace cpu
 } // namespace platform

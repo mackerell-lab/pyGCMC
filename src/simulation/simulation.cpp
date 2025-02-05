@@ -7,7 +7,11 @@ namespace pygcmc {
 namespace simulation {
 
 float Simulation::computeNaiveNonbondedEnergy(model::MCState& state) {
-    return platform::cpu::computeNaiveNonbondedEnergy(state);
+    platform::cpu::computeNaiveNonbondedEnergy(state);
+    // Return the energy of the first movement residue
+    const auto& firstMovementInfo = state.movementResidues[0];
+    const auto& residue = state.residues[firstMovementInfo.startIndex];
+    return residue.energy_vdw + residue.energy_elec;
 }
 
 } // namespace simulation

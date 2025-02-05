@@ -1,15 +1,31 @@
 // src/platform/cpu/energy.cpp
 #include "energy.hpp"
 #include <cmath>
+#include <stdexcept>
+#include <sstream>
 
 namespace pygcmc {
 namespace platform {
 namespace cpu {
 
-float computeNaiveNonbondedEnergy(model::MCState& state) {
+// Debug flag to control output
+static bool debug_output = false;
+
+void computeNaiveNonbondedEnergy(model::MCState& state) {
     auto& residues = state.residues;
     const auto& forcefield = state.forcefield;
     const auto& atoms = state.atoms;
+
+    // Validate force field setup
+    size_t expected_size = static_cast<size_t>(forcefield.numMovementTypes) * 
+                          static_cast<size_t>(forcefield.maxTypes);
+    if (forcefield.ljEps.size() != expected_size) {
+        std::stringstream ss;
+        ss << "Force field parameters array size mismatch. Expected size "
+           << expected_size
+           << " (numMovementTypes * maxTypes), but got " << forcefield.ljEps.size();
+        throw std::runtime_error(ss.str());
+    }
 
     // Reset energies for all residues
     for (auto& residue : residues) {
@@ -19,24 +35,28 @@ float computeNaiveNonbondedEnergy(model::MCState& state) {
 
     // Iterate through all active movement molecules
     for (const auto& movementInfo : state.movementResidues) {
-        int start = movementInfo.startIndex;
-        int count = movementInfo.activeCount;
+        size_t start = static_cast<size_t>(movementInfo.startIndex);
+        size_t count = static_cast<size_t>(movementInfo.activeCount);
         
         // For each active movement residue
-        for (int i = start; i < start + count; ++i) {
+        for (size_t i = start; i < start + count; ++i) {
             if (!residues[i].active) continue;
             
             // For each atom in the movement residue
-            for (int atom_i = residues[i].atomStart; atom_i < residues[i].atomStart + residues[i].atomCount; ++atom_i) {
-                int moveType = atoms[atom_i].type;
+            for (size_t atom_i = static_cast<size_t>(residues[i].atomStart); 
+                 atom_i < static_cast<size_t>(residues[i].atomStart + residues[i].atomCount); 
+                 ++atom_i) {
+                size_t moveType = static_cast<size_t>(atoms[atom_i].type);
                 
                 // Compute interaction with atoms in all other active residues
                 for (size_t j = 0; j < residues.size(); ++j) {
-                    if (!residues[j].active || static_cast<int>(j) == i) continue;
+                    if (!residues[j].active || j == i) continue;
                     
                     // For each atom in the other residue
-                    for (int atom_j = residues[j].atomStart; atom_j < residues[j].atomStart + residues[j].atomCount; ++atom_j) {
-                        int resType = atoms[atom_j].type;
+                    for (size_t atom_j = static_cast<size_t>(residues[j].atomStart);
+                         atom_j < static_cast<size_t>(residues[j].atomStart + residues[j].atomCount);
+                         ++atom_j) {
+                        size_t resType = static_cast<size_t>(atoms[atom_j].type);
                         
                         // Calculate distance between atoms
                         float dx = atoms[atom_j].x - atoms[atom_i].x;
@@ -44,18 +64,24 @@ float computeNaiveNonbondedEnergy(model::MCState& state) {
                         float dz = atoms[atom_j].z - atoms[atom_i].z;
                         float r = std::sqrt(dx*dx + dy*dy + dz*dz);
                         
-                        size_t index = static_cast<size_t>(moveType * forcefield.maxTypes + resType);
-                        if (index >= forcefield.ljEps.size()) continue;  // Safety check
+                        size_t index = moveType * static_cast<size_t>(forcefield.maxTypes) + resType;
+                        if (index >= forcefield.ljEps.size()) {
+                            std::stringstream ss;
+                            ss << "Invalid force field parameter index " << index 
+                               << " for atom types " << moveType << " and " << resType
+                               << ". This indicates a mismatch between atom types and force field parameters.";
+                            throw std::runtime_error(ss.str());
+                        }
                         
                         float eps = forcefield.ljEps[index];
                         float sigma = forcefield.ljSigma[index];
                         
-                        // Debug output
-                        printf("Computing energy between atoms %d (type %d) and %d (type %d)\n", 
-                               atom_i, moveType, atom_j, resType);
-                        printf("Distance r = %f\n", r);
-                        printf("Using force field parameters: eps = %f, sigma = %f at index %zu\n", 
-                               eps, sigma, index);
+                        platform::log(LogLevel::DEBUG, 
+                            "Computing energy between atoms ", atom_i, " (type ", moveType, 
+                            ") and ", atom_j, " (type ", resType, ")\n",
+                            "Distance r = ", r, "\n",
+                            "Using force field parameters: eps = ", eps, 
+                            ", sigma = ", sigma, " at index ", index);
                         
                         // Calculate vdw energy: V = eps * [(sigma/r)^12 - 2*(sigma/r)^6]
                         float term6 = std::pow(sigma / r, 6);
@@ -67,10 +93,11 @@ float computeNaiveNonbondedEnergy(model::MCState& state) {
                         float q2 = atoms[atom_j].charge;
                         float elec_energy = q1 * q2 / r;  // Simple Coulomb
                         
-                        printf("Computed vdw energy: %f\n", vdw_energy);
-                        printf("Computed elec energy: %f\n", elec_energy);
+                        platform::log(LogLevel::DEBUG, 
+                            "Computed vdw energy: ", vdw_energy, "\n",
+                            "Computed elec energy: ", elec_energy);
                         
-                        // Add the energies to the movement residue
+                        // Add energies only to the movement residue
                         residues[i].energy_vdw += vdw_energy;
                         residues[i].energy_elec += elec_energy;
                     }
@@ -78,18 +105,14 @@ float computeNaiveNonbondedEnergy(model::MCState& state) {
             }
         }
     }
-    
-    // Calculate total energy (divide by 2 because each interaction is counted twice)
-    float totalEnergy = 0.0f;
-    for (const auto& residue : residues) {
-        totalEnergy += residue.energy_vdw + residue.energy_elec;
-    }
-    totalEnergy *= 0.5f;
-    
-    printf("Total energy: %f\n", totalEnergy);
-    return totalEnergy;
+}
+
+// Function to enable/disable debug output
+void setEnergyDebugOutput(bool enable) {
+    debug_output = enable;
 }
 
 } // namespace cpu
 } // namespace platform
 } // namespace pygcmc
+
