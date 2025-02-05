@@ -48,6 +48,7 @@ def test_attractive_interaction():
     atom2.type = 1  # Fixed type
     
     state.atoms = [atom1, atom2]
+    state.activeAtomCount = 2
     
     # 3. Set up residues
     movement_res = pygcmc.MCResidue()
@@ -63,6 +64,7 @@ def test_attractive_interaction():
     fixed_res.atomCount = 1
     
     state.residues = [movement_res, fixed_res]
+    state.activeResidueCount = 2
     
     # 4. Set up movement residue info
     movement_info = pygcmc.MCMovementResidueInfo()
@@ -73,7 +75,8 @@ def test_attractive_interaction():
     state.movementResidues = [movement_info]
     
     # Calculate energy
-    energy = pygcmc.computeNaiveNonbondedEnergy(state)
+    pygcmc.computeNaiveNonbondedEnergy(state)
+    energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
     
     # Check result
     assert abs(energy - (-1.0)) < 1e-6, "Expected attractive interaction energy of -1.0"
@@ -121,6 +124,7 @@ def test_three_movement_molecules():
         atoms.append(atom)
     
     state.atoms = atoms
+    state.activeAtomCount = 3
     
     # 3. Set up three movement residues
     residues = []
@@ -133,6 +137,7 @@ def test_three_movement_molecules():
         residues.append(res)
     
     state.residues = residues
+    state.activeResidueCount = 3
     
     # 4. Set up movement residue info
     movement_info = pygcmc.MCMovementResidueInfo()
@@ -143,7 +148,8 @@ def test_three_movement_molecules():
     state.movementResidues = [movement_info]
     
     # Calculate energy
-    energy = pygcmc.computeNaiveNonbondedEnergy(state)
+    pygcmc.computeNaiveNonbondedEnergy(state)
+    energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
     
     # Check result
     # First residue interacts with two other residues at unit distance

@@ -655,7 +655,9 @@ void init_model(py::module& m) {
         .def_readwrite("chemPot", &pygcmc::model::MCResidue::chemPot)
         .def_property_readonly("chem_pot", [](const pygcmc::model::MCResidue& r) { return r.chemPot; })
         .def_readwrite("type", &pygcmc::model::MCResidue::type)
-        .def_readwrite("radius", &pygcmc::model::MCResidue::radius);
+        .def_readwrite("radius", &pygcmc::model::MCResidue::radius)
+        .def_readwrite("energy_vdw", &pygcmc::model::MCResidue::energy_vdw)
+        .def_readwrite("energy_elec", &pygcmc::model::MCResidue::energy_elec);
 
     // Bind MCAtom
     py::class_<pygcmc::model::MCAtom>(m, "MCAtom")

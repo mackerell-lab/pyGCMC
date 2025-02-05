@@ -6,20 +6,18 @@
 namespace pygcmc {
 namespace simulation {
 
-float Simulation::computeNaiveNonbondedEnergy(model::MCState& state) {
-    log(LogLevel::DEBUG, "Computing naive nonbonded energy for first movement residue");
+void Simulation::computeNaiveNonbondedEnergy(model::MCState& state) {
+    log(LogLevel::DEBUG, "Computing naive nonbonded energy for movement residues");
     
     platform::cpu::computeNaiveNonbondedEnergy(state);
     
-    // Return the energy of the first movement residue
+    // Log the energy of the first movement residue
     const auto& firstMovementInfo = state.movementResidues[0];
     const auto& residue = state.residues[firstMovementInfo.startIndex];
-    float energy = residue.energy_vdw + residue.energy_elec;
     
     log(LogLevel::DEBUG, "First movement residue energy: vdw=", residue.energy_vdw, 
-        ", elec=", residue.energy_elec, ", total=", energy);
-    
-    return energy;
+        ", elec=", residue.energy_elec, 
+        ", total=", (residue.energy_vdw + residue.energy_elec));
 }
 
 } // namespace simulation

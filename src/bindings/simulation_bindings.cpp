@@ -10,7 +10,7 @@ namespace bindings {
 void init_simulation_bindings(py::module& m) {
     // Bind the naive nonbonded energy calculation function
     m.def("computeNaiveNonbondedEnergy", &simulation::Simulation::computeNaiveNonbondedEnergy,
-          "Compute naive nonbonded energy (fixed r=1.0, no PBC) between active movement residues and all other active residues",
+          "Compute and update nonbonded energies (vdw and elec) for all active movement residues",
           py::arg("state"));
 }
 
