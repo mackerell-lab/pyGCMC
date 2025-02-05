@@ -5,9 +5,51 @@
 #include "../platform/platform.hpp"
 #include "../model/montecarlo.hpp"
 #include <memory>
+#include <sstream>
+#include <iostream>
 
 namespace pygcmc {
 namespace simulation {
+
+// Log level enum
+enum class LogLevel {
+    DEBUG,
+    INFO,
+    WARNING,
+    ERROR
+};
+
+// Static logging control
+static bool verbose_ = false;
+static LogLevel log_level_ = LogLevel::INFO;
+
+// Logging functions
+inline void set_verbose(bool verbose) { verbose_ = verbose; }
+inline void set_log_level(LogLevel level) { log_level_ = level; }
+
+template<typename... Args>
+inline void log(LogLevel level, Args... args) {
+    if (!verbose_ || level < log_level_) return;
+    
+    std::stringstream ss;
+    (ss << ... << args);
+    
+    switch (level) {
+        case LogLevel::DEBUG:
+            std::cout << "[SIMULATION DEBUG] ";
+            break;
+        case LogLevel::INFO:
+            std::cout << "[SIMULATION INFO] ";
+            break;
+        case LogLevel::WARNING:
+            std::cout << "[SIMULATION WARNING] ";
+            break;
+        case LogLevel::ERROR:
+            std::cout << "[SIMULATION ERROR] ";
+            break;
+    }
+    std::cout << ss.str() << std::endl;
+}
 
 class Simulation {
 public:
