@@ -1,0 +1,1 @@
+// src/platform/cpu/energy.hpp
