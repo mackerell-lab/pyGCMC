@@ -10,6 +10,7 @@
 #include "model/forcefield.hpp"
 
 namespace pygcmc {
+namespace io {
 
 class PRMParser {
 public:
@@ -20,13 +21,13 @@ public:
     ~PRMParser() = default;
 
     // Static methods for parsing
-    static void parse_string(const std::string& content, ForceField& ff);
-    static void parse_file_to_forcefield(const std::string& filename, ForceField& ff);
-    static ForceField parse_file(const std::string& filename);
-    static ForceField parse_files(const std::vector<std::string>& filenames);
+    static void parse_string(const std::string& content, model::ForceField& ff);
+    static void parse_file_to_forcefield(const std::string& filename, model::ForceField& ff);
+    static model::ForceField parse_file(const std::string& filename);
+    static model::ForceField parse_files(const std::vector<std::string>& filenames);
 
     // Instance method for backward compatibility
-    void parse(const std::string& filename, ForceField& ff);
+    void parse(const std::string& filename, model::ForceField& ff);
 
 private:
     // Helper functions
@@ -43,16 +44,16 @@ private:
     bool isNBFixSection(const std::string& line);
     
     // Section parsing
-    void parseAtomsSection(std::istream& input, ForceField& ff);
-    void parseBondsSection(std::istream& input, ForceField& ff);
-    void parseAnglesSection(std::istream& input, ForceField& ff);
-    void parseDihedralsSection(std::istream& input, ForceField& ff);
-    void parseImproperSection(std::istream& input, ForceField& ff);
-    void parseNonbondedSection(std::istream& input, ForceField& ff, const std::string& firstLine);
-    void parseNBFixSection(std::istream& input, ForceField& ff);
+    void parseAtomsSection(std::istream& input, model::ForceField& ff);
+    void parseBondsSection(std::istream& input, model::ForceField& ff);
+    void parseAnglesSection(std::istream& input, model::ForceField& ff);
+    void parseDihedralsSection(std::istream& input, model::ForceField& ff);
+    void parseImproperSection(std::istream& input, model::ForceField& ff);
+    void parseNonbondedSection(std::istream& input, model::ForceField& ff, const std::string& firstLine);
+    void parseNBFixSection(std::istream& input, model::ForceField& ff);
     
     // Stream parsing
-    void parseStream(std::istream& input, ForceField& ff);
+    void parseStream(std::istream& input, model::ForceField& ff);
     
     // Line processing helpers
     std::string readContinuationLine(std::istream& input, std::string firstLine);
@@ -69,4 +70,5 @@ private:
         const std::string& type3, const std::string& type4) const;
 };
 
+} // namespace io
 } // namespace pygcmc

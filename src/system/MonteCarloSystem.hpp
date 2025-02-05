@@ -41,7 +41,7 @@ public:
         state.forcefield = ff;
     }
 
-    void initializeForceField(const ForceField& ff);
+    void initializeForceField(const model::ForceField& ff);
 
     void addInitialResidues(const model::MCResidue* resVec, int resCount,
                            const model::MCAtom* atomVec, int atomCount);

@@ -7,6 +7,7 @@
 #include <iostream>
 
 namespace pygcmc {
+namespace io {
 
 // Initialize static debug flag
 bool PRMParser::debug_output = false;
@@ -29,13 +30,13 @@ namespace {
     }
 }
 
-void PRMParser::parse_string(const std::string& content, ForceField& ff) {
+void PRMParser::parse_string(const std::string& content, model::ForceField& ff) {
     std::istringstream iss(content);
     PRMParser parser;
     parser.parseStream(iss, ff);
 }
 
-void PRMParser::parse_file_to_forcefield(const std::string& filename, ForceField& ff) {
+void PRMParser::parse_file_to_forcefield(const std::string& filename, model::ForceField& ff) {
     std::ifstream file(filename);
     if (!file.is_open()) {
         throw std::runtime_error("Failed to open parameter file: " + filename);
@@ -44,25 +45,25 @@ void PRMParser::parse_file_to_forcefield(const std::string& filename, ForceField
     parser.parseStream(file, ff);
 }
 
-ForceField PRMParser::parse_file(const std::string& filename) {
-    ForceField ff;
+model::ForceField PRMParser::parse_file(const std::string& filename) {
+    model::ForceField ff;
     parse_file_to_forcefield(filename, ff);
     return ff;
 }
 
-ForceField PRMParser::parse_files(const std::vector<std::string>& filenames) {
-    ForceField ff;
+model::ForceField PRMParser::parse_files(const std::vector<std::string>& filenames) {
+    model::ForceField ff;
     for (const auto& filename : filenames) {
         parse_file_to_forcefield(filename, ff);
     }
     return ff;
 }
 
-void PRMParser::parse(const std::string& filename, ForceField& ff) {
+void PRMParser::parse(const std::string& filename, model::ForceField& ff) {
     parse_file_to_forcefield(filename, ff);
 }
 
-void PRMParser::parseStream(std::istream& input, ForceField& ff) {
+void PRMParser::parseStream(std::istream& input, model::ForceField& ff) {
     std::string line;
     bool inSection = false;
     std::string currentSection;
@@ -287,7 +288,7 @@ bool PRMParser::isNBFixSection(const std::string& line) {
     return line.find("NBFIX") != std::string::npos;
 }
 
-void PRMParser::parseAtomsSection(std::istream& input, ForceField& ff) {
+void PRMParser::parseAtomsSection(std::istream& input, model::ForceField& ff) {
     std::string line;
     if (debug_output) std::cerr << "\n=== Entering ATOMS/MASS section parsing ===" << std::endl;
     
@@ -348,7 +349,7 @@ void PRMParser::parseAtomsSection(std::istream& input, ForceField& ff) {
     }
 }
 
-void PRMParser::parseBondsSection(std::istream& input, ForceField& ff) {
+void PRMParser::parseBondsSection(std::istream& input, model::ForceField& ff) {
     std::string line;
     if (debug_output) std::cerr << "\n=== Entering BONDS section parsing ===" << std::endl;
     
@@ -410,7 +411,7 @@ void PRMParser::parseBondsSection(std::istream& input, ForceField& ff) {
     }
 }
 
-void PRMParser::parseAnglesSection(std::istream& input, ForceField& ff) {
+void PRMParser::parseAnglesSection(std::istream& input, model::ForceField& ff) {
     std::string line;
     if (debug_output) std::cerr << "\n=== Entering ANGLES section parsing ===" << std::endl;
     
@@ -468,7 +469,7 @@ void PRMParser::parseAnglesSection(std::istream& input, ForceField& ff) {
     }
 }
 
-void PRMParser::parseDihedralsSection(std::istream& input, ForceField& ff) {
+void PRMParser::parseDihedralsSection(std::istream& input, model::ForceField& ff) {
     std::string line;
     while (std::getline(input, line)) {
         if (isCommentLine(line)) continue;
@@ -500,7 +501,7 @@ void PRMParser::parseDihedralsSection(std::istream& input, ForceField& ff) {
     }
 }
 
-void PRMParser::parseImproperSection(std::istream& input, ForceField& ff) {
+void PRMParser::parseImproperSection(std::istream& input, model::ForceField& ff) {
     std::string line;
     while (std::getline(input, line)) {
         if (isCommentLine(line)) continue;
@@ -536,7 +537,7 @@ void PRMParser::parseImproperSection(std::istream& input, ForceField& ff) {
     }
 }
 
-void PRMParser::parseNBFixSection(std::istream& input, ForceField& ff) {
+void PRMParser::parseNBFixSection(std::istream& input, model::ForceField& ff) {
     std::string line;
     while (std::getline(input, line)) {
         if (isCommentLine(line)) continue;
@@ -576,7 +577,7 @@ void PRMParser::parseNBFixSection(std::istream& input, ForceField& ff) {
     }
 }
 
-void PRMParser::parseNonbondedSection(std::istream& input, ForceField& ff, const std::string& firstLine) {
+void PRMParser::parseNonbondedSection(std::istream& input, model::ForceField& ff, const std::string& firstLine) {
     std::string line = firstLine;
     std::string fullLine = readContinuationLine(input, line);
     
@@ -601,7 +602,7 @@ void PRMParser::parseNonbondedSection(std::istream& input, ForceField& ff, const
         }
         
         // Process parameters
-        NonbondedParams& params = ff.get_nonbonded_params();
+        model::NonbondedParams& params = ff.get_nonbonded_params();
         for (size_t i = 0; i < tokens.size(); ++i) {
             if (debug_output) std::cerr << "Processing parameter token: [" << tokens[i] << "]" << std::endl;
             
@@ -742,5 +743,6 @@ std::tuple<std::string, std::string, std::string, std::string> PRMParser::make_t
     return std::make_tuple(type1, type2, type3, type4);
 }
 
+} // namespace io
 } // namespace pygcmc
 

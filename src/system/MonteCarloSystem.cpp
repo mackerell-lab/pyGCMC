@@ -568,7 +568,7 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
     state = std::move(newState);
 }
 
-void MonteCarloSystem::initializeForceField(const ForceField& ff) {
+void MonteCarloSystem::initializeForceField(const model::ForceField& ff) {
     const auto& atomTypes = state.atomTypes;
     const int numTypes = atomTypes.atomTypes.size();
     const auto& movementTypes = state.movementAtomTypes;

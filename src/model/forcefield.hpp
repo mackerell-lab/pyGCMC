@@ -13,6 +13,7 @@
 #include <set>
 
 namespace pygcmc {
+namespace model {
 
 // Forward declarations
 class ForceField;
@@ -350,6 +351,7 @@ private:
     NonbondedParams nonbonded_params_;
 };
 
+} // namespace model
 } // namespace pygcmc
 
 

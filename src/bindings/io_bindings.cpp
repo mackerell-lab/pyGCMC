@@ -63,23 +63,17 @@ void init_io(py::module& m) {
     io.attr("TOPParser") = top_parser;
 
     // Add PRMParser bindings
-    auto prm_parser = py::class_<PRMParser>(m, "PRMParser")
-        // Static methods
-        .def_static("parse_string", &PRMParser::parse_string,
-            "Parse parameter content from a string",
+    auto prm_parser = py::class_<io::PRMParser>(m, "PRMParser")
+        .def(py::init<>())
+        .def_static("parse_string", &io::PRMParser::parse_string,
             py::arg("content"), py::arg("ff"))
-        .def_static("parse_file", &PRMParser::parse_file,
-            "Parse parameter content from a file and return a new ForceField object",
+        .def_static("parse_file", &io::PRMParser::parse_file,
             py::arg("filename"))
-        .def_static("parse_files", &PRMParser::parse_files,
-            "Parse parameter content from multiple files and return a new ForceField object",
+        .def_static("parse_files", &io::PRMParser::parse_files,
             py::arg("filenames"))
-        .def_static("parse_file_to_forcefield", &PRMParser::parse_file_to_forcefield,
-            "Parse parameter content from a file into an existing ForceField object",
+        .def_static("parse_file_to_forcefield", &io::PRMParser::parse_file_to_forcefield,
             py::arg("filename"), py::arg("ff"))
-        // Instance methods
-        .def("parse", &PRMParser::parse,
-            "Parse parameter content from a file (instance method)",
+        .def("parse", &io::PRMParser::parse,
             py::arg("filename"), py::arg("ff"));
 
     m.attr("PRMParser") = prm_parser;  // Add to main module as well
