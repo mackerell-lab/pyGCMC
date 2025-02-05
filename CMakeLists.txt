@@ -39,6 +39,13 @@ add_subdirectory(src/system)      # Implemented
 # 5. Python bindings (depends on implemented modules)
 add_subdirectory(src/bindings)
 
+# 6. Platform (depends on model and forcefield)
+add_subdirectory(src/platform)
+
+# 7. Simulation (depends on system)
+add_subdirectory(src/simulation)
+
+
 # Optional: Enable testing
 option(BUILD_TESTING "Build tests" OFF)
 if(BUILD_TESTING)

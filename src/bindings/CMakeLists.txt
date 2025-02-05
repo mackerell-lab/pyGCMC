@@ -23,6 +23,7 @@ pybind11_add_module(pygcmc
     model_bindings.cpp
     io_bindings.cpp
     system_bindings.cpp
+    simulation_bindings.cpp
 )
 
 # Link against other libraries
@@ -31,6 +32,7 @@ target_link_libraries(pygcmc
         pygcmc_model
         pygcmc_io
         pygcmc_system
+        pygcmc_simulation
 )
 
 # Set output directory to build root
