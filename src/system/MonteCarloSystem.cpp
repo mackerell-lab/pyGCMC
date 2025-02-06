@@ -579,7 +579,7 @@ void MonteCarloSystem::initializeForceField(const model::ForceField& ff) {
     }
     
     // Initialize force field parameters
-    state.forcefield.maxTypes = numTypes;
+    state.forcefield.numTotalTypes = numTypes;
     state.forcefield.numMovementTypes = numMovementTypes;
     
     // If there are no movement types, we don't need to store any parameters

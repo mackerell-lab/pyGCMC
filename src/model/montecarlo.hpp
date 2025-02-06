@@ -100,17 +100,23 @@ struct MCInfo {
  * movement molecules and all other molecules in the system. Parameters are stored in
  * 1D arrays but represent a 2D matrix of interactions:
  *   - Rows: movement atom types (numMovementTypes)
- *   - Columns: all possible atom types in the system (maxTypes)
+ *   - Columns: all possible atom types in the system (numTotalTypes)
  * 
  * For a movement atom type i and any atom type j, parameters are accessed using:
- * index = i * maxTypes + j
+ *   index = i * numTotalTypes + j
  * 
- * The Lennard-Jones potential is defined as:
- *   V(r) = eps * [(sigma/r)^12 - 2*(sigma/r)^6]
+ * The Lennard-Jones potential is used in the form:
+ *   V(r) = 4 * eps * [ (sigma/r)^12 - (sigma/r)^6 ]
  * where:
  *   - eps: well depth (in kcal/mole), stored in ljEps
- *   - sigma: distance at which potential is zero (in Angstroms), stored in ljSigma
- *   - r: distance between atoms
+ *   - sigma: distance at which the potential is zero (in Angstroms), stored in ljSigma.
+ *   - r: distance between atoms.
+ * 
+ * These parameters are derived from a CHARMM-style force field that originally provides
+ * epsilon (in kcal/mole) and Rmin/2 (in Angstroms). A conversion is performed via:
+ *   sigma = (Rmin/2) / (2^(1/6))
+ * so that the potential written in the above form is equivalent to the CHARMM expression:
+ *   V(r) = eps * [ (Rmin/(r))^12 - 2*(Rmin/(r))^6 ].
  * 
  * Parameters are combined using Lorentz-Berthelot rules:
  *   - sigma: arithmetic mean (Lorentz)
@@ -118,15 +124,15 @@ struct MCInfo {
  *   - epsilon: geometric mean (Berthelot)
  *      eps_ij = sqrt(eps_i * eps_j)
  * 
- * For NBFIX pairs, specific eps values are used directly, but sigma still uses
- * arithmetic mean.
+ * For NBFIX pairs, specific epsilon values are used directly, but sigma is still
+ * combined using the arithmetic mean.
  */
 struct MCForceField {
-    int maxTypes;           ///< Total number of atom types in the system
+    int numTotalTypes;    ///< Total number of atom types in the system
     int numMovementTypes;   ///< Number of atom types that belong to movement molecules
 
     // Arrays store parameters for movement types interacting with all types
-    // Size: numMovementTypes * maxTypes
+    // Size: numMovementTypes * numTotalTypes
     std::vector<float> ljSigma;   ///< Combined sigma values [Å] for each type pair
     std::vector<float> ljEps;     ///< Combined epsilon values [kcal/mole] for each type pair
 };

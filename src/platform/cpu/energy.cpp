@@ -18,12 +18,12 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
 
     // Validate force field setup
     size_t expected_size = static_cast<size_t>(forcefield.numMovementTypes) * 
-                          static_cast<size_t>(forcefield.maxTypes);
+                          static_cast<size_t>(forcefield.numTotalTypes);
     if (forcefield.ljEps.size() != expected_size) {
         std::stringstream ss;
         ss << "Force field parameters array size mismatch. Expected size "
            << expected_size
-           << " (numMovementTypes * maxTypes), but got " << forcefield.ljEps.size();
+           << " (numMovementTypes * numTotalTypes), but got " << forcefield.ljEps.size();
         throw std::runtime_error(ss.str());
     }
 
@@ -64,7 +64,7 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
                         float dz = atoms[atom_j].z - atoms[atom_i].z;
                         float r = std::sqrt(dx*dx + dy*dy + dz*dz);
                         
-                        size_t index = moveType * static_cast<size_t>(forcefield.maxTypes) + resType;
+                        size_t index = moveType * static_cast<size_t>(forcefield.numTotalTypes) + resType;
                         if (index >= forcefield.ljEps.size()) {
                             std::stringstream ss;
                             ss << "Invalid force field parameter index " << index 

@@ -714,7 +714,10 @@ void init_model(py::module& m) {
     // Bind MCForceField
     py::class_<pygcmc::model::MCForceField>(m, "MCForceField")
         .def(py::init<>())
-        .def_readwrite("maxTypes", &pygcmc::model::MCForceField::maxTypes)
+        .def_readwrite("numTotalTypes", &pygcmc::model::MCForceField::numTotalTypes)
+        .def_property("maxTypes",
+            [](const pygcmc::model::MCForceField& ff) { return ff.numTotalTypes; },
+            [](pygcmc::model::MCForceField& ff, int value) { ff.numTotalTypes = value; })
         .def_readwrite("numMovementTypes", &pygcmc::model::MCForceField::numMovementTypes)
         .def_readwrite("ljSigma", &pygcmc::model::MCForceField::ljSigma)
         .def_readwrite("ljEps", &pygcmc::model::MCForceField::ljEps);
