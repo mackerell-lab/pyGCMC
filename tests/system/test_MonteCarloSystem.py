@@ -1354,16 +1354,16 @@ def test_initialize_force_field(molecular_system, charmm_ff):
     
     # Check force field parameters
     print("\nForce field parameters:")
-    print(f"maxTypes: {state.forcefield.maxTypes}")
+    print(f"numTotalTypes: {state.forcefield.numTotalTypes}")
     print(f"numMovementTypes: {state.forcefield.numMovementTypes}")
     print(f"ljSigma size: {len(state.forcefield.ljSigma)}")
     print(f"ljEps size: {len(state.forcefield.ljEps)}")
     
     # Basic assertions
-    assert state.forcefield.maxTypes == len(atom_types.atomTypes)
+    assert state.forcefield.numTotalTypes == len(atom_types.atomTypes)
     assert state.forcefield.numMovementTypes == state.numMovementAtomTypes
-    assert len(state.forcefield.ljSigma) == state.numMovementAtomTypes * state.forcefield.maxTypes
-    assert len(state.forcefield.ljEps) == state.numMovementAtomTypes * state.forcefield.maxTypes
+    assert len(state.forcefield.ljSigma) == state.numMovementAtomTypes * state.forcefield.numTotalTypes
+    assert len(state.forcefield.ljEps) == state.numMovementAtomTypes * state.forcefield.numTotalTypes
     
     # Check both NBFIX and combined LJ parameters
     print("\nChecking NBFIX and combined LJ parameters:")
@@ -1373,7 +1373,7 @@ def test_initialize_force_field(molecular_system, charmm_ff):
         sigma1 = lj1.rmin_half / math.pow(2.0, 1.0/6.0)
         
         for j, type2 in enumerate(atom_types.atomTypes):
-            idx = mi * state.forcefield.maxTypes + j
+            idx = mi * state.forcefield.numTotalTypes + j
             nbfix_result = charmm_ff.get_nbfix(type1, type2)
             
             if nbfix_result[1]:  # If NBFIX exists

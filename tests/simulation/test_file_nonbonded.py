@@ -652,9 +652,9 @@ def test_nbfix_parameters(charmm_ff):
     print("\nForce field parameters:")
     for i in range(state.forcefield.numMovementTypes):
         type_i = type_maps.get_type_name(state.movementAtomTypes[i])
-        for j in range(state.forcefield.maxTypes):
+        for j in range(state.forcefield.numTotalTypes):
             type_j = type_maps.get_type_name(j)
-            idx = i * state.forcefield.maxTypes + j
+            idx = i * state.forcefield.numTotalTypes + j
             eps = state.forcefield.ljEps[idx]
             sigma = state.forcefield.ljSigma[idx]
             
@@ -743,9 +743,9 @@ def test_combination_rules(charmm_ff):
         lj_i = charmm_ff.get_lj_params(type_i)
         sigma_i = lj_i.rmin_half / math.pow(2.0, 1.0/6.0)
         
-        for j in range(state.forcefield.maxTypes):
+        for j in range(state.forcefield.numTotalTypes):
             type_j = type_maps.get_type_name(j)
-            idx = i * state.forcefield.maxTypes + j
+            idx = i * state.forcefield.numTotalTypes + j
             
             # Skip if NBFIX exists
             if charmm_ff.get_nbfix(type_i, type_j)[1]:

@@ -20,7 +20,7 @@ def test_attractive_interaction():
     state = pygcmc.MCState()
     
     # 1. Set up force field
-    state.forcefield.maxTypes = 2  # Two types: movement and fixed
+    state.forcefield.numTotalTypes = 2  # Two types: movement and fixed
     state.forcefield.numMovementTypes = 1  # One movement type
     
     # Initialize force field parameters for attractive interaction
@@ -101,7 +101,7 @@ def test_three_movement_molecules():
     state = pygcmc.MCState()
     
     # 1. Set up force field
-    state.forcefield.maxTypes = 1  # Only one type (movement type 0)
+    state.forcefield.numTotalTypes = 1  # Only one type (movement type 0)
     state.forcefield.numMovementTypes = 1  # One movement type
     
     # Initialize force field parameters
@@ -174,7 +174,7 @@ def test_electrostatic_interaction():
     state = pygcmc.MCState()
     
     # 1. Set up force field (no vdw interaction)
-    state.forcefield.maxTypes = 2
+    state.forcefield.numTotalTypes = 2
     state.forcefield.numMovementTypes = 1
     state.forcefield.ljEps = [0.0, 0.0]    # eps = 0.0 to disable vdw
     state.forcefield.ljSigma = [1.0, 1.0]  # sigma doesn't matter when eps = 0
@@ -246,7 +246,7 @@ def test_repulsive_interaction():
     state = pygcmc.MCState()
     
     # 1. Set up force field
-    state.forcefield.maxTypes = 2
+    state.forcefield.numTotalTypes = 2
     state.forcefield.numMovementTypes = 1
     state.forcefield.ljEps = [1.0, 1.0]
     state.forcefield.ljSigma = [1.0, 1.0]
@@ -306,7 +306,7 @@ def test_invalid_forcefield_params():
     state = pygcmc.MCState()
     
     # Set up force field with incorrect parameter array size
-    state.forcefield.maxTypes = 2
+    state.forcefield.numTotalTypes = 2
     state.forcefield.numMovementTypes = 1
     state.forcefield.ljEps = [1.0]  # Should be size 2
     state.forcefield.ljSigma = [1.0, 1.0]
@@ -333,7 +333,7 @@ def test_inactive_residue():
     state = pygcmc.MCState()
     
     # 1. Set up force field
-    state.forcefield.maxTypes = 2
+    state.forcefield.numTotalTypes = 2
     state.forcefield.numMovementTypes = 1
     state.forcefield.ljEps = [1.0, 1.0]
     state.forcefield.ljSigma = [1.0, 1.0]
