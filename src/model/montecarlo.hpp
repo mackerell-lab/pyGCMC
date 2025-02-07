@@ -12,10 +12,18 @@
  *
  * - GCMCInfo:    Global MC parameters (temperature, box, max molecules/atoms etc.)
  * - ForceField:  Force field parameters (e.g. Lennard-Jones), extensible for bond/angle/dihedral
- * - Atom:        Atomic coordinates, type, charge etc.
+ * - Atom:        Atomic coordinates (nm), type, charge (e) etc.
  * - Residue:     Group of atoms with start/count, for insertion/deletion/movement (swap-and-pop)
  * - GCMCSystem:  Contains pointers to (Atoms/Residues/ForceField/Info etc.)
  *                Provides interfaces for allocation, deallocation, download, upload
+ *
+ * Units used in this system follow GROMACS MD units:
+ * - Length: nanometers (nm)
+ * - Energy: kilojoules per mole (kJ/mol)
+ * - Charge: electron charge (e)
+ * - Time: picoseconds (ps)
+ * - Temperature: Kelvin (K)
+ * - Concentration: moles per liter (mol/L)
  */
 
 namespace pygcmc {
@@ -52,9 +60,9 @@ struct TypeMaps {
 // ------------------------------------------------------------
 struct MCInfo {
     int    mcSteps{0};       ///< Monte Carlo steps (dimensionless)
-    float  box[3]{-1.0f};    ///< Box dimensions (Å)
-    float  cutoff{15.0f};    ///< Cutoff distance for non-bonded interactions (Å)
-    float  beta{0.0f};       ///< 1/(kB*T) (mol/kcal) - inverse temperature
+    float  box[3]{-1.0f};    ///< Box dimensions (nm)
+    float  cutoff{1.5f};     ///< Cutoff distance for non-bonded interactions (nm)
+    float  beta{0.0f};       ///< 1/(kB*T) (mol/kJ) - inverse temperature
     
     // Reserved max capacity
     int    maxResidues;      ///< Maximum number of residues (dimensionless)
@@ -62,7 +70,7 @@ struct MCInfo {
     int    maxTypes;         ///< Maximum number of atom types (dimensionless)
 
     // Global parameters
-    float  volume;           ///< System volume (Å³)
+    float  volume;           ///< System volume (nm³)
     uint64_t seed;          ///< Random seed (dimensionless)
 
     // Statistics
@@ -75,17 +83,17 @@ struct MCInfo {
         int acceptedDeletions{0};    ///< Number of accepted deletions (dimensionless)
     } stats;
 
-    // Constants (CHARMM units)
-    static constexpr float BOLTZMANN = 0.0019881f;  ///< Boltzmann constant (kcal/mol/K)
-    static constexpr float KCAL_TO_KJ = 4.184f;     ///< Convert kcal/mol to kJ/mol
-    static constexpr float KJ_TO_KCAL = 0.239f;     ///< Convert kJ/mol to kcal/mol
-    static constexpr float MOLES_TO_MOLECULES = 0.0006023f;  ///< Convert mol/L to molecules/Å³
-    static constexpr float MOLECULES_TO_MOLES = 1660.539f;   ///< Convert molecules/Å³ to mol/L
+    // Constants (GROMACS MD units)
+    static constexpr float BOLTZMANN = 0.00831446f;  ///< Boltzmann constant (kJ/mol/K)
+    static constexpr float KCAL_TO_KJ = 4.184f;      ///< Convert kcal/mol to kJ/mol
+    static constexpr float KJ_TO_KCAL = 0.239f;      ///< Convert kJ/mol to kcal/mol
+    static constexpr float MOLES_TO_MOLECULES = 0.0006023f;  ///< Convert mol/L to molecules/nm³
+    static constexpr float MOLECULES_TO_MOLES = 1660.539f;   ///< Convert molecules/nm³ to mol/L
 
     // Set temperature and calculate beta
     void setTemperature(float temperature) {  // temperature in Kelvin
-        // beta = 1/(kB*T) where kB is BOLTZMANN in kcal/mol/K and T is in K
-        // This gives beta in mol/kcal units
+        // beta = 1/(kB*T) where kB is BOLTZMANN in kJ/mol/K and T is in K
+        // This gives beta in mol/kJ units
         beta = 1.0f / (BOLTZMANN * temperature);
     }
 };
@@ -108,15 +116,14 @@ struct MCInfo {
  * The Lennard-Jones potential is used in the form:
  *   V(r) = 4 * eps * [ (sigma/r)^12 - (sigma/r)^6 ]
  * where:
- *   - eps: well depth (in kcal/mole), stored in ljEps
- *   - sigma: distance at which the potential is zero (in Angstroms), stored in ljSigma.
- *   - r: distance between atoms.
+ *   - eps: well depth (in kJ/mole), stored in ljEps
+ *   - sigma: distance at which the potential is zero (in nm), stored in ljSigma
+ *   - r: distance between atoms (in nm)
  * 
  * These parameters are derived from a CHARMM-style force field that originally provides
- * epsilon (in kcal/mole) and Rmin/2 (in Angstroms). A conversion is performed via:
- *   sigma = (Rmin/2) / (2^(1/6))
- * so that the potential written in the above form is equivalent to the CHARMM expression:
- *   V(r) = eps * [ (Rmin/(r))^12 - 2*(Rmin/(r))^6 ].
+ * epsilon (in kcal/mole) and Rmin/2 (in Angstroms). The following conversions are applied:
+ *   sigma = (Rmin/2) / (2^(1/6)) * 0.1  [nm]
+ *   epsilon = epsilon_charmm * 4.184     [kJ/mol]
  * 
  * Parameters are combined using Lorentz-Berthelot rules:
  *   - sigma: arithmetic mean (Lorentz)
@@ -124,8 +131,8 @@ struct MCInfo {
  *   - epsilon: geometric mean (Berthelot)
  *      eps_ij = sqrt(eps_i * eps_j)
  * 
- * For NBFIX pairs, specific epsilon values are used directly, but sigma is still
- * combined using the arithmetic mean.
+ * For NBFIX pairs, specific epsilon values are used directly (after unit conversion),
+ * but sigma is still combined using the arithmetic mean.
  */
 struct MCForceField {
     int numTotalTypes;    ///< Total number of atom types in the system
@@ -133,17 +140,17 @@ struct MCForceField {
 
     // Arrays store parameters for movement types interacting with all types
     // Size: numMovementTypes * numTotalTypes
-    std::vector<float> ljSigma;   ///< Combined sigma values [Å] for each type pair
-    std::vector<float> ljEps;     ///< Combined epsilon values [kcal/mole] for each type pair
+    std::vector<float> ljSigma;   ///< Combined sigma values [nm] for each type pair
+    std::vector<float> ljEps;     ///< Combined epsilon values [kJ/mole] for each type pair
 };
 
 // ------------------------------------------------------------
 // 3) Atom: Basic atomic properties
 // ------------------------------------------------------------
 struct MCAtom {
-    float x, y, z;      ///< Position
-    float charge;       ///< Charge
-    int   type;        ///< Type index
+    float x, y, z;      ///< Position (nm)
+    float charge;       ///< Charge (e)
+    int   type;        ///< Type index (dimensionless)
 };
 
 // ------------------------------------------------------------
@@ -151,30 +158,30 @@ struct MCAtom {
 // ------------------------------------------------------------
 struct MCResidue {
     // Basic properties
-    int   atomStart;    ///< Starting index in global atom array
-    int   atomCount;    ///< Number of atoms
-    bool  active;       ///< Whether in use
-    bool  fixed;        ///< Whether fixed  
-    float center[3];    ///< Geometric center (Å): arithmetic mean of all atom coordinates in this residue
+    int   atomStart;    ///< Starting index in global atom array (dimensionless)
+    int   atomCount;    ///< Number of atoms (dimensionless)
+    bool  active;       ///< Whether in use (dimensionless)
+    bool  fixed;        ///< Whether fixed (dimensionless)
+    float center[3];    ///< Geometric center (nm): arithmetic mean of all atom coordinates in this residue
 
     // Energy components
-    float energy_vdw;   ///< Lennard-Jones energy (kcal/mole)
-    float energy_elec;  ///< Coulomb energy (kcal/mole)
+    float energy_vdw;   ///< Lennard-Jones energy (kJ/mole)
+    float energy_elec;  ///< Coulomb energy (kJ/mole)
         
     // GCMC parameters
     float concentration; ///< Target concentration (mol/L)
-    float chemPot;      ///< Chemical potential (kcal/mole)
-    int   type;         ///< Residue type index in residueTypes map
-    float radius;       ///< Approximate radius (Å)
+    float chemPot;      ///< Chemical potential (kJ/mole)
+    int   type;         ///< Residue type index in residueTypes map (dimensionless)
+    float radius;       ///< Approximate radius (nm)
 };
 
 // ------------------------------------------------------------
 // 4.5) Movement Residue Info: Track GCMC movement residues
 // ------------------------------------------------------------
 struct MCMovementResidueInfo {
-    int startIndex;         ///< Starting index of movement residues in global residue array
-    int activeCount;        ///< Number of active movement residues
-    int totalCount;         ///< Total number of movement residues (active + inactive)
+    int startIndex;         ///< Starting index of movement residues in global residue array (dimensionless)
+    int activeCount;        ///< Number of active movement residues (dimensionless)
+    int totalCount;         ///< Total number of movement residues (active + inactive) (dimensionless)
     std::string resName;    ///< Residue name for this movement group
 };
 

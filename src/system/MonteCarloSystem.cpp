@@ -75,9 +75,10 @@ bool MonteCarloSystem::removeResidue(int resIdx) {
 void MonteCarloSystem::translateResidue(int resIdx, float dx, float dy, float dz) {
     if (resIdx >= 0 && resIdx < state.activeResidueCount) {
         model::MCResidue& res = state.residues[resIdx];
+        // dx, dy, dz are expected to be in nm, no conversion needed
         for (int i = 0; i < res.atomCount; ++i) {
             model::MCAtom& atom = state.atoms[res.atomStart + i];
-            atom.x += dx;
+            atom.x += dx;  // All coordinates are in nm
             atom.y += dy;
             atom.z += dz;
             applyPBC(atom.x, atom.y, atom.z);
@@ -101,21 +102,24 @@ float MonteCarloSystem::calcTotalEnergy() const {
 }
 
 void MonteCarloSystem::applyPBC(float& x, float& y, float& z) const {
+    // Box dimensions and coordinates are in nm, no conversion needed
     x -= state.info.box[0] * std::floor(x / state.info.box[0]);
     y -= state.info.box[1] * std::floor(y / state.info.box[1]);
     z -= state.info.box[2] * std::floor(z / state.info.box[2]);
 }
 
 float MonteCarloSystem::getMinImageDistSqr(float dx, float dy, float dz) const {
+    // All distances are in nm, no conversion needed
     dx -= state.info.box[0] * std::round(dx / state.info.box[0]);
     dy -= state.info.box[1] * std::round(dy / state.info.box[1]);
     dz -= state.info.box[2] * std::round(dz / state.info.box[2]);
-    return dx*dx + dy*dy + dz*dz;
+    return dx*dx + dy*dy + dz*dz;  // Returns square of distance in nm²
 }
 
 void MonteCarloSystem::updateGeometricCenter(model::MCResidue& res) {
     res.center[0] = res.center[1] = res.center[2] = 0.0f;
     
+    // All coordinates are already in nm, no conversion needed
     for (int i = 0; i < res.atomCount; ++i) {
         const model::MCAtom& atom = state.atoms[res.atomStart + i];
         res.center[0] += atom.x;
@@ -136,10 +140,14 @@ void MonteCarloSystem::initializeFromMolecular(const std::shared_ptr<model::Mole
         throw std::runtime_error("MolecularSystem has no molecular data");
     }
     
+    // Unit conversion constant
+    const float ANGSTROM_TO_NM = 0.1f;    // 1 Å = 0.1 nm
+    [[maybe_unused]] const float KCAL_TO_KJ = 4.184f;    // 1 kcal/mol = 4.184 kJ/mol
+    
     // Set box dimensions from molecular system
-    state.info.box[0] = molecular->boxDimensions[0];
-    state.info.box[1] = molecular->boxDimensions[1];
-    state.info.box[2] = molecular->boxDimensions[2];
+    state.info.box[0] = molecular->boxDimensions[0] * ANGSTROM_TO_NM;  // Convert Å to nm
+    state.info.box[1] = molecular->boxDimensions[1] * ANGSTROM_TO_NM;  // Convert Å to nm
+    state.info.box[2] = molecular->boxDimensions[2] * ANGSTROM_TO_NM;  // Convert Å to nm
     state.info.volume = state.info.box[0] * state.info.box[1] * state.info.box[2];
 
     // Convert residues and atoms
@@ -158,6 +166,13 @@ void MonteCarloSystem::initializeFromMolecular(const std::shared_ptr<model::Mole
         mcRes.atomCount = molRes->atom_count();
         mcRes.active = true;
         
+        // Initialize energy components and GCMC parameters in GROMACS units
+        mcRes.energy_vdw = 0.0f;   // kJ/mole
+        mcRes.energy_elec = 0.0f;  // kJ/mole
+        mcRes.chemPot = 0.0f;      // kJ/mole
+        mcRes.concentration = 0.0f; // mol/L
+        mcRes.radius = 0.0f;       // nm
+        
         // Convert atoms for this residue
         const auto& molAtoms = molRes->get_atoms();
         for (size_t j = 0; j < molAtoms.size(); j++) {
@@ -165,11 +180,12 @@ void MonteCarloSystem::initializeFromMolecular(const std::shared_ptr<model::Mole
             const auto& topAtom = molecular->topology_atoms[topRes.atoms[j]];
             
             model::MCAtom mcAtom;
-            mcAtom.x = molAtom->get_x();
-            mcAtom.y = molAtom->get_y();
-            mcAtom.z = molAtom->get_z();
-            mcAtom.charge = topAtom.charge;  // 使用 topology 中的电荷
-            mcAtom.type = state.atomTypes.getOrAddType(topAtom.type);  // 使用 topology 中的类型
+            // Convert coordinates from Å to nm
+            mcAtom.x = molAtom->get_x() * ANGSTROM_TO_NM;
+            mcAtom.y = molAtom->get_y() * ANGSTROM_TO_NM;
+            mcAtom.z = molAtom->get_z() * ANGSTROM_TO_NM;
+            mcAtom.charge = topAtom.charge;  // Charge unit (e) remains the same
+            mcAtom.type = state.atomTypes.getOrAddType(topAtom.type);
             
             tempAtoms.push_back(mcAtom);
         }
@@ -177,12 +193,12 @@ void MonteCarloSystem::initializeFromMolecular(const std::shared_ptr<model::Mole
         // Set residue type
         mcRes.type = state.residueTypes.getOrAddType(molRes->get_resname());
 
-        // Calculate center of mass
+        // Calculate center of mass (in nm)
         mcRes.center[0] = mcRes.center[1] = mcRes.center[2] = 0.0f;
         for (const auto& atom : molAtoms) {
-            mcRes.center[0] += atom->get_x();
-            mcRes.center[1] += atom->get_y();
-            mcRes.center[2] += atom->get_z();
+            mcRes.center[0] += atom->get_x() * ANGSTROM_TO_NM;
+            mcRes.center[1] += atom->get_y() * ANGSTROM_TO_NM;
+            mcRes.center[2] += atom->get_z() * ANGSTROM_TO_NM;
         }
         
         if (mcRes.atomCount > 0) {
@@ -593,6 +609,10 @@ void MonteCarloSystem::initializeForceField(const model::ForceField& ff) {
     state.forcefield.ljSigma.resize(numMovementTypes * numTypes);
     state.forcefield.ljEps.resize(numMovementTypes * numTypes);
 
+    // Unit conversion constants
+    const float ANGSTROM_TO_NM = 0.1f;  // 1 Å = 0.1 nm
+    [[maybe_unused]] const float KCAL_TO_KJ = 4.184f;    // 1 kcal/mol = 4.184 kJ/mol
+
     // For each movement type
     for (int mi = 0; mi < numMovementTypes; ++mi) {
         int movementTypeIdx = movementTypes[mi];
@@ -613,32 +633,33 @@ void MonteCarloSystem::initializeForceField(const model::ForceField& ff) {
                 // Use NBFIX parameters
                 const auto& lj1 = ff.get_lj_params(type1);
                 const auto& lj2 = ff.get_lj_params(type2);
-                const float sigma1 = static_cast<float>(lj1.rmin_half / std::pow(2.0, 1.0/6.0));
-                const float sigma2 = static_cast<float>(lj2.rmin_half / std::pow(2.0, 1.0/6.0));
+                // Convert Rmin/2 from Å to nm
+                const float sigma1 = static_cast<float>(lj1.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
+                const float sigma2 = static_cast<float>(lj2.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
                 
-                // Calculate combined sigma (Lorentz-Berthelot)
+                // Calculate combined sigma (Lorentz-Berthelot) in nm
                 const float sigma_avg = 0.5f * (sigma1 + sigma2);
                 
-                // Store parameters
+                // Store parameters (eps in kJ/mol, sigma in nm)
                 state.forcefield.ljSigma[pairIdx] = sigma_avg;
-                state.forcefield.ljEps[pairIdx] = static_cast<float>(eps);
+                state.forcefield.ljEps[pairIdx] = static_cast<float>(eps) * KCAL_TO_KJ;
             } else {
                 // Use standard LJ combining rules
                 try {
                     const auto& lj1 = ff.get_lj_params(type1);
                     const auto& lj2 = ff.get_lj_params(type2);
                     
-                    // Convert Rmin to sigma (σ = Rmin/2^(1/6))
-                    const float sigma1 = static_cast<float>(lj1.rmin_half / std::pow(2.0, 1.0/6.0));
-                    const float sigma2 = static_cast<float>(lj2.rmin_half / std::pow(2.0, 1.0/6.0));
+                    // Convert Rmin/2 from Å to nm and then to sigma
+                    const float sigma1 = static_cast<float>(lj1.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
+                    const float sigma2 = static_cast<float>(lj2.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
                     
-                    // Lorentz-Berthelot combining rules
+                    // Lorentz-Berthelot combining rules (in original kcal/mol units)
                     const float sigma_avg = 0.5f * (sigma1 + sigma2);
                     const float eps_avg = std::sqrt(lj1.epsilon * lj2.epsilon);
                     
-                    // Store parameters
+                    // Store parameters (convert eps to kJ/mol after combining)
                     state.forcefield.ljSigma[pairIdx] = sigma_avg;
-                    state.forcefield.ljEps[pairIdx] = static_cast<float>(eps_avg);
+                    state.forcefield.ljEps[pairIdx] = eps_avg * KCAL_TO_KJ;
                 } catch (const std::exception& e) {
                     throw std::runtime_error("Missing LJ parameters for atom type pair '" + 
                                           type1 + "'-'" + type2 + "'");
