@@ -1369,21 +1369,54 @@ def test_initialize_force_field(molecular_system, charmm_ff):
     ANGSTROM_TO_NM = 0.1  # 1 Å = 0.1 nm
     KCAL_TO_KJ = 4.184    # 1 kcal/mol = 4.184 kJ/mol
     
+    # Construct atom type pairs to check
+    # We need to check all movement atom types against all atom types
+    atom_type_pairs = []
+    movement_type_indices = state.movementAtomTypes
+    all_type_indices = range(len(atom_types.atomTypes))
+    
+    # For each movement type
+    for mi in range(state.numMovementAtomTypes):
+        movement_type_idx = movement_type_indices[mi]
+        movement_type = atom_types.atomTypes[movement_type_idx]
+        # Check against all possible types
+        for type_idx in all_type_indices:
+            other_type = atom_types.atomTypes[type_idx]
+            atom_type_pairs.append((movement_type, other_type))
+    
+    print(f"\nConstructed {len(atom_type_pairs)} type pairs to check")
+    print("First few pairs:", atom_type_pairs[:5])
+
     # Check both NBFIX and combined LJ parameters
     print("\nChecking NBFIX and combined LJ parameters:")
     for type1, type2 in atom_type_pairs:
-        pairIdx = mc_system.state.forcefield.pairTypeIndex[type1][type2]
-        actual_eps = mc_system.state.forcefield.ljEps[pairIdx]
-        actual_sigma = mc_system.state.forcefield.ljSigma[pairIdx]
+        # Get type indices in the force field
+        type1_idx = atom_types.get_or_add_type(type1)  # Use get_or_add_type instead of direct map access
+        type2_idx = atom_types.get_or_add_type(type2)
+        
+        # Find movement type index (mi) for type1
+        mi = -1
+        for i, mt_idx in enumerate(movement_type_indices):
+            if mt_idx == type1_idx:
+                mi = i
+                break
+        assert mi >= 0, f"Could not find movement type index for {type1}"
+        
+        # Calculate pair index in the force field arrays
+        pairIdx = mi * state.forcefield.numTotalTypes + type2_idx
+        
+        # Get actual parameters from force field
+        actual_eps = state.forcefield.ljEps[pairIdx]
+        actual_sigma = state.forcefield.ljSigma[pairIdx]
         
         # Get NBFIX parameters if they exist
         nbfix_result = charmm_ff.get_nbfix(type1, type2)
         
         if nbfix_result[1]:  # If NBFIX exists
             # Convert NBFIX epsilon from kcal/mol to kJ/mol
-            expected_eps = nbfix_result[0].epsilon * KCAL_TO_KJ
+            expected_eps = nbfix_result[0] * KCAL_TO_KJ
             # Convert NBFIX Rmin to sigma in nm
-            expected_sigma = nbfix_result[0].rmin / 2.0**(1.0/6.0) * ANGSTROM_TO_NM
+            expected_sigma = nbfix_result[1] / 2.0**(1.0/6.0) * ANGSTROM_TO_NM
             
             print(f"NBFIX {type1}-{type2}:")
             print(f"  epsilon: expected {expected_eps:.6f}, got {actual_eps:.6f} kJ/mol")
@@ -1405,10 +1438,6 @@ def test_initialize_force_field(molecular_system, charmm_ff):
             expected_eps = math.sqrt(lj1.epsilon * lj2.epsilon) * KCAL_TO_KJ
             # Combine sigma values (already converted to nm)
             expected_sigma = 0.5 * (sigma1 + sigma2)
-            
-            # Get actual parameters (in GROMACS units)
-            actual_eps = state.forcefield.ljEps[pairIdx]
-            actual_sigma = state.forcefield.ljSigma[pairIdx]
             
             print(f"Combined LJ {type1}-{type2}:")
             print(f"  Expected: eps={expected_eps:.4f} kJ/mol, sigma={expected_sigma:.4f} nm")
