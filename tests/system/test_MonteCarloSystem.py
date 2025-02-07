@@ -1371,81 +1371,53 @@ def test_initialize_force_field(molecular_system, charmm_ff):
     
     # Check both NBFIX and combined LJ parameters
     print("\nChecking NBFIX and combined LJ parameters:")
-    
-    # Define GROMACS reference values for CG2R61 and NH3
-    GROMACS_CG2R61_SIGMA = 0.355005321205  # nm
-    GROMACS_CG2R61_EPSILON = 0.29288        # kJ/mol
-    GROMACS_NH3_SIGMA = 0.329632525712      # nm
-    GROMACS_NH3_EPSILON = 0.83680           # kJ/mol
-    
-    # Expected combined values
-    EXPECTED_SIGMA = (GROMACS_CG2R61_SIGMA + GROMACS_NH3_SIGMA) / 2.0  # nm
-    EXPECTED_EPSILON = math.sqrt(GROMACS_CG2R61_EPSILON * GROMACS_NH3_EPSILON)  # kJ/mol
-    
-    print(f"\nGROMACS reference values:")
-    print(f"CG2R61: sigma = {GROMACS_CG2R61_SIGMA} nm, epsilon = {GROMACS_CG2R61_EPSILON} kJ/mol")
-    print(f"NH3: sigma = {GROMACS_NH3_SIGMA} nm, epsilon = {GROMACS_NH3_EPSILON} kJ/mol")
-    print(f"Expected combined: sigma = {EXPECTED_SIGMA} nm, epsilon = {EXPECTED_EPSILON} kJ/mol")
-    
-    for mi, movement_type_idx in enumerate(state.movementAtomTypes):
-        type1 = atom_types.atomTypes[movement_type_idx]
-        lj1 = charmm_ff.get_lj_params(type1)
-        # Convert Rmin/2 from Å to nm and then to sigma
-        sigma1 = 2 * (lj1.rmin_half / math.pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM
+    for type1, type2 in atom_type_pairs:
+        pairIdx = mc_system.state.forcefield.pairTypeIndex[type1][type2]
+        actual_eps = mc_system.state.forcefield.ljEps[pairIdx]
+        actual_sigma = mc_system.state.forcefield.ljSigma[pairIdx]
         
-        for j, type2 in enumerate(atom_types.atomTypes):
-            idx = mi * state.forcefield.numTotalTypes + j
-            nbfix_result = charmm_ff.get_nbfix(type1, type2)
+        # Get NBFIX parameters if they exist
+        nbfix_result = charmm_ff.get_nbfix(type1, type2)
+        
+        if nbfix_result[1]:  # If NBFIX exists
+            # Convert NBFIX epsilon from kcal/mol to kJ/mol
+            expected_eps = nbfix_result[0].epsilon * KCAL_TO_KJ
+            # Convert NBFIX Rmin to sigma in nm
+            expected_sigma = nbfix_result[0].rmin / 2.0**(1.0/6.0) * ANGSTROM_TO_NM
             
-            # Special check for CG2R61-NH3 pair
-            if ((type1 == "CG2R61" and type2 == "NH3") or 
-                (type1 == "NH3" and type2 == "CG2R61")):
-                actual_eps = state.forcefield.ljEps[idx]
-                actual_sigma = state.forcefield.ljSigma[idx]
-                
-                print(f"\nTesting CG2R61-NH3 pair:")
-                print(f"  Expected sigma: {EXPECTED_SIGMA} nm")
-                print(f"  Actual sigma:   {actual_sigma} nm")
-                print(f"  Expected epsilon: {EXPECTED_EPSILON} kJ/mol")
-                print(f"  Actual epsilon:   {actual_eps} kJ/mol")
-                
-                assert abs(actual_sigma - EXPECTED_SIGMA) < 1e-6, \
-                    f"CG2R61-NH3 sigma mismatch: expected {EXPECTED_SIGMA}, got {actual_sigma} nm"
-                assert abs(actual_eps - EXPECTED_EPSILON) < 1e-6, \
-                    f"CG2R61-NH3 epsilon mismatch: expected {EXPECTED_EPSILON}, got {actual_eps} kJ/mol"
+            print(f"NBFIX {type1}-{type2}:")
+            print(f"  epsilon: expected {expected_eps:.6f}, got {actual_eps:.6f} kJ/mol")
+            print(f"  sigma: expected {expected_sigma:.6f}, got {actual_sigma:.6f} nm")
             
-            if nbfix_result[1]:  # If NBFIX exists
-                # Convert NBFIX epsilon from kcal/mol to kJ/mol
-                expected_eps = nbfix_result[0] * KCAL_TO_KJ
-                actual_eps = state.forcefield.ljEps[idx]
-                print(f"NBFIX {type1}-{type2}:")
-                print(f"  Expected epsilon: {expected_eps:.4f} kJ/mol")
-                print(f"  Actual epsilon:   {actual_eps:.4f} kJ/mol")
-                assert abs(actual_eps - expected_eps) < 1e-6, \
-                    f"NBFIX epsilon mismatch for {type1}-{type2}: expected {expected_eps}, got {actual_eps} kJ/mol"
-            else:  # No NBFIX, use combination rules
-                lj2 = charmm_ff.get_lj_params(type2)
-                # Convert Rmin/2 from Å to nm and then to sigma
-                sigma2 = 2 * (lj2.rmin_half / math.pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM
-                
-                # Calculate expected combined parameters
-                # First combine in original units (kcal/mol), then convert to kJ/mol
-                expected_eps = math.sqrt(lj1.epsilon * lj2.epsilon) * KCAL_TO_KJ
-                # Combine sigma values (already converted to nm)
-                expected_sigma = 0.5 * (sigma1 + sigma2)
-                
-                # Get actual parameters (in GROMACS units)
-                actual_eps = state.forcefield.ljEps[idx]
-                actual_sigma = state.forcefield.ljSigma[idx]
-                
-                print(f"Combined LJ {type1}-{type2}:")
-                print(f"  Expected: eps={expected_eps:.4f} kJ/mol, sigma={expected_sigma:.4f} nm")
-                print(f"  Actual:   eps={actual_eps:.4f} kJ/mol, sigma={actual_sigma:.4f} nm")
-                
-                assert abs(actual_eps - expected_eps) < 1e-6, \
-                    f"Combined epsilon mismatch for {type1}-{type2}: expected {expected_eps}, got {actual_eps} kJ/mol"
-                assert abs(actual_sigma - expected_sigma) < 1e-6, \
-                    f"Combined sigma mismatch for {type1}-{type2}: expected {expected_sigma}, got {actual_sigma} nm"
+            assert abs(actual_eps - expected_eps) < 1e-6, \
+                f"NBFIX epsilon mismatch for {type1}-{type2}: expected {expected_eps}, got {actual_eps} kJ/mol"
+            assert abs(actual_sigma - expected_sigma) < 1e-6, \
+                f"NBFIX sigma mismatch for {type1}-{type2}: expected {expected_sigma}, got {actual_sigma} nm"
+        else:  # No NBFIX, use combination rules
+            lj1 = charmm_ff.get_lj_params(type1)
+            lj2 = charmm_ff.get_lj_params(type2)
+            # Convert Rmin/2 from Å to nm and then to sigma
+            sigma1 = 2 * (lj1.rmin_half / math.pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM
+            sigma2 = 2 * (lj2.rmin_half / math.pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM
+            
+            # Calculate expected combined parameters
+            # First combine in original units (kcal/mol), then convert to kJ/mol
+            expected_eps = math.sqrt(lj1.epsilon * lj2.epsilon) * KCAL_TO_KJ
+            # Combine sigma values (already converted to nm)
+            expected_sigma = 0.5 * (sigma1 + sigma2)
+            
+            # Get actual parameters (in GROMACS units)
+            actual_eps = state.forcefield.ljEps[pairIdx]
+            actual_sigma = state.forcefield.ljSigma[pairIdx]
+            
+            print(f"Combined LJ {type1}-{type2}:")
+            print(f"  Expected: eps={expected_eps:.4f} kJ/mol, sigma={expected_sigma:.4f} nm")
+            print(f"  Actual:   eps={actual_eps:.4f} kJ/mol, sigma={actual_sigma:.4f} nm")
+            
+            assert abs(actual_eps - expected_eps) < 1e-6, \
+                f"Combined epsilon mismatch for {type1}-{type2}: expected {expected_eps}, got {actual_eps} kJ/mol"
+            assert abs(actual_sigma - expected_sigma) < 1e-6, \
+                f"Combined sigma mismatch for {type1}-{type2}: expected {expected_sigma}, got {actual_sigma} nm"
     
     print("\n=== test_initialize_force_field completed successfully ===")
 

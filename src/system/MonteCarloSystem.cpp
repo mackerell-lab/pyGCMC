@@ -627,25 +627,19 @@ void MonteCarloSystem::initializeForceField(const model::ForceField& ff) {
             const int pairIdx = mi * numTypes + j;  // Index into the parameter arrays
             
             // First try to get NBFIX parameters
-            auto [eps, has_nbfix] = ff.get_nbfix(type1, type2);
+            auto [nbfix_params, has_nbfix] = ff.get_nbfix(type1, type2);
             
-            if (has_nbfix) {
-                // Use NBFIX parameters
-                const auto& lj1 = ff.get_lj_params(type1);
-                const auto& lj2 = ff.get_lj_params(type2);
-                // Convert Rmin/2 from Å to nm
-                const float sigma1 = static_cast<float>(2.0 * lj1.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
-                const float sigma2 = static_cast<float>(2.0 * lj2.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
-                
-                // Calculate combined sigma (Lorentz-Berthelot) in nm
-                const float sigma_avg = 0.5f * (sigma1 + sigma2);
-                
-                // Store parameters (eps in kJ/mol, sigma in nm)
-                state.forcefield.ljSigma[pairIdx] = sigma_avg;
-                state.forcefield.ljEps[pairIdx] = static_cast<float>(eps) * KCAL_TO_KJ;
-            } else {
-                // Use standard LJ combining rules
-                try {
+            try {
+                if (has_nbfix) {
+                    // Use NBFIX parameters directly
+                    // Convert Rmin from Å to nm
+                    const float sigma = static_cast<float>(nbfix_params.rmin / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
+                    
+                    // Store parameters (eps in kJ/mol, sigma in nm)
+                    state.forcefield.ljSigma[pairIdx] = sigma;
+                    state.forcefield.ljEps[pairIdx] = static_cast<float>(nbfix_params.epsilon) * KCAL_TO_KJ;
+                } else {
+                    // Get LJ parameters for both types
                     const auto& lj1 = ff.get_lj_params(type1);
                     const auto& lj2 = ff.get_lj_params(type2);
                     
@@ -653,17 +647,17 @@ void MonteCarloSystem::initializeForceField(const model::ForceField& ff) {
                     const float sigma1 = static_cast<float>(2.0 * lj1.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
                     const float sigma2 = static_cast<float>(2.0 * lj2.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
                     
-                    // Lorentz-Berthelot combining rules (in original kcal/mol units)
+                    // Use Lorentz-Berthelot combining rules
                     const float sigma_avg = 0.5f * (sigma1 + sigma2);
                     const float eps_avg = std::sqrt(lj1.epsilon * lj2.epsilon);
                     
-                    // Store parameters (convert eps to kJ/mol after combining)
+                    // Store parameters (convert eps to kJ/mol)
                     state.forcefield.ljSigma[pairIdx] = sigma_avg;
                     state.forcefield.ljEps[pairIdx] = eps_avg * KCAL_TO_KJ;
-                } catch (const std::exception& e) {
-                    throw std::runtime_error("Missing LJ parameters for atom type pair '" + 
-                                          type1 + "'-'" + type2 + "'");
                 }
+            } catch (const std::exception& e) {
+                throw std::runtime_error("Missing LJ parameters for atom type pair '" + 
+                                      type1 + "'-'" + type2 + "'");
             }
         }
     }

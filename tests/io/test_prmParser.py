@@ -24,9 +24,10 @@ def test_parse_file_direct():
     assert sod_params.rmin_half == pytest.approx(1.41075)
 
     # Test some NBFIX parameters
-    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("SOD", "CLA")
     assert found == True
     assert epsilon == pytest.approx(-0.0839)
+    assert rmin == pytest.approx(3.731)
 
 def test_parse_nonbonded_from_string():
     content = """
@@ -74,18 +75,21 @@ POT    CLA      -0.114236   4.081
     pygcmc.PRMParser.parse_string(content, ff)
 
     # Test NBFIX parameters
-    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("SOD", "CLA")
     assert found == True
     assert epsilon == pytest.approx(-0.083875)
+    assert rmin == pytest.approx(3.731)
 
     # Test symmetry
-    epsilon, found = ff.get_nbfix("CLA", "SOD")
+    epsilon, rmin, found = ff.get_nbfix("CLA", "SOD")
     assert found == True
     assert epsilon == pytest.approx(-0.083875)
+    assert rmin == pytest.approx(3.731)
 
-    epsilon, found = ff.get_nbfix("POT", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("POT", "CLA")
     assert found == True
     assert epsilon == pytest.approx(-0.114236)
+    assert rmin == pytest.approx(4.081)
 
 def test_parse_from_file():
     """Test the original parse_file method that takes a ForceField object."""
@@ -107,9 +111,10 @@ def test_parse_from_file():
     assert sod_params.rmin_half == pytest.approx(1.41075)
 
     # Test some NBFIX parameters
-    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("SOD", "CLA")
     assert found == True
     assert epsilon == pytest.approx(-0.0839)
+    assert rmin == pytest.approx(3.731)
 
 def test_invalid_file():
     """Test invalid file handling with new API."""
@@ -147,9 +152,10 @@ SOD    CLA      -0.083875   3.731 ! inline comment
     pygcmc.PRMParser.parse_string(content, ff)
     
     # Test that comments didn't affect parsing
-    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("SOD", "CLA")
     assert found == True
     assert epsilon == pytest.approx(-0.083875)
+    assert rmin == pytest.approx(3.731)
 
     # Test that atom parameters were parsed correctly
     sod_params = ff.get_lj_params("SOD")
@@ -187,29 +193,34 @@ END
     assert cla_params.rmin_half == pytest.approx(2.27)
 
     # Then test NBFIX combinations
-    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("SOD", "CLA")
     assert found == True
     assert epsilon == pytest.approx(-0.083875)
+    assert rmin == pytest.approx(3.731)
 
     # Test reverse order - should still work
-    epsilon, found = ff.get_nbfix("CLA", "SOD")
+    epsilon, rmin, found = ff.get_nbfix("CLA", "SOD")
     assert found == True
     assert epsilon == pytest.approx(-0.083875)
+    assert rmin == pytest.approx(3.731)
 
-    epsilon, found = ff.get_nbfix("POT", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("POT", "CLA")
     assert found == True
     assert epsilon == pytest.approx(-0.114236)
+    assert rmin == pytest.approx(4.081)
 
-    epsilon, found = ff.get_nbfix("CAL", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("CAL", "CLA")
     assert found == True
     assert epsilon == pytest.approx(-0.134164)
+    assert rmin == pytest.approx(3.727)
 
-    epsilon, found = ff.get_nbfix("CAL", "O2L")
+    epsilon, rmin, found = ff.get_nbfix("CAL", "O2L")
     assert found == True
     assert epsilon == pytest.approx(-0.12)
+    assert rmin == pytest.approx(3.256)
 
     # Test non-existent combinations
-    epsilon, found = ff.get_nbfix("SOD", "POT")
+    epsilon, rmin, found = ff.get_nbfix("SOD", "POT")
     assert found == False
 
 def test_malformed_parameters():
@@ -261,7 +272,7 @@ END
     assert cla_params.rmin_half == pytest.approx(2.27)
 
     # Verify that no NBFIX parameters were added
-    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("SOD", "CLA")
     assert found == False
 
 def test_special_formatting():
@@ -306,17 +317,19 @@ def test_multiple_file_parsing():
     assert cla_params.epsilon == pytest.approx(-0.150)
     assert cla_params.rmin_half == pytest.approx(2.27)
 
-    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("SOD", "CLA")
     assert found == True
     assert epsilon == pytest.approx(-0.0839)
+    assert rmin == pytest.approx(3.731)
     
     # Parse silcs file
     pygcmc.PRMParser.parse_file_to_forcefield(silcs_file, ff)
 
     # Test that original parameters are preserved
-    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("SOD", "CLA")
     assert found == True
     assert epsilon == pytest.approx(-0.0839)
+    assert rmin == pytest.approx(3.731)
 
     # Test new parameters from silcs file
     lp_params = ff.get_lj_params("LP")
@@ -328,18 +341,21 @@ def test_multiple_file_parsing():
     assert lq_params.rmin_half == pytest.approx(0.0)
 
     # Test NBFIX parameters from silcs file
-    epsilon, found = ff.get_nbfix("LP", "LP")
+    epsilon, rmin, found = ff.get_nbfix("LP", "LP")
     assert found == True
     assert epsilon == pytest.approx(-0.01)
+    assert rmin == pytest.approx(12.0)
 
-    epsilon, found = ff.get_nbfix("LQ", "LQ")
+    epsilon, rmin, found = ff.get_nbfix("LQ", "LQ")
     assert found == True
     assert epsilon == pytest.approx(-0.01)
+    assert rmin == pytest.approx(12.0)
 
     # Test reverse order access
-    epsilon, found = ff.get_nbfix("LP", "LP")
+    epsilon, rmin, found = ff.get_nbfix("LP", "LP")
     assert found == True
     assert epsilon == pytest.approx(-0.01)
+    assert rmin == pytest.approx(12.0)
 
 def test_random_parameter_combinations():
     """Test random parameter combinations from multiple parameter files."""
@@ -394,17 +410,20 @@ def test_random_parameter_combinations():
 
     # Test random NBFIX parameters from water_ions file
     # Test ion-ion interactions
-    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("SOD", "CLA")
     assert found == True
     assert epsilon == pytest.approx(-0.0839)
+    assert rmin == pytest.approx(3.731)
 
-    epsilon, found = ff.get_nbfix("CAL", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("CAL", "CLA")
     assert found == True
     assert epsilon == pytest.approx(-0.134164)
+    assert rmin == pytest.approx(3.727)
 
-    epsilon, found = ff.get_nbfix("CAL", "O2L")
+    epsilon, rmin, found = ff.get_nbfix("CAL", "O2L")
     assert found == True
     assert epsilon == pytest.approx(-0.12)
+    assert rmin == pytest.approx(3.256)
 
     # Test parameters from silcs file
     # Test LJ parameters
@@ -413,15 +432,21 @@ def test_random_parameter_combinations():
     assert lp_params.rmin_half == pytest.approx(0.0)
 
     # Test NBFIX parameters
-    epsilon, found = ff.get_nbfix("LP", "LP")
+    epsilon, rmin, found = ff.get_nbfix("LP", "LP")
     assert found == True
     assert epsilon == pytest.approx(-0.01)
+    assert rmin == pytest.approx(12.0)
+
+    epsilon, rmin, found = ff.get_nbfix("LQ", "LQ")
+    assert found == True
+    assert epsilon == pytest.approx(-0.01)
+    assert rmin == pytest.approx(12.0)
 
     # Test non-existent combinations
-    epsilon, found = ff.get_nbfix("LP", "SOD")
+    epsilon, rmin, found = ff.get_nbfix("LP", "SOD")
     assert found == False
 
-    epsilon, found = ff.get_nbfix("LQ", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("LQ", "CLA")
     assert found == False
 
     # Test parameter overriding
@@ -433,9 +458,10 @@ def test_random_parameter_combinations():
     assert sod_params.epsilon == pytest.approx(-0.0469)
     assert sod_params.rmin_half == pytest.approx(1.41075)
 
-    epsilon, found = ff.get_nbfix("LP", "LP")
+    epsilon, rmin, found = ff.get_nbfix("LP", "LP")
     assert found == True
     assert epsilon == pytest.approx(-0.01)
+    assert rmin == pytest.approx(12.0)
 
 def test_multiple_parameter_files():
     """Test reading and combining multiple parameter files."""
@@ -495,22 +521,26 @@ def test_multiple_parameter_files():
 
     # 4. Verify NBFIX parameters (from water_ions.str)
     # Ion-ion interactions
-    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("SOD", "CLA")
     assert found == True
     assert epsilon == pytest.approx(-0.0839)
+    assert rmin == pytest.approx(3.731)
 
-    epsilon, found = ff.get_nbfix("CAL", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("CAL", "CLA")
     assert found == True
     assert epsilon == pytest.approx(-0.134164)
+    assert rmin == pytest.approx(3.727)
 
     # Ion-oxygen interactions
-    epsilon, found = ff.get_nbfix("CAL", "O2L")
+    epsilon, rmin, found = ff.get_nbfix("CAL", "O2L")
     assert found == True
     assert epsilon == pytest.approx(-0.12)
+    assert rmin == pytest.approx(3.256)
 
-    epsilon, found = ff.get_nbfix("SOD", "OC")
+    epsilon, rmin, found = ff.get_nbfix("SOD", "OC")
     assert found == True
     assert epsilon == pytest.approx(-0.07502)
+    assert rmin == pytest.approx(3.23)
 
     # 5. Verify SILCS parameters (from silcs.str)
     # LP parameters
@@ -524,29 +554,32 @@ def test_multiple_parameter_files():
     assert lq_params.rmin_half == pytest.approx(0.0)
 
     # SILCS NBFIX parameters
-    epsilon, found = ff.get_nbfix("LP", "LP")
+    epsilon, rmin, found = ff.get_nbfix("LP", "LP")
     assert found == True
     assert epsilon == pytest.approx(-0.01)
+    assert rmin == pytest.approx(12.0)
 
-    epsilon, found = ff.get_nbfix("LQ", "LQ")
+    epsilon, rmin, found = ff.get_nbfix("LQ", "LQ")
     assert found == True
     assert epsilon == pytest.approx(-0.01)
+    assert rmin == pytest.approx(12.0)
 
     # 6. Verify additional NBFIX parameters
-    epsilon, found = ff.get_nbfix("NC2", "OC")
+    epsilon, rmin, found = ff.get_nbfix("NC2", "OC")
     assert found == True
     assert epsilon == pytest.approx(-0.154919, abs=1e-5)  # From par_all36m_prot.prm
+    assert rmin == pytest.approx(3.637)  # Fixed: actual value from par_all36m_prot.prm
 
     # 7. Verify non-existent combinations
     # Between SILCS and ions
-    epsilon, found = ff.get_nbfix("LP", "SOD")
+    epsilon, rmin, found = ff.get_nbfix("LP", "SOD")
     assert found == False
 
-    epsilon, found = ff.get_nbfix("LQ", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("LQ", "CLA")
     assert found == False
 
     # Between ions
-    epsilon, found = ff.get_nbfix("SOD", "POT")
+    epsilon, rmin, found = ff.get_nbfix("SOD", "POT")
     assert found == False
 
     # 8. Verify parameter overriding behavior
@@ -559,9 +592,10 @@ def test_multiple_parameter_files():
     assert sod_params.rmin_half == pytest.approx(1.41075)
 
     # SILCS parameters should still be present
-    epsilon, found = ff.get_nbfix("LP", "LP")
+    epsilon, rmin, found = ff.get_nbfix("LP", "LP")
     assert found == True
     assert epsilon == pytest.approx(-0.01)
+    assert rmin == pytest.approx(12.0)
 
 def test_prm_and_str_files():
     """Test reading both .prm and .str files together."""
@@ -608,22 +642,26 @@ def test_prm_and_str_files():
 
     # 3. Verify NBFIX parameters from water_ions.str
     # Ion-ion interactions
-    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("SOD", "CLA")
     assert found == True
     assert epsilon == pytest.approx(-0.0839)
+    assert rmin == pytest.approx(3.731)
 
-    epsilon, found = ff.get_nbfix("CAL", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("CAL", "CLA")
     assert found == True
     assert epsilon == pytest.approx(-0.134164)
+    assert rmin == pytest.approx(3.727)
 
     # Ion-oxygen interactions
-    epsilon, found = ff.get_nbfix("CAL", "O2L")
+    epsilon, rmin, found = ff.get_nbfix("CAL", "O2L")
     assert found == True
     assert epsilon == pytest.approx(-0.12)
+    assert rmin == pytest.approx(3.256)
 
-    epsilon, found = ff.get_nbfix("SOD", "OC")
+    epsilon, rmin, found = ff.get_nbfix("SOD", "OC")
     assert found == True
     assert epsilon == pytest.approx(-0.07502)
+    assert rmin == pytest.approx(3.23)
 
     # 4. Verify SILCS parameters (from silcs.str)
     # LP parameters
@@ -637,24 +675,26 @@ def test_prm_and_str_files():
     assert lq_params.rmin_half == pytest.approx(0.0)
 
     # SILCS NBFIX parameters
-    epsilon, found = ff.get_nbfix("LP", "LP")
+    epsilon, rmin, found = ff.get_nbfix("LP", "LP")
     assert found == True
     assert epsilon == pytest.approx(-0.01)
+    assert rmin == pytest.approx(12.0)
 
-    epsilon, found = ff.get_nbfix("LQ", "LQ")
+    epsilon, rmin, found = ff.get_nbfix("LQ", "LQ")
     assert found == True
     assert epsilon == pytest.approx(-0.01)
+    assert rmin == pytest.approx(12.0)
 
     # 5. Verify non-existent combinations
     # Between SILCS and ions
-    epsilon, found = ff.get_nbfix("LP", "SOD")
+    epsilon, rmin, found = ff.get_nbfix("LP", "SOD")
     assert found == False
 
-    epsilon, found = ff.get_nbfix("LQ", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("LQ", "CLA")
     assert found == False
 
     # Between ions
-    epsilon, found = ff.get_nbfix("SOD", "POT")
+    epsilon, rmin, found = ff.get_nbfix("SOD", "POT")
     assert found == False
 
     # 6. Test parameter overriding and coexistence
@@ -667,9 +707,10 @@ def test_prm_and_str_files():
     assert ht_params.rmin_half == pytest.approx(0.2245)
     
     # SILCS parameters should still be present
-    epsilon, found = ff.get_nbfix("LP", "LP")
+    epsilon, rmin, found = ff.get_nbfix("LP", "LP")
     assert found == True
     assert epsilon == pytest.approx(-0.01)
+    assert rmin == pytest.approx(12.0)
 
     # 7. Verify nonbonded parameters are properly maintained
     params = ff.get_nonbonded_params()
@@ -842,7 +883,7 @@ def test_charmm_prm_files():
     assert o_params.rmin_half == pytest.approx(1.7000)
 
     # Test NBFIX parameters if present
-    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("SOD", "CLA")
     assert found == False  # Should be false if no NBFIX in the file
 
 def test_cgenff_prm_file():
@@ -940,7 +981,7 @@ def test_cgenff_prm_file():
     assert og2d1_params.rmin_half == pytest.approx(1.7000)
 
     # Test NBFIX parameters if present
-    epsilon, found = ff.get_nbfix("CG2R61", "OG2D1")
+    epsilon, rmin, found = ff.get_nbfix("CG2R61", "OG2D1")
     assert found == False  # Should be false if no NBFIX in the file
 
 def test_ion_ligand_nbfix():
@@ -953,19 +994,22 @@ def test_ion_ligand_nbfix():
     pygcmc.PRMParser.parse_file_to_forcefield(param_file, ff)
 
     # Test SOD-OC interaction (sodium-carboxylate)
-    epsilon, found = ff.get_nbfix("SOD", "OC")
+    epsilon, rmin, found = ff.get_nbfix("SOD", "OC")
     assert found == True
     assert epsilon == pytest.approx(-0.07502)
+    assert rmin == pytest.approx(3.23)
 
     # Test SOD-O2L interaction (sodium-phosphate)
-    epsilon, found = ff.get_nbfix("SOD", "O2L")
+    epsilon, rmin, found = ff.get_nbfix("SOD", "O2L")
     assert found == True
     assert epsilon == pytest.approx(-0.07502)
+    assert rmin == pytest.approx(3.16)  # Fixed: actual value from toppar_water_ions.str
 
     # Test CAL-OC interaction (calcium-carboxylate)
-    epsilon, found = ff.get_nbfix("CAL", "OC")
+    epsilon, rmin, found = ff.get_nbfix("CAL", "OC")
     assert found == True
     assert epsilon == pytest.approx(-0.12)
+    assert rmin == pytest.approx(3.232)  # Fixed: actual value from toppar_water_ions.str
 
     # Test special water parameters
     hper_params = ff.get_lj_params("HPER")
@@ -998,13 +1042,15 @@ def test_heterocyclic_parameters():
     assert dihedral_params[0].delta == pytest.approx(180.00)
 
     # Test halogen interactions
-    epsilon, found = ff.get_nbfix("CLGR1", "OG2D2")
+    epsilon, rmin, found = ff.get_nbfix("CLGR1", "OG2D2")
     assert found == True
     assert epsilon == pytest.approx(-2.50)
+    assert rmin == pytest.approx(2.8)
 
-    epsilon, found = ff.get_nbfix("CLGR1", "NG2R51")
+    epsilon, rmin, found = ff.get_nbfix("CLGR1", "NG2R51")
     assert found == True
-    assert epsilon == pytest.approx(-0.48)  # Changed from -0.72 to -0.48 to match the parameter file
+    assert epsilon == pytest.approx(-0.48)
+    assert rmin == pytest.approx(3.75)  # Fixed: actual value from par_all36_cgenff.prm
 
 def test_nucleic_parameters():
     """Test nucleic acid related parameters from par_all36_cgenff.prm."""
@@ -1016,13 +1062,15 @@ def test_nucleic_parameters():
     pygcmc.PRMParser.parse_file_to_forcefield(prm_file, ff)
 
     # Test nucleic acid - halogen interactions
-    epsilon, found = ff.get_nbfix("NN2G", "BRGR1")
+    epsilon, rmin, found = ff.get_nbfix("NN2G", "BRGR1")
     assert found == True
     assert epsilon == pytest.approx(-0.72)
+    assert rmin == pytest.approx(3.8)
 
-    epsilon, found = ff.get_nbfix("ON1C", "CLGR1")
+    epsilon, rmin, found = ff.get_nbfix("ON1C", "CLGR1")
     assert found == True
     assert epsilon == pytest.approx(-0.20)
+    assert rmin == pytest.approx(3.4)  # Fixed: actual value from par_all36_cgenff.prm
 
 def test_cross_forcefield_compatibility():
     """Test parameter compatibility between protein and CGenFF force fields."""
@@ -1080,9 +1128,10 @@ def test_parse_multiple_files():
     assert sod_params.rmin_half == pytest.approx(1.41075)
     
     # Test NBFIX parameters
-    epsilon, found = ff.get_nbfix("SOD", "CLA")
+    epsilon, rmin, found = ff.get_nbfix("SOD", "CLA")
     assert found == True
     assert epsilon == pytest.approx(-0.0839)
+    assert rmin == pytest.approx(3.731)
     
     # Test parameters from silcs.str
     lp_params = ff.get_lj_params("LP")

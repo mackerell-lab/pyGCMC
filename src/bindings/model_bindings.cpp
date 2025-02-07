@@ -341,7 +341,13 @@ void init_model(py::module& m) {
         .def_readwrite("kpsi", &model::ImproperParams::kpsi)
         .def_readwrite("psi0", &model::ImproperParams::psi0);
 
-    // ForceField
+    // NBFIXParams
+    py::class_<model::NBFIXParams>(m, "NBFIXParams")
+        .def(py::init<>())
+        .def_readwrite("epsilon", &model::NBFIXParams::epsilon)
+        .def_readwrite("rmin", &model::NBFIXParams::rmin);
+
+    // Bind ForceField
     py::class_<model::ForceField>(m, "ForceField")
         .def(py::init<>())
         .def("add_atom_mass", &model::ForceField::add_atom_mass)
@@ -353,7 +359,10 @@ void init_model(py::module& m) {
         .def("add_improper_params", &model::ForceField::add_improper_params)
         .def("get_atom_mass", &model::ForceField::get_atom_mass)
         .def("get_lj_params", static_cast<const model::LJParams& (model::ForceField::*)(const std::string&) const>(&model::ForceField::get_lj_params))
-        .def("get_nbfix", static_cast<std::pair<double, bool> (model::ForceField::*)(const std::string&, const std::string&) const>(&model::ForceField::get_nbfix))
+        .def("get_nbfix", [](const model::ForceField& ff, const std::string& type1, const std::string& type2) {
+            auto result = ff.get_nbfix(type1, type2);
+            return std::make_tuple(result.first.epsilon, result.first.rmin, result.second);
+        }, "Get NBFIX parameters for a pair of atom types. Returns (epsilon, rmin, found)")
         .def("get_bond_params", static_cast<const model::BondParams& (model::ForceField::*)(const std::string&, const std::string&) const>(&model::ForceField::get_bond_params))
         .def("get_angle_params", static_cast<const model::AngleParams& (model::ForceField::*)(const std::string&, const std::string&, const std::string&) const>(&model::ForceField::get_angle_params))
         .def("get_dihedral_params", static_cast<const std::vector<model::DihedralParams>& (model::ForceField::*)(const std::string&, const std::string&, const std::string&, const std::string&) const>(&model::ForceField::get_dihedral_params))
@@ -379,7 +388,7 @@ void init_model(py::module& m) {
         // Property accessors
         .def_property_readonly("atom_masses", static_cast<const std::map<std::string, double>& (model::ForceField::*)() const>(&model::ForceField::get_atom_masses))
         .def_property_readonly("lj_params", static_cast<const std::map<std::string, model::LJParams>& (model::ForceField::*)() const>(&model::ForceField::get_lj_params))
-        .def_property_readonly("nbfix", static_cast<const std::map<std::pair<std::string, std::string>, double>& (model::ForceField::*)() const>(&model::ForceField::get_nbfix))
+        .def_property_readonly("nbfix", static_cast<const std::map<std::pair<std::string, std::string>, model::NBFIXParams>& (model::ForceField::*)() const>(&model::ForceField::get_nbfix))
         .def_property_readonly("bond_params", static_cast<const std::map<std::pair<std::string, std::string>, model::BondParams>& (model::ForceField::*)() const>(&model::ForceField::get_bond_params))
         .def_property_readonly("angle_params", static_cast<const std::map<std::tuple<std::string, std::string, std::string>, model::AngleParams>& (model::ForceField::*)() const>(&model::ForceField::get_angle_params))
         .def_property_readonly("dihedral_params", static_cast<const std::map<std::tuple<std::string, std::string, std::string, std::string>, std::vector<model::DihedralParams>>& (model::ForceField::*)() const>(&model::ForceField::get_dihedral_params))

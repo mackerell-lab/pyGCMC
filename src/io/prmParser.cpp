@@ -566,12 +566,16 @@ void PRMParser::parseNBFixSection(std::istream& input, model::ForceField& ff) {
                 std::string type1 = tokens[0];
                 std::string type2 = tokens[1];
                 double epsilon = safe_stod(tokens[2], "NBFIX epsilon for " + type1 + "-" + type2);
-                ff.add_nbfix(type1, type2, epsilon);
+                double rmin = safe_stod(tokens[3], "NBFIX Rmin for " + type1 + "-" + type2);
                 
-                if (debug_output) std::cerr << "Stored NBFIX for " << type1 << "-" << type2 << ": epsilon = " << epsilon << std::endl;
+                // In CHARMM, NBFIX parameters are specified with full Rmin value
+                // No need to multiply by 2 since we store the full Rmin value
+                ff.add_nbfix(type1, type2, epsilon, rmin);
+                
+                if (debug_output) std::cerr << "Stored NBFIX for " << type1 << "-" << type2 
+                    << ": epsilon = " << epsilon << ", Rmin = " << rmin << std::endl;
             } catch (const std::exception& e) {
                 if (debug_output) std::cerr << "Warning: Skipping NBFIX line due to parsing error: " << line << std::endl;
-                continue;
             }
         }
     }

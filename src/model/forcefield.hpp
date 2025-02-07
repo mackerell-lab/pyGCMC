@@ -121,6 +121,21 @@ struct ImproperParams {
 };
 
 /**
+ * @brief Parameters for NBFIX (specific nonbonded interaction parameters)
+ * 
+ * In CHARMM, NBFIX allows specification of specific Lennard-Jones parameters
+ * for particular pairs of atom types, overriding the standard combining rules.
+ * 
+ * Units:
+ * - epsilon: kcal/mole
+ * - rmin: Angstroms (full Rmin, not Rmin/2)
+ */
+struct NBFIXParams {
+    double epsilon = 0.0;     ///< Well depth (kcal/mole)
+    double rmin = 0.0;        ///< Distance at minimum energy (Angstroms)
+};
+
+/**
  * @brief Main force field class that holds all force field parameters
  */
 class ForceField {
@@ -144,9 +159,18 @@ public:
         lj_params_[type] = params;
     }
 
-    void add_nbfix(const std::string& type1, const std::string& type2, double epsilon) {
+    /**
+     * @brief Add NBFIX parameters for a specific pair of atom types
+     * @param type1 First atom type
+     * @param type2 Second atom type
+     * @param epsilon Well depth (kcal/mole)
+     * @param rmin Distance at minimum energy (Angstroms)
+     */
+    void add_nbfix(const std::string& type1, const std::string& type2, 
+                  double epsilon, double rmin) {
         auto key = makeTypePair(type1, type2);
-        nbfix_[key] = epsilon;
+        NBFIXParams params{epsilon, rmin};
+        nbfix_[key] = params;
     }
 
     void add_bond_params(const std::string& type1, const std::string& type2, double kb, double b0) {
@@ -195,11 +219,18 @@ public:
         return it->second;
     }
 
-    std::pair<double, bool> get_nbfix(const std::string& type1, const std::string& type2) const {
+    /**
+     * @brief Get NBFIX parameters for a pair of atom types
+     * @param type1 First atom type
+     * @param type2 Second atom type
+     * @return Pair of (NBFIXParams, bool) where bool indicates if NBFIX exists
+     */
+    std::pair<NBFIXParams, bool> get_nbfix(const std::string& type1, 
+                                          const std::string& type2) const {
         auto key = makeTypePair(type1, type2);
         auto it = nbfix_.find(key);
         if (it == nbfix_.end()) {
-            return std::make_pair(0.0, false);
+            return std::make_pair(NBFIXParams{}, false);
         }
         return std::make_pair(it->second, true);
     }
@@ -333,7 +364,7 @@ public:
     // Direct access to parameter maps (for Python bindings)
     const std::map<std::string, double>& get_atom_masses() const { return atom_masses_; }
     const std::map<std::string, LJParams>& get_lj_params() const { return lj_params_; }
-    const std::map<std::pair<std::string, std::string>, double>& get_nbfix() const { return nbfix_; }
+    const std::map<std::pair<std::string, std::string>, NBFIXParams>& get_nbfix() const { return nbfix_; }
     const std::map<std::pair<std::string, std::string>, BondParams>& get_bond_params() const { return bond_params_; }
     const std::map<std::tuple<std::string, std::string, std::string>, AngleParams>& get_angle_params() const { return angle_params_; }
     const std::map<std::tuple<std::string, std::string, std::string, std::string>, std::vector<DihedralParams>>& get_dihedral_params() const { return dihedral_params_; }
@@ -343,7 +374,7 @@ private:
     // Parameter storage
     std::map<std::string, double> atom_masses_;
     std::map<std::string, LJParams> lj_params_;
-    std::map<std::pair<std::string, std::string>, double> nbfix_;
+    std::map<std::pair<std::string, std::string>, NBFIXParams> nbfix_;
     std::map<std::pair<std::string, std::string>, BondParams> bond_params_;
     std::map<std::tuple<std::string, std::string, std::string>, AngleParams> angle_params_;
     std::map<std::tuple<std::string, std::string, std::string, std::string>, std::vector<DihedralParams>> dihedral_params_;
