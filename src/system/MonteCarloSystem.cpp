@@ -634,8 +634,8 @@ void MonteCarloSystem::initializeForceField(const model::ForceField& ff) {
                 const auto& lj1 = ff.get_lj_params(type1);
                 const auto& lj2 = ff.get_lj_params(type2);
                 // Convert Rmin/2 from Å to nm
-                const float sigma1 = static_cast<float>(lj1.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
-                const float sigma2 = static_cast<float>(lj2.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
+                const float sigma1 = static_cast<float>(2.0 * lj1.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
+                const float sigma2 = static_cast<float>(2.0 * lj2.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
                 
                 // Calculate combined sigma (Lorentz-Berthelot) in nm
                 const float sigma_avg = 0.5f * (sigma1 + sigma2);
@@ -650,8 +650,8 @@ void MonteCarloSystem::initializeForceField(const model::ForceField& ff) {
                     const auto& lj2 = ff.get_lj_params(type2);
                     
                     // Convert Rmin/2 from Å to nm and then to sigma
-                    const float sigma1 = static_cast<float>(lj1.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
-                    const float sigma2 = static_cast<float>(lj2.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
+                    const float sigma1 = static_cast<float>(2.0 * lj1.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
+                    const float sigma2 = static_cast<float>(2.0 * lj2.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
                     
                     // Lorentz-Berthelot combining rules (in original kcal/mol units)
                     const float sigma_avg = 0.5f * (sigma1 + sigma2);
