@@ -25,6 +25,23 @@ namespace cpu {
  */
 void computeNaiveNonbondedEnergy(model::MCState& state);
 
+/**
+ * @brief Compute nonbonded energy for all active residues in the system
+ * 
+ * This implementation:
+ * - Computes pairwise interactions between all active residues
+ * - For each atom pair, computes both vdw and electrostatic energies:
+ *   - vdw: V = 4ε[(σ/r)¹² - (σ/r)⁶]
+ *   - elec: V = k_c * q1*q2/r
+ * - Accumulates energies into each residue's energy_vdw and energy_elec parameters
+ * - Uses full force field parameter matrix (numTotalTypes × numTotalTypes)
+ * - Implements safety checks for minimum distance and maximum energy
+ * 
+ * @param state The current MC state containing residues and force field parameters.
+ *              The residues' energy parameters will be modified.
+ */
+void computeAllNonbondedEnergy(model::MCState& state);
+
 } // namespace cpu
 } // namespace platform
 } // namespace pygcmc

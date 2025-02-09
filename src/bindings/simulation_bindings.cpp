@@ -12,6 +12,11 @@ void init_simulation_bindings(py::module& m) {
     m.def("computeNaiveNonbondedEnergy", &simulation::Simulation::computeNaiveNonbondedEnergy,
           "Compute and update nonbonded energies (vdw and elec) for all active movement residues",
           py::arg("state"));
+          
+    // 修改绑定，使用Simulation类的方法
+    m.def("computeAllNonbondedEnergy", &simulation::Simulation::computeAllNonbondedEnergy,
+          "Compute and update nonbonded energies (vdw and elec) for all active residues",
+          py::arg("state"));
 }
 
 } // namespace bindings

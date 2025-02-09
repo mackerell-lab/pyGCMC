@@ -182,6 +182,7 @@ def test_electrostatic_interaction():
     - r = 1.0 nm
     Therefore:
     V = 138.935458 * (+1) * (-1) / 1.0 = -138.935458 kJ/mol
+    Each residue gets this full energy (not divided by 2)
     """
     state = pygcmc.MCState()
     
@@ -266,6 +267,7 @@ def test_repulsive_interaction():
     V_LJ = 4ε[(σ/r)¹² - (σ/r)⁶]
     V = 4 * 1.0 * [(1.0/0.5)¹² - (1.0/0.5)⁶]
     V = 4 * (4096 - 64) = 16128
+    Each residue gets this full energy (not divided by 2)
     """
     state = pygcmc.MCState()
     
@@ -432,7 +434,7 @@ def test_combined_interaction():
     Expected:
     V_LJ = 4ε[(σ/r)¹² - (σ/r)⁶] = 0 kJ/mol (at r = sigma)
     V_C = k_c * q1*q2/r = 138.935458 * 0.5 * (-0.5) / 1.0 = -34.734 kJ/mol
-    V_total = -34.734 kJ/mol
+    Each residue gets this full energy (not divided by 2)
     """
     state = pygcmc.MCState()
     
@@ -492,16 +494,16 @@ def test_combined_interaction():
     # Calculate energy
     pygcmc.computeNaiveNonbondedEnergy(state)
     
+    # Get actual energies
+    actual_vdw = state.residues[0].energy_vdw
+    actual_elec = state.residues[0].energy_elec
+    actual_total = actual_vdw + actual_elec
+    
     # Expected energies
     COULOMB = 138.935458  # kJ·nm/mol/e²
     expected_vdw = 0.0  # kJ/mol (at r = sigma)
     expected_elec = COULOMB * 0.5 * (-0.5) / 1.0  # kJ/mol
     expected_total = expected_vdw + expected_elec
-    
-    # Get actual energies
-    actual_vdw = state.residues[0].energy_vdw
-    actual_elec = state.residues[0].energy_elec
-    actual_total = actual_vdw + actual_elec
     
     # Check results with appropriate tolerance
     rel_tol = 1e-5
@@ -594,6 +596,7 @@ def test_very_close_distance():
     - Two residues at very close distance (0.001 sigma)
     - Should give large but finite energy due to soft core potential
     - Energy should be capped at MAX_SAFE_ENERGY
+    Each residue gets this full capped energy (not divided by 2)
     """
     state = pygcmc.MCState()
     
@@ -751,4 +754,158 @@ def test_zero_distance_handling():
     # Energy should be finite and capped
     assert not math.isinf(energy), "Energy should not be infinite"
     assert not math.isnan(energy), "Energy should not be NaN"
-    assert energy <= 1e6, "Energy should be capped at MAX_SAFE_ENERGY" 
+    assert energy <= 1e6, "Energy should be capped at MAX_SAFE_ENERGY"
+
+def test_all_residues_nonbonded():
+    """Test nonbonded energy calculation for all residues.
+    
+    Setup:
+    - Three active residues in a triangular configuration
+    - Each residue has one atom with both charge and LJ interactions
+    - All residues should have correct pairwise interactions
+    
+    Note:
+    - Each pairwise interaction is calculated once and added to both residues
+    - Total system energy should be sum of all residue energies divided by 2
+      (because each interaction is counted twice in the sum)
+    """
+    state = pygcmc.MCState()
+    
+    # 1. 设置力场
+    state.forcefield.numTotalTypes = 3  # 三种类型
+    state.forcefield.numMovementTypes = 3
+    
+    # 设置力场参数 (3x3矩阵展平)
+    state.forcefield.ljEps = [1.0] * 9    # 所有相互作用eps=1.0
+    state.forcefield.ljSigma = [1.0] * 9  # 所有相互作用sigma=1.0
+    
+    # 2. 设置三个原子，形成等边三角形
+    atoms = []
+    # 在等边三角形顶点上放置原子
+    positions = [
+        (0.0, 0.0, 0.0),           # 原点
+        (1.0, 0.0, 0.0),           # x轴上1nm处
+        (0.5, 0.866, 0.0)          # 完成等边三角形
+    ]
+    charges = [0.5, -0.5, 0.5]     # 交替电荷
+    
+    for i, (x, y, z) in enumerate(positions):
+        atom = pygcmc.MCAtom()
+        atom.x = x
+        atom.y = y
+        atom.z = z
+        atom.charge = charges[i]
+        atom.type = i
+        atoms.append(atom)
+    
+    state.atoms = atoms
+    state.activeAtomCount = 3
+    
+    # 3. 设置三个residues
+    residues = []
+    for i in range(3):
+        res = pygcmc.MCResidue()
+        res.active = True
+        res.type = i
+        res.atomStart = i
+        res.atomCount = 1
+        residues.append(res)
+    
+    state.residues = residues
+    state.activeResidueCount = 3
+    
+    # 计算能量
+    pygcmc.computeAllNonbondedEnergy(state)
+    
+    # 验证每个residue都有能量
+    for i in range(3):
+        energy = state.residues[i].energy_vdw + state.residues[i].energy_elec
+        assert not math.isnan(energy), f"Residue {i} has NaN energy"
+        assert not math.isinf(energy), f"Residue {i} has infinite energy"
+    
+    # 计算总能量
+    total_vdw = sum(res.energy_vdw for res in state.residues)
+    total_elec = sum(res.energy_elec for res in state.residues)
+    total_energy = total_vdw + total_elec
+    
+    # 总能量除以2（因为每个相互作用被计算了两次）
+    system_energy = total_energy / 2.0
+    
+    # 验证总能量合理性
+    assert system_energy < 1e6, "Total system energy too large"
+    assert system_energy > -1e6, "Total system energy too negative"
+    
+    # 验证能量的数量级合理性
+    # 对于我们的设置：
+    # - LJ能量在r=sigma时为0
+    # - 静电能量 = k_c * q1*q2/r
+    # 对于三个residue，有三对相互作用：
+    # 1. residue 0-1: q1=0.5, q2=-0.5, r=1.0
+    # 2. residue 1-2: q1=-0.5, q2=0.5, r=1.0
+    # 3. residue 2-0: q1=0.5, q2=0.5, r=1.0
+    # 每对相互作用计算一次，加到两个相关的residue上
+    COULOMB = 138.935458  # kJ·nm/mol/e²
+    
+    # 计算每对相互作用的能量
+    e_01 = COULOMB * 0.5 * (-0.5) / 1.0  # residue 0-1 相互作用
+    e_12 = COULOMB * (-0.5) * 0.5 / 1.0  # residue 1-2 相互作用
+    e_20 = COULOMB * 0.5 * 0.5 / 1.0     # residue 2-0 相互作用
+    
+    # 总系统能量是所有相互作用的和
+    expected_system_energy = e_01 + e_12 + e_20
+    
+    rel_tol = 0.1  # 10%的相对误差容忍度
+    assert abs((system_energy - expected_system_energy) / expected_system_energy) < rel_tol, \
+           f"System energy {system_energy} differs too much from expected {expected_system_energy}"
+
+def test_all_residues_inactive():
+    """Test all residues nonbonded energy with inactive residues."""
+    state = pygcmc.MCState()
+    
+    # 基本设置
+    state.forcefield.numTotalTypes = 2
+    state.forcefield.numMovementTypes = 2
+    state.forcefield.ljEps = [1.0] * 4
+    state.forcefield.ljSigma = [1.0] * 4
+    
+    # 设置两个原子
+    atom1 = pygcmc.MCAtom()
+    atom1.x = 0.0
+    atom1.y = 0.0
+    atom1.z = 0.0
+    atom1.charge = 1.0
+    atom1.type = 0
+    
+    atom2 = pygcmc.MCAtom()
+    atom2.x = 1.0
+    atom2.y = 0.0
+    atom2.z = 0.0
+    atom2.charge = -1.0
+    atom2.type = 1
+    
+    state.atoms = [atom1, atom2]
+    state.activeAtomCount = 2
+    
+    # 设置两个inactive residues
+    res1 = pygcmc.MCResidue()
+    res1.active = False
+    res1.type = 0
+    res1.atomStart = 0
+    res1.atomCount = 1
+    
+    res2 = pygcmc.MCResidue()
+    res2.active = False
+    res2.type = 1
+    res2.atomStart = 1
+    res2.atomCount = 1
+    
+    state.residues = [res1, res2]
+    state.activeResidueCount = 0
+    
+    # 计算能量
+    pygcmc.computeAllNonbondedEnergy(state)
+    
+    # 验证所有能量都是0
+    for res in state.residues:
+        assert abs(res.energy_vdw) < 1e-6, "Inactive residue has non-zero VDW energy"
+        assert abs(res.energy_elec) < 1e-6, "Inactive residue has non-zero electrostatic energy" 

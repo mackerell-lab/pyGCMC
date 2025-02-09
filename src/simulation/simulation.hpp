@@ -79,6 +79,9 @@ public:
     // Note: This function modifies the energy_vdw and energy_elec parameters of residues in the state
     static void computeNaiveNonbondedEnergy(model::MCState& state);
 
+    // Compute all nonbonded energy between active movement residues and all other active residues
+    static void computeAllNonbondedEnergy(model::MCState& state);
+
     // Finalize the simulation and (optionally) download final data
     void finalize() {
         platform_->finalize();
