@@ -30,6 +30,10 @@ def test_attractive_interaction():
     state.forcefield.ljEps = [1.0, 1.0]    # eps = 1.0 for both interactions
     state.forcefield.ljSigma = [1.0, 1.0]  # sigma = 1.0 for both interactions
     
+    # Set up movement atom types
+    state.movementAtomTypes = [0]  # Type 0 is a movement type
+    state.numMovementAtomTypes = 1
+    
     # 2. Set up atoms
     # First atom (for movement residue)
     atom1 = pygcmc.MCAtom()
@@ -110,6 +114,10 @@ def test_three_movement_molecules():
     state.forcefield.ljEps = [1.0]     # eps = 1.0 for movement-movement interaction
     state.forcefield.ljSigma = [1.0]   # sigma = 1.0 for movement-movement interaction
     
+    # Set up movement atom types
+    state.movementAtomTypes = [0]  # Type 0 is a movement type
+    state.numMovementAtomTypes = 1
+    
     # 2. Set up atoms (place them at unit distance from each other)
     atoms = []
     positions = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)]  # Form a right triangle with unit distances
@@ -178,6 +186,10 @@ def test_electrostatic_interaction():
     state.forcefield.numMovementTypes = 1
     state.forcefield.ljEps = [0.0, 0.0]    # eps = 0.0 to disable vdw
     state.forcefield.ljSigma = [1.0, 1.0]  # sigma doesn't matter when eps = 0
+    
+    # Set up movement atom types
+    state.movementAtomTypes = [0]  # Type 0 is a movement type
+    state.numMovementAtomTypes = 1
     
     # 2. Set up atoms with opposite charges
     atom1 = pygcmc.MCAtom()
@@ -250,6 +262,10 @@ def test_repulsive_interaction():
     state.forcefield.numMovementTypes = 1
     state.forcefield.ljEps = [1.0, 1.0]
     state.forcefield.ljSigma = [1.0, 1.0]
+    
+    # Set up movement atom types
+    state.movementAtomTypes = [0]  # Type 0 is a movement type
+    state.numMovementAtomTypes = 1
     
     # 2. Set up atoms at close distance
     atom1 = pygcmc.MCAtom()
