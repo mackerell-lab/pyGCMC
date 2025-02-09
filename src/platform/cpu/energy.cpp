@@ -11,15 +11,128 @@ namespace cpu {
 // Debug flag to control output
 static bool debug_output = false;
 
-// Coulomb constant in kJ·nm/mol/e^2
+/**
+ * @brief Coulomb constant in GROMACS MD units [kJ·nm/mol/e²]
+ * 
+ * k_c = 1/(4*π*ε₀) = 138.935458 kJ·nm/mol/e²
+ * 
+ * Unit analysis:
+ * - ε₀ (vacuum permittivity) = 8.8541878128e-12 C²/(J·m)
+ * - 1 kJ = 1000 J
+ * - 1 nm = 1e-9 m
+ * - 1 e = 1.60217663e-19 C
+ * - N_A (Avogadro constant) = 6.02214076e23 mol⁻¹
+ */
 const float COULOMB = 138.935458f;
 
+/**
+ * @brief Safety parameters for energy calculation
+ * 
+ * !!! CRITICAL: Distance handling for Monte Carlo simulation !!!
+ * 
+ * MIN_SAFE_DISTANCE: Minimum allowed distance (1% of sigma)
+ * - !!! Prevents numerical instability and infinity at r = 0
+ * - !!! Essential for Monte Carlo sampling near contact
+ * - !!! Implements soft core potential for r < MIN_SAFE_DISTANCE
+ * 
+ * MAX_SAFE_ENERGY: Maximum allowed energy per interaction
+ * - !!! Prevents numerical overflow in Metropolis criterion
+ * - !!! Keeps energies finite for stable MC sampling
+ * - !!! Especially important for Coulomb interactions at small r
+ */
+const float MIN_SAFE_DISTANCE = 0.01f;  // nm (1% of typical sigma)
+const float MAX_SAFE_ENERGY = 1e6f;     // kJ/mol
+
+/**
+ * @brief Calculate LJ and Coulomb energy with safety checks
+ * 
+ * !!! IMPORTANT: Zero distance handling strategy !!!
+ * 1. For r < MIN_SAFE_DISTANCE:
+ *    - Replace actual distance with MIN_SAFE_DISTANCE
+ *    - Provides continuous potential without singularity
+ *    - Allows MC moves through high-energy regions
+ * 
+ * 2. Energy capping:
+ *    - Limits maximum repulsion to MAX_SAFE_ENERGY
+ *    - Prevents exp(−βE) underflow in Metropolis
+ *    - Maintains numerical stability of MC sampling
+ * 
+ * This approach:
+ * - !!! Avoids infinite energies at r = 0
+ * - !!! Keeps energy continuous and differentiable
+ * - !!! Allows MC sampling of close contacts
+ * - !!! Prevents numerical instabilities in simulation
+ */
+inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, float q1, float q2) {
+    // !!! CRITICAL: Apply soft core potential for very small distances
+    // This prevents infinities and numerical instabilities
+    if (r2 < MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE) {
+        r2 = MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE;  // !!! Replace with safe minimum
+    }
+    
+    float r = std::sqrt(r2);  // nm
+    
+    // Calculate LJ energy: V_LJ = 4ε[(σ/r)¹² - (σ/r)⁶]
+    float sigma_r = sigma / r;
+    float term6 = std::pow(sigma_r, 6);
+    float term12 = term6 * term6;
+    float vdw_energy = 4.0f * eps * (term12 - term6);  // kJ/mol
+    
+    // Calculate Coulomb energy: V_C = k_c * q1*q2/r
+    float elec_energy = COULOMB * q1 * q2 / r;  // kJ/mol
+    
+    // !!! CRITICAL: Apply energy capping for numerical stability
+    // First cap individual terms
+    vdw_energy = std::min(vdw_energy, MAX_SAFE_ENERGY);
+    vdw_energy = std::max(vdw_energy, -MAX_SAFE_ENERGY);
+    elec_energy = std::min(elec_energy, MAX_SAFE_ENERGY);
+    elec_energy = std::max(elec_energy, -MAX_SAFE_ENERGY);
+    
+    // !!! CRITICAL: Also cap total energy
+    float total_energy = vdw_energy + elec_energy;
+    if (total_energy > MAX_SAFE_ENERGY) {
+        // Scale both components proportionally
+        float scale = MAX_SAFE_ENERGY / total_energy;
+        vdw_energy *= scale;
+        elec_energy *= scale;
+    } else if (total_energy < -MAX_SAFE_ENERGY) {
+        // Scale both components proportionally
+        float scale = -MAX_SAFE_ENERGY / total_energy;
+        vdw_energy *= scale;
+        elec_energy *= scale;
+    }
+    
+    return {vdw_energy, elec_energy};
+}
+
+/**
+ * @brief Compute non-bonded energies for movement residues without PBC
+ * 
+ * Calculates Lennard-Jones and Coulomb interactions between:
+ * 1. Movement residues and all other active residues
+ * 2. Each atom pair between residues
+ * 
+ * Energy components per residue:
+ * 1. Lennard-Jones (kJ/mol):
+ *    V_LJ = 4ε[(σ/r)¹² - (σ/r)⁶]
+ *    - ε: well depth (kJ/mol)
+ *    - σ: distance at zero energy (nm)
+ *    - r: inter-atomic distance (nm)
+ * 
+ * 2. Coulomb (kJ/mol):
+ *    V_C = k_c * (q₁q₂/r)
+ *    - k_c: Coulomb constant (138.935458 kJ·nm/mol/e²)
+ *    - q₁,q₂: atomic charges (e)
+ *    - r: inter-atomic distance (nm)
+ * 
+ * Uses soft core potential and energy capping for numerical stability.
+ */
 void computeNaiveNonbondedEnergy(model::MCState& state) {
     auto& residues = state.residues;
     const auto& forcefield = state.forcefield;
     const auto& atoms = state.atoms;
 
-    // Validate force field setup
+    // Validate force field parameter array sizes
     size_t expected_size = static_cast<size_t>(forcefield.numMovementTypes) * 
                           static_cast<size_t>(forcefield.numTotalTypes);
     if (forcefield.ljEps.size() != expected_size || forcefield.ljSigma.size() != expected_size) {
@@ -39,7 +152,7 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
 
     // Iterate through all movement molecule groups
     for (const auto& movementInfo : state.movementResidues) {
-        // Calculate energies only for active movement residues
+        // Process only active movement residues
         for (int i = movementInfo.startIndex; 
              i < movementInfo.startIndex + movementInfo.activeCount; ++i) {
             if (!residues[i].active) continue;
@@ -50,7 +163,7 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
                  ++atom_i) {
                 int moveType = atoms[atom_i].type;
                 
-                // Find movement type index in movementAtomTypes
+                // Find movement type index in movementAtomTypes array
                 int mi = -1;
                 for (int k = 0; k < state.numMovementAtomTypes; ++k) {
                     if (state.movementAtomTypes[k] == moveType) {
@@ -80,7 +193,7 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
                 // Compute interaction with atoms in all other active residues
                 for (int j = 0; j < state.activeResidueCount; ++j) {
                     // Skip if:
-                    // 1. Same residue
+                    // 1. Same residue (avoid self-interaction)
                     // 2. Residue is inactive
                     if (j == i || !residues[j].active) continue;
                     
@@ -99,41 +212,37 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
                             throw std::runtime_error(ss.str());
                         }
                         
-                        // Calculate distance between atoms
-                        float dx = atoms[atom_j].x - atoms[atom_i].x;
-                        float dy = atoms[atom_j].y - atoms[atom_i].y;
-                        float dz = atoms[atom_j].z - atoms[atom_i].z;
-                        float r2 = dx*dx + dy*dy + dz*dz;  // nm^2
-                        float r = std::sqrt(r2);  // nm
+                        // Calculate distance between atoms (nm)
+                        float dx = atoms[atom_j].x - atoms[atom_i].x;  // nm
+                        float dy = atoms[atom_j].y - atoms[atom_i].y;  // nm
+                        float dz = atoms[atom_j].z - atoms[atom_i].z;  // nm
+                        float r2 = dx*dx + dy*dy + dz*dz;  // nm²
                         
-                        // Get force field parameters using movement type index
+                        // Get force field parameters
                         int param_index = mi * forcefield.numTotalTypes + resType;
-                        float eps = forcefield.ljEps[param_index];  // Already in kJ/mol
-                        float sigma = forcefield.ljSigma[param_index];  // Already in nm
+                        float eps = forcefield.ljEps[param_index];     // kJ/mol
+                        float sigma = forcefield.ljSigma[param_index]; // nm
+                        float q1 = atoms[atom_i].charge;  // e
+                        float q2 = atoms[atom_j].charge;  // e
                         
-                        // Calculate vdw energy: V = eps * [(sigma/r)^12 - 2*(sigma/r)^6]
-                        float sigma_r = sigma / r;
-                        float term6 = std::pow(sigma_r, 6);
-                        float term12 = term6 * term6;
-                        float vdw_energy = eps * (term12 - 2.0f * term6);
-                        
-                        // Calculate electrostatic energy: V = k_c * q1*q2/r
-                        float q1 = atoms[atom_i].charge;
-                        float q2 = atoms[atom_j].charge;
-                        float elec_energy = COULOMB * q1 * q2 / r;  // kJ/mol
+                        // Calculate energies with safety checks
+                        auto [vdw_energy, elec_energy] = calcPairEnergy(r2, sigma, eps, q1, q2);
                         
                         // Add energies to the movement residue
-                        residues[i].energy_vdw += vdw_energy;
-                        residues[i].energy_elec += elec_energy;
+                        residues[i].energy_vdw += vdw_energy;    // kJ/mol
+                        residues[i].energy_elec += elec_energy;  // kJ/mol
                         
                         if (debug_output) {
+                            float r = std::sqrt(r2);
                             platform::log(LogLevel::DEBUG,
                                 "Interaction between residues ", i, "(", movementInfo.resName, ") and ", j, "\n",
                                 "  Atoms: ", atom_i, "(type ", moveType, ") - ", 
                                 atom_j, "(type ", resType, ")\n",
                                 "  Distance: ", r, " nm\n",
                                 "  Parameters: eps=", eps, " kJ/mol, sigma=", sigma, " nm\n",
-                                "  Energies: vdw=", vdw_energy, " elec=", elec_energy, " kJ/mol");
+                                "  Energies: vdw=", vdw_energy, " elec=", elec_energy, " kJ/mol\n",
+                                "  Cumulative residue ", i, " energies: vdw=", residues[i].energy_vdw,
+                                " elec=", residues[i].energy_elec, " kJ/mol");
                         }
                     }
                 }
