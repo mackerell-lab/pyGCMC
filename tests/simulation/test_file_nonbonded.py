@@ -314,10 +314,10 @@ def test_nonbonded_energy_with_specific_molecules(charmm_ff):
         state.atoms[water1_start + i].y = 0.0
         state.atoms[water1_start + i].z = 0.0
     
-    # Second water at (3,0,0) - typical hydrogen bond distance
+    # Second water at (0.3,0,0) nm - typical hydrogen bond distance
     water2_start = state.residues[1].atomStart
     for i in range(3):
-        state.atoms[water2_start + i].x = 3.0
+        state.atoms[water2_start + i].x = 0.3  # nm
         state.atoms[water2_start + i].y = 0.0
         state.atoms[water2_start + i].z = 0.0
     
@@ -336,8 +336,8 @@ def test_nonbonded_energy_with_specific_molecules(charmm_ff):
         assert not math.isnan(total_energy), f"Energy is NaN for water {i+1}"
         assert not math.isinf(total_energy), f"Energy is infinite for water {i+1}"
         
-        # Water-water interaction at 3Å should be favorable
-        assert total_energy < 0, f"Water-water interaction should be attractive at 3Å"
+        # Water-water interaction at 0.3 nm should be favorable
+        assert total_energy < 0, f"Water-water interaction should be attractive at 0.3 nm"
     
     print("\n=== test_nonbonded_energy_with_specific_molecules completed successfully ===")
 
@@ -404,7 +404,7 @@ def test_benx_water_interaction(charmm_ff):
         state.atoms[benx_start + i].z = 0.0
     
     # Test different water positions
-    distances = [3.0, 5.0, 7.0]  # Test at different distances
+    distances = [0.3, 0.5, 0.7]  # nm
     water_start = state.residues[1].atomStart
     water_count = state.residues[1].atomCount
     
@@ -412,7 +412,7 @@ def test_benx_water_interaction(charmm_ff):
     for dist in distances:
         # Position water
         for i in range(water_count):
-            state.atoms[water_start + i].x = dist
+            state.atoms[water_start + i].x = dist  # nm
             state.atoms[water_start + i].y = 0.0
             state.atoms[water_start + i].z = 0.0
         
@@ -423,7 +423,7 @@ def test_benx_water_interaction(charmm_ff):
         benx_energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
         water_energy = state.residues[1].energy_vdw + state.residues[1].energy_elec
         
-        print(f"\nAt distance {dist}Å:")
+        print(f"\nAt distance {dist} nm:")
         print(f"Benzene energy: vdw={state.residues[0].energy_vdw:.3f}, elec={state.residues[0].energy_elec:.3f}, total={benx_energy:.3f}")
         print(f"Water energy: vdw={state.residues[1].energy_vdw:.3f}, elec={state.residues[1].energy_elec:.3f}, total={water_energy:.3f}")
         
@@ -432,8 +432,8 @@ def test_benx_water_interaction(charmm_ff):
         assert not math.isnan(water_energy), "Water energy is NaN"
         
         # Energy should decrease with distance
-        if dist > 3.0:
-            assert abs(benx_energy) < prev_benx_energy, f"Energy not decreasing with distance at {dist}Å"
+        if dist > 0.3:
+            assert abs(benx_energy) < prev_benx_energy, f"Energy not decreasing with distance at {dist} nm"
         
         prev_benx_energy = abs(benx_energy)
     
@@ -502,7 +502,7 @@ def test_imia_water_interaction(charmm_ff):
         state.atoms[imia_start + i].z = 0.0
     
     # Test different water positions and orientations
-    distances = [2.8, 4.0, 6.0]  # Include hydrogen bond distance
+    distances = [0.28, 0.4, 0.6]  # nm (including hydrogen bond distance)
     water_start = state.residues[1].atomStart
     water_count = state.residues[1].atomCount
     
@@ -510,7 +510,7 @@ def test_imia_water_interaction(charmm_ff):
     for dist in distances:
         # Position water
         for i in range(water_count):
-            state.atoms[water_start + i].x = dist
+            state.atoms[water_start + i].x = dist  # nm
             state.atoms[water_start + i].y = 0.0
             state.atoms[water_start + i].z = 0.0
         
@@ -521,7 +521,7 @@ def test_imia_water_interaction(charmm_ff):
         imia_energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
         water_energy = state.residues[1].energy_vdw + state.residues[1].energy_elec
         
-        print(f"\nAt distance {dist}Å:")
+        print(f"\nAt distance {dist} nm:")
         print(f"Imidazole energy: vdw={state.residues[0].energy_vdw:.3f}, elec={state.residues[0].energy_elec:.3f}, total={imia_energy:.3f}")
         print(f"Water energy: vdw={state.residues[1].energy_vdw:.3f}, elec={state.residues[1].energy_elec:.3f}, total={water_energy:.3f}")
         
@@ -529,13 +529,13 @@ def test_imia_water_interaction(charmm_ff):
         assert not math.isnan(imia_energy), "Imidazole energy is NaN"
         assert not math.isnan(water_energy), "Water energy is NaN"
         
-        # At hydrogen bond distance (2.8Å), interaction should be favorable
-        if abs(dist - 2.8) < 0.1:
-            assert imia_energy < 0, "Expected favorable interaction at hydrogen bond distance"
+        # At hydrogen bond distance (0.28 nm), interaction should be favorable
+        if abs(dist - 0.28) < 0.01:
+            assert imia_energy < 0, "Expected favorable interaction at hydrogen bond distance (0.28 nm)"
         
         # Energy should decrease with distance
-        if dist > 2.8:
-            assert abs(imia_energy) < prev_imia_energy, f"Energy not decreasing with distance at {dist}Å"
+        if dist > 0.28:
+            assert abs(imia_energy) < prev_imia_energy, f"Energy not decreasing with distance at {dist} nm"
         
         prev_imia_energy = abs(imia_energy)
     
@@ -591,7 +591,7 @@ def test_distance_dependence(charmm_ff):
         state.atoms[water1_start + i].z = 0.0
     
     # Test at various distances
-    distances = [2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0]
+    distances = [0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0]  # nm
     water2_start = state.residues[1].atomStart
     
     print("\nTesting distance dependence of interactions:")
@@ -599,7 +599,7 @@ def test_distance_dependence(charmm_ff):
     for dist in distances:
         # Position second water
         for i in range(3):
-            state.atoms[water2_start + i].x = dist
+            state.atoms[water2_start + i].x = dist  # nm
             state.atoms[water2_start + i].y = 0.0
             state.atoms[water2_start + i].z = 0.0
         
@@ -610,14 +610,14 @@ def test_distance_dependence(charmm_ff):
         total_energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
         energies.append(total_energy)
         
-        print(f"\nAt distance {dist}Å:")
+        print(f"\nAt distance {dist} nm:")
         print(f"VDW energy: {state.residues[0].energy_vdw:.3f}")
         print(f"Electrostatic energy: {state.residues[0].energy_elec:.3f}")
         print(f"Total energy: {total_energy:.3f}")
         
         # Verify energy properties
-        assert not math.isnan(total_energy), f"Energy is NaN at distance {dist}Å"
-        assert not math.isinf(total_energy), f"Energy is infinite at distance {dist}Å"
+        assert not math.isnan(total_energy), f"Energy is NaN at distance {dist} nm"
+        assert not math.isinf(total_energy), f"Energy is infinite at distance {dist} nm"
         
         # Check distance dependence
         if len(energies) > 1:
@@ -625,7 +625,7 @@ def test_distance_dependence(charmm_ff):
             expected_ratio = (dist / distances[-2])**6  # Approximate for vdw dominated region
             print(f"Energy ratio: {ratio:.3f}, Expected: {expected_ratio:.3f}")
             # Allow for some deviation due to mixed electrostatic and vdw
-            assert abs(ratio - expected_ratio) < 2.0, f"Unexpected distance dependence at {dist}Å"
+            assert abs(ratio - expected_ratio) < 2.0, f"Unexpected distance dependence at {dist} nm"
     
     print("\n=== test_distance_dependence completed successfully ===")
 
@@ -679,7 +679,7 @@ def test_short_range_repulsion(charmm_ff):
         state.atoms[water1_start + i].z = 0.0
     
     # Test at very short distances
-    distances = [0.5, 0.7, 1.0, 1.5, 2.0]
+    distances = [0.05, 0.07, 0.1, 0.15, 0.2]  # nm
     water2_start = state.residues[1].atomStart
     
     print("\nTesting short-range repulsive interactions:")
@@ -687,7 +687,7 @@ def test_short_range_repulsion(charmm_ff):
     for dist in distances:
         # Position second water
         for i in range(3):
-            state.atoms[water2_start + i].x = dist
+            state.atoms[water2_start + i].x = dist  # nm
             state.atoms[water2_start + i].y = 0.0
             state.atoms[water2_start + i].z = 0.0
         
@@ -699,27 +699,27 @@ def test_short_range_repulsion(charmm_ff):
         elec_energy = state.residues[0].energy_elec
         total_energy = vdw_energy + elec_energy
         
-        print(f"\nAt distance {dist}Å:")
+        print(f"\nAt distance {dist} nm:")
         print(f"VDW energy: {vdw_energy:.3f}")
         print(f"Electrostatic energy: {elec_energy:.3f}")
         print(f"Total energy: {total_energy:.3f}")
         
         # Verify energy properties
-        assert not math.isnan(total_energy), f"Energy is NaN at distance {dist}Å"
-        assert not math.isinf(total_energy), f"Energy is infinite at distance {dist}Å"
+        assert not math.isnan(total_energy), f"Energy is NaN at distance {dist} nm"
+        assert not math.isinf(total_energy), f"Energy is infinite at distance {dist} nm"
         
         # Energy should be positive (repulsive) at very short range
-        assert total_energy > 0, f"Expected repulsive interaction at {dist}Å"
+        assert total_energy > 0, f"Expected repulsive interaction at {dist} nm"
         
         # Check that repulsion increases as distance decreases
         if prev_energy is not None:
-            assert total_energy > prev_energy, f"Repulsion not increasing at {dist}Å"
+            assert total_energy > prev_energy, f"Repulsion not increasing at {dist} nm"
         
         prev_energy = total_energy
         
         # At very short range, vdw should dominate
-        if dist < 1.0:
-            assert abs(vdw_energy) > abs(elec_energy), f"VDW not dominant at {dist}Å"
+        if dist < 0.1:
+            assert abs(vdw_energy) > abs(elec_energy), f"VDW not dominant at {dist} nm"
     
     print("\n=== test_short_range_repulsion completed successfully ===")
 

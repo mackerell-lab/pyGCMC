@@ -3,13 +3,14 @@
 #include <cmath>
 #include <stdexcept>
 #include <sstream>
+#include <iomanip>  // 添加用于格式化输出
 
 namespace pygcmc {
 namespace platform {
 namespace cpu {
 
 // Debug flag to control output
-static bool debug_output = false;
+static bool debug_output = true;  // 默认开启调试输出
 
 /**
  * @brief Coulomb constant in GROMACS MD units [kJ·nm/mol/e²]
@@ -64,13 +65,32 @@ const float MAX_SAFE_ENERGY = 1e6f;     // kJ/mol
  * - !!! Prevents numerical instabilities in simulation
  */
 inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, float q1, float q2) {
-    // !!! CRITICAL: Apply soft core potential for very small distances
-    // This prevents infinities and numerical instabilities
+    if (debug_output) {
+        std::stringstream ss;
+        ss << std::fixed << std::setprecision(6);
+        ss << "\n=== calcPairEnergy called ===";
+        ss << "\nInput parameters:"
+           << "\n  Distance² = " << r2 << " nm²"
+           << "\n  Sigma = " << sigma << " nm"
+           << "\n  Epsilon = " << eps << " kJ/mol"
+           << "\n  q1 = " << q1 << " e"
+           << "\n  q2 = " << q2 << " e";
+        platform::log(LogLevel::DEBUG, ss.str());
+    }
+
     if (r2 < MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE) {
-        r2 = MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE;  // !!! Replace with safe minimum
+        if (debug_output) {
+            platform::log(LogLevel::DEBUG, "Distance below MIN_SAFE_DISTANCE, using r2 = ", 
+                         MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE);
+        }
+        r2 = MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE;
     }
     
-    float r = std::sqrt(r2);  // nm
+    float r = std::sqrt(r2);
+    
+    if (debug_output) {
+        platform::log(LogLevel::DEBUG, "Distance r = ", r, " nm");
+    }
     
     // Calculate LJ energy: V_LJ = 4ε[(σ/r)¹² - (σ/r)⁶]
     float sigma_r = sigma / r;
@@ -80,6 +100,23 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
     
     // Calculate Coulomb energy: V_C = k_c * q1*q2/r
     float elec_energy = COULOMB * q1 * q2 / r;  // kJ/mol
+
+    if (debug_output) {
+        std::stringstream ss;
+        ss << std::fixed << std::setprecision(6);
+        ss << "\nEnergy calculation details:";
+        ss << "\n  sigma/r = " << sigma_r;
+        ss << "\n  (sigma/r)^6 = " << term6;
+        ss << "\n  (sigma/r)^12 = " << term12;
+        ss << "\n  4*epsilon = " << (4.0f * eps);
+        ss << "\n  VDW term = " << (term12 - term6);
+        ss << "\n  COULOMB constant = " << COULOMB;
+        ss << "\n  q1*q2 = " << (q1 * q2);
+        ss << "\nInitial energies:";
+        ss << "\n  VDW energy = " << vdw_energy << " kJ/mol";
+        ss << "\n  Electrostatic energy = " << elec_energy << " kJ/mol";
+        platform::log(LogLevel::DEBUG, ss.str());
+    }
     
     // !!! CRITICAL: Apply energy capping for numerical stability
     // First cap individual terms
@@ -91,15 +128,29 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
     // !!! CRITICAL: Also cap total energy
     float total_energy = vdw_energy + elec_energy;
     if (total_energy > MAX_SAFE_ENERGY) {
-        // Scale both components proportionally
         float scale = MAX_SAFE_ENERGY / total_energy;
         vdw_energy *= scale;
         elec_energy *= scale;
+        if (debug_output) {
+            platform::log(LogLevel::DEBUG, "Total energy exceeded MAX_SAFE_ENERGY, scaled by ", scale);
+        }
     } else if (total_energy < -MAX_SAFE_ENERGY) {
-        // Scale both components proportionally
         float scale = -MAX_SAFE_ENERGY / total_energy;
         vdw_energy *= scale;
         elec_energy *= scale;
+        if (debug_output) {
+            platform::log(LogLevel::DEBUG, "Total energy below -MAX_SAFE_ENERGY, scaled by ", scale);
+        }
+    }
+
+    if (debug_output) {
+        std::stringstream ss;
+        ss << std::fixed << std::setprecision(6);
+        ss << "\n=== calcPairEnergy returning ===";
+        ss << "\n  Final VDW energy = " << vdw_energy << " kJ/mol";
+        ss << "\n  Final Electrostatic energy = " << elec_energy << " kJ/mol";
+        ss << "\n  Total energy = " << (vdw_energy + elec_energy) << " kJ/mol";
+        platform::log(LogLevel::DEBUG, ss.str());
     }
     
     return {vdw_energy, elec_energy};
@@ -128,6 +179,18 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
  * Uses soft core potential and energy capping for numerical stability.
  */
 void computeNaiveNonbondedEnergy(model::MCState& state) {
+    if (debug_output) {
+        platform::log(LogLevel::DEBUG, "\n=== Starting nonbonded energy calculation ===");
+        platform::log(LogLevel::DEBUG, "System state info:");
+        platform::log(LogLevel::DEBUG, "  Active residue count: ", state.activeResidueCount);
+        platform::log(LogLevel::DEBUG, "  Number of movement residues: ", state.movementResidues.size());
+        platform::log(LogLevel::DEBUG, "  Number of movement atom types: ", state.numMovementAtomTypes);
+        platform::log(LogLevel::DEBUG, "Force field info:");
+        platform::log(LogLevel::DEBUG, "  Number of movement types: ", state.forcefield.numMovementTypes);
+        platform::log(LogLevel::DEBUG, "  Number of total types: ", state.forcefield.numTotalTypes);
+        platform::log(LogLevel::DEBUG, "  Size of LJ parameters: ", state.forcefield.ljEps.size());
+    }
+
     auto& residues = state.residues;
     const auto& forcefield = state.forcefield;
     const auto& atoms = state.atoms;
@@ -148,15 +211,31 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
     for (auto& residue : residues) {
         residue.energy_vdw = 0.0f;
         residue.energy_elec = 0.0f;
+        if (debug_output) {
+            platform::log(LogLevel::DEBUG, "Reset energies for residue at atom start ", residue.atomStart);
+        }
     }
 
     // Iterate through all movement molecule groups
     for (const auto& movementInfo : state.movementResidues) {
+        if (debug_output) {
+            platform::log(LogLevel::DEBUG, "\nProcessing movement residue group: ", movementInfo.resName);
+            platform::log(LogLevel::DEBUG, "  Start index: ", movementInfo.startIndex);
+            platform::log(LogLevel::DEBUG, "  Active count: ", movementInfo.activeCount);
+            platform::log(LogLevel::DEBUG, "  Total count: ", movementInfo.totalCount);
+        }
+
         // Process only active movement residues
         for (int i = movementInfo.startIndex; 
              i < movementInfo.startIndex + movementInfo.activeCount; ++i) {
             if (!residues[i].active) continue;
             
+            if (debug_output) {
+                platform::log(LogLevel::DEBUG, "\nProcessing movement residue ", i);
+                platform::log(LogLevel::DEBUG, "  Atom start: ", residues[i].atomStart);
+                platform::log(LogLevel::DEBUG, "  Atom count: ", residues[i].atomCount);
+            }
+
             // For each atom in the movement residue
             for (int atom_i = residues[i].atomStart; 
                  atom_i < residues[i].atomStart + residues[i].atomCount; 
@@ -190,6 +269,16 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
                     throw std::runtime_error(ss.str());
                 }
                 
+                if (debug_output) {
+                    platform::log(LogLevel::DEBUG, "\nProcessing movement atom ", atom_i);
+                    platform::log(LogLevel::DEBUG, "  Type: ", moveType);
+                    platform::log(LogLevel::DEBUG, "  Movement type index: ", mi);
+                    platform::log(LogLevel::DEBUG, "  Position: (", 
+                                atoms[atom_i].x, ", ", 
+                                atoms[atom_i].y, ", ", 
+                                atoms[atom_i].z, ") nm");
+                }
+                
                 // Compute interaction with atoms in all other active residues
                 for (int j = 0; j < state.activeResidueCount; ++j) {
                     // Skip if:
@@ -197,6 +286,12 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
                     // 2. Residue is inactive
                     if (j == i || !residues[j].active) continue;
                     
+                    if (debug_output) {
+                        platform::log(LogLevel::DEBUG, "\n  Interacting with residue ", j);
+                        platform::log(LogLevel::DEBUG, "    Atom start: ", residues[j].atomStart);
+                        platform::log(LogLevel::DEBUG, "    Atom count: ", residues[j].atomCount);
+                    }
+
                     // For each atom in the other residue
                     for (int atom_j = residues[j].atomStart;
                          atom_j < residues[j].atomStart + residues[j].atomCount;
@@ -212,6 +307,15 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
                             throw std::runtime_error(ss.str());
                         }
                         
+                        if (debug_output) {
+                            platform::log(LogLevel::DEBUG, "\n    Interacting with atom ", atom_j);
+                            platform::log(LogLevel::DEBUG, "      Type: ", resType);
+                            platform::log(LogLevel::DEBUG, "      Position: (", 
+                                        atoms[atom_j].x, ", ", 
+                                        atoms[atom_j].y, ", ", 
+                                        atoms[atom_j].z, ") nm");
+                        }
+                        
                         // Calculate distance between atoms (nm)
                         float dx = atoms[atom_j].x - atoms[atom_i].x;  // nm
                         float dy = atoms[atom_j].y - atoms[atom_i].y;  // nm
@@ -225,29 +329,53 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
                         float q1 = atoms[atom_i].charge;  // e
                         float q2 = atoms[atom_j].charge;  // e
                         
+                        if (debug_output) {
+                            std::stringstream ss;
+                            ss << std::fixed << std::setprecision(6);
+                            ss << "\n      Interaction parameters:";
+                            ss << "\n        Parameter index: " << param_index;
+                            ss << "\n        Epsilon: " << eps << " kJ/mol";
+                            ss << "\n        Sigma: " << sigma << " nm";
+                            ss << "\n        Charges: q1=" << q1 << "e, q2=" << q2 << "e";
+                            ss << "\n        Distance vector: (" << dx << ", " << dy << ", " << dz << ") nm";
+                            ss << "\n        Distance²: " << r2 << " nm²";
+                            platform::log(LogLevel::DEBUG, ss.str());
+                        }
+                        
                         // Calculate energies with safety checks
                         auto [vdw_energy, elec_energy] = calcPairEnergy(r2, sigma, eps, q1, q2);
                         
                         // Add energies to the movement residue
                         residues[i].energy_vdw += vdw_energy;    // kJ/mol
                         residues[i].energy_elec += elec_energy;  // kJ/mol
-                        
+
                         if (debug_output) {
-                            float r = std::sqrt(r2);
-                            platform::log(LogLevel::DEBUG,
-                                "Interaction between residues ", i, "(", movementInfo.resName, ") and ", j, "\n",
-                                "  Atoms: ", atom_i, "(type ", moveType, ") - ", 
-                                atom_j, "(type ", resType, ")\n",
-                                "  Distance: ", r, " nm\n",
-                                "  Parameters: eps=", eps, " kJ/mol, sigma=", sigma, " nm\n",
-                                "  Energies: vdw=", vdw_energy, " elec=", elec_energy, " kJ/mol\n",
-                                "  Cumulative residue ", i, " energies: vdw=", residues[i].energy_vdw,
-                                " elec=", residues[i].energy_elec, " kJ/mol");
+                            std::stringstream ss;
+                            ss << std::fixed << std::setprecision(6);
+                            ss << "\n      Cumulative residue " << i << " energies:";
+                            ss << "\n        VDW: " << residues[i].energy_vdw << " kJ/mol";
+                            ss << "\n        Electrostatic: " << residues[i].energy_elec << " kJ/mol";
+                            ss << "\n        Total: " << (residues[i].energy_vdw + residues[i].energy_elec) << " kJ/mol";
+                            platform::log(LogLevel::DEBUG, ss.str());
                         }
                     }
                 }
             }
         }
+    }
+
+    if (debug_output) {
+        platform::log(LogLevel::DEBUG, "\n=== Final energies for all residues ===");
+        for (size_t i = 0; i < residues.size(); ++i) {
+            if (residues[i].active) {
+                platform::log(LogLevel::DEBUG, "Residue ", i, ":");
+                platform::log(LogLevel::DEBUG, "  VDW energy: ", residues[i].energy_vdw, " kJ/mol");
+                platform::log(LogLevel::DEBUG, "  Electrostatic energy: ", residues[i].energy_elec, " kJ/mol");
+                platform::log(LogLevel::DEBUG, "  Total energy: ", 
+                            (residues[i].energy_vdw + residues[i].energy_elec), " kJ/mol");
+            }
+        }
+        platform::log(LogLevel::DEBUG, "\n=== Completed nonbonded energy calculation ===");
     }
 }
 
