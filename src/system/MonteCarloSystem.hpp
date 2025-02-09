@@ -4,6 +4,11 @@
  * 
  * This class provides the core functionality for Grand Canonical Monte Carlo (GCMC)
  * simulations, including system initialization, molecule management, and energy calculations.
+ * 
+ * Handles unit conversions between PDB/CHARMM and internal units:
+ * - Coordinates: PDB Å -> internal nm
+ * - Energies: CHARMM kcal/mol -> internal kJ/mol
+ * - Charges: CHARMM partial charges (e) used directly
  */
 
 #pragma once
@@ -22,10 +27,10 @@ namespace system {
  * @brief Main class for Monte Carlo simulation management
  * 
  * Handles all aspects of the Monte Carlo simulation, including:
- * - System initialization and setup
- * - Force field parameter management
- * - Molecule insertion, deletion, and movement
- * - Energy calculations
+ * - System initialization and setup from PDB/CHARMM inputs
+ * - Force field parameter conversion and management
+ * - Molecule insertion, deletion, and movement with PBC
+ * - Energy calculations using CHARMM parameters
  * 
  * Uses swap-and-pop strategy for efficient memory management of active/inactive residues.
  */
@@ -51,10 +56,12 @@ public:
     /**
      * @brief Initialize the Monte Carlo system with given parameters
      * 
-     * @param info System parameters including box size, temperature, etc.
+     * @param info System parameters including:
+     *        - Box size (nm, converted from PDB CRYST1 record)
+     *        - Temperature (K)
+     *        - Cutoff distance (nm)
      * 
-     * Allocates memory for atoms and residues based on maximum capacities
-     * specified in the info structure.
+     * Allocates memory for atoms and residues based on maximum capacities.
      */
     void initialize(const model::MCInfo& info) {
         state.info = info;
@@ -77,15 +84,18 @@ public:
     /**
      * @brief Initialize force field from CHARMM parameters
      * 
-     * @param ff CHARMM force field object
+     * @param ff CHARMM force field object containing:
+     *        - Atom types and charges
+     *        - LJ parameters (Rmin/2 in Å, epsilon in kcal/mol)
+     *        - NBFIX parameters if available
      * 
-     * Processes CHARMM force field parameters to:
-     * 1. Generate parameters for movement molecule interactions
-     * 2. Apply combining rules
-     * 3. Convert units to simulation units
-     * 4. Handle NBFIX parameters
+     * Processes CHARMM parameters:
+     * 1. Converts units (Å -> nm, kcal/mol -> kJ/mol)
+     * 2. Transforms Rmin/2 to sigma
+     * 3. Applies combining rules or NBFIX
+     * 4. Organizes parameters for efficient access
      * 
-     * @throw std::runtime_error If parameters are missing
+     * @throw std::runtime_error If required parameters are missing
      */
     void initializeForceField(const model::ForceField& ff);
 
@@ -103,14 +113,19 @@ public:
                            const model::MCAtom* atomVec, int atomCount);
 
     /**
-     * @brief Initialize from molecular system
+     * @brief Initialize from molecular system (PDB/PSF/TOP)
      * 
-     * @param molecular Molecular system to convert
+     * @param molecular Molecular system containing:
+     *        - Atomic coordinates (Å)
+     *        - CHARMM atom types and charges
+     *        - Residue definitions
+     *        - Box dimensions (Å)
      * 
-     * Converts molecular system to Monte Carlo system:
-     * 1. Converts coordinates and units
-     * 2. Sets up type mappings
-     * 3. Transfers molecular information
+     * Performs:
+     * 1. Coordinate conversion (Å -> nm)
+     * 2. Box dimension conversion
+     * 3. Type mapping setup
+     * 4. Memory allocation and data transfer
      * 
      * @throw std::runtime_error If molecular system is invalid
      */
@@ -181,17 +196,31 @@ public:
     void translateResidue(int resIdx, float dx, float dy, float dz);
 
     /**
-     * @brief Calculate non-bonded energy between residues
+     * @brief Calculate non-bonded energy between residues using CHARMM parameters
+     * 
+     * Includes:
+     * 1. Lennard-Jones with converted CHARMM parameters:
+     *    - Uses sigma-epsilon form converted from CHARMM Rmin/2-epsilon
+     *    - Energy in kJ/mol (converted from CHARMM kcal/mol)
+     * 2. Coulomb with CHARMM partial charges
+     * 3. Periodic boundary conditions
+     * 4. Standard CHARMM cutoff scheme
      * 
      * @param res1 First residue
      * @param res2 Second residue
-     * @return Energy in kJ/mol
+     * @return Energy in kJ/mol (converted from CHARMM kcal/mol)
      */
     float calcNonBondedEnergy(const model::MCResidue& res1, const model::MCResidue& res2) const;
 
     /**
-     * @brief Calculate total system energy
-     * @return Total energy in kJ/mol
+     * @brief Calculate total system energy using CHARMM parameters
+     * 
+     * Computes:
+     * 1. All non-bonded interactions using converted CHARMM parameters
+     * 2. Applies periodic boundary conditions
+     * 3. Uses cutoff-based neighbor lists
+     * 
+     * @return Total energy in kJ/mol (converted from CHARMM kcal/mol)
      */
     float calcTotalEnergy() const;
 
@@ -221,21 +250,19 @@ private:
     // Private helper functions
     // ------------------------------------------------------------
     /**
-     * @brief Apply periodic boundary conditions
+     * @brief Apply periodic boundary conditions to coordinates
      * 
-     * @param x X coordinate [nm]
-     * @param y Y coordinate [nm]
-     * @param z Z coordinate [nm]
+     * @param x,y,z Coordinates in nm (converted from PDB Å)
+     * @note Uses box dimensions from PDB CRYST1 record (converted to nm)
      */
     void applyPBC(float& x, float& y, float& z) const;
 
     /**
      * @brief Calculate minimum image squared distance
      * 
-     * @param dx X separation [nm]
-     * @param dy Y separation [nm]
-     * @param dz Z separation [nm]
-     * @return Squared distance [nm²]
+     * @param dx,dy,dz Coordinate differences in nm
+     * @return Squared distance in nm² for use in energy calculations
+     * @note Consistent with CHARMM's minimum image convention
      */
     float getMinImageDistSqr(float dx, float dy, float dz) const;
 
