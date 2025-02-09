@@ -1362,48 +1362,39 @@ def test_initialize_force_field(molecular_system, charmm_ff):
     # Basic assertions
     assert state.forcefield.numTotalTypes == len(atom_types.atomTypes)
     assert state.forcefield.numMovementTypes == state.numMovementAtomTypes
-    assert len(state.forcefield.ljSigma) == state.numMovementAtomTypes * state.forcefield.numTotalTypes
-    assert len(state.forcefield.ljEps) == state.numMovementAtomTypes * state.forcefield.numTotalTypes
+    # 修改数组大小的断言，现在应该是 numTotalTypes * numTotalTypes
+    expected_size = state.forcefield.numTotalTypes * state.forcefield.numTotalTypes
+    assert len(state.forcefield.ljSigma) == expected_size, \
+        f"Expected ljSigma size {expected_size}, got {len(state.forcefield.ljSigma)}"
+    assert len(state.forcefield.ljEps) == expected_size, \
+        f"Expected ljEps size {expected_size}, got {len(state.forcefield.ljEps)}"
     
     # Unit conversion constants
     ANGSTROM_TO_NM = 0.1  # 1 Å = 0.1 nm
     KCAL_TO_KJ = 4.184    # 1 kcal/mol = 4.184 kJ/mol
     
-    # Construct atom type pairs to check
-    # We need to check all movement atom types against all atom types
+    # 修改类型对的构造逻辑，现在检查所有类型对
     atom_type_pairs = []
-    movement_type_indices = state.movementAtomTypes
     all_type_indices = range(len(atom_types.atomTypes))
     
-    # For each movement type
-    for mi in range(state.numMovementAtomTypes):
-        movement_type_idx = movement_type_indices[mi]
-        movement_type = atom_types.atomTypes[movement_type_idx]
-        # Check against all possible types
-        for type_idx in all_type_indices:
-            other_type = atom_types.atomTypes[type_idx]
-            atom_type_pairs.append((movement_type, other_type))
+    # 检查所有可能的类型对
+    for type1_idx in all_type_indices:
+        type1 = atom_types.atomTypes[type1_idx]
+        for type2_idx in all_type_indices:
+            type2 = atom_types.atomTypes[type2_idx]
+            atom_type_pairs.append((type1, type2))
     
     print(f"\nConstructed {len(atom_type_pairs)} type pairs to check")
     print("First few pairs:", atom_type_pairs[:5])
 
-    # Check both NBFIX and combined LJ parameters
-    print("\nChecking NBFIX and combined LJ parameters:")
+    # 修改参数索引计算
     for type1, type2 in atom_type_pairs:
         # Get type indices in the force field
-        type1_idx = atom_types.get_or_add_type(type1)  # Use get_or_add_type instead of direct map access
+        type1_idx = atom_types.get_or_add_type(type1)
         type2_idx = atom_types.get_or_add_type(type2)
         
-        # Find movement type index (mi) for type1
-        mi = -1
-        for i, mt_idx in enumerate(movement_type_indices):
-            if mt_idx == type1_idx:
-                mi = i
-                break
-        assert mi >= 0, f"Could not find movement type index for {type1}"
-        
         # Calculate pair index in the force field arrays
-        pairIdx = mi * state.forcefield.numTotalTypes + type2_idx
+        pairIdx = type1_idx * state.forcefield.numTotalTypes + type2_idx
         
         # Get actual parameters from force field
         actual_eps = state.forcefield.ljEps[pairIdx]

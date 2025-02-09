@@ -587,7 +587,6 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
 void MonteCarloSystem::initializeForceField(const model::ForceField& ff) {
     const auto& atomTypes = state.atomTypes;
     const int numTypes = atomTypes.atomTypes.size();
-    const auto& movementTypes = state.movementAtomTypes;
     const int numMovementTypes = state.numMovementAtomTypes;
     
     if (numTypes == 0) {
@@ -596,62 +595,50 @@ void MonteCarloSystem::initializeForceField(const model::ForceField& ff) {
     
     // Initialize force field parameters
     state.forcefield.numTotalTypes = numTypes;
-    state.forcefield.numMovementTypes = numMovementTypes;
+    state.forcefield.numMovementTypes = numMovementTypes;  // 保留以备将来优化
     
-    // If there are no movement types, we don't need to store any parameters
-    if (numMovementTypes == 0) {
-        state.forcefield.ljSigma.clear();
-        state.forcefield.ljEps.clear();
-        return;
-    }
-    
-    // Resize arrays to hold all type pairs (movement_type, any_type)
-    state.forcefield.ljSigma.resize(numMovementTypes * numTypes);
-    state.forcefield.ljEps.resize(numMovementTypes * numTypes);
+    // 扩展数组大小到 numTotalTypes * numTotalTypes
+    state.forcefield.ljSigma.resize(numTypes * numTypes);
+    state.forcefield.ljEps.resize(numTypes * numTypes);
 
     // Unit conversion constants
     const float ANGSTROM_TO_NM = 0.1f;  // 1 Å = 0.1 nm
     [[maybe_unused]] const float KCAL_TO_KJ = 4.184f;    // 1 kcal/mol = 4.184 kJ/mol
 
-    // For each movement type
-    for (int mi = 0; mi < numMovementTypes; ++mi) {
-        int movementTypeIdx = movementTypes[mi];
-        if (movementTypeIdx < 0 || movementTypeIdx >= numTypes) {
-            throw std::runtime_error("Invalid movement atom type index: " + std::to_string(movementTypeIdx));
-        }
-        const std::string& type1 = atomTypes.atomTypes[movementTypeIdx];
+    // 遍历所有可能的类型对
+    for (int i = 0; i < numTypes; ++i) {
+        const std::string& type1 = atomTypes.atomTypes[i];
         
-        // For each possible interaction partner
         for (int j = 0; j < numTypes; ++j) {
             const std::string& type2 = atomTypes.atomTypes[j];
-            const int pairIdx = mi * numTypes + j;  // Index into the parameter arrays
+            const int pairIdx = i * numTypes + j;  // 二维数组索引
             
-            // First try to get NBFIX parameters
+            // 首先尝试获取 NBFIX 参数
             auto [nbfix_params, has_nbfix] = ff.get_nbfix(type1, type2);
             
             try {
                 if (has_nbfix) {
-                    // Use NBFIX parameters directly
-                    // Convert Rmin from Å to nm
+                    // 直接使用 NBFIX 参数
+                    // 将 Rmin 从 Å 转换为 nm
                     const float sigma = static_cast<float>(nbfix_params.rmin / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
                     
-                    // Store parameters (eps in kJ/mol, sigma in nm)
+                    // 存储参数 (eps 单位为 kJ/mol, sigma 单位为 nm)
                     state.forcefield.ljSigma[pairIdx] = sigma;
                     state.forcefield.ljEps[pairIdx] = static_cast<float>(nbfix_params.epsilon) * KCAL_TO_KJ;
                 } else {
-                    // Get LJ parameters for both types
+                    // 获取两个类型的 LJ 参数
                     const auto& lj1 = ff.get_lj_params(type1);
                     const auto& lj2 = ff.get_lj_params(type2);
                     
-                    // Convert Rmin/2 from Å to nm and then to sigma
+                    // 将 Rmin/2 从 Å 转换为 nm，然后转换为 sigma
                     const float sigma1 = static_cast<float>(2.0 * lj1.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
                     const float sigma2 = static_cast<float>(2.0 * lj2.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
                     
-                    // Use Lorentz-Berthelot combining rules
+                    // 使用 Lorentz-Berthelot 组合规则
                     const float sigma_avg = 0.5f * (sigma1 + sigma2);
                     const float eps_avg = std::sqrt(lj1.epsilon * lj2.epsilon);
                     
-                    // Store parameters (convert eps to kJ/mol)
+                    // 存储参数 (将 eps 转换为 kJ/mol)
                     state.forcefield.ljSigma[pairIdx] = sigma_avg;
                     state.forcefield.ljEps[pairIdx] = eps_avg * KCAL_TO_KJ;
                 }

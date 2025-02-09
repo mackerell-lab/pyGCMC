@@ -165,14 +165,19 @@ struct MCForceField {
 
     /// @brief Number of atom types in movement molecules
     /// @note A single movement molecule may contain multiple atom types
+    /// @deprecated This field will be used in future optimization
     int numMovementTypes;   
 
     /// @brief LJ sigma parameters [nm] converted from CHARMM Rmin/2 [Å]
     /// @note sigma = (Rmin/2) * 2 * 2^(-1/6) * 0.1
+    /// @note Currently stores all type pairs (total_type, total_type)
+    /// @note Will be optimized to (movement_type, total_type) in future
     std::vector<float> ljSigma;   
 
     /// @brief LJ epsilon parameters [kJ/mol] converted from CHARMM [kcal/mol]
     /// @note epsilon_kj = epsilon_kcal * 4.184
+    /// @note Currently stores all type pairs (total_type, total_type)
+    /// @note Will be optimized to (movement_type, total_type) in future
     std::vector<float> ljEps;     
 };
 
