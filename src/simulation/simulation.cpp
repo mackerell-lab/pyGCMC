@@ -34,6 +34,33 @@ void Simulation::computeAllNonbondedEnergy(model::MCState& state) {
             total_elec += state.residues[i].energy_elec;
         }
     }
+
+    total_vdw /= 2.0f;
+    total_elec /= 2.0f; 
+    
+    log(LogLevel::DEBUG, "Total system energy: vdw=", total_vdw, 
+        ", elec=", total_elec, 
+        ", total=", (total_vdw + total_elec));
+}
+
+void Simulation::computeCutoffNonPeriodicEnergy(model::MCState& state) {
+    log(LogLevel::DEBUG, "Computing cutoff nonbonded energy for all active residues");
+    
+    platform::cpu::computeCutoffNonPeriodicEnergy(state);
+    
+    // Log total system energy
+    float total_vdw = 0.0f;
+    float total_elec = 0.0f;
+    for (int i = 0; i < state.activeResidueCount; ++i) {
+        if (state.residues[i].active) {
+            total_vdw += state.residues[i].energy_vdw;
+            total_elec += state.residues[i].energy_elec;
+        }
+    }
+    
+    // 总能量除以2（因为每个相互作用被计算了两次）
+    total_vdw /= 2.0f;
+    total_elec /= 2.0f;
     
     log(LogLevel::DEBUG, "Total system energy: vdw=", total_vdw, 
         ", elec=", total_elec, 

@@ -82,6 +82,9 @@ public:
     // Compute all nonbonded energy between active movement residues and all other active residues
     static void computeAllNonbondedEnergy(model::MCState& state);
 
+    // Compute nonbonded energy with cutoff but no periodic boundary conditions
+    static void computeCutoffNonPeriodicEnergy(model::MCState& state);
+
     // Finalize the simulation and (optionally) download final data
     void finalize() {
         platform_->finalize();

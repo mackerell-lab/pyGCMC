@@ -17,6 +17,10 @@ void init_simulation_bindings(py::module& m) {
     m.def("computeAllNonbondedEnergy", &simulation::Simulation::computeAllNonbondedEnergy,
           "Compute and update nonbonded energies (vdw and elec) for all active residues",
           py::arg("state"));
+          
+    m.def("computeCutoffNonPeriodicEnergy", &simulation::Simulation::computeCutoffNonPeriodicEnergy,
+          "Compute and update nonbonded energies (vdw and elec) for all active residues within cutoff",
+          py::arg("state"));
 }
 
 } // namespace bindings

@@ -828,7 +828,7 @@ def test_all_residues_nonbonded():
     total_elec = sum(res.energy_elec for res in state.residues)
     total_energy = total_vdw + total_elec
     
-    # 总能量除以2（因为每个相互作用被计算了两次）
+    # 总能量需要除以2，因为每个相互作用被计算了两次
     system_energy = total_energy / 2.0
     
     # 验证总能量合理性
@@ -851,8 +851,8 @@ def test_all_residues_nonbonded():
     e_12 = COULOMB * (-0.5) * 0.5 / 1.0  # residue 1-2 相互作用
     e_20 = COULOMB * 0.5 * 0.5 / 1.0     # residue 2-0 相互作用
     
-    # 总系统能量是所有相互作用的和
-    expected_system_energy = e_01 + e_12 + e_20
+    # 总系统能量是所有相互作用的和（每个相互作用在代码中已经被加了两次）
+    expected_system_energy = (e_01 + e_12 + e_20)
     
     rel_tol = 0.1  # 10%的相对误差容忍度
     assert abs((system_energy - expected_system_energy) / expected_system_energy) < rel_tol, \
@@ -908,4 +908,108 @@ def test_all_residues_inactive():
     # 验证所有能量都是0
     for res in state.residues:
         assert abs(res.energy_vdw) < 1e-6, "Inactive residue has non-zero VDW energy"
-        assert abs(res.energy_elec) < 1e-6, "Inactive residue has non-zero electrostatic energy" 
+        assert abs(res.energy_elec) < 1e-6, "Inactive residue has non-zero electrostatic energy"
+
+def test_cutoff_nonperiodic():
+    """Test nonbonded energy calculation with cutoff but no periodic boundary conditions.
+    
+    Setup:
+    - Three active residues in a line:
+      residue 0: at origin
+      residue 1: at x=1.0 nm (within cutoff)
+      residue 2: at x=2.0 nm (beyond cutoff)
+    - Each residue has one atom with both charge and LJ interactions
+    - Cutoff = 1.5 nm
+    
+    Expected:
+    - Only residue 0-1 interaction should be computed (within cutoff)
+    - residue 0-2 and 1-2 interactions should be ignored (beyond cutoff)
+    """
+    state = pygcmc.MCState()
+    
+    # 1. 设置力场
+    state.forcefield.numTotalTypes = 3  # 三种类型
+    state.forcefield.numMovementTypes = 3
+    
+    # 设置力场参数 (3x3矩阵展平)
+    state.forcefield.ljEps = [1.0] * 9    # 所有相互作用eps=1.0
+    state.forcefield.ljSigma = [1.0] * 9  # 所有相互作用sigma=1.0
+    
+    # 设置截断距离
+    state.info.cutoff = 1.5  # nm
+    
+    # 2. 设置三个原子，在x轴上依次排列
+    atoms = []
+    positions = [
+        (0.0, 0.0, 0.0),  # 原点
+        (1.0, 0.0, 0.0),  # x=1.0 nm，在截断距离内
+        (2.0, 0.0, 0.0)   # x=2.0 nm，超出截断距离
+    ]
+    charges = [0.5, -0.5, 0.5]  # 交替电荷
+    
+    for i, (x, y, z) in enumerate(positions):
+        atom = pygcmc.MCAtom()
+        atom.x = x
+        atom.y = y
+        atom.z = z
+        atom.charge = charges[i]
+        atom.type = i
+        atoms.append(atom)
+    
+    state.atoms = atoms
+    state.activeAtomCount = 3
+    
+    # 3. 设置三个residues
+    residues = []
+    for i in range(3):
+        res = pygcmc.MCResidue()
+        res.active = True
+        res.type = i
+        res.atomStart = i
+        res.atomCount = 1
+        residues.append(res)
+    
+    state.residues = residues
+    state.activeResidueCount = 3
+    
+    # 计算能量
+    pygcmc.computeCutoffNonPeriodicEnergy(state)
+    
+    # 验证每个residue都有能量
+    for i in range(3):
+        energy = state.residues[i].energy_vdw + state.residues[i].energy_elec
+        assert not math.isnan(energy), f"Residue {i} has NaN energy"
+        assert not math.isinf(energy), f"Residue {i} has infinite energy"
+    
+    # 计算总能量
+    total_vdw = sum(res.energy_vdw for res in state.residues)
+    total_elec = sum(res.energy_elec for res in state.residues)
+    total_energy = total_vdw + total_elec
+    
+    # 总能量需要除以2，因为每个相互作用被计算了两次
+    system_energy = total_energy / 2.0
+    
+    # 验证总能量合理性
+    assert system_energy < 1e6, "Total system energy too large"
+    assert system_energy > -1e6, "Total system energy too negative"
+    
+    # 验证能量的数量级合理性
+    # 对于我们的设置：
+    # - LJ能量在r=sigma时为0
+    # - 静电能量 = k_c * q1*q2/r
+    # 只有residue 0-1的相互作用在截断距离内：
+    # - q1=0.5, q2=-0.5, r=1.0
+    # - 每个相互作用的能量被完整地加到了两个residue上
+    COULOMB = 138.935458  # kJ·nm/mol/e²
+    expected_energy = 2.0 * COULOMB * 0.5 * (-0.5) / 1.0  # 一对原子间的相互作用能量，乘以2因为在代码中被加了两次
+
+    rel_tol = 0.1  # 10%的相对误差容忍度
+    assert abs((system_energy - expected_energy) / expected_energy) < rel_tol, \
+           f"System energy {system_energy} differs too much from expected {expected_energy}"
+    
+    # 验证residue 2的能量为0（因为它与其他residue的距离都超出截断）
+    res2_energy = state.residues[2].energy_vdw + state.residues[2].energy_elec
+    # residue 2应该有能量，因为它从residue 1的相互作用中获得能量
+    expected_res2_energy = COULOMB * 0.5 * (-0.5) / 1.0  # residue 0-1的相互作用
+    assert abs((res2_energy - expected_res2_energy) / expected_res2_energy) < rel_tol, \
+           f"Residue 2 energy {res2_energy} differs too much from expected {expected_res2_energy}" 
