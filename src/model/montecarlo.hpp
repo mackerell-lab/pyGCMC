@@ -29,13 +29,21 @@
 namespace pygcmc {
 namespace model {
 
-// ------------------------------------------------------------
-// 0) TypeMaps: Atom type mapping system
-// ------------------------------------------------------------
+/**
+ * @brief Type mapping system for atom and residue types
+ * 
+ * Provides bidirectional mapping between string type names and integer indices.
+ * Used for both atom types and residue types in the system.
+ */
 struct TypeMaps {
-    std::vector<std::string> atomTypes;  // Index -> Type string mapping
-    std::unordered_map<std::string, int> atomTypeIndices;  // Type string -> Index mapping
+    std::vector<std::string> atomTypes;  ///< Index -> Type string mapping
+    std::unordered_map<std::string, int> atomTypeIndices;  ///< Type string -> Index mapping
     
+    /**
+     * @brief Get or add a type to the mapping
+     * @param type Type string to look up or add
+     * @return Index of the type in the mapping
+     */
     int getOrAddType(const std::string& type) {
         auto it = atomTypeIndices.find(type);
         if (it != atomTypeIndices.end()) {
@@ -47,6 +55,11 @@ struct TypeMaps {
         return newIndex;
     }
     
+    /**
+     * @brief Get type name from index
+     * @param index Index to look up
+     * @return Type string, empty if index invalid
+     */
     std::string getTypeName(int index) const {
         if (index >= 0 && static_cast<size_t>(index) < atomTypes.size()) {
             return atomTypes[index];
@@ -55,9 +68,12 @@ struct TypeMaps {
     }
 };
 
-// ------------------------------------------------------------
-// 1) GCMCInfo: Global MC parameters
-// ------------------------------------------------------------
+/**
+ * @brief Global Monte Carlo simulation parameters
+ * 
+ * Contains all global parameters needed for the MC simulation,
+ * including system dimensions, thermodynamic conditions, and statistics.
+ */
 struct MCInfo {
     int    mcSteps{0};       ///< Monte Carlo steps (dimensionless)
     float  box[3]{-1.0f};    ///< Box dimensions (nm)
@@ -73,14 +89,18 @@ struct MCInfo {
     float  volume;           ///< System volume (nm³)
     uint64_t seed;          ///< Random seed (dimensionless)
 
-    // Statistics
+    /**
+     * @brief Statistics for Monte Carlo moves
+     * 
+     * Tracks acceptance rates for different types of MC moves
+     */
     struct Statistics {
-        int totalMoves{0};           ///< Total number of moves attempted (dimensionless)
-        int acceptedMoves{0};        ///< Number of accepted moves (dimensionless)
-        int insertionAttempts{0};    ///< Number of insertion attempts (dimensionless)
-        int acceptedInsertions{0};   ///< Number of accepted insertions (dimensionless)
-        int deletionAttempts{0};     ///< Number of deletion attempts (dimensionless)
-        int acceptedDeletions{0};    ///< Number of accepted deletions (dimensionless)
+        int totalMoves{0};           ///< Total number of moves attempted
+        int acceptedMoves{0};        ///< Number of accepted moves
+        int insertionAttempts{0};    ///< Number of insertion attempts
+        int acceptedInsertions{0};   ///< Number of accepted insertions
+        int deletionAttempts{0};     ///< Number of deletion attempts
+        int acceptedDeletions{0};    ///< Number of accepted deletions
     } stats;
 
     // Constants (GROMACS MD units)
@@ -90,79 +110,89 @@ struct MCInfo {
     static constexpr float MOLES_TO_MOLECULES = 0.0006023f;  ///< Convert mol/L to molecules/nm³
     static constexpr float MOLECULES_TO_MOLES = 1660.539f;   ///< Convert molecules/nm³ to mol/L
 
-    // Set temperature and calculate beta
-    void setTemperature(float temperature) {  // temperature in Kelvin
-        // beta = 1/(kB*T) where kB is BOLTZMANN in kJ/mol/K and T is in K
-        // This gives beta in mol/kJ units
+    /**
+     * @brief Set temperature and calculate beta
+     * @param temperature Temperature in Kelvin
+     */
+    void setTemperature(float temperature) {
         beta = 1.0f / (BOLTZMANN * temperature);
     }
 };
 
-// ------------------------------------------------------------
-// 2) ForceField: Force field parameters
-// ------------------------------------------------------------
 /**
  * @brief Force field parameters for Monte Carlo simulation
  * 
- * The force field parameters are organized to optimize the energy calculation between
- * movement molecules and all other molecules in the system. Parameters are stored in
- * 1D arrays but represent a 2D matrix of interactions:
- *   - Rows: movement atom types (numMovementTypes)
- *   - Columns: all possible atom types in the system (numTotalTypes)
+ * The force field parameters are organized to optimize energy calculations between
+ * movement molecules and all other molecules in the system.
  * 
- * For a movement atom type i and any atom type j, parameters are accessed using:
- *   index = i * numTotalTypes + j
+ * Storage layout:
+ * - Arrays are 1D but represent 2D interaction matrices
+ * - Rows: movement atom types (numMovementTypes)
+ * - Columns: all atom types (numTotalTypes)
  * 
- * The Lennard-Jones potential is used in the form:
- *   V(r) = 4 * eps * [ (sigma/r)^12 - (sigma/r)^6 ]
- * where:
- *   - eps: well depth (in kJ/mole), stored in ljEps
- *   - sigma: distance at which the potential is zero (in nm), stored in ljSigma
- *   - r: distance between atoms (in nm)
+ * Access pattern:
+ * For movement type i and any type j: index = i * numTotalTypes + j
  * 
- * These parameters are derived from a CHARMM-style force field that originally provides
- * epsilon (in kcal/mole) and Rmin/2 (in Angstroms). The following conversions are applied:
- *   sigma = (Rmin/2) / (2^(1/6)) * 0.1  [nm]
- *   epsilon = epsilon_charmm * 4.184     [kJ/mol]
+ * Units:
+ * - Length: nanometers (nm)
+ * - Energy: kilojoules per mole (kJ/mol)
  * 
- * Parameters are combined using Lorentz-Berthelot rules:
- *   - sigma: arithmetic mean (Lorentz)
- *      sigma_ij = (sigma_i + sigma_j) / 2
- *   - epsilon: geometric mean (Berthelot)
- *      eps_ij = sqrt(eps_i * eps_j)
+ * Parameter conversion from CHARMM to internal units:
+ * - sigma = (Rmin/2) / (2^(1/6)) * 0.1  [Å -> nm]
+ * - epsilon = epsilon_charmm * 4.184     [kcal/mol -> kJ/mol]
  * 
- * For NBFIX pairs, specific epsilon values are used directly (after unit conversion),
- * but sigma is still combined using the arithmetic mean.
+ * Combining rules:
+ * - sigma: arithmetic mean (Lorentz)
+ *   sigma_ij = (sigma_i + sigma_j) / 2
+ * - epsilon: geometric mean (Berthelot)
+ *   eps_ij = sqrt(eps_i * eps_j)
+ * 
+ * Note: NBFIX parameters, if available, take precedence over combined parameters
  */
 struct MCForceField {
-    int numTotalTypes;    ///< Total number of atom types in the system
-    int numMovementTypes;   ///< Number of atom types that belong to movement molecules
+    /// @brief Total number of atom types in the system, including both fixed and movement molecules
+    int numTotalTypes;    
 
-    // Arrays store parameters for movement types interacting with all types
-    // Size: numMovementTypes * numTotalTypes
-    std::vector<float> ljSigma;   ///< Combined sigma values [nm] for each type pair
-    std::vector<float> ljEps;     ///< Combined epsilon values [kJ/mole] for each type pair
+    /// @brief Number of atom types that belong to movement molecules
+    /// @note A single movement molecule may contain multiple atom types
+    int numMovementTypes;   
+
+    /// @brief Combined sigma values [nm] for each type pair
+    /// @note Array size: numMovementTypes * numTotalTypes
+    /// @note Organized for optimal GPU memory access
+    std::vector<float> ljSigma;   
+
+    /// @brief Combined epsilon values [kJ/mole] for each type pair
+    /// @note Array size: numMovementTypes * numTotalTypes
+    /// @note Pre-converted to simulation units
+    std::vector<float> ljEps;     
 };
 
-// ------------------------------------------------------------
-// 3) Atom: Basic atomic properties
-// ------------------------------------------------------------
+/**
+ * @brief Basic atomic properties for Monte Carlo simulation
+ * 
+ * Represents a single atom in the system with its position,
+ * charge, and type information.
+ */
 struct MCAtom {
     float x, y, z;      ///< Position (nm)
     float charge;       ///< Charge (e)
     int   type;        ///< Type index (dimensionless)
 };
 
-// ------------------------------------------------------------
-// 4) Residue: Molecular unit for GCMC
-// ------------------------------------------------------------
+/**
+ * @brief Molecular unit for GCMC simulation
+ * 
+ * Represents a group of atoms that move together in the simulation.
+ * Used for insertion, deletion, and movement operations.
+ */
 struct MCResidue {
     // Basic properties
-    int   atomStart;    ///< Starting index in global atom array (dimensionless)
-    int   atomCount;    ///< Number of atoms (dimensionless)
-    bool  active;       ///< Whether in use (dimensionless)
-    bool  fixed;        ///< Whether fixed (dimensionless)
-    float center[3];    ///< Geometric center (nm): arithmetic mean of all atom coordinates in this residue
+    int   atomStart;    ///< Starting index in global atom array
+    int   atomCount;    ///< Number of atoms in this residue
+    bool  active;       ///< Whether this residue is currently in use
+    bool  fixed;        ///< Whether this residue can be moved
+    float center[3];    ///< Geometric center (nm): arithmetic mean of atom coordinates
 
     // Energy components
     float energy_vdw;   ///< Lennard-Jones energy (kJ/mole)
@@ -171,23 +201,29 @@ struct MCResidue {
     // GCMC parameters
     float concentration; ///< Target concentration (mol/L)
     float chemPot;      ///< Chemical potential (kJ/mole)
-    int   type;         ///< Residue type index in residueTypes map (dimensionless)
+    int   type;         ///< Residue type index in residueTypes map
     float radius;       ///< Approximate radius (nm)
 };
 
-// ------------------------------------------------------------
-// 4.5) Movement Residue Info: Track GCMC movement residues
-// ------------------------------------------------------------
+/**
+ * @brief Information about movement residues in the system
+ * 
+ * Tracks the location and count of residues that can be moved,
+ * inserted, or deleted during the simulation.
+ */
 struct MCMovementResidueInfo {
-    int startIndex;         ///< Starting index of movement residues in global residue array (dimensionless)
-    int activeCount;        ///< Number of active movement residues (dimensionless)
-    int totalCount;         ///< Total number of movement residues (active + inactive) (dimensionless)
+    int startIndex;         ///< Starting index in global residue array
+    int activeCount;        ///< Number of active movement residues
+    int totalCount;         ///< Total number of movement residues (active + inactive)
     std::string resName;    ///< Residue name for this movement group
 };
 
-// ------------------------------------------------------------
-// 5) System State: Current state of the MC system
-// ------------------------------------------------------------
+/**
+ * @brief Current state of the Monte Carlo system
+ * 
+ * Contains all information about the current state of the system,
+ * including atoms, residues, type mappings, and force field parameters.
+ */
 struct MCState {
     // Arrays
     std::vector<MCAtom>    atoms;      ///< Global atom array
