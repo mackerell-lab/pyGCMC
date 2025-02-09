@@ -11,6 +11,9 @@ namespace cpu {
 // Debug flag to control output
 static bool debug_output = false;
 
+// Coulomb constant in kJ·nm/mol/e^2
+const float COULOMB = 138.935458f;
+
 void computeNaiveNonbondedEnergy(model::MCState& state) {
     auto& residues = state.residues;
     const auto& forcefield = state.forcefield;
@@ -47,13 +50,30 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
                  ++atom_i) {
                 int moveType = atoms[atom_i].type;
                 
+                // Find movement type index in movementAtomTypes
+                int mi = -1;
+                for (int k = 0; k < state.numMovementAtomTypes; ++k) {
+                    if (state.movementAtomTypes[k] == moveType) {
+                        mi = k;
+                        break;
+                    }
+                }
+                
                 // Validate movement atom type
-                if (moveType >= forcefield.numMovementTypes) {
+                if (mi < 0) {
                     std::stringstream ss;
-                    ss << "Movement atom type " << moveType << " out of range. "
-                       << "Maximum allowed type is " << (forcefield.numMovementTypes - 1)
-                       << " for atom " << atom_i << " in residue " << i 
+                    ss << "Movement atom type " << moveType << " not found in movementAtomTypes "
+                       << "for atom " << atom_i << " in residue " << i 
                        << " (" << movementInfo.resName << ")";
+                    throw std::runtime_error(ss.str());
+                }
+                
+                // Validate movement type index
+                if (mi >= forcefield.numMovementTypes) {
+                    std::stringstream ss;
+                    ss << "Movement type index " << mi << " out of range. "
+                       << "Maximum allowed index is " << (forcefield.numMovementTypes - 1)
+                       << " for atom " << atom_i << " in residue " << i;
                     throw std::runtime_error(ss.str());
                 }
                 
@@ -86,10 +106,10 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
                         float r2 = dx*dx + dy*dy + dz*dz;  // nm^2
                         float r = std::sqrt(r2);  // nm
                         
-                        // Get force field parameters
-                        int param_index = moveType * forcefield.numTotalTypes + resType;
-                        float eps = forcefield.ljEps[param_index];
-                        float sigma = forcefield.ljSigma[param_index];
+                        // Get force field parameters using movement type index
+                        int param_index = mi * forcefield.numTotalTypes + resType;
+                        float eps = forcefield.ljEps[param_index];  // Already in kJ/mol
+                        float sigma = forcefield.ljSigma[param_index];  // Already in nm
                         
                         // Calculate vdw energy: V = eps * [(sigma/r)^12 - 2*(sigma/r)^6]
                         float sigma_r = sigma / r;
@@ -97,10 +117,10 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
                         float term12 = term6 * term6;
                         float vdw_energy = eps * (term12 - 2.0f * term6);
                         
-                        // Calculate electrostatic energy: V = q1*q2/r
+                        // Calculate electrostatic energy: V = k_c * q1*q2/r
                         float q1 = atoms[atom_i].charge;
                         float q2 = atoms[atom_j].charge;
-                        float elec_energy = q1 * q2 / r;
+                        float elec_energy = COULOMB * q1 * q2 / r;  // kJ/mol
                         
                         // Add energies to the movement residue
                         residues[i].energy_vdw += vdw_energy;
@@ -112,8 +132,8 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
                                 "  Atoms: ", atom_i, "(type ", moveType, ") - ", 
                                 atom_j, "(type ", resType, ")\n",
                                 "  Distance: ", r, " nm\n",
-                                "  Parameters: eps=", eps, " sigma=", sigma, "\n",
-                                "  Energies: vdw=", vdw_energy, " elec=", elec_energy);
+                                "  Parameters: eps=", eps, " kJ/mol, sigma=", sigma, " nm\n",
+                                "  Energies: vdw=", vdw_energy, " elec=", elec_energy, " kJ/mol");
                         }
                     }
                 }

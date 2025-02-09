@@ -174,10 +174,15 @@ def test_electrostatic_interaction():
     - Both residues are active
     - Force field parameters:
         eps = 0.0 (no vdw interaction)
-        r = 1.0 (fixed in naive implementation)
+        r = 1.0 nm
     
     Expected:
-    V = q1*q2/r = (+1)*(-1)/1.0 = -1.0
+    V = k_c * q1*q2/r where:
+    - k_c = 138.935458 kJ·nm/mol/e^2 (Coulomb constant)
+    - q1 = +1e, q2 = -1e
+    - r = 1.0 nm
+    Therefore:
+    V = 138.935458 * (+1) * (-1) / 1.0 = -138.935458 kJ/mol
     """
     state = pygcmc.MCState()
     
@@ -200,7 +205,7 @@ def test_electrostatic_interaction():
     atom1.type = 0
     
     atom2 = pygcmc.MCAtom()
-    atom2.x = 1.0
+    atom2.x = 1.0  # Distance of 1.0 nm
     atom2.y = 0.0
     atom2.z = 0.0
     atom2.charge = -1.0  # Negative charge
@@ -230,6 +235,7 @@ def test_electrostatic_interaction():
     movement_info.startIndex = 0
     movement_info.activeCount = 1
     movement_info.totalCount = 1
+    movement_info.resName = "MOV"  # Add residue name
     
     state.movementResidues = [movement_info]
     
@@ -237,8 +243,15 @@ def test_electrostatic_interaction():
     pygcmc.computeNaiveNonbondedEnergy(state)
     energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
     
-    # Check result
-    assert abs(energy - (-1.0)) < 1e-6, "Expected electrostatic energy of -1.0"
+    # Expected energy with Coulomb constant
+    COULOMB = 138.935458  # kJ·nm/mol/e^2
+    expected_energy = -COULOMB  # k_c * (+1) * (-1) / 1.0
+    
+    # Check result with appropriate tolerance for single-precision float
+    rel_tol = 1e-5  # 0.001% relative tolerance
+    abs_diff = abs(energy - expected_energy)
+    rel_diff = abs_diff / abs(expected_energy)
+    assert rel_diff < rel_tol, f"Expected electrostatic energy of {expected_energy} kJ/mol, got {energy} kJ/mol (relative error: {rel_diff})"
 
 def test_repulsive_interaction():
     """Test naive nonbonded energy calculation for repulsive interaction.
@@ -388,11 +401,16 @@ def test_inactive_residue():
     state.residues = [movement_res, fixed_res]
     state.activeResidueCount = 1  # Only one active residue
     
+    # Set up movementAtomTypes
+    state.movementAtomTypes = [0]  # Type 0 is a movement type
+    state.numMovementAtomTypes = 1
+    
     # 4. Set up movement residue info
     movement_info = pygcmc.MCMovementResidueInfo()
     movement_info.startIndex = 0
     movement_info.activeCount = 1
     movement_info.totalCount = 1
+    movement_info.resName = "MOV"  # Add residue name
     
     state.movementResidues = [movement_info]
     
