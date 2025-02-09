@@ -19,11 +19,12 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
     // Validate force field setup
     size_t expected_size = static_cast<size_t>(forcefield.numMovementTypes) * 
                           static_cast<size_t>(forcefield.numTotalTypes);
-    if (forcefield.ljEps.size() != expected_size) {
+    if (forcefield.ljEps.size() != expected_size || forcefield.ljSigma.size() != expected_size) {
         std::stringstream ss;
         ss << "Force field parameters array size mismatch. Expected size "
            << expected_size
-           << " (numMovementTypes * numTotalTypes), but got " << forcefield.ljEps.size();
+           << " (numMovementTypes * numTotalTypes), but got eps=" << forcefield.ljEps.size()
+           << " sigma=" << forcefield.ljSigma.size();
         throw std::runtime_error(ss.str());
     }
 
@@ -33,73 +34,87 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
         residue.energy_elec = 0.0f;
     }
 
-    // Iterate through all active movement molecules
+    // Iterate through all movement molecule groups
     for (const auto& movementInfo : state.movementResidues) {
-        size_t start = static_cast<size_t>(movementInfo.startIndex);
-        size_t count = static_cast<size_t>(movementInfo.activeCount);
-        
-        // For each active movement residue
-        for (size_t i = start; i < start + count; ++i) {
+        // Calculate energies only for active movement residues
+        for (int i = movementInfo.startIndex; 
+             i < movementInfo.startIndex + movementInfo.activeCount; ++i) {
             if (!residues[i].active) continue;
             
             // For each atom in the movement residue
-            for (size_t atom_i = static_cast<size_t>(residues[i].atomStart); 
-                 atom_i < static_cast<size_t>(residues[i].atomStart + residues[i].atomCount); 
+            for (int atom_i = residues[i].atomStart; 
+                 atom_i < residues[i].atomStart + residues[i].atomCount; 
                  ++atom_i) {
-                size_t moveType = static_cast<size_t>(atoms[atom_i].type);
+                int moveType = atoms[atom_i].type;
+                
+                // Validate movement atom type
+                if (moveType >= forcefield.numMovementTypes) {
+                    std::stringstream ss;
+                    ss << "Movement atom type " << moveType << " out of range. "
+                       << "Maximum allowed type is " << (forcefield.numMovementTypes - 1)
+                       << " for atom " << atom_i << " in residue " << i 
+                       << " (" << movementInfo.resName << ")";
+                    throw std::runtime_error(ss.str());
+                }
                 
                 // Compute interaction with atoms in all other active residues
-                for (size_t j = 0; j < residues.size(); ++j) {
-                    if (!residues[j].active || j == i) continue;
+                for (int j = 0; j < state.activeResidueCount; ++j) {
+                    // Skip if:
+                    // 1. Same residue
+                    // 2. Residue is inactive
+                    if (j == i || !residues[j].active) continue;
                     
                     // For each atom in the other residue
-                    for (size_t atom_j = static_cast<size_t>(residues[j].atomStart);
-                         atom_j < static_cast<size_t>(residues[j].atomStart + residues[j].atomCount);
+                    for (int atom_j = residues[j].atomStart;
+                         atom_j < residues[j].atomStart + residues[j].atomCount;
                          ++atom_j) {
-                        size_t resType = static_cast<size_t>(atoms[atom_j].type);
+                        int resType = atoms[atom_j].type;
+                        
+                        // Validate residue atom type
+                        if (resType >= forcefield.numTotalTypes) {
+                            std::stringstream ss;
+                            ss << "Residue atom type " << resType << " out of range. "
+                               << "Maximum allowed type is " << (forcefield.numTotalTypes - 1)
+                               << " for atom " << atom_j << " in residue " << j;
+                            throw std::runtime_error(ss.str());
+                        }
                         
                         // Calculate distance between atoms
                         float dx = atoms[atom_j].x - atoms[atom_i].x;
                         float dy = atoms[atom_j].y - atoms[atom_i].y;
                         float dz = atoms[atom_j].z - atoms[atom_i].z;
-                        float r = std::sqrt(dx*dx + dy*dy + dz*dz);
+                        float r2 = dx*dx + dy*dy + dz*dz;  // nm^2
+                        float r = std::sqrt(r2);  // nm
                         
-                        size_t index = moveType * static_cast<size_t>(forcefield.numTotalTypes) + resType;
-                        if (index >= forcefield.ljEps.size()) {
-                            std::stringstream ss;
-                            ss << "Invalid force field parameter index " << index 
-                               << " for atom types " << moveType << " and " << resType
-                               << ". This indicates a mismatch between atom types and force field parameters.";
-                            throw std::runtime_error(ss.str());
-                        }
-                        
-                        float eps = forcefield.ljEps[index];
-                        float sigma = forcefield.ljSigma[index];
-                        
-                        platform::log(LogLevel::DEBUG, 
-                            "Computing energy between atoms ", atom_i, " (type ", moveType, 
-                            ") and ", atom_j, " (type ", resType, ")\n",
-                            "Distance r = ", r, "\n",
-                            "Using force field parameters: eps = ", eps, 
-                            ", sigma = ", sigma, " at index ", index);
+                        // Get force field parameters
+                        int param_index = moveType * forcefield.numTotalTypes + resType;
+                        float eps = forcefield.ljEps[param_index];
+                        float sigma = forcefield.ljSigma[param_index];
                         
                         // Calculate vdw energy: V = eps * [(sigma/r)^12 - 2*(sigma/r)^6]
-                        float term6 = std::pow(sigma / r, 6);
+                        float sigma_r = sigma / r;
+                        float term6 = std::pow(sigma_r, 6);
                         float term12 = term6 * term6;
                         float vdw_energy = eps * (term12 - 2.0f * term6);
                         
-                        // Calculate electrostatic energy: V = q1*q2/(eps*r)
+                        // Calculate electrostatic energy: V = q1*q2/r
                         float q1 = atoms[atom_i].charge;
                         float q2 = atoms[atom_j].charge;
-                        float elec_energy = q1 * q2 / r;  // Simple Coulomb
+                        float elec_energy = q1 * q2 / r;
                         
-                        platform::log(LogLevel::DEBUG, 
-                            "Computed vdw energy: ", vdw_energy, "\n",
-                            "Computed elec energy: ", elec_energy);
-                        
-                        // Add energies only to the movement residue
+                        // Add energies to the movement residue
                         residues[i].energy_vdw += vdw_energy;
                         residues[i].energy_elec += elec_energy;
+                        
+                        if (debug_output) {
+                            platform::log(LogLevel::DEBUG,
+                                "Interaction between residues ", i, "(", movementInfo.resName, ") and ", j, "\n",
+                                "  Atoms: ", atom_i, "(type ", moveType, ") - ", 
+                                atom_j, "(type ", resType, ")\n",
+                                "  Distance: ", r, " nm\n",
+                                "  Parameters: eps=", eps, " sigma=", sigma, "\n",
+                                "  Energies: vdw=", vdw_energy, " elec=", elec_energy);
+                        }
                     }
                 }
             }
