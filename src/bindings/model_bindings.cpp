@@ -689,9 +689,13 @@ void init_model(py::module& m) {
     py::class_<pygcmc::model::MCState>(m, "MCState")
         .def(py::init<>())
         .def_property("atoms",
-            [](const pygcmc::model::MCState& state) {
-                return std::vector<pygcmc::model::MCAtom>(state.atoms.begin(), 
-                    state.atoms.begin() + state.activeAtomCount);
+            [](pygcmc::model::MCState& state) -> std::vector<std::reference_wrapper<pygcmc::model::MCAtom>> {
+                std::vector<std::reference_wrapper<pygcmc::model::MCAtom>> refs;
+                refs.reserve(state.activeAtomCount);
+                for (int i = 0; i < state.activeAtomCount; ++i) {
+                    refs.push_back(std::ref(state.atoms[i]));
+                }
+                return refs;
             },
             [](pygcmc::model::MCState& state, const std::vector<pygcmc::model::MCAtom>& atoms) {
                 state.atoms = atoms;
