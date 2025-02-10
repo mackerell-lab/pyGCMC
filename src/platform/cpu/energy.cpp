@@ -3,14 +3,14 @@
 #include <cmath>
 #include <stdexcept>
 #include <sstream>
-#include <iomanip>  // 添加用于格式化输出
+#include <iomanip>  // For output formatting
 
 namespace pygcmc {
 namespace platform {
 namespace cpu {
 
 // Debug flag to control output
-static bool debug_output = true;  // 默认开启调试输出
+static bool debug_output = true;  // Default: debug output enabled
 
 /**
  * @brief Coulomb constant in GROMACS MD units [kJ·nm/mol/e²]
@@ -78,6 +78,7 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
         platform::log(LogLevel::DEBUG, ss.str());
     }
 
+    // Apply minimum safe distance for numerical stability
     if (r2 < MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE) {
         if (debug_output) {
             platform::log(LogLevel::DEBUG, "Distance below MIN_SAFE_DISTANCE, using r2 = ", 
@@ -157,15 +158,15 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
 }
 
 /**
- * @brief 计算单个residue与其他所有active residue的nonbonded相互作用能量
+ * @brief Calculate nonbonded interactions between a single residue and all other active residues
  * 
- * @param state 系统状态
- * @param residue_idx 要计算能量的residue索引
- * @param use_cutoff 是否使用截断
+ * @param state System state
+ * @param residue_idx Index of the residue to calculate energy for
+ * @param use_cutoff Whether to use distance cutoff
  * 
- * 这个函数统一处理两种情况：
- * 1. 不使用截断：计算所有原子对之间的相互作用
- * 2. 使用截断：只计算在截断距离内的原子对之间的相互作用
+ * This function handles two scenarios:
+ * 1. No cutoff: Calculate interactions between all atom pairs
+ * 2. With cutoff: Only calculate interactions within cutoff distance
  */
 inline void computeResidueNonbondedEnergy(
     model::MCState& state,
@@ -176,25 +177,25 @@ inline void computeResidueNonbondedEnergy(
     const auto& forcefield = state.forcefield;
     const auto& atoms = state.atoms;
     
-    // 如果使用截断，计算截断距离的平方
+    // Calculate squared cutoff distance if using cutoff
     const float cutoff2 = use_cutoff ? state.info.cutoff * state.info.cutoff : std::numeric_limits<float>::max();
     
-    // 如果residue不active，直接返回
+    // Return if residue is not active
     if (!residues[residue_idx].active) {
         return;
     }
     
-    // 重置当前residue的能量
+    // Reset energy components for current residue
     residues[residue_idx].energy_vdw = 0.0f;
     residues[residue_idx].energy_elec = 0.0f;
     
-    // 遍历当前residue的所有原子
+    // Iterate through all atoms in current residue
     for (int atom_i = residues[residue_idx].atomStart;
          atom_i < residues[residue_idx].atomStart + residues[residue_idx].atomCount;
          ++atom_i) {
         int type_i = atoms[atom_i].type;
         
-        // 验证原子类型
+        // Validate atom type
         if (type_i >= forcefield.numTotalTypes) {
             std::stringstream ss;
             ss << "Atom type " << type_i << " out of range. "
@@ -203,17 +204,17 @@ inline void computeResidueNonbondedEnergy(
             throw std::runtime_error(ss.str());
         }
         
-        // 与其他active residues的原子计算相互作用
+        // Calculate interactions with atoms in other active residues
         for (int j = 0; j < state.activeResidueCount; ++j) {
             if (!residues[j].active || j == residue_idx) continue;
             
-            // 遍历另一个residue的所有原子
+            // Iterate through atoms in other residue
             for (int atom_j = residues[j].atomStart;
                  atom_j < residues[j].atomStart + residues[j].atomCount;
                  ++atom_j) {
                 int type_j = atoms[atom_j].type;
                 
-                // 验证原子类型
+                // Validate atom type
                 if (type_j >= forcefield.numTotalTypes) {
                     std::stringstream ss;
                     ss << "Atom type " << type_j << " out of range. "
@@ -222,26 +223,26 @@ inline void computeResidueNonbondedEnergy(
                     throw std::runtime_error(ss.str());
                 }
                 
-                // 计算原子间距离
+                // Calculate interatomic distance
                 float dx = atoms[atom_j].x - atoms[atom_i].x;
                 float dy = atoms[atom_j].y - atoms[atom_i].y;
                 float dz = atoms[atom_j].z - atoms[atom_i].z;
                 float r2 = dx*dx + dy*dy + dz*dz;
                 
-                // 如果使用截断且距离超过截断距离，跳过
+                // Skip if beyond cutoff distance
                 if (r2 > cutoff2) continue;
                 
-                // 获取力场参数
+                // Get force field parameters
                 int param_index = type_i * forcefield.numTotalTypes + type_j;
                 float eps = forcefield.ljEps[param_index];
                 float sigma = forcefield.ljSigma[param_index];
                 float q1 = atoms[atom_i].charge;
                 float q2 = atoms[atom_j].charge;
                 
-                // 计算能量
+                // Calculate pair energy
                 auto [vdw, elec] = calcPairEnergy(r2, sigma, eps, q1, q2);
                 
-                // 能量加到当前residue上
+                // Add energy components to current residue
                 residues[residue_idx].energy_vdw += vdw;
                 residues[residue_idx].energy_elec += elec;
             }
@@ -250,11 +251,17 @@ inline void computeResidueNonbondedEnergy(
 }
 
 /**
- * @brief 计算所有非键相互作用能量的通用函数
+ * @brief Universal function for calculating all nonbonded interactions
  * 
- * @param state 系统状态
- * @param use_cutoff 是否使用截断
- * @param movement_only 是否只计算movement residues
+ * @param state System state
+ * @param use_cutoff Whether to use distance cutoff
+ * @param movement_only Whether to calculate only for movement residues
+ * 
+ * This function provides a unified interface for all nonbonded energy calculations:
+ * - Can handle both cutoff and non-cutoff calculations
+ * - Can calculate for all residues or movement residues only
+ * - Validates force field parameters based on calculation type
+ * - Provides detailed debug output for energy components
  */
 void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movement_only = false) {
     if (debug_output) {
@@ -274,14 +281,14 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
     auto& residues = state.residues;
     const auto& forcefield = state.forcefield;
 
-    // 验证力场参数数组大小
+    // Validate force field parameter array sizes based on calculation type
     size_t expected_size;
     if (movement_only) {
-        // 如果只计算movement residues，使用numMovementTypes * numTotalTypes
+        // For movement residues only, use numMovementTypes * numTotalTypes
         expected_size = static_cast<size_t>(forcefield.numMovementTypes) * 
                        static_cast<size_t>(forcefield.numTotalTypes);
     } else {
-        // 如果计算所有residues，使用numTotalTypes * numTotalTypes
+        // For all residues, use numTotalTypes * numTotalTypes
         expected_size = static_cast<size_t>(forcefield.numTotalTypes) * 
                        static_cast<size_t>(forcefield.numTotalTypes);
     }
@@ -296,14 +303,14 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
         throw std::runtime_error(ss.str());
     }
 
-    // 重置所有residue的能量
+    // Reset energies for all residues
     for (auto& residue : residues) {
         residue.energy_vdw = 0.0f;
         residue.energy_elec = 0.0f;
     }
 
     if (movement_only) {
-        // 只计算movement residues的能量
+        // Calculate energies only for movement residues
         for (const auto& movementInfo : state.movementResidues) {
             if (debug_output) {
                 platform::log(LogLevel::DEBUG, "\nProcessing movement residue group: ", movementInfo.resName);
@@ -312,7 +319,7 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
                 platform::log(LogLevel::DEBUG, "  Total count: ", movementInfo.totalCount);
             }
 
-            // 处理active movement residues
+            // Process active movement residues
             for (int i = movementInfo.startIndex;
                  i < movementInfo.startIndex + movementInfo.activeCount;
                  ++i) {
@@ -328,13 +335,14 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
             }
         }
     } else {
-        // 计算所有active residues的能量
+        // Calculate energies for all active residues
         for (int i = 0; i < state.activeResidueCount; ++i) {
             if (!residues[i].active) continue;
             computeResidueNonbondedEnergy(state, i, use_cutoff);
         }
     }
 
+    // Output final energies if debug is enabled
     if (debug_output) {
         platform::log(LogLevel::DEBUG, "\n=== Final energies for all residues ===");
         float total_vdw = 0.0f;
@@ -358,17 +366,25 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
     }
 }
 
-// 为了保持向后兼容性，保留原有的函数名，但内部调用新的统一函数
-void computeNaiveNonbondedEnergy(model::MCState& state) {
-    computeNonbondedEnergy(state, false, true);  // 不使用截断，只计算movement residues
+/**
+ * @brief Interface functions for nonbonded energy calculations
+ * 
+ * These functions provide different specializations of nonbonded energy calculation:
+ * 1. computeMovementResiduesEnergy: Calculate energies only for movement residues without distance cutoff
+ * 2. computeFullSystemEnergy: Calculate energies for all residues without distance cutoff
+ * 3. computeFullSystemCutoffEnergy: Calculate energies for all residues with distance cutoff
+ */
+
+void computeMovementResiduesEnergy(model::MCState& state) {
+    computeNonbondedEnergy(state, false, true);  // No cutoff, movement residues only
 }
 
-void computeAllNonbondedEnergy(model::MCState& state) {
-    computeNonbondedEnergy(state, false, false);  // 不使用截断，计算所有residues
+void computeFullSystemEnergy(model::MCState& state) {
+    computeNonbondedEnergy(state, false, false);  // No cutoff, all residues
 }
 
-void computeCutoffNonPeriodicEnergy(model::MCState& state) {
-    computeNonbondedEnergy(state, true, false);  // 使用截断，计算所有residues
+void computeFullSystemCutoffEnergy(model::MCState& state) {
+    computeNonbondedEnergy(state, true, false);  // With cutoff, all residues
 }
 
 // Function to enable/disable debug output

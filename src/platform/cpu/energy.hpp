@@ -10,56 +10,37 @@ namespace platform {
 namespace cpu {
 
 /**
- * @brief Compute a naive (simplified) nonbonded energy based on Lennard-Jones potential,
- *        considering only active movement molecules and all other active molecules.
- *
- * This implementation uses a simplified approach: 
- * - It computes actual distances between atoms
- * - For each atom pair, computes both vdw and electrostatic energies:
- *   - vdw: V = eps * [(sigma/r)^12 - 2*(sigma/r)^6]
- *   - elec: V = q1*q2/r
- * - Accumulates energies into each residue's energy_vdw and energy_elec parameters
+ * @brief Calculate nonbonded energies for movement residues only
  * 
- * @param state The current MC state containing residues and force field parameters.
- *              The residues' energy parameters will be modified.
+ * This function calculates nonbonded interactions (VDW and electrostatic)
+ * between movement residues and all other active residues without distance cutoff.
+ * 
+ * @param state System state containing residues and force field parameters
  */
-void computeNaiveNonbondedEnergy(model::MCState& state);
+void computeMovementResiduesEnergy(model::MCState& state);
 
 /**
- * @brief Compute nonbonded energy for all active residues in the system
+ * @brief Calculate nonbonded energies for the full system
  * 
- * This implementation:
- * - Computes pairwise interactions between all active residues
- * - For each atom pair, computes both vdw and electrostatic energies:
- *   - vdw: V = 4ε[(σ/r)¹² - (σ/r)⁶]
- *   - elec: V = k_c * q1*q2/r
- * - Accumulates energies into each residue's energy_vdw and energy_elec parameters
- * - Uses full force field parameter matrix (numTotalTypes × numTotalTypes)
- * - Implements safety checks for minimum distance and maximum energy
+ * This function calculates nonbonded interactions (VDW and electrostatic)
+ * between all active residues without distance cutoff.
  * 
- * @param state The current MC state containing residues and force field parameters.
- *              The residues' energy parameters will be modified.
+ * @param state System state containing residues and force field parameters
  */
-void computeAllNonbondedEnergy(model::MCState& state);
+void computeFullSystemEnergy(model::MCState& state);
 
 /**
- * @brief Compute nonbonded energy for all active residues with cutoff but no periodic boundary conditions
+ * @brief Calculate nonbonded energies for the full system with distance cutoff
  * 
- * This implementation:
- * - Uses a spherical cutoff for both vdw and electrostatic interactions
- * - No periodic boundary conditions (simple cutoff)
- * - Computes pairwise interactions between all active residues within cutoff
- * - For each atom pair within cutoff, computes both vdw and electrostatic energies:
- *   - vdw: V = 4ε[(σ/r)¹² - (σ/r)⁶]
- *   - elec: V = k_c * q1*q2/r
- * - Accumulates energies into each residue's energy_vdw and energy_elec parameters
- * - Uses full force field parameter matrix (numTotalTypes × numTotalTypes)
- * - Implements safety checks for minimum distance and maximum energy
+ * This function calculates nonbonded interactions (VDW and electrostatic)
+ * between all active residues within the specified cutoff distance.
  * 
- * @param state The current MC state containing residues and force field parameters.
- *              The residues' energy parameters will be modified.
+ * @param state System state containing residues and force field parameters
  */
-void computeCutoffNonPeriodicEnergy(model::MCState& state);
+void computeFullSystemCutoffEnergy(model::MCState& state);
+
+// Function to enable/disable debug output
+void setEnergyDebugOutput(bool enable);
 
 } // namespace cpu
 } // namespace platform

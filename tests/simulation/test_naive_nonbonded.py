@@ -3,7 +3,7 @@ import pygcmc
 import math
 
 def test_attractive_interaction():
-    """Test naive nonbonded energy calculation for an attractive interaction.
+    """Test nonbonded energy calculation for an attractive interaction between movement and fixed residues.
     
     Setup:
     - Two residues: one movement (type 0) and one fixed (type 1)
@@ -11,7 +11,7 @@ def test_attractive_interaction():
     - Both residues are active
     - Force field parameters:
         eps = 1.0, sigma = 1.0
-        r = 1.0 (fixed in naive implementation)
+        r = 1.0 (distance between atoms)
     
     Expected:
     V_LJ = 4ε[(σ/r)¹² - (σ/r)⁶]
@@ -81,14 +81,14 @@ def test_attractive_interaction():
     state.movementResidues = [movement_info]
     
     # Calculate energy
-    pygcmc.computeNaiveNonbondedEnergy(state)
+    pygcmc.computeMovementResiduesEnergy(state)
     energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
     
     # Check result
     assert abs(energy) < 1e-6, "Expected zero interaction energy at r = sigma"
 
 def test_three_movement_molecules():
-    """Test naive nonbonded energy calculation for three movement molecules.
+    """Test nonbonded energy calculation for three movement molecules.
     
     Setup:
     - Three movement residues (all type 0)
@@ -96,7 +96,7 @@ def test_three_movement_molecules():
     - All residues are active
     - Force field parameters:
         eps = 1.0, sigma = 1.0
-        r = 1.0 (fixed in naive implementation)
+        r = 1.0 (distance between atoms)
     
     Expected:
     - First movement residue interacts with two other residues
@@ -158,14 +158,14 @@ def test_three_movement_molecules():
     state.movementResidues = [movement_info]
     
     # Calculate energy
-    pygcmc.computeNaiveNonbondedEnergy(state)
+    pygcmc.computeMovementResiduesEnergy(state)
     energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
     
     # Check result
     assert abs(energy) < 1e-5, "Expected zero energy at r = sigma"
 
 def test_electrostatic_interaction():
-    """Test naive nonbonded energy calculation for electrostatic interaction.
+    """Test nonbonded energy calculation for electrostatic interaction.
     
     Setup:
     - Two residues: one movement (type 0) and one fixed (type 1)
@@ -182,7 +182,6 @@ def test_electrostatic_interaction():
     - r = 1.0 nm
     Therefore:
     V = 138.935458 * (+1) * (-1) / 1.0 = -138.935458 kJ/mol
-    Each residue gets this full energy (not divided by 2)
     """
     state = pygcmc.MCState()
     
@@ -240,7 +239,7 @@ def test_electrostatic_interaction():
     state.movementResidues = [movement_info]
     
     # Calculate energy
-    pygcmc.computeNaiveNonbondedEnergy(state)
+    pygcmc.computeMovementResiduesEnergy(state)
     energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
     
     # Expected energy with Coulomb constant
@@ -248,10 +247,7 @@ def test_electrostatic_interaction():
     expected_energy = -COULOMB  # k_c * (+1) * (-1) / 1.0
     
     # Check result with appropriate tolerance for single-precision float
-    rel_tol = 1e-5  # 0.001% relative tolerance
-    abs_diff = abs(energy - expected_energy)
-    rel_diff = abs_diff / abs(expected_energy)
-    assert rel_diff < rel_tol, f"Expected electrostatic energy of {expected_energy} kJ/mol, got {energy} kJ/mol (relative error: {rel_diff})"
+    assert abs(energy - expected_energy) < 1e-5, f"Expected energy {expected_energy}, got {energy}"
 
 def test_repulsive_interaction():
     """Test naive nonbonded energy calculation for repulsive interaction.
@@ -324,7 +320,7 @@ def test_repulsive_interaction():
     state.movementResidues = [movement_info]
     
     # Calculate energy
-    pygcmc.computeNaiveNonbondedEnergy(state)
+    pygcmc.computeMovementResiduesEnergy(state)
     energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
     
     # Check result
@@ -351,7 +347,7 @@ def test_invalid_forcefield_params():
     
     # Expect runtime error due to invalid parameter array size
     with pytest.raises(RuntimeError):
-        pygcmc.computeNaiveNonbondedEnergy(state)
+        pygcmc.computeMovementResiduesEnergy(state)
 
 def test_inactive_residue():
     """Test energy calculation with inactive residues.
@@ -416,7 +412,7 @@ def test_inactive_residue():
     state.movementResidues = [movement_info]
     
     # Calculate energy
-    pygcmc.computeNaiveNonbondedEnergy(state)
+    pygcmc.computeMovementResiduesEnergy(state)
     energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
     
     # Check result
@@ -492,7 +488,7 @@ def test_combined_interaction():
     state.movementResidues = [movement_info]
     
     # Calculate energy
-    pygcmc.computeNaiveNonbondedEnergy(state)
+    pygcmc.computeMovementResiduesEnergy(state)
     
     # Get actual energies
     actual_vdw = state.residues[0].energy_vdw
@@ -578,7 +574,7 @@ def test_energy_symmetry():
     state.movementResidues = [movement_info]
     
     # Calculate energy
-    pygcmc.computeNaiveNonbondedEnergy(state)
+    pygcmc.computeMovementResiduesEnergy(state)
     
     # Get energies for both residues
     energy1 = state.residues[0].energy_vdw + state.residues[0].energy_elec
@@ -654,7 +650,7 @@ def test_very_close_distance():
     state.movementResidues = [movement_info]
     
     # Calculate energy
-    pygcmc.computeNaiveNonbondedEnergy(state)
+    pygcmc.computeMovementResiduesEnergy(state)
     energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
     
     # Energy should be large but finite
@@ -748,7 +744,7 @@ def test_zero_distance_handling():
     state.movementResidues = [movement_info]
     
     # Calculate energy - should not raise exception
-    pygcmc.computeNaiveNonbondedEnergy(state)
+    pygcmc.computeMovementResiduesEnergy(state)
     energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
     
     # Energy should be finite and capped
@@ -757,17 +753,12 @@ def test_zero_distance_handling():
     assert energy <= 1e6, "Energy should be capped at MAX_SAFE_ENERGY"
 
 def test_all_residues_nonbonded():
-    """Test nonbonded energy calculation for all residues.
+    """Test nonbonded energy calculation for all residues in the system.
     
     Setup:
-    - Three active residues in a triangular configuration
-    - Each residue has one atom with both charge and LJ interactions
-    - All residues should have correct pairwise interactions
-    
-    Note:
-    - Each pairwise interaction is calculated once and added to both residues
-    - Total system energy should be sum of all residue energies divided by 2
-      (because each interaction is counted twice in the sum)
+    - Multiple residues with various interactions
+    - Mix of movement and fixed residues
+    - Both VDW and electrostatic interactions
     """
     state = pygcmc.MCState()
     
@@ -815,7 +806,7 @@ def test_all_residues_nonbonded():
     state.activeResidueCount = 3
     
     # 计算能量
-    pygcmc.computeAllNonbondedEnergy(state)
+    pygcmc.computeFullSystemEnergy(state)
     
     # 验证每个residue都有能量
     for i in range(3):
@@ -903,7 +894,7 @@ def test_all_residues_inactive():
     state.activeResidueCount = 0
     
     # 计算能量
-    pygcmc.computeAllNonbondedEnergy(state)
+    pygcmc.computeFullSystemEnergy(state)
     
     # 验证所有能量都是0
     for res in state.residues:
@@ -911,19 +902,12 @@ def test_all_residues_inactive():
         assert abs(res.energy_elec) < 1e-6, "Inactive residue has non-zero electrostatic energy"
 
 def test_cutoff_nonperiodic():
-    """Test nonbonded energy calculation with cutoff but no periodic boundary conditions.
+    """Test nonbonded energy calculation with distance cutoff.
     
     Setup:
-    - Three active residues in a line:
-      residue 0: at origin
-      residue 1: at x=1.0 nm (within cutoff)
-      residue 2: at x=2.0 nm (beyond cutoff)
-    - Each residue has one atom with both charge and LJ interactions
-    - Cutoff = 1.5 nm
-    
-    Expected:
-    - Only residue 0-1 interaction should be computed (within cutoff)
-    - residue 0-2 and 1-2 interactions should be ignored (beyond cutoff)
+    - Multiple residues at various distances
+    - Only interactions within cutoff distance are considered
+    - No periodic boundary conditions
     """
     state = pygcmc.MCState()
     
@@ -973,7 +957,7 @@ def test_cutoff_nonperiodic():
     state.activeResidueCount = 3
     
     # 计算能量
-    pygcmc.computeCutoffNonPeriodicEnergy(state)
+    pygcmc.computeFullSystemCutoffEnergy(state)
     
     # 验证每个residue都有能量
     for i in range(3):

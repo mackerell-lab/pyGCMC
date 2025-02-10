@@ -6,10 +6,10 @@
 namespace pygcmc {
 namespace simulation {
 
-void Simulation::computeNaiveNonbondedEnergy(model::MCState& state) {
-    log(LogLevel::DEBUG, "Computing naive nonbonded energy for movement residues");
+void Simulation::computeMovementResiduesEnergy(model::MCState& state) {
+    log(LogLevel::DEBUG, "Computing nonbonded energy for movement residues");
     
-    platform::cpu::computeNaiveNonbondedEnergy(state);
+    platform::cpu::computeMovementResiduesEnergy(state);
     
     // Log the energy of the first movement residue
     const auto& firstMovementInfo = state.movementResidues[0];
@@ -20,10 +20,10 @@ void Simulation::computeNaiveNonbondedEnergy(model::MCState& state) {
         ", total=", (residue.energy_vdw + residue.energy_elec));
 }
 
-void Simulation::computeAllNonbondedEnergy(model::MCState& state) {
+void Simulation::computeFullSystemEnergy(model::MCState& state) {
     log(LogLevel::DEBUG, "Computing nonbonded energy for all active residues");
     
-    platform::cpu::computeAllNonbondedEnergy(state);
+    platform::cpu::computeFullSystemEnergy(state);
     
     // Log total system energy
     float total_vdw = 0.0f;
@@ -43,10 +43,10 @@ void Simulation::computeAllNonbondedEnergy(model::MCState& state) {
         ", total=", (total_vdw + total_elec));
 }
 
-void Simulation::computeCutoffNonPeriodicEnergy(model::MCState& state) {
+void Simulation::computeFullSystemCutoffEnergy(model::MCState& state) {
     log(LogLevel::DEBUG, "Computing cutoff nonbonded energy for all active residues");
     
-    platform::cpu::computeCutoffNonPeriodicEnergy(state);
+    platform::cpu::computeFullSystemCutoffEnergy(state);
     
     // Log total system energy
     float total_vdw = 0.0f;
@@ -58,7 +58,7 @@ void Simulation::computeCutoffNonPeriodicEnergy(model::MCState& state) {
         }
     }
     
-    // 总能量除以2（因为每个相互作用被计算了两次）
+    // Total energy divided by 2 (since each interaction is counted twice)
     total_vdw /= 2.0f;
     total_elec /= 2.0f;
     

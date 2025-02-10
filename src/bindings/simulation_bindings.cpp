@@ -8,19 +8,14 @@ namespace pygcmc {
 namespace bindings {
 
 void init_simulation_bindings(py::module& m) {
-    // Bind the naive nonbonded energy calculation function
-    m.def("computeNaiveNonbondedEnergy", &simulation::Simulation::computeNaiveNonbondedEnergy,
-          "Compute and update nonbonded energies (vdw and elec) for all active movement residues",
-          py::arg("state"));
+    m.def("computeMovementResiduesEnergy", &simulation::Simulation::computeMovementResiduesEnergy,
+          "Calculate nonbonded energies for movement residues only");
           
-    // 修改绑定，使用Simulation类的方法
-    m.def("computeAllNonbondedEnergy", &simulation::Simulation::computeAllNonbondedEnergy,
-          "Compute and update nonbonded energies (vdw and elec) for all active residues",
-          py::arg("state"));
+    m.def("computeFullSystemEnergy", &simulation::Simulation::computeFullSystemEnergy,
+          "Calculate nonbonded energies for the full system");
           
-    m.def("computeCutoffNonPeriodicEnergy", &simulation::Simulation::computeCutoffNonPeriodicEnergy,
-          "Compute and update nonbonded energies (vdw and elec) for all active residues within cutoff",
-          py::arg("state"));
+    m.def("computeFullSystemCutoffEnergy", &simulation::Simulation::computeFullSystemCutoffEnergy,
+          "Calculate nonbonded energies for the full system with distance cutoff");
 }
 
 } // namespace bindings
