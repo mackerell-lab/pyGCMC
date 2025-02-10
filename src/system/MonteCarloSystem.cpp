@@ -3,6 +3,8 @@
 #include <cmath>
 #include <algorithm>
 #include <cctype>
+#include <set>
+#include <sstream>
 
 namespace pygcmc {
 namespace system {
@@ -139,6 +141,9 @@ void MonteCarloSystem::initializeFromMolecular(const std::shared_ptr<model::Mole
     if (!molecular) {
         throw std::runtime_error("MolecularSystem has no molecular data");
     }
+    
+    // Store molecular system for later parameter validation
+    this->molecular = molecular;
     
     // Unit conversion constant
     const float ANGSTROM_TO_NM = 0.1f;    // 1 Å = 0.1 nm
@@ -584,7 +589,60 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
     state = std::move(newState);
 }
 
+void MonteCarloSystem::validateParameters(const model::ForceField& ff, const std::shared_ptr<model::Molecular>& molecular) {
+    if (!molecular) {
+        throw std::runtime_error("Molecular system is null");
+    }
+
+    // 检查所有原子的拓扑参数
+    std::set<std::string> missingTopoTypes;
+    for (const auto& res : molecular->topology_residues) {
+        for (int atomIdx : res.atoms) {
+            if (atomIdx >= static_cast<int>(molecular->topology_atoms.size())) {
+                throw std::runtime_error("Invalid topology atom index: " + std::to_string(atomIdx));
+            }
+        }
+    }
+
+    // 检查所有原子类型的LJ参数
+    std::set<std::string> missingLJTypes;
+    for (const auto& atom : molecular->topology_atoms) {
+        try {
+            ff.get_lj_params(atom.type);
+        } catch (const std::exception&) {
+            missingLJTypes.insert(atom.type);
+        }
+    }
+
+    // 如果有缺失的参数，生成详细的错误信息
+    if (!missingTopoTypes.empty() || !missingLJTypes.empty()) {
+        std::stringstream error;
+        error << "Missing parameters detected:\n";
+        
+        if (!missingTopoTypes.empty()) {
+            error << "Missing topology parameters for atom types:\n";
+            for (const auto& type : missingTopoTypes) {
+                error << "  - " << type << "\n";
+            }
+        }
+        
+        if (!missingLJTypes.empty()) {
+            error << "Missing LJ parameters for atom types:\n";
+            for (const auto& type : missingLJTypes) {
+                error << "  - " << type << "\n";
+            }
+        }
+        
+        throw std::runtime_error(error.str());
+    }
+
+    System::log(LogLevel::DEBUG, "All topology and force field parameters validated successfully");
+}
+
 void MonteCarloSystem::initializeForceField(const model::ForceField& ff) {
+    // 首先验证所有参数
+    validateParameters(ff, molecular);  // 需要保存molecular作为成员变量
+
     const auto& atomTypes = state.atomTypes;
     const int numTypes = atomTypes.atomTypes.size();
     const int numMovementTypes = state.numMovementAtomTypes;

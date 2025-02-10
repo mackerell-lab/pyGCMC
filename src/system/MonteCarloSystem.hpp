@@ -245,6 +245,14 @@ public:
      */
     int getActiveAtomCount() const { return state.activeAtomCount; }
 
+    /**
+     * @brief Check if all atoms have valid topology and force field parameters
+     * @param ff Force field to check against
+     * @param molecular Molecular system to check
+     * @throws std::runtime_error if any parameters are missing
+     */
+    void validateParameters(const model::ForceField& ff, const std::shared_ptr<model::Molecular>& molecular);
+
 private:
     // ------------------------------------------------------------
     // Private helper functions
@@ -275,8 +283,8 @@ private:
     // ------------------------------------------------------------
     // Member variables
     // ------------------------------------------------------------
-    /// @brief Current system state
-    model::MCState state;
+    model::MCState state;  ///< Current state of the Monte Carlo system
+    std::shared_ptr<model::Molecular> molecular;  ///< Stored molecular system for parameter validation
 };
 
 } // namespace system
