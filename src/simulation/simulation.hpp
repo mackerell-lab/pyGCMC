@@ -94,6 +94,11 @@ public:
      */
     static void computeFullSystemCutoffEnergy(model::MCState& state);
 
+    /**
+     * @brief Calculate nonbonded energies for the full system with distance cutoff and periodic boundary conditions
+     */
+    static void computeFullSystemCutoffPBCEnergy(model::MCState& state);
+
     // Finalize the simulation and (optionally) download final data
     void finalize() {
         platform_->finalize();

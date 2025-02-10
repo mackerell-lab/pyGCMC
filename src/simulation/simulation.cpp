@@ -67,5 +67,37 @@ void Simulation::computeFullSystemCutoffEnergy(model::MCState& state) {
         ", total=", (total_vdw + total_elec));
 }
 
+void Simulation::computeFullSystemCutoffPBCEnergy(model::MCState& state) {
+    log(LogLevel::DEBUG, "Computing cutoff nonbonded energy with PBC for all active residues");
+    
+    // Validate box dimensions before proceeding
+    if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
+        throw std::runtime_error("Invalid box dimensions for PBC calculation");
+    }
+    
+    log(LogLevel::DEBUG, "Box dimensions: ", state.info.box[0], " x ", 
+        state.info.box[1], " x ", state.info.box[2], " nm");
+    
+    platform::cpu::computeFullSystemCutoffPBCEnergy(state);
+    
+    // Log total system energy
+    float total_vdw = 0.0f;
+    float total_elec = 0.0f;
+    for (int i = 0; i < state.activeResidueCount; ++i) {
+        if (state.residues[i].active) {
+            total_vdw += state.residues[i].energy_vdw;
+            total_elec += state.residues[i].energy_elec;
+        }
+    }
+    
+    // Total energy divided by 2 (since each interaction is counted twice)
+    total_vdw /= 2.0f;
+    total_elec /= 2.0f;
+    
+    log(LogLevel::DEBUG, "Total system energy with PBC: vdw=", total_vdw, 
+        ", elec=", total_elec, 
+        ", total=", (total_vdw + total_elec));
+}
+
 } // namespace simulation
 } // namespace pygcmc

@@ -94,10 +94,11 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
     }
     
     // Calculate LJ energy: V_LJ = 4ε[(σ/r)¹² - (σ/r)⁶]
-    float sigma_r = sigma / r;
-    float term6 = std::pow(sigma_r, 6);
-    float term12 = term6 * term6;
-    float vdw_energy = 4.0f * eps * (term12 - term6);  // kJ/mol
+    // 使用更稳定的计算方法：先计算(σ/r)²，然后通过乘法得到6次和12次方
+    float sigma_r2 = (sigma * sigma) / r2;  // (σ/r)²
+    float sigma_r6 = sigma_r2 * sigma_r2 * sigma_r2;  // (σ/r)⁶
+    float sigma_r12 = sigma_r6 * sigma_r6;  // (σ/r)¹²
+    float vdw_energy = 4.0f * eps * (sigma_r12 - sigma_r6);  // kJ/mol
     
     // Calculate Coulomb energy: V_C = k_c * q1*q2/r
     float elec_energy = COULOMB * q1 * q2 / r;  // kJ/mol
@@ -106,11 +107,11 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
         std::stringstream ss;
         ss << std::fixed << std::setprecision(6);
         ss << "\nEnergy calculation details:";
-        ss << "\n  sigma/r = " << sigma_r;
-        ss << "\n  (sigma/r)^6 = " << term6;
-        ss << "\n  (sigma/r)^12 = " << term12;
+        ss << "\n  (sigma/r)² = " << sigma_r2;
+        ss << "\n  (sigma/r)⁶ = " << sigma_r6;
+        ss << "\n  (sigma/r)¹² = " << sigma_r12;
         ss << "\n  4*epsilon = " << (4.0f * eps);
-        ss << "\n  VDW term = " << (term12 - term6);
+        ss << "\n  VDW term = " << (sigma_r12 - sigma_r6);
         ss << "\n  COULOMB constant = " << COULOMB;
         ss << "\n  q1*q2 = " << (q1 * q2);
         ss << "\nInitial energies:";
@@ -163,19 +164,23 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
  * @param state System state
  * @param residue_idx Index of the residue to calculate energy for
  * @param use_cutoff Whether to use distance cutoff
+ * @param use_pbc Whether to use periodic boundary conditions
  * 
- * This function handles two scenarios:
- * 1. No cutoff: Calculate interactions between all atom pairs
- * 2. With cutoff: Only calculate interactions within cutoff distance
+ * This function handles three scenarios:
+ * 1. No cutoff, no PBC: Calculate interactions between all atom pairs
+ * 2. With cutoff, no PBC: Only calculate interactions within cutoff distance
+ * 3. With PBC: Apply minimum image convention for distance calculation
  */
 inline void computeResidueNonbondedEnergy(
     model::MCState& state,
     int residue_idx,
-    bool use_cutoff = false
+    bool use_cutoff = false,
+    bool use_pbc = false
 ) {
     auto& residues = state.residues;
     const auto& forcefield = state.forcefield;
     const auto& atoms = state.atoms;
+    const auto& box = state.info.box;  // Box dimensions for PBC
     
     // Calculate squared cutoff distance if using cutoff
     const float cutoff2 = use_cutoff ? state.info.cutoff * state.info.cutoff : std::numeric_limits<float>::max();
@@ -223,10 +228,35 @@ inline void computeResidueNonbondedEnergy(
                     throw std::runtime_error(ss.str());
                 }
                 
-                // Calculate interatomic distance
+                // Calculate interatomic distance with PBC if enabled
                 float dx = atoms[atom_j].x - atoms[atom_i].x;
                 float dy = atoms[atom_j].y - atoms[atom_i].y;
                 float dz = atoms[atom_j].z - atoms[atom_i].z;
+                
+                // Apply minimum image convention if PBC is enabled
+                if (use_pbc) {
+                    // Validate box dimensions
+                    if (box[0] <= 0.0f || box[1] <= 0.0f || box[2] <= 0.0f) {
+                        throw std::runtime_error("Invalid box dimensions for PBC calculation");
+                    }
+                    
+                    // Apply minimum image convention
+                    dx -= box[0] * std::round(dx / box[0]);
+                    dy -= box[1] * std::round(dy / box[1]);
+                    dz -= box[2] * std::round(dz / box[2]);
+                    
+                    if (debug_output) {
+                        std::stringstream ss;
+                        ss << "\nPBC distance calculation:";
+                        ss << "\n  Original dx,dy,dz: " << (atoms[atom_j].x - atoms[atom_i].x)
+                           << ", " << (atoms[atom_j].y - atoms[atom_i].y)
+                           << ", " << (atoms[atom_j].z - atoms[atom_i].z);
+                        ss << "\n  After PBC dx,dy,dz: " << dx << ", " << dy << ", " << dz;
+                        ss << "\n  Box dimensions: " << box[0] << ", " << box[1] << ", " << box[2];
+                        platform::log(LogLevel::DEBUG, ss.str());
+                    }
+                }
+                
                 float r2 = dx*dx + dy*dy + dz*dz;
                 
                 // Skip if beyond cutoff distance
@@ -256,6 +286,7 @@ inline void computeResidueNonbondedEnergy(
  * @param state System state
  * @param use_cutoff Whether to use distance cutoff
  * @param movement_only Whether to calculate only for movement residues
+ * @param use_pbc Whether to use periodic boundary conditions
  * 
  * This function provides a unified interface for all nonbonded energy calculations:
  * - Can handle both cutoff and non-cutoff calculations
@@ -263,7 +294,7 @@ inline void computeResidueNonbondedEnergy(
  * - Validates force field parameters based on calculation type
  * - Provides detailed debug output for energy components
  */
-void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movement_only = false) {
+void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movement_only = false, bool use_pbc = false) {
     if (debug_output) {
         std::stringstream ss;
         ss << "\n=== Starting nonbonded energy calculation ===";
@@ -274,6 +305,9 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
         }
         if (movement_only) {
             ss << "\n  Calculating only for movement residues";
+        }
+        if (use_pbc) {
+            ss << "\n  Using periodic boundary conditions";
         }
         platform::log(LogLevel::DEBUG, ss.str());
     }
@@ -374,7 +408,7 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
                                            std::to_string(atoms.size()));
                 }
 
-                computeResidueNonbondedEnergy(state, i, use_cutoff);
+                computeResidueNonbondedEnergy(state, i, use_cutoff, use_pbc);
             }
         }
     } else {
@@ -393,7 +427,7 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
                                        std::to_string(atoms.size()));
             }
 
-            computeResidueNonbondedEnergy(state, i, use_cutoff);
+            computeResidueNonbondedEnergy(state, i, use_cutoff, use_pbc);
         }
     }
 
@@ -423,23 +457,45 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
 
 /**
  * @brief Interface functions for nonbonded energy calculations
- * 
- * These functions provide different specializations of nonbonded energy calculation:
- * 1. computeMovementResiduesEnergy: Calculate energies only for movement residues without distance cutoff
- * 2. computeFullSystemEnergy: Calculate energies for all residues without distance cutoff
- * 3. computeFullSystemCutoffEnergy: Calculate energies for all residues with distance cutoff
  */
 
 void computeMovementResiduesEnergy(model::MCState& state) {
-    computeNonbondedEnergy(state, false, true);  // No cutoff, movement residues only
+    computeNonbondedEnergy(state, false, true, false);  // No cutoff, movement residues only, no PBC
 }
 
 void computeFullSystemEnergy(model::MCState& state) {
-    computeNonbondedEnergy(state, false, false);  // No cutoff, all residues
+    computeNonbondedEnergy(state, false, false, false);  // No cutoff, all residues, no PBC
 }
 
 void computeFullSystemCutoffEnergy(model::MCState& state) {
-    computeNonbondedEnergy(state, true, false);  // With cutoff, all residues
+    computeNonbondedEnergy(state, true, false, false);  // With cutoff, all residues, no PBC
+}
+
+/**
+ * @brief Interface functions for nonbonded energy calculations with PBC support
+ * 
+ * These functions provide PBC-specific versions of the energy calculations:
+ * - Uses minimum image convention for distance calculations
+ * - Requires valid box dimensions in state.info.box
+ * - Recommended to use with cutoff for better performance
+ */
+
+void computeFullSystemCutoffPBCEnergy(model::MCState& state) {
+    if (debug_output) {
+        std::stringstream ss;
+        ss << "\n=== Starting PBC nonbonded energy calculation ===";
+        ss << "\nBox dimensions: " << state.info.box[0] << " x " 
+           << state.info.box[1] << " x " << state.info.box[2] << " nm";
+        platform::log(LogLevel::DEBUG, ss.str());
+    }
+    
+    // Validate box dimensions before proceeding
+    if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
+        throw std::runtime_error("Invalid box dimensions for PBC calculation");
+    }
+    
+    // Calculate with both cutoff and PBC enabled
+    computeNonbondedEnergy(state, true, false, true);
 }
 
 // Function to enable/disable debug output

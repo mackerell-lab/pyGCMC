@@ -16,6 +16,9 @@ void init_simulation_bindings(py::module& m) {
           
     m.def("computeFullSystemCutoffEnergy", &simulation::Simulation::computeFullSystemCutoffEnergy,
           "Calculate nonbonded energies for the full system with distance cutoff");
+          
+    m.def("computeFullSystemCutoffPBCEnergy", &simulation::Simulation::computeFullSystemCutoffPBCEnergy,
+          "Calculate nonbonded energies for the full system with distance cutoff and periodic boundary conditions");
 }
 
 } // namespace bindings
