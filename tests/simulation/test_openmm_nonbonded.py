@@ -46,7 +46,7 @@ def create_test_system():
         movement_atoms.append([x, y, z])
     
     # Fixed molecule (water-like): 3 atoms
-    # Oxygen with charge -0.8e and 2 hydrogens with charge +0.4e each
+    # Oxygen with charge -0.834e and 2 hydrogens with charge +0.417e each (TIP3P)
     fixed_atoms = [
         [1.0, 0.0, 0.0],  # O
         [1.1, 0.1, 0.0],  # H1
@@ -59,14 +59,14 @@ def create_test_system():
     # Create nonbonded force
     nb_force = NonbondedForce()
     
-    # Add movement molecule atoms (carbons)
+    # Add movement molecule atoms (carbons with OPLS-AA like parameters)
     for _ in range(6):
-        nb_force.addParticle(0.1, 0.3, 0.5)  # charge=+0.1e, sigma=0.3nm, epsilon=0.5kJ/mol
+        nb_force.addParticle(0.1, 0.34, 0.36)  # charge=+0.1e, sigma=0.34nm, epsilon=0.36kJ/mol
     
-    # Add fixed molecule atoms
-    nb_force.addParticle(-0.8, 0.3, 0.5)  # O
-    nb_force.addParticle(0.4, 0.2, 0.2)   # H1
-    nb_force.addParticle(0.4, 0.2, 0.2)   # H2
+    # Add fixed molecule atoms (TIP3P-like parameters)
+    nb_force.addParticle(-0.834, 0.3166, 0.650)  # O
+    nb_force.addParticle(0.417, 0.0, 0.0)        # H1
+    nb_force.addParticle(0.417, 0.0, 0.0)        # H2
     
     # Set up periodic boundary conditions
     nb_force.setNonbondedMethod(NonbondedForce.PME)
@@ -100,26 +100,40 @@ def create_test_system():
     return system, topology, positions
 
 def calculate_nonbonded_energy(system, positions, movement_atoms, fixed_atoms, use_pbc=True):
-    """Calculate nonbonded energy between specified groups using a shifted Coulomb potential.
+    """Calculate nonbonded energy between specified groups using shifted Coulomb and LJ potentials.
     
-    The energy expression is:
-      E = step(cutoff - r) * kC * q1 * q2 * (1/r - 1/cutoff)
+    The energy expression includes both electrostatic and van der Waals terms:
+    E = step(cutoff - r) * [
+        kC * q1 * q2 * (1/r - 1/cutoff) +  # shifted Coulomb
+        4 * sqrt(eps1*eps2) * ((sigma/r)^12 - (sigma/r)^6)  # LJ
+    ]
     where:
     - step(x) is the Heaviside step function (0 for x < 0, 1 for x >= 0)
-    - This ensures E = 0 exactly when r >= cutoff
+    - sigma = (sigma1 + sigma2)/2  # Lorentz-Berthelot mixing rule for sigma
+    - eps = sqrt(eps1*eps2)        # Lorentz-Berthelot mixing rule for epsilon
     """
-    # Create custom force with shifted Coulomb potential expression
-    energy_expression = "step(cutoff - r)*kC*q1*q2*(1/r - 1/cutoff);"
+    # 完整的nonbonded能量表达式，包括Coulomb和LJ
+    energy_expression = """
+    step(cutoff - r) * (
+        kC * q1 * q2 * (1/r - 1/cutoff) + 
+        4 * sqrt(eps1*eps2) * (
+            (0.5*(sigma1+sigma2)/r)^12 - 
+            (0.5*(sigma1+sigma2)/r)^6
+        )
+    );
+    """
     custom_force = CustomNonbondedForce(energy_expression)
     
-    # Add per-particle parameter for charge
-    custom_force.addPerParticleParameter("q")
+    # 添加每个粒子的参数
+    custom_force.addPerParticleParameter("q")      # 电荷
+    custom_force.addPerParticleParameter("sigma")  # LJ sigma
+    custom_force.addPerParticleParameter("eps")    # LJ epsilon
     
-    # Add global parameters: kC and cutoff
-    custom_force.addGlobalParameter("kC", 138.935456)
-    custom_force.addGlobalParameter("cutoff", 1.0)  # cutoff in nm
+    # 添加全局参数
+    custom_force.addGlobalParameter("kC", 138.935456)  # Coulomb常数 (kJ·nm/mol/e^2)
+    custom_force.addGlobalParameter("cutoff", 1.0)     # 截断距离 (nm)
     
-    # Retrieve original nonbonded force from the system
+    # 从原始NonbondedForce中获取参数
     nb_force = None
     for force in system.getForces():
         if isinstance(force, NonbondedForce):
@@ -128,30 +142,31 @@ def calculate_nonbonded_energy(system, positions, movement_atoms, fixed_atoms, u
     if nb_force is None:
         raise ValueError("No NonbondedForce found in system")
     
-    # Add particle parameters: use only charge parameter
+    # 添加粒子参数
     num_particles = system.getNumParticles()
     for i in range(num_particles):
         charge, sigma, epsilon = nb_force.getParticleParameters(i)
-        custom_force.addParticle([charge])
+        # OpenMM的sigma单位是nm，epsilon单位是kJ/mol
+        custom_force.addParticle([charge, sigma, epsilon])
     
-    # Only compute interactions between the specified groups
+    # 只计算指定组之间的相互作用
     custom_force.addInteractionGroup(movement_atoms, fixed_atoms)
     
-    # Set nonbonded method and cutoff distance based on use_pbc
+    # 设置非键方法和截断距离
     if use_pbc:
         custom_force.setNonbondedMethod(CustomNonbondedForce.CutoffPeriodic)
     else:
         custom_force.setNonbondedMethod(CustomNonbondedForce.CutoffNonPeriodic)
     custom_force.setCutoffDistance(1.0 * nanometers)
     
-    # Create an energy system containing only the custom force
+    # 创建只包含custom force的能量系统
     energy_system = System()
     for i in range(num_particles):
         energy_system.addParticle(system.getParticleMass(i))
     energy_system.setDefaultPeriodicBoxVectors(*system.getDefaultPeriodicBoxVectors())
     energy_system.addForce(custom_force)
     
-    # Calculate energy using a Reference platform
+    # 使用Reference平台计算能量
     integrator = VerletIntegrator(0.001 * picoseconds)
     platform = Platform.getPlatformByName('Reference')
     context = Context(energy_system, integrator, platform)
