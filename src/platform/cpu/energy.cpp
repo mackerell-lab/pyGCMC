@@ -334,22 +334,15 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
                                std::to_string(forcefield.numMovementTypes));
     }
 
-    // Validate force field parameter array sizes
-    size_t expected_size;
-    if (movement_only) {
-        expected_size = static_cast<size_t>(forcefield.numMovementTypes) * 
-                       static_cast<size_t>(forcefield.numTotalTypes);
-    } else {
-        expected_size = static_cast<size_t>(forcefield.numTotalTypes) * 
-                       static_cast<size_t>(forcefield.numTotalTypes);
-    }
+    // Always expect full matrix size
+    size_t expected_size = static_cast<size_t>(forcefield.numTotalTypes) * 
+                           static_cast<size_t>(forcefield.numTotalTypes);
     
     if (forcefield.ljEps.size() != expected_size || forcefield.ljSigma.size() != expected_size) {
         std::stringstream ss;
         ss << "Force field parameters array size mismatch. Expected size "
            << expected_size
-           << " (" << (movement_only ? "numMovementTypes" : "numTotalTypes")
-           << " * numTotalTypes), but got eps=" << forcefield.ljEps.size()
+           << " (numTotalTypes * numTotalTypes), but got eps=" << forcefield.ljEps.size()
            << " sigma=" << forcefield.ljSigma.size();
         throw std::runtime_error(ss.str());
     }

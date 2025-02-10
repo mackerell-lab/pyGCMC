@@ -28,11 +28,14 @@ def test_attractive_interaction():
     state.forcefield.numMovementTypes = 1  # One movement type
     
     # Initialize force field parameters for attractive interaction
-    # For movement type 0:
+    # For type 0:
     #   - interaction with type 0: index = 0 * 2 + 0 = 0
     #   - interaction with type 1: index = 0 * 2 + 1 = 1
-    state.forcefield.ljEps = [1.0, 1.0]    # eps = 1.0 for both interactions
-    state.forcefield.ljSigma = [1.0, 1.0]  # sigma = 1.0 for both interactions
+    # For type 1:
+    #   - interaction with type 0: index = 1 * 2 + 0 = 2
+    #   - interaction with type 1: index = 1 * 2 + 1 = 3
+    state.forcefield.ljEps = [1.0, 1.0, 1.0, 1.0]    # Complete 2x2 matrix for eps
+    state.forcefield.ljSigma = [1.0, 1.0, 1.0, 1.0]  # Complete 2x2 matrix for sigma
     
     # Set up movement atom types
     state.movementAtomTypes = [0]  # Type 0 is a movement type
@@ -190,8 +193,8 @@ def test_electrostatic_interaction():
     # 1. Set up force field (no vdw interaction)
     state.forcefield.numTotalTypes = 2
     state.forcefield.numMovementTypes = 1
-    state.forcefield.ljEps = [0.0, 0.0]    # eps = 0.0 to disable vdw
-    state.forcefield.ljSigma = [1.0, 1.0]  # sigma doesn't matter when eps = 0
+    state.forcefield.ljEps = [0.0, 0.0, 0.0, 0.0]    # Complete 2x2 matrix with eps = 0.0
+    state.forcefield.ljSigma = [1.0, 1.0, 1.0, 1.0]  # Complete 2x2 matrix with sigma = 1.0
     
     # Set up movement atom types
     state.movementAtomTypes = [0]  # Type 0 is a movement type
@@ -272,8 +275,8 @@ def test_repulsive_interaction():
     # 1. Set up force field
     state.forcefield.numTotalTypes = 2
     state.forcefield.numMovementTypes = 1
-    state.forcefield.ljEps = [1.0, 1.0]
-    state.forcefield.ljSigma = [1.0, 1.0]
+    state.forcefield.ljEps = [1.0, 1.0, 1.0, 1.0]    # Complete 2x2 matrix for eps
+    state.forcefield.ljSigma = [1.0, 1.0, 1.0, 1.0]  # Complete 2x2 matrix for sigma
     
     # Set up movement atom types
     state.movementAtomTypes = [0]  # Type 0 is a movement type
@@ -363,8 +366,8 @@ def test_inactive_residue():
     # 1. Set up force field
     state.forcefield.numTotalTypes = 2
     state.forcefield.numMovementTypes = 1
-    state.forcefield.ljEps = [1.0, 1.0]
-    state.forcefield.ljSigma = [1.0, 1.0]
+    state.forcefield.ljEps = [1.0, 1.0, 1.0, 1.0]    # Complete 2x2 matrix for eps
+    state.forcefield.ljSigma = [1.0, 1.0, 1.0, 1.0]  # Complete 2x2 matrix for sigma
     
     # 2. Set up atoms
     atom1 = pygcmc.MCAtom()
@@ -439,8 +442,8 @@ def test_combined_interaction():
     # 1. Set up force field
     state.forcefield.numTotalTypes = 2
     state.forcefield.numMovementTypes = 1
-    state.forcefield.ljEps = [1.0, 1.0]    # eps = 1.0 kJ/mol
-    state.forcefield.ljSigma = [1.0, 1.0]  # sigma = 1.0 nm
+    state.forcefield.ljEps = [1.0, 1.0, 1.0, 1.0]    # Complete 2x2 matrix for eps
+    state.forcefield.ljSigma = [1.0, 1.0, 1.0, 1.0]  # Complete 2x2 matrix for sigma
     
     # Set up movement atom types
     state.movementAtomTypes = [0]  # Type 0 is a movement type
@@ -601,8 +604,8 @@ def test_very_close_distance():
     # 1. Set up force field
     state.forcefield.numTotalTypes = 2
     state.forcefield.numMovementTypes = 1
-    state.forcefield.ljEps = [1.0, 1.0]
-    state.forcefield.ljSigma = [1.0, 1.0]
+    state.forcefield.ljEps = [1.0, 1.0, 1.0, 1.0]    # Complete 2x2 matrix for eps
+    state.forcefield.ljSigma = [1.0, 1.0, 1.0, 1.0]  # Complete 2x2 matrix for sigma
     
     # Set up movement atom types
     state.movementAtomTypes = [0]
@@ -695,8 +698,8 @@ def test_zero_distance_handling():
     # 1. Set up force field
     state.forcefield.numTotalTypes = 2
     state.forcefield.numMovementTypes = 1
-    state.forcefield.ljEps = [1.0, 1.0]
-    state.forcefield.ljSigma = [1.0, 1.0]
+    state.forcefield.ljEps = [1.0, 1.0, 1.0, 1.0]    # Complete 2x2 matrix for eps
+    state.forcefield.ljSigma = [1.0, 1.0, 1.0, 1.0]  # Complete 2x2 matrix for sigma
     
     # Set up movement atom types
     state.movementAtomTypes = [0]

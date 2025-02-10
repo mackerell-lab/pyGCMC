@@ -211,23 +211,28 @@ def convert_openmm_state_to_mcstate():
     o_params = nb_force.getParticleParameters(6)  # Oxygen parameters
     h_params = nb_force.getParticleParameters(7)  # Hydrogen parameters
     
-    # 注意：在naive实现中，epsilon已经包含了factor 4，所以不需要除以4
-    # 因为在naive实现的C++代码中已经包含了这个factor
-    c_c_eps = c_params[2].value_in_unit(kilojoules_per_mole)
+    # 注意：OpenMM的epsilon已经包含了4的因子，所以需要除以4
+    c_c_eps = c_params[2].value_in_unit(kilojoules_per_mole) / 4.0
     c_c_sigma = c_params[1].value_in_unit(nanometers)
-    o_o_eps = o_params[2].value_in_unit(kilojoules_per_mole)
+    o_o_eps = o_params[2].value_in_unit(kilojoules_per_mole) / 4.0
     o_o_sigma = o_params[1].value_in_unit(nanometers)
     
     # C-O参数使用Lorentz-Berthelot混合规则
     c_o_sigma = (c_c_sigma + o_o_sigma) / 2
     c_o_eps = math.sqrt(c_c_eps * o_o_eps)
     
-    # 设置力场参数
-    # 注意：在naive实现中，参数矩阵是按照movement type和total type组织的
-    # 对于每个movement type，需要它与所有total type的相互作用参数
-    # 这里只有一个movement type (C)，它需要与两个total types (C和O)的相互作用参数
-    state.forcefield.ljEps = [c_c_eps, c_o_eps]  # [C-C, C-O]
-    state.forcefield.ljSigma = [c_c_sigma, c_o_sigma]  # [C-C, C-O]
+    # 设置力场参数矩阵 (numTotalTypes * numTotalTypes = 2 * 2)
+    # 完整的交互矩阵:
+    # [C-C, C-O]
+    # [O-C, O-O]
+    state.forcefield.ljEps = [
+        c_c_eps, c_o_eps,    # C与(C,O)的相互作用
+        c_o_eps, o_o_eps     # O与(C,O)的相互作用
+    ]
+    state.forcefield.ljSigma = [
+        c_c_sigma, c_o_sigma,    # C与(C,O)的相互作用
+        c_o_sigma, o_o_sigma     # O与(C,O)的相互作用
+    ]
     
     # 设置movement类型
     state.movementAtomTypes = [0]  # Type 0 (C) is movement type
