@@ -157,6 +157,92 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
 }
 
 /**
+ * @brief 计算单个residue与其他所有active residue的nonbonded相互作用能量
+ * 
+ * @param state 系统状态
+ * @param residue_idx 要计算能量的residue索引
+ * @return std::pair<float, float> (vdw能量, 静电能量)
+ * 
+ * 注意：每次计算两个原子之间的相互作用只加到当前计算的residue上
+ */
+inline std::pair<float, float> computeResidueNonbondedEnergy(
+    const model::MCState& state,
+    int residue_idx
+) {
+    float vdw_energy = 0.0f;
+    float elec_energy = 0.0f;
+    
+    const auto& residues = state.residues;
+    const auto& forcefield = state.forcefield;
+    const auto& atoms = state.atoms;
+    
+    // 如果residue不active，直接返回0能量
+    if (!residues[residue_idx].active) {
+        return {0.0f, 0.0f};
+    }
+    
+    // 遍历当前residue的所有原子
+    for (int atom_i = residues[residue_idx].atomStart;
+         atom_i < residues[residue_idx].atomStart + residues[residue_idx].atomCount;
+         ++atom_i) {
+        int type_i = atoms[atom_i].type;
+        
+        // 验证原子类型
+        if (type_i >= forcefield.numTotalTypes) {
+            std::stringstream ss;
+            ss << "Atom type " << type_i << " out of range. "
+               << "Maximum allowed type is " << (forcefield.numTotalTypes - 1)
+               << " for atom " << atom_i << " in residue " << residue_idx;
+            throw std::runtime_error(ss.str());
+        }
+        
+        // 与其他active residues的原子计算相互作用
+        for (int j = 0; j < state.activeResidueCount; ++j) {
+            // 跳过自己和非active的residue
+            if (j == residue_idx || !residues[j].active) continue;
+            
+            // 遍历另一个residue的所有原子
+            for (int atom_j = residues[j].atomStart;
+                 atom_j < residues[j].atomStart + residues[j].atomCount;
+                 ++atom_j) {
+                int type_j = atoms[atom_j].type;
+                
+                // 验证原子类型
+                if (type_j >= forcefield.numTotalTypes) {
+                    std::stringstream ss;
+                    ss << "Atom type " << type_j << " out of range. "
+                       << "Maximum allowed type is " << (forcefield.numTotalTypes - 1)
+                       << " for atom " << atom_j << " in residue " << j;
+                    throw std::runtime_error(ss.str());
+                }
+                
+                // 计算原子间距离
+                float dx = atoms[atom_j].x - atoms[atom_i].x;
+                float dy = atoms[atom_j].y - atoms[atom_i].y;
+                float dz = atoms[atom_j].z - atoms[atom_i].z;
+                float r2 = dx*dx + dy*dy + dz*dz;
+                
+                // 获取力场参数
+                int param_index = type_i * forcefield.numTotalTypes + type_j;
+                float eps = forcefield.ljEps[param_index];
+                float sigma = forcefield.ljSigma[param_index];
+                float q1 = atoms[atom_i].charge;
+                float q2 = atoms[atom_j].charge;
+                
+                // 计算能量
+                auto [vdw, elec] = calcPairEnergy(r2, sigma, eps, q1, q2);
+                
+                // 能量只加到当前计算的residue上
+                vdw_energy += vdw;
+                elec_energy += elec;
+            }
+        }
+    }
+    
+    return {vdw_energy, elec_energy};
+}
+
+/**
  * @brief Compute non-bonded energies for movement residues without PBC
  * 
  * Calculates Lennard-Jones and Coulomb interactions between:
@@ -191,9 +277,8 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
         platform::log(LogLevel::DEBUG, "  Size of LJ parameters: ", state.forcefield.ljEps.size());
     }
 
-    auto& residues = state.residues;
     const auto& forcefield = state.forcefield;
-    const auto& atoms = state.atoms;
+    auto& residues = state.residues;
 
     // Validate force field parameter array sizes
     size_t expected_size = static_cast<size_t>(forcefield.numMovementTypes) * 
@@ -226,143 +311,21 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
         }
 
         // Process only active movement residues
-        for (int i = movementInfo.startIndex; 
-             i < movementInfo.startIndex + movementInfo.activeCount; ++i) {
+        for (int i = movementInfo.startIndex;
+             i < movementInfo.startIndex + movementInfo.activeCount;
+             ++i) {
             if (!residues[i].active) continue;
-            
+
             if (debug_output) {
                 platform::log(LogLevel::DEBUG, "\nProcessing movement residue ", i);
                 platform::log(LogLevel::DEBUG, "  Atom start: ", residues[i].atomStart);
                 platform::log(LogLevel::DEBUG, "  Atom count: ", residues[i].atomCount);
             }
 
-            // For each atom in the movement residue
-            for (int atom_i = residues[i].atomStart; 
-                 atom_i < residues[i].atomStart + residues[i].atomCount; 
-                 ++atom_i) {
-                int moveType = atoms[atom_i].type;
-                
-                // Find movement type index in movementAtomTypes array
-                int mi = -1;
-                for (int k = 0; k < state.numMovementAtomTypes; ++k) {
-                    if (state.movementAtomTypes[k] == moveType) {
-                        mi = k;
-                        break;
-                    }
-                }
-                
-                // Validate movement atom type
-                if (mi < 0) {
-                    std::stringstream ss;
-                    ss << "Movement atom type " << moveType << " not found in movementAtomTypes "
-                       << "for atom " << atom_i << " in residue " << i 
-                       << " (" << movementInfo.resName << ")";
-                    throw std::runtime_error(ss.str());
-                }
-                
-                // Validate movement type index
-                if (mi >= forcefield.numMovementTypes) {
-                    std::stringstream ss;
-                    ss << "Movement type index " << mi << " out of range. "
-                       << "Maximum allowed index is " << (forcefield.numMovementTypes - 1)
-                       << " for atom " << atom_i << " in residue " << i;
-                    throw std::runtime_error(ss.str());
-                }
-                
-                if (debug_output) {
-                    platform::log(LogLevel::DEBUG, "\nProcessing movement atom ", atom_i);
-                    platform::log(LogLevel::DEBUG, "  Type: ", moveType);
-                    platform::log(LogLevel::DEBUG, "  Movement type index: ", mi);
-                    platform::log(LogLevel::DEBUG, "  Position: (", 
-                                atoms[atom_i].x, ", ", 
-                                atoms[atom_i].y, ", ", 
-                                atoms[atom_i].z, ") nm");
-                }
-                
-                // Compute interaction with atoms in all other active residues
-                for (int j = 0; j < state.activeResidueCount; ++j) {
-                    // Skip if:
-                    // 1. Same residue (avoid self-interaction)
-                    // 2. Residue is inactive
-                    if (j == i || !residues[j].active) continue;
-                    
-                    if (debug_output) {
-                        platform::log(LogLevel::DEBUG, "\n  Interacting with residue ", j);
-                        platform::log(LogLevel::DEBUG, "    Atom start: ", residues[j].atomStart);
-                        platform::log(LogLevel::DEBUG, "    Atom count: ", residues[j].atomCount);
-                    }
-
-                    // For each atom in the other residue
-                    for (int atom_j = residues[j].atomStart;
-                         atom_j < residues[j].atomStart + residues[j].atomCount;
-                         ++atom_j) {
-                        int resType = atoms[atom_j].type;
-                        
-                        // Validate residue atom type
-                        if (resType >= forcefield.numTotalTypes) {
-                            std::stringstream ss;
-                            ss << "Residue atom type " << resType << " out of range. "
-                               << "Maximum allowed type is " << (forcefield.numTotalTypes - 1)
-                               << " for atom " << atom_j << " in residue " << j;
-                            throw std::runtime_error(ss.str());
-                        }
-                        
-                        if (debug_output) {
-                            platform::log(LogLevel::DEBUG, "\n    Interacting with atom ", atom_j);
-                            platform::log(LogLevel::DEBUG, "      Type: ", resType);
-                            platform::log(LogLevel::DEBUG, "      Position: (", 
-                                        atoms[atom_j].x, ", ", 
-                                        atoms[atom_j].y, ", ", 
-                                        atoms[atom_j].z, ") nm");
-                        }
-                        
-                        // Calculate distance between atoms (nm)
-                        float dx = atoms[atom_j].x - atoms[atom_i].x;  // nm
-                        float dy = atoms[atom_j].y - atoms[atom_i].y;  // nm
-                        float dz = atoms[atom_j].z - atoms[atom_i].z;  // nm
-                        float r2 = dx*dx + dy*dy + dz*dz;  // nm²
-                        
-                        // Get force field parameters
-                        int param_index = mi * forcefield.numTotalTypes + resType;
-                        float eps = forcefield.ljEps[param_index];     // kJ/mol
-                        float sigma = forcefield.ljSigma[param_index]; // nm
-                        float q1 = atoms[atom_i].charge;  // e
-                        float q2 = atoms[atom_j].charge;  // e
-                        
-                        if (debug_output) {
-                            std::stringstream ss;
-                            ss << std::fixed << std::setprecision(6);
-                            ss << "\n      Interaction parameters:";
-                            ss << "\n        Parameter index: " << param_index;
-                            ss << "\n        Epsilon: " << eps << " kJ/mol";
-                            ss << "\n        Sigma: " << sigma << " nm";
-                            ss << "\n        Charges: q1=" << q1 << "e, q2=" << q2 << "e";
-                            ss << "\n        Distance vector: (" << dx << ", " << dy << ", " << dz << ") nm";
-                            ss << "\n        Distance²: " << r2 << " nm²";
-                            platform::log(LogLevel::DEBUG, ss.str());
-                        }
-                        
-                        // Calculate energies with safety checks
-                        auto [vdw_energy, elec_energy] = calcPairEnergy(r2, sigma, eps, q1, q2);
-                        
-                        // Add energies to the movement residue
-                        residues[i].energy_vdw += vdw_energy;
-                        residues[i].energy_elec += elec_energy;
-                        residues[j].energy_vdw += vdw_energy;
-                        residues[j].energy_elec += elec_energy;
-
-                        if (debug_output) {
-                            std::stringstream ss;
-                            ss << std::fixed << std::setprecision(6);
-                            ss << "\n      Cumulative residue " << i << " energies:";
-                            ss << "\n        VDW: " << residues[i].energy_vdw << " kJ/mol";
-                            ss << "\n        Electrostatic: " << residues[i].energy_elec << " kJ/mol";
-                            ss << "\n        Total: " << (residues[i].energy_vdw + residues[i].energy_elec) << " kJ/mol";
-                            platform::log(LogLevel::DEBUG, ss.str());
-                        }
-                    }
-                }
-            }
+            // Compute energy for this residue
+            auto [vdw_energy, elec_energy] = computeResidueNonbondedEnergy(state, i);
+            residues[i].energy_vdw = vdw_energy;
+            residues[i].energy_elec = elec_energy;
         }
     }
 
@@ -373,7 +336,7 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
                 platform::log(LogLevel::DEBUG, "Residue ", i, ":");
                 platform::log(LogLevel::DEBUG, "  VDW energy: ", residues[i].energy_vdw, " kJ/mol");
                 platform::log(LogLevel::DEBUG, "  Electrostatic energy: ", residues[i].energy_elec, " kJ/mol");
-                platform::log(LogLevel::DEBUG, "  Total energy: ", 
+                platform::log(LogLevel::DEBUG, "  Total energy: ",
                             (residues[i].energy_vdw + residues[i].energy_elec), " kJ/mol");
             }
         }
@@ -618,4 +581,5 @@ void setEnergyDebugOutput(bool enable) {
 } // namespace cpu
 } // namespace platform
 } // namespace pygcmc
+
 
