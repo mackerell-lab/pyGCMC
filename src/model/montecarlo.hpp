@@ -17,17 +17,13 @@
  * - GCMCSystem:  Contains pointers to (Atoms/Residues/ForceField/Info etc.)
  *                Provides interfaces for allocation, deallocation, download, upload
  *
- * Units used in this system follow GROMACS MD units, with conversions from PDB/CHARMM:
- * - Length: nanometers (nm) [converted from PDB/CHARMM Å]
- * - Energy: kilojoules per mole (kJ/mol) [converted from CHARMM kcal/mol]
- * - Charge: electron charge (e) [same as CHARMM partial charges]
+ * Units used in this system:
+ * - Length: nanometers (nm)
+ * - Energy: kilojoules per mole (kJ/mol)
+ * - Charge: electron charge (e)
  * - Time: picoseconds (ps)
  * - Temperature: Kelvin (K)
  * - Concentration: moles per liter (mol/L)
- * 
- * Unit Conversions:
- * - Distance: 1 Å = 0.1 nm
- * - Energy: 1 kcal/mol = 4.184 kJ/mol
  */
 
 namespace pygcmc {
@@ -80,7 +76,7 @@ struct TypeMaps {
  */
 struct MCInfo {
     int    mcSteps{0};       ///< Monte Carlo steps (dimensionless)
-    float  box[3]{-1.0f};    ///< Box dimensions (nm, converted from PDB CRYST1 record in Å)
+    float  box[3]{-1.0f};    ///< Box dimensions (nm)
     float  cutoff{1.5f};     ///< Cutoff distance for non-bonded interactions (nm)
     
     /// @brief Inverse temperature beta = 1/(kB*T) [mol/kJ]
@@ -110,14 +106,11 @@ struct MCInfo {
         int acceptedDeletions{0};    ///< Number of accepted deletions
     } stats;
 
-    // Constants (GROMACS MD units)
+    // Physical constants
     /// @brief Boltzmann constant [kJ/(mol·K)]
-    /// @note Consistent with energy unit conversion from CHARMM (kcal/mol -> kJ/mol)
     static constexpr float BOLTZMANN = 0.00831446f;  
     
-    /// @brief Energy conversion factor from CHARMM to internal units
-    static constexpr float KCAL_TO_KJ = 4.184f;      
-    static constexpr float KJ_TO_KCAL = 0.239f;      
+    // Unit conversion constants
     static constexpr float MOLES_TO_MOLECULES = 0.0006023f;  
     static constexpr float MOLECULES_TO_MOLES = 1660.539f;   
 
@@ -133,18 +126,9 @@ struct MCInfo {
 /**
  * @brief Force field parameters for Monte Carlo simulation
  * 
- * CHARMM force field conversion:
- * - Original CHARMM format uses Rmin/2 (Å) and epsilon (kcal/mol)
- * - Internal format uses sigma (nm) and epsilon (kJ/mol)
- * 
- * Conversions:
- * 1. Distance: 
- *    - CHARMM provides Rmin/2 in Å
- *    - Convert to nm: multiply by 0.1
- * 
- * 2. Energy:
- *    - CHARMM provides epsilon in kcal/mol
- *    - Convert to kJ/mol: multiply by 4.184
+ * Units used in force field:
+ * - Distance: nanometers (nm)
+ * - Energy: kilojoules per mole (kJ/mol)
  * 
  * Lennard-Jones potential form:
  * - E = 4 * epsilon * [(sigma/r)^12 - (sigma/r)^6]
@@ -163,14 +147,12 @@ struct MCForceField {
     /// @deprecated This field will be used in future optimization
     int numMovementTypes;   
 
-    /// @brief LJ sigma parameters [nm] converted from CHARMM Rmin/2 [Å]
-    /// @note sigma = (Rmin/2) * 2 * 2^(-1/6) * 0.1
+    /// @brief LJ sigma parameters [nm]
     /// @note Stores all type pairs as (total_type, total_type) matrix
     /// @note Size is numTotalTypes * numTotalTypes
     std::vector<float> ljSigma;   
 
-    /// @brief LJ epsilon parameters [kJ/mol] converted from CHARMM [kcal/mol]
-    /// @note epsilon_kj = epsilon_kcal * 4.184
+    /// @brief LJ epsilon parameters [kJ/mol]
     /// @note Stores all type pairs as (total_type, total_type) matrix
     /// @note Size is numTotalTypes * numTotalTypes
     std::vector<float> ljEps;     
@@ -183,9 +165,9 @@ struct MCForceField {
  * charge, and type information.
  */
 struct MCAtom {
-    float x, y, z;      ///< Position (nm, converted from Å in PDB)
-    float charge;       ///< Charge (e, CHARMM partial charges)
-    int   type;        ///< Type index mapping to CHARMM atom types
+    float x, y, z;      ///< Position (nm)
+    float charge;       ///< Charge (e)
+    int   type;        ///< Type index
 };
 
 /**
@@ -200,22 +182,16 @@ struct MCResidue {
     int   atomCount;    ///< Number of atoms in this residue
     bool  active;       ///< Whether this residue is currently in use
     bool  fixed;        ///< Whether this residue can be moved
-    float center[3];    ///< Geometric center (nm, derived from atom positions)
+    float center[3];    ///< Geometric center (nm)
 
-    // Energy components (converted from CHARMM kcal/mol to kJ/mol)
+    // Energy components
     float energy_vdw;   ///< Lennard-Jones energy (kJ/mol)
     float energy_elec;  ///< Coulomb energy (kJ/mol)
         
     // GCMC parameters
-    /// @brief Target concentration for GCMC insertion/deletion (mol/L)
-    /// @note Used to determine acceptance probability
-    float concentration; 
-
-    /// @brief Excess chemical potential for GCMC moves (kJ/mol)
-    /// @note Should be consistent with CHARMM force field energies after conversion
-    float chemPot;      
-
-    int   type;         ///< Residue type index mapping to CHARMM residue names
+    float concentration; ///< Target concentration for GCMC insertion/deletion (mol/L)
+    float chemPot;      ///< Excess chemical potential (kJ/mol)
+    int   type;         ///< Residue type index
     float radius;       ///< Approximate radius (nm)
 };
 
