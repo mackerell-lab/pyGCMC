@@ -140,24 +140,19 @@ struct MCInfo {
  * Conversions:
  * 1. Distance: 
  *    - CHARMM provides Rmin/2 in Å
- *    - sigma = 2^(-1/6) * Rmin = 2^(-1/6) * (2 * Rmin/2)
- *    - Then convert Å to nm: multiply by 0.1
+ *    - Convert to nm: multiply by 0.1
  * 
  * 2. Energy:
  *    - CHARMM provides epsilon in kcal/mol
  *    - Convert to kJ/mol: multiply by 4.184
  * 
  * Lennard-Jones potential form:
- * - CHARMM form: E = epsilon * [(Rmin/r)^12 - 2(Rmin/r)^6]
- * - Internal form: E = 4 * epsilon * [(sigma/r)^12 - (sigma/r)^6]
+ * - E = 4 * epsilon * [(sigma/r)^12 - (sigma/r)^6]
  * 
  * Storage layout:
  * - Arrays are 1D but represent 2D interaction matrices
- * - Rows: movement atom types (numMovementTypes)
- * - Columns: all atom types (numTotalTypes)
- * 
- * Access pattern:
- * For movement type i and any type j: index = i * numTotalTypes + j
+ * - Size is (numTotalTypes * numTotalTypes)
+ * - For type i and j: index = i * numTotalTypes + j
  */
 struct MCForceField {
     /// @brief Total number of atom types in system
@@ -170,14 +165,14 @@ struct MCForceField {
 
     /// @brief LJ sigma parameters [nm] converted from CHARMM Rmin/2 [Å]
     /// @note sigma = (Rmin/2) * 2 * 2^(-1/6) * 0.1
-    /// @note Currently stores all type pairs (total_type, total_type)
-    /// @note Will be optimized to (movement_type, total_type) in future
+    /// @note Stores all type pairs as (total_type, total_type) matrix
+    /// @note Size is numTotalTypes * numTotalTypes
     std::vector<float> ljSigma;   
 
     /// @brief LJ epsilon parameters [kJ/mol] converted from CHARMM [kcal/mol]
     /// @note epsilon_kj = epsilon_kcal * 4.184
-    /// @note Currently stores all type pairs (total_type, total_type)
-    /// @note Will be optimized to (movement_type, total_type) in future
+    /// @note Stores all type pairs as (total_type, total_type) matrix
+    /// @note Size is numTotalTypes * numTotalTypes
     std::vector<float> ljEps;     
 };
 
