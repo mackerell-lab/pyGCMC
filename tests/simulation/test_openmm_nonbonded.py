@@ -1,4 +1,4 @@
-# /tests/simulation/test_openmm_naive_nonbonded.py
+# /tests/simulation/test_openmm_nonbonded.py
 
 import pytest
 import os
