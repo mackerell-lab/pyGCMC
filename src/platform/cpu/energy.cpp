@@ -280,15 +280,32 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
 
     auto& residues = state.residues;
     const auto& forcefield = state.forcefield;
+    const auto& atoms = state.atoms;
 
-    // Validate force field parameter array sizes based on calculation type
+    // Validate basic state parameters
+    if (state.activeResidueCount < 0 || 
+        static_cast<size_t>(state.activeResidueCount) > residues.size()) {
+        throw std::runtime_error("Invalid activeResidueCount: " + 
+                               std::to_string(state.activeResidueCount) +
+                               " (residues size: " + std::to_string(residues.size()) + ")");
+    }
+
+    if (forcefield.numTotalTypes <= 0) {
+        throw std::runtime_error("Invalid numTotalTypes: " + 
+                               std::to_string(forcefield.numTotalTypes));
+    }
+
+    if (movement_only && forcefield.numMovementTypes <= 0) {
+        throw std::runtime_error("Invalid numMovementTypes: " + 
+                               std::to_string(forcefield.numMovementTypes));
+    }
+
+    // Validate force field parameter array sizes
     size_t expected_size;
     if (movement_only) {
-        // For movement residues only, use numMovementTypes * numTotalTypes
         expected_size = static_cast<size_t>(forcefield.numMovementTypes) * 
                        static_cast<size_t>(forcefield.numTotalTypes);
     } else {
-        // For all residues, use numTotalTypes * numTotalTypes
         expected_size = static_cast<size_t>(forcefield.numTotalTypes) * 
                        static_cast<size_t>(forcefield.numTotalTypes);
     }
@@ -310,6 +327,11 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
     }
 
     if (movement_only) {
+        // Validate movement residues
+        if (state.movementResidues.empty()) {
+            throw std::runtime_error("No movement residues defined");
+        }
+
         // Calculate energies only for movement residues
         for (const auto& movementInfo : state.movementResidues) {
             if (debug_output) {
@@ -317,6 +339,16 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
                 platform::log(LogLevel::DEBUG, "  Start index: ", movementInfo.startIndex);
                 platform::log(LogLevel::DEBUG, "  Active count: ", movementInfo.activeCount);
                 platform::log(LogLevel::DEBUG, "  Total count: ", movementInfo.totalCount);
+            }
+
+            // Validate movement residue indices
+            if (movementInfo.startIndex < 0 || 
+                movementInfo.startIndex + movementInfo.activeCount > state.activeResidueCount) {
+                throw std::runtime_error("Invalid movement residue range: [" + 
+                                       std::to_string(movementInfo.startIndex) + ", " +
+                                       std::to_string(movementInfo.startIndex + movementInfo.activeCount) + 
+                                       ") exceeds active residue count " +
+                                       std::to_string(state.activeResidueCount));
             }
 
             // Process active movement residues
@@ -331,6 +363,17 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
                     platform::log(LogLevel::DEBUG, "  Atom count: ", residues[i].atomCount);
                 }
 
+                // Validate atom indices
+                if (residues[i].atomStart < 0 || 
+                    static_cast<size_t>(residues[i].atomStart + residues[i].atomCount) > atoms.size()) {
+                    throw std::runtime_error("Invalid atom range for residue " + 
+                                           std::to_string(i) + ": [" +
+                                           std::to_string(residues[i].atomStart) + ", " +
+                                           std::to_string(residues[i].atomStart + residues[i].atomCount) + 
+                                           ") exceeds atoms size " +
+                                           std::to_string(atoms.size()));
+                }
+
                 computeResidueNonbondedEnergy(state, i, use_cutoff);
             }
         }
@@ -338,6 +381,18 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
         // Calculate energies for all active residues
         for (int i = 0; i < state.activeResidueCount; ++i) {
             if (!residues[i].active) continue;
+
+            // Validate atom indices
+            if (residues[i].atomStart < 0 || 
+                static_cast<size_t>(residues[i].atomStart + residues[i].atomCount) > atoms.size()) {
+                throw std::runtime_error("Invalid atom range for residue " + 
+                                       std::to_string(i) + ": [" +
+                                       std::to_string(residues[i].atomStart) + ", " +
+                                       std::to_string(residues[i].atomStart + residues[i].atomCount) + 
+                                       ") exceeds atoms size " +
+                                       std::to_string(atoms.size()));
+            }
+
             computeResidueNonbondedEnergy(state, i, use_cutoff);
         }
     }
