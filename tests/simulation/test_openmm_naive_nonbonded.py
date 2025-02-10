@@ -4,18 +4,19 @@ import pytest
 import os
 import numpy as np
 import warnings
+
+import math
+
+# 提前屏蔽 SWIG 相关的 DeprecationWarning
+warnings.filterwarnings("ignore", category=DeprecationWarning,
+                        message="builtin type SwigPyPacked has no __module__ attribute")
+warnings.filterwarnings("ignore", category=DeprecationWarning,
+                        message="builtin type SwigPyObject has no __module__ attribute")
+warnings.filterwarnings("ignore", category=DeprecationWarning,
+                        message="builtin type swigvarlink has no __module__ attribute")
 from openmm import *
 from openmm.app import *
 from openmm.unit import *
-import math
-
-# Suppress OpenMM SWIG-related warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning,
-                      message="builtin type SwigPyPacked has no __module__ attribute")
-warnings.filterwarnings("ignore", category=DeprecationWarning,
-                      message="builtin type SwigPyObject has no __module__ attribute")
-warnings.filterwarnings("ignore", category=DeprecationWarning,
-                      message="builtin type swigvarlink has no __module__ attribute")
 
 # Get the directory containing test data files
 TEST_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
