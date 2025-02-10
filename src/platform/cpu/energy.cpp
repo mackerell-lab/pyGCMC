@@ -161,25 +161,25 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
  * 
  * @param state 系统状态
  * @param residue_idx 要计算能量的residue索引
- * @return std::pair<float, float> (vdw能量, 静电能量)
  * 
  * 注意：每次计算两个原子之间的相互作用只加到当前计算的residue上
  */
-inline std::pair<float, float> computeResidueNonbondedEnergy(
-    const model::MCState& state,
+inline void computeResidueNonbondedEnergy(
+    model::MCState& state,
     int residue_idx
 ) {
-    float vdw_energy = 0.0f;
-    float elec_energy = 0.0f;
-    
-    const auto& residues = state.residues;
+    auto& residues = state.residues;
     const auto& forcefield = state.forcefield;
     const auto& atoms = state.atoms;
     
-    // 如果residue不active，直接返回0能量
+    // 如果residue不active，直接返回
     if (!residues[residue_idx].active) {
-        return {0.0f, 0.0f};
+        return;
     }
+    
+    // 重置当前residue的能量
+    residues[residue_idx].energy_vdw = 0.0f;
+    residues[residue_idx].energy_elec = 0.0f;
     
     // 遍历当前residue的所有原子
     for (int atom_i = residues[residue_idx].atomStart;
@@ -232,14 +232,12 @@ inline std::pair<float, float> computeResidueNonbondedEnergy(
                 // 计算能量
                 auto [vdw, elec] = calcPairEnergy(r2, sigma, eps, q1, q2);
                 
-                // 能量只加到当前计算的residue上
-                vdw_energy += vdw;
-                elec_energy += elec;
+                // 能量直接加到当前residue上
+                residues[residue_idx].energy_vdw += vdw;
+                residues[residue_idx].energy_elec += elec;
             }
         }
     }
-    
-    return {vdw_energy, elec_energy};
 }
 
 /**
@@ -323,9 +321,7 @@ void computeNaiveNonbondedEnergy(model::MCState& state) {
             }
 
             // Compute energy for this residue
-            auto [vdw_energy, elec_energy] = computeResidueNonbondedEnergy(state, i);
-            residues[i].energy_vdw = vdw_energy;
-            residues[i].energy_elec = elec_energy;
+            computeResidueNonbondedEnergy(state, i);
         }
     }
 
@@ -353,7 +349,6 @@ void computeAllNonbondedEnergy(model::MCState& state) {
 
     auto& residues = state.residues;
     const auto& forcefield = state.forcefield;
-    const auto& atoms = state.atoms;
 
     // 验证力场参数数组大小
     size_t expected_size = static_cast<size_t>(forcefield.numTotalTypes) * 
@@ -377,64 +372,8 @@ void computeAllNonbondedEnergy(model::MCState& state) {
     for (int i = 0; i < state.activeResidueCount; ++i) {
         if (!residues[i].active) continue;
         
-        // 遍历当前residue的所有原子
-        for (int atom_i = residues[i].atomStart; 
-             atom_i < residues[i].atomStart + residues[i].atomCount; 
-             ++atom_i) {
-            int type_i = atoms[atom_i].type;
-            
-            // 验证原子类型
-            if (type_i >= forcefield.numTotalTypes) {
-                std::stringstream ss;
-                ss << "Atom type " << type_i << " out of range. "
-                   << "Maximum allowed type is " << (forcefield.numTotalTypes - 1)
-                   << " for atom " << atom_i << " in residue " << i;
-                throw std::runtime_error(ss.str());
-            }
-
-            // 与其他active residues的原子计算相互作用
-            for (int j = i + 1; j < state.activeResidueCount; ++j) {
-                if (!residues[j].active) continue;
-
-                // 遍历另一个residue的所有原子
-                for (int atom_j = residues[j].atomStart;
-                     atom_j < residues[j].atomStart + residues[j].atomCount;
-                     ++atom_j) {
-                    int type_j = atoms[atom_j].type;
-                    
-                    // 验证原子类型
-                    if (type_j >= forcefield.numTotalTypes) {
-                        std::stringstream ss;
-                        ss << "Atom type " << type_j << " out of range. "
-                           << "Maximum allowed type is " << (forcefield.numTotalTypes - 1)
-                           << " for atom " << atom_j << " in residue " << j;
-                        throw std::runtime_error(ss.str());
-                    }
-
-                    // 计算原子间距离
-                    float dx = atoms[atom_j].x - atoms[atom_i].x;
-                    float dy = atoms[atom_j].y - atoms[atom_i].y;
-                    float dz = atoms[atom_j].z - atoms[atom_i].z;
-                    float r2 = dx*dx + dy*dy + dz*dz;
-
-                    // 获取力场参数
-                    int param_index = type_i * forcefield.numTotalTypes + type_j;
-                    float eps = forcefield.ljEps[param_index];
-                    float sigma = forcefield.ljSigma[param_index];
-                    float q1 = atoms[atom_i].charge;
-                    float q2 = atoms[atom_j].charge;
-
-                    // 计算能量
-                    auto [vdw_energy, elec_energy] = calcPairEnergy(r2, sigma, eps, q1, q2);
-
-                    // 将能量完整地加到每个residue上
-                    residues[i].energy_vdw += vdw_energy;
-                    residues[i].energy_elec += elec_energy;
-                    residues[j].energy_vdw += vdw_energy;
-                    residues[j].energy_elec += elec_energy;
-                }
-            }
-        }
+        // 计算当前residue的能量
+        computeResidueNonbondedEnergy(state, i);
     }
 
     if (debug_output) {
