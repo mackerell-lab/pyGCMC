@@ -161,16 +161,23 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
  * 
  * @param state 系统状态
  * @param residue_idx 要计算能量的residue索引
+ * @param use_cutoff 是否使用截断
  * 
- * 注意：每次计算两个原子之间的相互作用只加到当前计算的residue上
+ * 这个函数统一处理两种情况：
+ * 1. 不使用截断：计算所有原子对之间的相互作用
+ * 2. 使用截断：只计算在截断距离内的原子对之间的相互作用
  */
 inline void computeResidueNonbondedEnergy(
     model::MCState& state,
-    int residue_idx
+    int residue_idx,
+    bool use_cutoff = false
 ) {
     auto& residues = state.residues;
     const auto& forcefield = state.forcefield;
     const auto& atoms = state.atoms;
+    
+    // 如果使用截断，计算截断距离的平方
+    const float cutoff2 = use_cutoff ? state.info.cutoff * state.info.cutoff : std::numeric_limits<float>::max();
     
     // 如果residue不active，直接返回
     if (!residues[residue_idx].active) {
@@ -198,242 +205,6 @@ inline void computeResidueNonbondedEnergy(
         
         // 与其他active residues的原子计算相互作用
         for (int j = 0; j < state.activeResidueCount; ++j) {
-            // 跳过自己和非active的residue
-            if (j == residue_idx || !residues[j].active) continue;
-            
-            // 遍历另一个residue的所有原子
-            for (int atom_j = residues[j].atomStart;
-                 atom_j < residues[j].atomStart + residues[j].atomCount;
-                 ++atom_j) {
-                int type_j = atoms[atom_j].type;
-                
-                // 验证原子类型
-                if (type_j >= forcefield.numTotalTypes) {
-                    std::stringstream ss;
-                    ss << "Atom type " << type_j << " out of range. "
-                       << "Maximum allowed type is " << (forcefield.numTotalTypes - 1)
-                       << " for atom " << atom_j << " in residue " << j;
-                    throw std::runtime_error(ss.str());
-                }
-                
-                // 计算原子间距离
-                float dx = atoms[atom_j].x - atoms[atom_i].x;
-                float dy = atoms[atom_j].y - atoms[atom_i].y;
-                float dz = atoms[atom_j].z - atoms[atom_i].z;
-                float r2 = dx*dx + dy*dy + dz*dz;
-                
-                // 获取力场参数
-                int param_index = type_i * forcefield.numTotalTypes + type_j;
-                float eps = forcefield.ljEps[param_index];
-                float sigma = forcefield.ljSigma[param_index];
-                float q1 = atoms[atom_i].charge;
-                float q2 = atoms[atom_j].charge;
-                
-                // 计算能量
-                auto [vdw, elec] = calcPairEnergy(r2, sigma, eps, q1, q2);
-                
-                // 能量直接加到当前residue上
-                residues[residue_idx].energy_vdw += vdw;
-                residues[residue_idx].energy_elec += elec;
-            }
-        }
-    }
-}
-
-/**
- * @brief Compute non-bonded energies for movement residues without PBC
- * 
- * Calculates Lennard-Jones and Coulomb interactions between:
- * 1. Movement residues and all other active residues
- * 2. Each atom pair between residues
- * 
- * Energy components per residue:
- * 1. Lennard-Jones (kJ/mol):
- *    V_LJ = 4ε[(σ/r)¹² - (σ/r)⁶]
- *    - ε: well depth (kJ/mol)
- *    - σ: distance at zero energy (nm)
- *    - r: inter-atomic distance (nm)
- * 
- * 2. Coulomb (kJ/mol):
- *    V_C = k_c * (q₁q₂/r)
- *    - k_c: Coulomb constant (138.935458 kJ·nm/mol/e²)
- *    - q₁,q₂: atomic charges (e)
- *    - r: inter-atomic distance (nm)
- * 
- * Uses soft core potential and energy capping for numerical stability.
- */
-void computeNaiveNonbondedEnergy(model::MCState& state) {
-    if (debug_output) {
-        platform::log(LogLevel::DEBUG, "\n=== Starting nonbonded energy calculation ===");
-        platform::log(LogLevel::DEBUG, "System state info:");
-        platform::log(LogLevel::DEBUG, "  Active residue count: ", state.activeResidueCount);
-        platform::log(LogLevel::DEBUG, "  Number of movement residues: ", state.movementResidues.size());
-        platform::log(LogLevel::DEBUG, "  Number of movement atom types: ", state.numMovementAtomTypes);
-        platform::log(LogLevel::DEBUG, "Force field info:");
-        platform::log(LogLevel::DEBUG, "  Number of movement types: ", state.forcefield.numMovementTypes);
-        platform::log(LogLevel::DEBUG, "  Number of total types: ", state.forcefield.numTotalTypes);
-        platform::log(LogLevel::DEBUG, "  Size of LJ parameters: ", state.forcefield.ljEps.size());
-    }
-
-    const auto& forcefield = state.forcefield;
-    auto& residues = state.residues;
-
-    // Validate force field parameter array sizes
-    size_t expected_size = static_cast<size_t>(forcefield.numMovementTypes) * 
-                          static_cast<size_t>(forcefield.numTotalTypes);
-    if (forcefield.ljEps.size() != expected_size || forcefield.ljSigma.size() != expected_size) {
-        std::stringstream ss;
-        ss << "Force field parameters array size mismatch. Expected size "
-           << expected_size
-           << " (numMovementTypes * numTotalTypes), but got eps=" << forcefield.ljEps.size()
-           << " sigma=" << forcefield.ljSigma.size();
-        throw std::runtime_error(ss.str());
-    }
-
-    // Reset energies for all residues
-    for (auto& residue : residues) {
-        residue.energy_vdw = 0.0f;
-        residue.energy_elec = 0.0f;
-        if (debug_output) {
-            platform::log(LogLevel::DEBUG, "Reset energies for residue at atom start ", residue.atomStart);
-        }
-    }
-
-    // Iterate through all movement molecule groups
-    for (const auto& movementInfo : state.movementResidues) {
-        if (debug_output) {
-            platform::log(LogLevel::DEBUG, "\nProcessing movement residue group: ", movementInfo.resName);
-            platform::log(LogLevel::DEBUG, "  Start index: ", movementInfo.startIndex);
-            platform::log(LogLevel::DEBUG, "  Active count: ", movementInfo.activeCount);
-            platform::log(LogLevel::DEBUG, "  Total count: ", movementInfo.totalCount);
-        }
-
-        // Process only active movement residues
-        for (int i = movementInfo.startIndex;
-             i < movementInfo.startIndex + movementInfo.activeCount;
-             ++i) {
-            if (!residues[i].active) continue;
-
-            if (debug_output) {
-                platform::log(LogLevel::DEBUG, "\nProcessing movement residue ", i);
-                platform::log(LogLevel::DEBUG, "  Atom start: ", residues[i].atomStart);
-                platform::log(LogLevel::DEBUG, "  Atom count: ", residues[i].atomCount);
-            }
-
-            // Compute energy for this residue
-            computeResidueNonbondedEnergy(state, i);
-        }
-    }
-
-    if (debug_output) {
-        platform::log(LogLevel::DEBUG, "\n=== Final energies for all residues ===");
-        for (size_t i = 0; i < residues.size(); ++i) {
-            if (residues[i].active) {
-                platform::log(LogLevel::DEBUG, "Residue ", i, ":");
-                platform::log(LogLevel::DEBUG, "  VDW energy: ", residues[i].energy_vdw, " kJ/mol");
-                platform::log(LogLevel::DEBUG, "  Electrostatic energy: ", residues[i].energy_elec, " kJ/mol");
-                platform::log(LogLevel::DEBUG, "  Total energy: ",
-                            (residues[i].energy_vdw + residues[i].energy_elec), " kJ/mol");
-            }
-        }
-        platform::log(LogLevel::DEBUG, "\n=== Completed nonbonded energy calculation ===");
-    }
-}
-
-void computeAllNonbondedEnergy(model::MCState& state) {
-    if (debug_output) {
-        platform::log(LogLevel::DEBUG, "\n=== Starting all residues nonbonded energy calculation ===");
-        platform::log(LogLevel::DEBUG, "System state info:");
-        platform::log(LogLevel::DEBUG, "  Active residue count: ", state.activeResidueCount);
-    }
-
-    auto& residues = state.residues;
-    const auto& forcefield = state.forcefield;
-
-    // 验证力场参数数组大小
-    size_t expected_size = static_cast<size_t>(forcefield.numTotalTypes) * 
-                          static_cast<size_t>(forcefield.numTotalTypes);
-    if (forcefield.ljEps.size() != expected_size || forcefield.ljSigma.size() != expected_size) {
-        std::stringstream ss;
-        ss << "Force field parameters array size mismatch. Expected size "
-           << expected_size
-           << " (numTotalTypes * numTotalTypes), but got eps=" << forcefield.ljEps.size()
-           << " sigma=" << forcefield.ljSigma.size();
-        throw std::runtime_error(ss.str());
-    }
-
-    // 重置所有residue的能量
-    for (auto& residue : residues) {
-        residue.energy_vdw = 0.0f;
-        residue.energy_elec = 0.0f;
-    }
-
-    // 遍历所有active residues
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        if (!residues[i].active) continue;
-        
-        // 计算当前residue的能量
-        computeResidueNonbondedEnergy(state, i);
-    }
-
-    if (debug_output) {
-        platform::log(LogLevel::DEBUG, "\n=== Final energies for all residues ===");
-        for (int i = 0; i < state.activeResidueCount; ++i) {
-            if (residues[i].active) {
-                platform::log(LogLevel::DEBUG, "Residue ", i, ":");
-                platform::log(LogLevel::DEBUG, "  VDW energy: ", residues[i].energy_vdw, " kJ/mol");
-                platform::log(LogLevel::DEBUG, "  Electrostatic energy: ", residues[i].energy_elec, " kJ/mol");
-                platform::log(LogLevel::DEBUG, "  Total energy: ", 
-                            (residues[i].energy_vdw + residues[i].energy_elec), " kJ/mol");
-            }
-        }
-        platform::log(LogLevel::DEBUG, "\n=== Completed all residues nonbonded energy calculation ===");
-    }
-}
-
-/**
- * @brief 计算单个residue与其他所有active residue的nonbonded相互作用能量（带截断）
- * 
- * @param state 系统状态
- * @param residue_idx 要计算能量的residue索引
- * 
- * 
- */
-inline void computeResidueCutoffEnergy(
-    model::MCState& state,
-    int residue_idx
-) {
-    auto& residues = state.residues;
-    const auto& forcefield = state.forcefield;
-    const auto& atoms = state.atoms;
-    const float cutoff2 = state.info.cutoff * state.info.cutoff;  // 截断距离的平方
-    
-    // 如果residue不active，直接返回
-    if (!residues[residue_idx].active) {
-        return;
-    }
-    
-    // 重置当前residue的能量
-    residues[residue_idx].energy_vdw = 0.0f;
-    residues[residue_idx].energy_elec = 0.0f;
-    
-    // 遍历当前residue的所有原子
-    for (int atom_i = residues[residue_idx].atomStart;
-         atom_i < residues[residue_idx].atomStart + residues[residue_idx].atomCount;
-         ++atom_i) {
-        int type_i = atoms[atom_i].type;
-        
-        // 验证原子类型
-        if (type_i >= forcefield.numTotalTypes) {
-            std::stringstream ss;
-            ss << "Atom type " << type_i << " out of range. "
-               << "Maximum allowed type is " << (forcefield.numTotalTypes - 1)
-               << " for atom " << atom_i << " in residue " << residue_idx;
-            throw std::runtime_error(ss.str());
-        }
-        
-        // 与后续residues的原子计算相互作用
-        for (int j = 0; j < state.activeResidueCount; ++j) {
             if (!residues[j].active || j == residue_idx) continue;
             
             // 遍历另一个residue的所有原子
@@ -457,7 +228,7 @@ inline void computeResidueCutoffEnergy(
                 float dz = atoms[atom_j].z - atoms[atom_i].z;
                 float r2 = dx*dx + dy*dy + dz*dz;
                 
-                // 检查是否在截断距离内
+                // 如果使用截断且距离超过截断距离，跳过
                 if (r2 > cutoff2) continue;
                 
                 // 获取力场参数
@@ -470,7 +241,7 @@ inline void computeResidueCutoffEnergy(
                 // 计算能量
                 auto [vdw, elec] = calcPairEnergy(r2, sigma, eps, q1, q2);
                 
-                // 将能量加到两个residue上
+                // 能量加到当前residue上
                 residues[residue_idx].energy_vdw += vdw;
                 residues[residue_idx].energy_elec += elec;
             }
@@ -478,25 +249,49 @@ inline void computeResidueCutoffEnergy(
     }
 }
 
-void computeCutoffNonPeriodicEnergy(model::MCState& state) {
+/**
+ * @brief 计算所有非键相互作用能量的通用函数
+ * 
+ * @param state 系统状态
+ * @param use_cutoff 是否使用截断
+ * @param movement_only 是否只计算movement residues
+ */
+void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movement_only = false) {
     if (debug_output) {
-        platform::log(LogLevel::DEBUG, "\n=== Starting cutoff nonbonded energy calculation ===");
-        platform::log(LogLevel::DEBUG, "System state info:");
-        platform::log(LogLevel::DEBUG, "  Active residue count: ", state.activeResidueCount);
-        platform::log(LogLevel::DEBUG, "  Cutoff distance: ", state.info.cutoff, " nm");
+        std::stringstream ss;
+        ss << "\n=== Starting nonbonded energy calculation ===";
+        ss << "\nSystem state info:";
+        ss << "\n  Active residue count: " << state.activeResidueCount;
+        if (use_cutoff) {
+            ss << "\n  Cutoff distance: " << state.info.cutoff << " nm";
+        }
+        if (movement_only) {
+            ss << "\n  Calculating only for movement residues";
+        }
+        platform::log(LogLevel::DEBUG, ss.str());
     }
 
     auto& residues = state.residues;
     const auto& forcefield = state.forcefield;
 
     // 验证力场参数数组大小
-    size_t expected_size = static_cast<size_t>(forcefield.numTotalTypes) * 
-                          static_cast<size_t>(forcefield.numTotalTypes);
+    size_t expected_size;
+    if (movement_only) {
+        // 如果只计算movement residues，使用numMovementTypes * numTotalTypes
+        expected_size = static_cast<size_t>(forcefield.numMovementTypes) * 
+                       static_cast<size_t>(forcefield.numTotalTypes);
+    } else {
+        // 如果计算所有residues，使用numTotalTypes * numTotalTypes
+        expected_size = static_cast<size_t>(forcefield.numTotalTypes) * 
+                       static_cast<size_t>(forcefield.numTotalTypes);
+    }
+    
     if (forcefield.ljEps.size() != expected_size || forcefield.ljSigma.size() != expected_size) {
         std::stringstream ss;
         ss << "Force field parameters array size mismatch. Expected size "
            << expected_size
-           << " (numTotalTypes * numTotalTypes), but got eps=" << forcefield.ljEps.size()
+           << " (" << (movement_only ? "numMovementTypes" : "numTotalTypes")
+           << " * numTotalTypes), but got eps=" << forcefield.ljEps.size()
            << " sigma=" << forcefield.ljSigma.size();
         throw std::runtime_error(ss.str());
     }
@@ -507,12 +302,37 @@ void computeCutoffNonPeriodicEnergy(model::MCState& state) {
         residue.energy_elec = 0.0f;
     }
 
-    // 遍历所有active residues
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        if (!residues[i].active) continue;
-        
-        // 计算当前residue的能量
-        computeResidueCutoffEnergy(state, i);
+    if (movement_only) {
+        // 只计算movement residues的能量
+        for (const auto& movementInfo : state.movementResidues) {
+            if (debug_output) {
+                platform::log(LogLevel::DEBUG, "\nProcessing movement residue group: ", movementInfo.resName);
+                platform::log(LogLevel::DEBUG, "  Start index: ", movementInfo.startIndex);
+                platform::log(LogLevel::DEBUG, "  Active count: ", movementInfo.activeCount);
+                platform::log(LogLevel::DEBUG, "  Total count: ", movementInfo.totalCount);
+            }
+
+            // 处理active movement residues
+            for (int i = movementInfo.startIndex;
+                 i < movementInfo.startIndex + movementInfo.activeCount;
+                 ++i) {
+                if (!residues[i].active) continue;
+
+                if (debug_output) {
+                    platform::log(LogLevel::DEBUG, "\nProcessing movement residue ", i);
+                    platform::log(LogLevel::DEBUG, "  Atom start: ", residues[i].atomStart);
+                    platform::log(LogLevel::DEBUG, "  Atom count: ", residues[i].atomCount);
+                }
+
+                computeResidueNonbondedEnergy(state, i, use_cutoff);
+            }
+        }
+    } else {
+        // 计算所有active residues的能量
+        for (int i = 0; i < state.activeResidueCount; ++i) {
+            if (!residues[i].active) continue;
+            computeResidueNonbondedEnergy(state, i, use_cutoff);
+        }
     }
 
     if (debug_output) {
@@ -530,12 +350,25 @@ void computeCutoffNonPeriodicEnergy(model::MCState& state) {
                             (residues[i].energy_vdw + residues[i].energy_elec), " kJ/mol");
             }
         }
-        platform::log(LogLevel::DEBUG, "\nTotal system energy (before /2):");
+        platform::log(LogLevel::DEBUG, "\nTotal system energy:");
         platform::log(LogLevel::DEBUG, "  VDW: ", total_vdw, " kJ/mol");
         platform::log(LogLevel::DEBUG, "  Electrostatic: ", total_elec, " kJ/mol");
         platform::log(LogLevel::DEBUG, "  Total: ", (total_vdw + total_elec), " kJ/mol");
-        platform::log(LogLevel::DEBUG, "\n=== Completed cutoff nonbonded energy calculation ===");
+        platform::log(LogLevel::DEBUG, "\n=== Completed nonbonded energy calculation ===");
     }
+}
+
+// 为了保持向后兼容性，保留原有的函数名，但内部调用新的统一函数
+void computeNaiveNonbondedEnergy(model::MCState& state) {
+    computeNonbondedEnergy(state, false, true);  // 不使用截断，只计算movement residues
+}
+
+void computeAllNonbondedEnergy(model::MCState& state) {
+    computeNonbondedEnergy(state, false, false);  // 不使用截断，计算所有residues
+}
+
+void computeCutoffNonPeriodicEnergy(model::MCState& state) {
+    computeNonbondedEnergy(state, true, false);  // 使用截断，计算所有residues
 }
 
 // Function to enable/disable debug output
