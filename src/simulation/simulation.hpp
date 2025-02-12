@@ -20,12 +20,17 @@ enum class LogLevel {
 };
 
 // Static logging control
-static bool verbose_ = false;
-static LogLevel log_level_ = LogLevel::INFO;
+static bool verbose_ = false;  // Default to false for production use
+static LogLevel log_level_ = LogLevel::WARNING;  // Default to WARNING level
 
 // Logging functions
 inline void set_verbose(bool verbose) { verbose_ = verbose; }
 inline void set_log_level(LogLevel level) { log_level_ = level; }
+
+// Helper function to check if debug output is enabled
+inline bool is_debug_enabled() { 
+    return verbose_ && log_level_ <= LogLevel::DEBUG; 
+}
 
 template<typename... Args>
 inline void log(LogLevel level, Args... args) {
@@ -36,16 +41,16 @@ inline void log(LogLevel level, Args... args) {
     
     switch (level) {
         case LogLevel::DEBUG:
-            std::cout << "[SIMULATION DEBUG] ";
+            std::cout << "[DEBUG] ";
             break;
         case LogLevel::INFO:
-            std::cout << "[SIMULATION INFO] ";
+            std::cout << "[INFO] ";
             break;
         case LogLevel::WARNING:
-            std::cout << "[SIMULATION WARNING] ";
+            std::cout << "[WARN] ";
             break;
         case LogLevel::ERROR:
-            std::cout << "[SIMULATION ERROR] ";
+            std::cout << "[ERROR] ";
             break;
     }
     std::cout << ss.str() << std::endl;

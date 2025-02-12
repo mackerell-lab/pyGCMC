@@ -9,8 +9,8 @@ namespace pygcmc {
 namespace platform {
 namespace cpu {
 
-// Debug flag to control output
-static bool debug_output = true;  // Default: debug output enabled
+// Debug flag to control output - default to false for production use
+static bool debug_output = false;
 
 /**
  * @brief Coulomb constant in GROMACS MD units [kJ·nm/mol/e²]

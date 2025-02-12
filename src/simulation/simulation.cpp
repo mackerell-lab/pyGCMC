@@ -7,95 +7,112 @@ namespace pygcmc {
 namespace simulation {
 
 void Simulation::computeMovementEnergy(model::MCState& state) {
-    log(LogLevel::DEBUG, "Computing nonbonded energy for movement residues");
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing nonbonded energy for movement residues");
+    }
     platform::cpu::computeMovementEnergy(state);
 }
 
 void Simulation::computeMovementEnergyCutoff(model::MCState& state) {
-    log(LogLevel::DEBUG, "Computing nonbonded energy for movement residues with cutoff");
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing nonbonded energy for movement residues with cutoff");
+    }
     platform::cpu::computeMovementEnergyCutoff(state);
 }
 
 void Simulation::computeSystemEnergy(model::MCState& state) {
-    log(LogLevel::DEBUG, "Computing nonbonded energy for all active residues");
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing nonbonded energy for all active residues");
+    }
     
     platform::cpu::computeSystemEnergy(state);
     
-    // Log total system energy
-    float total_vdw = 0.0f;
-    float total_elec = 0.0f;
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        if (state.residues[i].active) {
-            total_vdw += state.residues[i].energy_vdw;
-            total_elec += state.residues[i].energy_elec;
+    // Only log total energy in debug mode
+    if (is_debug_enabled()) {
+        float total_vdw = 0.0f;
+        float total_elec = 0.0f;
+        for (int i = 0; i < state.activeResidueCount; ++i) {
+            if (state.residues[i].active) {
+                total_vdw += state.residues[i].energy_vdw;
+                total_elec += state.residues[i].energy_elec;
+            }
         }
-    }
 
-    total_vdw /= 2.0f;
-    total_elec /= 2.0f; 
-    
-    log(LogLevel::DEBUG, "Total system energy: vdw=", total_vdw, 
-        ", elec=", total_elec, 
-        ", total=", (total_vdw + total_elec));
+        total_vdw /= 2.0f;
+        total_elec /= 2.0f; 
+        
+        log(LogLevel::DEBUG, "Total system energy: vdw=", total_vdw, 
+            ", elec=", total_elec, 
+            ", total=", (total_vdw + total_elec));
+    }
 }
 
 void Simulation::computeSystemEnergyCutoff(model::MCState& state) {
-    log(LogLevel::DEBUG, "Computing cutoff nonbonded energy for all active residues");
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing cutoff nonbonded energy for all active residues");
+    }
     
     platform::cpu::computeSystemEnergyCutoff(state);
     
-    // Log total system energy
-    float total_vdw = 0.0f;
-    float total_elec = 0.0f;
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        if (state.residues[i].active) {
-            total_vdw += state.residues[i].energy_vdw;
-            total_elec += state.residues[i].energy_elec;
+    // Only log total energy in debug mode
+    if (is_debug_enabled()) {
+        float total_vdw = 0.0f;
+        float total_elec = 0.0f;
+        for (int i = 0; i < state.activeResidueCount; ++i) {
+            if (state.residues[i].active) {
+                total_vdw += state.residues[i].energy_vdw;
+                total_elec += state.residues[i].energy_elec;
+            }
         }
+        
+        total_vdw /= 2.0f;
+        total_elec /= 2.0f;
+        
+        log(LogLevel::DEBUG, "Total system energy: vdw=", total_vdw, 
+            ", elec=", total_elec, 
+            ", total=", (total_vdw + total_elec));
     }
-    
-    // Total energy divided by 2 (since each interaction is counted twice)
-    total_vdw /= 2.0f;
-    total_elec /= 2.0f;
-    
-    log(LogLevel::DEBUG, "Total system energy: vdw=", total_vdw, 
-        ", elec=", total_elec, 
-        ", total=", (total_vdw + total_elec));
 }
 
 void Simulation::computeSystemEnergyPBC(model::MCState& state) {
-    log(LogLevel::DEBUG, "Computing cutoff nonbonded energy with PBC for all active residues");
-    
     // Validate box dimensions before proceeding
     if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
         throw std::runtime_error("Invalid box dimensions for PBC calculation");
     }
     
-    log(LogLevel::DEBUG, "Box dimensions: ", state.info.box[0], " x ", 
-        state.info.box[1], " x ", state.info.box[2], " nm");
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing PBC nonbonded energy: box=", 
+            state.info.box[0], "x", state.info.box[1], "x", state.info.box[2], " nm");
+    }
     
     platform::cpu::computeSystemEnergyPBC(state);
     
-    // Log total system energy
-    float total_vdw = 0.0f;
-    float total_elec = 0.0f;
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        if (state.residues[i].active) {
-            total_vdw += state.residues[i].energy_vdw;
-            total_elec += state.residues[i].energy_elec;
+    // Only log total energy in debug mode
+    if (is_debug_enabled()) {
+        float total_vdw = 0.0f;
+        float total_elec = 0.0f;
+        for (int i = 0; i < state.activeResidueCount; ++i) {
+            if (state.residues[i].active) {
+                total_vdw += state.residues[i].energy_vdw;
+                total_elec += state.residues[i].energy_elec;
+            }
         }
+        
+        total_vdw /= 2.0f;
+        total_elec /= 2.0f;
+        
+        log(LogLevel::DEBUG, "Total system energy with PBC: vdw=", total_vdw, 
+            ", elec=", total_elec, 
+            ", total=", (total_vdw + total_elec));
     }
-    
-    // Total energy divided by 2 (since each interaction is counted twice)
-    total_vdw /= 2.0f;
-    total_elec /= 2.0f;
-    
-    log(LogLevel::DEBUG, "Total system energy with PBC: vdw=", total_vdw, 
-        ", elec=", total_elec, 
-        ", total=", (total_vdw + total_elec));
 }
 
 void Simulation::setEnergyDebugOutput(bool enable) {
+    // Set both simulation-level and platform-level debug output
+    if (enable) {
+        set_verbose(true);
+        set_log_level(LogLevel::DEBUG);
+    }
     platform::cpu::setEnergyDebugOutput(enable);
 }
 
