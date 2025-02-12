@@ -1142,3 +1142,142 @@ def test_compare_naive_vs_cutoff_energy():
         
         del naive_system, cutoff_system
 
+def test_detailed_energy_comparison_simple_vs_openmm_cutoff():
+    """
+    在多个距离下详细比较简单公式（硬截断）和 OpenMM 截断公式（移位库伦和 LJ 切换函数）
+    计算的能量差异。输出的表格中包括每个距离下：
+      - simple_energy：使用简单截断公式计算的能量（kJ/mol）
+      - cutoff_energy：使用 OpenMM 截断公式（移位/切换函数）计算的能量，经自能补偿后的值（kJ/mol）
+      - abs_diff：两者的绝对差异（kJ/mol）
+      - rel_diff：两者的相对差异（百分比）
+    注意：本测试中使用的系统与粒子参数与 create_test_system() 中定义的保持一致，
+    而 water 分子（原系统中最后 3 个原子）的 x 坐标会被设置为指定的测试距离（nm）。
+    """
+    # 获取初始系统、拓扑结构和初始位置
+    system, topology, positions = create_test_system()
+    # 保存 NonbondedForce 中的原始参数（用于提取粒子参数和计算自能补偿）
+    original_nb_force = None
+    for force in system.getForces():
+        if isinstance(force, NonbondedForce):
+            original_nb_force = force
+            break
+    if original_nb_force is None:
+        raise ValueError("系统中未找到 NonbondedForce")
+    
+    # 定义参与相互作用的原子组：benzene 分子的原子编号 0-5 与 water 分子的编号 6-8
+    movement_atoms = set(range(6))  # benzene
+    fixed_atoms = set(range(6, 9))    # water
+
+    # 定义能量表达式
+    # （1）简单公式：硬截断，不含移位或切换
+    naive_expression = """
+    step(cutoff - r) * (
+        kC * q1 * q2 / r +
+        4 * sqrt(eps1*eps2) * (
+            (0.5*(sigma1+sigma2)/r)^12 -
+            (0.5*(sigma1+sigma2)/r)^6
+        )
+    )"""
+    # （2）OpenMM 截断公式：移位库伦（1/r - 1/cutoff）和 LJ 带切换函数
+    cutoff_expression = """
+    step(cutoff - r) * (
+        kC * q1 * q2 * (1/r - 1/cutoff) +
+        4 * sqrt(eps1*eps2) * (
+            (0.5*(sigma1+sigma2)/r)^12 -
+            (0.5*(sigma1+sigma2)/r)^6
+        ) * (
+            step(switch - r) +
+            step(r - switch) * (cutoff - r)^2 * (cutoff + 2*r - 3*switch) / ((cutoff - switch)^3)
+        )
+    )"""
+    # 用于每次新建 CustomNonbondedForce 的辅助函数
+    def create_naive_force():
+        force = CustomNonbondedForce(naive_expression)
+        force.addPerParticleParameter("q")
+        force.addPerParticleParameter("sigma")
+        force.addPerParticleParameter("eps")
+        force.addGlobalParameter("kC", 138.935456)
+        force.addGlobalParameter("cutoff", 1.0)
+        # 将所有粒子的参数从 original_nb_force 中提取出来
+        for i in range(system.getNumParticles()):
+            charge, sigma, epsilon = original_nb_force.getParticleParameters(i)
+            force.addParticle([charge, sigma, epsilon])
+        force.addInteractionGroup(movement_atoms, fixed_atoms)
+        force.setNonbondedMethod(CustomNonbondedForce.CutoffNonPeriodic)
+        force.setCutoffDistance(1.0 * nanometers)
+        return force
+
+    def create_cutoff_force():
+        force = CustomNonbondedForce(cutoff_expression)
+        force.addPerParticleParameter("q")
+        force.addPerParticleParameter("sigma")
+        force.addPerParticleParameter("eps")
+        force.addGlobalParameter("kC", 138.935456)
+        force.addGlobalParameter("cutoff", 1.0)
+        force.addGlobalParameter("switch", 0.9)
+        for i in range(system.getNumParticles()):
+            charge, sigma, epsilon = original_nb_force.getParticleParameters(i)
+            force.addParticle([charge, sigma, epsilon])
+        force.addInteractionGroup(movement_atoms, fixed_atoms)
+        force.setNonbondedMethod(CustomNonbondedForce.CutoffNonPeriodic)
+        force.setCutoffDistance(1.0 * nanometers)
+        return force
+
+    # 定义测试距离（nm）；其中包括平衡区、切换区和超过截断距离的情况
+    distances = [0.35, 0.5, 0.7, 0.9, 0.95, 1.0, 1.1, 1.2]
+
+    print("\nDetailed Energy Comparison: Simple vs OpenMM Cutoff")
+    print("Distance (nm) | Simple Energy (kJ/mol) | OpenMM Cutoff Energy (kJ/mol) | Abs Diff (kJ/mol) | Rel Diff (%)")
+    print("-" * 100)
+
+    platform = Platform.getPlatformByName('Reference')
+    # 计算自能补偿项（注意：计算时 cutoff 使用 1.0 nm）
+    correction = calculate_self_energy_correction(original_nb_force, 1.0)
+    
+    for dist in distances:
+        # 生成新的位置：将 water 分子（原子编号 6-8）的 x 坐标设置为 dist，其余保持不变
+        new_positions = []
+        for i, pos in enumerate(positions):
+            if 6 <= i < 9:
+                pos_val = pos.value_in_unit(nanometers)
+                new_positions.append(Vec3(dist, pos_val[1], pos_val[2]) * nanometers)
+            else:
+                new_positions.append(pos)
+        
+        # --- 计算简单公式能量 ---
+        sys_naive = System()
+        for i in range(system.getNumParticles()):
+            sys_naive.addParticle(system.getParticleMass(i))
+        naive_force = create_naive_force()
+        sys_naive.addForce(naive_force)
+        integrator = VerletIntegrator(0.001 * picoseconds)
+        context = Context(sys_naive, integrator, platform)
+        context.setPositions(new_positions)
+        state = context.getState(getEnergy=True)
+        simple_energy = state.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
+        del context, integrator
+        
+        # --- 计算 OpenMM 截断公式能量 ---
+        sys_cutoff = System()
+        for i in range(system.getNumParticles()):
+            sys_cutoff.addParticle(system.getParticleMass(i))
+        cutoff_force = create_cutoff_force()
+        sys_cutoff.addForce(cutoff_force)
+        integrator = VerletIntegrator(0.001 * picoseconds)
+        context = Context(sys_cutoff, integrator, platform)
+        context.setPositions(new_positions)
+        state = context.getState(getEnergy=True)
+        cutoff_energy = state.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
+        del context, integrator
+        
+        # 对于 OpenMM 截断公式，需要加上自能补偿（注意：原测试中使用减去 correction）
+        cutoff_energy_corrected = cutoff_energy - correction
+        
+        # 计算绝对和相对差异（当 simple_energy 接近 0 时，仅比较绝对差异）
+        abs_diff = abs(cutoff_energy_corrected - simple_energy)
+        if abs(simple_energy) > 1e-6:
+            rel_diff = abs_diff / abs(simple_energy) * 100
+        else:
+            rel_diff = 0.0
+        
+        print(f"{dist:13.2f} | {simple_energy:22.6f} | {cutoff_energy_corrected:29.6f} | {abs_diff:16.6f} | {rel_diff:11.6f}")
