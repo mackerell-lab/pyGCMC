@@ -1233,6 +1233,8 @@ def test_detailed_energy_comparison_simple_vs_openmm_cutoff():
     platform = Platform.getPlatformByName('Reference')
     # 计算自能补偿项（注意：计算时 cutoff 使用 1.0 nm）
     correction = calculate_self_energy_correction(original_nb_force, 1.0)
+    print(f"\nSelf-energy correction: {correction:.6f} kJ/mol")
+    print("(Note: Standard OpenMM already handles self-energy correction internally)")
     
     for dist in distances:
         # 生成新的位置：将 water 分子（原子编号 6-8）的 x 坐标设置为 dist，其余保持不变
@@ -1281,3 +1283,314 @@ def test_detailed_energy_comparison_simple_vs_openmm_cutoff():
             rel_diff = 0.0
         
         print(f"{dist:13.2f} | {simple_energy:22.6f} | {cutoff_energy_corrected:29.6f} | {abs_diff:16.6f} | {rel_diff:11.6f}")
+
+def test_compare_all_methods_with_self_energy():
+    """比较三种方法（简单公式、自定义截断和标准OpenMM）在考虑自能补偿后的能量差异。
+    
+    所有方法都使用相同的相互作用组（只计算benzene和water分子之间的相互作用）。
+    """
+    # 创建测试系统
+    system, topology, positions = create_test_system()
+    
+    # 获取原始NonbondedForce
+    original_nb_force = None
+    for force in system.getForces():
+        if isinstance(force, NonbondedForce):
+            original_nb_force = force
+            break
+    
+    # 定义相互作用组
+    movement_atoms = set(range(6))  # benzene
+    fixed_atoms = set(range(6, 9))  # water
+    
+    # 计算自能补偿项
+    correction = calculate_self_energy_correction(original_nb_force, 1.0)
+    print(f"\nSelf-energy correction: {correction:.6f} kJ/mol")
+    print("(Note: Standard OpenMM already handles self-energy correction internally)")
+    
+    # 定义测试距离
+    distances = [0.35, 0.5, 0.7, 0.9, 0.95, 1.0, 1.1, 1.2]
+    
+    print("\nDetailed Energy Comparison:")
+    print("Distance (nm) | Simple (kJ/mol) | Custom (kJ/mol) | Standard (kJ/mol) | Max Diff (kJ/mol)")
+    print("-" * 100)
+    
+    platform = Platform.getPlatformByName('Reference')
+    
+    for dist in distances:
+        # 生成新的位置
+        new_positions = []
+        for i, pos in enumerate(positions):
+            if 6 <= i < 9:  # water分子
+                pos_val = pos.value_in_unit(nanometers)
+                new_positions.append(Vec3(dist, pos_val[1], pos_val[2]) * nanometers)
+            else:
+                new_positions.append(pos)
+        
+        # 1. 简单公式（硬截断）
+        sys_naive = System()
+        for i in range(system.getNumParticles()):
+            sys_naive.addParticle(system.getParticleMass(i))
+        
+        naive_expression = """
+        step(cutoff - r) * (
+            kC * q1 * q2 / r +
+            4 * sqrt(eps1*eps2) * (
+                (0.5*(sigma1+sigma2)/r)^12 -
+                (0.5*(sigma1+sigma2)/r)^6
+            )
+        )"""
+        
+        naive_force = CustomNonbondedForce(naive_expression)
+        naive_force.addPerParticleParameter("q")
+        naive_force.addPerParticleParameter("sigma")
+        naive_force.addPerParticleParameter("eps")
+        naive_force.addGlobalParameter("kC", 138.935456)
+        naive_force.addGlobalParameter("cutoff", 1.0)
+        
+        for i in range(original_nb_force.getNumParticles()):
+            charge, sigma, epsilon = original_nb_force.getParticleParameters(i)
+            naive_force.addParticle([charge, sigma, epsilon])
+        
+        naive_force.addInteractionGroup(movement_atoms, fixed_atoms)
+        naive_force.setNonbondedMethod(CustomNonbondedForce.CutoffNonPeriodic)
+        naive_force.setCutoffDistance(1.0 * nanometers)
+        sys_naive.addForce(naive_force)
+        
+        integrator = VerletIntegrator(0.001 * picoseconds)
+        context = Context(sys_naive, integrator, platform)
+        context.setPositions(new_positions)
+        state = context.getState(getEnergy=True)
+        simple_energy = state.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
+        del context, integrator
+        
+        # 2. 自定义截断公式（带移位和切换）
+        sys_custom = System()
+        for i in range(system.getNumParticles()):
+            sys_custom.addParticle(system.getParticleMass(i))
+        
+        cutoff_expression = """
+        step(cutoff - r) * (
+            kC * q1 * q2 * (1/r - 1/cutoff) +
+            4 * sqrt(eps1*eps2) * (
+                (0.5*(sigma1+sigma2)/r)^12 -
+                (0.5*(sigma1+sigma2)/r)^6
+            ) * (
+                step(switch - r) +
+                step(r - switch) * (cutoff - r)^2 * (cutoff + 2*r - 3*switch) / ((cutoff - switch)^3)
+            )
+        )"""
+        
+        custom_force = CustomNonbondedForce(cutoff_expression)
+        custom_force.addPerParticleParameter("q")
+        custom_force.addPerParticleParameter("sigma")
+        custom_force.addPerParticleParameter("eps")
+        custom_force.addGlobalParameter("kC", 138.935456)
+        custom_force.addGlobalParameter("cutoff", 1.0)
+        custom_force.addGlobalParameter("switch", 0.9)
+        
+        for i in range(original_nb_force.getNumParticles()):
+            charge, sigma, epsilon = original_nb_force.getParticleParameters(i)
+            custom_force.addParticle([charge, sigma, epsilon])
+        
+        custom_force.addInteractionGroup(movement_atoms, fixed_atoms)
+        custom_force.setNonbondedMethod(CustomNonbondedForce.CutoffNonPeriodic)
+        custom_force.setCutoffDistance(1.0 * nanometers)
+        sys_custom.addForce(custom_force)
+        
+        integrator = VerletIntegrator(0.001 * picoseconds)
+        context = Context(sys_custom, integrator, platform)
+        context.setPositions(new_positions)
+        state = context.getState(getEnergy=True)
+        custom_energy = state.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
+        # 不再应用自能补偿，因为标准OpenMM已经在内部处理了
+        custom_energy_corrected = custom_energy
+        del context, integrator
+        
+        # 3. 标准OpenMM NonbondedForce
+        sys_standard = System()
+        for i in range(system.getNumParticles()):
+            sys_standard.addParticle(system.getParticleMass(i))
+        
+        nb_force = NonbondedForce()
+        for i in range(original_nb_force.getNumParticles()):
+            charge, sigma, epsilon = original_nb_force.getParticleParameters(i)
+            nb_force.addParticle(charge, sigma, epsilon)
+        
+        # 设置相互作用组：通过添加例外（exceptions）来实现
+        # 将所有不需要计算的相互作用设置为0
+        for i in range(original_nb_force.getNumParticles()):
+            for j in range(i+1, original_nb_force.getNumParticles()):
+                # 如果两个原子不是一个在movement_atoms一个在fixed_atoms，就设置为例外
+                if not ((i in movement_atoms and j in fixed_atoms) or 
+                       (i in fixed_atoms and j in movement_atoms)):
+                    nb_force.addException(i, j, 0.0, 1.0, 0.0)
+        
+        nb_force.setNonbondedMethod(NonbondedForce.CutoffNonPeriodic)
+        nb_force.setCutoffDistance(1.0 * nanometers)
+        nb_force.setUseSwitchingFunction(True)
+        nb_force.setSwitchingDistance(0.9 * nanometers)
+        sys_standard.addForce(nb_force)
+        
+        integrator = VerletIntegrator(0.001 * picoseconds)
+        context = Context(sys_standard, integrator, platform)
+        context.setPositions(new_positions)
+        state = context.getState(getEnergy=True)
+        standard_energy = state.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
+        del context, integrator
+        
+        # 计算最大差异
+        energies = [simple_energy, custom_energy_corrected, standard_energy]
+        max_diff = max([abs(e1 - e2) for e1 in energies for e2 in energies])
+        
+        print(f"{dist:11.2f} | {simple_energy:13.6f} | {custom_energy_corrected:17.6f} | {standard_energy:15.6f} | {max_diff:16.6f}")
+        
+        # 如果差异太大，输出详细信息
+        if max_diff > 1.0:  # 差异大于1 kJ/mol时输出详细信息
+            print(f"  Detailed differences at {dist} nm:")
+            print(f"  Custom-Simple: {abs(custom_energy_corrected - simple_energy):.6f} kJ/mol")
+            print(f"  Standard-Simple: {abs(standard_energy - simple_energy):.6f} kJ/mol")
+            print(f"  Standard-Custom: {abs(standard_energy - custom_energy_corrected):.6f} kJ/mol")
+
+def test_analyze_openmm_energy_terms():
+    """分析OpenMM的能量计算公式，分别计算库伦项和LJ项。"""
+    # 创建测试系统
+    system, topology, positions = create_test_system()
+    
+    # 获取原始NonbondedForce
+    original_nb_force = None
+    for force in system.getForces():
+        if isinstance(force, NonbondedForce):
+            original_nb_force = force
+            break
+    
+    # 定义相互作用组
+    movement_atoms = set(range(6))  # benzene
+    fixed_atoms = set(range(6, 9))  # water
+    
+    # 定义测试距离
+    distances = [0.35, 0.5, 0.7, 0.9, 0.95, 1.0, 1.1, 1.2]
+    
+    print("\nAnalyzing OpenMM energy terms:")
+    print("Distance (nm) | Coulomb (kJ/mol) | LJ (kJ/mol) | Total (kJ/mol) | Standard OpenMM (kJ/mol)")
+    print("-" * 100)
+    
+    platform = Platform.getPlatformByName('Reference')
+    
+    for dist in distances:
+        # 生成新的位置
+        new_positions = []
+        for i, pos in enumerate(positions):
+            if 6 <= i < 9:  # water分子
+                pos_val = pos.value_in_unit(nanometers)
+                new_positions.append(Vec3(dist, pos_val[1], pos_val[2]) * nanometers)
+            else:
+                new_positions.append(pos)
+        
+        # 1. 计算移位库伦能
+        sys_coulomb = System()
+        for i in range(system.getNumParticles()):
+            sys_coulomb.addParticle(system.getParticleMass(i))
+        
+        coulomb_expression = "step(cutoff - r) * kC * q1 * q2 * (1/r - 1/cutoff)"
+        
+        coulomb_force = CustomNonbondedForce(coulomb_expression)
+        coulomb_force.addPerParticleParameter("q")
+        coulomb_force.addGlobalParameter("kC", 138.935456)
+        coulomb_force.addGlobalParameter("cutoff", 1.0)
+        
+        for i in range(original_nb_force.getNumParticles()):
+            charge, _, _ = original_nb_force.getParticleParameters(i)
+            coulomb_force.addParticle([charge])
+        
+        coulomb_force.addInteractionGroup(movement_atoms, fixed_atoms)
+        coulomb_force.setNonbondedMethod(CustomNonbondedForce.CutoffNonPeriodic)
+        coulomb_force.setCutoffDistance(1.0 * nanometers)
+        sys_coulomb.addForce(coulomb_force)
+        
+        integrator = VerletIntegrator(0.001 * picoseconds)
+        context = Context(sys_coulomb, integrator, platform)
+        context.setPositions(new_positions)
+        state = context.getState(getEnergy=True)
+        coulomb_energy = state.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
+        del context, integrator
+        
+        # 2. 计算带切换函数的LJ能
+        sys_lj = System()
+        for i in range(system.getNumParticles()):
+            sys_lj.addParticle(system.getParticleMass(i))
+        
+        lj_expression = """
+        step(cutoff - r) * (
+            4 * sqrt(eps1*eps2) * (
+                (0.5*(sigma1+sigma2)/r)^12 - 
+                (0.5*(sigma1+sigma2)/r)^6
+            ) * (
+                step(switch - r) +
+                step(r - switch) * (cutoff - r)^2 * (cutoff + 2*r - 3*switch) / ((cutoff - switch)^3)
+            )
+        )"""
+        
+        lj_force = CustomNonbondedForce(lj_expression)
+        lj_force.addPerParticleParameter("sigma")
+        lj_force.addPerParticleParameter("eps")
+        lj_force.addGlobalParameter("cutoff", 1.0)
+        lj_force.addGlobalParameter("switch", 0.9)
+        
+        for i in range(original_nb_force.getNumParticles()):
+            _, sigma, epsilon = original_nb_force.getParticleParameters(i)
+            lj_force.addParticle([sigma, epsilon])
+        
+        lj_force.addInteractionGroup(movement_atoms, fixed_atoms)
+        lj_force.setNonbondedMethod(CustomNonbondedForce.CutoffNonPeriodic)
+        lj_force.setCutoffDistance(1.0 * nanometers)
+        sys_lj.addForce(lj_force)
+        
+        integrator = VerletIntegrator(0.001 * picoseconds)
+        context = Context(sys_lj, integrator, platform)
+        context.setPositions(new_positions)
+        state = context.getState(getEnergy=True)
+        lj_energy = state.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
+        del context, integrator
+        
+        # 3. 计算标准OpenMM能量作为参考
+        sys_standard = System()
+        for i in range(system.getNumParticles()):
+            sys_standard.addParticle(system.getParticleMass(i))
+        
+        nb_force = NonbondedForce()
+        for i in range(original_nb_force.getNumParticles()):
+            charge, sigma, epsilon = original_nb_force.getParticleParameters(i)
+            nb_force.addParticle(charge, sigma, epsilon)
+        
+        # 设置相互作用组
+        for i in range(original_nb_force.getNumParticles()):
+            for j in range(i+1, original_nb_force.getNumParticles()):
+                if not ((i in movement_atoms and j in fixed_atoms) or 
+                       (i in fixed_atoms and j in movement_atoms)):
+                    nb_force.addException(i, j, 0.0, 1.0, 0.0)
+        
+        nb_force.setNonbondedMethod(NonbondedForce.CutoffNonPeriodic)
+        nb_force.setCutoffDistance(1.0 * nanometers)
+        nb_force.setUseSwitchingFunction(True)
+        nb_force.setSwitchingDistance(0.9 * nanometers)
+        sys_standard.addForce(nb_force)
+        
+        integrator = VerletIntegrator(0.001 * picoseconds)
+        context = Context(sys_standard, integrator, platform)
+        context.setPositions(new_positions)
+        state = context.getState(getEnergy=True)
+        standard_energy = state.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
+        del context, integrator
+        
+        # 计算总能量（库伦 + LJ）
+        total_energy = coulomb_energy + lj_energy
+        
+        print(f"{dist:11.2f} | {coulomb_energy:15.6f} | {lj_energy:11.6f} | {total_energy:13.6f} | {standard_energy:21.6f}")
+        
+        # 如果与标准OpenMM结果差异较大，输出详细信息
+        diff = abs(total_energy - standard_energy)
+        if diff > 0.1:
+            print(f"  Large difference at {dist} nm:")
+            print(f"  Difference between sum and standard: {diff:.6f} kJ/mol")
+            print(f"  Relative difference: {diff/abs(standard_energy)*100 if abs(standard_energy) > 1e-10 else 0:.6f}%")
