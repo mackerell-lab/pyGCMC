@@ -551,7 +551,7 @@ def test_compare_cutoff_effects():
             assert abs(naive_energy) < 1e-6, f"Naive energy not zero beyond cutoff: {naive_energy}"
         else:
             # 对于截断内的距离，能量应该接近
-            rel_tol = 0.3  # 30%的相对误差容忍度，因为两种实现的细节可能有所不同
+            rel_tol = 0.001  # 0.1%的相对误差容忍度，因为两种实现的细节可能有所不同
             assert abs(openmm_energy_val - naive_energy) / abs(openmm_energy_val) < rel_tol, \
                    f"Energy mismatch at {dist} nm: OpenMM={openmm_energy_val}, Naive={naive_energy}"
 
