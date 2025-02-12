@@ -82,22 +82,29 @@ public:
     /**
      * @brief Calculate nonbonded energies for movement residues only
      */
-    static void computeMovementResiduesEnergy(model::MCState& state);
+    static void computeMovementEnergy(model::MCState& state);
+
+    /**
+     * @brief Calculate nonbonded energies for movement residues only with distance cutoff
+     */
+    static void computeMovementEnergyCutoff(model::MCState& state);
 
     /**
      * @brief Calculate nonbonded energies for the full system
      */
-    static void computeFullSystemEnergy(model::MCState& state);
+    static void computeSystemEnergy(model::MCState& state);
 
     /**
      * @brief Calculate nonbonded energies for the full system with distance cutoff
      */
-    static void computeFullSystemCutoffEnergy(model::MCState& state);
+    static void computeSystemEnergyCutoff(model::MCState& state);
 
     /**
      * @brief Calculate nonbonded energies for the full system with distance cutoff and periodic boundary conditions
      */
-    static void computeFullSystemCutoffPBCEnergy(model::MCState& state);
+    static void computeSystemEnergyPBC(model::MCState& state);
+
+    static void setEnergyDebugOutput(bool enable);
 
     // Finalize the simulation and (optionally) download final data
     void finalize() {

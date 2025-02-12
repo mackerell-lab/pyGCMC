@@ -86,7 +86,7 @@ def test_attractive_interaction():
     state.movementResidues = [movement_info]
     
     # Calculate energy
-    pygcmc.computeMovementResiduesEnergy(state)
+    pygcmc.computeMovementEnergy(state)
     energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
     
     # Check result
@@ -163,7 +163,7 @@ def test_three_movement_molecules():
     state.movementResidues = [movement_info]
     
     # Calculate energy
-    pygcmc.computeMovementResiduesEnergy(state)
+    pygcmc.computeMovementEnergy(state)
     energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
     
     # Check result
@@ -244,7 +244,7 @@ def test_electrostatic_interaction():
     state.movementResidues = [movement_info]
     
     # Calculate energy
-    pygcmc.computeMovementResiduesEnergy(state)
+    pygcmc.computeMovementEnergy(state)
     energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
     
     # Expected energy with Coulomb constant
@@ -325,7 +325,7 @@ def test_repulsive_interaction():
     state.movementResidues = [movement_info]
     
     # Calculate energy
-    pygcmc.computeMovementResiduesEnergy(state)
+    pygcmc.computeMovementEnergy(state)
     energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
     
     # Check result
@@ -352,7 +352,7 @@ def test_invalid_forcefield_params():
     
     # Expect runtime error due to invalid parameter array size
     with pytest.raises(RuntimeError):
-        pygcmc.computeMovementResiduesEnergy(state)
+        pygcmc.computeMovementEnergy(state)
 
 def test_inactive_residue():
     """Test energy calculation with inactive residues.
@@ -417,7 +417,7 @@ def test_inactive_residue():
     state.movementResidues = [movement_info]
     
     # Calculate energy
-    pygcmc.computeMovementResiduesEnergy(state)
+    pygcmc.computeMovementEnergy(state)
     energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
     
     # Check result
@@ -493,7 +493,7 @@ def test_combined_interaction():
     state.movementResidues = [movement_info]
     
     # Calculate energy
-    pygcmc.computeMovementResiduesEnergy(state)
+    pygcmc.computeMovementEnergy(state)
     
     # Get actual energies
     actual_vdw = state.residues[0].energy_vdw
@@ -579,7 +579,7 @@ def test_energy_symmetry():
     state.movementResidues = [movement_info]
     
     # Calculate energy
-    pygcmc.computeMovementResiduesEnergy(state)
+    pygcmc.computeMovementEnergy(state)
     
     # Get energies for both residues
     energy1 = state.residues[0].energy_vdw + state.residues[0].energy_elec
@@ -655,7 +655,7 @@ def test_very_close_distance():
     state.movementResidues = [movement_info]
     
     # Calculate energy
-    pygcmc.computeMovementResiduesEnergy(state)
+    pygcmc.computeMovementEnergy(state)
     energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
     
     # Energy should be large but finite
@@ -749,7 +749,7 @@ def test_zero_distance_handling():
     state.movementResidues = [movement_info]
     
     # Calculate energy - should not raise exception
-    pygcmc.computeMovementResiduesEnergy(state)
+    pygcmc.computeMovementEnergy(state)
     energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
     
     # Energy should be finite and capped
@@ -811,7 +811,7 @@ def test_all_residues_nonbonded():
     state.activeResidueCount = 3
     
     # 计算能量
-    pygcmc.computeFullSystemEnergy(state)
+    pygcmc.computeSystemEnergy(state)
     
     # 验证每个residue都有能量
     for i in range(3):
@@ -899,7 +899,7 @@ def test_all_residues_inactive():
     state.activeResidueCount = 0
     
     # 计算能量
-    pygcmc.computeFullSystemEnergy(state)
+    pygcmc.computeSystemEnergy(state)
     
     # 验证所有能量都是0
     for res in state.residues:
@@ -962,7 +962,7 @@ def test_cutoff_nonperiodic():
     state.activeResidueCount = 3
     
     # 计算能量
-    pygcmc.computeFullSystemCutoffEnergy(state)
+    pygcmc.computeSystemEnergyCutoff(state)
     
     # 验证每个residue都有能量
     for i in range(3):
@@ -1058,7 +1058,7 @@ def test_pbc_basic():
     state.activeResidueCount = 2
     
     # 计算PBC能量
-    pygcmc.computeFullSystemCutoffPBCEnergy(state)
+    pygcmc.computeSystemEnergyPBC(state)
     
     # 计算总能量
     total_vdw = sum(res.energy_vdw for res in state.residues)
@@ -1128,7 +1128,7 @@ def test_pbc_invalid_box():
     
     # 期望抛出异常
     with pytest.raises(RuntimeError, match="Invalid box dimensions"):
-        pygcmc.computeFullSystemCutoffPBCEnergy(state) 
+        pygcmc.computeSystemEnergyPBC(state) 
 
 def test_pbc_vs_nopbc():
     """Compare PBC and non-PBC energy calculations.
@@ -1183,7 +1183,7 @@ def test_pbc_vs_nopbc():
     state.activeResidueCount = 2
     
     # 计算两种能量
-    pygcmc.computeFullSystemCutoffEnergy(state)
+    pygcmc.computeSystemEnergyCutoff(state)
     nopbc_vdw = sum(res.energy_vdw for res in state.residues)
     nopbc_elec = sum(res.energy_elec for res in state.residues)
     nopbc_energy = (nopbc_vdw + nopbc_elec) / 2.0
@@ -1194,7 +1194,7 @@ def test_pbc_vs_nopbc():
         res.energy_elec = 0.0
     
     # 计算PBC能量
-    pygcmc.computeFullSystemCutoffPBCEnergy(state)
+    pygcmc.computeSystemEnergyPBC(state)
     pbc_vdw = sum(res.energy_vdw for res in state.residues)
     pbc_elec = sum(res.energy_elec for res in state.residues)
     pbc_energy = (pbc_vdw + pbc_elec) / 2.0
@@ -1258,7 +1258,7 @@ def test_pbc_cross_boundary():
     state.activeResidueCount = 3
     
     # 计算PBC能量
-    pygcmc.computeFullSystemCutoffPBCEnergy(state)
+    pygcmc.computeSystemEnergyPBC(state)
     
     # 验证所有residue都有合理的能量
     for i, res in enumerate(state.residues):

@@ -15,7 +15,7 @@ static bool debug_output = true;  // Default: debug output enabled
 /**
  * @brief Coulomb constant in GROMACS MD units [kJ·nm/mol/e²]
  * 
- * k_c = 1/(4*π*ε₀) = 138.935458 kJ·nm/mol/e²
+ * k_c = 1/(4*π*ε₀) = 138.935456 kJ·nm/mol/e²
  * 
  * Unit analysis:
  * - ε₀ (vacuum permittivity) = 8.8541878128e-12 C²/(J·m)
@@ -24,7 +24,7 @@ static bool debug_output = true;  // Default: debug output enabled
  * - 1 e = 1.60217663e-19 C
  * - N_A (Avogadro constant) = 6.02214076e23 mol⁻¹
  */
-const float COULOMB = 138.935458f;
+const float COULOMB = 138.935456f;
 
 /**
  * @brief Safety parameters for energy calculation
@@ -122,26 +122,57 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
     
     // !!! CRITICAL: Apply energy capping for numerical stability
     // First cap individual terms
+    if (debug_output && (std::abs(vdw_energy) > MAX_SAFE_ENERGY || std::abs(elec_energy) > MAX_SAFE_ENERGY)) {
+        std::stringstream ss;
+        ss << "\nEnergy capping applied:";
+        ss << "\n  Original VDW energy = " << vdw_energy << " kJ/mol";
+        ss << "\n  Original Elec energy = " << elec_energy << " kJ/mol";
+        platform::log(LogLevel::DEBUG, ss.str());
+    }
+    
     vdw_energy = std::min(vdw_energy, MAX_SAFE_ENERGY);
     vdw_energy = std::max(vdw_energy, -MAX_SAFE_ENERGY);
     elec_energy = std::min(elec_energy, MAX_SAFE_ENERGY);
     elec_energy = std::max(elec_energy, -MAX_SAFE_ENERGY);
     
+    if (debug_output && (std::abs(vdw_energy) > MAX_SAFE_ENERGY || std::abs(elec_energy) > MAX_SAFE_ENERGY)) {
+        std::stringstream ss;
+        ss << "\nAfter individual capping:";
+        ss << "\n  Capped VDW energy = " << vdw_energy << " kJ/mol";
+        ss << "\n  Capped Elec energy = " << elec_energy << " kJ/mol";
+        platform::log(LogLevel::DEBUG, ss.str());
+    }
+    
     // !!! CRITICAL: Also cap total energy
     float total_energy = vdw_energy + elec_energy;
+    float original_total = total_energy;
     if (total_energy > MAX_SAFE_ENERGY) {
         float scale = MAX_SAFE_ENERGY / total_energy;
         vdw_energy *= scale;
         elec_energy *= scale;
         if (debug_output) {
-            platform::log(LogLevel::DEBUG, "Total energy exceeded MAX_SAFE_ENERGY, scaled by ", scale);
+            std::stringstream ss;
+            ss << "\nTotal energy exceeded MAX_SAFE_ENERGY:";
+            ss << "\n  Original total = " << original_total << " kJ/mol";
+            ss << "\n  Scale factor = " << scale;
+            ss << "\n  Final VDW = " << vdw_energy << " kJ/mol";
+            ss << "\n  Final Elec = " << elec_energy << " kJ/mol";
+            ss << "\n  Final total = " << (vdw_energy + elec_energy) << " kJ/mol";
+            platform::log(LogLevel::DEBUG, ss.str());
         }
     } else if (total_energy < -MAX_SAFE_ENERGY) {
         float scale = -MAX_SAFE_ENERGY / total_energy;
         vdw_energy *= scale;
         elec_energy *= scale;
         if (debug_output) {
-            platform::log(LogLevel::DEBUG, "Total energy below -MAX_SAFE_ENERGY, scaled by ", scale);
+            std::stringstream ss;
+            ss << "\nTotal energy below -MAX_SAFE_ENERGY:";
+            ss << "\n  Original total = " << original_total << " kJ/mol";
+            ss << "\n  Scale factor = " << scale;
+            ss << "\n  Final VDW = " << vdw_energy << " kJ/mol";
+            ss << "\n  Final Elec = " << elec_energy << " kJ/mol";
+            ss << "\n  Final total = " << (vdw_energy + elec_energy) << " kJ/mol";
+            platform::log(LogLevel::DEBUG, ss.str());
         }
     }
 
@@ -452,15 +483,19 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
  * @brief Interface functions for nonbonded energy calculations
  */
 
-void computeMovementResiduesEnergy(model::MCState& state) {
+void computeMovementEnergy(model::MCState& state) {
     computeNonbondedEnergy(state, false, true, false);  // No cutoff, movement residues only, no PBC
 }
 
-void computeFullSystemEnergy(model::MCState& state) {
+void computeMovementEnergyCutoff(model::MCState& state) {
+    computeNonbondedEnergy(state, true, true, false);  // With cutoff, movement residues only, no PBC
+}
+
+void computeSystemEnergy(model::MCState& state) {
     computeNonbondedEnergy(state, false, false, false);  // No cutoff, all residues, no PBC
 }
 
-void computeFullSystemCutoffEnergy(model::MCState& state) {
+void computeSystemEnergyCutoff(model::MCState& state) {
     computeNonbondedEnergy(state, true, false, false);  // With cutoff, all residues, no PBC
 }
 
@@ -473,7 +508,7 @@ void computeFullSystemCutoffEnergy(model::MCState& state) {
  * - Recommended to use with cutoff for better performance
  */
 
-void computeFullSystemCutoffPBCEnergy(model::MCState& state) {
+void computeSystemEnergyPBC(model::MCState& state) {
     if (debug_output) {
         std::stringstream ss;
         ss << "\n=== Starting PBC nonbonded energy calculation ===";

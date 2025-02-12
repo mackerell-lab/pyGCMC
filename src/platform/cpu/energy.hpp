@@ -17,7 +17,17 @@ namespace cpu {
  * 
  * @param state System state containing residues and force field parameters
  */
-void computeMovementResiduesEnergy(model::MCState& state);
+void computeMovementEnergy(model::MCState& state);
+
+/**
+ * @brief Calculate nonbonded energies for movement residues only with distance cutoff
+ * 
+ * This function calculates nonbonded interactions (VDW and electrostatic)
+ * between movement residues and all other active residues within the specified cutoff distance.
+ * 
+ * @param state System state containing residues and force field parameters
+ */
+void computeMovementEnergyCutoff(model::MCState& state);
 
 /**
  * @brief Calculate nonbonded energies for the full system
@@ -27,7 +37,7 @@ void computeMovementResiduesEnergy(model::MCState& state);
  * 
  * @param state System state containing residues and force field parameters
  */
-void computeFullSystemEnergy(model::MCState& state);
+void computeSystemEnergy(model::MCState& state);
 
 /**
  * @brief Calculate nonbonded energies for the full system with distance cutoff
@@ -37,7 +47,7 @@ void computeFullSystemEnergy(model::MCState& state);
  * 
  * @param state System state containing residues and force field parameters
  */
-void computeFullSystemCutoffEnergy(model::MCState& state);
+void computeSystemEnergyCutoff(model::MCState& state);
 
 /**
  * @brief Calculate nonbonded energies for the full system with distance cutoff and periodic boundary conditions
@@ -49,7 +59,7 @@ void computeFullSystemCutoffEnergy(model::MCState& state);
  * @param state System state containing residues and force field parameters
  * @throws std::runtime_error if box dimensions are invalid for PBC calculation
  */
-void computeFullSystemCutoffPBCEnergy(model::MCState& state);
+void computeSystemEnergyPBC(model::MCState& state);
 
 // Function to enable/disable debug output
 void setEnergyDebugOutput(bool enable);

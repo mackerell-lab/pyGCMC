@@ -155,7 +155,8 @@ def calculate_nonbonded_energy(system, positions, movement_atoms, fixed_atoms, u
         custom_force.setNonbondedMethod(CustomNonbondedForce.CutoffPeriodic)
         custom_force.setCutoffDistance(1.0 * nanometers)  # 设置与naive实现相同的截断距离
     else:
-        custom_force.setNonbondedMethod(CustomNonbondedForce.NoCutoff)
+        custom_force.setNonbondedMethod(CustomNonbondedForce.CutoffNonPeriodic)
+        custom_force.setCutoffDistance(1.0 * nanometers)  # 设置与naive实现相同的截断距离
     
     # 创建只包含custom force的能量系统
     energy_system = System()
@@ -190,6 +191,9 @@ def convert_openmm_state_to_mcstate():
     
     # 创建MCState
     state = pygcmc.MCState()
+    
+    # 设置截断距离为1.0nm，与OpenMM保持一致
+    state.info.cutoff = 1.0
     
     # 1. 设置力场
     state.forcefield.numTotalTypes = 3  # 三种类型：C、O和H
@@ -362,7 +366,7 @@ def test_naive_energy_components():
     state, system, positions = convert_openmm_state_to_mcstate()
     
     # 计算能量
-    pygcmc.computeMovementResiduesEnergy(state)
+    pygcmc.computeMovementEnergyCutoff(state)
     
     print(f"\nNaive implementation energy components:")
     print(f"VDW energy: {state.residues[0].energy_vdw:.6f} kJ/mol")
@@ -401,6 +405,9 @@ def print_force_field_params():
 
 def test_compare_openmm_naive_nonbonded():
     """Compare nonbonded energy calculations between OpenMM and naive implementation."""
+    # 启用调试输出
+    pygcmc.setEnergyDebugOutput(True)
+    
     # 首先打印所有调试信息
     print("\n=== Force Field Parameters ===")
     print_force_field_params()
@@ -419,7 +426,7 @@ def test_compare_openmm_naive_nonbonded():
     openmm_energy = calculate_nonbonded_energy(system, positions, movement_atoms, fixed_atoms)
     openmm_energy_val = openmm_energy.value_in_unit(kilojoules_per_mole)
     
-    pygcmc.computeMovementResiduesEnergy(state)
+    pygcmc.computeMovementEnergyCutoff(state)
     naive_energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
     
     print(f"\n=== Final Energy Comparison ===")
@@ -475,7 +482,7 @@ def test_compare_pbc_energies():
         state.atoms[i].z = pos[2]
     
     # 计算naive PBC能量 - 只计算movement residue的能量
-    pygcmc.computeFullSystemCutoffPBCEnergy(state)
+    pygcmc.computeSystemEnergyPBC(state)
     movement_fixed_energy = state.residues[1].energy_vdw + state.residues[1].energy_elec
     
     # 打印详细信息
@@ -495,6 +502,9 @@ def test_compare_pbc_energies():
 
 def test_compare_cutoff_effects():
     """Compare cutoff effects between OpenMM and naive implementation."""
+    # 启用调试输出
+    pygcmc.setEnergyDebugOutput(True)
+    
     # 获取系统
     state, system, positions = convert_openmm_state_to_mcstate()
     
@@ -527,7 +537,7 @@ def test_compare_cutoff_effects():
             state.atoms[i].z = pos[2]
         
         # 计算naive能量
-        pygcmc.computeMovementResiduesEnergy(state)
+        pygcmc.computeMovementEnergyCutoff(state)
         naive_energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
         
         print(f"\nEnergy comparison at distance {dist} nm:")

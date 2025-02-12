@@ -6,24 +6,20 @@
 namespace pygcmc {
 namespace simulation {
 
-void Simulation::computeMovementResiduesEnergy(model::MCState& state) {
+void Simulation::computeMovementEnergy(model::MCState& state) {
     log(LogLevel::DEBUG, "Computing nonbonded energy for movement residues");
-    
-    platform::cpu::computeMovementResiduesEnergy(state);
-    
-    // Log the energy of the first movement residue
-    const auto& firstMovementInfo = state.movementResidues[0];
-    const auto& residue = state.residues[firstMovementInfo.startIndex];
-    
-    log(LogLevel::DEBUG, "First movement residue energy: vdw=", residue.energy_vdw, 
-        ", elec=", residue.energy_elec, 
-        ", total=", (residue.energy_vdw + residue.energy_elec));
+    platform::cpu::computeMovementEnergy(state);
 }
 
-void Simulation::computeFullSystemEnergy(model::MCState& state) {
+void Simulation::computeMovementEnergyCutoff(model::MCState& state) {
+    log(LogLevel::DEBUG, "Computing nonbonded energy for movement residues with cutoff");
+    platform::cpu::computeMovementEnergyCutoff(state);
+}
+
+void Simulation::computeSystemEnergy(model::MCState& state) {
     log(LogLevel::DEBUG, "Computing nonbonded energy for all active residues");
     
-    platform::cpu::computeFullSystemEnergy(state);
+    platform::cpu::computeSystemEnergy(state);
     
     // Log total system energy
     float total_vdw = 0.0f;
@@ -43,10 +39,10 @@ void Simulation::computeFullSystemEnergy(model::MCState& state) {
         ", total=", (total_vdw + total_elec));
 }
 
-void Simulation::computeFullSystemCutoffEnergy(model::MCState& state) {
+void Simulation::computeSystemEnergyCutoff(model::MCState& state) {
     log(LogLevel::DEBUG, "Computing cutoff nonbonded energy for all active residues");
     
-    platform::cpu::computeFullSystemCutoffEnergy(state);
+    platform::cpu::computeSystemEnergyCutoff(state);
     
     // Log total system energy
     float total_vdw = 0.0f;
@@ -67,7 +63,7 @@ void Simulation::computeFullSystemCutoffEnergy(model::MCState& state) {
         ", total=", (total_vdw + total_elec));
 }
 
-void Simulation::computeFullSystemCutoffPBCEnergy(model::MCState& state) {
+void Simulation::computeSystemEnergyPBC(model::MCState& state) {
     log(LogLevel::DEBUG, "Computing cutoff nonbonded energy with PBC for all active residues");
     
     // Validate box dimensions before proceeding
@@ -78,7 +74,7 @@ void Simulation::computeFullSystemCutoffPBCEnergy(model::MCState& state) {
     log(LogLevel::DEBUG, "Box dimensions: ", state.info.box[0], " x ", 
         state.info.box[1], " x ", state.info.box[2], " nm");
     
-    platform::cpu::computeFullSystemCutoffPBCEnergy(state);
+    platform::cpu::computeSystemEnergyPBC(state);
     
     // Log total system energy
     float total_vdw = 0.0f;
@@ -97,6 +93,10 @@ void Simulation::computeFullSystemCutoffPBCEnergy(model::MCState& state) {
     log(LogLevel::DEBUG, "Total system energy with PBC: vdw=", total_vdw, 
         ", elec=", total_elec, 
         ", total=", (total_vdw + total_elec));
+}
+
+void Simulation::setEnergyDebugOutput(bool enable) {
+    platform::cpu::setEnergyDebugOutput(enable);
 }
 
 } // namespace simulation
