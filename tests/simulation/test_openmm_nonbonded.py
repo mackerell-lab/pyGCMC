@@ -866,3 +866,279 @@ def test_compare_separate_terms():
     
     del context, integrator
 
+def test_compare_naive_vs_cutoff_energy():
+    """比较简单公式和带截断公式的能量差别。
+    
+    简单公式（带硬截断）：
+    E = step(cutoff - r) * (
+        kC * q1 * q2 / r + 
+        4 * sqrt(eps1*eps2) * (
+            (0.5*(sigma1+sigma2)/r)^12 - 
+            (0.5*(sigma1+sigma2)/r)^6
+        )
+    )
+        
+    带截断公式（使用移位库伦势和LJ切换函数）：
+    E = step(cutoff - r) * (
+        kC * q1 * q2 * (1/r - 1/cutoff) + 
+        4 * sqrt(eps1*eps2) * (
+            (0.5*(sigma1+sigma2)/r)^12 - 
+            (0.5*(sigma1+sigma2)/r)^6
+        ) * (
+            step(switch - r) +
+            step(r - switch) * (cutoff - r)^2 * (cutoff + 2*r - 3*switch) / ((cutoff - switch)^3)
+        )
+    )
+    """
+    # 创建测试系统
+    system, topology, positions = create_test_system()
+    
+    # 定义测试距离
+    distances = [0.5, 0.7, 0.9, 0.95, 1.0, 1.2]  # nm
+    movement_atoms = set(range(6))  # Benzene carbons
+    fixed_atoms = set(range(6, 9))  # Water atoms
+    
+    print("\n比较简单公式和带截断公式的能量差别：")
+    print("距离(nm)  简单公式(kJ/mol)  带截断公式(kJ/mol)  差异(%)")
+    print("-" * 60)
+    
+    # 添加调试函数
+    def analyze_switching_function(r):
+        """分析在给定距离r处的切换函数值"""
+        cutoff = 1.0
+        switch = 0.9
+        if r <= switch:
+            return 1.0
+        elif r >= cutoff:
+            return 0.0
+        else:
+            x = (cutoff - r)**2 * (cutoff + 2*r - 3*switch) / ((cutoff - switch)**3)
+            return x
+    
+    def debug_energy_components(r, nb_force, movement_atoms, fixed_atoms, platform):
+        """分析在距离r处的能量组分"""
+        # 1. 只计算库伦项
+        coulomb_expression = """
+        step(cutoff - r) * kC * q1 * q2 * (1/r - 1/cutoff)
+        """
+        coulomb_force = CustomNonbondedForce(coulomb_expression)
+        coulomb_force.addPerParticleParameter("q")
+        coulomb_force.addGlobalParameter("kC", 138.935456)
+        coulomb_force.addGlobalParameter("cutoff", 1.0)
+        
+        # 2. 只计算LJ项（不带切换函数）
+        lj_expression = """
+        step(cutoff - r) * 4 * sqrt(eps1*eps2) * (
+            (0.5*(sigma1+sigma2)/r)^12 - 
+            (0.5*(sigma1+sigma2)/r)^6
+        )
+        """
+        lj_force = CustomNonbondedForce(lj_expression)
+        lj_force.addPerParticleParameter("sigma")
+        lj_force.addPerParticleParameter("eps")
+        lj_force.addGlobalParameter("cutoff", 1.0)
+        
+        # 3. 只计算LJ项（带切换函数）
+        lj_switched_expression = """
+        step(cutoff - r) * 4 * sqrt(eps1*eps2) * (
+            (0.5*(sigma1+sigma2)/r)^12 - 
+            (0.5*(sigma1+sigma2)/r)^6
+        ) * (
+            step(switch - r) +
+            step(r - switch) * (cutoff - r)^2 * (cutoff + 2*r - 3*switch) / ((cutoff - switch)^3)
+        )
+        """
+        lj_switched_force = CustomNonbondedForce(lj_switched_expression)
+        lj_switched_force.addPerParticleParameter("sigma")
+        lj_switched_force.addPerParticleParameter("eps")
+        lj_switched_force.addGlobalParameter("cutoff", 1.0)
+        lj_switched_force.addGlobalParameter("switch", 0.9)
+        
+        # 添加粒子参数到所有力场
+        for i in range(nb_force.getNumParticles()):
+            charge, sigma, epsilon = nb_force.getParticleParameters(i)
+            coulomb_force.addParticle([charge])
+            lj_force.addParticle([sigma, epsilon])
+            lj_switched_force.addParticle([sigma, epsilon])
+        
+        # 设置相互作用组和截断方法
+        for force in [coulomb_force, lj_force, lj_switched_force]:
+            force.addInteractionGroup(movement_atoms, fixed_atoms)
+            force.setNonbondedMethod(CustomNonbondedForce.CutoffNonPeriodic)
+            force.setCutoffDistance(1.0 * nanometers)
+        
+        # 创建系统并计算能量
+        def calc_energy(force):
+            sys = System()
+            for i in range(nb_force.getNumParticles()):
+                sys.addParticle(system.getParticleMass(i))
+            sys.addForce(force)
+            integrator = VerletIntegrator(0.001 * picoseconds)
+            context = Context(sys, integrator, platform)
+            context.setPositions(new_positions)
+            energy = context.getState(getEnergy=True).getPotentialEnergy()
+            del context, integrator
+            return energy.value_in_unit(kilojoules_per_mole)
+        
+        # 计算各组分能量
+        coulomb_energy = calc_energy(coulomb_force)
+        lj_energy = calc_energy(lj_force)
+        lj_switched_energy = calc_energy(lj_switched_force)
+        
+        # 计算切换函数值
+        switch_value = analyze_switching_function(r)
+        
+        print(f"\n=== 能量分析 (r = {r:.3f} nm) ===")
+        print(f"切换函数值: {switch_value:.6f}")
+        print(f"库伦能量: {coulomb_energy:.6f} kJ/mol")
+        print(f"LJ能量 (无切换): {lj_energy:.6f} kJ/mol")
+        print(f"LJ能量 (带切换): {lj_switched_energy:.6f} kJ/mol")
+        print(f"LJ能量比例 (带切换/无切换): {lj_switched_energy/lj_energy if abs(lj_energy) > 1e-10 else 0:.6f}")
+        
+        return coulomb_energy, lj_energy, lj_switched_energy, switch_value
+    
+    for dist in distances:
+        # 移动水分子到指定距离
+        new_positions = []
+        for i in range(len(positions)):
+            if i >= 6 and i < 9:  # Water atoms
+                pos = positions[i].value_in_unit(nanometers)
+                new_positions.append(Vec3(dist, pos[1], pos[2]) * nanometers)
+            else:
+                new_positions.append(positions[i])
+        
+        # 获取原始NonbondedForce
+        nb_force = None
+        for force in system.getForces():
+            if isinstance(force, NonbondedForce):
+                nb_force = force
+                break
+        
+        # 分析能量组分
+        platform = Platform.getPlatformByName('Reference')
+        coulomb_energy, lj_energy, lj_switched_energy, switch_value = debug_energy_components(
+            dist, nb_force, movement_atoms, fixed_atoms, platform
+        )
+        
+        # 计算简单公式的能量
+        naive_expression = """
+        step(cutoff - r) * (
+            kC * q1 * q2 / r + 
+            4 * sqrt(eps1*eps2) * (
+                (0.5*(sigma1+sigma2)/r)^12 - 
+                (0.5*(sigma1+sigma2)/r)^6
+            )
+        )"""
+        
+        naive_force = CustomNonbondedForce(naive_expression)
+        naive_force.addPerParticleParameter("q")
+        naive_force.addPerParticleParameter("sigma")
+        naive_force.addPerParticleParameter("eps")
+        naive_force.addGlobalParameter("kC", 138.935456)
+        naive_force.addGlobalParameter("cutoff", 1.0)
+        
+        # 添加粒子参数
+        for i in range(system.getNumParticles()):
+            charge, sigma, epsilon = nb_force.getParticleParameters(i)
+            naive_force.addParticle([charge, sigma, epsilon])
+        
+        naive_force.addInteractionGroup(movement_atoms, fixed_atoms)
+        naive_force.setNonbondedMethod(CustomNonbondedForce.CutoffNonPeriodic)
+        naive_force.setCutoffDistance(1.0 * nanometers)
+        
+        # 创建系统并计算能量
+        naive_system = System()
+        for i in range(system.getNumParticles()):
+            naive_system.addParticle(system.getParticleMass(i))
+        naive_system.addForce(naive_force)
+        
+        # 计算简单公式能量
+        integrator_naive = VerletIntegrator(0.001 * picoseconds)
+        context = Context(naive_system, integrator_naive, platform)
+        context.setPositions(new_positions)
+        naive_energy = context.getState(getEnergy=True).getPotentialEnergy()
+        del context, integrator_naive
+        
+        # 计算带截断公式能量
+        cutoff_expression = """
+        step(cutoff - r) * (
+            kC * q1 * q2 * (1/r - 1/cutoff) + 
+            4 * sqrt(eps1*eps2) * (
+                (0.5*(sigma1+sigma2)/r)^12 - 
+                (0.5*(sigma1+sigma2)/r)^6
+            ) * (
+                step(switch - r) +
+                step(r - switch) * (cutoff - r)^2 * (cutoff + 2*r - 3*switch) / ((cutoff - switch)^3)
+            )
+        )"""
+        
+        cutoff_force = CustomNonbondedForce(cutoff_expression)
+        cutoff_force.addPerParticleParameter("q")
+        cutoff_force.addPerParticleParameter("sigma")
+        cutoff_force.addPerParticleParameter("eps")
+        cutoff_force.addGlobalParameter("kC", 138.935456)
+        cutoff_force.addGlobalParameter("cutoff", 1.0)
+        cutoff_force.addGlobalParameter("switch", 0.9)
+        
+        # 添加粒子参数
+        for i in range(system.getNumParticles()):
+            charge, sigma, epsilon = nb_force.getParticleParameters(i)
+            cutoff_force.addParticle([charge, sigma, epsilon])
+        
+        cutoff_force.addInteractionGroup(movement_atoms, fixed_atoms)
+        cutoff_force.setNonbondedMethod(CustomNonbondedForce.CutoffNonPeriodic)
+        cutoff_force.setCutoffDistance(1.0 * nanometers)
+        
+        # 创建系统并计算能量
+        cutoff_system = System()
+        for i in range(system.getNumParticles()):
+            cutoff_system.addParticle(system.getParticleMass(i))
+        cutoff_system.addForce(cutoff_force)
+        
+        # 计算能量
+        integrator_cutoff = VerletIntegrator(0.001 * picoseconds)
+        context = Context(cutoff_system, integrator_cutoff, platform)
+        context.setPositions(new_positions)
+        cutoff_energy = context.getState(getEnergy=True).getPotentialEnergy()
+        del context, integrator_cutoff
+        
+        # 计算差异
+        naive_val = naive_energy.value_in_unit(kilojoules_per_mole)
+        cutoff_val = cutoff_energy.value_in_unit(kilojoules_per_mole)
+        
+        # 计算相对差异（如果能量接近0，使用绝对差异）
+        if abs(naive_val) < 1e-6:
+            diff_percent = abs(cutoff_val - naive_val)
+        else:
+            diff_percent = abs(cutoff_val - naive_val) / abs(naive_val) * 100
+        
+        print(f"{dist:6.2f}  {naive_val:14.6f}  {cutoff_val:16.6f}  {diff_percent:8.2f}")
+        
+        # 对于超出截断距离的情况，带截断公式应该给出0能量
+        if dist > 1.0:  # cutoff distance
+            assert abs(cutoff_val) < 1e-6, f"Energy should be zero beyond cutoff, got {cutoff_val}"
+        
+        # 对于接近截断距离的情况，带截断公式应该给出较小的能量
+        if 0.9 < dist < 1.0:  # switching region
+            # 使用相对容差进行比较
+            rel_tol = 1e-10  # 相对容差：1e-10
+            abs_tol = 1e-10  # 绝对容差：1e-10 kJ/mol
+            
+            # 如果能量很小，使用绝对容差；否则使用相对容差
+            if abs(naive_val) < 1e-6:
+                assert abs(cutoff_val) <= abs_tol, \
+                       f"Energy with switching should be near zero at {dist} nm, got {cutoff_val}"
+            else:
+                # 检查带切换的能量是否小于或等于（考虑容差）简单公式的能量
+                assert abs(cutoff_val) <= abs(naive_val) * (1 + rel_tol) + abs_tol, \
+                       f"Energy with switching ({cutoff_val}) should be smaller than or equal to naive ({naive_val}) at {dist} nm"
+                
+                # 输出详细的比较信息
+                print(f"\n能量比较详情 (r = {dist} nm):")
+                print(f"简单公式能量: {naive_val:.15f} kJ/mol")
+                print(f"带切换能量: {cutoff_val:.15f} kJ/mol")
+                print(f"相对差异: {abs(cutoff_val - naive_val)/abs(naive_val)*100:.15f}%")
+                print(f"绝对差异: {abs(cutoff_val - naive_val):.15e} kJ/mol")
+        
+        del naive_system, cutoff_system
+
