@@ -735,6 +735,7 @@ def test_compare_separate_terms():
     # 创建测试系统
     system, topology, positions = create_test_system()
     cutoff_distance = 1.0  # nm
+    switch_distance = 0.9  # nm
     
     # 获取原始NonbondedForce
     original_nb_force = None
@@ -794,6 +795,9 @@ def test_compare_separate_terms():
         4 * sqrt(eps1*eps2) * (
             (0.5*(sigma1+sigma2)/r)^12 - 
             (0.5*(sigma1+sigma2)/r)^6
+        ) * (
+            step(switch - r) +
+            step(r - switch) * (cutoff - r)^2 * (cutoff + 2*r - 3*switch) / ((cutoff - switch)^3)
         )
     )""")
     
@@ -801,6 +805,7 @@ def test_compare_separate_terms():
     lj_custom.addPerParticleParameter("sigma")
     lj_custom.addPerParticleParameter("eps")
     lj_custom.addGlobalParameter("cutoff", cutoff_distance)
+    lj_custom.addGlobalParameter("switch", switch_distance)
     
     # 创建只有LJ项的系统
     system_lj = System()
