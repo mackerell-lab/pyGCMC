@@ -627,7 +627,8 @@ void init_model(py::module& m) {
         .def_readwrite("max_atoms", &pygcmc::model::MCInfo::maxAtoms)
         .def_readwrite("max_types", &pygcmc::model::MCInfo::maxTypes)
         .def_readwrite("volume", &pygcmc::model::MCInfo::volume)
-        .def_readwrite("seed", &pygcmc::model::MCInfo::seed);
+        .def_readwrite("seed", &pygcmc::model::MCInfo::seed)
+        .def("setTemperature", &pygcmc::model::MCInfo::setTemperature, "Set temperature in Kelvin and calculate beta");
 
     // Bind GCMCInfo::Statistics
     py::class_<pygcmc::model::MCInfo::Statistics>(m, "MCStatistics")

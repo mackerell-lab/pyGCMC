@@ -9,6 +9,22 @@ namespace pygcmc {
 namespace platform {
 namespace cpu {
 
+// Constants for energy calculations
+extern const float COULOMB;
+extern const float MIN_SAFE_DISTANCE;
+extern const float MAX_SAFE_ENERGY;
+
+// Ewald parameters
+struct EwaldParams {
+    float alpha{1.0f};     // Ewald分离参数 (nm^-1)
+    int kmax[3]{6,6,6};    // 倒空间最大波矢
+    float tolerance{1e-5f}; // 精度控制
+    bool initialized{false};
+};
+
+// Global Ewald parameters
+extern EwaldParams ewald_params;
+
 /**
  * @brief Calculate nonbonded energies for movement residues only
  * 
@@ -63,6 +79,11 @@ void computeSystemEnergyPBC(model::MCState& state);
 
 // Function to enable/disable debug output
 void setEnergyDebugOutput(bool enable);
+
+// Ewald method interfaces
+void setEwaldParameters(float alpha, const int kmax[3], float tolerance = 1e-5f);
+void computeSystemEnergyEwald(model::MCState& state);
+void computeMovementEnergyEwald(model::MCState& state);
 
 } // namespace cpu
 } // namespace platform

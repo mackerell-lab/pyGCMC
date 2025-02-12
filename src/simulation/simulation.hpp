@@ -116,6 +116,11 @@ public:
         platform_->finalize();
     }
 
+    // Ewald method interfaces
+    static void setEwaldParameters(float alpha, const int kmax[3], float tolerance = 1e-5f);
+    static void computeSystemEnergyEwald(model::MCState& state);
+    static void computeMovementEnergyEwald(model::MCState& state);
+
 private:
     std::unique_ptr<platform::IPlatform> platform_;
 };

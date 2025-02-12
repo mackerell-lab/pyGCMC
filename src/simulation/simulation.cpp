@@ -116,5 +116,23 @@ void Simulation::setEnergyDebugOutput(bool enable) {
     platform::cpu::setEnergyDebugOutput(enable);
 }
 
+void Simulation::setEwaldParameters(float alpha, const int kmax[3], float tolerance) {
+    platform::cpu::setEwaldParameters(alpha, kmax, tolerance);
+}
+
+void Simulation::computeSystemEnergyEwald(model::MCState& state) {
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing Ewald energy for all active residues");
+    }
+    platform::cpu::computeSystemEnergyEwald(state);
+}
+
+void Simulation::computeMovementEnergyEwald(model::MCState& state) {
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing Ewald energy for movement residues");
+    }
+    platform::cpu::computeMovementEnergyEwald(state);
+}
+
 } // namespace simulation
 } // namespace pygcmc
