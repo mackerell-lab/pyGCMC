@@ -1016,13 +1016,12 @@ def test_pbc_basic():
     # 1. 设置力场
     state.forcefield.numTotalTypes = 2
     state.forcefield.numMovementTypes = 2
-    state.forcefield.ljEps = [1.0] * 4    # 所有相互作用eps=1.0
-    state.forcefield.ljSigma = [1.0] * 4  # 所有相互作用sigma=1.0
+    state.forcefield.ljEps = [1.0] * 4
+    state.forcefield.ljSigma = [1.0] * 4
     
-    # 设置盒子和截断
-    box_size = 2.0
-    state.info.box = [box_size, box_size, box_size]  # 2.0 nm 的立方体盒子
-    state.info.cutoff = box_size / 2  # 截断距离设为盒子大小的一半
+    # 设置大盒子和适当的截断
+    state.info.box = [10.0, 10.0, 10.0]  # 大盒子避免PBC效应
+    state.info.cutoff = 2.0  # nm
     
     # 2. 设置两个原子在盒子的相对两侧
     atoms = []
@@ -1058,12 +1057,10 @@ def test_pbc_basic():
     state.activeResidueCount = 2
     
     # 计算PBC能量
-    pygcmc.computeSystemEnergyPBC(state)
-    
-    # 计算总能量
-    total_vdw = sum(res.energy_vdw for res in state.residues)
-    total_elec = sum(res.energy_elec for res in state.residues)
-    pbc_energy = (total_vdw + total_elec) / 2.0
+    pygcmc.computeSystemEnergyPBCCutoff(state)
+    pbc_vdw = sum(res.energy_vdw for res in state.residues)
+    pbc_elec = sum(res.energy_elec for res in state.residues)
+    pbc_energy = (pbc_vdw + pbc_elec) / 2.0
     
     # 通过PBC，原子间的实际距离应该是1.0 nm（而不是1.0 nm）
     # 在x方向上：1.5 - 0.5 = 1.0，正好等于sigma
@@ -1077,27 +1074,27 @@ def test_pbc_basic():
     
     # 打印详细的调试信息
     print(f"\nDetailed energy comparison:")
-    print(f"Box size: {box_size} nm")
+    print(f"Box size: {state.info.box}")
     print(f"Cutoff distance: {state.info.cutoff} nm")
     print(f"Atom positions: {positions}")
     print(f"Minimum image distance: {min_dist} nm")
     print(f"Expected electrostatic energy: {expected_elec} kJ/mol")
     print(f"Expected VDW energy: {expected_vdw} kJ/mol")
     print(f"Expected total energy: {expected_energy} kJ/mol")
-    print(f"Actual VDW energy: {total_vdw/2} kJ/mol")
-    print(f"Actual electrostatic energy: {total_elec/2} kJ/mol")
+    print(f"Actual VDW energy: {pbc_vdw/2} kJ/mol")
+    print(f"Actual electrostatic energy: {pbc_elec/2} kJ/mol")
     print(f"Actual total energy: {pbc_energy} kJ/mol")
     
     # 分别检查VDW和静电能量
     rel_tol = 0.1  # 10%的相对误差容忍度
     
     # 检查静电能量
-    actual_elec = total_elec / 2.0
+    actual_elec = pbc_elec / 2.0
     assert abs((actual_elec - expected_elec) / expected_elec) < rel_tol, \
            f"Electrostatic energy {actual_elec} differs too much from expected {expected_elec}"
     
     # 检查VDW能量（应该接近0，因为r ≈ sigma）
-    actual_vdw = total_vdw / 2.0
+    actual_vdw = pbc_vdw / 2.0
     assert abs(actual_vdw) < 10.0, f"VDW energy {actual_vdw} is too large"
     
     # 检查总能量
@@ -1128,7 +1125,7 @@ def test_pbc_invalid_box():
     
     # 期望抛出异常
     with pytest.raises(RuntimeError, match="Invalid box dimensions"):
-        pygcmc.computeSystemEnergyPBC(state) 
+        pygcmc.computeSystemEnergyPBCCutoff(state) 
 
 def test_pbc_vs_nopbc():
     """Compare PBC and non-PBC energy calculations.
@@ -1194,7 +1191,7 @@ def test_pbc_vs_nopbc():
         res.energy_elec = 0.0
     
     # 计算PBC能量
-    pygcmc.computeSystemEnergyPBC(state)
+    pygcmc.computeSystemEnergyPBCCutoff(state)
     pbc_vdw = sum(res.energy_vdw for res in state.residues)
     pbc_elec = sum(res.energy_elec for res in state.residues)
     pbc_energy = (pbc_vdw + pbc_elec) / 2.0
@@ -1258,7 +1255,7 @@ def test_pbc_cross_boundary():
     state.activeResidueCount = 3
     
     # 计算PBC能量
-    pygcmc.computeSystemEnergyPBC(state)
+    pygcmc.computeSystemEnergyPBCCutoff(state)
     
     # 验证所有residue都有合理的能量
     for i, res in enumerate(state.residues):

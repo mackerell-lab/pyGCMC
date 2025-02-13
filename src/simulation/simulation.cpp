@@ -81,7 +81,7 @@ void Simulation::computeSystemEnergyPBC(model::MCState& state) {
     }
     
     if (is_debug_enabled()) {
-        log(LogLevel::DEBUG, "Computing PBC nonbonded energy: box=", 
+        log(LogLevel::DEBUG, "Computing PBC nonbonded energy (no cutoff): box=", 
             state.info.box[0], "x", state.info.box[1], "x", state.info.box[2], " nm");
     }
     
@@ -101,7 +101,40 @@ void Simulation::computeSystemEnergyPBC(model::MCState& state) {
         total_vdw /= 2.0f;
         total_elec /= 2.0f;
         
-        log(LogLevel::DEBUG, "Total system energy with PBC: vdw=", total_vdw, 
+        log(LogLevel::DEBUG, "Total system energy with PBC (no cutoff): vdw=", total_vdw, 
+            ", elec=", total_elec, 
+            ", total=", (total_vdw + total_elec));
+    }
+}
+
+void Simulation::computeSystemEnergyPBCCutoff(model::MCState& state) {
+    // Validate box dimensions before proceeding
+    if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
+        throw std::runtime_error("Invalid box dimensions for PBC calculation");
+    }
+    
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing PBC nonbonded energy (with cutoff): box=", 
+            state.info.box[0], "x", state.info.box[1], "x", state.info.box[2], " nm");
+    }
+    
+    platform::cpu::computeSystemEnergyPBCCutoff(state);
+    
+    // Only log total energy in debug mode
+    if (is_debug_enabled()) {
+        float total_vdw = 0.0f;
+        float total_elec = 0.0f;
+        for (int i = 0; i < state.activeResidueCount; ++i) {
+            if (state.residues[i].active) {
+                total_vdw += state.residues[i].energy_vdw;
+                total_elec += state.residues[i].energy_elec;
+            }
+        }
+        
+        total_vdw /= 2.0f;
+        total_elec /= 2.0f;
+        
+        log(LogLevel::DEBUG, "Total system energy with PBC (with cutoff): vdw=", total_vdw, 
             ", elec=", total_elec, 
             ", total=", (total_vdw + total_elec));
     }

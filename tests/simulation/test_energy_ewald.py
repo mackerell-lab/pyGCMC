@@ -176,6 +176,57 @@ def test_ewald_parameter_sensitivity():
         assert rel_diff < 0.10, (  # 增加容差到10%
             f"Ewald energy should be relatively insensitive to alpha, but got {rel_diff*100:.2f}% difference")
 
+def test_pbc_cutoff_ewald_comparison():
+    """比较PBC无截断、PBC有截断和Ewald方法的能量计算结果"""
+    
+    # 创建一个2x2x2的NaCl晶体
+    state = create_nacl_crystal(2.0, 2)  # 2nm盒子，2x2x2晶胞
+    
+    # 1. 计算PBC无截断能量
+    pygcmc.computeSystemEnergyPBC(state)
+    energy_pbc = sum(res.energy_vdw + res.energy_elec 
+                    for res in state.residues if res.active)
+    
+    # 重置能量
+    for res in state.residues:
+        res.energy_vdw = 0.0
+        res.energy_elec = 0.0
+    
+    # 2. 计算PBC+cutoff能量
+    pygcmc.computeSystemEnergyPBCCutoff(state)
+    energy_pbc_cutoff = sum(res.energy_vdw + res.energy_elec 
+                           for res in state.residues if res.active)
+    
+    # 重置能量
+    for res in state.residues:
+        res.energy_vdw = 0.0
+        res.energy_elec = 0.0
+    
+    # 3. 计算Ewald能量
+    kmax = [6, 6, 6]  # 倒空间截断
+    alpha = 2.0  # Ewald参数 (nm^-1)
+    pygcmc.setEwaldParameters(alpha, kmax)
+    pygcmc.computeSystemEnergyEwald(state)
+    energy_ewald = sum(res.energy_vdw + res.energy_elec 
+                      for res in state.residues if res.active)
+    
+    print(f"\nEnergy comparison for 2x2x2 NaCl crystal:")
+    print(f"PBC without cutoff:  {energy_pbc:.3f} kJ/mol")
+    print(f"PBC with cutoff:     {energy_pbc_cutoff:.3f} kJ/mol")
+    print(f"Ewald:               {energy_ewald:.3f} kJ/mol")
+    print(f"Relative difference (PBC vs Ewald): {abs(energy_pbc - energy_ewald)/abs(energy_ewald)*100:.2f}%")
+    print(f"Relative difference (PBC+cutoff vs Ewald): {abs(energy_pbc_cutoff - energy_ewald)/abs(energy_ewald)*100:.2f}%")
+    
+    # 对于带电系统，三种方法的结果应该有显著差异
+    # PBC无截断应该与Ewald结果最接近，因为它考虑了所有长程相互作用
+    assert abs(energy_pbc - energy_ewald) < abs(energy_pbc_cutoff - energy_ewald), \
+        "PBC without cutoff should be closer to Ewald than PBC with cutoff"
+    
+    # PBC有截断的结果应该与其他两种方法有显著差异
+    assert abs(energy_pbc_cutoff - energy_ewald) > 1.0, \
+        "Expected significant difference between PBC with cutoff and Ewald"
+
 if __name__ == "__main__":
     test_energy_methods_comparison()
     test_ewald_parameter_sensitivity()
+    test_pbc_cutoff_ewald_comparison()

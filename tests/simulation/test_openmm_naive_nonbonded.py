@@ -482,7 +482,7 @@ def test_compare_pbc_energies():
         state.atoms[i].z = pos[2]
     
     # 计算naive PBC能量 - 只计算movement residue的能量
-    pygcmc.computeSystemEnergyPBC(state)
+    pygcmc.computeSystemEnergyPBCCutoff(state)
     movement_fixed_energy = state.residues[1].energy_vdw + state.residues[1].energy_elec
     
     # 打印详细信息

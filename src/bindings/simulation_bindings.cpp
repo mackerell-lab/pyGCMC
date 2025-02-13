@@ -22,7 +22,10 @@ void init_simulation_bindings(py::module& m) {
           "Calculate nonbonded energies for the full system with distance cutoff");
           
     m.def("computeSystemEnergyPBC", &simulation::Simulation::computeSystemEnergyPBC,
-          "Calculate nonbonded energies for the full system with distance cutoff and periodic boundary conditions");
+          "Calculate nonbonded energies for the full system with periodic boundary conditions");
+          
+    m.def("computeSystemEnergyPBCCutoff", &simulation::Simulation::computeSystemEnergyPBCCutoff,
+          "Calculate nonbonded energies for the full system with periodic boundary conditions and cutoff");
           
     m.def("setEnergyDebugOutput", &simulation::Simulation::setEnergyDebugOutput,
           "Enable or disable debug output for energy calculations");

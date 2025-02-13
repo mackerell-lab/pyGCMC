@@ -105,9 +105,28 @@ public:
     static void computeSystemEnergyCutoff(model::MCState& state);
 
     /**
-     * @brief Calculate nonbonded energies for the full system with distance cutoff and periodic boundary conditions
+     * @brief Calculate nonbonded energies for the full system with periodic boundary conditions
+     * 
+     * This function calculates nonbonded interactions (VDW and electrostatic)
+     * between all active residues without distance cutoff,
+     * applying periodic boundary conditions using the minimum image convention.
+     * 
+     * @param state System state containing residues and force field parameters
+     * @throws std::runtime_error if box dimensions are invalid for PBC calculation
      */
     static void computeSystemEnergyPBC(model::MCState& state);
+
+    /**
+     * @brief Calculate nonbonded energies for the full system with periodic boundary conditions and cutoff
+     * 
+     * This function calculates nonbonded interactions (VDW and electrostatic)
+     * between all active residues within the specified cutoff distance,
+     * applying periodic boundary conditions using the minimum image convention.
+     * 
+     * @param state System state containing residues and force field parameters
+     * @throws std::runtime_error if box dimensions are invalid for PBC calculation
+     */
+    static void computeSystemEnergyPBCCutoff(model::MCState& state);
 
     static void setEnergyDebugOutput(bool enable);
 
