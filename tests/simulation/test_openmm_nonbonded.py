@@ -867,9 +867,9 @@ def test_compare_separate_terms():
     del context, integrator
 
 def test_compare_naive_vs_cutoff_energy():
-    """比较简单公式和带截断公式的能量差别。
+    """Compare energy differences between simple formula and cutoff formula.
     
-    简单公式（带硬截断）：
+    Simple formula (with hard cutoff):
     E = step(cutoff - r) * (
         kC * q1 * q2 / r + 
         4 * sqrt(eps1*eps2) * (
@@ -878,7 +878,7 @@ def test_compare_naive_vs_cutoff_energy():
         )
     )
         
-    带截断公式（使用移位库伦势和LJ切换函数）：
+    Cutoff formula (using shifted Coulomb potential and LJ switching function):
     E = step(cutoff - r) * (
         kC * q1 * q2 * (1/r - 1/cutoff) + 
         4 * sqrt(eps1*eps2) * (
@@ -890,21 +890,21 @@ def test_compare_naive_vs_cutoff_energy():
         )
     )
     """
-    # 创建测试系统
+    # Create test system
     system, topology, positions = create_test_system()
     
-    # 定义测试距离
+    # Define test distances
     distances = [0.5, 0.7, 0.9, 0.95, 1.0, 1.2]  # nm
     movement_atoms = set(range(6))  # Benzene carbons
     fixed_atoms = set(range(6, 9))  # Water atoms
     
-    print("\n比较简单公式和带截断公式的能量差别：")
-    print("距离(nm)  简单公式(kJ/mol)  带截断公式(kJ/mol)  差异(%)")
+    print("\nComparing simple formula and cutoff formula energies:")
+    print("Distance(nm)  Simple(kJ/mol)  Cutoff(kJ/mol)  Difference(%)")
     print("-" * 60)
     
-    # 添加调试函数
+    # Add debug function
     def analyze_switching_function(r):
-        """分析在给定距离r处的切换函数值"""
+        """Analyze switching function value at given distance r"""
         cutoff = 1.0
         switch = 0.9
         if r <= switch:
@@ -916,8 +916,8 @@ def test_compare_naive_vs_cutoff_energy():
             return x
     
     def debug_energy_components(r, nb_force, movement_atoms, fixed_atoms, platform):
-        """分析在距离r处的能量组分"""
-        # 1. 只计算库伦项
+        """Analyze energy components at distance r"""
+        # 1. Calculate Coulomb term only
         coulomb_expression = """
         step(cutoff - r) * kC * q1 * q2 * (1/r - 1/cutoff)
         """
@@ -926,7 +926,7 @@ def test_compare_naive_vs_cutoff_energy():
         coulomb_force.addGlobalParameter("kC", 138.935456)
         coulomb_force.addGlobalParameter("cutoff", 1.0)
         
-        # 2. 只计算LJ项（不带切换函数）
+        # 2. Calculate LJ term (without switching function)
         lj_expression = """
         step(cutoff - r) * 4 * sqrt(eps1*eps2) * (
             (0.5*(sigma1+sigma2)/r)^12 - 
@@ -938,7 +938,7 @@ def test_compare_naive_vs_cutoff_energy():
         lj_force.addPerParticleParameter("eps")
         lj_force.addGlobalParameter("cutoff", 1.0)
         
-        # 3. 只计算LJ项（带切换函数）
+        # 3. Calculate LJ term (with switching function)
         lj_switched_expression = """
         step(cutoff - r) * 4 * sqrt(eps1*eps2) * (
             (0.5*(sigma1+sigma2)/r)^12 - 
@@ -954,20 +954,20 @@ def test_compare_naive_vs_cutoff_energy():
         lj_switched_force.addGlobalParameter("cutoff", 1.0)
         lj_switched_force.addGlobalParameter("switch", 0.9)
         
-        # 添加粒子参数到所有力场
+        # Add particle parameters to all forces
         for i in range(nb_force.getNumParticles()):
             charge, sigma, epsilon = nb_force.getParticleParameters(i)
             coulomb_force.addParticle([charge])
             lj_force.addParticle([sigma, epsilon])
             lj_switched_force.addParticle([sigma, epsilon])
         
-        # 设置相互作用组和截断方法
+        # Set interaction groups and cutoff method
         for force in [coulomb_force, lj_force, lj_switched_force]:
             force.addInteractionGroup(movement_atoms, fixed_atoms)
             force.setNonbondedMethod(CustomNonbondedForce.CutoffNonPeriodic)
             force.setCutoffDistance(1.0 * nanometers)
         
-        # 创建系统并计算能量
+        # Create system and calculate energy
         def calc_energy(force):
             sys = System()
             for i in range(nb_force.getNumParticles()):
@@ -980,20 +980,20 @@ def test_compare_naive_vs_cutoff_energy():
             del context, integrator
             return energy.value_in_unit(kilojoules_per_mole)
         
-        # 计算各组分能量
+        # Calculate component energies
         coulomb_energy = calc_energy(coulomb_force)
         lj_energy = calc_energy(lj_force)
         lj_switched_energy = calc_energy(lj_switched_force)
         
-        # 计算切换函数值
+        # Calculate switching function value
         switch_value = analyze_switching_function(r)
         
-        print(f"\n=== 能量分析 (r = {r:.3f} nm) ===")
-        print(f"切换函数值: {switch_value:.6f}")
-        print(f"库伦能量: {coulomb_energy:.6f} kJ/mol")
-        print(f"LJ能量 (无切换): {lj_energy:.6f} kJ/mol")
-        print(f"LJ能量 (带切换): {lj_switched_energy:.6f} kJ/mol")
-        print(f"LJ能量比例 (带切换/无切换): {lj_switched_energy/lj_energy if abs(lj_energy) > 1e-10 else 0:.6f}")
+        print(f"\n=== Energy Analysis (r = {r:.3f} nm) ===")
+        print(f"Switching function value: {switch_value:.6f}")
+        print(f"Coulomb energy: {coulomb_energy:.6f} kJ/mol")
+        print(f"LJ energy (no switching): {lj_energy:.6f} kJ/mol")
+        print(f"LJ energy (with switching): {lj_switched_energy:.6f} kJ/mol")
+        print(f"LJ energy ratio (switched/unswitched): {lj_switched_energy/lj_energy if abs(lj_energy) > 1e-10 else 0:.6f}")
         
         return coulomb_energy, lj_energy, lj_switched_energy, switch_value
     
