@@ -1612,6 +1612,17 @@ def test_cutoff_periodic_comparison():
     switch_distance = 0.9  # nm
     epsilon_rf = 78.5  # 水的相对介电常数
 
+    # 输出系统配置信息
+    print("\n=== 系统配置信息 ===")
+    print(f"总原子数: {system.getNumParticles()}")
+    print(f"周期性盒子向量:")
+    vectors = system.getDefaultPeriodicBoxVectors()
+    for i, v in enumerate(vectors):
+        print(f"  向量{i+1}: ({v[0]}, {v[1]}, {v[2]}) nm")
+    print(f"截断距离: {cutoff_distance} nm")
+    print(f"切换距离: {switch_distance} nm")
+    print(f"反应场介电常数: {epsilon_rf}")
+
     # 获取原始 NonbondedForce
     original_nb_force = None
     for force in system.getForces():
@@ -1621,8 +1632,19 @@ def test_cutoff_periodic_comparison():
     if original_nb_force is None:
         raise ValueError("系统中未找到 NonbondedForce")
 
+    # 输出粒子参数信息
+    print("\n=== 粒子参数信息 ===")
+    print("索引  电荷(e)  sigma(nm)  epsilon(kJ/mol)")
+    print("-" * 45)
+    for i in range(system.getNumParticles()):
+        charge, sigma, epsilon = original_nb_force.getParticleParameters(i)
+        # 转换为无单位数值
+        charge_val = charge.value_in_unit(elementary_charge)
+        sigma_val = sigma.value_in_unit(nanometers)
+        epsilon_val = epsilon.value_in_unit(kilojoules_per_mole)
+        print(f"{i:3d}  {charge_val:8.3f}  {sigma_val:9.3f}  {epsilon_val:13.3f}")
+
     # 定义能量表达式
-    # 注意：反应场势已经包含了长程效应的校正，不需要额外的自能校正
     custom_energy_expression = """
     U_LJ + U_Coulomb;
     U_LJ = 4 * epsilon * ((sigma/r)^12 - (sigma/r)^6) * sw;
@@ -1634,17 +1656,40 @@ def test_cutoff_periodic_comparison():
     crf = (3*epsilon_rf) / (2*epsilon_rf + 1) / cutoff;
     """
 
+    print("\n=== 能量表达式 ===")
+    print(custom_energy_expression)
+
+    # 计算和输出反应场参数
+    krf = (epsilon_rf - 1) / (2 * epsilon_rf + 1) / cutoff_distance**3
+    crf = (3 * epsilon_rf) / (2 * epsilon_rf + 1) / cutoff_distance
+    print("\n=== 反应场参数 ===")
+    print(f"krf = {krf:.6f} nm^-3")
+    print(f"crf = {crf:.6f} nm^-1")
+
     # 测试不同距离
     distances = [0.5, 0.7, 0.9, 0.95, 1.0, 1.1]
-    print("\n测试不同位置的能量:")
-    print("\n距离(nm)  CustomNonbondedForce  NonbondedForce    差异(%)")
-    print("-" * 60)
+    print("\n=== 能量计算结果 ===")
+    print("\n距离(nm)  切换函数值  CustomNonbondedForce  NonbondedForce    差异(kJ/mol)  差异(%)")
+    print("-" * 85)
 
-    # 使用 Reference 平台
+    # 定义切换函数
+    def calc_switching_function(r):
+        if r >= cutoff_distance:
+            return 0.0
+        elif r <= switch_distance:
+            return 1.0
+        else:
+            x = (cutoff_distance - r)**2 * (cutoff_distance + 2*r - 3*switch_distance)
+            x /= (cutoff_distance - switch_distance)**3
+            return x
+
     platform = Platform.getPlatformByName('Reference')
 
     for dist in distances:
-        # 移动水分子到新位置
+        # 计算切换函数值
+        switch_value = calc_switching_function(dist)
+
+        # 移动water分子到新位置
         new_positions = []
         for i, pos in enumerate(positions):
             if i >= 6 and i < 9:  # water分子
@@ -1658,7 +1703,7 @@ def test_cutoff_periodic_comparison():
         custom_force.addPerParticleParameter("q")
         custom_force.addPerParticleParameter("sigma")
         custom_force.addPerParticleParameter("epsilon")
-        custom_force.addGlobalParameter("kC", 138.935456)  # Coulomb 常数
+        custom_force.addGlobalParameter("kC", 138.935456)
         custom_force.addGlobalParameter("cutoff", cutoff_distance)
         custom_force.addGlobalParameter("switch", switch_distance)
         custom_force.addGlobalParameter("epsilon_rf", epsilon_rf)
@@ -1684,8 +1729,6 @@ def test_cutoff_periodic_comparison():
         custom_context.setPositions(new_positions)
         custom_energy = custom_context.getState(getEnergy=True).getPotentialEnergy()
         
-        # 注意：不再添加移位库仑势的自能校正，因为反应场方法已经包含了长程效应的校正
-
         # 清理 CustomNonbondedForce 资源
         del custom_context, custom_integrator, custom_system
 
@@ -1722,22 +1765,28 @@ def test_cutoff_periodic_comparison():
         custom_val = custom_energy.value_in_unit(kilojoules_per_mole)
         ref_val = ref_energy.value_in_unit(kilojoules_per_mole)
         abs_diff = abs(custom_val - ref_val)
+        rel_diff = abs_diff / abs(ref_val) * 100 if abs(ref_val) > 1e-6 else abs_diff
 
-        # 使用更稳健的相对差异计算方法
-        if abs(ref_val) > 1e-6:
-            rel_diff = abs_diff / abs(ref_val) * 100
-        else:
-            rel_diff = abs_diff * 100 if abs_diff > 1e-6 else 0.0
-
-        print(f"{dist:6.2f}    {custom_val:16.6f}    {ref_val:12.6f}    {rel_diff:8.4f}")
+        print(f"{dist:6.2f}    {switch_value:10.4f}  {custom_val:16.6f}    {ref_val:12.6f}    {abs_diff:12.6f}  {rel_diff:8.4f}")
 
         # 如果差异较大，输出详细信息
-        if rel_diff > 0.05:  # 当差异超过0.05%时输出详细信息
-            print(f"\n  距离 {dist} nm 处的详细信息:")
-            print(f"    CustomNonbondedForce: {custom_val:.6f} kJ/mol")
-            print(f"    NonbondedForce:       {ref_val:.6f} kJ/mol")
-            print(f"    绝对差异:             {abs_diff:.6f} kJ/mol")
-            print(f"    相对差异:             {rel_diff:.6f}%")
+        if rel_diff > 0.01:  # 降低阈值到0.01%以获得更多详细信息
+            print(f"\n=== 距离 {dist} nm 处的详细分析 ===")
+            print(f"1. 切换函数分析:")
+            print(f"   - 切换函数值: {switch_value:.6f}")
+            print(f"   - 相对于切换距离: {'内部' if dist <= switch_distance else '切换区域' if dist < cutoff_distance else '截断外'}")
+            
+            print(f"\n2. 能量分析:")
+            print(f"   - CustomNonbondedForce: {custom_val:.6f} kJ/mol")
+            print(f"   - NonbondedForce:       {ref_val:.6f} kJ/mol")
+            print(f"   - 绝对差异:             {abs_diff:.6f} kJ/mol")
+            print(f"   - 相对差异:             {rel_diff:.6f}%")
+
+            print(f"\n3. 位置分析:")
+            print(f"   - 距离: {dist:.6f} nm")
+            print(f"   - 相对于截断: {dist/cutoff_distance:.2%}")
+            if switch_distance < dist < cutoff_distance:
+                print(f"   - 切换进度: {((dist-switch_distance)/(cutoff_distance-switch_distance)):.2%}")
 
         # 验证结果：根据距离使用不同的容差
         if dist <= switch_distance:
@@ -1749,6 +1798,12 @@ def test_cutoff_periodic_comparison():
         else:
             # 在截断距离之外，能量应该非常接近零
             assert abs_diff < 2e-1, f"在截断距离外 {dist} nm 处能量应该接近零，但差异为 {abs_diff:.6f} kJ/mol"
+
+    print("\n=== 测试总结 ===")
+    print("所有距离点的能量计算均在允许的误差范围内")
+    print("- 切换距离内 (r ≤ 0.9 nm): 相对误差 < 0.1%")
+    print("- 切换区域 (0.9 nm < r < 1.0 nm): 相对误差 < 0.5%")
+    print("- 截断距离外 (r ≥ 1.0 nm): 绝对误差 < 0.2 kJ/mol")
 
 def test_separate_lj_coulomb_periodic():
     """分别比较周期性边界条件下的LJ项和反应场库仑项。
