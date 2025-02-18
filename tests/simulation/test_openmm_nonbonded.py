@@ -1285,30 +1285,30 @@ def test_detailed_energy_comparison_simple_vs_openmm_cutoff():
         print(f"{dist:13.2f} | {simple_energy:22.6f} | {cutoff_energy_corrected:29.6f} | {abs_diff:16.6f} | {rel_diff:11.6f}")
 
 def test_compare_all_methods_with_self_energy():
-    """比较三种方法（简单公式、自定义截断和标准OpenMM）在考虑自能补偿后的能量差异。
+    """Compare three methods (simple formula, custom cutoff, and standard OpenMM) with self-energy correction.
     
-    所有方法都使用相同的相互作用组（只计算benzene和water分子之间的相互作用）。
+    All methods use the same interaction groups (only calculating interactions between benzene and water molecules).
     """
-    # 创建测试系统
+    # Create test system
     system, topology, positions = create_test_system()
     
-    # 获取原始NonbondedForce
+    # Get original NonbondedForce
     original_nb_force = None
     for force in system.getForces():
         if isinstance(force, NonbondedForce):
             original_nb_force = force
             break
     
-    # 定义相互作用组
+    # Define interaction groups
     movement_atoms = set(range(6))  # benzene
     fixed_atoms = set(range(6, 9))  # water
     
-    # 计算自能补偿项
+    # Calculate self-energy correction
     correction = calculate_self_energy_correction(original_nb_force, 1.0)
     print(f"\nSelf-energy correction: {correction:.6f} kJ/mol")
     print("(Note: Standard OpenMM already handles self-energy correction internally)")
     
-    # 定义测试距离
+    # Define test distances
     distances = [0.35, 0.5, 0.7, 0.9, 0.95, 1.0, 1.1, 1.2]
     
     print("\nDetailed Energy Comparison:")
@@ -1318,16 +1318,16 @@ def test_compare_all_methods_with_self_energy():
     platform = Platform.getPlatformByName('Reference')
     
     for dist in distances:
-        # 生成新的位置
+        # Generate new positions
         new_positions = []
         for i, pos in enumerate(positions):
-            if 6 <= i < 9:  # water分子
+            if 6 <= i < 9:  # water molecule
                 pos_val = pos.value_in_unit(nanometers)
                 new_positions.append(Vec3(dist, pos_val[1], pos_val[2]) * nanometers)
             else:
                 new_positions.append(pos)
         
-        # 1. 简单公式（硬截断）
+        # 1. Simple formula (hard cutoff)
         sys_naive = System()
         for i in range(system.getNumParticles()):
             sys_naive.addParticle(system.getParticleMass(i))
@@ -1364,7 +1364,7 @@ def test_compare_all_methods_with_self_energy():
         simple_energy = state.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
         del context, integrator
         
-        # 2. 自定义截断公式（带移位和切换）
+        # 2. Custom cutoff formula (with shifting and switching)
         sys_custom = System()
         for i in range(system.getNumParticles()):
             sys_custom.addParticle(system.getParticleMass(i))
@@ -1403,11 +1403,11 @@ def test_compare_all_methods_with_self_energy():
         context.setPositions(new_positions)
         state = context.getState(getEnergy=True)
         custom_energy = state.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
-        # 不再应用自能补偿，因为标准OpenMM已经在内部处理了
+        # No longer apply self-energy correction since standard OpenMM handles it internally
         custom_energy_corrected = custom_energy
         del context, integrator
         
-        # 3. 标准OpenMM NonbondedForce
+        # 3. Standard OpenMM NonbondedForce
         sys_standard = System()
         for i in range(system.getNumParticles()):
             sys_standard.addParticle(system.getParticleMass(i))
@@ -1417,11 +1417,11 @@ def test_compare_all_methods_with_self_energy():
             charge, sigma, epsilon = original_nb_force.getParticleParameters(i)
             nb_force.addParticle(charge, sigma, epsilon)
         
-        # 设置相互作用组：通过添加例外（exceptions）来实现
-        # 将所有不需要计算的相互作用设置为0
+        # Set interaction groups by adding exceptions
+        # Set all non-required interactions to zero
         for i in range(original_nb_force.getNumParticles()):
             for j in range(i+1, original_nb_force.getNumParticles()):
-                # 如果两个原子不是一个在movement_atoms一个在fixed_atoms，就设置为例外
+                # If not one atom in movement_atoms and one in fixed_atoms, set as exception
                 if not ((i in movement_atoms and j in fixed_atoms) or 
                        (i in fixed_atoms and j in movement_atoms)):
                     nb_force.addException(i, j, 0.0, 1.0, 0.0)
@@ -1439,36 +1439,36 @@ def test_compare_all_methods_with_self_energy():
         standard_energy = state.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
         del context, integrator
         
-        # 计算最大差异
+        # Calculate maximum difference
         energies = [simple_energy, custom_energy_corrected, standard_energy]
         max_diff = max([abs(e1 - e2) for e1 in energies for e2 in energies])
         
         print(f"{dist:11.2f} | {simple_energy:13.6f} | {custom_energy_corrected:17.6f} | {standard_energy:15.6f} | {max_diff:16.6f}")
         
-        # 如果差异太大，输出详细信息
-        if max_diff > 1.0:  # 差异大于1 kJ/mol时输出详细信息
+        # If difference is too large, output detailed information
+        if max_diff > 1.0:  # Output detailed info when difference > 1 kJ/mol
             print(f"  Detailed differences at {dist} nm:")
             print(f"  Custom-Simple: {abs(custom_energy_corrected - simple_energy):.6f} kJ/mol")
             print(f"  Standard-Simple: {abs(standard_energy - simple_energy):.6f} kJ/mol")
             print(f"  Standard-Custom: {abs(standard_energy - custom_energy_corrected):.6f} kJ/mol")
 
 def test_analyze_openmm_energy_terms():
-    """分析OpenMM的能量计算公式，分别计算库伦项和LJ项。"""
-    # 创建测试系统
+    """Analyze OpenMM energy terms by calculating Coulomb and LJ terms separately."""
+    # Create test system
     system, topology, positions = create_test_system()
     
-    # 获取原始NonbondedForce
+    # Get original NonbondedForce
     original_nb_force = None
     for force in system.getForces():
         if isinstance(force, NonbondedForce):
             original_nb_force = force
             break
     
-    # 定义相互作用组
+    # Define interaction groups
     movement_atoms = set(range(6))  # benzene
     fixed_atoms = set(range(6, 9))  # water
     
-    # 定义测试距离
+    # Define test distances
     distances = [0.35, 0.5, 0.7, 0.9, 0.95, 1.0, 1.1, 1.2]
     
     print("\nAnalyzing OpenMM energy terms:")
@@ -1478,16 +1478,16 @@ def test_analyze_openmm_energy_terms():
     platform = Platform.getPlatformByName('Reference')
     
     for dist in distances:
-        # 生成新的位置
+        # Generate new positions
         new_positions = []
         for i, pos in enumerate(positions):
-            if 6 <= i < 9:  # water分子
+            if 6 <= i < 9:  # water molecule
                 pos_val = pos.value_in_unit(nanometers)
                 new_positions.append(Vec3(dist, pos_val[1], pos_val[2]) * nanometers)
             else:
                 new_positions.append(pos)
         
-        # 1. 计算移位库伦能
+        # 1. Calculate shifted Coulomb energy
         sys_coulomb = System()
         for i in range(system.getNumParticles()):
             sys_coulomb.addParticle(system.getParticleMass(i))
@@ -1515,7 +1515,7 @@ def test_analyze_openmm_energy_terms():
         coulomb_energy = state.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
         del context, integrator
         
-        # 2. 计算带切换函数的LJ能
+        # 2. Calculate LJ energy with switching function
         sys_lj = System()
         for i in range(system.getNumParticles()):
             sys_lj.addParticle(system.getParticleMass(i))
@@ -1553,7 +1553,7 @@ def test_analyze_openmm_energy_terms():
         lj_energy = state.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
         del context, integrator
         
-        # 3. 计算标准OpenMM能量作为参考
+        # 3. Calculate standard OpenMM energy as reference
         sys_standard = System()
         for i in range(system.getNumParticles()):
             sys_standard.addParticle(system.getParticleMass(i))
@@ -1563,7 +1563,7 @@ def test_analyze_openmm_energy_terms():
             charge, sigma, epsilon = original_nb_force.getParticleParameters(i)
             nb_force.addParticle(charge, sigma, epsilon)
         
-        # 设置相互作用组
+        # Set interaction groups
         for i in range(original_nb_force.getNumParticles()):
             for j in range(i+1, original_nb_force.getNumParticles()):
                 if not ((i in movement_atoms and j in fixed_atoms) or 
@@ -1583,12 +1583,12 @@ def test_analyze_openmm_energy_terms():
         standard_energy = state.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
         del context, integrator
         
-        # 计算总能量（库伦 + LJ）
+        # Calculate total energy (Coulomb + LJ)
         total_energy = coulomb_energy + lj_energy
         
         print(f"{dist:11.2f} | {coulomb_energy:15.6f} | {lj_energy:11.6f} | {total_energy:13.6f} | {standard_energy:21.6f}")
         
-        # 如果与标准OpenMM结果差异较大，输出详细信息
+        # If difference from standard OpenMM is large, output detailed information
         diff = abs(total_energy - standard_energy)
         if diff > 0.1:
             print(f"  Large difference at {dist} nm:")
