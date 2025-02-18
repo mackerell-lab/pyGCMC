@@ -341,23 +341,23 @@ def test_energy_symmetry():
 
 def test_compare_custom_vs_standard_nonbonded():
     """Compare energy calculations between CustomNonbondedForce and NonbondedForce."""
-    # 创建测试系统
+    # Create test system
     system, topology, positions = create_test_system()
     
-    # 获取原始的NonbondedForce
+    # Get original NonbondedForce
     original_nb_force = None
     for force in system.getForces():
         if isinstance(force, NonbondedForce):
             original_nb_force = force
             break
     
-    # 创建一个新的系统，只包含NonbondedForce
+    # Create a new system containing only NonbondedForce
     system_standard = System()
     for i in range(system.getNumParticles()):
         system_standard.addParticle(system.getParticleMass(i))
     system_standard.setDefaultPeriodicBoxVectors(*system.getDefaultPeriodicBoxVectors())
     
-    # 复制NonbondedForce到新系统
+    # Copy NonbondedForce to the new system
     nb_force = NonbondedForce()
     for i in range(original_nb_force.getNumParticles()):
         params = original_nb_force.getParticleParameters(i)
@@ -365,13 +365,13 @@ def test_compare_custom_vs_standard_nonbonded():
     nb_force.setNonbondedMethod(NonbondedForce.NoCutoff)
     system_standard.addForce(nb_force)
     
-    # 创建一个使用CustomNonbondedForce的系统
+    # Create a system using CustomNonbondedForce
     system_custom = System()
     for i in range(system.getNumParticles()):
         system_custom.addParticle(system.getParticleMass(i))
     system_custom.setDefaultPeriodicBoxVectors(*system.getDefaultPeriodicBoxVectors())
     
-    # 创建CustomNonbondedForce，使用与NonbondedForce相同的能量表达式
+    # Create CustomNonbondedForce using the same energy expression as NonbondedForce
     energy_expression = """
     kC * q1 * q2 / r + 
     4 * sqrt(eps1*eps2) * (
@@ -383,9 +383,9 @@ def test_compare_custom_vs_standard_nonbonded():
     custom_force.addPerParticleParameter("q")
     custom_force.addPerParticleParameter("sigma")
     custom_force.addPerParticleParameter("eps")
-    custom_force.addGlobalParameter("kC", 138.935456)  # Coulomb常数 (kJ·nm/mol/e^2)
+    custom_force.addGlobalParameter("kC", 138.935456)  # Coulomb constant (kJ·nm/mol/e^2)
     
-    # 添加粒子参数
+    # Add particle parameters
     for i in range(original_nb_force.getNumParticles()):
         charge, sigma, epsilon = original_nb_force.getParticleParameters(i)
         custom_force.addParticle([charge, sigma, epsilon])
@@ -395,21 +395,21 @@ def test_compare_custom_vs_standard_nonbonded():
     
     platform = Platform.getPlatformByName('Reference')
     
-    # 计算标准NonbondedForce的能量
+    # Calculate standard NonbondedForce energy
     integrator_standard = VerletIntegrator(0.001 * picoseconds)
     context_standard = Context(system_standard, integrator_standard, platform)
     context_standard.setPositions(positions)
     state_standard = context_standard.getState(getEnergy=True)
     energy_standard = state_standard.getPotentialEnergy()
     
-    # 计算CustomNonbondedForce的能量
+    # Calculate CustomNonbondedForce energy
     integrator_custom = VerletIntegrator(0.001 * picoseconds)
     context_custom = Context(system_custom, integrator_custom, platform)
     context_custom.setPositions(positions)
     state_custom = context_custom.getState(getEnergy=True)
     energy_custom = state_custom.getPotentialEnergy()
     
-    # 打印结果
+    # Print results
     print(f"\nComparing NonbondedForce vs CustomNonbondedForce:")
     print(f"NonbondedForce energy: {energy_standard.value_in_unit(kilojoules_per_mole):.6f} kJ/mol")
     print(f"CustomNonbondedForce energy: {energy_custom.value_in_unit(kilojoules_per_mole):.6f} kJ/mol")
@@ -417,7 +417,7 @@ def test_compare_custom_vs_standard_nonbonded():
     rel_diff = abs(energy_standard.value_in_unit(kilojoules_per_mole) - energy_custom.value_in_unit(kilojoules_per_mole))/abs(energy_standard.value_in_unit(kilojoules_per_mole))*100
     print(f"Relative difference: {rel_diff:.6f}%")
     
-    # 验证结果
+    # Verify results
     assert rel_diff < 1e-6, "Energy mismatch between NonbondedForce and CustomNonbondedForce"
     
     del context_standard, context_custom
