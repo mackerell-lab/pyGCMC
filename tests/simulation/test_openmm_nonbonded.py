@@ -7,7 +7,7 @@ import warnings
 
 import math
 
-# 提前屏蔽 SWIG 相关的 DeprecationWarning
+# Suppress SWIG-related DeprecationWarning
 warnings.filterwarnings("ignore", category=DeprecationWarning,
                         message="builtin type SwigPyPacked has no __module__ attribute")
 warnings.filterwarnings("ignore", category=DeprecationWarning,
@@ -114,7 +114,7 @@ def calculate_nonbonded_energy(system, positions, movement_atoms, fixed_atoms, u
     - sigma = (sigma1 + sigma2)/2  # Lorentz-Berthelot mixing rule for sigma
     - eps = sqrt(eps1*eps2)        # Lorentz-Berthelot mixing rule for epsilon
     """
-    # 完整的nonbonded能量表达式，包括Coulomb和LJ
+    # Complete nonbonded energy expression, including Coulomb and LJ
     energy_expression = """
     step(cutoff - r) * (
         kC * q1 * q2 * (1/r - 1/cutoff) + 
@@ -128,17 +128,17 @@ def calculate_nonbonded_energy(system, positions, movement_atoms, fixed_atoms, u
     )"""
     custom_force = CustomNonbondedForce(energy_expression)
     
-    # 添加每个粒子的参数
-    custom_force.addPerParticleParameter("q")      # 电荷
+    # Add per-particle parameters
+    custom_force.addPerParticleParameter("q")      # charge
     custom_force.addPerParticleParameter("sigma")  # LJ sigma
     custom_force.addPerParticleParameter("eps")    # LJ epsilon
     
-    # 添加全局参数
-    custom_force.addGlobalParameter("kC", 138.935456)  # Coulomb常数 (kJ·nm/mol/e^2)
-    custom_force.addGlobalParameter("cutoff", 1.0)     # 截断距离 (nm)
-    custom_force.addGlobalParameter("switch", 0.9)     # 切换距离 (nm)
+    # Add global parameters
+    custom_force.addGlobalParameter("kC", 138.935456)  # Coulomb constant (kJ·nm/mol/e^2)
+    custom_force.addGlobalParameter("cutoff", 1.0)     # cutoff distance (nm)
+    custom_force.addGlobalParameter("switch", 0.9)     # switching distance (nm)
     
-    # 从原始NonbondedForce中获取参数
+    # Get parameters from original NonbondedForce
     nb_force = None
     for force in system.getForces():
         if isinstance(force, NonbondedForce):
@@ -147,31 +147,31 @@ def calculate_nonbonded_energy(system, positions, movement_atoms, fixed_atoms, u
     if nb_force is None:
         raise ValueError("No NonbondedForce found in system")
     
-    # 添加粒子参数
+    # Add particle parameters
     num_particles = system.getNumParticles()
     for i in range(num_particles):
         charge, sigma, epsilon = nb_force.getParticleParameters(i)
-        # OpenMM的sigma单位是nm，epsilon单位是kJ/mol
+        # OpenMM's sigma is in nm, epsilon in kJ/mol
         custom_force.addParticle([charge, sigma, epsilon])
     
-    # 只计算指定组之间的相互作用
+    # Only calculate interactions between specified groups
     custom_force.addInteractionGroup(movement_atoms, fixed_atoms)
     
-    # 设置非键方法和截断距离
+    # Set nonbonded method and cutoff distance
     if use_pbc:
         custom_force.setNonbondedMethod(CustomNonbondedForce.CutoffPeriodic)
     else:
         custom_force.setNonbondedMethod(CustomNonbondedForce.CutoffNonPeriodic)
     custom_force.setCutoffDistance(1.0 * nanometers)
     
-    # 创建只包含custom force的能量系统
+    # Create energy system with only custom force
     energy_system = System()
     for i in range(num_particles):
         energy_system.addParticle(system.getParticleMass(i))
     energy_system.setDefaultPeriodicBoxVectors(*system.getDefaultPeriodicBoxVectors())
     energy_system.addForce(custom_force)
     
-    # 使用Reference平台计算能量
+    # Calculate energy using Reference platform
     integrator = VerletIntegrator(0.001 * picoseconds)
     platform = Platform.getPlatformByName('Reference')
     context = Context(energy_system, integrator, platform)
@@ -184,18 +184,18 @@ def calculate_nonbonded_energy(system, positions, movement_atoms, fixed_atoms, u
 
 def calculate_self_energy_correction(force, cutoff):
     """
-    计算移位库伦势下的自能补偿项。
+    Calculate self-energy correction for shifted Coulomb potential.
 
-    标准 NonbondedForce 在使用移位库伦势时扣除的自能为
+    The standard NonbondedForce subtracts a self-energy term when using shifted Coulomb:
       U_self = - (kC/(2*r_cut)) * sum_i q_i^2.
-    为了使对成对相互作用求和的自定义能量与标准实现一致，
-    需要加上该补偿项（注意：补偿项为负）。
+    To make the custom pairwise energy sum match the standard implementation,
+    we need to add this correction term (note: correction is negative).
     """
     kC = 138.935456  # kJ·nm/mol/e^2
     sum_q2 = 0.0
     for i in range(force.getNumParticles()):
         charge, _, _ = force.getParticleParameters(i)
-        # 转换为以e为单位的无量纲数值
+        # Convert to dimensionless value in units of e
         charge_val = charge.value_in_unit(elementary_charge)
         sum_q2 += charge_val * charge_val
     correction = - (kC * sum_q2) / (2 * cutoff)
