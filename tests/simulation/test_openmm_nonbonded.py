@@ -1980,41 +1980,41 @@ def test_separate_lj_coulomb_periodic():
             assert abs_diff < 2e-1, f"在截断距离外 {dist} nm 处能量应该接近零，但差异为 {abs_diff:.6f} kJ/mol"
 
 def test_compare_force_parameters_and_energies():
-    """比较NonbondedForce和CustomNonbondedForce的参数设置和能量计算。
+    """Compare parameter settings and energy calculations between NonbondedForce and CustomNonbondedForce.
     
-    本测试将：
-    1. 从标准NonbondedForce中获取参数设置
-    2. 将这些参数应用到CustomNonbondedForce中
-    3. 比较两种方法计算的能量结果
+    This test will:
+    1. Get parameter settings from standard NonbondedForce
+    2. Apply these parameters to CustomNonbondedForce
+    3. Compare energy results from both methods
     """
-    # 创建测试系统
+    # Create test system
     system, topology, positions = create_test_system()
     
-    # 获取原始NonbondedForce
+    # Get original NonbondedForce
     ref_force = None
     for force in system.getForces():
         if isinstance(force, NonbondedForce):
             ref_force = force
             break
     if ref_force is None:
-        raise ValueError("系统中未找到NonbondedForce")
+        raise ValueError("No NonbondedForce found in system")
     
-    # 设置NonbondedMethod为CutoffPeriodic
+    # Set NonbondedMethod to CutoffPeriodic
     ref_force.setNonbondedMethod(NonbondedForce.CutoffPeriodic)
     
-    # 获取当前设置的参数值
+    # Get current parameter values
     cutoff = ref_force.getCutoffDistance().value_in_unit(nanometers)
     use_switching = ref_force.getUseSwitchingFunction()
     switching_distance = ref_force.getSwitchingDistance().value_in_unit(nanometers)
     rf_dielectric = ref_force.getReactionFieldDielectric()
     
-    print("\n=== NonbondedForce参数设置 ===")
-    print(f"截断距离: {cutoff} nm")
-    print(f"使用切换函数: {use_switching}")
-    print(f"切换距离: {switching_distance} nm")
-    print(f"反应场介电常数: {rf_dielectric}")
+    print("\n=== NonbondedForce Parameter Settings ===")
+    print(f"Cutoff distance: {cutoff} nm")
+    print(f"Using switching function: {use_switching}")
+    print(f"Switching distance: {switching_distance} nm")
+    print(f"Reaction field dielectric: {rf_dielectric}")
     
-    # 创建CustomNonbondedForce
+    # Create CustomNonbondedForce
     custom_expression = """
     U_LJ + U_Coulomb;
     U_LJ = 4 * epsilon * ((sigma/r)^12 - (sigma/r)^6) * sw;
@@ -2035,7 +2035,7 @@ def test_compare_force_parameters_and_energies():
     custom_force.addGlobalParameter("switch", switching_distance)
     custom_force.addGlobalParameter("epsilon_rf", rf_dielectric)
     
-    # 添加粒子参数
+    # Add particle parameters
     for i in range(ref_force.getNumParticles()):
         charge, sigma, epsilon = ref_force.getParticleParameters(i)
         custom_force.addParticle([charge, sigma, epsilon])
@@ -2043,7 +2043,7 @@ def test_compare_force_parameters_and_energies():
     custom_force.setNonbondedMethod(CustomNonbondedForce.CutoffPeriodic)
     custom_force.setCutoffDistance(cutoff * nanometers)
     
-    # 创建系统并添加力场
+    # Create system and add force
     custom_system = System()
     
     for i in range(system.getNumParticles()):
@@ -2052,26 +2052,26 @@ def test_compare_force_parameters_and_energies():
     custom_system.setDefaultPeriodicBoxVectors(*system.getDefaultPeriodicBoxVectors())
     custom_system.addForce(custom_force)
     
-    # 定义测试距离
+    # Define test distances
     distances = [0.5, 0.7, 0.9, 0.95, 1.0, 1.1]
     
-    print("\n=== 能量比较 ===")
-    print("距离(nm)  NonbondedForce(kJ/mol)  CustomNonbondedForce(kJ/mol)  相对差异(%)")
+    print("\n=== Energy Comparison ===")
+    print("Distance(nm)  NonbondedForce(kJ/mol)  CustomNonbondedForce(kJ/mol)  Relative Diff(%)")
     print("-" * 75)
     
     platform = Platform.getPlatformByName('Reference')
     
     for dist in distances:
-        # 移动water分子到新位置
+        # Move water molecule to new position
         new_positions = []
         for i, pos in enumerate(positions):
-            if i >= 6 and i < 9:  # water分子
+            if i >= 6 and i < 9:  # water molecule
                 pos_val = pos.value_in_unit(nanometers)
                 new_positions.append(Vec3(dist, pos_val[1], pos_val[2]) * nanometers)
             else:
                 new_positions.append(pos)
         
-        # 计算NonbondedForce能量
+        # Calculate NonbondedForce energy
         integrator = VerletIntegrator(0.001 * picoseconds)
         context = Context(system, integrator, platform)
         context.setPositions(new_positions)
@@ -2079,7 +2079,7 @@ def test_compare_force_parameters_and_energies():
         ref_val = ref_energy.value_in_unit(kilojoules_per_mole)
         del context, integrator
         
-        # 计算CustomNonbondedForce能量
+        # Calculate CustomNonbondedForce energy
         integrator = VerletIntegrator(0.001 * picoseconds)
         context = Context(custom_system, integrator, platform)
         context.setPositions(new_positions)
@@ -2087,33 +2087,33 @@ def test_compare_force_parameters_and_energies():
         custom_val = custom_energy.value_in_unit(kilojoules_per_mole)
         del context, integrator
         
-        # 计算相对差异
+        # Calculate relative difference
         abs_diff = abs(custom_val - ref_val)
         rel_diff = abs_diff / abs(ref_val) * 100 if abs(ref_val) > 1e-6 else abs_diff
         
         print(f"{dist:7.2f}  {ref_val:20.6f}  {custom_val:25.6f}  {rel_diff:12.6f}")
         
-        # 如果差异较大，输出详细信息
-        if rel_diff > 0.05:  # 当差异超过0.05%时输出详细信息
-            print(f"\n  距离 {dist} nm 处的详细信息:")
-            print(f"    NonbondedForce能量:     {ref_val:.6f} kJ/mol")
-            print(f"    CustomNonbondedForce能量: {custom_val:.6f} kJ/mol")
-            print(f"    绝对差异:               {abs_diff:.6f} kJ/mol")
-            print(f"    相对差异:               {rel_diff:.6f}%")
+        # If difference is large, output detailed information
+        if rel_diff > 0.05:  # Output detailed info when difference > 0.05%
+            print(f"\n  Detailed information at {dist} nm:")
+            print(f"    NonbondedForce energy:     {ref_val:.6f} kJ/mol")
+            print(f"    CustomNonbondedForce energy: {custom_val:.6f} kJ/mol")
+            print(f"    Absolute difference:        {abs_diff:.6f} kJ/mol")
+            print(f"    Relative difference:        {rel_diff:.6f}%")
         
-        # 验证结果：根据距离使用不同的容差
+        # Verify results: use different tolerances based on distance
         if dist <= switching_distance:
-            # 在切换距离内使用较严格的容差
-            assert rel_diff < 0.1, f"在距离 {dist} nm 处能量差异过大: {rel_diff:.6f}% > 0.1%"
+            # Use stricter tolerance within switching distance
+            assert rel_diff < 0.1, f"Energy difference too large at {dist} nm: {rel_diff:.6f}% > 0.1%"
         elif dist < cutoff:
-            # 在切换区域使用较宽松的容差
-            assert rel_diff < 0.5, f"在切换区域 {dist} nm 处能量差异过大: {rel_diff:.6f}% > 0.5%"
+            # Use looser tolerance in switching region
+            assert rel_diff < 0.5, f"Energy difference too large in switching region at {dist} nm: {rel_diff:.6f}% > 0.5%"
         else:
-            # 在截断距离之外，能量应该接近零
-            assert abs_diff < 2e-1, f"在截断距离外 {dist} nm 处能量应该接近零，但差异为 {abs_diff:.6f} kJ/mol"
+            # Energy should be close to zero beyond cutoff
+            assert abs_diff < 2e-1, f"Energy should be close to zero beyond cutoff at {dist} nm, but difference is {abs_diff:.6f} kJ/mol"
     
-    print("\n=== 测试总结 ===")
-    print("所有距离点的能量计算均在允许的误差范围内")
-    print(f"- 切换距离内 (r ≤ {switching_distance} nm): 相对误差 < 0.1%")
-    print(f"- 切换区域 ({switching_distance} nm < r < {cutoff} nm): 相对误差 < 0.5%")
-    print(f"- 截断距离外 (r ≥ {cutoff} nm): 绝对误差 < 0.2 kJ/mol")
+    print("\n=== Test Summary ===")
+    print("Energy calculations at all distances are within acceptable error ranges")
+    print(f"- Within switching distance (r ≤ {switching_distance} nm): relative error < 0.1%")
+    print(f"- Switching region ({switching_distance} nm < r < {cutoff} nm): relative error < 0.5%")
+    print(f"- Beyond cutoff (r ≥ {cutoff} nm): absolute error < 0.2 kJ/mol")
