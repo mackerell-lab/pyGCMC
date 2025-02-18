@@ -1749,3 +1749,176 @@ def test_cutoff_periodic_comparison():
         else:
             # 在截断距离之外，能量应该非常接近零
             assert abs_diff < 2e-1, f"在截断距离外 {dist} nm 处能量应该接近零，但差异为 {abs_diff:.6f} kJ/mol"
+
+def test_separate_lj_coulomb_periodic():
+    """分别比较周期性边界条件下的LJ项和反应场库仑项。
+    
+    本测试将CustomNonbondedForce的能量分解为：
+    1. LJ项：带切换函数的Lennard-Jones势
+    2. Coulomb项：反应场静电势
+    
+    分别与标准OpenMM NonbondedForce的结果进行比较，以便更好地理解
+    不同项的贡献和误差来源。
+    """
+    # 创建测试系统
+    system, topology, positions = create_test_system()
+    cutoff_distance = 1.0  # nm
+    switch_distance = 0.9  # nm
+    epsilon_rf = 78.5  # 水的相对介电常数
+
+    # 获取原始NonbondedForce
+    original_nb_force = None
+    for force in system.getForces():
+        if isinstance(force, NonbondedForce):
+            original_nb_force = force
+            break
+    if original_nb_force is None:
+        raise ValueError("系统中未找到NonbondedForce")
+
+    # 定义LJ能量表达式（带切换函数）
+    lj_expression = """
+    4 * epsilon * ((sigma/r)^12 - (sigma/r)^6) * sw;
+    epsilon = sqrt(epsilon1*epsilon2);
+    sigma = 0.5*(sigma1+sigma2);
+    sw = step(cutoff - r) * (step(r - switch) * (cutoff - r)^2 * (cutoff + 2*r - 3*switch) / ((cutoff - switch)^3) + step(switch - r));
+    """
+
+    # 定义反应场库仑能量表达式
+    coulomb_expression = """
+    kC * q1 * q2 * (1/r + krf * r^2 - crf);
+    krf = (epsilon_rf - 1) / (2*epsilon_rf + 1) / cutoff^3;
+    crf = (3*epsilon_rf) / (2*epsilon_rf + 1) / cutoff;
+    """
+
+    # 测试不同距离
+    distances = [0.5, 0.7, 0.9, 0.95, 1.0, 1.1]
+    print("\n分别测试LJ项和Coulomb项的能量:")
+    print("\n距离(nm)  |  Custom LJ  |  Custom Coulomb  |  Total Custom  |  OpenMM Total  |  差异(%)")
+    print("-" * 85)
+
+    platform = Platform.getPlatformByName('Reference')
+
+    for dist in distances:
+        # 移动water分子到新位置
+        new_positions = []
+        for i, pos in enumerate(positions):
+            if i >= 6 and i < 9:  # water分子
+                pos_val = pos.value_in_unit(nanometers)
+                new_positions.append(Vec3(dist, pos_val[1], pos_val[2]) * nanometers)
+            else:
+                new_positions.append(pos)
+
+        # 1. 计算LJ能量
+        lj_force = CustomNonbondedForce(lj_expression)
+        lj_force.addPerParticleParameter("sigma")
+        lj_force.addPerParticleParameter("epsilon")
+        lj_force.addGlobalParameter("cutoff", cutoff_distance)
+        lj_force.addGlobalParameter("switch", switch_distance)
+
+        # 添加粒子参数（只需要LJ参数）
+        for i in range(original_nb_force.getNumParticles()):
+            _, sigma, epsilon = original_nb_force.getParticleParameters(i)
+            lj_force.addParticle([sigma, epsilon])
+
+        lj_force.setNonbondedMethod(CustomNonbondedForce.CutoffPeriodic)
+        lj_force.setCutoffDistance(cutoff_distance * nanometers)
+
+        # 创建LJ系统
+        lj_system = System()
+        for i in range(system.getNumParticles()):
+            lj_system.addParticle(system.getParticleMass(i))
+        lj_system.setDefaultPeriodicBoxVectors(*system.getDefaultPeriodicBoxVectors())
+        lj_system.addForce(lj_force)
+
+        # 计算LJ能量
+        integrator = VerletIntegrator(0.001 * picoseconds)
+        context = Context(lj_system, integrator, platform)
+        context.setPositions(new_positions)
+        lj_energy = context.getState(getEnergy=True).getPotentialEnergy()
+        del context, integrator
+
+        # 2. 计算Coulomb能量
+        coulomb_force = CustomNonbondedForce(coulomb_expression)
+        coulomb_force.addPerParticleParameter("q")
+        coulomb_force.addGlobalParameter("kC", 138.935456)
+        coulomb_force.addGlobalParameter("cutoff", cutoff_distance)
+        coulomb_force.addGlobalParameter("epsilon_rf", epsilon_rf)
+
+        # 添加粒子参数（只需要电荷）
+        for i in range(original_nb_force.getNumParticles()):
+            charge, _, _ = original_nb_force.getParticleParameters(i)
+            coulomb_force.addParticle([charge])
+
+        coulomb_force.setNonbondedMethod(CustomNonbondedForce.CutoffPeriodic)
+        coulomb_force.setCutoffDistance(cutoff_distance * nanometers)
+
+        # 创建Coulomb系统
+        coulomb_system = System()
+        for i in range(system.getNumParticles()):
+            coulomb_system.addParticle(system.getParticleMass(i))
+        coulomb_system.setDefaultPeriodicBoxVectors(*system.getDefaultPeriodicBoxVectors())
+        coulomb_system.addForce(coulomb_force)
+
+        # 计算Coulomb能量
+        integrator = VerletIntegrator(0.001 * picoseconds)
+        context = Context(coulomb_system, integrator, platform)
+        context.setPositions(new_positions)
+        coulomb_energy = context.getState(getEnergy=True).getPotentialEnergy()
+        del context, integrator
+
+        # 3. 计算标准OpenMM能量作为参考
+        ref_force = NonbondedForce()
+        ref_force.setNonbondedMethod(NonbondedForce.CutoffPeriodic)
+        ref_force.setCutoffDistance(cutoff_distance * nanometers)
+        ref_force.setUseSwitchingFunction(True)
+        ref_force.setSwitchingDistance(switch_distance * nanometers)
+        ref_force.setReactionFieldDielectric(epsilon_rf)
+
+        for i in range(original_nb_force.getNumParticles()):
+            charge, sigma, epsilon = original_nb_force.getParticleParameters(i)
+            ref_force.addParticle(charge, sigma, epsilon)
+
+        ref_system = System()
+        for i in range(system.getNumParticles()):
+            ref_system.addParticle(system.getParticleMass(i))
+        ref_system.setDefaultPeriodicBoxVectors(*system.getDefaultPeriodicBoxVectors())
+        ref_system.addForce(ref_force)
+
+        integrator = VerletIntegrator(0.001 * picoseconds)
+        context = Context(ref_system, integrator, platform)
+        context.setPositions(new_positions)
+        ref_energy = context.getState(getEnergy=True).getPotentialEnergy()
+        del context, integrator
+
+        # 转换为kJ/mol并计算总能量
+        lj_val = lj_energy.value_in_unit(kilojoules_per_mole)
+        coulomb_val = coulomb_energy.value_in_unit(kilojoules_per_mole)
+        custom_total = lj_val + coulomb_val
+        ref_val = ref_energy.value_in_unit(kilojoules_per_mole)
+
+        # 计算相对差异
+        abs_diff = abs(custom_total - ref_val)
+        rel_diff = abs_diff / abs(ref_val) * 100 if abs(ref_val) > 1e-6 else abs_diff
+
+        print(f"{dist:8.2f} | {lj_val:10.4f} | {coulomb_val:14.4f} | {custom_total:12.4f} | {ref_val:13.4f} | {rel_diff:8.4f}")
+
+        # 如果差异较大，输出详细信息
+        if rel_diff > 0.05:  # 当差异超过0.05%时输出详细信息
+            print(f"\n  距离 {dist} nm 处的详细信息:")
+            print(f"    LJ能量:        {lj_val:.6f} kJ/mol")
+            print(f"    Coulomb能量:   {coulomb_val:.6f} kJ/mol")
+            print(f"    Custom总能量:  {custom_total:.6f} kJ/mol")
+            print(f"    OpenMM能量:    {ref_val:.6f} kJ/mol")
+            print(f"    绝对差异:      {abs_diff:.6f} kJ/mol")
+            print(f"    相对差异:      {rel_diff:.6f}%")
+
+        # 验证结果：根据距离使用不同的容差
+        if dist <= switch_distance:
+            # 在切换距离内使用较严格的容差
+            assert rel_diff < 0.1, f"在距离 {dist} nm 处能量差异过大: {rel_diff:.6f}% > 0.1%"
+        elif dist < cutoff_distance:
+            # 在切换区域使用较宽松的容差
+            assert rel_diff < 0.5, f"在切换区域 {dist} nm 处能量差异过大: {rel_diff:.6f}% > 0.5%"
+        else:
+            # 在截断距离之外，能量应该接近零
+            assert abs_diff < 2e-1, f"在截断距离外 {dist} nm 处能量应该接近零，但差异为 {abs_diff:.6f} kJ/mol"
