@@ -553,23 +553,28 @@ def test_compare_nonbonded_methods():
         del context_standard, context_custom
 
 def test_compare_switching_functions():
-    """测试带切换函数的非键相互作用。"""
-    # 创建测试系统
+    """Test nonbonded interactions with switching function.
+    
+    This test compares the energy calculations between:
+    1. With switching function
+    2. Without switching function
+    """
+    # Create test system
     system, topology, positions = create_test_system()
     cutoff_distance = 1.0  # nm
     switch_distance = 0.9  # nm
     
-    # 获取原始NonbondedForce
+    # Get original NonbondedForce
     original_nb_force = None
     for force in system.getForces():
         if isinstance(force, NonbondedForce):
             original_nb_force = force
             break
     
-    # 测试带切换函数的情况
+    # Test with switching function
     print("\nTesting with switching function:")
     
-    # 创建带切换函数的自定义力
+    # Create custom force with switching function
     switched_force = CustomNonbondedForce("""
     step(cutoff - r) * (
         kC * q1 * q2 * (1/r - 1/cutoff) + 
@@ -582,7 +587,7 @@ def test_compare_switching_functions():
         )
     )""")
     
-    # 创建不带切换函数的自定义力
+    # Create unswitched force
     unswitched_force = CustomNonbondedForce("""
     step(cutoff - r) * (
         kC * q1 * q2 * (1/r - 1/cutoff) + 
@@ -592,7 +597,7 @@ def test_compare_switching_functions():
         )
     )""")
     
-    # 添加参数
+    # Add parameters
     switched_force.addPerParticleParameter("q")
     switched_force.addPerParticleParameter("sigma")
     switched_force.addPerParticleParameter("eps")
@@ -606,12 +611,12 @@ def test_compare_switching_functions():
     unswitched_force.addGlobalParameter("kC", 138.935456)
     unswitched_force.addGlobalParameter("cutoff", cutoff_distance)
     
-    # 创建系统
+    # Create system
     system_switched = System()
     for i in range(system.getNumParticles()):
         system_switched.addParticle(system.getParticleMass(i))
     
-    # 添加粒子参数
+    # Add particle parameters
     for i in range(original_nb_force.getNumParticles()):
         charge, sigma, epsilon = original_nb_force.getParticleParameters(i)
         switched_force.addParticle([charge, sigma, epsilon])
@@ -621,24 +626,24 @@ def test_compare_switching_functions():
     switched_force.setCutoffDistance(cutoff_distance * nanometers)
     system_switched.addForce(switched_force)
     
-    # 计算带切换函数的能量
+    # Calculate switched energy
     platform = Platform.getPlatformByName('Reference')
     integrator = VerletIntegrator(0.001 * picoseconds)
     context = Context(system_switched, integrator, platform)
     context.setPositions(positions)
     switched_energy = context.getState(getEnergy=True).getPotentialEnergy()
     
-    # 加上自能补偿项
+    # Add self-energy correction
     correction = calculate_self_energy_correction(original_nb_force, cutoff_distance)
     switched_energy = switched_energy + correction * kilojoules_per_mole
     
     print(f"Energy with switching: {switched_energy.value_in_unit(kilojoules_per_mole):.6f} kJ/mol")
     del context, integrator
     
-    # 测试不带切换函数的情况
+    # Test without switching
     print("\nTesting without switching:")
     
-    # 创建不带切换函数的自定义力
+    # Create unswitched force
     unswitched_force = CustomNonbondedForce("""
     step(cutoff - r) * (
         kC * q1 * q2 * (1/r - 1/cutoff) + 
@@ -648,19 +653,19 @@ def test_compare_switching_functions():
         )
     )""")
     
-    # 添加参数
+    # Add parameters
     unswitched_force.addPerParticleParameter("q")
     unswitched_force.addPerParticleParameter("sigma")
     unswitched_force.addPerParticleParameter("eps")
     unswitched_force.addGlobalParameter("kC", 138.935456)
     unswitched_force.addGlobalParameter("cutoff", cutoff_distance)
     
-    # 创建系统
+    # Create system
     system_unswitched = System()
     for i in range(system.getNumParticles()):
         system_unswitched.addParticle(system.getParticleMass(i))
     
-    # 添加粒子参数
+    # Add particle parameters
     for i in range(original_nb_force.getNumParticles()):
         charge, sigma, epsilon = original_nb_force.getParticleParameters(i)
         unswitched_force.addParticle([charge, sigma, epsilon])
@@ -669,19 +674,19 @@ def test_compare_switching_functions():
     unswitched_force.setCutoffDistance(cutoff_distance * nanometers)
     system_unswitched.addForce(unswitched_force)
     
-    # 计算不带切换函数的能量
+    # Calculate unswitched energy
     integrator = VerletIntegrator(0.001 * picoseconds)
     context = Context(system_unswitched, integrator, platform)
     context.setPositions(positions)
     unswitched_energy = context.getState(getEnergy=True).getPotentialEnergy()
     
-    # 加上自能补偿项
+    # Add self-energy correction
     unswitched_energy = unswitched_energy + correction * kilojoules_per_mole
     
     print(f"Energy without switching: {unswitched_energy.value_in_unit(kilojoules_per_mole):.6f} kJ/mol")
     del context, integrator
     
-    # 创建标准参考系统
+    # Create reference system
     system_ref = System()
     for i in range(system.getNumParticles()):
         system_ref.addParticle(system.getParticleMass(i))
@@ -697,17 +702,17 @@ def test_compare_switching_functions():
     nb_force.setSwitchingDistance(switch_distance * nanometers)
     system_ref.addForce(nb_force)
     
-    # 计算参考能量
+    # Calculate reference energy
     integrator = VerletIntegrator(0.001 * picoseconds)
     context = Context(system_ref, integrator, platform)
     context.setPositions(positions)
     ref_energy = context.getState(getEnergy=True).getPotentialEnergy()
     print(f"Reference energy: {ref_energy.value_in_unit(kilojoules_per_mole):.6f} kJ/mol")
     
-    # 验证结果
+    # Verify results
     print("\nResults:")
     
-    # 验证带切换函数的能量与参考值的差异
+    # Verify switched energy vs reference
     energy_diff = abs(switched_energy.value_in_unit(kilojoules_per_mole) - 
                      ref_energy.value_in_unit(kilojoules_per_mole))
     rel_diff = energy_diff / abs(ref_energy.value_in_unit(kilojoules_per_mole)) * 100
@@ -716,16 +721,16 @@ def test_compare_switching_functions():
     print(f"Absolute difference: {energy_diff:.6f} kJ/mol")
     print(f"Relative difference: {rel_diff:.6f}%")
     
-    # 验证相对误差小于0.1%
+    # Verify relative error < 0.1%
     assert rel_diff/100 < 1e-3, "Energy with switching differs significantly from OpenMM reference"
     
-    # 验证切换函数的效果
+    # Verify switching function effect
     energy_diff = abs(switched_energy.value_in_unit(kilojoules_per_mole) - 
                      unswitched_energy.value_in_unit(kilojoules_per_mole))
     print(f"\nDifference between switched and unswitched:")
     print(f"Absolute difference: {energy_diff:.6f} kJ/mol")
     
-    # 验证切换函数确实影响了能量
+    # Verify switching function affects energy
     assert energy_diff > 0, "Switching function should affect the energy"
     
     del context, integrator
