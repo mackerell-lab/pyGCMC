@@ -736,39 +736,46 @@ def test_compare_switching_functions():
     del context, integrator
 
 def test_compare_separate_terms():
-    """分别比较库伦项和LJ项的能量计算。"""
-    # 创建测试系统
+    """Compare Coulomb and LJ terms separately.
+    
+    This test verifies that the energy calculated by CustomNonbondedForce matches
+    the results from standard OpenMM NonbondedForce by comparing:
+    1. Coulomb term
+    2. LJ term
+    3. Total energy
+    """
+    # Create test system
     system, topology, positions = create_test_system()
     cutoff_distance = 1.0  # nm
     switch_distance = 0.9  # nm
     
-    # 获取原始NonbondedForce
+    # Get original NonbondedForce
     original_nb_force = None
     for force in system.getForces():
         if isinstance(force, NonbondedForce):
             original_nb_force = force
             break
     
-    # 测试库伦项
+    # Test Coulomb term
     print("\nTesting Coulomb term:")
     
-    # 创建只有库伦项的CustomNonbondedForce
+    # Create CustomNonbondedForce for Coulomb only
     coulomb_custom = CustomNonbondedForce("""
     step(cutoff - r) * (
         kC * q1 * q2 * (1/r - 1/cutoff)
     )""")
     
-    # 添加参数
+    # Add parameters
     coulomb_custom.addPerParticleParameter("q")
     coulomb_custom.addGlobalParameter("kC", 138.935456)
     coulomb_custom.addGlobalParameter("cutoff", cutoff_distance)
     
-    # 创建只有库伦项的系统
+    # Create only Coulomb system
     system_coulomb = System()
     for i in range(system.getNumParticles()):
         system_coulomb.addParticle(system.getParticleMass(i))
     
-    # 添加粒子参数
+    # Add particle parameters
     for i in range(original_nb_force.getNumParticles()):
         charge, _, _ = original_nb_force.getParticleParameters(i)
         coulomb_custom.addParticle([charge])
@@ -777,24 +784,24 @@ def test_compare_separate_terms():
     coulomb_custom.setCutoffDistance(cutoff_distance * nanometers)
     system_coulomb.addForce(coulomb_custom)
     
-    # 计算自定义库伦能量
+    # Calculate custom Coulomb energy
     platform = Platform.getPlatformByName('Reference')
     integrator = VerletIntegrator(0.001 * picoseconds)
     context = Context(system_coulomb, integrator, platform)
     context.setPositions(positions)
     coulomb_energy = context.getState(getEnergy=True).getPotentialEnergy()
     
-    # 加上自能补偿项
+    # Add self-energy correction
     correction = calculate_self_energy_correction(original_nb_force, cutoff_distance)
     coulomb_energy = coulomb_energy + correction * kilojoules_per_mole
     
     print(f"Custom Coulomb energy: {coulomb_energy.value_in_unit(kilojoules_per_mole):.6f} kJ/mol")
     del context, integrator
     
-    # 测试LJ项
+    # Test LJ term
     print("\nTesting LJ term:")
     
-    # 创建只有LJ项的CustomNonbondedForce
+    # Create CustomNonbondedForce for LJ only
     lj_custom = CustomNonbondedForce("""
     step(cutoff - r) * (
         4 * sqrt(eps1*eps2) * (
@@ -806,18 +813,18 @@ def test_compare_separate_terms():
         )
     )""")
     
-    # 添加参数
+    # Add parameters
     lj_custom.addPerParticleParameter("sigma")
     lj_custom.addPerParticleParameter("eps")
     lj_custom.addGlobalParameter("cutoff", cutoff_distance)
     lj_custom.addGlobalParameter("switch", switch_distance)
     
-    # 创建只有LJ项的系统
+    # Create only LJ system
     system_lj = System()
     for i in range(system.getNumParticles()):
         system_lj.addParticle(system.getParticleMass(i))
     
-    # 添加粒子参数
+    # Add particle parameters
     for i in range(original_nb_force.getNumParticles()):
         _, sigma, epsilon = original_nb_force.getParticleParameters(i)
         lj_custom.addParticle([sigma, epsilon])
@@ -826,7 +833,7 @@ def test_compare_separate_terms():
     lj_custom.setCutoffDistance(cutoff_distance * nanometers)
     system_lj.addForce(lj_custom)
     
-    # 计算自定义LJ能量
+    # Calculate custom LJ energy
     integrator = VerletIntegrator(0.001 * picoseconds)
     context = Context(system_lj, integrator, platform)
     context.setPositions(positions)
@@ -834,7 +841,7 @@ def test_compare_separate_terms():
     print(f"Custom LJ energy: {lj_energy.value_in_unit(kilojoules_per_mole):.6f} kJ/mol")
     del context, integrator
     
-    # 创建标准参考系统
+    # Create reference system
     system_ref = System()
     for i in range(system.getNumParticles()):
         system_ref.addParticle(system.getParticleMass(i))
@@ -848,14 +855,14 @@ def test_compare_separate_terms():
     nb_force.setCutoffDistance(cutoff_distance * nanometers)
     system_ref.addForce(nb_force)
     
-    # 计算参考能量
+    # Calculate reference energy
     integrator = VerletIntegrator(0.001 * picoseconds)
     context = Context(system_ref, integrator, platform)
     context.setPositions(positions)
     total_energy = context.getState(getEnergy=True).getPotentialEnergy()
     print(f"Reference total energy: {total_energy.value_in_unit(kilojoules_per_mole):.6f} kJ/mol")
     
-    # 验证总能量
+    # Verify total energy
     custom_total = coulomb_energy + lj_energy
     energy_diff = abs(custom_total.value_in_unit(kilojoules_per_mole) - 
                      total_energy.value_in_unit(kilojoules_per_mole))
@@ -866,7 +873,7 @@ def test_compare_separate_terms():
     print(f"Absolute difference: {energy_diff:.6f} kJ/mol")
     print(f"Relative difference: {rel_diff:.6f}%")
     
-    # 验证相对误差小于1%
+    # Verify relative error < 1%
     assert rel_diff/100 < 1e-2, "Energy terms differ significantly from OpenMM reference"
     
     del context, integrator
