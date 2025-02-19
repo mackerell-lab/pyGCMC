@@ -424,19 +424,19 @@ def test_compare_custom_vs_standard_nonbonded():
 
 def test_compare_nonbonded_methods():
     """Compare different nonbonded methods between CustomNonbondedForce and NonbondedForce."""
-    # 创建测试系统
+    # Create test system
     system, topology, positions = create_test_system()
     
-    # 测试不同的非键方法
+    # Test different nonbonded methods
     methods = [
         (NonbondedForce.NoCutoff, CustomNonbondedForce.NoCutoff, "NoCutoff"),
         (NonbondedForce.CutoffNonPeriodic, CustomNonbondedForce.CutoffNonPeriodic, "CutoffNonPeriodic")
     ]
     
-    # 为不同方法定义不同的容差
+    # Define different tolerances for different methods
     tolerances = {
-        "NoCutoff": 1e-6,           # 无截断时要求更高的精度
-        "CutoffNonPeriodic": 5e-4   # 使用截断时允许 0.05% 的误差
+        "NoCutoff": 1e-6,           # Higher precision required for no cutoff
+        "CutoffNonPeriodic": 5e-4   # Allow 0.05% error when using cutoff
     }
     
     platform = Platform.getPlatformByName('Reference')
@@ -444,7 +444,7 @@ def test_compare_nonbonded_methods():
     for nb_method, custom_method, method_name in methods:
         print(f"\nTesting {method_name}:")
         
-        # 创建标准NonbondedForce系统
+        # Create standard NonbondedForce system
         system_standard = System()
         for i in range(system.getNumParticles()):
             system_standard.addParticle(system.getParticleMass(i))
@@ -463,20 +463,20 @@ def test_compare_nonbonded_methods():
         
         nb_force.setNonbondedMethod(nb_method)
         cutoff_distance = 1.0  # nm
-        switch_distance = 0.9  # nm, 切换函数开始的距离
+        switch_distance = 0.9  # nm, distance where switching function starts
         if nb_method != NonbondedForce.NoCutoff:
             nb_force.setCutoffDistance(cutoff_distance * nanometers)
             nb_force.setUseSwitchingFunction(True)
             nb_force.setSwitchingDistance(switch_distance * nanometers)
         system_standard.addForce(nb_force)
         
-        # 创建CustomNonbondedForce系统
+        # Create CustomNonbondedForce system
         system_custom = System()
         for i in range(system.getNumParticles()):
             system_custom.addParticle(system.getParticleMass(i))
         system_custom.setDefaultPeriodicBoxVectors(*system.getDefaultPeriodicBoxVectors())
         
-        # 修改能量表达式
+        # Modify energy expression
         if custom_method == CustomNonbondedForce.NoCutoff:
             energy_expression = """
             kC * q1 * q2 / r + 
@@ -543,7 +543,7 @@ def test_compare_nonbonded_methods():
         print(f"Absolute difference: {energy_diff:.6f} kJ/mol")
         print(f"Relative difference: {rel_diff:.6f}%")
         
-        # 使用对应方法的容差进行验证
+        # Use corresponding tolerance for verification
         rel_tol = tolerances[method_name]
         print(f"Using relative tolerance: {rel_tol:.6e}")
         
@@ -1010,7 +1010,7 @@ def test_compare_naive_vs_cutoff_energy():
         return coulomb_energy, lj_energy, lj_switched_energy, switch_value
     
     for dist in distances:
-        # 移动水分子到指定距离
+        # Move water molecule to specified distance
         new_positions = []
         for i in range(len(positions)):
             if i >= 6 and i < 9:  # Water atoms
@@ -1019,20 +1019,20 @@ def test_compare_naive_vs_cutoff_energy():
             else:
                 new_positions.append(positions[i])
         
-        # 获取原始NonbondedForce
+        # Get original NonbondedForce
         nb_force = None
         for force in system.getForces():
             if isinstance(force, NonbondedForce):
                 nb_force = force
                 break
         
-        # 分析能量组分
+        # Analyze energy components
         platform = Platform.getPlatformByName('Reference')
         coulomb_energy, lj_energy, lj_switched_energy, switch_value = debug_energy_components(
             dist, nb_force, movement_atoms, fixed_atoms, platform
         )
         
-        # 计算简单公式的能量
+        # Calculate energy using simple formula
         naive_expression = """
         step(cutoff - r) * (
             kC * q1 * q2 / r + 
@@ -1049,7 +1049,7 @@ def test_compare_naive_vs_cutoff_energy():
         naive_force.addGlobalParameter("kC", 138.935456)
         naive_force.addGlobalParameter("cutoff", 1.0)
         
-        # 添加粒子参数
+        # Add particle parameters
         for i in range(system.getNumParticles()):
             charge, sigma, epsilon = nb_force.getParticleParameters(i)
             naive_force.addParticle([charge, sigma, epsilon])
@@ -1058,20 +1058,20 @@ def test_compare_naive_vs_cutoff_energy():
         naive_force.setNonbondedMethod(CustomNonbondedForce.CutoffNonPeriodic)
         naive_force.setCutoffDistance(1.0 * nanometers)
         
-        # 创建系统并计算能量
+        # Create system and calculate energy
         naive_system = System()
         for i in range(system.getNumParticles()):
             naive_system.addParticle(system.getParticleMass(i))
         naive_system.addForce(naive_force)
         
-        # 计算简单公式能量
+        # Calculate simple formula energy
         integrator_naive = VerletIntegrator(0.001 * picoseconds)
         context = Context(naive_system, integrator_naive, platform)
         context.setPositions(new_positions)
         naive_energy = context.getState(getEnergy=True).getPotentialEnergy()
         del context, integrator_naive
         
-        # 计算带截断公式能量
+        # Calculate energy using cutoff formula
         cutoff_expression = """
         step(cutoff - r) * (
             kC * q1 * q2 * (1/r - 1/cutoff) + 
@@ -1092,7 +1092,7 @@ def test_compare_naive_vs_cutoff_energy():
         cutoff_force.addGlobalParameter("cutoff", 1.0)
         cutoff_force.addGlobalParameter("switch", 0.9)
         
-        # 添加粒子参数
+        # Add particle parameters
         for i in range(system.getNumParticles()):
             charge, sigma, epsilon = nb_force.getParticleParameters(i)
             cutoff_force.addParticle([charge, sigma, epsilon])
@@ -1101,24 +1101,24 @@ def test_compare_naive_vs_cutoff_energy():
         cutoff_force.setNonbondedMethod(CustomNonbondedForce.CutoffNonPeriodic)
         cutoff_force.setCutoffDistance(1.0 * nanometers)
         
-        # 创建系统并计算能量
+        # Create system and calculate energy
         cutoff_system = System()
         for i in range(system.getNumParticles()):
             cutoff_system.addParticle(system.getParticleMass(i))
         cutoff_system.addForce(cutoff_force)
         
-        # 计算能量
+        # Calculate energy
         integrator_cutoff = VerletIntegrator(0.001 * picoseconds)
         context = Context(cutoff_system, integrator_cutoff, platform)
         context.setPositions(new_positions)
         cutoff_energy = context.getState(getEnergy=True).getPotentialEnergy()
         del context, integrator_cutoff
         
-        # 计算差异
+        # Calculate differences
         naive_val = naive_energy.value_in_unit(kilojoules_per_mole)
         cutoff_val = cutoff_energy.value_in_unit(kilojoules_per_mole)
         
-        # 计算相对差异（如果能量接近0，使用绝对差异）
+        # Calculate relative difference (use absolute difference if energy is close to zero)
         if abs(naive_val) < 1e-6:
             diff_percent = abs(cutoff_val - naive_val)
         else:
@@ -1126,62 +1126,64 @@ def test_compare_naive_vs_cutoff_energy():
         
         print(f"{dist:6.2f}  {naive_val:14.6f}  {cutoff_val:16.6f}  {diff_percent:8.2f}")
         
-        # 对于超出截断距离的情况，带截断公式应该给出0能量
+        # For distances beyond cutoff, cutoff formula should give 0 energy
         if dist > 1.0:  # cutoff distance
             assert abs(cutoff_val) < 1e-6, f"Energy should be zero beyond cutoff, got {cutoff_val}"
         
-        # 对于接近截断距离的情况，带截断公式应该给出较小的能量
+        # For distances close to cutoff, cutoff formula should give smaller energy
         if 0.9 < dist < 1.0:  # switching region
-            # 使用相对容差进行比较
-            rel_tol = 1e-10  # 相对容差：1e-10
-            abs_tol = 1e-10  # 绝对容差：1e-10 kJ/mol
+            # Use relative tolerance for comparison
+            rel_tol = 1e-10  # relative tolerance: 1e-10
+            abs_tol = 1e-10  # absolute tolerance: 1e-10 kJ/mol
             
-            # 如果能量很小，使用绝对容差；否则使用相对容差
+            # If energy is small, use absolute tolerance; otherwise use relative tolerance
             if abs(naive_val) < 1e-6:
                 assert abs(cutoff_val) <= abs_tol, \
                        f"Energy with switching should be near zero at {dist} nm, got {cutoff_val}"
             else:
-                # 检查带切换的能量是否小于或等于（考虑容差）简单公式的能量
+                # Check if the energy with switching is smaller than or equal to (considering tolerance) the simple formula energy
                 assert abs(cutoff_val) <= abs(naive_val) * (1 + rel_tol) + abs_tol, \
                        f"Energy with switching ({cutoff_val}) should be smaller than or equal to naive ({naive_val}) at {dist} nm"
                 
-                # 输出详细的比较信息
-                print(f"\n能量比较详情 (r = {dist} nm):")
-                print(f"简单公式能量: {naive_val:.15f} kJ/mol")
-                print(f"带切换能量: {cutoff_val:.15f} kJ/mol")
-                print(f"相对差异: {abs(cutoff_val - naive_val)/abs(naive_val)*100:.15f}%")
-                print(f"绝对差异: {abs(cutoff_val - naive_val):.15e} kJ/mol")
+                # Output detailed comparison information
+                print(f"\nEnergy comparison details (r = {dist} nm):")
+                print(f"Simple formula energy: {naive_val:.15f} kJ/mol")
+                print(f"Cutoff formula energy: {cutoff_val:.15f} kJ/mol")
+                print(f"Relative difference: {abs(cutoff_val - naive_val)/abs(naive_val)*100:.15f}%")
+                print(f"Absolute difference: {abs(cutoff_val - naive_val):.15e} kJ/mol")
         
         del naive_system, cutoff_system
 
 def test_detailed_energy_comparison_simple_vs_openmm_cutoff():
+    """Detailed comparison of energy between simple formula (hard cutoff) and OpenMM cutoff formula 
+    (shifted Coulomb and LJ switching function) at multiple distances.
+    
+    The output table includes for each distance:
+    - simple_energy: Energy calculated using simple cutoff formula (kJ/mol)
+    - cutoff_energy: Energy calculated using OpenMM cutoff formula (shift/switch function) after self-energy correction (kJ/mol)
+    - abs_diff: Absolute difference between the two (kJ/mol)
+    - rel_diff: Relative difference between the two (percentage)
+    
+    Note: The system and particle parameters used in this test are consistent with those defined in create_test_system(),
+    and the x-coordinate of the water molecule (last 3 atoms in the original system) will be set to the specified test distance (nm).
     """
-    在多个距离下详细比较简单公式（硬截断）和 OpenMM 截断公式（移位库伦和 LJ 切换函数）
-    计算的能量差异。输出的表格中包括每个距离下：
-      - simple_energy：使用简单截断公式计算的能量（kJ/mol）
-      - cutoff_energy：使用 OpenMM 截断公式（移位/切换函数）计算的能量，经自能补偿后的值（kJ/mol）
-      - abs_diff：两者的绝对差异（kJ/mol）
-      - rel_diff：两者的相对差异（百分比）
-    注意：本测试中使用的系统与粒子参数与 create_test_system() 中定义的保持一致，
-    而 water 分子（原系统中最后 3 个原子）的 x 坐标会被设置为指定的测试距离（nm）。
-    """
-    # 获取初始系统、拓扑结构和初始位置
+    # Get initial system, topology and positions
     system, topology, positions = create_test_system()
-    # 保存 NonbondedForce 中的原始参数（用于提取粒子参数和计算自能补偿）
+    # Save original parameters from NonbondedForce (for extracting particle parameters and calculating self-energy correction)
     original_nb_force = None
     for force in system.getForces():
         if isinstance(force, NonbondedForce):
             original_nb_force = force
             break
     if original_nb_force is None:
-        raise ValueError("系统中未找到 NonbondedForce")
+        raise ValueError("No NonbondedForce found in system")
     
-    # 定义参与相互作用的原子组：benzene 分子的原子编号 0-5 与 water 分子的编号 6-8
+    # Define interacting atom groups: benzene molecule atoms 0-5 and water molecule atoms 6-8
     movement_atoms = set(range(6))  # benzene
     fixed_atoms = set(range(6, 9))    # water
 
-    # 定义能量表达式
-    # （1）简单公式：硬截断，不含移位或切换
+    # Define energy expressions
+    # (1) Simple formula: hard cutoff, no shift or switching
     naive_expression = """
     step(cutoff - r) * (
         kC * q1 * q2 / r +
@@ -1190,7 +1192,7 @@ def test_detailed_energy_comparison_simple_vs_openmm_cutoff():
             (0.5*(sigma1+sigma2)/r)^6
         )
     )"""
-    # （2）OpenMM 截断公式：移位库伦（1/r - 1/cutoff）和 LJ 带切换函数
+    # (2) OpenMM cutoff formula: shifted Coulomb (1/r - 1/cutoff) and LJ with switching function
     cutoff_expression = """
     step(cutoff - r) * (
         kC * q1 * q2 * (1/r - 1/cutoff) +
@@ -1202,7 +1204,7 @@ def test_detailed_energy_comparison_simple_vs_openmm_cutoff():
             step(r - switch) * (cutoff - r)^2 * (cutoff + 2*r - 3*switch) / ((cutoff - switch)^3)
         )
     )"""
-    # 用于每次新建 CustomNonbondedForce 的辅助函数
+    # Helper function for creating new CustomNonbondedForce instances
     def create_naive_force():
         force = CustomNonbondedForce(naive_expression)
         force.addPerParticleParameter("q")
@@ -1210,7 +1212,7 @@ def test_detailed_energy_comparison_simple_vs_openmm_cutoff():
         force.addPerParticleParameter("eps")
         force.addGlobalParameter("kC", 138.935456)
         force.addGlobalParameter("cutoff", 1.0)
-        # 将所有粒子的参数从 original_nb_force 中提取出来
+        # Extract all particle parameters from original_nb_force
         for i in range(system.getNumParticles()):
             charge, sigma, epsilon = original_nb_force.getParticleParameters(i)
             force.addParticle([charge, sigma, epsilon])
@@ -1235,7 +1237,7 @@ def test_detailed_energy_comparison_simple_vs_openmm_cutoff():
         force.setCutoffDistance(1.0 * nanometers)
         return force
 
-    # 定义测试距离（nm）；其中包括平衡区、切换区和超过截断距离的情况
+    # Define test distances (nm); includes equilibrium region, switching region, and beyond cutoff
     distances = [0.35, 0.5, 0.7, 0.9, 0.95, 1.0, 1.1, 1.2]
 
     print("\nDetailed Energy Comparison: Simple vs OpenMM Cutoff")
@@ -1243,22 +1245,22 @@ def test_detailed_energy_comparison_simple_vs_openmm_cutoff():
     print("-" * 100)
 
     platform = Platform.getPlatformByName('Reference')
-    # 计算自能补偿项（注意：计算时 cutoff 使用 1.0 nm）
+    # Calculate self-energy correction (Note: using cutoff = 1.0 nm)
     correction = calculate_self_energy_correction(original_nb_force, 1.0)
     print(f"\nSelf-energy correction: {correction:.6f} kJ/mol")
     print("(Note: Standard OpenMM already handles self-energy correction internally)")
     
     for dist in distances:
-        # 生成新的位置：将 water 分子（原子编号 6-8）的 x 坐标设置为 dist，其余保持不变
+        # Generate new positions: set water molecule (atoms 6-8) x-coordinate to dist, keep others unchanged
         new_positions = []
         for i, pos in enumerate(positions):
-            if 6 <= i < 9:
+            if 6 <= i < 9:  # water molecule
                 pos_val = pos.value_in_unit(nanometers)
                 new_positions.append(Vec3(dist, pos_val[1], pos_val[2]) * nanometers)
             else:
                 new_positions.append(pos)
         
-        # --- 计算简单公式能量 ---
+        # --- Calculate simple formula energy ---
         sys_naive = System()
         for i in range(system.getNumParticles()):
             sys_naive.addParticle(system.getParticleMass(i))
@@ -1271,7 +1273,7 @@ def test_detailed_energy_comparison_simple_vs_openmm_cutoff():
         simple_energy = state.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
         del context, integrator
         
-        # --- 计算 OpenMM 截断公式能量 ---
+        # --- Calculate OpenMM cutoff formula energy ---
         sys_cutoff = System()
         for i in range(system.getNumParticles()):
             sys_cutoff.addParticle(system.getParticleMass(i))
@@ -1284,15 +1286,16 @@ def test_detailed_energy_comparison_simple_vs_openmm_cutoff():
         cutoff_energy = state.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
         del context, integrator
         
-        # 对于 OpenMM 截断公式，需要加上自能补偿（注意：原测试中使用减去 correction）
+        # For OpenMM cutoff formula, add self-energy correction (Note: original test used subtraction)
         cutoff_energy_corrected = cutoff_energy - correction
         
-        # 计算绝对和相对差异（当 simple_energy 接近 0 时，仅比较绝对差异）
+        # Calculate absolute and relative differences (when simple_energy is close to 0, only compare absolute difference)
         abs_diff = abs(cutoff_energy_corrected - simple_energy)
         if abs(simple_energy) > 1e-6:
             rel_diff = abs_diff / abs(simple_energy) * 100
         else:
             rel_diff = 0.0
+        
         
         print(f"{dist:13.2f} | {simple_energy:22.6f} | {cutoff_energy_corrected:29.6f} | {abs_diff:16.6f} | {rel_diff:11.6f}")
 
