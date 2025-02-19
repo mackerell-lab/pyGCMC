@@ -514,26 +514,26 @@ def test_compare_nonbonded_methods():
             custom_force.setCutoffDistance(cutoff_distance * nanometers)
         system_custom.addForce(custom_force)
         
-        # 计算标准NonbondedForce的能量
+        # Calculate standard NonbondedForce energy
         integrator_standard = VerletIntegrator(0.001 * picoseconds)
         context_standard = Context(system_standard, integrator_standard, platform)
         context_standard.setPositions(positions)
         state_standard = context_standard.getState(getEnergy=True)
         energy_standard = state_standard.getPotentialEnergy()
         
-        # 计算CustomNonbondedForce的能量
+        # Calculate CustomNonbondedForce energy
         integrator_custom = VerletIntegrator(0.001 * picoseconds)
         context_custom = Context(system_custom, integrator_custom, platform)
         context_custom.setPositions(positions)
         state_custom = context_custom.getState(getEnergy=True)
         energy_custom = state_custom.getPotentialEnergy()
         
-        # 如果使用截断，减去自能补偿
+        # If using cutoff, subtract self-energy correction
         if custom_method != CustomNonbondedForce.NoCutoff:
             correction = calculate_self_energy_correction(original_nb_force, cutoff_distance)
             energy_custom = energy_custom - correction * kilojoules_per_mole
         
-        # 计算与参考能量的差异
+        # Calculate difference from reference energy
         energy_diff = abs(energy_standard.value_in_unit(kilojoules_per_mole) - 
                          energy_custom.value_in_unit(kilojoules_per_mole))
         rel_diff = energy_diff / abs(energy_standard.value_in_unit(kilojoules_per_mole)) * 100
