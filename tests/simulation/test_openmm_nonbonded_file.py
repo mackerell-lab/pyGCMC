@@ -242,6 +242,22 @@ def test_verify_openmm_expressions():
 
 def test_verify_energy_components():
     """验证库伦和LJ能量分量的计算。"""
+    # 初始化统计信息
+    stats = {
+        "particles": {
+            "total": 0,
+            "charged": 0,
+            "max_charge": 0.0
+        },
+        "exceptions": {
+            "total": 0,
+            "zero_charge": 0,
+            "nonzero_charge": 0,
+            "zero_epsilon": 0,
+            "nonzero_epsilon": 0
+        }
+    }
+    
     # 加载测试系统
     system, positions = load_test_system()
     
@@ -253,7 +269,7 @@ def test_verify_energy_components():
             break
     
     # 定义测试距离
-    distances = [0.9, 0.95, 1.0, 1.1, 1.5, 2.0]  # 移除极端短距离
+    distances = [0.9, 0.95, 1.0, 1.1, 1.5, 2.0]
     print("\n=== 比较能量分量 ===")
     print("距离(nm)  OpenMM总能量  库伦能量  LJ能量  总能量  相对误差(%)")
     print("-" * 75)
@@ -262,29 +278,29 @@ def test_verify_energy_components():
     
     # 打印能量分量的计算设置
     print("\n能量分量计算设置:")
-    print("库伦能量:")
+    print("库伦能量 (硬截断):")
     coulomb_nonbonded_expression = """
-        kC * q1 * q2 / r
-        * (step(r - switch) * (1 - 10*((r - switch)/(cutoff - switch))^3 + 15*((r - switch)/(cutoff - switch))^4 - 6*((r - switch)/(cutoff - switch))^5) * step(cutoff - r)
-        + step(switch - r) * step(cutoff - r))
+        select(step(cutoff-r), kC * q1 * q2 / r, 0)
     """
     print(coulomb_nonbonded_expression)
-    print("\nLJ能量:")
+    
+    print("\nLJ能量 (带切换函数):")
     lj_nonbonded_expression = """
-        4 * sqrt(eps1*eps2) * ((0.5*(sigma1+sigma2)/r)^12 - (0.5*(sigma1+sigma2)/r)^6)
-        * (step(r - switch) * (1 - 10*((r - switch)/(cutoff - switch))^3 + 15*((r - switch)/(cutoff - switch))^4 - 6*((r - switch)/(cutoff - switch))^5) * step(cutoff - r)
-        + step(switch - r) * step(cutoff - r))
+        select(step(cutoff-r),
+            4 * sqrt(eps1*eps2) * ((0.5*(sigma1+sigma2)/r)^12 - (0.5*(sigma1+sigma2)/r)^6) *
+            (step(switch-r) + step(r-switch) * (1 - 10*((r-switch)/(cutoff-switch))^3 + 15*((r-switch)/(cutoff-switch))^4 - 6*((r-switch)/(cutoff-switch))^5)),
+            0)
     """
     print(lj_nonbonded_expression)
 
-    # Create CustomNonbondedForces and CustomBondForces *outside* the loop
+    # 创建力场对象
     coulomb_nonbonded_force = CustomNonbondedForce(coulomb_nonbonded_expression.replace('\n', '').strip())
     coulomb_nonbonded_force.addPerParticleParameter("q")
     coulomb_nonbonded_force.addGlobalParameter("kC", 138.935456)
     coulomb_nonbonded_force.addGlobalParameter("cutoff", 1.0)
-    coulomb_nonbonded_force.addGlobalParameter("switch", 0.9)
     coulomb_nonbonded_force.setNonbondedMethod(CustomNonbondedForce.CutoffNonPeriodic)
     coulomb_nonbonded_force.setCutoffDistance(1.0 * nanometer)
+    coulomb_nonbonded_force.setUseLongRangeCorrection(False)
 
     lj_nonbonded_force = CustomNonbondedForce(lj_nonbonded_expression.replace('\n', '').strip())
     lj_nonbonded_force.addPerParticleParameter("sigma")
@@ -293,56 +309,103 @@ def test_verify_energy_components():
     lj_nonbonded_force.addGlobalParameter("switch", 0.9)
     lj_nonbonded_force.setNonbondedMethod(CustomNonbondedForce.CutoffNonPeriodic)
     lj_nonbonded_force.setCutoffDistance(1.0 * nanometers)
+    lj_nonbonded_force.setUseLongRangeCorrection(False)
 
-    coulomb_exception_expression = """
-        kC * chargeprod / r * coulombscale
-        * (step(r - switch) * (1 - 10*((r - switch)/(cutoff - switch))^3 + 15*((r - switch)/(cutoff - switch))^4 - 6*((r - switch)/(cutoff - switch))^5) * step(cutoff - r)
-        + step(switch - r) * step(cutoff-r))
-    """
-    coulomb_exception_force = CustomBondForce(coulomb_exception_expression.replace('\n', '').strip())
+    # 创建例外力场对象
+    coulomb_exception_expression = "kC * chargeprod / r"
+    coulomb_exception_force = CustomBondForce(coulomb_exception_expression)
     coulomb_exception_force.addPerBondParameter("chargeprod")
-    coulomb_exception_force.addPerBondParameter("coulombscale")
     coulomb_exception_force.addGlobalParameter("kC", 138.935456)
-    coulomb_exception_force.addGlobalParameter("cutoff", 1.0)
-    coulomb_exception_force.addGlobalParameter("switch", 0.9)
 
+    # Update LJ exception expression to include switching function
     lj_exception_expression = """
-        4 * epsilon * ((sigma/r)^12 - (sigma/r)^6) * ljscale
-        * (step(r - switch) * (1 - 10*((r - switch)/(cutoff - switch))^3 + 15*((r - switch)/(cutoff - switch))^4 - 6*((r - switch)/(cutoff - switch))^5) * step(cutoff - r)
-        + step(switch - r) * step(cutoff - r))
+        select(step(cutoff-r),
+            4 * epsilon * ((sigma/r)^12 - (sigma/r)^6) *
+            (step(switch-r) + step(r-switch) * (1 - 10*((r-switch)/(cutoff-switch))^3 + 15*((r-switch)/(cutoff-switch))^4 - 6*((r-switch)/(cutoff-switch))^5)),
+            0)
     """
     lj_exception_force = CustomBondForce(lj_exception_expression.replace('\n', '').strip())
     lj_exception_force.addPerBondParameter("sigma")
     lj_exception_force.addPerBondParameter("epsilon")
-    lj_exception_force.addPerBondParameter("ljscale")
     lj_exception_force.addGlobalParameter("cutoff", 1.0)
     lj_exception_force.addGlobalParameter("switch", 0.9)
 
-    # Add particles and exceptions to the forces *outside* the loop
-    for i in range(original_nb_force.getNumParticles()):
-        charge, sigma, epsilon = original_nb_force.getParticleParameters(i)
-        coulomb_nonbonded_force.addParticle([charge])
-        lj_nonbonded_force.addParticle([sigma, epsilon.value_in_unit(kilojoule_per_mole)]) # Store epsilon in correct units
-
+    # 处理例外
+    print("\n处理例外相互作用:")
     for i in range(original_nb_force.getNumExceptions()):
         p1, p2, chargeProd, sigma, epsilon = original_nb_force.getExceptionParameters(i)
+        stats["exceptions"]["total"] += 1
+        
+        # 1. 首先从常规非键力中排除所有exception对
         coulomb_nonbonded_force.addExclusion(p1, p2)
         lj_nonbonded_force.addExclusion(p1, p2)
+        
+        # 2. 处理库伦相互作用
+        if abs(chargeProd.value_in_unit(elementary_charge**2)) > 1e-10:
+            stats["exceptions"]["nonzero_charge"] += 1
+            coulomb_exception_force.addBond(p1, p2, [chargeProd])
+        else:
+            stats["exceptions"]["zero_charge"] += 1
+            
+        # 3. 处理LJ相互作用 - 只在epsilon非零时添加
+        if abs(epsilon.value_in_unit(kilojoule_per_mole)) > 1e-10:
+            stats["exceptions"]["nonzero_epsilon"] += 1
+            lj_exception_force.addBond(p1, p2, [sigma, epsilon])
+        else:
+            stats["exceptions"]["zero_epsilon"] += 1
+            # Skip combination rules unless explicitly required by force field
 
-        # Coulomb exception scaling
-        q1, _, _ = original_nb_force.getParticleParameters(p1)
-        q2, _, _ = original_nb_force.getParticleParameters(p2)
-        unscaled_chargeProd = q1 * q2
-        coulomb_scale = 0.0 if abs(unscaled_chargeProd.value_in_unit(elementary_charge**2)) < 1e-10 else chargeProd / unscaled_chargeProd
-        coulomb_exception_force.addBond(p1, p2, [chargeProd, coulomb_scale])
-
-        # LJ exception scaling
-        _, sig1, eps1 = original_nb_force.getParticleParameters(p1)
-        _, sig2, eps2 = original_nb_force.getParticleParameters(p2)
-        unscaled_epsilon = sqrt(eps1.value_in_unit(kilojoule_per_mole) * eps2.value_in_unit(kilojoule_per_mole)) * kilojoule_per_mole  # Correct units
-        unscaled_sigma = (sig1 + sig2) * 0.5
-        lj_scale = 0.0 if abs(unscaled_epsilon.value_in_unit(kilojoule_per_mole)) < 1e-10 else epsilon / unscaled_epsilon
-        lj_exception_force.addBond(p1, p2, [sigma, epsilon, lj_scale])
+    # 打印统计信息
+    print("\n系统统计信息:")
+    print(f"粒子总数: {stats['particles']['total']}")
+    print(f"带电粒子数: {stats['particles']['charged']}")
+    print(f"最大电荷绝对值: {stats['particles']['max_charge']:.3f} e")
+    print(f"\n例外总数: {stats['exceptions']['total']}")
+    print(f"零电荷例外: {stats['exceptions']['zero_charge']}")
+    print(f"非零电荷例外: {stats['exceptions']['nonzero_charge']}")
+    print(f"零epsilon例外: {stats['exceptions']['zero_epsilon']}")
+    print(f"非零epsilon例外: {stats['exceptions']['nonzero_epsilon']}")
+    
+    # 初始化scaled_positions (使用默认距离1.0)
+    default_dist = 1.0
+    scaled_positions = [Vec3(pos[0].value_in_unit(nanometers) * default_dist,
+                           pos[1].value_in_unit(nanometers) * default_dist,
+                           pos[2].value_in_unit(nanometers) * default_dist) * nanometers
+                      for pos in positions]
+    
+    # 添加诊断输出
+    print("\n计算OpenMM的LJ能量分量...")
+    openmm_lj_system = System()
+    for i in range(system.getNumParticles()):
+        openmm_lj_system.addParticle(system.getParticleMass(i))
+    
+    openmm_lj_force = NonbondedForce()
+    openmm_lj_force.setNonbondedMethod(NonbondedForce.CutoffNonPeriodic)
+    openmm_lj_force.setCutoffDistance(1.0 * nanometer)
+    openmm_lj_force.setSwitchingDistance(0.9 * nanometer)
+    openmm_lj_force.setUseSwitchingFunction(True)
+    openmm_lj_force.setUseDispersionCorrection(False)
+    
+    # 添加粒子，但电荷设为0
+    for i in range(original_nb_force.getNumParticles()):
+        _, sigma, epsilon = original_nb_force.getParticleParameters(i)
+        openmm_lj_force.addParticle(0.0 * elementary_charge, sigma, epsilon)
+    
+    # 添加例外，但电荷积设为0
+    for i in range(original_nb_force.getNumExceptions()):
+        p1, p2, _, sigma, epsilon = original_nb_force.getExceptionParameters(i)
+        openmm_lj_force.addException(p1, p2, 0.0 * elementary_charge**2, sigma, epsilon)
+    
+    openmm_lj_system.addForce(openmm_lj_force)
+    
+    # 计算OpenMM的LJ能量
+    integrator = VerletIntegrator(0.001 * picoseconds)
+    context = Context(openmm_lj_system, integrator, platform)
+    context.setPositions(scaled_positions)
+    openmm_lj_energy = context.getState(getEnergy=True).getPotentialEnergy()
+    del context, integrator
+    
+    print(f"OpenMM LJ能量: {openmm_lj_energy.value_in_unit(kilojoules_per_mole):.4f} kJ/mol")
 
     for dist in distances:
         # 缩放所有位置
@@ -351,7 +414,7 @@ def test_verify_energy_components():
                                pos[2].value_in_unit(nanometers) * dist) * nanometers
                           for pos in positions]
 
-        # 1. Create a new system with ONLY NonbondedForce for comparison
+        # 1. 计算OpenMM参考能量
         openmm_system = System()
         for i in range(system.getNumParticles()):
             openmm_system.addParticle(system.getParticleMass(i))
@@ -361,8 +424,8 @@ def test_verify_energy_components():
         openmm_nb_force.setCutoffDistance(1.0 * nanometer)
         openmm_nb_force.setSwitchingDistance(0.9 * nanometer)
         openmm_nb_force.setUseSwitchingFunction(True)
-        openmm_nb_force.setUseDispersionCorrection(False)  # Disable dispersion correction
-        openmm_nb_force.setReactionFieldDielectric(1.0)   # Set reaction-field dielectric to 1.0
+        openmm_nb_force.setUseDispersionCorrection(False)
+        openmm_nb_force.setReactionFieldDielectric(1.0)
 
         for i in range(original_nb_force.getNumParticles()):
             charge, sigma, epsilon = original_nb_force.getParticleParameters(i)
@@ -374,20 +437,29 @@ def test_verify_energy_components():
 
         openmm_system.addForce(openmm_nb_force)
 
-        # 1. 计算OpenMM默认实现的总能量
         integrator = VerletIntegrator(0.001 * picoseconds)
         context = Context(openmm_system, integrator, platform)
         context.setPositions(scaled_positions)
-        state = context.getState(getEnergy=True)
-        openmm_energy = state.getPotentialEnergy()
+        openmm_energy = context.getState(getEnergy=True).getPotentialEnergy()
         del context, integrator
 
-        # 2. Calculate Coulomb energy
+        # 2. 计算库伦能量
         coulomb_system = System()
         for i in range(system.getNumParticles()):
             coulomb_system.addParticle(system.getParticleMass(i))
+            # Add particle parameters to coulomb_nonbonded_force
+            charge, sigma, epsilon = original_nb_force.getParticleParameters(i)
+            coulomb_nonbonded_force.addParticle([charge])
+            
+            # Update particle statistics
+            stats["particles"]["total"] += 1
+            if abs(charge.value_in_unit(elementary_charge)) > 1e-10:
+                stats["particles"]["charged"] += 1
+                stats["particles"]["max_charge"] = max(stats["particles"]["max_charge"], 
+                                                     abs(charge.value_in_unit(elementary_charge)))
+
         coulomb_system.addForce(coulomb_nonbonded_force)
-        coulomb_system.addForce(coulomb_exception_force)  # Add exception force
+        coulomb_system.addForce(coulomb_exception_force)
 
         integrator = VerletIntegrator(0.001 * picoseconds)
         context = Context(coulomb_system, integrator, platform)
@@ -395,12 +467,16 @@ def test_verify_energy_components():
         coulomb_energy = context.getState(getEnergy=True).getPotentialEnergy()
         del context, integrator
 
-        # 3. Calculate LJ energy
+        # 3. 计算LJ能量
         lj_system = System()
         for i in range(system.getNumParticles()):
             lj_system.addParticle(system.getParticleMass(i))
+            # Add particle parameters to lj_nonbonded_force
+            _, sigma, epsilon = original_nb_force.getParticleParameters(i)
+            lj_nonbonded_force.addParticle([sigma, epsilon])
+
         lj_system.addForce(lj_nonbonded_force)
-        lj_system.addForce(lj_exception_force) # Add exception force
+        lj_system.addForce(lj_exception_force)
 
         integrator = VerletIntegrator(0.001 * picoseconds)
         context = Context(lj_system, integrator, platform)
@@ -416,7 +492,12 @@ def test_verify_energy_components():
 
         rel_error = abs(total_val - openmm_val) / abs(openmm_val) * 100 if abs(openmm_val) > 1e-6 else 0.0
 
-        print(f"{dist:6.2f}  {openmm_val:12.4f}  {coulomb_val:9.4f}  {lj_val:8.4f}  {total_val:8.4f}  {rel_error:8.4f}")
+        print(f"\n=== 距离 {dist} nm 的能量分析 ===")
+        print(f"OpenMM总能量: {openmm_val:.4f} kJ/mol")
+        print(f"库伦能量: {coulomb_val:.4f} kJ/mol")
+        print(f"LJ能量: {lj_val:.4f} kJ/mol")
+        print(f"自定义总能量: {total_val:.4f} kJ/mol")
+        print(f"相对误差: {rel_error:.4f}%")
 
         # 验证结果
         if dist <= 0.9:  # 切换距离内
