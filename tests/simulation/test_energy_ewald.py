@@ -488,12 +488,3 @@ def test_ewald_charge_neutrality():
     except RuntimeError as e:
         print(f"Expected exception raised: {str(e)}")
         assert "neutral" in str(e).lower(), "Exception should mention charge neutrality"
-
-if __name__ == "__main__":
-    test_energy_methods_comparison()
-    test_ewald_parameter_sensitivity()
-    test_pbc_cutoff_ewald_comparison()
-    test_ewald_symmetry()
-    test_madelung_constant()
-    test_ewald_error_convergence()
-    test_ewald_charge_neutrality()
