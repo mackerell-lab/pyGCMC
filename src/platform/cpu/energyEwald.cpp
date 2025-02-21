@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <sstream>
 #include <iomanip>  // For output formatting
+#include <algorithm>
 
 namespace pygcmc {
 namespace platform {
@@ -12,6 +13,68 @@ namespace cpu {
 
 // Define global variables
 EwaldParams ewald_params;
+
+void EwaldParams::initializeTables(float cutoff) {
+    this->cutoff = cutoff;
+    ewaldDX = cutoff/NUM_TABLE_POINTS;
+    ewaldDXInv = 1.0f/ewaldDX;
+    erfcDXInv = 1.0f/(ewaldDX*alpha);
+    
+    erfcTable.resize(NUM_TABLE_POINTS + 4);
+    ewaldScaleTable.resize(NUM_TABLE_POINTS + 4);
+    
+    for(int i = 0; i < NUM_TABLE_POINTS + 4; i++) {
+        float r = i * ewaldDX;
+        float alphaR = alpha * r;
+        erfcTable[i] = std::erfc(alphaR);
+        ewaldScaleTable[i] = erfcTable[i] + TWO_OVER_SQRT_PI * alphaR * std::exp(-alphaR * alphaR);
+    }
+}
+
+void EwaldParams::initializeExpIkrTable(int numAtoms) {
+    maxK = std::max(kmax[0], std::max(kmax[1], kmax[2]));
+    expIkrTable.resize(maxK * numAtoms * 3);
+    expIkrXY.resize(numAtoms);
+}
+
+float EwaldParams::erfcApprox(float r) const {
+    float x = r * erfcDXInv;
+    int index = std::min(static_cast<int>(x), NUM_TABLE_POINTS);
+    float coeff2 = x - index;
+    float coeff1 = 1.0f - coeff2;
+    return coeff1 * erfcTable[index] + coeff2 * erfcTable[index + 1];
+}
+
+float EwaldParams::ewaldScaleApprox(float r) const {
+    float x = r * ewaldDXInv;
+    int index = std::min(static_cast<int>(x), NUM_TABLE_POINTS);
+    float coeff2 = x - index;
+    float coeff1 = 1.0f - coeff2;
+    return coeff1 * ewaldScaleTable[index] + coeff2 * ewaldScaleTable[index + 1];
+}
+
+void autoAdjustParameters(float error_tolerance, float cutoff_distance, const float box[3]) {
+    // 检查cutoff是否小于盒子长度的一半
+    float minBoxSize = std::min(box[0], std::min(box[1], box[2]));
+    if (cutoff_distance >= 0.5f * minBoxSize) {
+        throw std::runtime_error("Cutoff distance must be less than half the smallest box dimension");
+    }
+    
+    // Calculate optimal alpha based on error tolerance and cutoff
+    ewald_params.alpha = std::sqrt(-std::log(2.0f * error_tolerance)) / cutoff_distance;
+    
+    // Calculate optimal kmax for each dimension
+    float kmax_float = 2.0f * ewald_params.alpha * minBoxSize * 
+                      std::sqrt(-std::log(2.0f * error_tolerance));
+    
+    for(int i = 0; i < 3; i++) {
+        ewald_params.kmax[i] = static_cast<int>(std::ceil(kmax_float * minBoxSize/box[i]));
+    }
+    
+    // Initialize lookup tables
+    ewald_params.initializeTables(cutoff_distance);
+    ewald_params.initialized = true;
+}
 
 /**
  * @brief 设置Ewald计算参数
@@ -52,10 +115,9 @@ inline std::pair<float, float> calcPairEnergyEwald(
     float sigma_r12 = sigma_r6 * sigma_r6;
     float vdw_energy = 4.0f * eps * (sigma_r12 - sigma_r6);
     
-    // Ewald实空间静电能
-    float alpha_r = ewald_params.alpha * r;
-    float erfc_term = std::erfc(alpha_r);
-    float elec_energy = COULOMB * q1 * q2 * erfc_term / r;
+    // 修正的Ewald实空间静电能计算（添加1/2因子）
+    float erfc_term = ewald_params.erfcApprox(r);
+    float elec_energy = 0.5f * COULOMB * q1 * q2 * erfc_term / r;
     
     // 应用能量上限
     vdw_energy = std::min(std::max(vdw_energy, -MAX_SAFE_ENERGY), MAX_SAFE_ENERGY);
@@ -76,72 +138,119 @@ float computeReciprocalEnergy(model::MCState& state, bool movement_only) {
     const auto& atoms = state.atoms;
     float volume = box[0] * box[1] * box[2];
     
-    // 计算倒空间基矢
-    float recip_vec[3][3];
-    for(int i = 0; i < 3; i++) {
-        for(int j = 0; j < 3; j++) {
-            recip_vec[i][j] = (i == j) ? 2.0f * M_PI / box[i] : 0.0f;
+    // 初始化exp(ikr)表格
+    if (ewald_params.expIkrTable.empty()) {
+        ewald_params.initializeExpIkrTable(static_cast<int>(atoms.size()));
+    }
+    
+    // 预计算exp(ikr)表格
+    typedef std::complex<float> Complex;
+    const float TWO_PI = 2.0f * M_PI;
+    const float recipCoeff = COULOMB * 4 * M_PI / (volume);
+    const float factorEwald = -1.0f / (4.0f * ewald_params.alpha * ewald_params.alpha);
+    
+    // 初始化exp(ikr)表格
+    for (int i = 0; i < static_cast<int>(atoms.size()); i++) {
+        const auto& pos = atoms[i];
+        for (int m = 0; m < 3; m++) {
+            // 计算基本exp(ikr)值
+            float coord = (m == 0) ? pos.x : ((m == 1) ? pos.y : pos.z);
+            float kr = TWO_PI * coord / box[m];
+            Complex eir(std::cos(kr), std::sin(kr));
+            ewald_params.expIkrTable[i*3 + m] = Complex(1.0f, 0.0f);  // k=0
+            ewald_params.expIkrTable[i*3 + m + atoms.size()*3] = eir; // k=1
+            
+            // 计算更高阶的k值
+            for (int k = 2; k < ewald_params.maxK; k++) {
+                ewald_params.expIkrTable[i*3 + m + k*atoms.size()*3] = 
+                    ewald_params.expIkrTable[i*3 + m + (k-1)*atoms.size()*3] * eir;
+            }
         }
     }
     
     float total_energy = 0.0f;
     
-    // 倒空间求和
-    for(int kx = -ewald_params.kmax[0]; kx <= ewald_params.kmax[0]; kx++) {
-        for(int ky = -ewald_params.kmax[1]; ky <= ewald_params.kmax[1]; ky++) {
-            for(int kz = -ewald_params.kmax[2]; kz <= ewald_params.kmax[2]; kz++) {
-                if(kx == 0 && ky == 0 && kz == 0) continue;
+    // 优化的k空间求和（利用对称性）
+    int lowry = 0;
+    int lowrz = 1;
+    
+    for (int rx = 0; rx <= ewald_params.kmax[0]; rx++) {
+        float kx = rx * TWO_PI / box[0];
+        
+        for (int ry = lowry; ry <= ewald_params.kmax[1]; ry++) {
+            float ky = ry * TWO_PI / box[1];
+            
+            // 计算xy平面的结构因子
+            if (ry >= 0) {
+                for (int n = 0; n < static_cast<int>(atoms.size()); n++) {
+                    ewald_params.expIkrXY[n] = ewald_params.expIkrTable[n*3 + rx*atoms.size()*3] * 
+                                              ewald_params.expIkrTable[n*3 + 1 + ry*atoms.size()*3];
+                }
+            } else {
+                for (int n = 0; n < static_cast<int>(atoms.size()); n++) {
+                    ewald_params.expIkrXY[n] = ewald_params.expIkrTable[n*3 + rx*atoms.size()*3] * 
+                                              std::conj(ewald_params.expIkrTable[n*3 + 1 + (-ry)*atoms.size()*3]);
+                }
+            }
+            
+            for (int rz = lowrz; rz <= ewald_params.kmax[2]; rz++) {
+                float kz = rz * TWO_PI / box[2];
                 
-                float k[3] = {
-                    kx * recip_vec[0][0],
-                    ky * recip_vec[1][1],
-                    kz * recip_vec[2][2]
-                };
-                
-                float k2 = k[0]*k[0] + k[1]*k[1] + k[2]*k[2];
-                float k_factor = 2.0f * M_PI / volume * 
-                               std::exp(-k2/(4.0f*ewald_params.alpha*ewald_params.alpha)) / k2;
+                Complex structureFactor(0.0f, 0.0f);
                 
                 // 计算结构因子
-                float struct_real = 0.0f, struct_imag = 0.0f;
-                
-                if(movement_only) {
-                    // 只计算movement residues的贡献
-                    for(const auto& movementInfo : state.movementResidues) {
-                        for(int i = movementInfo.startIndex; 
-                            i < movementInfo.startIndex + movementInfo.activeCount; i++) {
-                            if(!state.residues[i].active) continue;
-                            
-                            for(int j = state.residues[i].atomStart;
-                                j < state.residues[i].atomStart + state.residues[i].atomCount; j++) {
-                                float kdotr = k[0]*atoms[j].x + k[1]*atoms[j].y + k[2]*atoms[j].z;
-                                float charge = atoms[j].charge;
-                                struct_real += charge * std::cos(kdotr);
-                                struct_imag += charge * std::sin(kdotr);
+                if (rz >= 0) {
+                    for (int n = 0; n < static_cast<int>(atoms.size()); n++) {
+                        if (movement_only) {
+                            bool in_movement = false;
+                            for (const auto& movementInfo : state.movementResidues) {
+                                if (n >= movementInfo.startIndex && 
+                                    n < movementInfo.startIndex + movementInfo.activeCount) {
+                                    in_movement = true;
+                                    break;
+                                }
                             }
+                            if (!in_movement) continue;
                         }
+                        structureFactor += atoms[n].charge * 
+                            (ewald_params.expIkrXY[n] * ewald_params.expIkrTable[n*3 + 2 + rz*atoms.size()*3]);
                     }
                 } else {
-                    // 计算所有active residues的贡献
-                    for(int r = 0; r < state.activeResidueCount; r++) {
-                        if(!state.residues[r].active) continue;
-                        
-                        for(int i = state.residues[r].atomStart;
-                            i < state.residues[r].atomStart + state.residues[r].atomCount; i++) {
-                            float kdotr = k[0]*atoms[i].x + k[1]*atoms[i].y + k[2]*atoms[i].z;
-                            float charge = atoms[i].charge;
-                            struct_real += charge * std::cos(kdotr);
-                            struct_imag += charge * std::sin(kdotr);
+                    for (int n = 0; n < static_cast<int>(atoms.size()); n++) {
+                        if (movement_only) {
+                            bool in_movement = false;
+                            for (const auto& movementInfo : state.movementResidues) {
+                                if (n >= movementInfo.startIndex && 
+                                    n < movementInfo.startIndex + movementInfo.activeCount) {
+                                    in_movement = true;
+                                    break;
+                                }
+                            }
+                            if (!in_movement) continue;
                         }
+                        structureFactor += atoms[n].charge * 
+                            (ewald_params.expIkrXY[n] * std::conj(ewald_params.expIkrTable[n*3 + 2 + (-rz)*atoms.size()*3]));
                     }
                 }
                 
-                total_energy += k_factor * (struct_real*struct_real + struct_imag*struct_imag);
+                float k2 = kx*kx + ky*ky + kz*kz;
+                if (k2 == 0.0f) continue;
+                
+                float ak = std::exp(k2 * factorEwald) / k2;
+                float structureFactorNorm = std::norm(structureFactor);
+                total_energy += recipCoeff * ak * structureFactorNorm;
+                
+                // 如果rx > 0，添加-kx的贡献（利用对称性）
+                if (rx > 0) {
+                    total_energy += recipCoeff * ak * structureFactorNorm;
+                }
             }
+            lowrz = 1 - ewald_params.kmax[2];
         }
+        lowry = 1 - ewald_params.kmax[1];
     }
     
-    return total_energy * COULOMB;
+    return total_energy;
 }
 
 /**
@@ -186,12 +295,17 @@ void computeSystemEnergyEwald(model::MCState& state) {
         throw std::runtime_error("Ewald parameters not initialized");
     }
     
-    // 检查PBC
+    // 检查PBC和cutoff条件
     if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
         throw std::runtime_error("Ewald method requires periodic boundary conditions");
     }
     
-    // 实空间部分 (使用现有的cutoff PBC计算)
+    float minBoxSize = std::min(state.info.box[0], std::min(state.info.box[1], state.info.box[2]));
+    if (ewald_params.cutoff >= 0.5f * minBoxSize) {
+        throw std::runtime_error("Cutoff distance must be less than half the smallest box dimension");
+    }
+    
+    // 实空间部分
     computeSystemEnergyCutoff(state);
     
     // 倒空间部分
@@ -224,9 +338,14 @@ void computeMovementEnergyEwald(model::MCState& state) {
         throw std::runtime_error("Ewald parameters not initialized");
     }
     
-    // 检查PBC
+    // 检查PBC和cutoff条件
     if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
         throw std::runtime_error("Ewald method requires periodic boundary conditions");
+    }
+    
+    float minBoxSize = std::min({state.info.box[0], state.info.box[1], state.info.box[2]});
+    if (ewald_params.cutoff >= 0.5f * minBoxSize) {
+        throw std::runtime_error("Cutoff distance must be less than half the smallest box dimension");
     }
     
     // 实空间部分
