@@ -59,6 +59,18 @@ void computeSystemEnergyPBC(model::MCState& state);
  */
 void computeSystemEnergyPBCCutoff(model::MCState& state);
 
+/**
+ * @brief Calculate VDW-only energies for the full system with cutoff
+ * 
+ * This function calculates ONLY van der Waals interactions between all active residues
+ * within the specified cutoff distance. It does NOT calculate any electrostatic interactions.
+ * This is particularly useful when used in conjunction with Ewald summation, where
+ * electrostatic interactions are handled separately.
+ * 
+ * @param state System state containing residues and force field parameters
+ */
+void computeSystemVdwEnergyCutoff(model::MCState& state);
+
 // Function to enable/disable debug output
 void setEnergyDebugOutput(bool enable);
 

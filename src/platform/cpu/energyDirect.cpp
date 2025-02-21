@@ -15,7 +15,7 @@ static bool debug_output = false;
 /**
  * @brief Calculate LJ and Coulomb energy with safety checks
  */
-inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, float q1, float q2) {
+inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, float q1, float q2, bool calc_coulomb = true) {
     if (debug_output) {
         std::stringstream ss;
         ss << std::fixed << std::setprecision(6);
@@ -50,8 +50,11 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
     float sigma_r12 = sigma_r6 * sigma_r6;  // (σ/r)¹²
     float vdw_energy = 4.0f * eps * (sigma_r12 - sigma_r6);  // kJ/mol
     
-    // Calculate Coulomb energy: V_C = k_c * q1*q2/r
-    float elec_energy = COULOMB * q1 * q2 / r;  // kJ/mol
+    // Calculate Coulomb energy only if requested
+    float elec_energy = 0.0f;
+    if (calc_coulomb) {
+        elec_energy = COULOMB * q1 * q2 / r;  // kJ/mol
+    }
 
     if (debug_output) {
         std::stringstream ss;
@@ -253,7 +256,7 @@ inline void computeResidueNonbondedEnergy(
 /**
  * @brief Universal function for calculating all nonbonded interactions
  */
-void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movement_only = false, bool use_pbc = false) {
+void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movement_only = false, bool use_pbc = false, bool vdw_only = false) {
     if (debug_output) {
         std::stringstream ss;
         ss << "\n=== Starting nonbonded energy calculation ===";
@@ -267,6 +270,9 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
         }
         if (use_pbc) {
             ss << "\n  Using periodic boundary conditions";
+        }
+        if (vdw_only) {
+            ss << "\n  Calculating VDW interactions only";
         }
         platform::log(LogLevel::DEBUG, ss.str());
     }
@@ -309,7 +315,9 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
     // Reset energies for all residues
     for (auto& residue : residues) {
         residue.energy_vdw = 0.0f;
-        residue.energy_elec = 0.0f;
+        if (!vdw_only) {  // Only reset electrostatic energy if we're calculating it
+            residue.energy_elec = 0.0f;
+        }
     }
 
     if (movement_only) {
@@ -457,6 +465,11 @@ void computeSystemEnergyPBCCutoff(model::MCState& state) {
     
     // Calculate with both cutoff and PBC enabled
     computeNonbondedEnergy(state, true, false, true);
+}
+
+void computeSystemVdwEnergyCutoff(model::MCState& state) {
+    // Call computeNonbondedEnergy with VDW-only flag
+    computeNonbondedEnergy(state, true, false, false, true);  // use_cutoff=true, movement_only=false, use_pbc=false, vdw_only=true
 }
 
 void setEnergyDebugOutput(bool enable) {
