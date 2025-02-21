@@ -378,8 +378,8 @@ void computeSystemEnergyEwald(model::MCState& state) {
     // 实空间部分 - 使用erfc(αr)/r
     computeRealSpaceEwald(state, false);
     
-    // VDW能量仍使用普通截断
-    computeSystemEnergyCutoff(state);  // Use the correct function name
+    // VDW能量使用纯LJ计算
+    computeSystemVdwEnergyCutoff(state);
     
     // 倒空间部分
     double recip_energy = computeReciprocalEnergy(state, false);
@@ -428,8 +428,8 @@ void computeMovementEnergyEwald(model::MCState& state) {
     // 实空间部分 - 使用erfc(αr)/r
     computeRealSpaceEwald(state, true);
     
-    // VDW能量仍使用普通截断
-    computeMovementEnergyCutoff(state);  // Use the correct function name
+    // VDW能量使用纯LJ计算
+    computeSystemVdwEnergyCutoff(state);
     
     // 倒空间部分
     double recip_energy = computeReciprocalEnergy(state, true);
