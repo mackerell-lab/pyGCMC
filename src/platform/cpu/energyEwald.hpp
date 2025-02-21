@@ -14,50 +14,50 @@ namespace platform {
 namespace cpu {
 
 // Constants for Ewald calculation
-static const int NUM_TABLE_POINTS = 2048;
-static const float TWO_OVER_SQRT_PI = 2.0f/std::sqrt(M_PI);
+static const int NUM_TABLE_POINTS = 20000;  // Increased from 2048 for better precision
+static const double TWO_OVER_SQRT_PI = 2.0/std::sqrt(M_PI);
 
 // Ewald parameters
 struct EwaldParams {
-    float alpha{1.0f};     // Ewald separation parameter (nm^-1)
-    int kmax[3]{6,6,6};    // Maximum reciprocal space wave vectors
-    float tolerance{1e-5f}; // Precision control
+    double alpha{1.0};     // Changed to double for better precision
+    int kmax[3]{15,15,15}; // Increased from 6,6,6 for better convergence
+    double tolerance{1e-5f};
     bool initialized{false};
-    float cutoff{0.0f};    // Real space cutoff distance
+    double cutoff{0.0};    // Changed to double
     
     // Tables for optimized calculation
-    std::vector<float> erfcTable;      // Table for erfc values
-    std::vector<float> ewaldScaleTable; // Table for complete Ewald scale factor
-    float ewaldDX;                     // Table spacing
-    float ewaldDXInv;                  // Inverse of table spacing
-    float erfcDXInv;                   // Inverse of table spacing for erfc
+    std::vector<double> erfcTable;      // Changed to double
+    std::vector<double> ewaldScaleTable;
+    double ewaldDX;                     // Changed to double
+    double ewaldDXInv;
+    double erfcDXInv;
     
     // Exp(ikr) tables for reciprocal space optimization
-    std::vector<std::complex<float>> expIkrTable;  // Table for exp(ikr)
-    std::vector<std::complex<float>> expIkrXY;     // Temporary storage for xy plane
-    int maxK;                          // Maximum k value for tables
+    std::vector<std::complex<double>> expIkrTable;  // Changed to double
+    std::vector<std::complex<double>> expIkrXY;
+    int maxK;
     
     // Methods for table management
-    void initializeTables(float cutoff);
+    void initializeTables(double cutoff);
     void initializeExpIkrTable(int numAtoms);
-    float erfcApprox(float r) const;
-    float ewaldScaleApprox(float r) const;
+    double erfcApprox(double r) const;
+    double ewaldScaleApprox(double r) const;
     
     // Error estimation methods
-    float estimateRealSpaceError() const {
+    double estimateRealSpaceError() const {
         return std::erfc(alpha * cutoff);
     }
     
-    float estimateReciprocalSpaceError(const float box[3]) const {
-        float minBoxSize = std::min(box[0], std::min(box[1], box[2]));
-        float minKmax = std::min(kmax[0], std::min(kmax[1], kmax[2]));
-        float error = minKmax * std::sqrt(alpha * minBoxSize) / 20.0f;
+    double estimateReciprocalSpaceError(const double box[3]) const {
+        double minBoxSize = std::min(box[0], std::min(box[1], box[2]));
+        double minKmax = std::min(kmax[0], std::min(kmax[1], kmax[2]));
+        double error = minKmax * std::sqrt(alpha * minBoxSize) / 20.0;
         error *= std::exp(-(M_PI * minKmax / (alpha * minBoxSize)) * 
                          (M_PI * minKmax / (alpha * minBoxSize)));
         return error;
     }
     
-    float estimateTotalError(const float box[3]) const {
+    double estimateTotalError(const double box[3]) const {
         return estimateRealSpaceError() + estimateReciprocalSpaceError(box);
     }
 };
@@ -65,20 +65,14 @@ struct EwaldParams {
 // Global Ewald parameters
 extern EwaldParams ewald_params;
 
-// Function to set Ewald parameters
-void setEwaldParameters(float alpha, const int kmax[3], float tolerance = 1e-5f);
-
-// Automatic parameter selection
-void autoAdjustParameters(float error_tolerance, float cutoff_distance, const float box[3]);
-
-// Ewald method interfaces
+// Function declarations
+void setEwaldParameters(double alpha, const int kmax[3], double tolerance = 1e-5);
+void autoAdjustParameters(double error_tolerance, double cutoff_distance, const double box[3]);
 void computeSystemEnergyEwald(model::MCState& state);
 void computeMovementEnergyEwald(model::MCState& state);
-
-// Internal calculation methods
-float computeReciprocalEnergy(model::MCState& state, bool movement_only);
-float computeSelfEnergy(model::MCState& state, bool movement_only);
-std::pair<float, float> calcPairEnergyEwald(float r2, float sigma, float eps, float q1, float q2);
+std::pair<double, double> calcPairEnergyEwald(double r2, double sigma, double eps, double q1, double q2);
+double computeReciprocalEnergy(model::MCState& state, bool movement_only);
+double computeSelfEnergy(model::MCState& state, bool movement_only);
 
 } // namespace cpu
 } // namespace platform

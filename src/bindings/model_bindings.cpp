@@ -689,6 +689,21 @@ void init_model(py::module& m) {
     // Bind MCState
     py::class_<pygcmc::model::MCState>(m, "MCState")
         .def(py::init<>())
+        .def("copy", [](const pygcmc::model::MCState& state) {
+            pygcmc::model::MCState new_state;
+            new_state.atoms = state.atoms;
+            new_state.residues = state.residues;
+            new_state.residueTypes = state.residueTypes;
+            new_state.atomTypes = state.atomTypes;
+            new_state.activeAtomCount = state.activeAtomCount;
+            new_state.activeResidueCount = state.activeResidueCount;
+            new_state.info = state.info;
+            new_state.forcefield = state.forcefield;
+            new_state.movementResidues = state.movementResidues;
+            new_state.movementAtomTypes = state.movementAtomTypes;
+            new_state.numMovementAtomTypes = state.numMovementAtomTypes;
+            return new_state;
+        }, "Create a deep copy of the MCState object")
         .def_property("atoms",
             [](pygcmc::model::MCState& state) -> std::vector<std::reference_wrapper<pygcmc::model::MCAtom>> {
                 std::vector<std::reference_wrapper<pygcmc::model::MCAtom>> refs;
@@ -735,6 +750,9 @@ void init_model(py::module& m) {
         .def_readwrite("numMovementTypes", &pygcmc::model::MCForceField::numMovementTypes)
         .def_readwrite("ljSigma", &pygcmc::model::MCForceField::ljSigma)
         .def_readwrite("ljEps", &pygcmc::model::MCForceField::ljEps);
+
+    // Add COULOMB constant to the module
+    m.attr("COULOMB") = 138.935458; // kJ·mol^-1·nm·e^-2, Coulomb's constant in MD units
 }
 
 } // namespace bindings

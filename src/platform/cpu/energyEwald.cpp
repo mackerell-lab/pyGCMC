@@ -13,19 +13,20 @@ namespace cpu {
 
 // Define global variables
 EwaldParams ewald_params;
+const float TWO_PI = 2.0f * M_PI;
 
-void EwaldParams::initializeTables(float cutoff) {
+void EwaldParams::initializeTables(double cutoff) {
     this->cutoff = cutoff;
     ewaldDX = cutoff/NUM_TABLE_POINTS;
-    ewaldDXInv = 1.0f/ewaldDX;
-    erfcDXInv = 1.0f/(ewaldDX*alpha);
+    ewaldDXInv = 1.0/ewaldDX;
+    erfcDXInv = 1.0/(ewaldDX*alpha);
     
     erfcTable.resize(NUM_TABLE_POINTS + 4);
     ewaldScaleTable.resize(NUM_TABLE_POINTS + 4);
     
     for(int i = 0; i < NUM_TABLE_POINTS + 4; i++) {
-        float r = i * ewaldDX;
-        float alphaR = alpha * r;
+        double r = i * ewaldDX;
+        double alphaR = alpha * r;
         erfcTable[i] = std::erfc(alphaR);
         ewaldScaleTable[i] = erfcTable[i] + TWO_OVER_SQRT_PI * alphaR * std::exp(-alphaR * alphaR);
     }
@@ -37,35 +38,35 @@ void EwaldParams::initializeExpIkrTable(int numAtoms) {
     expIkrXY.resize(numAtoms);
 }
 
-float EwaldParams::erfcApprox(float r) const {
-    float x = r * erfcDXInv;
+double EwaldParams::erfcApprox(double r) const {
+    double x = r * erfcDXInv;
     int index = std::min(static_cast<int>(x), NUM_TABLE_POINTS);
-    float coeff2 = x - index;
-    float coeff1 = 1.0f - coeff2;
+    double coeff2 = x - index;
+    double coeff1 = 1.0 - coeff2;
     return coeff1 * erfcTable[index] + coeff2 * erfcTable[index + 1];
 }
 
-float EwaldParams::ewaldScaleApprox(float r) const {
-    float x = r * ewaldDXInv;
+double EwaldParams::ewaldScaleApprox(double r) const {
+    double x = r * ewaldDXInv;
     int index = std::min(static_cast<int>(x), NUM_TABLE_POINTS);
-    float coeff2 = x - index;
-    float coeff1 = 1.0f - coeff2;
+    double coeff2 = x - index;
+    double coeff1 = 1.0 - coeff2;
     return coeff1 * ewaldScaleTable[index] + coeff2 * ewaldScaleTable[index + 1];
 }
 
-void autoAdjustParameters(float error_tolerance, float cutoff_distance, const float box[3]) {
+void autoAdjustParameters(double error_tolerance, double cutoff_distance, const double box[3]) {
     // 检查cutoff是否小于盒子长度的一半
-    float minBoxSize = std::min(box[0], std::min(box[1], box[2]));
-    if (cutoff_distance >= 0.5f * minBoxSize) {
+    double minBoxSize = std::min(box[0], std::min(box[1], box[2]));
+    if (cutoff_distance >= 0.5 * minBoxSize) {
         throw std::runtime_error("Cutoff distance must be less than half the smallest box dimension");
     }
     
     // Calculate optimal alpha based on error tolerance and cutoff
-    ewald_params.alpha = std::sqrt(-std::log(2.0f * error_tolerance)) / cutoff_distance;
+    ewald_params.alpha = std::sqrt(-std::log(2.0 * error_tolerance)) / cutoff_distance;
     
     // Calculate optimal kmax for each dimension
-    float kmax_float = 2.0f * ewald_params.alpha * minBoxSize * 
-                      std::sqrt(-std::log(2.0f * error_tolerance));
+    double kmax_float = 2.0 * ewald_params.alpha * minBoxSize * 
+                      std::sqrt(-std::log(2.0 * error_tolerance));
     
     for(int i = 0; i < 3; i++) {
         ewald_params.kmax[i] = static_cast<int>(std::ceil(kmax_float * minBoxSize/box[i]));
@@ -83,7 +84,7 @@ void autoAdjustParameters(float error_tolerance, float cutoff_distance, const fl
  * @param kmax Maximum reciprocal space wave vectors
  * @param tolerance Precision control
  */
-void setEwaldParameters(float alpha, const int kmax[3], float tolerance) {
+void setEwaldParameters(double alpha, const int kmax[3], double tolerance) {
     ewald_params.alpha = alpha;
     for(int i = 0; i < 3; i++) {
         ewald_params.kmax[i] = kmax[i];
@@ -99,29 +100,30 @@ void setEwaldParameters(float alpha, const int kmax[3], float tolerance) {
  * 1. van der Waals interactions (same as direct calculation)
  * 2. short-range Coulomb interactions (erfc(αr)/r)
  */
-inline std::pair<float, float> calcPairEnergyEwald(
-    float r2, float sigma, float eps, float q1, float q2) {
+inline std::pair<double, double> calcPairEnergyEwald(
+    double r2, double sigma, double eps, double q1, double q2) {
     
     // 应用最小安全距离
     if (r2 < MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE) {
         r2 = MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE;
     }
     
-    float r = std::sqrt(r2);
+    double r = std::sqrt(r2);
     
     // VDW能量计算保持不变
-    float sigma_r2 = (sigma * sigma) / r2;
-    float sigma_r6 = sigma_r2 * sigma_r2 * sigma_r2;
-    float sigma_r12 = sigma_r6 * sigma_r6;
-    float vdw_energy = 4.0f * eps * (sigma_r12 - sigma_r6);
+    double sigma_r2 = (sigma * sigma) / r2;
+    double sigma_r6 = sigma_r2 * sigma_r2 * sigma_r2;
+    double sigma_r12 = sigma_r6 * sigma_r6;
+    double vdw_energy = 4.0 * eps * (sigma_r12 - sigma_r6);
     
-    // 修正的Ewald实空间静电能计算（添加1/2因子）
-    float erfc_term = ewald_params.erfcApprox(r);
-    float elec_energy = 0.5f * COULOMB * q1 * q2 * erfc_term / r;
+    // Remove 0.5 factor since outer loop already handles i<j pairs
+    double erfc_term = ewald_params.erfcApprox(r);
+    double elec_energy = COULOMB * q1 * q2 * erfc_term / r;
     
     // 应用能量上限
-    vdw_energy = std::min(std::max(vdw_energy, -MAX_SAFE_ENERGY), MAX_SAFE_ENERGY);
-    elec_energy = std::min(std::max(elec_energy, -MAX_SAFE_ENERGY), MAX_SAFE_ENERGY);
+    const double max_safe_energy = static_cast<double>(MAX_SAFE_ENERGY);
+    vdw_energy = std::min(std::max(vdw_energy, -max_safe_energy), max_safe_energy);
+    elec_energy = std::min(std::max(elec_energy, -max_safe_energy), max_safe_energy);
     
     return {vdw_energy, elec_energy};
 }
@@ -133,53 +135,40 @@ inline std::pair<float, float> calcPairEnergyEwald(
  * @param movement_only 是否只计算movement residues
  * @return 倒空间总能量
  */
-float computeReciprocalEnergy(model::MCState& state, bool movement_only) {
+double computeReciprocalEnergy(model::MCState& state, bool movement_only) {
     const auto& box = state.info.box;
     const auto& atoms = state.atoms;
-    float volume = box[0] * box[1] * box[2];
+    double volume = box[0] * box[1] * box[2];
     
-    // 计算总电荷
-    float totalCharge = 0.0f;
+    // Calculate total charge
+    double totalCharge = 0.0;
     for(const auto& atom : atoms) {
-        totalCharge += atom.charge;
+        totalCharge += static_cast<double>(atom.charge);
     }
     
-    // 初始化exp(ikr)表格
-    if (ewald_params.expIkrTable.empty()) {
-        ewald_params.initializeExpIkrTable(static_cast<int>(atoms.size()));
-    }
+    typedef std::complex<double> Complex;
+    const double TWO_PI = 2.0 * M_PI;
+    // Standard reciprocal coefficient (2π/V)
+    const double recipCoeff = COULOMB * TWO_PI / volume;
+    const double factorEwald = -1.0 / (4.0 * ewald_params.alpha * ewald_params.alpha);
     
-    // 预计算exp(ikr)表格
-    typedef std::complex<float> Complex;
-    const float TWO_PI = 2.0f * M_PI;
-    const float recipCoeff = COULOMB * 2 * M_PI / volume;  // 注意这里改为2π而不是4π
-    const float factorEwald = -1.0f / (4.0f * ewald_params.alpha * ewald_params.alpha);
+    double total_energy = 0.0;
     
-    float total_energy = 0.0f;
-    
-    // 优化的k空间求和（利用对称性）
-    for (int rx = 0; rx <= ewald_params.kmax[0]; rx++) {
-        float kx = rx * TWO_PI / box[0];
+    // Standard k-space summation over all k-vectors
+    for (int rx = -ewald_params.kmax[0]; rx <= ewald_params.kmax[0]; rx++) {
+        double kx = rx * TWO_PI / box[0];
         
         for (int ry = -ewald_params.kmax[1]; ry <= ewald_params.kmax[1]; ry++) {
-            float ky = ry * TWO_PI / box[1];
+            double ky = ry * TWO_PI / box[1];
             
             for (int rz = -ewald_params.kmax[2]; rz <= ewald_params.kmax[2]; rz++) {
-                // 处理k=0的情况
-                if (rx == 0 && ry == 0 && rz == 0) {
-                    if (!movement_only && std::abs(totalCharge) > 1e-6f) {
-                        // 对非零净电荷的处理
-                        float backgroundEnergy = -COULOMB * TWO_PI * totalCharge * totalCharge / 
-                            (2.0f * volume * ewald_params.alpha * ewald_params.alpha);
-                        total_energy += backgroundEnergy;
-                    }
-                    continue;
-                }
+                // Skip k = 0
+                if (rx == 0 && ry == 0 && rz == 0) continue;
                 
-                float kz = rz * TWO_PI / box[2];
-                float k2 = kx*kx + ky*ky + kz*kz;
+                double kz = rz * TWO_PI / box[2];
+                double k2 = kx*kx + ky*ky + kz*kz;
                 
-                Complex structureFactor(0.0f, 0.0f);
+                Complex structureFactor(0.0, 0.0);
                 for (int n = 0; n < static_cast<int>(atoms.size()); n++) {
                     if (movement_only) {
                         bool in_movement = false;
@@ -193,24 +182,18 @@ float computeReciprocalEnergy(model::MCState& state, bool movement_only) {
                         if (!in_movement) continue;
                     }
                     
-                    float kdotr = kx*atoms[n].x + ky*atoms[n].y + kz*atoms[n].z;
+                    double kdotr = kx*static_cast<double>(atoms[n].x) + 
+                                 ky*static_cast<double>(atoms[n].y) + 
+                                 kz*static_cast<double>(atoms[n].z);
                     Complex phase(std::cos(kdotr), std::sin(kdotr));
-                    structureFactor += atoms[n].charge * phase;
+                    structureFactor += static_cast<double>(atoms[n].charge) * phase;
                 }
                 
-                float ak = std::exp(k2 * factorEwald) / k2;
-                float structureFactorNorm = std::norm(structureFactor);
+                double ak = std::exp(k2 * factorEwald) / k2;
+                double structureFactorNorm = std::norm(structureFactor);
                 
-                // 对rx=0的情况，只计算ry>0或(ry=0,rz>0)的部分
-                if (rx == 0) {
-                    if (ry > 0 || (ry == 0 && rz > 0)) {
-                        total_energy += 2.0f * recipCoeff * ak * structureFactorNorm;
-                    }
-                }
-                // 对rx>0的情况，计算所有ry,rz
-                else {
-                    total_energy += recipCoeff * ak * structureFactorNorm;
-                }
+                // No symmetry factor needed - we sum over all k-vectors
+                total_energy += recipCoeff * ak * structureFactorNorm;
             }
         }
     }
@@ -221,9 +204,9 @@ float computeReciprocalEnergy(model::MCState& state, bool movement_only) {
 /**
  * @brief 计算自能校正项
  */
-float computeSelfEnergy(model::MCState& state, bool movement_only) {
-    float self_energy = 0.0f;
-    float totalCharge = 0.0f;
+double computeSelfEnergy(model::MCState& state, bool movement_only) {
+    double self_energy = 0.0;
+    double totalCharge = 0.0;
     
     if(movement_only) {
         for(const auto& movementInfo : state.movementResidues) {
@@ -233,7 +216,8 @@ float computeSelfEnergy(model::MCState& state, bool movement_only) {
                 
                 for(int j = state.residues[i].atomStart;
                     j < state.residues[i].atomStart + state.residues[i].atomCount; j++) {
-                    float charge = state.atoms[j].charge;
+                    double charge = state.atoms[j].charge;
+                    // Standard self-energy term
                     self_energy -= charge * charge;
                     totalCharge += charge;
                 }
@@ -245,21 +229,22 @@ float computeSelfEnergy(model::MCState& state, bool movement_only) {
             
             for(int i = state.residues[r].atomStart;
                 i < state.residues[r].atomStart + state.residues[r].atomCount; i++) {
-                float charge = state.atoms[i].charge;
+                double charge = state.atoms[i].charge;
+                // Standard self-energy term
                 self_energy -= charge * charge;
                 totalCharge += charge;
             }
         }
     }
     
-    // 基本的自能项
-    float baseEnergy = self_energy * COULOMB * ewald_params.alpha / std::sqrt(M_PI);
+    // Standard self-energy prefactor
+    double baseEnergy = self_energy * COULOMB * ewald_params.alpha / std::sqrt(M_PI);
     
-    // 对非零净电荷的额外修正
-    if (!movement_only && std::abs(totalCharge) > 1e-6f) {
-        float volume = state.info.box[0] * state.info.box[1] * state.info.box[2];
-        float backgroundCorrection = -COULOMB * M_PI * totalCharge * totalCharge / 
-            (2.0f * volume * ewald_params.alpha * ewald_params.alpha);
+    // Background correction for non-zero net charge
+    if (!movement_only && std::abs(totalCharge) > 1e-10) {
+        double volume = state.info.box[0] * state.info.box[1] * state.info.box[2];
+        double backgroundCorrection = -COULOMB * M_PI * totalCharge * totalCharge / 
+            (2.0 * volume * ewald_params.alpha * ewald_params.alpha);
         baseEnergy += backgroundCorrection;
     }
     
@@ -298,10 +283,10 @@ void computeSystemEnergyEwald(model::MCState& state) {
     computeSystemEnergyCutoff(state);
     
     // 倒空间部分
-    float recip_energy = computeReciprocalEnergy(state, false);
+    double recip_energy = computeReciprocalEnergy(state, false);
     
     // 自能校正
-    float self_energy = computeSelfEnergy(state, false);
+    double self_energy = computeSelfEnergy(state, false);
     
     // 分配长程能量到residues
     int active_count = 0;
@@ -310,7 +295,7 @@ void computeSystemEnergyEwald(model::MCState& state) {
     }
     
     if(active_count > 0) {
-        float energy_per_residue = (recip_energy + self_energy) / active_count;
+        double energy_per_residue = (recip_energy + self_energy) / active_count;
         for(auto& residue : state.residues) {
             if(residue.active) {
                 residue.energy_elec += energy_per_residue;
@@ -341,10 +326,10 @@ void computeMovementEnergyEwald(model::MCState& state) {
     computeMovementEnergyCutoff(state);
     
     // 倒空间部分
-    float recip_energy = computeReciprocalEnergy(state, true);
+    double recip_energy = computeReciprocalEnergy(state, true);
     
     // 自能校正
-    float self_energy = computeSelfEnergy(state, true);
+    double self_energy = computeSelfEnergy(state, true);
     
     // 分配长程能量到movement residues
     int movement_count = 0;
@@ -353,7 +338,7 @@ void computeMovementEnergyEwald(model::MCState& state) {
     }
     
     if(movement_count > 0) {
-        float energy_per_residue = (recip_energy + self_energy) / movement_count;
+        double energy_per_residue = (recip_energy + self_energy) / movement_count;
         for(const auto& movementInfo : state.movementResidues) {
             for(int i = movementInfo.startIndex;
                 i < movementInfo.startIndex + movementInfo.activeCount; i++) {
