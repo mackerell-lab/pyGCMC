@@ -1,3 +1,5 @@
+// src/platform/cpu/energyCommon.cpp
+
 #include "energyCommon.hpp"
 
 namespace pygcmc {

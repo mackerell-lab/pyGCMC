@@ -1,7 +1,9 @@
+// src/platform/cpu/energyDirect.hpp
+
 #pragma once
 
-#include "../../model/montecarlo.hpp"
-#include "../platform.hpp"
+#include "model/montecarlo.hpp"
+#include "platform/platform.hpp"
 #include "energyCommon.hpp"
 
 namespace pygcmc {

@@ -1,3 +1,5 @@
+// src/platform/cpu/energyCommon.hpp
+
 #pragma once
 
 #include <cmath>

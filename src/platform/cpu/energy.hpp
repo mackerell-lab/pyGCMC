@@ -1,3 +1,5 @@
+// src/platform/cpu/energy.hpp
+
 #pragma once
 
 // Include both energy calculation implementations

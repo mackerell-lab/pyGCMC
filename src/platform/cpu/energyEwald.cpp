@@ -1,4 +1,5 @@
 // src/platform/cpu/energyEwald.cpp
+
 #include "energyEwald.hpp"
 #include <cmath>
 #include <stdexcept>
@@ -9,15 +10,15 @@ namespace pygcmc {
 namespace platform {
 namespace cpu {
 
-// 定义全局变量
+// Define global variables
 EwaldParams ewald_params;
 
 /**
  * @brief 设置Ewald计算参数
  * 
  * @param alpha Ewald分离参数 (nm^-1)
- * @param kmax 倒空间最大波矢
- * @param tolerance 精度控制
+ * @param kmax Maximum reciprocal space wave vectors
+ * @param tolerance Precision control
  */
 void setEwaldParameters(float alpha, const int kmax[3], float tolerance) {
     ewald_params.alpha = alpha;
@@ -31,9 +32,9 @@ void setEwaldParameters(float alpha, const int kmax[3], float tolerance) {
 /**
  * @brief 计算Ewald实空间部分的能量
  * 
- * 实空间部分包含:
- * 1. 范德华相互作用 (与直接计算相同)
- * 2. 短程库仑相互作用 (erfc(αr)/r)
+ * The real space part includes:
+ * 1. van der Waals interactions (same as direct calculation)
+ * 2. short-range Coulomb interactions (erfc(αr)/r)
  */
 inline std::pair<float, float> calcPairEnergyEwald(
     float r2, float sigma, float eps, float q1, float q2) {
