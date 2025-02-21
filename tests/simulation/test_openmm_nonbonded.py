@@ -22,7 +22,35 @@ from openmm.unit import *
 TEST_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 
 def create_test_system():
-    """Create a simple test system with a few molecules."""
+    """
+    Create a simple test system with a benzene-like molecule and a water-like molecule.
+    
+    System configuration:
+    1. Periodic boundary conditions with 3nm box size
+    2. Movement molecule (benzene-like):
+       - 6 carbon atoms in a ring
+       - Each carbon has charge +0.1e
+       - Uses OPLS-AA like parameters:
+         σ = 0.34nm, ε = 0.36kJ/mol
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#lennard-jones-interaction
+    
+    3. Fixed molecule (water-like):
+       - TIP3P water model
+       - Oxygen: charge -0.834e, σ = 0.3166nm, ε = 0.650kJ/mol
+       - Hydrogens: charge +0.417e each
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#nonbondedforce
+    
+    4. Nonbonded force settings:
+       - Method: CutoffNonPeriodic
+       - Cutoff distance: 1.0nm
+       - Switching function: True
+       - Switching distance: 0.9nm
+    
+    Returns:
+        system (System): OpenMM system
+        topology (Topology): System topology
+        positions (list): Initial atomic positions
+    """
     # Create a system with periodic boundary conditions
     system = System()
     box_size = 3.0 * nanometers
@@ -102,17 +130,32 @@ def create_test_system():
     return system, topology, positions
 
 def calculate_nonbonded_energy(system, positions, movement_atoms, fixed_atoms, use_pbc=True):
-    """Calculate nonbonded energy between specified groups using shifted Coulomb and LJ potentials.
+    """
+    Calculate nonbonded energy between specified groups using shifted Coulomb and LJ potentials.
     
-    The energy expression includes both electrostatic and van der Waals terms:
-    E = step(cutoff - r) * [
-        kC * q1 * q2 * (1/r - 1/cutoff) +  # shifted Coulomb
-        4 * sqrt(eps1*eps2) * ((sigma/r)^12 - (sigma/r)^6)  # LJ
-    ]
-    where:
-    - step(x) is the Heaviside step function (0 for x < 0, 1 for x >= 0)
-    - sigma = (sigma1 + sigma2)/2  # Lorentz-Berthelot mixing rule for sigma
-    - eps = sqrt(eps1*eps2)        # Lorentz-Berthelot mixing rule for epsilon
+    Energy expressions:
+    1. Lennard-Jones with switching function:
+       E_LJ = 4ε[(σ/r)¹² - (σ/r)⁶] * S(r)
+       where S(r) is the switching function:
+       S(r) = 1                                    if r ≤ r_switch
+       S(r) = (r_cut-r)²(r_cut+2r-3r_switch)/     if r_switch < r < r_cut
+              (r_cut-r_switch)³
+       S(r) = 0                                    if r ≥ r_cut
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#lennard-jones-interaction
+    
+    2. Shifted Coulomb potential:
+       E_coul = kC * q₁q₂ * (1/r - 1/r_cut)
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#coulomb-interaction-with-cutoff
+    
+    Parameters:
+        system (System): OpenMM system
+        positions (list): Atomic positions
+        movement_atoms (set): Indices of first group atoms
+        fixed_atoms (set): Indices of second group atoms
+        use_pbc (bool): Whether to use periodic boundary conditions
+    
+    Returns:
+        energy (Quantity): Calculated nonbonded energy
     """
     # Complete nonbonded energy expression, including Coulomb and LJ
     energy_expression = """
@@ -185,11 +228,24 @@ def calculate_nonbonded_energy(system, positions, movement_atoms, fixed_atoms, u
 def calculate_self_energy_correction(force, cutoff):
     """
     Calculate self-energy correction for shifted Coulomb potential.
-
-    The standard NonbondedForce subtracts a self-energy term when using shifted Coulomb:
-      U_self = - (kC/(2*r_cut)) * sum_i q_i^2.
-    To make the custom pairwise energy sum match the standard implementation,
-    we need to add this correction term (note: correction is negative).
+    
+    In OpenMM's shifted Coulomb implementation, a self-energy correction term is subtracted:
+    U_self = - (kC/(2*r_cut)) * sum_i q_i²
+    
+    This correction ensures proper energy conservation and is described in:
+    @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#coulomb-interaction-with-cutoff
+    
+    Parameters:
+        force (NonbondedForce): The force object containing particle parameters
+        cutoff (float): Cutoff distance in nm
+    
+    Returns:
+        float: Self-energy correction in kJ/mol
+        
+    Note:
+        This correction is automatically handled by OpenMM's NonbondedForce,
+        but needs to be manually applied when using CustomNonbondedForce
+        to match the standard implementation.
     """
     kC = 138.935456  # kJ·nm/mol/e^2
     sum_q2 = 0.0
@@ -202,7 +258,23 @@ def calculate_self_energy_correction(force, cutoff):
     return correction
 
 def test_attractive_interaction():
-    """Test nonbonded energy calculation for an attractive interaction."""
+    """
+    Test nonbonded energy calculation for an attractive interaction.
+    
+    Tests the attractive regime of the Lennard-Jones and Coulomb potentials:
+    1. LJ attraction: r > r_min where r_min = 2^(1/6)σ
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#lennard-jones-interaction
+    
+    2. Coulomb attraction: opposite charges
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#coulomb-interaction-without-cutoff
+    
+    System configuration:
+    - Benzene (+0.1e per C) interacting with water (-0.834e on O, +0.417e on H)
+    - Default separation should result in net attractive force
+    
+    Verification:
+    - Ensures total energy is negative (attractive)
+    """
     # Create test system
     system, topology, positions = create_test_system()
     
@@ -219,7 +291,21 @@ def test_attractive_interaction():
     print(f"Attractive interaction energy: {energy}")
 
 def test_repulsive_interaction():
-    """Test nonbonded energy calculation for a repulsive interaction."""
+    """
+    Test nonbonded energy calculation for a repulsive interaction.
+    
+    Tests the repulsive regime of the Lennard-Jones potential:
+    1. LJ repulsion: r < r_min where r_min = 2^(1/6)σ
+       E_LJ = 4ε[(σ/r)¹² - (σ/r)⁶]
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#lennard-jones-interaction
+    
+    System configuration:
+    - Moves water molecule very close to benzene (0.1 nm)
+    - At this distance, LJ repulsion dominates over electrostatic attraction
+    
+    Verification:
+    - Ensures total energy is positive (repulsive)
+    """
     # Create test system
     system, topology, positions = create_test_system()
     
@@ -246,7 +332,25 @@ def test_repulsive_interaction():
     print(f"Repulsive interaction energy: {energy}")
 
 def test_pbc_interaction():
-    """Test nonbonded energy calculation with periodic boundary conditions."""
+    """
+    Test nonbonded energy calculation with periodic boundary conditions.
+    
+    Tests the implementation of periodic boundary conditions in nonbonded calculations:
+    1. Reaction field for electrostatics:
+       E = (q₁q₂/4πε₀)[1/r + k_rf*r² - c_rf]
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#coulomb-interaction-with-cutoff
+    
+    2. Periodic wrapping for LJ interactions
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#lennard-jones-interaction
+    
+    System configuration:
+    - Moves water molecule to box edge
+    - Tests with and without PBC
+    
+    Verification:
+    - Ensures PBC affects the interaction energy
+    - Compares energies with and without PBC
+    """
     # Create test system
     system, topology, positions = create_test_system()
     
@@ -277,11 +381,28 @@ def test_pbc_interaction():
     print(f"Non-PBC interaction energy: {energy_no_pbc}")
 
 def test_cutoff_effect():
-    """Test the effect of cutoff distance on nonbonded energy calculation.
+    """
+    Test the effect of cutoff distance on nonbonded energy calculation.
     
-    This test verifies that the nonbonded energy decreases with distance and
-    becomes zero beyond the cutoff distance. We disable PBC to ensure we're
-    measuring true distance-dependent effects.
+    Tests the implementation of cutoff-based methods:
+    1. Switching function for LJ:
+       S(r) = 1-6x⁵+15x⁴-10x³, x=(r-r_switch)/(r_cutoff-r_switch)
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#lennard-jones-interaction
+    
+    2. Reaction field for Coulomb:
+       E = (q₁q₂/4πε₀)[1/r + k_rf*r² - c_rf]
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#coulomb-interaction-with-cutoff
+    
+    Test distances:
+    - 0.5 nm: Well within cutoff
+    - 0.7 nm: Within cutoff
+    - 0.9 nm: At switching distance
+    - 1.2 nm: Beyond cutoff
+    
+    Verification:
+    - Energy decreases with distance
+    - Energy goes to zero beyond cutoff
+    - Switching function properly applied
     """
     # Create test system
     system, topology, positions = create_test_system()
@@ -320,7 +441,22 @@ def test_cutoff_effect():
            f"Energy should be zero beyond cutoff (1.0 nm), but got {energies[-1]} kJ/mol"
 
 def test_energy_symmetry():
-    """Test that energy calculation is symmetric (A->B equals B->A)."""
+    """
+    Test that energy calculation is symmetric (A->B equals B->A).
+    
+    Tests the fundamental physical principle that nonbonded interactions are symmetric:
+    1. LJ interaction symmetry:
+       E_LJ(1,2) = E_LJ(2,1)
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#lennard-jones-interaction
+    
+    2. Coulomb interaction symmetry:
+       E_coul(1,2) = E_coul(2,1)
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#coulomb-interaction-without-cutoff
+    
+    Verification:
+    - Calculates energy both ways (group1->group2 and group2->group1)
+    - Ensures absolute difference is negligible
+    """
     # Create test system
     system, topology, positions = create_test_system()
     
@@ -340,7 +476,26 @@ def test_energy_symmetry():
     print(f"Reverse energy: {energy2}")
 
 def test_compare_custom_vs_standard_nonbonded():
-    """Compare energy calculations between CustomNonbondedForce and NonbondedForce."""
+    """
+    Compare energy calculations between CustomNonbondedForce and NonbondedForce.
+    
+    Tests the equivalence of custom and standard implementations of:
+    1. LJ potential:
+       E = 4ε[(σ/r)¹² - (σ/r)⁶]
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#lennard-jones-interaction
+    
+    2. Coulomb potential:
+       E = (1/4πε₀)(q₁q₂/r)
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#coulomb-interaction-without-cutoff
+    
+    Parameters tested:
+    - Particle charges, σ, and ε values
+    - Cutoff distances
+    - Switching function
+    
+    Verification:
+    - Relative difference < 1e-6
+    """
     # Create test system
     system, topology, positions = create_test_system()
     
@@ -423,7 +578,24 @@ def test_compare_custom_vs_standard_nonbonded():
     del context_standard, context_custom
 
 def test_compare_nonbonded_methods():
-    """Compare different nonbonded methods between CustomNonbondedForce and NonbondedForce."""
+    """
+    Compare different nonbonded methods between CustomNonbondedForce and NonbondedForce.
+    
+    Tests different calculation methods:
+    1. No cutoff:
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#coulomb-interaction-without-cutoff
+    
+    2. Cutoff with reaction field:
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#coulomb-interaction-with-cutoff
+    
+    Tolerances:
+    - NoCutoff: 1e-6 (higher precision)
+    - CutoffNonPeriodic: 5e-4 (allows for switching function effects)
+    
+    Verification:
+    - Compares energies between custom and standard implementations
+    - Ensures differences are within method-specific tolerances
+    """
     # Create test system
     system, topology, positions = create_test_system()
     
@@ -553,11 +725,21 @@ def test_compare_nonbonded_methods():
         del context_standard, context_custom
 
 def test_compare_switching_functions():
-    """Test nonbonded interactions with switching function.
+    """
+    Test nonbonded interactions with switching function.
     
-    This test compares the energy calculations between:
+    Tests switching function implementation:
+    1. LJ switching function:
+       S(r) = 1-6x⁵+15x⁴-10x³, x=(r-r_switch)/(r_cutoff-r_switch)
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#lennard-jones-interaction
+    
+    Compares:
     1. With switching function
     2. Without switching function
+    
+    Verification:
+    - Switching function properly modifies energy
+    - Energy smoothly approaches zero at cutoff
     """
     # Create test system
     system, topology, positions = create_test_system()
@@ -736,13 +918,24 @@ def test_compare_switching_functions():
     del context, integrator
 
 def test_compare_separate_terms():
-    """Compare Coulomb and LJ terms separately.
+    """
+    Compare Coulomb and LJ terms separately.
     
-    This test verifies that the energy calculated by CustomNonbondedForce matches
-    the results from standard OpenMM NonbondedForce by comparing:
-    1. Coulomb term
-    2. LJ term
-    3. Total energy
+    Tests the individual contributions of:
+    1. Lennard-Jones term:
+       E_LJ = 4ε[(σ/r)¹² - (σ/r)⁶]
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#lennard-jones-interaction
+    
+    2. Coulomb term:
+       E_coul = (1/4πε₀)(q₁q₂/r)
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#coulomb-interaction-without-cutoff
+    
+    3. Total energy:
+       E_total = E_LJ + E_coul
+    
+    Verification:
+    - Compares each term with OpenMM reference
+    - Ensures relative error < 1%
     """
     # Create test system
     system, topology, positions = create_test_system()
@@ -879,28 +1072,26 @@ def test_compare_separate_terms():
     del context, integrator
 
 def test_compare_naive_vs_cutoff_energy():
-    """Compare energy differences between simple formula and cutoff formula.
+    """
+    Compare energy differences between simple formula and cutoff formula.
     
-    Simple formula (with hard cutoff):
-    E = step(cutoff - r) * (
-        kC * q1 * q2 / r + 
-        4 * sqrt(eps1*eps2) * (
-            (0.5*(sigma1+sigma2)/r)^12 - 
-            (0.5*(sigma1+sigma2)/r)^6
-        )
-    )
-        
-    Cutoff formula (using shifted Coulomb potential and LJ switching function):
-    E = step(cutoff - r) * (
-        kC * q1 * q2 * (1/r - 1/cutoff) + 
-        4 * sqrt(eps1*eps2) * (
-            (0.5*(sigma1+sigma2)/r)^12 - 
-            (0.5*(sigma1+sigma2)/r)^6
-        ) * (
-            step(switch - r) +
-            step(r - switch) * (cutoff - r)^2 * (cutoff + 2*r - 3*switch) / ((cutoff - switch)^3)
-        )
-    )
+    Tests two implementations:
+    1. Simple formula (hard cutoff):
+       E = step(cutoff - r) * (kC * q₁q₂/r + 4ε[(σ/r)¹² - (σ/r)⁶])
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#coulomb-interaction-without-cutoff
+    
+    2. Cutoff formula:
+       - Shifted Coulomb: E_coul = kC * q₁q₂ * (1/r - 1/r_cutoff)
+       - LJ with switching: E_LJ = 4ε[(σ/r)¹² - (σ/r)⁶] * S(r)
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#coulomb-interaction-with-cutoff
+    
+    Test distances:
+    - Inside switching region (0.9-1.0 nm)
+    - Beyond cutoff (>1.0 nm)
+    
+    Verification:
+    - Energy properly goes to zero at cutoff
+    - Switching function properly applied
     """
     # Create test system
     system, topology, positions = create_test_system()
@@ -1155,17 +1346,27 @@ def test_compare_naive_vs_cutoff_energy():
         del naive_system, cutoff_system
 
 def test_detailed_energy_comparison_simple_vs_openmm_cutoff():
-    """Detailed comparison of energy between simple formula (hard cutoff) and OpenMM cutoff formula 
-    (shifted Coulomb and LJ switching function) at multiple distances.
+    """
+    Detailed comparison of energy between simple formula and OpenMM cutoff formula.
     
-    The output table includes for each distance:
-    - simple_energy: Energy calculated using simple cutoff formula (kJ/mol)
-    - cutoff_energy: Energy calculated using OpenMM cutoff formula (shift/switch function) after self-energy correction (kJ/mol)
-    - abs_diff: Absolute difference between the two (kJ/mol)
-    - rel_diff: Relative difference between the two (percentage)
+    Tests energy calculations at multiple distances with:
+    1. Simple cutoff formula:
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#coulomb-interaction-without-cutoff
     
-    Note: The system and particle parameters used in this test are consistent with those defined in create_test_system(),
-    and the x-coordinate of the water molecule (last 3 atoms in the original system) will be set to the specified test distance (nm).
+    2. OpenMM cutoff formula with:
+       - Reaction field electrostatics
+       - LJ switching function
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#coulomb-interaction-with-cutoff
+    
+    Output table includes:
+    - simple_energy: Energy from simple cutoff formula
+    - cutoff_energy: Energy from OpenMM cutoff formula
+    - abs_diff: Absolute difference
+    - rel_diff: Relative difference
+    
+    System configuration:
+    - Uses test system from create_test_system()
+    - Water molecule position varied along x-axis
     """
     # Get initial system, topology and positions
     system, topology, positions = create_test_system()
@@ -1468,7 +1669,32 @@ def test_compare_all_methods_with_self_energy():
             print(f"  Standard-Custom: {abs(standard_energy - custom_energy_corrected):.6f} kJ/mol")
 
 def test_analyze_openmm_energy_terms():
-    """Analyze OpenMM energy terms by calculating Coulomb and LJ terms separately."""
+    """
+    Analyze OpenMM energy terms by calculating Coulomb and LJ terms separately.
+    
+    Tests the decomposition and analysis of nonbonded energy terms:
+    1. Coulomb term with reaction field:
+       E_rf = (q₁q₂/4πε₀)[1/r + k_rf*r² - c_rf]
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#coulomb-interaction-with-cutoff
+    
+    2. Lennard-Jones term with switching:
+       E_LJ = 4ε[(σ/r)¹² - (σ/r)⁶] * S(r)
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#lennard-jones-interaction
+    
+    3. Total energy:
+       E_total = E_rf + E_LJ
+    
+    Test distances:
+    - 0.35 nm: Strong repulsion region
+    - 0.5-0.7 nm: Normal interaction region
+    - 0.9-1.0 nm: Switching region
+    - >1.0 nm: Beyond cutoff
+    
+    Verification:
+    - Individual terms match OpenMM reference
+    - Sum of terms equals total energy
+    - Energy behavior in different regions is physically reasonable
+    """
     # Create test system
     system, topology, positions = create_test_system()
     
@@ -1611,16 +1837,29 @@ def test_analyze_openmm_energy_terms():
             print(f"  Relative difference: {diff/abs(standard_energy)*100 if abs(standard_energy) > 1e-10 else 0:.6f}%")
 
 def test_cutoff_periodic_comparison():
-    """Compare energy between CustomNonbondedForce and NonbondedForce in CutoffPeriodic mode.
+    """
+    Compare energy between CustomNonbondedForce and NonbondedForce in CutoffPeriodic mode.
     
-    This test verifies that the energy calculated by CustomNonbondedForce using reaction-field
-    Coulomb potential and LJ switching function matches the results from standard OpenMM
-    NonbondedForce in periodic boundary conditions.
+    Tests periodic boundary implementations with:
+    1. Reaction-field electrostatics:
+       E = (q₁q₂/4πε₀)[1/r + k_rf*r² - c_rf]
+       where:
+       k_rf = (εₛ-1)/(2εₛ+1)/r_c³
+       c_rf = (3εₛ)/(2εₛ+1)/r_c
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#coulomb-interaction-with-cutoff
     
-    Test includes:
-    1. Reaction-field electrostatics
-    2. LJ potential with switching function
-    3. Periodic boundary conditions
+    2. LJ with switching function:
+       S(r) = 1-6x⁵+15x⁴-10x³
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#lennard-jones-interaction
+    
+    Parameters:
+    - Cutoff: 1.0 nm
+    - Switching: 0.9 nm
+    - Reaction field dielectric: 78.5
+    
+    Verification:
+    - Compares energies at various distances
+    - Analyzes switching function behavior
     """
     # Create test system
     system, topology, positions = create_test_system()
@@ -1822,14 +2061,26 @@ def test_cutoff_periodic_comparison():
     print("- Beyond cutoff (r ≥ 1.0 nm): absolute error < 0.2 kJ/mol")
 
 def test_separate_lj_coulomb_periodic():
-    """Compare LJ and reaction field Coulomb terms separately in periodic boundary conditions.
+    """
+    Compare LJ and reaction field Coulomb terms separately in periodic boundary conditions.
     
-    This test decomposes the CustomNonbondedForce energy into:
-    1. LJ term: Lennard-Jones potential with switching function
-    2. Coulomb term: Reaction field electrostatic potential
+    Tests individual terms:
+    1. LJ term with switching:
+       E_LJ = 4ε[(σ/r)¹² - (σ/r)⁶] * S(r)
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#lennard-jones-interaction
     
-    Each term is compared with standard OpenMM NonbondedForce results to better understand
-    the contributions and sources of error from different terms.
+    2. Reaction field Coulomb:
+       E_rf = (q₁q₂/4πε₀)[1/r + k_rf*r² - c_rf]
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#coulomb-interaction-with-cutoff
+    
+    Parameters:
+    - Cutoff: 1.0 nm
+    - Switching: 0.9 nm
+    - Reaction field dielectric: 78.5
+    
+    Verification:
+    - Compares each term with OpenMM reference
+    - Analyzes relative contributions
     """
     # Create test system
     system, topology, positions = create_test_system()
@@ -1995,12 +2246,27 @@ def test_separate_lj_coulomb_periodic():
             assert abs_diff < 2e-1, f"Energy should be close to zero beyond cutoff at {dist} nm, but difference is {abs_diff:.6f} kJ/mol"
 
 def test_compare_force_parameters_and_energies():
-    """Compare parameter settings and energy calculations between NonbondedForce and CustomNonbondedForce.
+    """
+    Compare parameter settings and energy calculations between NonbondedForce and CustomNonbondedForce.
     
-    This test will:
-    1. Get parameter settings from standard NonbondedForce
-    2. Apply these parameters to CustomNonbondedForce
-    3. Compare energy results from both methods
+    Tests parameter consistency:
+    1. NonbondedForce parameters:
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#nonbondedforce
+       - Cutoff distance
+       - Switching function
+       - Reaction field dielectric
+    
+    2. CustomNonbondedForce implementation:
+       - Matching parameters
+       - Equivalent energy expressions
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#coulomb-interaction-with-cutoff
+    
+    Verification:
+    - Parameter values match
+    - Energy calculations agree within tolerances:
+      * Within switching: < 0.1%
+      * Switching region: < 0.5%
+      * Beyond cutoff: < 0.2 kJ/mol
     """
     # Create test system
     system, topology, positions = create_test_system()
