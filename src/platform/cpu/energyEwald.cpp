@@ -270,6 +270,90 @@ void checkSystemNeutrality(const model::MCState& state) {
 }
 
 /**
+ * @brief Calculate real-space part of Ewald sum using erfc(αr)/r
+ * 
+ * For each pair of atoms within cutoff:
+ * V_real(r) = q_i * q_j * erfc(α*r)/r
+ */
+void computeRealSpaceEwald(model::MCState& state, bool movement_only) {
+    const auto& box = state.info.box;
+    auto& atoms = state.atoms;  // Remove const to allow modification
+    auto& residues = state.residues;  // Remove const to allow modification
+    const float cutoff2 = ewald_params.cutoff * ewald_params.cutoff;
+    
+    // Reset electrostatic energies
+    for(auto& residue : residues) {
+        if(residue.active) {
+            residue.energy_elec = 0.0f;
+        }
+    }
+    
+    // Loop over all residue pairs
+    for(int r1 = 0; r1 < state.activeResidueCount; r1++) {
+        if(!residues[r1].active) continue;
+        if(movement_only) {
+            bool in_movement = false;
+            for(const auto& movementInfo : state.movementResidues) {
+                if(r1 >= movementInfo.startIndex && 
+                   r1 < movementInfo.startIndex + movementInfo.activeCount) {
+                    in_movement = true;
+                    break;
+                }
+            }
+            if(!in_movement) continue;
+        }
+        
+        for(int r2 = r1 + 1; r2 < state.activeResidueCount; r2++) {
+            if(!residues[r2].active) continue;
+            
+            // Loop over atoms in residue pairs
+            for(int i = residues[r1].atomStart; 
+                i < residues[r1].atomStart + residues[r1].atomCount; i++) {
+                
+                for(int j = residues[r2].atomStart;
+                    j < residues[r2].atomStart + residues[r2].atomCount; j++) {
+                    
+                    // Calculate minimum image distance
+                    float dx = atoms[i].x - atoms[j].x;
+                    float dy = atoms[i].y - atoms[j].y;
+                    float dz = atoms[i].z - atoms[j].z;
+                    
+                    // Apply PBC
+                    dx -= box[0] * std::round(dx/box[0]);
+                    dy -= box[1] * std::round(dy/box[1]);
+                    dz -= box[2] * std::round(dz/box[2]);
+                    
+                    float r2 = dx*dx + dy*dy + dz*dz;
+                    
+                    // Only compute for pairs within cutoff
+                    if(r2 < cutoff2) {
+                        // Apply minimum safe distance
+                        if(r2 < MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE) {
+                            r2 = MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE;
+                        }
+                        
+                        float r = std::sqrt(r2);
+                        float qi = atoms[i].charge;
+                        float qj = atoms[j].charge;
+                        
+                        // Use erfc(αr)/r for real space
+                        float erfc_term = ewald_params.erfcApprox(r);
+                        float energy = COULOMB * qi * qj * erfc_term / r;
+                        
+                        // Apply energy limits
+                        energy = std::min(std::max(energy, -MAX_SAFE_ENERGY), MAX_SAFE_ENERGY);
+                        
+                        // Add energy to both residues
+                        residues[r1].energy_elec += energy;
+                        residues[r2].energy_elec += energy;
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
  * @brief 使用Ewald方法计算系统能量
  */
 void computeSystemEnergyEwald(model::MCState& state) {
@@ -291,8 +375,11 @@ void computeSystemEnergyEwald(model::MCState& state) {
             minBoxSize/2, " nm). This may affect minimum image convention.");
     }
     
-    // 实空间部分
-    computeSystemEnergyCutoff(state);
+    // 实空间部分 - 使用erfc(αr)/r
+    computeRealSpaceEwald(state, false);
+    
+    // VDW能量仍使用普通截断
+    computeSystemEnergyCutoff(state);  // Use the correct function name
     
     // 倒空间部分
     double recip_energy = computeReciprocalEnergy(state, false);
@@ -338,8 +425,11 @@ void computeMovementEnergyEwald(model::MCState& state) {
             minBoxSize/2, " nm). This may affect minimum image convention.");
     }
     
-    // 实空间部分
-    computeMovementEnergyCutoff(state);
+    // 实空间部分 - 使用erfc(αr)/r
+    computeRealSpaceEwald(state, true);
+    
+    // VDW能量仍使用普通截断
+    computeMovementEnergyCutoff(state);  // Use the correct function name
     
     // 倒空间部分
     double recip_energy = computeReciprocalEnergy(state, true);
