@@ -23,16 +23,29 @@ from openmm.app.gromacstopfile import GromacsTopFile
 TEST_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 
 def load_test_system():
-    """从PDB和TOP文件加载测试系统。"""
-    # 加载PDB文件
+    """
+    Load test system from PDB and TOP files.
+    
+    System configuration:
+    1. Nonbonded force settings:
+       - Method: CutoffNonPeriodic
+       - Cutoff distance: 1.0 nm
+       - Switching distance: 0.9 nm
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#nonbondedforce
+    
+    Returns:
+        system (System): OpenMM system with nonbonded forces
+        positions (list): Initial atomic positions
+    """
+    # Load PDB file
     pdb_path = os.path.join(TEST_DATA_DIR, "test.pdb")
     pdb = PDBFile(pdb_path)
     
-    # 加载TOP文件
+    # Load TOP file
     top_path = os.path.join(TEST_DATA_DIR, "test.top")
     top = GromacsTopFile(top_path)
     
-    # 创建系统
+    # Create system
     system = top.createSystem(
         nonbondedMethod=CutoffNonPeriodic,
         nonbondedCutoff=1.0*nanometer,
@@ -42,30 +55,65 @@ def load_test_system():
     return system, pdb.positions
 
 def test_verify_openmm_expressions():
-    """验证我们的自定义非键相互作用表达式与OpenMM默认实现的一致性。"""
-    # 加载测试系统
+    """
+    Verify consistency between custom nonbonded expressions and OpenMM default implementation.
+    
+    Tests two implementations:
+    1. Standard nonbonded interactions:
+       E = E_coulomb + E_LJ
+       where:
+       E_coulomb = (kC * q₁q₂)/r
+       E_LJ = 4ε[(σ/r)¹² - (σ/r)⁶]
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#lennard-jones-interaction
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#coulomb-interaction-without-cutoff
+    
+    2. Exception interactions (1-4 pairs):
+       E = coulombScale * E_coulomb + ljScale * E_LJ
+       where:
+       E_coulomb = (kC * q₁q₂)/r
+       E_LJ = 4ε[(σ/r)¹² - (σ/r)⁶]
+       @http://docs.openmm.org/8.2.0/userguide/theory/02_standard_forces.html#nonbondedforce
+    
+    Parameters:
+    - kC: Coulomb constant (138.935456 kJ·nm/mol/e²)
+    - q₁,q₂: Particle charges
+    - σ: Combined LJ diameter (σ₁₂ = (σ₁ + σ₂)/2)
+    - ε: Combined LJ well depth (ε₁₂ = √(ε₁ε₂))
+    - r: Interparticle distance
+    
+    Test distances:
+    - 0.9 nm: At switching distance
+    - 0.95 nm: In switching region
+    - 1.0 nm: At cutoff
+    - 1.1-2.0 nm: Beyond cutoff
+    
+    Verification:
+    - Relative error < 0.0001% for all distances
+    - Both standard and exception interactions match
+    """
+    # Load test system
     system, positions = load_test_system()
     
-    # 获取原始NonbondedForce
+    # Get original NonbondedForce
     original_nb_force = None
     for force in system.getForces():
         if isinstance(force, NonbondedForce):
             original_nb_force = force
             break
     
-    # 定义测试距离
-    distances = [0.9, 0.95, 1.0, 1.1, 1.5, 2.0]  # 移除极端短距离
-    print("\n=== 比较不同非键相互作用表达式 ===")
-    print("距离(nm)  OpenMM默认   自定义公式    相对误差(%)")
+    # Define test distances
+    distances = [0.9, 0.95, 1.0, 1.1, 1.5, 2.0]  # Remove extreme short distances
+    print("\n=== Comparing Different Nonbonded Interaction Expressions ===")
+    print("Distance(nm)  OpenMM Default   Custom Formula    Relative Error(%)")
     print("-" * 55)
     
     platform = Platform.getPlatformByName('Reference')
     
-    # 打印系统基本信息（只打印一次）
-    print(f"\n系统信息: {system.getNumParticles()}个粒子")
+    # Print system basic information (only once)
+    print(f"\nSystem Information: {system.getNumParticles()} particles")
     
     for dist in distances:
-        # 缩放所有位置
+        # Scale all positions
         scaled_positions = [Vec3(pos[0].value_in_unit(nanometers) * dist,
                                pos[1].value_in_unit(nanometers) * dist,
                                pos[2].value_in_unit(nanometers) * dist) * nanometers
@@ -89,7 +137,7 @@ def test_verify_openmm_expressions():
         
         openmm_system.addForce(openmm_nb_force)
         
-        # 1. 计算OpenMM默认实现的能量
+        # 1. Calculate energy using OpenMM default implementation
         integrator = VerletIntegrator(0.001 * picoseconds)
         context = Context(openmm_system, integrator, platform)
         context.setPositions(scaled_positions)
@@ -97,8 +145,8 @@ def test_verify_openmm_expressions():
         openmm_energy = state.getPotentialEnergy()
         del context, integrator
 
-        # 2. 计算自定义公式的能量
-        # 2.1 计算正常非键相互作用
+        # 2. Calculate energy using custom formula
+        # 2.1 Calculate normal nonbonded interactions
         combined_nonbonded_expression = """
             (kC * q1 * q2 / r + 4 * sqrt(eps1*eps2) * ((0.5*(sigma1+sigma2)/r)^12 - (0.5*(sigma1+sigma2)/r)^6))
         """
@@ -110,12 +158,12 @@ def test_verify_openmm_expressions():
         nonbonded_force.addGlobalParameter("kC", 138.935456)
         nonbonded_force.setNonbondedMethod(CustomNonbondedForce.NoCutoff)
 
-        # 添加粒子参数
+        # Add particle parameters
         for i in range(original_nb_force.getNumParticles()):
             charge, sigma, epsilon = original_nb_force.getParticleParameters(i)
             nonbonded_force.addParticle([charge, sigma, epsilon])
 
-        # 2.2 计算例外相互作用
+        # 2.2 Calculate exception interactions
         exception_expression = """
             (kC * chargeprod / r * coulombscale + 4 * epsilon * ((sigma/r)^12 - (sigma/r)^6) * ljscale)
         """
@@ -135,7 +183,7 @@ def test_verify_openmm_expressions():
             exception_force.addBond(p1, p2, [chargeProd, sigma, epsilon, lj_scale, coulomb_scale])
             nonbonded_force.addExclusion(p1, p2)
 
-        # 创建系统并计算能量
+        # Create system and calculate energy
         custom_system = System()
         for i in range(system.getNumParticles()):
             custom_system.addParticle(system.getParticleMass(i))
@@ -148,13 +196,13 @@ def test_verify_openmm_expressions():
         custom_energy = context.getState(getEnergy=True).getPotentialEnergy()
         del context, integrator
 
-        # 计算相对误差
+        # Calculate relative error
         openmm_val = openmm_energy.value_in_unit(kilojoules_per_mole)
         custom_val = custom_energy.value_in_unit(kilojoules_per_mole)
         rel_error = abs(custom_val - openmm_val) / abs(openmm_val) * 100 if abs(openmm_val) > 1e-6 else 0.0
         
         print(f"{dist:6.2f}  {openmm_val:10.4f}  {custom_val:11.4f}  {rel_error:8.4f}")
         
-        # 验证结果
+        # Verify results
         assert rel_error < 1e-4, f"Relative error too large: {rel_error:.4f}%"
 
