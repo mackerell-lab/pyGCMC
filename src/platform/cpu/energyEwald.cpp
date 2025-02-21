@@ -138,6 +138,12 @@ float computeReciprocalEnergy(model::MCState& state, bool movement_only) {
     const auto& atoms = state.atoms;
     float volume = box[0] * box[1] * box[2];
     
+    // 计算总电荷
+    float totalCharge = 0.0f;
+    for(const auto& atom : atoms) {
+        totalCharge += atom.charge;
+    }
+    
     // 初始化exp(ikr)表格
     if (ewald_params.expIkrTable.empty()) {
         ewald_params.initializeExpIkrTable(static_cast<int>(atoms.size()));
@@ -146,108 +152,67 @@ float computeReciprocalEnergy(model::MCState& state, bool movement_only) {
     // 预计算exp(ikr)表格
     typedef std::complex<float> Complex;
     const float TWO_PI = 2.0f * M_PI;
-    const float recipCoeff = COULOMB * 4 * M_PI / (volume);
+    const float recipCoeff = COULOMB * 2 * M_PI / volume;  // 注意这里改为2π而不是4π
     const float factorEwald = -1.0f / (4.0f * ewald_params.alpha * ewald_params.alpha);
-    
-    // 初始化exp(ikr)表格
-    for (int i = 0; i < static_cast<int>(atoms.size()); i++) {
-        const auto& pos = atoms[i];
-        for (int m = 0; m < 3; m++) {
-            // 计算基本exp(ikr)值
-            float coord = (m == 0) ? pos.x : ((m == 1) ? pos.y : pos.z);
-            float kr = TWO_PI * coord / box[m];
-            Complex eir(std::cos(kr), std::sin(kr));
-            ewald_params.expIkrTable[i*3 + m] = Complex(1.0f, 0.0f);  // k=0
-            ewald_params.expIkrTable[i*3 + m + atoms.size()*3] = eir; // k=1
-            
-            // 计算更高阶的k值
-            for (int k = 2; k < ewald_params.maxK; k++) {
-                ewald_params.expIkrTable[i*3 + m + k*atoms.size()*3] = 
-                    ewald_params.expIkrTable[i*3 + m + (k-1)*atoms.size()*3] * eir;
-            }
-        }
-    }
     
     float total_energy = 0.0f;
     
     // 优化的k空间求和（利用对称性）
-    int lowry = 0;
-    int lowrz = 1;
-    
     for (int rx = 0; rx <= ewald_params.kmax[0]; rx++) {
         float kx = rx * TWO_PI / box[0];
         
-        for (int ry = lowry; ry <= ewald_params.kmax[1]; ry++) {
+        for (int ry = -ewald_params.kmax[1]; ry <= ewald_params.kmax[1]; ry++) {
             float ky = ry * TWO_PI / box[1];
             
-            // 计算xy平面的结构因子
-            if (ry >= 0) {
-                for (int n = 0; n < static_cast<int>(atoms.size()); n++) {
-                    ewald_params.expIkrXY[n] = ewald_params.expIkrTable[n*3 + rx*atoms.size()*3] * 
-                                              ewald_params.expIkrTable[n*3 + 1 + ry*atoms.size()*3];
+            for (int rz = -ewald_params.kmax[2]; rz <= ewald_params.kmax[2]; rz++) {
+                // 处理k=0的情况
+                if (rx == 0 && ry == 0 && rz == 0) {
+                    if (!movement_only && std::abs(totalCharge) > 1e-6f) {
+                        // 对非零净电荷的处理
+                        float backgroundEnergy = -COULOMB * TWO_PI * totalCharge * totalCharge / 
+                            (2.0f * volume * ewald_params.alpha * ewald_params.alpha);
+                        total_energy += backgroundEnergy;
+                    }
+                    continue;
                 }
-            } else {
-                for (int n = 0; n < static_cast<int>(atoms.size()); n++) {
-                    ewald_params.expIkrXY[n] = ewald_params.expIkrTable[n*3 + rx*atoms.size()*3] * 
-                                              std::conj(ewald_params.expIkrTable[n*3 + 1 + (-ry)*atoms.size()*3]);
-                }
-            }
-            
-            for (int rz = lowrz; rz <= ewald_params.kmax[2]; rz++) {
+                
                 float kz = rz * TWO_PI / box[2];
+                float k2 = kx*kx + ky*ky + kz*kz;
                 
                 Complex structureFactor(0.0f, 0.0f);
-                
-                // 计算结构因子
-                if (rz >= 0) {
-                    for (int n = 0; n < static_cast<int>(atoms.size()); n++) {
-                        if (movement_only) {
-                            bool in_movement = false;
-                            for (const auto& movementInfo : state.movementResidues) {
-                                if (n >= movementInfo.startIndex && 
-                                    n < movementInfo.startIndex + movementInfo.activeCount) {
-                                    in_movement = true;
-                                    break;
-                                }
+                for (int n = 0; n < static_cast<int>(atoms.size()); n++) {
+                    if (movement_only) {
+                        bool in_movement = false;
+                        for (const auto& movementInfo : state.movementResidues) {
+                            if (n >= movementInfo.startIndex && 
+                                n < movementInfo.startIndex + movementInfo.activeCount) {
+                                in_movement = true;
+                                break;
                             }
-                            if (!in_movement) continue;
                         }
-                        structureFactor += atoms[n].charge * 
-                            (ewald_params.expIkrXY[n] * ewald_params.expIkrTable[n*3 + 2 + rz*atoms.size()*3]);
+                        if (!in_movement) continue;
                     }
-                } else {
-                    for (int n = 0; n < static_cast<int>(atoms.size()); n++) {
-                        if (movement_only) {
-                            bool in_movement = false;
-                            for (const auto& movementInfo : state.movementResidues) {
-                                if (n >= movementInfo.startIndex && 
-                                    n < movementInfo.startIndex + movementInfo.activeCount) {
-                                    in_movement = true;
-                                    break;
-                                }
-                            }
-                            if (!in_movement) continue;
-                        }
-                        structureFactor += atoms[n].charge * 
-                            (ewald_params.expIkrXY[n] * std::conj(ewald_params.expIkrTable[n*3 + 2 + (-rz)*atoms.size()*3]));
-                    }
+                    
+                    float kdotr = kx*atoms[n].x + ky*atoms[n].y + kz*atoms[n].z;
+                    Complex phase(std::cos(kdotr), std::sin(kdotr));
+                    structureFactor += atoms[n].charge * phase;
                 }
-                
-                float k2 = kx*kx + ky*ky + kz*kz;
-                if (k2 == 0.0f) continue;
                 
                 float ak = std::exp(k2 * factorEwald) / k2;
                 float structureFactorNorm = std::norm(structureFactor);
-                total_energy += recipCoeff * ak * structureFactorNorm;
                 
-                // 如果rx > 0，添加-kx的贡献（利用对称性）
-                if (rx > 0) {
+                // 对rx=0的情况，只计算ry>0或(ry=0,rz>0)的部分
+                if (rx == 0) {
+                    if (ry > 0 || (ry == 0 && rz > 0)) {
+                        total_energy += 2.0f * recipCoeff * ak * structureFactorNorm;
+                    }
+                }
+                // 对rx>0的情况，计算所有ry,rz
+                else {
                     total_energy += recipCoeff * ak * structureFactorNorm;
                 }
             }
-            lowrz = 1 - ewald_params.kmax[2];
         }
-        lowry = 1 - ewald_params.kmax[1];
     }
     
     return total_energy;
@@ -258,6 +223,7 @@ float computeReciprocalEnergy(model::MCState& state, bool movement_only) {
  */
 float computeSelfEnergy(model::MCState& state, bool movement_only) {
     float self_energy = 0.0f;
+    float totalCharge = 0.0f;
     
     if(movement_only) {
         for(const auto& movementInfo : state.movementResidues) {
@@ -269,6 +235,7 @@ float computeSelfEnergy(model::MCState& state, bool movement_only) {
                     j < state.residues[i].atomStart + state.residues[i].atomCount; j++) {
                     float charge = state.atoms[j].charge;
                     self_energy -= charge * charge;
+                    totalCharge += charge;
                 }
             }
         }
@@ -280,11 +247,33 @@ float computeSelfEnergy(model::MCState& state, bool movement_only) {
                 i < state.residues[r].atomStart + state.residues[r].atomCount; i++) {
                 float charge = state.atoms[i].charge;
                 self_energy -= charge * charge;
+                totalCharge += charge;
             }
         }
     }
     
-    return self_energy * COULOMB * ewald_params.alpha / std::sqrt(M_PI);
+    // 基本的自能项
+    float baseEnergy = self_energy * COULOMB * ewald_params.alpha / std::sqrt(M_PI);
+    
+    // 对非零净电荷的额外修正
+    if (!movement_only && std::abs(totalCharge) > 1e-6f) {
+        float volume = state.info.box[0] * state.info.box[1] * state.info.box[2];
+        float backgroundCorrection = -COULOMB * M_PI * totalCharge * totalCharge / 
+            (2.0f * volume * ewald_params.alpha * ewald_params.alpha);
+        baseEnergy += backgroundCorrection;
+    }
+    
+    return baseEnergy;
+}
+
+void checkSystemNeutrality(const model::MCState& state) {
+    float totalCharge = 0.0f;
+    for(const auto& atom : state.atoms) {
+        totalCharge += atom.charge;
+    }
+    if(std::abs(totalCharge) > 1e-6f) {
+        throw std::runtime_error("Ewald summation requires neutral system");
+    }
 }
 
 /**
