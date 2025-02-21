@@ -1,8 +1,9 @@
 // src/platform/cpu/energyEwald.cpp
-#include "energy.hpp"
+#include "energyEwald.hpp"
 #include <cmath>
 #include <stdexcept>
 #include <sstream>
+#include <iomanip>  // For output formatting
 
 namespace pygcmc {
 namespace platform {

@@ -3,8 +3,13 @@
 # Create platform library
 add_library(pygcmc_platform STATIC
     platform.hpp
-    cpu/energy.cpp
+    cpu/energy.hpp
+    cpu/energyCommon.hpp
+    cpu/energyCommon.cpp
+    cpu/energyDirect.hpp
+    cpu/energyEwald.hpp
     cpu/energyEwald.cpp
+    cpu/energyDirect.cpp
     # Future source files like cpuPlatform.cpp, cudaPlatform.cu, etc. can be added here
 )
 

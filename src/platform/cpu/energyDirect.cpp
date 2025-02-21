@@ -1,5 +1,5 @@
-// src/platform/cpu/energy.cpp
-#include "energy.hpp"
+// src/platform/cpu/energyDirect.cpp
+#include "energyDirect.hpp"
 #include <cmath>
 #include <stdexcept>
 #include <sstream>
@@ -13,56 +13,7 @@ namespace cpu {
 static bool debug_output = false;
 
 /**
- * @brief Coulomb constant in GROMACS MD units [kJ·nm/mol/e²]
- * 
- * k_c = 1/(4*π*ε₀) = 138.935456 kJ·nm/mol/e²
- * 
- * Unit analysis:
- * - ε₀ (vacuum permittivity) = 8.8541878128e-12 C²/(J·m)
- * - 1 kJ = 1000 J
- * - 1 nm = 1e-9 m
- * - 1 e = 1.60217663e-19 C
- * - N_A (Avogadro constant) = 6.02214076e23 mol⁻¹
- */
-const float COULOMB = 138.935456f;
-
-/**
- * @brief Safety parameters for energy calculation
- * 
- * !!! CRITICAL: Distance handling for Monte Carlo simulation !!!
- * 
- * MIN_SAFE_DISTANCE: Minimum allowed distance (1% of sigma)
- * - !!! Prevents numerical instability and infinity at r = 0
- * - !!! Essential for Monte Carlo sampling near contact
- * - !!! Implements soft core potential for r < MIN_SAFE_DISTANCE
- * 
- * MAX_SAFE_ENERGY: Maximum allowed energy per interaction
- * - !!! Prevents numerical overflow in Metropolis criterion
- * - !!! Keeps energies finite for stable MC sampling
- * - !!! Especially important for Coulomb interactions at small r
- */
-const float MIN_SAFE_DISTANCE = 0.01f;  // nm (1% of typical sigma)
-const float MAX_SAFE_ENERGY = 1e6f;     // kJ/mol
-
-/**
  * @brief Calculate LJ and Coulomb energy with safety checks
- * 
- * !!! IMPORTANT: Zero distance handling strategy !!!
- * 1. For r < MIN_SAFE_DISTANCE:
- *    - Replace actual distance with MIN_SAFE_DISTANCE
- *    - Provides continuous potential without singularity
- *    - Allows MC moves through high-energy regions
- * 
- * 2. Energy capping:
- *    - Limits maximum repulsion to MAX_SAFE_ENERGY
- *    - Prevents exp(−βE) underflow in Metropolis
- *    - Maintains numerical stability of MC sampling
- * 
- * This approach:
- * - !!! Avoids infinite energies at r = 0
- * - !!! Keeps energy continuous and differentiable
- * - !!! Allows MC sampling of close contacts
- * - !!! Prevents numerical instabilities in simulation
  */
 inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, float q1, float q2) {
     if (debug_output) {
@@ -94,7 +45,6 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
     }
     
     // Calculate LJ energy: V_LJ = 4ε[(σ/r)¹² - (σ/r)⁶]
-    // 使用更稳定的计算方法：先计算(σ/r)²，然后通过乘法得到6次和12次方
     float sigma_r2 = (sigma * sigma) / r2;  // (σ/r)²
     float sigma_r6 = sigma_r2 * sigma_r2 * sigma_r2;  // (σ/r)⁶
     float sigma_r12 = sigma_r6 * sigma_r6;  // (σ/r)¹²
@@ -120,8 +70,7 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
         platform::log(LogLevel::DEBUG, ss.str());
     }
     
-    // !!! CRITICAL: Apply energy capping for numerical stability
-    // First cap individual terms
+    // Apply energy capping for numerical stability
     if (debug_output && (std::abs(vdw_energy) > MAX_SAFE_ENERGY || std::abs(elec_energy) > MAX_SAFE_ENERGY)) {
         std::stringstream ss;
         ss << "\nEnergy capping applied:";
@@ -143,7 +92,7 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
         platform::log(LogLevel::DEBUG, ss.str());
     }
     
-    // !!! CRITICAL: Also cap total energy
+    // Cap total energy
     float total_energy = vdw_energy + elec_energy;
     float original_total = total_energy;
     if (total_energy > MAX_SAFE_ENERGY) {
@@ -191,16 +140,6 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
 
 /**
  * @brief Calculate nonbonded interactions between a single residue and all other active residues
- * 
- * @param state System state
- * @param residue_idx Index of the residue to calculate energy for
- * @param use_cutoff Whether to use distance cutoff
- * @param use_pbc Whether to use periodic boundary conditions
- * 
- * This function handles three scenarios:
- * 1. No cutoff, no PBC: Calculate interactions between all atom pairs
- * 2. With cutoff, no PBC: Only calculate interactions within cutoff distance
- * 3. With PBC: Apply minimum image convention for distance calculation
  */
 inline void computeResidueNonbondedEnergy(
     model::MCState& state,
@@ -313,17 +252,6 @@ inline void computeResidueNonbondedEnergy(
 
 /**
  * @brief Universal function for calculating all nonbonded interactions
- * 
- * @param state System state
- * @param use_cutoff Whether to use distance cutoff
- * @param movement_only Whether to calculate only for movement residues
- * @param use_pbc Whether to use periodic boundary conditions
- * 
- * This function provides a unified interface for all nonbonded energy calculations:
- * - Can handle both cutoff and non-cutoff calculations
- * - Can calculate for all residues or movement residues only
- * - Validates force field parameters based on calculation type
- * - Provides detailed debug output for energy components
  */
 void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movement_only = false, bool use_pbc = false) {
     if (debug_output) {
@@ -479,10 +407,6 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
     }
 }
 
-/**
- * @brief Interface functions for nonbonded energy calculations
- */
-
 void computeMovementEnergy(model::MCState& state) {
     computeNonbondedEnergy(state, false, true, false);  // No cutoff, movement residues only, no PBC
 }
@@ -498,15 +422,6 @@ void computeSystemEnergy(model::MCState& state) {
 void computeSystemEnergyCutoff(model::MCState& state) {
     computeNonbondedEnergy(state, true, false, false);  // With cutoff, all residues, no PBC
 }
-
-/**
- * @brief Interface functions for nonbonded energy calculations with PBC support
- * 
- * These functions provide PBC-specific versions of the energy calculations:
- * - Uses minimum image convention for distance calculations
- * - Requires valid box dimensions in state.info.box
- * - Recommended to use with cutoff for better performance
- */
 
 void computeSystemEnergyPBC(model::MCState& state) {
     if (debug_output) {
@@ -544,13 +459,10 @@ void computeSystemEnergyPBCCutoff(model::MCState& state) {
     computeNonbondedEnergy(state, true, false, true);
 }
 
-// Function to enable/disable debug output
 void setEnergyDebugOutput(bool enable) {
     debug_output = enable;
 }
 
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc
-
-
+} // namespace pygcmc 
