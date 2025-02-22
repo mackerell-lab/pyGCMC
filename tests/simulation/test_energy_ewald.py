@@ -48,6 +48,7 @@ def create_nacl_crystal(box_size, n_cells):
     residues = []
     
     # Create NaCl lattice
+    print(f"\n正在创建 {n_cells}x{n_cells}x{n_cells} 的 NaCl 晶体...")
     for i in range(n_cells):
         for j in range(n_cells):
             for k in range(n_cells):
@@ -76,7 +77,8 @@ def create_nacl_crystal(box_size, n_cells):
                 res.active = True
                 res.fixed = False
                 residues.append(res)
-    
+                
+    print(f"创建完成，共添加 {len(atoms)} 个原子和 {len(residues)} 个残基。")
     state.atoms = atoms
     state.residues = residues
     state.activeAtomCount = len(atoms)
@@ -274,8 +276,6 @@ def test_ewald_symmetry():
     assert abs(base_energy - shifted_energy) < 1e-3, \
         "Energy should be approximately invariant under translation"
 
-
-
 def test_madelung_constant():
     """Test against known Madelung constant for NaCl"""
     # Madelung constant for NaCl (from literature)
@@ -383,8 +383,6 @@ def test_madelung_constant():
     assert best_error < 0.2, \
         f"Best calculated Madelung constant ({best_madelung}) differs too much from reference ({MADELUNG_NACL})"
 
-
-
 def test_ewald_error_convergence():
     """Test the convergence of Ewald summation with respect to parameters"""
     
@@ -488,3 +486,156 @@ def test_ewald_charge_neutrality():
     except RuntimeError as e:
         print(f"Expected exception raised: {str(e)}")
         assert "neutral" in str(e).lower(), "Exception should mention charge neutrality"
+
+def read_nacl_crystal_data(file_path):
+    """读取NaCl晶体的原子位置和电荷信息"""
+    atoms = []
+    with open(file_path, 'r') as f:
+        for line in f:
+            # 跳过空行
+            if not line.strip():
+                continue
+                
+            # 解析形如 positions[0] = Vec3(0.141000,0.141000,0.141000); 的行
+            if 'Vec3' in line:
+                # 提取坐标值
+                coords = line.split('Vec3(')[1].split(')')[0].split(',')
+                x, y, z = map(float, coords)
+                
+                # 创建原子
+                atom = MCAtom()
+                atom.x = x
+                atom.y = y
+                atom.z = z
+                # 根据索引设置电荷：前500个是Na+(+1)，后500个是Cl-(-1)
+                index = len(atoms)
+                atom.charge = 1.0 if index < 500 else -1.0
+                atom.type = 0 if index < 500 else 1
+                atoms.append(atom)
+    
+    print(f"\n成功读取了 {len(atoms)} 个原子的位置信息")
+    return atoms
+
+def test_ewald_exact_energy():
+    """测试 Ewald 求和计算的绝对能量值是否正确"""
+    print("\n开始测试 Ewald 求和计算...")
+    
+    # 参数定义 - 与 TestEwald.h 保持一致
+    numParticles = 1000         # 500 Na+ and 500 Cl-
+    cutoff = 1.0                # 实空间截断距离
+    boxSize = 2.82              # 盒子尺寸
+    alpha = 2.5                 # Ewald 分离参数
+    kmax = [8, 8, 8]           # 倒空间截断
+    AVOGADRO = 6.022e23        # 阿伏伽德罗常数
+    
+    print("\n=== 初始化参数 ===")
+    print(f"numParticles: {numParticles}")
+    print(f"盒子尺寸: {boxSize:.3f} nm")
+    print(f"cutoff: {cutoff}")
+    print(f"alpha: {alpha}")
+    print(f"kmax: {kmax}")
+    
+    # 创建系统
+    state = MCState()
+    state.info.box = [boxSize, boxSize, boxSize]
+    state.info.setTemperature(300.0)
+    state.info.cutoff = cutoff
+    
+    # 设置力场参数
+    ff = MCForceField()
+    ff.numTotalTypes = 2  # Na+ and Cl-
+    
+    # 设置 LJ 参数
+    ff.ljSigma = [1.0, 1.0, 1.0, 1.0]  # 与 TestEwald.h 一致
+    ff.ljEps = [0.0, 0.0, 0.0, 0.0]    # 与 TestEwald.h 一致
+    state.forcefield = ff
+    
+    # 从 nacl_crystal.dat 读取原子位置
+    nacl_crystal_path = '../pygcmc_dev/tests/data/nacl_crystal.dat'
+    atoms = read_nacl_crystal_data(nacl_crystal_path)
+    
+    # 检查原子位置和电荷分布
+    print("\n=== 原子位置和电荷分布 ===")
+    na_count = sum(1 for atom in atoms if atom.charge > 0)
+    cl_count = sum(1 for atom in atoms if atom.charge < 0)
+    print(f"Na+ 离子数量: {na_count}")
+    print(f"Cl- 离子数量: {cl_count}")
+
+    # 检查第一个和最后一个原子的位置
+    print("\n第一个原子 (Na+):")
+    print(f"位置: ({atoms[0].x:.6f}, {atoms[0].y:.6f}, {atoms[0].z:.6f})")
+    print(f"电荷: {atoms[0].charge}")
+    print("\n最后一个原子 (Cl-):")
+    print(f"位置: ({atoms[-1].x:.6f}, {atoms[-1].y:.6f}, {atoms[-1].z:.6f})")
+    print(f"电荷: {atoms[-1].charge}")
+
+    # 将原子添加到状态中
+    state.atoms = atoms
+    state.activeAtomCount = len(atoms)
+
+    # 创建残基（每个Na+/Cl-对作为一个残基）
+    residues = []
+    for i in range(numParticles // 2):
+        res = MCResidue()
+        res.atomStart = i * 2
+        res.atomCount = 2
+        res.active = True
+        res.fixed = False
+        residues.append(res)
+    
+    state.residues = residues
+    state.activeResidueCount = len(residues)
+    
+    # 检查系统电中性
+    total_charge = sum(atom.charge for atom in state.atoms)
+    print(f"\n系统总电荷: {total_charge}")
+    assert abs(total_charge) < 1e-10, "系统必须是电中性的"
+    
+    print("\n设置Ewald参数并计算能量...")
+    # 设置Ewald参数并计算能量
+    pygcmc.setEwaldParameters(alpha, kmax)
+    print(f"设置的Ewald参数: alpha = {alpha}, kmax = {kmax}")
+    pygcmc.computeSystemEnergyEwald(state)
+    print("能量计算完成")
+    
+    # 计算系统总能量
+    calculatedEnergy = sum(res.energy_vdw + res.energy_elec for res in state.residues if res.active)
+    elec_energy = sum(res.energy_elec for res in state.residues if res.active)
+    vdw_energy = sum(res.energy_vdw for res in state.residues if res.active)
+    
+    print(f"静电能量：{elec_energy:.6f} kJ/mol")
+    print(f"范德华能量：{vdw_energy:.6f} kJ/mol")
+    print(f"计算总能量：{calculatedEnergy:.6f} kJ/mol")
+    
+    # 计算理论能量 - 使用与 TestEwald.h 相同的公式
+    # E = - (M*e^2*N_A*N)/(4*pi*epsilon0*a0*2*1000)
+    # 其中：
+    # M = 1.7476 (Madelung常数)
+    # e = 1.6022e-19 C (基本电荷)
+    # N_A = 6.022e23 (阿伏伽德罗常数)
+    # N = numParticles (总粒子数)
+    # 4*pi*epsilon0 = 1.112e-10 C²/(J m)
+    # a0 = 0.282e-9 m (晶格常数)
+    # 最后除以2是因为每对离子的能量，除以1000是转换为kJ/mol
+    exactTotalEnergy = - (1.7476 * 1.6022e-19 * 1.6022e-19 * AVOGADRO * numParticles) / (1.112e-10 * 0.282e-9 * 2 * 1000)
+
+    print(f"\n=== 最终结果 ===")
+    print(f"静电能量：{elec_energy:.6f} kJ/mol")
+    print(f"范德华能量：{vdw_energy:.6f} kJ/mol")
+    print(f"计算总能量：{calculatedEnergy:.6f} kJ/mol")
+    print(f"理论能量：{exactTotalEnergy:.6f} kJ/mol")
+    rel_error = abs(calculatedEnergy - exactTotalEnergy) / abs(exactTotalEnergy) * 100
+    print(f"相对误差：{rel_error:.6f}%")
+    
+    # 计算每个原子的平均能量
+    avg_energy_per_atom = calculatedEnergy / numParticles
+    avg_theoretical_energy_per_atom = exactTotalEnergy / numParticles
+    print(f"\n=== 每个原子的平均能量 ===")
+    print(f"计算值：{avg_energy_per_atom:.6f} kJ/mol")
+    print(f"理论值：{avg_theoretical_energy_per_atom:.6f} kJ/mol")
+    
+    # 允许20%的相对误差
+    assert abs(calculatedEnergy - exactTotalEnergy) < abs(exactTotalEnergy) * 0.2, \
+        "计算能量与理论能量的相对误差超过20%"
+    
+    print("\n测试完成")
