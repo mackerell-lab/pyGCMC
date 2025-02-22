@@ -4,6 +4,7 @@ import pytest
 import numpy as np
 import pygcmc
 from pygcmc import MCState, MCAtom, MCResidue, MCForceField, MCInfo, MCMovementResidueInfo
+import os
 
 def create_nacl_crystal(box_size, n_cells):
     """
@@ -490,7 +491,12 @@ def test_ewald_charge_neutrality():
 def read_nacl_crystal_data(file_path):
     """读取NaCl晶体的原子位置和电荷信息"""
     atoms = []
-    with open(file_path, 'r') as f:
+    # 获取当前测试文件的目录
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    # 构建数据文件的绝对路径
+    data_file = os.path.join(current_dir, '..', 'data', 'nacl_crystal.dat')
+    
+    with open(data_file, 'r') as f:
         for line in f:
             # 跳过空行
             if not line.strip():
@@ -553,8 +559,7 @@ def test_ewald_exact_energy():
     state.forcefield = ff
     
     # 从 nacl_crystal.dat 读取原子位置
-    nacl_crystal_path = '../pygcmc_dev/tests/data/nacl_crystal.dat'
-    atoms = read_nacl_crystal_data(nacl_crystal_path)
+    atoms = read_nacl_crystal_data(None)  # 文件路径现在在函数内部处理
     
     # 检查原子位置和电荷分布
     print("\n=== 原子位置和电荷分布 ===")
@@ -641,3 +646,93 @@ def test_ewald_exact_energy():
         "计算能量与理论能量的相对误差超过20%"
     
     print("\n测试完成")
+
+
+
+def test_ewald_exact():
+    """
+    新增测试：对比 Ewald 求和计算得到的能量与理论计算的 Madelung 能量
+    参考 C++ 中的 testEwaldExact 实现
+    """
+    import math
+    # 常数定义
+    eCharge = 1.6022e-19          # 元电荷，单位：C
+    AVOGADRO = 6.02214129e23      # 阿伏伽德罗常数
+    FOUR_PI_EPS0 = 1.112e-10      # 4*pi*epsilon0，单位：C²/(J·m)
+    numParticles = 1000           # 总粒子数（500 对 NaCl）
+
+    # 参数设置 - 调整参数以提高精度
+    cutoff = 1.0                # 实空间截断，单位 nm
+    boxSize = 2.82              # 盒子边长，单位 nm（10×晶胞边长，晶胞边长约 0.282 nm）
+    ewaldTol = 1e-6             # 提高误差容限
+    # 使用固定的 alpha 值，与 C++ 测试保持一致
+    alpha = 2.5
+    # 增加 kmax 以提高精度
+    kmax = [8, 8, 8]
+
+    print("\n[Test] 运行 test_ewald_exact：使用 nacl_crystal.dat 对比 Ewald 能量与理论能量")
+    print(f"使用参数：alpha = {alpha}, kmax = {kmax}, cutoff = {cutoff} nm")
+
+    # 创建系统状态
+    state = MCState()
+    state.info.box = [boxSize, boxSize, boxSize]
+    state.info.setTemperature(300.0)
+    state.info.cutoff = cutoff
+
+    # 设置力场参数：两种粒子（Na⁺ 和 Cl⁻），LJ 参数设为零，仅计算静电能
+    ff = MCForceField()
+    ff.numTotalTypes = 2
+    ff.ljSigma = [1.0, 1.0, 1.0, 1.0]  # 占位参数
+    ff.ljEps = [0.0, 0.0, 0.0, 0.0]     # 无范德华作用
+    state.forcefield = ff
+
+    # 从 nacl_crystal.dat 读取原子数据
+    atoms = read_nacl_crystal_data(None)  # 文件路径现在在函数内部处理
+    assert len(atoms) == numParticles, f"期望 {numParticles} 个原子，实际获得 {len(atoms)} 个"
+    state.atoms = atoms
+    state.activeAtomCount = len(atoms)
+
+    # 构建残基：每个残基包含一对离子（前 500 个 Na⁺ 和后 500 个 Cl⁻）
+    residues = []
+    for i in range(numParticles // 2):
+        res = MCResidue()
+        res.atomStart = i * 2
+        res.atomCount = 2
+        res.active = True
+        res.fixed = False
+        residues.append(res)
+    state.residues = residues
+    state.activeResidueCount = len(residues)
+
+    # 检查系统电中性
+    total_charge = sum(atom.charge for atom in state.atoms)
+    print(f"系统总电荷: {total_charge}")
+    assert abs(total_charge) < 1e-10, "系统必须是电中性的"
+
+    # 设置 Ewald 参数，并计算能量
+    pygcmc.setEwaldParameters(alpha, kmax)
+    pygcmc.computeSystemEnergyEwald(state)
+    energy = sum(res.energy_vdw + res.energy_elec for res in state.residues if res.active)
+    elec_energy = sum(res.energy_elec for res in state.residues if res.active)
+    vdw_energy = sum(res.energy_vdw for res in state.residues if res.active)
+    
+    print(f"计算得到的能量:")
+    print(f"  静电能量: {elec_energy:.6f} kJ/mol")
+    print(f"  范德华能量: {vdw_energy:.6f} kJ/mol")
+    print(f"  总能量: {energy:.6f} kJ/mol")
+
+    # 理论能量计算：基于 Madelung 常数公式
+    # 公式：E_exact = - (M * e^2 * N_A * N) / (4*pi*epsilon0 * a0 * 2 * 1000)
+    # 其中 M = 1.7476，a0 = 0.282e-9 m（晶胞边长）
+    exactEnergy = - (1.7476 * eCharge * eCharge * AVOGADRO * numParticles) / \
+                  (FOUR_PI_EPS0 * (0.282e-9) * 2 * 1000)
+    print(f"理论计算的 Madelung 能量: {exactEnergy:.6f} kJ/mol")
+
+    # 计算相对误差
+    rel_error = abs(energy - exactEnergy) / abs(exactEnergy) * 100
+    print(f"相对误差: {rel_error:.2f}%")
+
+    # 允许 1% 的误差
+    tol = 0.01 * abs(exactEnergy)
+    assert abs(energy - exactEnergy) < tol, \
+        f"计算能量与理论能量差异过大：|{energy - exactEnergy}| > {tol}"
