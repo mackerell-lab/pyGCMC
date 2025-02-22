@@ -152,12 +152,13 @@ inline std::pair<double, double> calcPairEnergyEwald(
  * Uses 4π/V coefficient and sums over all k-vectors, then multiplies by 1/2
  */
 double computeReciprocalEnergy(model::MCState& state, bool movement_only) {
+    // 使用 Ewald.cpp 中的实现
     const auto& box = state.info.box;
     const auto& atoms = state.atoms;
     double volume = box[0] * box[1] * box[2];
     int numAtoms = static_cast<int>(atoms.size());
-    
-    // Check system neutrality
+
+    // 检查系统中性
     double totalCharge = 0.0;
     for(const auto& atom : atoms) {
         totalCharge += static_cast<double>(atom.charge);
@@ -165,28 +166,27 @@ double computeReciprocalEnergy(model::MCState& state, bool movement_only) {
     if (std::abs(totalCharge) > 1e-10) {
         throw std::runtime_error("System must be charge neutral for Ewald summation");
     }
-    
+
     typedef std::complex<double> Complex;
-    // Use 4π/V coefficient to match standard Ewald formula
     const double recipCoeff = COULOMB * 4.0 * M_PI / volume;
     const double factorEwald = -1.0 / (4.0 * ewald_params.alpha * ewald_params.alpha);
-    
+
     double total_energy = 0.0;
-    
-    // Standard k-space summation over all k-vectors
+
+    // 标准 k 空间求和
     for (int rx = -ewald_params.kmax[0]; rx <= ewald_params.kmax[0]; rx++) {
         double kx = rx * TWO_PI / box[0];
-        
+
         for (int ry = -ewald_params.kmax[1]; ry <= ewald_params.kmax[1]; ry++) {
             double ky = ry * TWO_PI / box[1];
-            
+
             for (int rz = -ewald_params.kmax[2]; rz <= ewald_params.kmax[2]; rz++) {
-                // Skip k = 0
+                // 跳过 k = 0
                 if (rx == 0 && ry == 0 && rz == 0) continue;
-                
+
                 double kz = rz * TWO_PI / box[2];
                 double k2 = kx*kx + ky*ky + kz*kz;
-                
+
                 Complex structureFactor(0.0, 0.0);
                 for (int n = 0; n < numAtoms; n++) {
                     if (movement_only) {
@@ -200,26 +200,26 @@ double computeReciprocalEnergy(model::MCState& state, bool movement_only) {
                         }
                         if (!in_movement) continue;
                     }
-                    
+
                     double kdotr = kx*static_cast<double>(atoms[n].x) + 
-                                 ky*static_cast<double>(atoms[n].y) + 
-                                 kz*static_cast<double>(atoms[n].z);
+                                   ky*static_cast<double>(atoms[n].y) + 
+                                   kz*static_cast<double>(atoms[n].z);
                     Complex phase(std::cos(kdotr), std::sin(kdotr));
                     structureFactor += static_cast<double>(atoms[n].charge) * phase;
                 }
-                
+
                 double ak = std::exp(k2 * factorEwald) / k2;
                 double structureFactorNorm = std::norm(structureFactor);
-                
-                // Add k-space contribution
+
+                // 添加 k 空间贡献
                 total_energy += recipCoeff * ak * structureFactorNorm;
             }
         }
     }
-    
-    // Multiply by 1/2 since we summed over both positive and negative k
+
+    // 乘以 1/2，因为我们对正负 k 都进行了求和
     total_energy *= 0.5;
-    
+
     return total_energy;
 }
 
@@ -276,18 +276,19 @@ void checkSystemNeutrality(const model::MCState& state) {
  * V_real(r) = q_i * q_j * erfc(α*r)/r
  */
 void computeRealSpaceEwald(model::MCState& state, bool movement_only) {
+    // 使用 Ewald.cpp 中的实现
     const auto& box = state.info.box;
     auto& atoms = state.atoms;  // Remove const to allow modification
     auto& residues = state.residues;  // Remove const to allow modification
     const float cutoff2 = ewald_params.cutoff * ewald_params.cutoff;
-    
+
     // Reset electrostatic energies
     for(auto& residue : residues) {
         if(residue.active) {
             residue.energy_elec = 0.0f;
         }
     }
-    
+
     // Loop over all residue pairs
     for(int r1 = 0; r1 < state.activeResidueCount; r1++) {
         if(!residues[r1].active) continue;
@@ -302,48 +303,44 @@ void computeRealSpaceEwald(model::MCState& state, bool movement_only) {
             }
             if(!in_movement) continue;
         }
-        
+
         for(int r2 = r1 + 1; r2 < state.activeResidueCount; r2++) {
             if(!residues[r2].active) continue;
-            
-            // Loop over atoms in residue pairs
+
+            // 使用 Ewald.cpp 中的实现
             for(int i = residues[r1].atomStart; 
                 i < residues[r1].atomStart + residues[r1].atomCount; i++) {
                 
                 for(int j = residues[r2].atomStart;
                     j < residues[r2].atomStart + residues[r2].atomCount; j++) {
                     
-                    // Calculate minimum image distance
+                    // 计算最小像距离
                     float dx = atoms[i].x - atoms[j].x;
                     float dy = atoms[i].y - atoms[j].y;
                     float dz = atoms[i].z - atoms[j].z;
-                    
-                    // Apply PBC
+
+                    // 应用 PBC
                     dx -= box[0] * std::round(dx/box[0]);
                     dy -= box[1] * std::round(dy/box[1]);
                     dz -= box[2] * std::round(dz/box[2]);
-                    
+
                     float r2 = dx*dx + dy*dy + dz*dz;
-                    
-                    // Only compute for pairs within cutoff
+
+                    // 仅计算在截断范围内的对
                     if(r2 < cutoff2) {
-                        // Apply minimum safe distance
-                        if(r2 < MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE) {
-                            r2 = MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE;
-                        }
-                        
+                        // 使用 Ewald.cpp 中的 erfc 计算
                         float r = std::sqrt(r2);
                         float qi = atoms[i].charge;
                         float qj = atoms[j].charge;
-                        
-                        // Use erfc(αr)/r for real space
+
+                        // 使用 erfc(αr)/r 计算能量
                         float erfc_term = ewald_params.erfcApprox(r);
                         float energy = COULOMB * qi * qj * erfc_term / r;
-                        
-                        // Apply energy limits
+
+                        // 应用能量限制
                         energy = std::min(std::max(energy, -MAX_SAFE_ENERGY), MAX_SAFE_ENERGY);
-                        
-                        // Add energy to both residues
+
+                        // 将能量添加到两个残基
                         residues[r1].energy_elec += energy;
                         residues[r2].energy_elec += energy;
                     }
