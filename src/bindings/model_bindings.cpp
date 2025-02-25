@@ -738,7 +738,15 @@ void init_model(py::module& m) {
                 state.movementResidues = movementResidues;
             })
         .def_readwrite("movementAtomTypes", &pygcmc::model::MCState::movementAtomTypes)
-        .def_readwrite("numMovementAtomTypes", &pygcmc::model::MCState::numMovementAtomTypes);
+        .def_readwrite("numMovementAtomTypes", &pygcmc::model::MCState::numMovementAtomTypes)
+        .def_property_readonly("ewald_energy", [](const pygcmc::model::MCState& state) {
+            py::dict result;
+            result["real_space"] = state.ewald_energy.real_space;
+            result["reciprocal"] = state.ewald_energy.reciprocal;
+            result["self"] = state.ewald_energy.self;
+            result["total"] = state.ewald_energy.total;
+            return result;
+        });
 
     // Bind MCForceField
     py::class_<pygcmc::model::MCForceField>(m, "MCForceField")

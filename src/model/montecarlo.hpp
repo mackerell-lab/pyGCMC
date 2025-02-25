@@ -236,6 +236,14 @@ struct MCState {
     MCInfo info;            ///< System information
     MCForceField forcefield;  ///< Force field parameters
 
+    // Ewald energy components
+    struct EwaldEnergy {
+        double real_space{0.0};     ///< 实空间部分能量 (kJ/mol)
+        double reciprocal{0.0};     ///< 倒空间部分能量 (kJ/mol)
+        double self{0.0};           ///< 自能校正项 (kJ/mol)
+        double total{0.0};          ///< 总 Ewald 能量 (kJ/mol)
+    } ewald_energy;
+
     // Constructor to initialize counts
     MCState() : activeAtomCount(0), activeResidueCount(0) {}
 };

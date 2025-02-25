@@ -74,6 +74,18 @@ std::pair<double, double> calcPairEnergyEwald(double r2, double sigma, double ep
 double computeReciprocalEnergy(model::MCState& state, bool movement_only);
 double computeSelfEnergy(model::MCState& state, bool movement_only);
 
+// Forward declarations for internal functions
+void computeRealSpaceEwald(model::MCState& state, bool movement_only, bool store_in_residues = true);
+
+/**
+ * @brief 获取计算的 Ewald 总能量
+ * @param state MC 状态
+ * @return Ewald 总能量 (kJ/mol)
+ */
+inline double getEwaldTotalEnergy(const model::MCState& state) {
+    return state.ewald_energy.total;
+}
+
 } // namespace cpu
 } // namespace platform
 } // namespace pygcmc 

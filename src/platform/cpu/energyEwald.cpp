@@ -274,8 +274,12 @@ void checkSystemNeutrality(const model::MCState& state) {
  * 
  * For each pair of atoms within cutoff:
  * V_real(r) = q_i * q_j * erfc(α*r)/r
+ * 
+ * @param state MC状态
+ * @param movement_only 是否只计算运动残基
+ * @param store_in_residues 是否将能量存储在残基中（默认为true，保持兼容性）
  */
-void computeRealSpaceEwald(model::MCState& state, bool movement_only) {
+void computeRealSpaceEwald(model::MCState& state, bool movement_only, bool store_in_residues) {
     // 使用 Ewald.cpp 中的实现
     const auto& box = state.info.box;
     auto& atoms = state.atoms;  // Remove const to allow modification
@@ -288,6 +292,9 @@ void computeRealSpaceEwald(model::MCState& state, bool movement_only) {
             residue.energy_elec = 0.0f;
         }
     }
+    
+    // 如果不存储在残基中，直接返回实空间能量
+    double real_space_total = 0.0;
 
     // Loop over all residue pairs
     for(int r1 = 0; r1 < state.activeResidueCount; r1++) {
@@ -340,13 +347,24 @@ void computeRealSpaceEwald(model::MCState& state, bool movement_only) {
                         // 应用能量限制
                         energy = std::min(std::max(energy, -MAX_SAFE_ENERGY), MAX_SAFE_ENERGY);
 
-                        // 将能量添加到两个残基
-                        residues[r1].energy_elec += energy;
-                        residues[r2].energy_elec += energy;
+                        // 根据参数决定如何存储能量
+                        if (store_in_residues) {
+                            // 将能量添加到两个残基
+                            residues[r1].energy_elec += energy;
+                            residues[r2].energy_elec += energy;
+                        } else {
+                            // 只累加到总能量
+                            real_space_total += energy;
+                        }
                     }
                 }
             }
         }
+    }
+    
+    // 如果不存储在残基中，将总能量存储在系统的ewald_energy.real_space字段中
+    if (!store_in_residues) {
+        state.ewald_energy.real_space = real_space_total;
     }
 }
 
@@ -372,26 +390,72 @@ void computeSystemEnergyEwald(model::MCState& state) {
             minBoxSize/2, " nm). This may affect minimum image convention.");
     }
     
-    // 实空间部分 - 使用erfc(αr)/r
-    computeRealSpaceEwald(state, false);
+    // 重置 Ewald 能量
+    state.ewald_energy.real_space = 0.0;
+    state.ewald_energy.reciprocal = 0.0;
+    state.ewald_energy.self = 0.0;
+    state.ewald_energy.total = 0.0;
+    
+    // 清除残基的静电能量
+    for(auto& residue : state.residues) {
+        if(residue.active) {
+            residue.energy_elec = 0.0f;
+        }
+    }
+    
+    // 实空间部分计算 - 将能量存储在残基中
+    computeRealSpaceEwald(state, false, true);
+    
+    // 计算实空间总能量，用于记录
+    double real_space_total = 0.0;
+    for(const auto& residue : state.residues) {
+        if(residue.active) {
+            real_space_total += residue.energy_elec;
+        }
+    }
+    state.ewald_energy.real_space = real_space_total;
     
     // VDW能量使用纯LJ计算
     computeSystemVdwEnergyCutoff(state);
     
-    // 倒空间部分
+    // 倒空间部分 - 全局计算
     double recip_energy = computeReciprocalEnergy(state, false);
+    state.ewald_energy.reciprocal = recip_energy;
     
-    // 自能校正
+    // 自能校正 - 分配到各个残基
+    // 重新计算自能，直接写入残基
+    if(!state.residues.empty()) {
+        for(int r = 0; r < state.activeResidueCount; r++) {
+            if(!state.residues[r].active) continue;
+            
+            double res_self_energy = 0.0;
+            for(int i = state.residues[r].atomStart;
+                i < state.residues[r].atomStart + state.residues[r].atomCount; i++) {
+                double charge = state.atoms[i].charge;
+                res_self_energy -= charge * charge * ewald_params.alpha / SQRT_PI;
+            }
+            res_self_energy *= COULOMB;
+            state.residues[r].energy_elec += static_cast<float>(res_self_energy);
+        }
+    }
+    
+    // 计算自能总和，用于记录
     double self_energy = computeSelfEnergy(state, false);
+    state.ewald_energy.self = self_energy;
     
-    // 分配长程能量到residues
+    // 总能量
+    state.ewald_energy.total = state.ewald_energy.real_space + 
+                              state.ewald_energy.reciprocal + 
+                              state.ewald_energy.self;
+    
+    // 将倒空间能量平均分配给所有活动残基
     int active_count = 0;
     for(const auto& residue : state.residues) {
         if(residue.active) active_count++;
     }
     
     if(active_count > 0) {
-        double energy_per_residue = (recip_energy + self_energy) / active_count;
+        double energy_per_residue = recip_energy / active_count;
         for(auto& residue : state.residues) {
             if(residue.active) {
                 residue.energy_elec += energy_per_residue;
@@ -422,26 +486,79 @@ void computeMovementEnergyEwald(model::MCState& state) {
             minBoxSize/2, " nm). This may affect minimum image convention.");
     }
     
-    // 实空间部分 - 使用erfc(αr)/r
-    computeRealSpaceEwald(state, true);
+    // 重置 Ewald 能量
+    state.ewald_energy.real_space = 0.0;
+    state.ewald_energy.reciprocal = 0.0;
+    state.ewald_energy.self = 0.0;
+    state.ewald_energy.total = 0.0;
+    
+    // 清除相关残基的静电能量
+    for(const auto& movementInfo : state.movementResidues) {
+        for(int i = movementInfo.startIndex;
+            i < movementInfo.startIndex + movementInfo.activeCount; i++) {
+            if(state.residues[i].active) {
+                state.residues[i].energy_elec = 0.0f;
+            }
+        }
+    }
+    
+    // 实空间部分 - 将能量存储在残基中
+    computeRealSpaceEwald(state, true, true);
+    
+    // 计算实空间总能量，用于记录
+    double real_space_total = 0.0;
+    for(const auto& movementInfo : state.movementResidues) {
+        for(int i = movementInfo.startIndex;
+            i < movementInfo.startIndex + movementInfo.activeCount; i++) {
+            if(state.residues[i].active) {
+                real_space_total += state.residues[i].energy_elec;
+            }
+        }
+    }
+    state.ewald_energy.real_space = real_space_total;
     
     // VDW能量使用纯LJ计算
     computeSystemVdwEnergyCutoff(state);
     
-    // 倒空间部分
+    // 倒空间部分 - 全局计算
     double recip_energy = computeReciprocalEnergy(state, true);
+    state.ewald_energy.reciprocal = recip_energy;
     
-    // 自能校正
+    // 自能校正 - 分配到各个残基
+    // 直接计算自能，并写入残基
+    for(const auto& movementInfo : state.movementResidues) {
+        for(int r = movementInfo.startIndex; 
+            r < movementInfo.startIndex + movementInfo.activeCount; r++) {
+            if(!state.residues[r].active) continue;
+            
+            double res_self_energy = 0.0;
+            for(int i = state.residues[r].atomStart;
+                i < state.residues[r].atomStart + state.residues[r].atomCount; i++) {
+                double charge = state.atoms[i].charge;
+                res_self_energy -= charge * charge * ewald_params.alpha / SQRT_PI;
+            }
+            res_self_energy *= COULOMB;
+            state.residues[r].energy_elec += static_cast<float>(res_self_energy);
+        }
+    }
+    
+    // 计算自能总和，用于记录
     double self_energy = computeSelfEnergy(state, true);
+    state.ewald_energy.self = self_energy;
     
-    // 分配长程能量到movement residues
+    // 计算总能量
+    state.ewald_energy.total = state.ewald_energy.real_space + 
+                              state.ewald_energy.reciprocal + 
+                              state.ewald_energy.self;
+    
+    // 将倒空间能量平均分配给所有运动残基
     int movement_count = 0;
     for(const auto& movementInfo : state.movementResidues) {
         movement_count += movementInfo.activeCount;
     }
     
     if(movement_count > 0) {
-        double energy_per_residue = (recip_energy + self_energy) / movement_count;
+        double energy_per_residue = recip_energy / movement_count;
         for(const auto& movementInfo : state.movementResidues) {
             for(int i = movementInfo.startIndex;
                 i < movementInfo.startIndex + movementInfo.activeCount; i++) {
