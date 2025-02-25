@@ -45,8 +45,28 @@ void init_simulation_bindings(py::module& m) {
         py::arg("kmax"),
         py::arg("tolerance") = 1e-5f);
           
-    m.def("computeSystemEnergyEwald", &simulation::Simulation::computeSystemEnergyEwald,
-          "Calculate system energy using Ewald summation");
+    m.def("computeSystemEnergyEwald", 
+        [](model::MCState& state) {
+            simulation::Simulation::computeSystemEnergyEwald(state);
+            
+            // 计算总能量
+            double electrostatic = 0.0;
+            double vdw = 0.0;
+            
+            // 从ewald_energy结构体中获取能量
+            electrostatic = state.ewald_energy.total;
+            
+            // 从残基中累计VDW能量
+            for(const auto& res : state.residues) {
+                if(res.active) {
+                    vdw += res.energy_vdw;
+                }
+            }
+            
+            // 返回[静电能量, 范德华能量]的元组
+            return py::make_tuple(electrostatic, vdw);
+        },
+        "Calculate system energy using Ewald summation");
           
     m.def("computeMovementEnergyEwald", &simulation::Simulation::computeMovementEnergyEwald,
           "Calculate movement residues energy using Ewald summation");
