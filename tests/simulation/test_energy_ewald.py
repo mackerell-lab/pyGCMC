@@ -578,9 +578,13 @@ def test_ewald_error_tolerance():
           f"Real: {state.ewald_energy['real_space']:.4f}, "
           f"Recip: {state.ewald_energy['reciprocal']:.4f}")
     
+    # 验证参考能量计算正确
+    assert abs(ref_energy) > 1e-6, "Reference energy should not be zero"
+    
     # 2. 测试不同的误差容限
     tolerances = [1e-5, 5e-5, 1e-4, 5e-4, 1e-3]
     all_tests_passed = True
+    test_results = []  # 用于存储每个测试的结果
     
     # 固定alpha值，与C++版本保持一致
     fixed_alpha = 3.5
@@ -636,6 +640,17 @@ def test_ewald_error_tolerance():
         else:
             print("   PASSED: Error within acceptable range (< 100*tol)")
         
+        # 添加测试结果的具体断言
+        assert rel_diff <= 100*tol, f"相对误差 {rel_diff} 超过了容限范围 (100*{tol}={100*tol})"
+        
+        # 保存测试结果
+        test_results.append({
+            'tolerance': tol,
+            'energy': energy,
+            'rel_diff': rel_diff,
+            'passed': test_passed
+        })
+        
         # 验证参数计算策略
         expected_alpha = math.sqrt(-math.log(2*tol))/cutoff
         expected_kmax = int(2*expected_alpha*box_size/math.pi + 0.5)
@@ -652,6 +667,12 @@ def test_ewald_error_tolerance():
                   f"Real: {real_space_ratio:.4f}, Recip: {recip_energy_ratio:.4f}")
         else:
             print("   Warning: Total energy near zero, cannot compute ratios")
+    
+    # 验证误差随着kmax减小而增加的趋势（将第一个和最后一个测试结果进行比较）
+    if len(test_results) >= 2:
+        first_test = test_results[0]
+        last_test = test_results[-1]
+        assert last_test['rel_diff'] >= first_test['rel_diff'], "误差应随着kmax的减小而增加"
     
     print(f"\nAll error tolerance tests {'PASSED' if all_tests_passed else 'FAILED'}")
     # 使用all_tests_passed变量判断测试是否通过
