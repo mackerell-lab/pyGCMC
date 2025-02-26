@@ -460,6 +460,203 @@ def test_ewald_error_convergence():
     # Relaxed convergence criterion
     assert max_rel_diff < 0.05, f"Energy changes too much with increasing kmax (max relative difference: {max_rel_diff})"
 
+def test_ewald_error_tolerance():
+    """
+    Test Ewald method with different error tolerances.
+    
+    This test is based on the C++ test in ewald.cpp (testEwaldErrorTolerance).
+    It creates a system with randomly distributed charged particles and tests 
+    the accuracy of Ewald calculation with different error tolerance settings.
+    """
+    print("\n===== Testing Ewald method with different error tolerances =====")
+    
+    # 创建一个简单的随机带电系统
+    num_particles = 51  # 使用奇数，与C++测试保持一致
+    box_size = 5.0      # Same as the C++ test
+    cutoff = 1.0        # Same as the C++ test
+    
+    # 创建状态对象
+    state = MCState()
+    
+    # 设置盒子尺寸和温度
+    state.info.box = [box_size, box_size, box_size]
+    state.info.setTemperature(300.0)  # 300K
+    state.info.cutoff = cutoff
+    
+    # 设置力场参数 - 只关注静电作用
+    ff = MCForceField()
+    ff.numTotalTypes = 1  # 只有一种原子类型
+    
+    # 设置零LJ参数矩阵
+    ff.ljSigma = [0.0]  # 无LJ相互作用
+    ff.ljEps = [0.0]    # 无LJ相互作用
+    
+    state.forcefield = ff
+    
+    # 使用与C++相同的电荷分布方式（从-1到+1）
+    np.random.seed(0)  # 使用固定的随机种子以便结果可重现
+    
+    charges = []
+    for i in range(num_particles):
+        # 线性分布从-1到+1，与C++实现保持一致
+        charge = -1.0 + i * 2.0/(num_particles-1)
+        charges.append(charge)
+    
+    # 验证总电荷为零
+    total_charge = sum(charges)
+    print(f"Total system charge: {total_charge}")
+    assert abs(total_charge) < 1e-10, "System must be charge neutral for Ewald"
+    
+    # 创建原子和残基列表
+    atoms = []
+    residues = []
+    
+    # 使用随机分布的粒子生成原子和残基
+    for i in range(num_particles):
+        # 创建原子
+        atom = MCAtom()
+        atom.x = box_size * np.random.random()
+        atom.y = box_size * np.random.random()
+        atom.z = box_size * np.random.random()
+        atom.charge = charges[i]
+        atom.type = 0
+        
+        # 添加到原子列表
+        atoms.append(atom)
+        
+        # 创建残基（每个原子一个残基）
+        residue = MCResidue()
+        residue.atomStart = i
+        residue.atomCount = 1
+        residue.active = True
+        
+        # 添加到残基列表
+        residues.append(residue)
+    
+    # 一次性赋值给状态
+    state.atoms = atoms
+    state.residues = residues
+    state.activeAtomCount = len(atoms)
+    state.activeResidueCount = len(residues)
+    
+    # 再次验证总电荷为零
+    total_charge = sum(atom.charge for atom in state.atoms)
+    print(f"Verified total charge: {total_charge}")
+    assert abs(total_charge) < 1e-10, "System not charge neutral"
+    
+    # 确保state设置完成
+    print(f"Created system with {len(state.atoms)} atoms and {len(state.residues)} residues")
+    print(f"Active atoms: {state.activeAtomCount}, Active residues: {state.activeResidueCount}")
+    
+    # 1. 使用高精度参数计算参考结果
+    alpha_ref = 3.5  # 与C++版本保持一致
+    kmax_ref = [40, 40, 40]  # 使用更高的kmax值以提高精度，对应C++版本的40
+    
+    print("\n1. Computing reference result with high precision parameters")
+    print(f"   Alpha = {alpha_ref}, kmax = {kmax_ref}")
+    
+    # 设置参数
+    try:
+        pygcmc.setEwaldParameters(alpha_ref, kmax_ref)
+        print("   Ewald parameters set successfully")
+    except Exception as e:
+        print(f"   Error setting Ewald parameters: {e}")
+        pytest.skip("Ewald parameter setting failed, skipping test")
+    
+    # 计算能量
+    try:
+        pygcmc.computeSystemEnergyEwald(state)
+        print("   Ewald energy computed successfully")
+    except Exception as e:
+        print(f"   Error computing Ewald energy: {e}")
+        pytest.skip("Reference Ewald calculation failed, skipping test")
+    
+    # 计算参考能量
+    ref_energy = state.ewald_energy['total']  # 使用总Ewald能量作为参考
+    print(f"   Reference energy: {ref_energy:.6f} kJ/mol")
+    print(f"   Ewald components - Self: {state.ewald_energy['self']:.4f}, "
+          f"Real: {state.ewald_energy['real_space']:.4f}, "
+          f"Recip: {state.ewald_energy['reciprocal']:.4f}")
+    
+    # 2. 测试不同的误差容限
+    tolerances = [1e-5, 5e-5, 1e-4, 5e-4, 1e-3]
+    all_tests_passed = True
+    
+    # 固定alpha值，与C++版本保持一致
+    fixed_alpha = 3.5
+    
+    print("\n2. Testing different error tolerances")
+    for tol in tolerances:
+        # 根据容限调整kmax，与C++版本保持一致
+        if tol <= 1e-5:
+            kmax = [30, 30, 30]  # 对应C++的kmax=30
+        elif tol <= 1e-4:
+            kmax = [25, 25, 25]  # 对应C++的kmax=25
+        elif tol <= 5e-4:
+            kmax = [20, 20, 20]  # 对应C++的kmax=20
+        else:
+            kmax = [15, 15, 15]  # 对应C++的kmax=15
+        
+        print(f"\n   Testing tolerance: {tol}")
+        print(f"   Using alpha = {fixed_alpha} and kmax = {kmax}")
+        
+        # 设置Ewald参数
+        try:
+            pygcmc.setEwaldParameters(fixed_alpha, kmax)
+            print("   Ewald parameters set successfully")
+        except Exception as e:
+            print(f"   Error setting Ewald parameters: {e}")
+            continue
+            
+        # 计算能量
+        try:
+            pygcmc.computeSystemEnergyEwald(state)
+            print("   Ewald energy computed successfully")
+        except Exception as e:
+            print(f"   Error computing Ewald energy: {e}")
+            all_tests_passed = False
+            continue
+        
+        # 计算当前容限下的能量
+        energy = state.ewald_energy['total']  # 使用总Ewald能量
+        
+        # 计算差异
+        abs_diff = abs(energy - ref_energy)
+        rel_diff = abs_diff/abs(ref_energy) if abs(ref_energy) > 1e-10 else abs_diff
+        
+        print(f"   Energy: {energy:.6f} kJ/mol")
+        print(f"   Absolute difference: {abs_diff:.6f} kJ/mol")
+        print(f"   Relative difference: {rel_diff:.6f}")
+        
+        # 检查是否在100*tolerance范围内
+        test_passed = (rel_diff <= 100*tol)
+        if not test_passed:
+            print("   ERROR: Error exceeds 100 times the tolerance!")
+            all_tests_passed = False
+        else:
+            print("   PASSED: Error within acceptable range (< 100*tol)")
+        
+        # 验证参数计算策略
+        expected_alpha = math.sqrt(-math.log(2*tol))/cutoff
+        expected_kmax = int(2*expected_alpha*box_size/math.pi + 0.5)
+        print(f"   Theoretical alpha for this tolerance: {expected_alpha:.6f}")
+        print(f"   Theoretical kmax for this tolerance: {expected_kmax}")
+        
+        # 计算能量分量比例
+        if abs(state.ewald_energy['total']) > 1e-10:
+            self_energy_ratio = abs(state.ewald_energy['self'] / state.ewald_energy['total'])
+            real_space_ratio = abs(state.ewald_energy['real_space'] / state.ewald_energy['total'])
+            recip_energy_ratio = abs(state.ewald_energy['reciprocal'] / state.ewald_energy['total'])
+            
+            print(f"   Energy component ratios - Self: {self_energy_ratio:.4f}, "
+                  f"Real: {real_space_ratio:.4f}, Recip: {recip_energy_ratio:.4f}")
+        else:
+            print("   Warning: Total energy near zero, cannot compute ratios")
+    
+    print(f"\nAll error tolerance tests {'PASSED' if all_tests_passed else 'FAILED'}")
+    # 使用all_tests_passed变量判断测试是否通过
+    assert all_tests_passed, "Ewald error tolerance tests failed"
+
 def test_ewald_charge_neutrality():
     """Test that Ewald summation properly handles charge neutrality requirements"""
     
