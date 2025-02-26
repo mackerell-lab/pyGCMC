@@ -494,13 +494,13 @@ void computeSystemEnergyEwald(model::MCState& state) {
         }
     }
     
-    // 输出Ewald能量的各个组成部分
-    std::cout << "\n========== Ewald Energy Components ==========\n";
-    std::cout << "Real Space Energy:     " << state.ewald_energy.real_space << " kJ/mol\n";
-    std::cout << "Reciprocal Space Energy: " << state.ewald_energy.reciprocal << " kJ/mol\n";
-    std::cout << "Self Energy:          " << state.ewald_energy.self << " kJ/mol\n";
-    std::cout << "Total Ewald Energy:    " << state.ewald_energy.total << " kJ/mol\n";
-    std::cout << "============================================\n";
+    // 使用platform::log替代std::cout
+    platform::log(LogLevel::INFO, "\n========== Ewald Energy Components ==========");
+    platform::log(LogLevel::INFO, "Real Space Energy:     ", state.ewald_energy.real_space, " kJ/mol");
+    platform::log(LogLevel::INFO, "Reciprocal Space Energy: ", state.ewald_energy.reciprocal, " kJ/mol");
+    platform::log(LogLevel::INFO, "Self Energy:          ", state.ewald_energy.self, " kJ/mol");
+    platform::log(LogLevel::INFO, "Total Ewald Energy:    ", state.ewald_energy.total, " kJ/mol");
+    platform::log(LogLevel::INFO, "============================================");
 }
 
 /**
@@ -598,13 +598,13 @@ void computeMovementEnergyEwald(model::MCState& state) {
         }
     }
     
-    // 输出Ewald能量的各个组成部分
-    std::cout << "\n========== Movement Ewald Energy Components ==========\n";
-    std::cout << "Real Space Energy:     " << state.ewald_energy.real_space << " kJ/mol\n";
-    std::cout << "Reciprocal Space Energy: " << state.ewald_energy.reciprocal << " kJ/mol\n";
-    std::cout << "Self Energy:          " << state.ewald_energy.self << " kJ/mol\n";
-    std::cout << "Total Ewald Energy:    " << state.ewald_energy.total << " kJ/mol\n";
-    std::cout << "====================================================\n";
+    // 使用platform::log替代std::cout
+    platform::log(LogLevel::INFO, "\n========== Movement Ewald Energy Components ==========");
+    platform::log(LogLevel::INFO, "Real Space Energy:     ", state.ewald_energy.real_space, " kJ/mol");
+    platform::log(LogLevel::INFO, "Reciprocal Space Energy: ", state.ewald_energy.reciprocal, " kJ/mol");
+    platform::log(LogLevel::INFO, "Self Energy:          ", state.ewald_energy.self, " kJ/mol");
+    platform::log(LogLevel::INFO, "Total Ewald Energy:    ", state.ewald_energy.total, " kJ/mol");
+    platform::log(LogLevel::INFO, "====================================================");
 }
 
 } // namespace cpu
