@@ -545,16 +545,7 @@ void computeMovementEnergyEwald(model::MCState& state) {
     computeRealSpaceEwald(state, true, true);
     
     // 计算实空间总能量并乘以COULOMB - 与Ewald.cpp完全一致
-    double real_space_total = 0.0;
-    for(const auto& movementInfo : state.movementResidues) {
-        for(int i = movementInfo.startIndex;
-            i < movementInfo.startIndex + movementInfo.activeCount; i++) {
-            if(state.residues[i].active) {
-                real_space_total += state.residues[i].energy_elec;
-            }
-        }
-    }
-    real_space_total *= COULOMB;
+    double real_space_total = state.ewald_energy.real_space * COULOMB;
     state.ewald_energy.real_space = real_space_total;
     
     // 对残基中的能量应用COULOMB常数
