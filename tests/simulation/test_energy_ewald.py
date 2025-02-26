@@ -296,8 +296,13 @@ def test_madelung_constant():
     box_size = n_cells * a
     state = create_nacl_crystal(box_size, n_cells)
 
-    # 标定因子，用于将计算得到的 Madelung 常数放大到参考值数量级
-    SCALING_FACTOR = 3.45
+    # 定义物理常数 - 与test_ewald_exact完全相同的常数
+    PI_M = math.pi
+    ONE_4PI_EPS0 = 138.935456  # 转换为kJ·mol^-1·nm·e^-2的库仑常数
+    eCharge = 1.6022e-19  # 元电荷，单位：库仑(C)
+    AVOGADRO = 6.02214076e23  # 阿伏伽德罗常数
+    eps0 = 8.8542e-12  # 真空介电常数，F/m
+    a0 = 0.282e-9  # 米，NaCl晶胞边长
 
     # Test different alpha values and kmax to understand convergence
     alpha_tests = [1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
@@ -316,13 +321,16 @@ def test_madelung_constant():
 
     for alpha in alpha_tests:
         pygcmc.setEwaldParameters(alpha, kmax_fixed)
-        pygcmc.computeSystemEnergyEwald(state)
-        elec_energy = sum(res.energy_elec for res in state.residues if res.active)
+        energy = pygcmc.computeSystemEnergyEwald(state)
+        elec_energy = energy[0]  # 获取静电能量
+        
         # 对能量归一化：除以单元数 (n_cells^3)
         elec_energy = elec_energy / (n_cells ** 3)
-        # 注意：当前计算得到的 Madelung 值比参考值偏低，
-        # 因此引入一个标定因子 SCALING_FACTOR 进行补偿
-        calculated_madelung = -elec_energy * a * SCALING_FACTOR / (pygcmc.COULOMB)
+        
+        # 计算理论能量，与test_ewald_exact完全一致
+        num_atoms = len(state.atoms)
+        theoretical_energy = -(MADELUNG_NACL * eCharge * eCharge * AVOGADRO) / (4 * PI_M * eps0 * a0 * 2 * 1000)
+        calculated_madelung = MADELUNG_NACL * (elec_energy / theoretical_energy)
         rel_error = abs(calculated_madelung - MADELUNG_NACL) / MADELUNG_NACL
 
         print(f"Alpha = {alpha:.1f}: Madelung = {calculated_madelung:.6f}, Error = {rel_error:.6f}")
@@ -337,18 +345,20 @@ def test_madelung_constant():
     print("\nTesting kmax convergence with optimal alpha...")
     for kmax in kmax_tests:
         pygcmc.setEwaldParameters(optimal_alpha, kmax)
-        pygcmc.computeSystemEnergyEwald(state)
-
-        total_energy = sum(res.energy_vdw + res.energy_elec for res in state.residues if res.active)
-        elec_energy = sum(res.energy_elec for res in state.residues if res.active)
-        vdw_energy = sum(res.energy_vdw for res in state.residues if res.active)
+        energy = pygcmc.computeSystemEnergyEwald(state)
+        elec_energy = energy[0]  # 获取静电能量
+        vdw_energy = energy[1]  # 获取范德华能量
+        total_energy = elec_energy + vdw_energy
 
         # 能量归一化：除以 n_cells^3
         total_energy = total_energy / (n_cells ** 3)
         elec_energy = elec_energy / (n_cells ** 3)
         vdw_energy = vdw_energy / (n_cells ** 3)
 
-        calculated_madelung = -elec_energy * a * SCALING_FACTOR / (pygcmc.COULOMB)
+        # 使用与test_ewald_exact相同的计算方法
+        num_atoms = len(state.atoms)
+        theoretical_energy = -(MADELUNG_NACL * eCharge * eCharge * AVOGADRO) / (4 * PI_M * eps0 * a0 * 2 * 1000)
+        calculated_madelung = MADELUNG_NACL * (elec_energy / theoretical_energy)
         rel_error = abs(calculated_madelung - MADELUNG_NACL) / MADELUNG_NACL
 
         if rel_error < best_error:
@@ -376,11 +386,16 @@ def test_madelung_constant():
         # 盒子尺寸应为 n * a
         state = create_nacl_crystal(n * a, n)
         pygcmc.setEwaldParameters(best_params[0], best_params[1])
-        pygcmc.computeSystemEnergyEwald(state)
-        elec_energy = sum(res.energy_elec for res in state.residues if res.active)
+        energy = pygcmc.computeSystemEnergyEwald(state)
+        elec_energy = energy[0]  # 获取静电能量
         elec_energy = elec_energy / (n ** 3)
-        calculated_madelung = -elec_energy * a * SCALING_FACTOR / (pygcmc.COULOMB)
+        
+        # 使用与test_ewald_exact相同的计算方法
+        num_atoms = len(state.atoms)
+        theoretical_energy = -(MADELUNG_NACL * eCharge * eCharge * AVOGADRO) / (4 * PI_M * eps0 * a0 * 2 * 1000)
+        calculated_madelung = MADELUNG_NACL * (elec_energy / theoretical_energy)
         rel_error = abs(calculated_madelung - MADELUNG_NACL) / MADELUNG_NACL
+        
         print(f"\n{n}x{n}x{n} cells:")
         print(f"Calculated Madelung: {calculated_madelung:.9f}")
         print(f"Relative error: {rel_error:.6f}")
