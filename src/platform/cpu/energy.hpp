@@ -49,6 +49,27 @@ inline std::string getEnergyMethodName(EnergyMethod method) {
     }
 }
 
+/**
+ * @brief 获取当前系统的总能量
+ * 
+ * @param state 系统状态
+ * @param method 使用的能量计算方法
+ * @return 总能量（kJ/mol）
+ */
+inline double getTotalEnergy(const model::MCState& state, EnergyMethod method) {
+    if (method == EnergyMethod::EWALD) {
+        return getEwaldTotalEnergy(state);
+    } else {
+        double total = 0.0;
+        for (const auto& residue : state.residues) {
+            if (residue.active) {
+                total += residue.energy_vdw + residue.energy_elec;
+            }
+        }
+        return total;
+    }
+}
+
 } // namespace cpu
 } // namespace platform
 } // namespace pygcmc 
