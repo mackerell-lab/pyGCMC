@@ -9,14 +9,14 @@ namespace pygcmc {
 namespace platform {
 namespace cpu {
 
-// Debug flag to control output - default to false for production use
-static bool debug_output = false;
+// 现在使用通用的debug标志，而不是局部变量
+// static bool debug_output = false;
 
 /**
  * @brief Calculate LJ and Coulomb energy with safety checks
  */
 inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, float q1, float q2, bool calc_coulomb = true) {
-    if (debug_output) {
+    if (energy_debug_output) {
         std::stringstream ss;
         ss << std::fixed << std::setprecision(6);
         ss << "\n=== calcPairEnergy called ===";
@@ -31,7 +31,7 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
 
     // Apply minimum safe distance for numerical stability
     if (r2 < MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE) {
-        if (debug_output) {
+        if (energy_debug_output) {
             platform::log(LogLevel::DEBUG, "Distance below MIN_SAFE_DISTANCE, using r2 = ", 
                          MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE);
         }
@@ -40,7 +40,7 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
     
     float r = std::sqrt(r2);
     
-    if (debug_output) {
+    if (energy_debug_output) {
         platform::log(LogLevel::DEBUG, "Distance r = ", r, " nm");
     }
     
@@ -56,7 +56,7 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
         elec_energy = COULOMB * q1 * q2 / r;  // kJ/mol
     }
 
-    if (debug_output) {
+    if (energy_debug_output) {
         std::stringstream ss;
         ss << std::fixed << std::setprecision(6);
         ss << "\nEnergy calculation details:";
@@ -74,7 +74,7 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
     }
     
     // Apply energy capping for numerical stability
-    if (debug_output && (std::abs(vdw_energy) > MAX_SAFE_ENERGY || std::abs(elec_energy) > MAX_SAFE_ENERGY)) {
+    if (energy_debug_output && (std::abs(vdw_energy) > MAX_SAFE_ENERGY || std::abs(elec_energy) > MAX_SAFE_ENERGY)) {
         std::stringstream ss;
         ss << "\nEnergy capping applied:";
         ss << "\n  Original VDW energy = " << vdw_energy << " kJ/mol";
@@ -87,7 +87,7 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
     elec_energy = std::min(elec_energy, MAX_SAFE_ENERGY);
     elec_energy = std::max(elec_energy, -MAX_SAFE_ENERGY);
     
-    if (debug_output && (std::abs(vdw_energy) > MAX_SAFE_ENERGY || std::abs(elec_energy) > MAX_SAFE_ENERGY)) {
+    if (energy_debug_output && (std::abs(vdw_energy) > MAX_SAFE_ENERGY || std::abs(elec_energy) > MAX_SAFE_ENERGY)) {
         std::stringstream ss;
         ss << "\nAfter individual capping:";
         ss << "\n  Capped VDW energy = " << vdw_energy << " kJ/mol";
@@ -102,7 +102,7 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
         float scale = MAX_SAFE_ENERGY / total_energy;
         vdw_energy *= scale;
         elec_energy *= scale;
-        if (debug_output) {
+        if (energy_debug_output) {
             std::stringstream ss;
             ss << "\nTotal energy exceeded MAX_SAFE_ENERGY:";
             ss << "\n  Original total = " << original_total << " kJ/mol";
@@ -116,7 +116,7 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
         float scale = -MAX_SAFE_ENERGY / total_energy;
         vdw_energy *= scale;
         elec_energy *= scale;
-        if (debug_output) {
+        if (energy_debug_output) {
             std::stringstream ss;
             ss << "\nTotal energy below -MAX_SAFE_ENERGY:";
             ss << "\n  Original total = " << original_total << " kJ/mol";
@@ -128,7 +128,7 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
         }
     }
 
-    if (debug_output) {
+    if (energy_debug_output) {
         std::stringstream ss;
         ss << std::fixed << std::setprecision(6);
         ss << "\n=== calcPairEnergy returning ===";
@@ -218,7 +218,7 @@ inline void computeResidueNonbondedEnergy(
                     dy -= box[1] * std::round(dy / box[1]);
                     dz -= box[2] * std::round(dz / box[2]);
                     
-                    if (debug_output) {
+                    if (energy_debug_output) {
                         std::stringstream ss;
                         ss << "\nPBC distance calculation:";
                         ss << "\n  Original dx,dy,dz: " << (atoms[atom_j].x - atoms[atom_i].x)
@@ -257,7 +257,7 @@ inline void computeResidueNonbondedEnergy(
  * @brief Universal function for calculating all nonbonded interactions
  */
 void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movement_only = false, bool use_pbc = false, bool vdw_only = false) {
-    if (debug_output) {
+    if (energy_debug_output) {
         std::stringstream ss;
         ss << "\n=== Starting nonbonded energy calculation ===";
         ss << "\nSystem state info:";
@@ -328,7 +328,7 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
 
         // Calculate energies only for movement residues
         for (const auto& movementInfo : state.movementResidues) {
-            if (debug_output) {
+            if (energy_debug_output) {
                 platform::log(LogLevel::DEBUG, "\nProcessing movement residue group: ", movementInfo.resName);
                 platform::log(LogLevel::DEBUG, "  Start index: ", movementInfo.startIndex);
                 platform::log(LogLevel::DEBUG, "  Active count: ", movementInfo.activeCount);
@@ -351,7 +351,7 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
                  ++i) {
                 if (!residues[i].active) continue;
 
-                if (debug_output) {
+                if (energy_debug_output) {
                     platform::log(LogLevel::DEBUG, "\nProcessing movement residue ", i);
                     platform::log(LogLevel::DEBUG, "  Atom start: ", residues[i].atomStart);
                     platform::log(LogLevel::DEBUG, "  Atom count: ", residues[i].atomCount);
@@ -392,7 +392,7 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
     }
 
     // Output final energies if debug is enabled
-    if (debug_output) {
+    if (energy_debug_output) {
         platform::log(LogLevel::DEBUG, "\n=== Final energies for all residues ===");
         float total_vdw = 0.0f;
         float total_elec = 0.0f;
@@ -432,7 +432,7 @@ void computeSystemEnergyCutoff(model::MCState& state) {
 }
 
 void computeSystemEnergyPBC(model::MCState& state) {
-    if (debug_output) {
+    if (energy_debug_output) {
         std::stringstream ss;
         ss << "\n=== Starting PBC nonbonded energy calculation (no cutoff) ===";
         ss << "\nBox dimensions: " << state.info.box[0] << " x " 
@@ -450,7 +450,7 @@ void computeSystemEnergyPBC(model::MCState& state) {
 }
 
 void computeSystemEnergyPBCCutoff(model::MCState& state) {
-    if (debug_output) {
+    if (energy_debug_output) {
         std::stringstream ss;
         ss << "\n=== Starting PBC nonbonded energy calculation (with cutoff) ===";
         ss << "\nBox dimensions: " << state.info.box[0] << " x " 
@@ -472,8 +472,78 @@ void computeSystemVdwEnergyCutoff(model::MCState& state) {
     computeNonbondedEnergy(state, true, false, false, true);  // use_cutoff=true, movement_only=false, use_pbc=false, vdw_only=true
 }
 
-void setEnergyDebugOutput(bool enable) {
-    debug_output = enable;
+/**
+ * @brief 统一的系统能量计算函数(直接计算方法)
+ * 
+ * 使用直接计算方法计算系统中所有原子间的非键相互作用能量。
+ * 
+ * @param state 系统状态
+ * @param use_cutoff 是否使用距离截断
+ * @param use_pbc 是否使用周期性边界条件
+ */
+void computeSystemEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc) {
+    if (use_pbc) {
+        if (use_cutoff) {
+            computeSystemEnergyPBCCutoff(state);
+        } else {
+            computeSystemEnergyPBC(state);
+        }
+    } else {
+        if (use_cutoff) {
+            computeSystemEnergyCutoff(state);
+        } else {
+            // 直接使用本地函数，无需作用域限定
+            // 这样可以绕过歧义问题
+            computeNonbondedEnergy(state, false, false, false);
+        }
+    }
+}
+
+/**
+ * @brief 统一的运动残基能量计算函数(直接计算方法)
+ * 
+ * 使用直接计算方法计算运动残基与系统中其他原子间的非键相互作用能量。
+ * 
+ * @param state 系统状态
+ * @param use_cutoff 是否使用距离截断
+ * @param use_pbc 是否使用周期性边界条件
+ */
+void computeMovementEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc) {
+    if (use_pbc) {
+        // 目前没有专门的PBC版本的运动残基能量计算函数
+        // 我们使用完整系统计算，这可能会稍慢一些
+        if (use_cutoff) {
+            computeSystemEnergyPBCCutoff(state);
+        } else {
+            computeSystemEnergyPBC(state);
+        }
+    } else {
+        if (use_cutoff) {
+            computeMovementEnergyCutoff(state);
+        } else {
+            // 直接使用本地函数，无需作用域限定
+            // 这样可以绕过歧义问题
+            computeNonbondedEnergy(state, false, true, false);
+        }
+    }
+}
+
+/**
+ * @brief 仅计算范德华能量的统一接口函数
+ * 
+ * 使用直接计算方法仅计算范德华相互作用能量，不计算静电能。
+ * 
+ * @param state 系统状态
+ * @param use_cutoff 是否使用距离截断
+ * @param use_pbc 是否使用周期性边界条件
+ */
+void computeSystemVdwEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc) {
+    if (use_cutoff) {
+        computeSystemVdwEnergyCutoff(state);
+    } else {
+        // 如果没有专门的不带截断的VDW能量计算函数，使用通用计算函数但只保留VDW部分
+        computeNonbondedEnergy(state, use_cutoff, false, use_pbc, true);
+    }
 }
 
 } // namespace cpu

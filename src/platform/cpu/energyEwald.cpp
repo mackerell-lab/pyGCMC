@@ -284,16 +284,6 @@ double computeSelfEnergy(model::MCState& state, bool movement_only) {
     return self_energy;
 }
 
-void checkSystemNeutrality(const model::MCState& state) {
-    float totalCharge = 0.0f;
-    for(const auto& atom : state.atoms) {
-        totalCharge += atom.charge;
-    }
-    if(std::abs(totalCharge) > 1e-6f) {
-        throw std::runtime_error("Ewald summation requires neutral system");
-    }
-}
-
 /**
  * @brief Calculate real-space part of Ewald sum - 与Ewald.cpp完全一致的实现
  * 
@@ -463,7 +453,7 @@ void computeSystemEnergyEwald(model::MCState& state) {
     }
     
     // VDW能量使用纯LJ计算
-    computeSystemVdwEnergyCutoff(state);
+    computeSystemVdwEnergyDirect(state, true, true);
     
     // 倒空间部分 - 全局计算
     double recip_energy = computeReciprocalEnergy(state, false);
@@ -559,7 +549,7 @@ void computeMovementEnergyEwald(model::MCState& state) {
     }
     
     // VDW能量使用纯LJ计算
-    computeSystemVdwEnergyCutoff(state);
+    computeSystemVdwEnergyDirect(state, true, true);
     
     // 倒空间部分 - 与Ewald.cpp保持一致
     double recip_energy = computeReciprocalEnergy(state, true);

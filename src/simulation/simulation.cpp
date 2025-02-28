@@ -10,7 +10,7 @@ void Simulation::computeMovementEnergy(model::MCState& state) {
     if (is_debug_enabled()) {
         log(LogLevel::DEBUG, "Computing nonbonded energy for movement residues");
     }
-    platform::cpu::computeMovementEnergy(state);
+    platform::cpu::computeMovementEnergy(state, platform::cpu::EnergyMethod::DIRECT, false, false);
 }
 
 void Simulation::computeMovementEnergyCutoff(model::MCState& state) {
@@ -25,7 +25,7 @@ void Simulation::computeSystemEnergy(model::MCState& state) {
         log(LogLevel::DEBUG, "Computing nonbonded energy for all active residues");
     }
     
-    platform::cpu::computeSystemEnergy(state);
+    platform::cpu::computeSystemEnergy(state, platform::cpu::EnergyMethod::DIRECT, false, false);
     
     // Only log total energy in debug mode
     if (is_debug_enabled()) {

@@ -16,59 +16,42 @@ extern const float MIN_SAFE_DISTANCE;
 extern const float MAX_SAFE_ENERGY;
 
 /**
- * @brief Calculate nonbonded energies for movement residues only
+ * @brief 使用直接计算方法计算系统的非键能量
+ * 
+ * @param state 系统状态
+ * @param use_cutoff 是否使用距离截断
+ * @param use_pbc 是否使用周期性边界条件
  */
+void computeSystemEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc);
+
+/**
+ * @brief 使用直接计算方法计算运动残基的非键能量
+ * 
+ * @param state 系统状态
+ * @param use_cutoff 是否使用距离截断
+ * @param use_pbc 是否使用周期性边界条件
+ */
+void computeMovementEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc);
+
+/**
+ * @brief 仅计算系统的范德华能量（带截断）
+ * 
+ * 此函数仅计算范德华相互作用，不计算静电相互作用。
+ * 主要用于与Ewald求和方法配合使用，其中静电相互作用单独处理。
+ * 
+ * @param state 系统状态
+ * @param use_cutoff 是否使用距离截断（一般为true）
+ * @param use_pbc 是否使用周期性边界条件
+ */
+void computeSystemVdwEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc);
+
+// 以下是为了兼容旧接口而保留的函数
 void computeMovementEnergy(model::MCState& state);
-
-/**
- * @brief Calculate nonbonded energies for movement residues only with distance cutoff
- */
 void computeMovementEnergyCutoff(model::MCState& state);
-
-/**
- * @brief Calculate nonbonded energies for the full system
- */
 void computeSystemEnergy(model::MCState& state);
-
-/**
- * @brief Calculate nonbonded energies for the full system with distance cutoff
- */
 void computeSystemEnergyCutoff(model::MCState& state);
-
-/**
- * @brief Calculate nonbonded energies for the full system with periodic boundary conditions
- * 
- * This function calculates nonbonded interactions (VDW and electrostatic)
- * between all active residues without distance cutoff,
- * applying periodic boundary conditions using the minimum image convention.
- * 
- * @param state System state containing residues and force field parameters
- * @throws std::runtime_error if box dimensions are invalid for PBC calculation
- */
 void computeSystemEnergyPBC(model::MCState& state);
-
-/**
- * @brief Calculate nonbonded energies for the full system with periodic boundary conditions and cutoff
- * 
- * This function calculates nonbonded interactions (VDW and electrostatic)
- * between all active residues within the specified cutoff distance,
- * applying periodic boundary conditions using the minimum image convention.
- * 
- * @param state System state containing residues and force field parameters
- * @throws std::runtime_error if box dimensions are invalid for PBC calculation
- */
 void computeSystemEnergyPBCCutoff(model::MCState& state);
-
-/**
- * @brief Calculate VDW-only energies for the full system with cutoff
- * 
- * This function calculates ONLY van der Waals interactions between all active residues
- * within the specified cutoff distance. It does NOT calculate any electrostatic interactions.
- * This is particularly useful when used in conjunction with Ewald summation, where
- * electrostatic interactions are handled separately.
- * 
- * @param state System state containing residues and force field parameters
- */
 void computeSystemVdwEnergyCutoff(model::MCState& state);
 
 // Function to enable/disable debug output
