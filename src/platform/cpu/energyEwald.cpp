@@ -463,26 +463,14 @@ void computeSystemEnergyEwald(model::MCState& state) {
     double self_energy = computeSelfEnergy(state, false);
     state.ewald_energy.self = self_energy;
     
-    // 总能量 - 直接相加，与Ewald.cpp一致
-    state.ewald_energy.total = state.ewald_energy.real_space + 
-                              state.ewald_energy.reciprocal + 
-                              state.ewald_energy.self;
-    
-    // 将倒空间能量和自能平均分配给所有活动残基
-    int active_count = 0;
-    for(const auto& residue : state.residues) {
-        if(residue.active) active_count++;
-    }
-    
-    if(active_count > 0) {
-        double reciprocal_per_residue = recip_energy / active_count;
-        double self_per_residue = self_energy / active_count;
-        for(auto& residue : state.residues) {
-            if(residue.active) {
-                residue.energy_elec += reciprocal_per_residue + self_per_residue;
-            }
+    // 计算总能量 - 从residues获取能量(包含vdw和实空间静电)，加上倒空间和自能
+    double residue_total = 0.0;
+    for (const auto& residue : state.residues) {
+        if (residue.active) {
+            residue_total += residue.energy_vdw + residue.energy_elec;
         }
     }
+    state.ewald_energy.total = residue_total + state.ewald_energy.reciprocal + state.ewald_energy.self;
     
     // 使用platform::log替代std::cout
     platform::log(LogLevel::INFO, "\n========== Ewald Energy Components ==========");
@@ -559,34 +547,17 @@ void computeMovementEnergyEwald(model::MCState& state) {
     double self_energy = computeSelfEnergy(state, true);
     state.ewald_energy.self = self_energy;
     
-    // 计算总能量 - 直接相加
-    state.ewald_energy.total = state.ewald_energy.real_space + 
-                              state.ewald_energy.reciprocal + 
-                              state.ewald_energy.self;
-    
-    // 将倒空间能量和自能平均分配给所有运动残基
-    int movement_count = 0;
+    // 计算总能量 - 从相关residues获取能量(包含vdw和实空间静电)，加上倒空间和自能
+    double residue_total = 0.0;
     for(const auto& movementInfo : state.movementResidues) {
         for(int i = movementInfo.startIndex;
             i < movementInfo.startIndex + movementInfo.activeCount; i++) {
             if(state.residues[i].active) {
-                movement_count++;
+                residue_total += state.residues[i].energy_vdw + state.residues[i].energy_elec;
             }
         }
     }
-    
-    if(movement_count > 0) {
-        double reciprocal_per_residue = recip_energy / movement_count;
-        double self_per_residue = self_energy / movement_count;
-        for(const auto& movementInfo : state.movementResidues) {
-            for(int i = movementInfo.startIndex;
-                i < movementInfo.startIndex + movementInfo.activeCount; i++) {
-                if(state.residues[i].active) {
-                    state.residues[i].energy_elec += reciprocal_per_residue + self_per_residue;
-                }
-            }
-        }
-    }
+    state.ewald_energy.total = residue_total + state.ewald_energy.reciprocal + state.ewald_energy.self;
     
     // 使用platform::log替代std::cout
     platform::log(LogLevel::INFO, "\n========== Movement Ewald Energy Components ==========");

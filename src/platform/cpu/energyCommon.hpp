@@ -131,7 +131,16 @@ inline double getTotalEnergy(const model::MCState& state) {
 }
 
 inline double getEwaldTotalEnergy(const model::MCState& state) {
-    return state.ewald_energy.total;
+    // 计算所有residue中的能量（包含vdw能量和实空间静电能量）
+    double residue_total = 0.0;
+    for (const auto& residue : state.residues) {
+        if (residue.active) {
+            residue_total += residue.energy_vdw + residue.energy_elec;
+        }
+    }
+    
+    // 加上EwaldEnergy中的倒空间能量和自能
+    return residue_total + state.ewald_energy.reciprocal + state.ewald_energy.self;
 }
 
 } // namespace cpu

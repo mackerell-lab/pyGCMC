@@ -214,9 +214,13 @@ def test_pbc_cutoff_ewald_comparison():
     kmax = [6, 6, 6]  # reciprocal space cutoff
     alpha = 2.0  # Ewald parameter (nm^-1)
     pygcmc.setEwaldParameters(alpha, kmax)
-    pygcmc.computeSystemEnergyEwald(state)
-    energy_ewald = sum(res.energy_vdw + res.energy_elec 
-                      for res in state.residues if res.active)
+    # 函数返回(electrostatic_total, vdw, ewald_dict)元组
+    result = pygcmc.computeSystemEnergyEwald(state)
+    # 创建本地变量保存ewald_dict
+    ewald_dict = result[2]
+    
+    # 修改：从ewald_dict中获取总能量
+    energy_ewald = ewald_dict['total']
     
     print(f"\nEnergy comparison for 2x2x2 NaCl crystal:")
     print(f"PBC without cutoff:  {energy_pbc:.3f} kJ/mol")
@@ -321,8 +325,11 @@ def test_madelung_constant():
 
     for alpha in alpha_tests:
         pygcmc.setEwaldParameters(alpha, kmax_fixed)
-        energy = pygcmc.computeSystemEnergyEwald(state)
-        elec_energy = energy[0]  # 获取静电能量
+        result = pygcmc.computeSystemEnergyEwald(state)
+        ewald_dict = result[2]  # 保存ewald字典
+        
+        # 修改：从ewald_dict字典中获取静电能量
+        elec_energy = ewald_dict['real_space'] + ewald_dict['reciprocal'] + ewald_dict['self']
         
         # 对能量归一化：除以单元数 (n_cells^3)
         elec_energy = elec_energy / (n_cells ** 3)
@@ -345,9 +352,12 @@ def test_madelung_constant():
     print("\nTesting kmax convergence with optimal alpha...")
     for kmax in kmax_tests:
         pygcmc.setEwaldParameters(optimal_alpha, kmax)
-        energy = pygcmc.computeSystemEnergyEwald(state)
-        elec_energy = energy[0]  # 获取静电能量
-        vdw_energy = energy[1]  # 获取范德华能量
+        result = pygcmc.computeSystemEnergyEwald(state)
+        ewald_dict = result[2]  # 保存ewald字典
+        
+        # 修改：从ewald_dict字典中获取能量分量
+        elec_energy = ewald_dict['real_space'] + ewald_dict['reciprocal'] + ewald_dict['self']
+        vdw_energy = sum(res.energy_vdw for res in state.residues if res.active)
         total_energy = elec_energy + vdw_energy
 
         # 能量归一化：除以 n_cells^3
@@ -386,10 +396,13 @@ def test_madelung_constant():
         # 盒子尺寸应为 n * a
         state = create_nacl_crystal(n * a, n)
         pygcmc.setEwaldParameters(best_params[0], best_params[1])
-        energy = pygcmc.computeSystemEnergyEwald(state)
-        elec_energy = energy[0]  # 获取静电能量
-        elec_energy = elec_energy / (n ** 3)
+        result = pygcmc.computeSystemEnergyEwald(state)
+        ewald_dict = result[2]  # 保存ewald字典
         
+        # 修改：从ewald_dict字典中获取静电能量
+        elec_energy = ewald_dict['real_space'] + ewald_dict['reciprocal'] + ewald_dict['self']
+        elec_energy = elec_energy / (n ** 3)
+
         # 使用与test_ewald_exact相同的计算方法
         num_atoms = len(state.atoms)
         theoretical_energy = -(MADELUNG_NACL * eCharge * eCharge * AVOGADRO) / (4 * PI_M * eps0 * a0 * 2 * 1000)
@@ -571,12 +584,16 @@ def test_ewald_error_tolerance():
         print(f"   Error computing Ewald energy: {e}")
         pytest.skip("Reference Ewald calculation failed, skipping test")
     
+    # 保存ewald字典
+    result = pygcmc.computeSystemEnergyEwald(state)
+    ewald_dict = result[2]
+    
     # 计算参考能量
-    ref_energy = state.ewald_energy['total']  # 使用总Ewald能量作为参考
+    ref_energy = ewald_dict['total']  # 使用总Ewald能量作为参考
     print(f"   Reference energy: {ref_energy:.6f} kJ/mol")
-    print(f"   Ewald components - Self: {state.ewald_energy['self']:.4f}, "
-          f"Real: {state.ewald_energy['real_space']:.4f}, "
-          f"Recip: {state.ewald_energy['reciprocal']:.4f}")
+    print(f"   Ewald components - Self: {ewald_dict['self']:.4f}, "
+          f"Real: {ewald_dict['real_space']:.4f}, "
+          f"Recip: {ewald_dict['reciprocal']:.4f}")
     
     # 验证参考能量计算正确
     assert abs(ref_energy) > 1e-6, "Reference energy should not be zero"
@@ -621,8 +638,12 @@ def test_ewald_error_tolerance():
             all_tests_passed = False
             continue
         
+        # 保存ewald字典
+        result = pygcmc.computeSystemEnergyEwald(state)
+        ewald_dict = result[2]
+        
         # 计算当前容限下的能量
-        energy = state.ewald_energy['total']  # 使用总Ewald能量
+        energy = ewald_dict['total']  # 使用总Ewald能量
         
         # 计算差异
         abs_diff = abs(energy - ref_energy)
@@ -658,10 +679,10 @@ def test_ewald_error_tolerance():
         print(f"   Theoretical kmax for this tolerance: {expected_kmax}")
         
         # 计算能量分量比例
-        if abs(state.ewald_energy['total']) > 1e-10:
-            self_energy_ratio = abs(state.ewald_energy['self'] / state.ewald_energy['total'])
-            real_space_ratio = abs(state.ewald_energy['real_space'] / state.ewald_energy['total'])
-            recip_energy_ratio = abs(state.ewald_energy['reciprocal'] / state.ewald_energy['total'])
+        if abs(ewald_dict['total']) > 1e-10:
+            self_energy_ratio = abs(ewald_dict['self'] / ewald_dict['total'])
+            real_space_ratio = abs(ewald_dict['real_space'] / ewald_dict['total'])
+            recip_energy_ratio = abs(ewald_dict['reciprocal'] / ewald_dict['total'])
             
             print(f"   Energy component ratios - Self: {self_energy_ratio:.4f}, "
                   f"Real: {real_space_ratio:.4f}, Recip: {recip_energy_ratio:.4f}")
@@ -873,18 +894,21 @@ def test_ewald_exact():
     print(f"设置的Ewald参数: alpha = {alpha}, kmax = {kmax}")
     
     # 计算能量
-    energy = pygcmc.computeSystemEnergyEwald(state)
+    result = pygcmc.computeSystemEnergyEwald(state)
+    ewald_dict = result[2]  # 保存ewald字典
     
-    # 获取分解的能量
-    electrostatic = energy[0]  # 静电能量
-    vdw = energy[1]            # 范德华能量
-    total = electrostatic + vdw  # 总能量
+    # 获取分解的能量 - 修改为从ewald_dict中获取
+    electrostatic = ewald_dict['real_space'] + ewald_dict['reciprocal'] + ewald_dict['self']
+    vdw = sum(res.energy_vdw for res in state.residues if res.active)
+    # 自己计算总能量，不使用ewald_dict['total']
+    total = electrostatic + vdw
     
     # 打印能量组成
     print("\n=== 能量组成 ===")
     print(f"静电能量：{electrostatic:.6f} kJ/mol")
     print(f"范德华能量：{vdw:.6f} kJ/mol")
     print(f"总能量：{total:.6f} kJ/mol")
+    print(f"字典中的总能量：{ewald_dict['total']:.6f} kJ/mol")
     
     # 获取COULOMB常数值进行对比
     print(f"pygcmc.COULOMB = {pygcmc.COULOMB}")
@@ -915,9 +939,9 @@ def test_ewald_exact():
     # 用于分析差异的每个组件的比较
     print("\n=== 能量组件对比 ===")
     print("Python计算结果:")
-    print(f"  - 实空间能量：{state.ewald_energy['real_space']:.2f} kJ/mol")
-    print(f"  - 倒空间能量：{state.ewald_energy['reciprocal']:.2f} kJ/mol")
-    print(f"  - 自能：{state.ewald_energy['self']:.2f} kJ/mol")
+    print(f"  - 实空间能量：{ewald_dict['real_space']:.2f} kJ/mol")
+    print(f"  - 倒空间能量：{ewald_dict['reciprocal']:.2f} kJ/mol")
+    print(f"  - 自能：{ewald_dict['self']:.2f} kJ/mol")
     print("C++参考结果:")
     print("  - 实空间能量：-156562 kJ/mol")
     print("  - 倒空间能量：419.213 kJ/mol")
