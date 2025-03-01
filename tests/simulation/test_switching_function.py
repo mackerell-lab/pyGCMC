@@ -534,6 +534,152 @@ def test_monte_carlo_system_switching_function():
     state.info.use_switching = False
     assert mc_system.is_using_switching_function() == False, "切换函数应该被禁用"
 
+def test_internal_switching_function():
+    """
+    通过能量计算结果直接测试内部实现的switching function
+    
+    这个测试通过比较有/无switching function时的能量比值，
+    来间接测试内部实现的switching function是否符合预期
+    """
+    # 创建测试系统
+    state = create_test_system()
+    
+    # 设置平滑函数参数
+    r_on = 1.0   # 内截断半径
+    r_off = 1.2  # 外截断半径
+    
+    # 选择在r_on到r_off之间的距离进行测试
+    test_distances = [1.02, 1.05, 1.08, 1.10, 1.15, 1.18]
+    
+    print("\n内部Switching Function测试（通过能量比值验证）:")
+    print(f"{'距离(nm)':10s} | {'无切换能量':14s} | {'有切换能量':14s} | {'实际比值':10s} | {'预期切换值':10s} | {'误差':10s}")
+    print("-" * 75)
+    
+    for r in test_distances:
+        # 设置粒子间距离
+        state.atoms[1].x = r
+        state.atoms[1].y = 0.0
+        state.atoms[1].z = 0.0
+        
+        # 1. 计算不使用switching function的能量
+        state.info.use_switching = False
+        pygcmc.computeSystemEnergy(state)
+        energy_no_switch = state.residues[0].energy_vdw + state.residues[1].energy_vdw
+        
+        # 如果能量为0，跳过这个距离点
+        if abs(energy_no_switch) < 1e-10:
+            continue
+        
+        # 2. 计算使用switching function的能量
+        state.info.use_switching = True
+        state.info.r_on = r_on
+        state.info.r_off = r_off
+        pygcmc.computeSystemEnergy(state)
+        energy_with_switch = state.residues[0].energy_vdw + state.residues[1].energy_vdw
+        
+        # 3. 计算能量比值，即实际的switching function值
+        actual_switch = energy_with_switch / energy_no_switch if energy_no_switch != 0 else 0
+        
+        # 4. 计算理论上的switching function值
+        r2 = r * r
+        ron2 = r_on * r_on
+        roff2 = r_off * r_off
+        
+        numerator = (roff2 - r2) * (roff2 - r2) * (roff2 + 2.0*r2 - 3.0*ron2)
+        denominator = (roff2 - ron2) * (roff2 - ron2) * (roff2 - ron2)
+        expected_switch = numerator / denominator
+        
+        # 计算误差
+        error = abs(actual_switch - expected_switch)
+        
+        # 打印结果
+        print(f"{r:10.3f} | {energy_no_switch:14.6f} | {energy_with_switch:14.6f} | "
+              f"{actual_switch:10.6f} | {expected_switch:10.6f} | {error:10.6f}")
+        
+        # 验证误差在可接受范围内
+        assert actual_switch == pytest.approx(expected_switch, abs=1e-4), \
+               f"At r={r}, switching function value differs: {actual_switch} vs expected {expected_switch}"
+    
+    # 还原测试状态
+    state.info.use_switching = False
+
+def test_internal_switching_function_ewald():
+    """
+    通过Ewald能量计算结果直接测试内部实现的switching function
+    
+    这个测试使用Ewald计算方法，通过比较有/无switching function时的VDW能量比值，
+    来间接测试内部实现的switching function是否符合预期
+    """
+    # 创建测试系统
+    state = create_test_system()
+    
+    # 设置原子电荷用于Ewald计算
+    state.atoms[0].charge = 1.0
+    state.atoms[1].charge = -1.0
+    
+    # 设置Ewald参数
+    state.info.setTemperature(300.0)  # 300K
+    pygcmc.initializeEwaldParameters(state.info.cutoff, state.info.box)
+    
+    # 设置平滑函数参数
+    r_on = 1.0   # 内截断半径
+    r_off = 1.2  # 外截断半径
+    
+    # 选择在r_on到r_off之间的距离进行测试
+    test_distances = [1.02, 1.05, 1.08, 1.10, 1.15, 1.18]
+    
+    print("\n内部Switching Function测试（通过Ewald VDW能量比值验证）:")
+    print(f"{'距离(nm)':10s} | {'无切换VDW':14s} | {'有切换VDW':14s} | {'实际比值':10s} | {'预期切换值':10s} | {'误差':10s}")
+    print("-" * 75)
+    
+    for r in test_distances:
+        # 设置粒子间距离
+        state.atoms[1].x = r
+        state.atoms[1].y = 0.0
+        state.atoms[1].z = 0.0
+        
+        # 1. 计算不使用switching function的能量
+        state.info.use_switching = False
+        pygcmc.computeSystemEnergyEwald(state)
+        vdw_no_switch = state.residues[0].energy_vdw + state.residues[1].energy_vdw
+        
+        # 如果能量为0，跳过这个距离点
+        if abs(vdw_no_switch) < 1e-10:
+            continue
+        
+        # 2. 计算使用switching function的能量
+        state.info.use_switching = True
+        state.info.r_on = r_on
+        state.info.r_off = r_off
+        pygcmc.computeSystemEnergyEwald(state)
+        vdw_with_switch = state.residues[0].energy_vdw + state.residues[1].energy_vdw
+        
+        # 3. 计算能量比值，即实际的switching function值
+        actual_switch = vdw_with_switch / vdw_no_switch if vdw_no_switch != 0 else 0
+        
+        # 4. 计算理论上的switching function值
+        r2 = r * r
+        ron2 = r_on * r_on
+        roff2 = r_off * r_off
+        
+        numerator = (roff2 - r2) * (roff2 - r2) * (roff2 + 2.0*r2 - 3.0*ron2)
+        denominator = (roff2 - ron2) * (roff2 - ron2) * (roff2 - ron2)
+        expected_switch = numerator / denominator
+        
+        # 计算误差
+        error = abs(actual_switch - expected_switch)
+        
+        # 打印结果
+        print(f"{r:10.3f} | {vdw_no_switch:14.6f} | {vdw_with_switch:14.6f} | "
+              f"{actual_switch:10.6f} | {expected_switch:10.6f} | {error:10.6f}")
+        
+        # 验证误差在可接受范围内
+        assert actual_switch == pytest.approx(expected_switch, abs=1e-4), \
+               f"At r={r}, switching function value differs: {actual_switch} vs expected {expected_switch}"
+    
+    # 还原测试状态
+    state.info.use_switching = False
+
 def test_mcs_energy_calculation_with_switching():
     """
     测试MonteCarloSystem对象是否能正确影响能量计算
@@ -594,3 +740,6 @@ if __name__ == "__main__":
     test_print_switching_values()
     # 运行新增的对比测试
     test_compare_energy_with_without_switching() 
+    # 运行内部switching function测试
+    test_internal_switching_function()
+    test_internal_switching_function_ewald() 
