@@ -1362,7 +1362,7 @@ def test_initialize_force_field(molecular_system, charmm_ff):
     # Basic assertions
     assert state.forcefield.numTotalTypes == len(atom_types.atomTypes)
     assert state.forcefield.numMovementTypes == state.numMovementAtomTypes
-    # 修改数组大小的断言，现在应该是 numTotalTypes * numTotalTypes
+    # Modified assertion for array size, now should be numTotalTypes * numTotalTypes
     expected_size = state.forcefield.numTotalTypes * state.forcefield.numTotalTypes
     assert len(state.forcefield.ljSigma) == expected_size, \
         f"Expected ljSigma size {expected_size}, got {len(state.forcefield.ljSigma)}"
@@ -1373,11 +1373,11 @@ def test_initialize_force_field(molecular_system, charmm_ff):
     ANGSTROM_TO_NM = 0.1  # 1 Å = 0.1 nm
     KCAL_TO_KJ = 4.184    # 1 kcal/mol = 4.184 kJ/mol
     
-    # 修改类型对的构造逻辑，现在检查所有类型对
+    # Modified construction logic for type pairs, now checking all type pairs
     atom_type_pairs = []
     all_type_indices = range(len(atom_types.atomTypes))
     
-    # 检查所有可能的类型对
+    # Check all possible type pairs
     for type1_idx in all_type_indices:
         type1 = atom_types.atomTypes[type1_idx]
         for type2_idx in all_type_indices:
@@ -1387,7 +1387,7 @@ def test_initialize_force_field(molecular_system, charmm_ff):
     print(f"\nConstructed {len(atom_type_pairs)} type pairs to check")
     print("First few pairs:", atom_type_pairs[:5])
 
-    # 修改参数索引计算
+    # Modified parameter index calculation
     for type1, type2 in atom_type_pairs:
         # Get type indices in the force field
         type1_idx = atom_types.get_or_add_type(type1)

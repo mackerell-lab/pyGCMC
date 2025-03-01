@@ -198,7 +198,7 @@ def test_energy_with_switching():
         e_switch = energies_with_switching[i]
         
         # Print results for observation
-        print(f"r={r:.3f}, 无切换={e_hard:.6f}, 有切换={e_switch:.6f}")
+        print(f"r={r:.3f}, no_switching={e_hard:.6f}, with_switching={e_switch:.6f}")
         
         # When r < r_on, both methods should produce the same energy
         if r < r_on:
@@ -280,7 +280,7 @@ def test_with_ewald():
         e_normal = energies_ewald[i]
         e_switch = energies_ewald_switching[i]
         
-        print(f"Ewald r={r:.3f}, 无切换={e_normal:.6f}, 有切换={e_switch:.6f}")
+        print(f"Ewald r={r:.3f}, no_switching={e_normal:.6f}, with_switching={e_switch:.6f}")
         
         # When r < r_on, energy should be the same
         if r < r_on:
