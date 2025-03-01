@@ -9,63 +9,63 @@ namespace pygcmc {
 namespace io {
 
 /**
- * @brief GCMC输入文件解析器类
- * @details 用于解析GCMC模拟的输入文件，将参数存储到Param数据结构中
- * 支持的参数包括：
- * - 文件路径参数：par, fragitp, atomtypes, top, pdb等
- * - 空间参数：grid_dx, box_size, cutoff等
- * - 片段参数：fragname, fragconc, fragmuex
- * - 模拟控制参数：nprint, mcsteps等
- * - 偏置采样参数：use_cavity_bias, use_conf_bias
+ * @brief GCMC input file parser class
+ * @details Used to parse GCMC simulation input files and store parameters in the Param data structure
+ * Supported parameters include:
+ * - File path parameters: par, fragitp, atomtypes, top, pdb, etc.
+ * - Spatial parameters: grid_dx, box_size, cutoff, etc.
+ * - Fragment parameters: fragname, fragconc, fragmuex
+ * - Simulation control parameters: nprint, mcsteps, etc.
+ * - Biased sampling parameters: use_cavity_bias, use_conf_bias
  */
 class INPParser {
 public:
     /**
-     * @brief 解析输入文件并返回新的Param对象
-     * @param filename 输入文件路径
-     * @return model::Param 包含解析结果的Param对象
-     * @throw std::runtime_error 如果文件不存在或解析失败
+     * @brief Parse input file and return a new Param object
+     * @param filename Input file path
+     * @return model::Param Param object containing parsing results
+     * @throw std::runtime_error If the file doesn't exist or parsing fails
      */
     static model::Param parse_file(const std::string& filename);
 
     /**
-     * @brief 解析输入字符串并返回新的Param对象
-     * @param content 输入文件内容字符串
-     * @return model::Param 包含解析结果的Param对象
-     * @throw std::runtime_error 如果解析失败
+     * @brief Parse input string and return a new Param object
+     * @param content Input file content string
+     * @return model::Param Param object containing parsing results
+     * @throw std::runtime_error If parsing fails
      */
     static model::Param parse_string(const std::string& content);
 
     /**
-     * @brief 解析输入文件并将结果存储到现有Param对象中
-     * @param filename 输入文件路径
-     * @param param 用于存储结果的Param对象
-     * @throw std::runtime_error 如果文件不存在或解析失败
+     * @brief Parse input file and store results in an existing Param object
+     * @param filename Input file path
+     * @param param Param object for storing results
+     * @throw std::runtime_error If the file doesn't exist or parsing fails
      */
     static void parse_to_param(const std::string& filename, model::Param& param);
 
     /**
-     * @brief 解析输入字符串并将结果存储到现有Param对象中
-     * @param content 输入文件内容字符串
-     * @param param 用于存储结果的Param对象
-     * @throw std::runtime_error 如果解析失败
+     * @brief Parse input string and store results in an existing Param object
+     * @param content Input file content string
+     * @param param Param object for storing results
+     * @throw std::runtime_error If parsing fails
      */
     static void parse_string_to_param(const std::string& content, model::Param& param);
 
 private:
     /**
-     * @brief 解析单行参数
-     * @param key 参数名
-     * @param value 参数值
-     * @param param 用于存储结果的Param对象
-     * @throw std::runtime_error 如果解析失败
+     * @brief Parse single line parameter
+     * @param key Parameter name
+     * @param value Parameter value
+     * @param param Param object for storing results
+     * @throw std::runtime_error If parsing fails
      */
     static void parse_line(const std::string& key, const std::string& value, model::Param& param);
 
     /**
-     * @brief 验证参数的有效性和一致性
-     * @param param 需要验证的Param对象
-     * @throw std::runtime_error 如果验证失败
+     * @brief Validate parameter validity and consistency
+     * @param param Param object to be validated
+     * @throw std::runtime_error If validation fails
      */
     static void validate_parameters(model::Param& param);
 };

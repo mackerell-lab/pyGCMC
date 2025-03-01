@@ -210,17 +210,17 @@ void init_system(py::module& m) {
         .def("get_active_residue_count", &pygcmc::system::MonteCarloSystem::getActiveResidueCount)
         .def("set_switching_function", &pygcmc::system::MonteCarloSystem::setSwitchingFunction,
              py::arg("enable"), py::arg("r_on") = 1.0f, py::arg("r_off") = 1.2f,
-             "设置或禁用CHARMM风格的平滑切换函数")
+             "Set or disable CHARMM-style smooth switching function")
         .def("calculate_switching_function", &pygcmc::system::MonteCarloSystem::calculateSwitchingFunction,
-             py::arg("r"), "计算给定距离处的切换函数值")
+             py::arg("r"), "Calculate switching function value at the given distance")
         .def("is_using_switching_function", &pygcmc::system::MonteCarloSystem::isUsingSwitchingFunction,
-             "获取当前是否启用切换函数")
+             "Get whether the switching function is currently enabled")
         .def("get_switching_r_on", &pygcmc::system::MonteCarloSystem::getSwitchingROn,
-             "获取内截断半径")
+             "Get the inner cutoff radius")
         .def("get_switching_r_off", &pygcmc::system::MonteCarloSystem::getSwitchingROff,
-             "获取外截断半径")
+             "Get the outer cutoff radius")
         .def("apply_switching_to_state", &pygcmc::system::MonteCarloSystem::applySwitchingToState,
-             py::arg("state"), "将当前的switching function设置应用到外部state对象");
+             py::arg("state"), "Apply the current switching function settings to an external state object");
 
     // Bind MovementMolecularInfo
     py::class_<pygcmc::system::MonteCarloSystem::MovementMolecularInfo>(m, "MovementMolecularInfo")

@@ -33,8 +33,8 @@ void init_simulation_bindings(py::module& m) {
     m.def("setEnergyDebugOutput", &simulation::Simulation::setEnergyDebugOutput,
           "Enable or disable debug output for energy calculations");
     
-    // CHARMM切换函数相关绑定已移除
-    // 请使用MonteCarloSystem类中的set_switching_function和calculate_switching_function方法
+    // CHARMM switching function related bindings have been removed
+    // Please use the set_switching_function and calculate_switching_function methods in the MonteCarloSystem class
 
     // Ewald parameters are stored as static variables in the implementation
     m.def("setEwaldParameters",
@@ -43,7 +43,7 @@ void init_simulation_bindings(py::module& m) {
                 throw std::runtime_error("kmax must have exactly three elements");
             }
             int kmax_array[3] = { kmax[0], kmax[1], kmax[2] };
-            // 这里需要修改实现，让setEwaldParameters成为静态方法
+            // Implementation needs to be modified to make setEwaldParameters a static method
             simulation::Simulation::setEwaldParameters(alpha, kmax_array, tolerance);
         },
         "Set parameters for Ewald summation",
@@ -68,21 +68,21 @@ void init_simulation_bindings(py::module& m) {
           
     m.def("computeSystemEnergyEwald", 
         [](model::MCState& state) {
-            // 调用C++函数计算能量
+            // Call C++ function to calculate energy
             simulation::Simulation::computeSystemEnergyEwald(state);
             
-            // 从C++结构体转换为Python字典
+            // Convert from C++ struct to Python dictionary
             py::dict ewald_dict;
             ewald_dict["real_space"] = state.ewald_energy.real_space;
             ewald_dict["reciprocal"] = state.ewald_energy.reciprocal;
             ewald_dict["self"] = state.ewald_energy.self;
             
-            // 计算静电总能量
+            // Calculate total electrostatic energy
             double electrostatic_total = state.ewald_energy.real_space + 
                                          state.ewald_energy.reciprocal + 
                                          state.ewald_energy.self;
             
-            // 从残基中累计VDW能量
+            // Accumulate VDW energy from residues
             double vdw = 0.0;
             for(const auto& res : state.residues) {
                 if(res.active) {
@@ -90,32 +90,32 @@ void init_simulation_bindings(py::module& m) {
                 }
             }
             
-            // 正确计算总能量并保存
+            // Correctly calculate and save total energy
             double total = electrostatic_total + vdw;
             ewald_dict["total"] = total;
             
-            // 返回元组：(静电总能量, 范德华能量, ewald字典)
+            // Return tuple: (electrostatic_total, vdw_energy, ewald_dict)
             return py::make_tuple(electrostatic_total, vdw, ewald_dict);
         },
         "Calculate system energy using Ewald summation");
           
     m.def("computeMovementEnergyEwald", 
         [](model::MCState& state) {
-            // 调用C++函数计算能量
+            // Call C++ function to calculate energy
             simulation::Simulation::computeMovementEnergyEwald(state);
             
-            // 从C++结构体转换为Python字典
+            // Convert from C++ struct to Python dictionary
             py::dict ewald_dict;
             ewald_dict["real_space"] = state.ewald_energy.real_space;
             ewald_dict["reciprocal"] = state.ewald_energy.reciprocal;
             ewald_dict["self"] = state.ewald_energy.self;
             
-            // 计算静电总能量
+            // Calculate total electrostatic energy
             double electrostatic_total = state.ewald_energy.real_space + 
                                          state.ewald_energy.reciprocal + 
                                          state.ewald_energy.self;
             
-            // 只累计movement残基的VDW能量
+            // Only accumulate VDW energy from movement residues
             double vdw = 0.0;
             for(const auto& movementInfo : state.movementResidues) {
                 for(int i = movementInfo.startIndex;
@@ -126,11 +126,11 @@ void init_simulation_bindings(py::module& m) {
                 }
             }
             
-            // 正确计算总能量并保存
+            // Correctly calculate and save total energy
             double total = electrostatic_total + vdw;
             ewald_dict["total"] = total;
             
-            // 返回元组：(静电总能量, 范德华能量, ewald字典)
+            // Return tuple: (electrostatic_total, vdw_energy, ewald_dict)
             return py::make_tuple(electrostatic_total, vdw, ewald_dict);
         },
         "Calculate movement residue energy using Ewald summation");

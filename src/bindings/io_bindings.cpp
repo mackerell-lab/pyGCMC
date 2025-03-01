@@ -31,7 +31,7 @@ void init_io(py::module& m) {
         .def_static("parse_string_to_structure", &io::PDBParser::parse_string_to_structure,
             py::arg("pdbStr"), py::arg("structure"),
             "Parse PDB string and populate Structure object");
-    m.attr("PDBParser") = pdb_parser;  // 将 PDBParser 也添加到主模块
+    m.attr("PDBParser") = pdb_parser;  // Also add PDBParser to the main module
 
     // PSFParser bindings
     auto psf_parser = py::class_<io::PSFParser>(m, "PSFParser")

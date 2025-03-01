@@ -141,7 +141,7 @@ void init_model(py::module& m) {
     // Bind Structure to main module
     auto structure = py::class_<model::Structure>(m, "Structure")
         .def(py::init<>())
-        // 直接暴露内部成员作为属性
+        // Directly expose internal members as properties
         .def_property_readonly("atoms", [](const model::Structure& s) { return s.get_atoms(); },
             "List of atoms in the structure")
         .def_property_readonly("residues", [](const model::Structure& s) { return s.get_residues(); },
@@ -156,7 +156,7 @@ void init_model(py::module& m) {
             "List of disulfide bonds")
         .def_property_readonly("box_dimensions", [](const model::Structure& s) { return s.get_box_dimensions(); },
             "Box dimensions and angles")
-        // 保留原有方法
+        // Preserve original methods
         .def("add_atom", &model::Structure::add_atom)
         .def("add_residue", &model::Structure::add_residue)
         .def("add_terminal", &model::Structure::add_terminal)
