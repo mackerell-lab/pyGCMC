@@ -137,6 +137,41 @@ void MonteCarloSystem::updateGeometricCenter(model::MCResidue& res) {
     }
 }
 
+void MonteCarloSystem::setSwitchingFunction(bool enable, float r_on, float r_off) {
+    // 参数验证
+    if (r_on >= r_off) {
+        throw std::runtime_error("Invalid switching function parameters: r_on must be less than r_off");
+    }
+    if (r_on <= 0.0f || r_off <= 0.0f) {
+        throw std::runtime_error("Invalid switching function parameters: radii must be positive");
+    }
+
+    // 设置MCState中的参数
+    state.info.use_switching = enable;
+    state.info.r_on = r_on;
+    state.info.r_off = r_off;
+}
+
+float MonteCarloSystem::calculateSwitchingFunction(float r) const {
+    if (!state.info.use_switching || r <= state.info.r_on) {
+        return 1.0f;  // 小于r_on时不使用切换函数
+    }
+    if (r >= state.info.r_off) {
+        return 0.0f;  // 大于r_off时能量为零
+    }
+    
+    // 计算CHARMM风格的切换函数
+    // S(r) = [(r_off^2 - r^2)^2 * (r_off^2 + 2r^2 - 3r_on^2)] / (r_off^2 - r_on^2)^3
+    float r2 = r * r;
+    float ron2 = state.info.r_on * state.info.r_on;
+    float roff2 = state.info.r_off * state.info.r_off;
+    
+    float numerator = (roff2 - r2) * (roff2 - r2) * (roff2 + 2.0f*r2 - 3.0f*ron2);
+    float denominator = (roff2 - ron2) * (roff2 - ron2) * (roff2 - ron2);
+    
+    return numerator / denominator;
+}
+
 void MonteCarloSystem::initializeFromMolecular(const std::shared_ptr<model::Molecular>& molecular) {
     if (!molecular) {
         throw std::runtime_error("MolecularSystem has no molecular data");

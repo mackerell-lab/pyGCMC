@@ -205,8 +205,22 @@ void init_system(py::module& m) {
         .def("calc_non_bonded_energy", &pygcmc::system::MonteCarloSystem::calcNonBondedEnergy)
         .def("calc_total_energy", &pygcmc::system::MonteCarloSystem::calcTotalEnergy)
         .def("get_state", (const pygcmc::model::MCState& (pygcmc::system::MonteCarloSystem::*)() const) &pygcmc::system::MonteCarloSystem::getState, py::return_value_policy::reference)
+        .def("get_state_mutable", (pygcmc::model::MCState& (pygcmc::system::MonteCarloSystem::*)()) &pygcmc::system::MonteCarloSystem::getState, py::return_value_policy::reference)
         .def("get_active_atom_count", &pygcmc::system::MonteCarloSystem::getActiveAtomCount)
-        .def("get_active_residue_count", &pygcmc::system::MonteCarloSystem::getActiveResidueCount);
+        .def("get_active_residue_count", &pygcmc::system::MonteCarloSystem::getActiveResidueCount)
+        .def("set_switching_function", &pygcmc::system::MonteCarloSystem::setSwitchingFunction,
+             py::arg("enable"), py::arg("r_on") = 0.8f, py::arg("r_off") = 1.2f,
+             "设置或禁用CHARMM风格的平滑切换函数")
+        .def("calculate_switching_function", &pygcmc::system::MonteCarloSystem::calculateSwitchingFunction,
+             py::arg("r"), "计算给定距离处的切换函数值")
+        .def("is_using_switching_function", &pygcmc::system::MonteCarloSystem::isUsingSwitchingFunction,
+             "获取当前是否启用切换函数")
+        .def("get_switching_r_on", &pygcmc::system::MonteCarloSystem::getSwitchingROn,
+             "获取内截断半径")
+        .def("get_switching_r_off", &pygcmc::system::MonteCarloSystem::getSwitchingROff,
+             "获取外截断半径")
+        .def("apply_switching_to_state", &pygcmc::system::MonteCarloSystem::applySwitchingToState,
+             py::arg("state"), "将当前的switching function设置应用到外部state对象");
 
     // Bind MovementMolecularInfo
     py::class_<pygcmc::system::MonteCarloSystem::MovementMolecularInfo>(m, "MovementMolecularInfo")

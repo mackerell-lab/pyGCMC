@@ -143,10 +143,9 @@ public:
     // Energy calculation methods exposed to Python
     static void computeSystemVdwEnergyCutoff(model::MCState& state);
     
-    // CHARMM switching function methods
-    static void enableSwitchingFunction(model::MCState& state, bool enable, float r_on, float r_off);
-    static float calculateSwitchingFunction(const model::MCState& state, float r);
-
+    // CHARMM切换函数相关方法已移至MonteCarloSystem类
+    // 在此注释掉以避免用户使用过时接口
+    
     // Ewald methods
     static void initializeEwaldParameters(float cutoff, const float box[3], 
                                           float alpha = 0.0f, float tolerance = 1e-5f);

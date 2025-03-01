@@ -253,6 +253,58 @@ public:
      */
     void validateParameters(const model::ForceField& ff, const std::shared_ptr<model::Molecular>& molecular);
 
+    /**
+     * @brief 设置或禁用CHARMM风格的平滑切换函数
+     * 
+     * @param enable 是否启用切换函数
+     * @param r_on 内截断半径 (nm)，开始衰减的距离
+     * @param r_off 外截断半径 (nm)，能量降为零的距离
+     */
+    void setSwitchingFunction(bool enable, float r_on = 1.0f, float r_off = 1.2f);
+
+    /**
+     * @brief 计算给定距离处的切换函数值
+     * 
+     * @param r 需要计算切换函数值的距离 (nm)
+     * @return 切换函数值，范围在[0,1]之间
+     */
+    float calculateSwitchingFunction(float r) const;
+
+    /**
+     * @brief 获取当前是否启用切换函数
+     * @return 是否启用切换函数
+     */
+    bool isUsingSwitchingFunction() const { return state.info.use_switching; }
+
+    /**
+     * @brief 获取内截断半径
+     * @return 内截断半径 (nm)
+     */
+    float getSwitchingROn() const { return state.info.r_on; }
+
+    /**
+     * @brief 获取外截断半径
+     * @return 外截断半径 (nm)
+     */
+    float getSwitchingROff() const { return state.info.r_off; }
+
+    /**
+     * @brief 将当前的switching function设置应用到外部state对象
+     * 
+     * @param externalState 需要应用switching function设置的外部state对象
+     */
+    void applySwitchingToState(model::MCState& externalState) const {
+        externalState.info.use_switching = state.info.use_switching;
+        externalState.info.r_on = state.info.r_on;
+        externalState.info.r_off = state.info.r_off;
+    }
+
+    /**
+     * @brief 获取系统状态（可修改）
+     * @return 系统状态引用
+     */
+    model::MCState& getState() { return state; }
+
 private:
     // ------------------------------------------------------------
     // Private helper functions

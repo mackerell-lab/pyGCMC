@@ -33,20 +33,8 @@ void init_simulation_bindings(py::module& m) {
     m.def("setEnergyDebugOutput", &simulation::Simulation::setEnergyDebugOutput,
           "Enable or disable debug output for energy calculations");
     
-    // CHARMM switching function bindings
-    m.def("enableSwitchingFunction", 
-          static_cast<void (*)(model::MCState&, bool, float, float)>(&simulation::Simulation::enableSwitchingFunction),
-          "Enable or disable CHARMM-style switching function for LJ potential, storing parameters in MCState",
-          py::arg("state"),
-          py::arg("enable"),
-          py::arg("r_on") = 0.8f,
-          py::arg("r_off") = 1.2f);
-    
-    m.def("calculateSwitchingFunction", 
-          static_cast<float (*)(const model::MCState&, float)>(&simulation::Simulation::calculateSwitchingFunction),
-          "Calculate CHARMM-style switching function value at distance r using MCState parameters",
-          py::arg("state"),
-          py::arg("r"));
+    // CHARMM切换函数相关绑定已移除
+    // 请使用MonteCarloSystem类中的set_switching_function和calculate_switching_function方法
 
     // Ewald parameters are stored as static variables in the implementation
     m.def("setEwaldParameters",

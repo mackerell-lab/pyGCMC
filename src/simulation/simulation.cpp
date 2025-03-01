@@ -116,17 +116,9 @@ void Simulation::computeSystemEnergyPBCCutoff(model::MCState& state) {
 
 void Simulation::computeSystemVdwEnergyCutoff(model::MCState& state) {
     if (is_debug_enabled()) {
-        log(LogLevel::DEBUG, "Computing VDW energy for all active residues with cutoff");
+        log(LogLevel::DEBUG, "Computing VDW energies with cutoff");
     }
     platform::cpu::computeSystemVdwEnergyCutoff(state);
-}
-
-void Simulation::enableSwitchingFunction(model::MCState& state, bool enable, float r_on, float r_off) {
-    platform::cpu::setSwitchingFunction(state, enable, r_on, r_off);
-}
-
-float Simulation::calculateSwitchingFunction(const model::MCState& state, float r) {
-    return platform::cpu::calculateSwitchingFunction(r, state.info);
 }
 
 void Simulation::setEwaldParameters(float alpha, const int kmax[3], float tolerance) {
