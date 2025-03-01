@@ -269,6 +269,133 @@ def test_print_switching_values():
     # 禁用平滑函数，恢复默认状态
     pygcmc.enableSwitchingFunction(False, r_on, r_off)
 
+def test_compare_energy_with_without_switching():
+    """
+    详细对比有无switching函数下的能量计算结果
+    同时包含direct计算和Ewald计算方法
+    """
+    # 创建测试系统
+    state = create_test_system()
+    
+    # 设置原子电荷，用于Ewald计算
+    state.atoms[0].charge = 1.0
+    state.atoms[1].charge = -1.0
+    
+    # 设置Ewald参数
+    state.info.setTemperature(300.0)  # 300K
+    pygcmc.initializeEwaldParameters(state.info.cutoff, state.info.box)
+    
+    # 设置平滑函数参数
+    r_on = 1.0   # 内截断半径 (10 Å)
+    r_off = 1.2  # 外截断半径 (12 Å)
+    
+    # 在r_on附近取更多的点，更好展示switching效果
+    distances = [0.7 + i * 0.8/50 for i in range(51)]  # 从0.7到1.5的51个点
+    
+    # 1. Direct计算结果对比
+    # 禁用平滑函数
+    pygcmc.enableSwitchingFunction(False, r_on, r_off)
+    
+    direct_no_switching = []
+    for r in distances:
+        state.atoms[1].x = r  # 设置距离
+        pygcmc.computeSystemEnergy(state)  # 使用direct方法计算能量
+        direct_no_switching.append(state.residues[0].energy_vdw + state.residues[1].energy_vdw)
+    
+    # 启用平滑函数
+    pygcmc.enableSwitchingFunction(True, r_on, r_off)
+    
+    direct_with_switching = []
+    for r in distances:
+        state.atoms[1].x = r  # 设置距离
+        pygcmc.computeSystemEnergy(state)  # 使用direct方法计算能量
+        direct_with_switching.append(state.residues[0].energy_vdw + state.residues[1].energy_vdw)
+    
+    # 2. Ewald计算结果对比
+    # 禁用平滑函数
+    pygcmc.enableSwitchingFunction(False, r_on, r_off)
+    
+    ewald_no_switching_vdw = []
+    ewald_no_switching_elec = []
+    for r in distances:
+        state.atoms[1].x = r  # 设置距离
+        pygcmc.computeSystemEnergyEwald(state)  # 使用Ewald方法计算能量
+        ewald_no_switching_vdw.append(state.residues[0].energy_vdw + state.residues[1].energy_vdw)
+        ewald_no_switching_elec.append(state.residues[0].energy_elec + state.residues[1].energy_elec)
+    
+    # 启用平滑函数
+    pygcmc.enableSwitchingFunction(True, r_on, r_off)
+    
+    ewald_with_switching_vdw = []
+    ewald_with_switching_elec = []
+    for r in distances:
+        state.atoms[1].x = r  # 设置距离
+        pygcmc.computeSystemEnergyEwald(state)  # 使用Ewald方法计算能量
+        ewald_with_switching_vdw.append(state.residues[0].energy_vdw + state.residues[1].energy_vdw)
+        ewald_with_switching_elec.append(state.residues[0].energy_elec + state.residues[1].energy_elec)
+    
+    # 打印结果并验证
+    print("\n能量计算对比结果 (带switching vs 不带switching):")
+    print(f"{'距离(nm)':10s} | {'Direct无切换':14s} | {'Direct有切换':14s} | {'Ewald VDW无切换':16s} | {'Ewald VDW有切换':16s}")
+    print("-" * 80)
+    
+    # 打印部分关键结果点
+    key_indices = [0, 10, 20, 25, 30, 35, 40, 45, 50]  # 选择几个关键点展示
+    
+    for idx in key_indices:
+        if idx < len(distances):
+            r = distances[idx]
+            # 在r_off处计算平滑函数值便于验证
+            switch_value = pygcmc.calculateSwitchingFunction(r) if r_on <= r <= r_off else (1.0 if r < r_on else 0.0)
+            
+            print(f"{r:10.3f} | {direct_no_switching[idx]:14.6f} | {direct_with_switching[idx]:14.6f} | "
+                  f"{ewald_no_switching_vdw[idx]:16.6f} | {ewald_with_switching_vdw[idx]:16.6f}")
+    
+    # 进行验证
+    for i, r in enumerate(distances):
+        # 1. 距离小于r_on时，能量应该相同
+        if r < r_on:
+            assert direct_no_switching[i] == pytest.approx(direct_with_switching[i]), \
+                  f"Direct energy should be the same when r < r_on, at r={r}"
+            assert ewald_no_switching_vdw[i] == pytest.approx(ewald_with_switching_vdw[i]), \
+                  f"Ewald VDW energy should be the same when r < r_on, at r={r}"
+                  
+        # 2. 距离大于r_off时，使用switching的能量应为0
+        elif r > r_off:
+            assert direct_with_switching[i] == pytest.approx(0.0), \
+                  f"Direct energy with switching should be 0 when r > r_off, at r={r}"
+            assert ewald_with_switching_vdw[i] == pytest.approx(0.0), \
+                  f"Ewald VDW energy with switching should be 0 when r > r_off, at r={r}"
+                  
+        # 3. 在r_on和r_off之间，检查switching是否正确应用
+        elif r_on <= r <= r_off:
+            # 计算预期的switching值
+            switch_value = pygcmc.calculateSwitchingFunction(r)
+            
+            # 检查direct能量是否按switching缩放
+            assert direct_with_switching[i] == pytest.approx(direct_no_switching[i] * switch_value, abs=1e-5), \
+                  f"Direct energy with switching not correctly scaled at r={r}"
+                  
+            # 检查Ewald VDW能量是否按switching缩放
+            assert ewald_with_switching_vdw[i] == pytest.approx(ewald_no_switching_vdw[i] * switch_value, abs=1e-5), \
+                  f"Ewald VDW energy with switching not correctly scaled at r={r}"
+    
+    # 电荷能量测试 - 只检查关键点
+    if ewald_no_switching_elec[0] != 0:  # 确保有电荷能量
+        print("\n静电能量对比结果 (Ewald):")
+        print(f"{'距离(nm)':10s} | {'Ewald静电无切换':18s} | {'Ewald静电有切换':18s}")
+        print("-" * 60)
+        
+        for idx in key_indices:
+            if idx < len(distances):
+                r = distances[idx]
+                print(f"{r:10.3f} | {ewald_no_switching_elec[idx]:18.6f} | {ewald_with_switching_elec[idx]:18.6f}")
+    
+    # 禁用平滑函数，恢复默认状态
+    pygcmc.enableSwitchingFunction(False, r_on, r_off)
+
 if __name__ == "__main__":
     # 运行测试函数
-    test_print_switching_values() 
+    test_print_switching_values()
+    # 运行新增的对比测试
+    test_compare_energy_with_without_switching() 
