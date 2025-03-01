@@ -1,14 +1,14 @@
 # tests/simulation/test_energy_ewald.py
 
 import pytest
-import numpy as np
+import math
+import random
 import pygcmc
 from pygcmc import MCState, MCAtom, MCResidue, MCForceField, MCInfo, MCMovementResidueInfo
 import os
-import math
 import sys
 
-# 设置日志级别为INFO，以便查看调试输出
+# Set log level to INFO for debugging output
 pygcmc.System.set_log_level(pygcmc.LogLevel.INFO)
 
 def create_nacl_crystal(box_size, n_cells):
@@ -42,8 +42,8 @@ def create_nacl_crystal(box_size, n_cells):
         (sigma_na + sigma_cl)/2.0, sigma_cl
     ]
     ff.ljEps = [
-        eps_na, np.sqrt(eps_na * eps_cl),
-        np.sqrt(eps_na * eps_cl), eps_cl
+        eps_na, math.sqrt(eps_na * eps_cl),
+        math.sqrt(eps_na * eps_cl), eps_cl
     ]
     
     state.forcefield = ff
@@ -54,7 +54,7 @@ def create_nacl_crystal(box_size, n_cells):
     residues = []
     
     # Create NaCl lattice
-    print(f"\n正在创建 {n_cells}x{n_cells}x{n_cells} 的 NaCl 晶体...")
+    print(f"\nCreating {n_cells}x{n_cells}x{n_cells} NaCl crystal...")
     for i in range(n_cells):
         for j in range(n_cells):
             for k in range(n_cells):
@@ -84,7 +84,7 @@ def create_nacl_crystal(box_size, n_cells):
                 res.fixed = False
                 residues.append(res)
                 
-    print(f"创建完成，共添加 {len(atoms)} 个原子和 {len(residues)} 个残基。")
+    print(f"Creation complete, added a total of {len(atoms)} atoms and {len(residues)} residues.")
     state.atoms = atoms
     state.residues = residues
     state.activeAtomCount = len(atoms)
@@ -214,12 +214,12 @@ def test_pbc_cutoff_ewald_comparison():
     kmax = [6, 6, 6]  # reciprocal space cutoff
     alpha = 2.0  # Ewald parameter (nm^-1)
     pygcmc.setEwaldParameters(alpha, kmax)
-    # 函数返回(electrostatic_total, vdw, ewald_dict)元组
+    # Function returns (electrostatic_total, vdw, ewald_dict) tuple
     result = pygcmc.computeSystemEnergyEwald(state)
-    # 创建本地变量保存ewald_dict
+    # Create local variable to store ewald_dict
     ewald_dict = result[2]
     
-    # 修改：从ewald_dict中获取总能量
+    # Modification: Get total energy from ewald_dict
     energy_ewald = ewald_dict['total']
     
     print(f"\nEnergy comparison for 2x2x2 NaCl crystal:")
@@ -294,19 +294,19 @@ def test_madelung_constant():
     # NaCl lattice constant (nm)
     a = 0.564
 
-    # 对于 n_cells x n_cells x n_cells 的晶体，
-    # 为保证晶体填满盒子，盒子尺寸设为 n_cells * a
+    # For n_cells x n_cells x n_cells crystal,
+    # to ensure the crystal fills the box, the box size is set to n_cells * a
     n_cells = 4
     box_size = n_cells * a
     state = create_nacl_crystal(box_size, n_cells)
 
-    # 定义物理常数 - 与test_ewald_exact完全相同的常数
+    # Define physical constants - identical to those in test_ewald_exact
     PI_M = math.pi
-    ONE_4PI_EPS0 = 138.935456  # 转换为kJ·mol^-1·nm·e^-2的库仑常数
-    eCharge = 1.6022e-19  # 元电荷，单位：库仑(C)
-    AVOGADRO = 6.02214076e23  # 阿伏伽德罗常数
-    eps0 = 8.8542e-12  # 真空介电常数，F/m
-    a0 = 0.282e-9  # 米，NaCl晶胞边长
+    ONE_4PI_EPS0 = 138.935456  # Coulomb constant converted to kJ·mol^-1·nm·e^-2
+    eCharge = 1.6022e-19  # Elementary charge, unit: Coulomb (C)
+    AVOGADRO = 6.02214076e23  # Avogadro's number
+    eps0 = 8.8542e-12  # Vacuum permittivity, F/m
+    a0 = 0.282e-9  # Meters, NaCl unit cell length
 
     # Test different alpha values and kmax to understand convergence
     alpha_tests = [1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
@@ -317,7 +317,7 @@ def test_madelung_constant():
     best_madelung = 0.0
     best_params = None
 
-    # 1. 估计最佳的 alpha（使用固定的 kmax）
+    # 1. Estimate optimal alpha (using fixed kmax)
     print("\nEstimating optimal alpha...")
     optimal_alpha = None
     min_alpha_error = float('inf')
@@ -326,15 +326,15 @@ def test_madelung_constant():
     for alpha in alpha_tests:
         pygcmc.setEwaldParameters(alpha, kmax_fixed)
         result = pygcmc.computeSystemEnergyEwald(state)
-        ewald_dict = result[2]  # 保存ewald字典
+        ewald_dict = result[2]  # Save ewald dictionary
         
-        # 修改：从ewald_dict字典中获取静电能量
+        # Modification: Get electrostatic energy from ewald_dict
         elec_energy = ewald_dict['real_space'] + ewald_dict['reciprocal'] + ewald_dict['self']
         
-        # 对能量归一化：除以单元数 (n_cells^3)
+        # Normalize energy: divide by number of unit cells (n_cells^3)
         elec_energy = elec_energy / (n_cells ** 3)
         
-        # 计算理论能量，与test_ewald_exact完全一致
+        # Calculate theoretical energy, identical to test_ewald_exact
         num_atoms = len(state.atoms)
         theoretical_energy = -(MADELUNG_NACL * eCharge * eCharge * AVOGADRO) / (4 * PI_M * eps0 * a0 * 2 * 1000)
         calculated_madelung = MADELUNG_NACL * (elec_energy / theoretical_energy)
@@ -348,24 +348,24 @@ def test_madelung_constant():
 
     print(f"\nOptimal alpha = {optimal_alpha}")
 
-    # 2. 针对最佳 alpha 测试不同的 kmax 值
+    # 2. Test different kmax values with optimal alpha
     print("\nTesting kmax convergence with optimal alpha...")
     for kmax in kmax_tests:
         pygcmc.setEwaldParameters(optimal_alpha, kmax)
         result = pygcmc.computeSystemEnergyEwald(state)
-        ewald_dict = result[2]  # 保存ewald字典
+        ewald_dict = result[2]  # Save ewald dictionary
         
-        # 修改：从ewald_dict字典中获取能量分量
+        # Modification: Get energy components from ewald_dict
         elec_energy = ewald_dict['real_space'] + ewald_dict['reciprocal'] + ewald_dict['self']
         vdw_energy = sum(res.energy_vdw for res in state.residues if res.active)
         total_energy = elec_energy + vdw_energy
 
-        # 能量归一化：除以 n_cells^3
+        # Energy normalization: divide by n_cells^3
         total_energy = total_energy / (n_cells ** 3)
         elec_energy = elec_energy / (n_cells ** 3)
         vdw_energy = vdw_energy / (n_cells ** 3)
 
-        # 使用与test_ewald_exact相同的计算方法
+        # Use the same calculation method as in test_ewald_exact
         num_atoms = len(state.atoms)
         theoretical_energy = -(MADELUNG_NACL * eCharge * eCharge * AVOGADRO) / (4 * PI_M * eps0 * a0 * 2 * 1000)
         calculated_madelung = MADELUNG_NACL * (elec_energy / theoretical_energy)
@@ -389,21 +389,21 @@ def test_madelung_constant():
     print(f"Reference Madelung: {MADELUNG_NACL:.9f}")
     print(f"Best relative error: {best_error:.6f}")
 
-    # 3. 检查有限尺寸效应
+    # 3. Check finite size effects
     print("\nChecking finite size effects...")
     cell_counts = [2, 3, 4, 5]
     for n in cell_counts:
-        # 盒子尺寸应为 n * a
+        # Box size should be n * a
         state = create_nacl_crystal(n * a, n)
         pygcmc.setEwaldParameters(best_params[0], best_params[1])
         result = pygcmc.computeSystemEnergyEwald(state)
-        ewald_dict = result[2]  # 保存ewald字典
+        ewald_dict = result[2]  # Save ewald dictionary
         
-        # 修改：从ewald_dict字典中获取静电能量
+        # Modification: Get electrostatic energy from ewald_dict
         elec_energy = ewald_dict['real_space'] + ewald_dict['reciprocal'] + ewald_dict['self']
         elec_energy = elec_energy / (n ** 3)
 
-        # 使用与test_ewald_exact相同的计算方法
+        # Use the same calculation method as in test_ewald_exact
         num_atoms = len(state.atoms)
         theoretical_energy = -(MADELUNG_NACL * eCharge * eCharge * AVOGADRO) / (4 * PI_M * eps0 * a0 * 2 * 1000)
         calculated_madelung = MADELUNG_NACL * (elec_energy / theoretical_energy)
@@ -413,7 +413,7 @@ def test_madelung_constant():
         print(f"Calculated Madelung: {calculated_madelung:.9f}")
         print(f"Relative error: {rel_error:.6f}")
 
-    # 检查最佳相对误差是否在允许范围内
+    # Check if the best relative error is within the allowed range
     assert best_error < 0.2, \
         f"Best calculated Madelung constant ({best_madelung}) differs too much from reference ({MADELUNG_NACL})"
 
@@ -483,92 +483,92 @@ def test_ewald_error_tolerance():
     """
     print("\n===== Testing Ewald method with different error tolerances =====")
     
-    # 创建一个简单的随机带电系统
-    num_particles = 51  # 使用奇数，与C++测试保持一致
+    # Create a simple random charged system
+    num_particles = 51  # Use an odd number, consistent with the C++ test
     box_size = 5.0      # Same as the C++ test
     cutoff = 1.0        # Same as the C++ test
     
-    # 创建状态对象
+    # Create state object
     state = MCState()
     
-    # 设置盒子尺寸和温度
+    # Set box size and temperature
     state.info.box = [box_size, box_size, box_size]
     state.info.setTemperature(300.0)  # 300K
     state.info.cutoff = cutoff
     
-    # 设置力场参数 - 只关注静电作用
+    # Set force field parameters - focus only on electrostatic interactions
     ff = MCForceField()
-    ff.numTotalTypes = 1  # 只有一种原子类型
+    ff.numTotalTypes = 1  # Only one atom type
     
-    # 设置零LJ参数矩阵
-    ff.ljSigma = [0.0]  # 无LJ相互作用
-    ff.ljEps = [0.0]    # 无LJ相互作用
+    # Set zero LJ parameter matrix
+    ff.ljSigma = [0.0]  # No LJ interaction
+    ff.ljEps = [0.0]    # No LJ interaction
     
     state.forcefield = ff
     
-    # 使用与C++相同的电荷分布方式（从-1到+1）
-    np.random.seed(0)  # 使用固定的随机种子以便结果可重现
+    # Use the same charge distribution as in C++ (from -1 to +1)
+    random.seed(0)  # Use a fixed random seed for reproducible results
     
     charges = []
     for i in range(num_particles):
-        # 线性分布从-1到+1，与C++实现保持一致
+        # Linear distribution from -1 to +1, consistent with C++ implementation
         charge = -1.0 + i * 2.0/(num_particles-1)
         charges.append(charge)
     
-    # 验证总电荷为零
+    # Verify total charge is zero
     total_charge = sum(charges)
     print(f"Total system charge: {total_charge}")
     assert abs(total_charge) < 1e-10, "System must be charge neutral for Ewald"
     
-    # 创建原子和残基列表
+    # Create atom and residue lists
     atoms = []
     residues = []
     
-    # 使用随机分布的粒子生成原子和残基
+    # Generate atoms and residues with randomly distributed particles
     for i in range(num_particles):
-        # 创建原子
+        # Create atom
         atom = MCAtom()
-        atom.x = box_size * np.random.random()
-        atom.y = box_size * np.random.random()
-        atom.z = box_size * np.random.random()
+        atom.x = box_size * random.random()
+        atom.y = box_size * random.random()
+        atom.z = box_size * random.random()
         atom.charge = charges[i]
         atom.type = 0
         
-        # 添加到原子列表
+        # Add to atom list
         atoms.append(atom)
         
-        # 创建残基（每个原子一个残基）
+        # Create residue (one residue per atom)
         residue = MCResidue()
         residue.atomStart = i
         residue.atomCount = 1
         residue.active = True
         
-        # 添加到残基列表
+        # Add to residue list
         residues.append(residue)
     
-    # 一次性赋值给状态
+    # Assign to state at once
     state.atoms = atoms
     state.residues = residues
     state.activeAtomCount = len(atoms)
     state.activeResidueCount = len(residues)
     
-    # 再次验证总电荷为零
+    # Verify total charge is zero again
     total_charge = sum(atom.charge for atom in state.atoms)
     print(f"Verified total charge: {total_charge}")
     assert abs(total_charge) < 1e-10, "System not charge neutral"
     
-    # 确保state设置完成
+    # Ensure state is set up
     print(f"Created system with {len(state.atoms)} atoms and {len(state.residues)} residues")
     print(f"Active atoms: {state.activeAtomCount}, Active residues: {state.activeResidueCount}")
     
-    # 1. 使用高精度参数计算参考结果
-    alpha_ref = 3.5  # 与C++版本保持一致
-    kmax_ref = [40, 40, 40]  # 使用更高的kmax值以提高精度，对应C++版本的40
+    # 1. Calculate reference result with high precision parameters
+    alpha_ref = 3.5  # Consistent with C++ version
+    kmax_ref = [40, 40, 40]  # Use higher kmax values for better precision, corresponding to 40 in C++ version
     
     print("\n1. Computing reference result with high precision parameters")
     print(f"   Alpha = {alpha_ref}, kmax = {kmax_ref}")
     
-    # 设置参数
+    # Set parameters
     try:
         pygcmc.setEwaldParameters(alpha_ref, kmax_ref)
         print("   Ewald parameters set successfully")
@@ -576,7 +576,7 @@ def test_ewald_error_tolerance():
         print(f"   Error setting Ewald parameters: {e}")
         pytest.skip("Ewald parameter setting failed, skipping test")
     
-    # 计算能量
+    # Calculate energy
     try:
         pygcmc.computeSystemEnergyEwald(state)
         print("   Ewald energy computed successfully")
@@ -584,44 +584,44 @@ def test_ewald_error_tolerance():
         print(f"   Error computing Ewald energy: {e}")
         pytest.skip("Reference Ewald calculation failed, skipping test")
     
-    # 保存ewald字典
+    # Save ewald dictionary
     result = pygcmc.computeSystemEnergyEwald(state)
     ewald_dict = result[2]
     
-    # 计算参考能量
-    ref_energy = ewald_dict['total']  # 使用总Ewald能量作为参考
+    # Calculate reference energy
+    ref_energy = ewald_dict['total']  # Use total Ewald energy as reference
     print(f"   Reference energy: {ref_energy:.6f} kJ/mol")
     print(f"   Ewald components - Self: {ewald_dict['self']:.4f}, "
           f"Real: {ewald_dict['real_space']:.4f}, "
           f"Recip: {ewald_dict['reciprocal']:.4f}")
     
-    # 验证参考能量计算正确
+    # Verify reference energy calculation is correct
     assert abs(ref_energy) > 1e-6, "Reference energy should not be zero"
     
-    # 2. 测试不同的误差容限
+    # 2. Test different error tolerances
     tolerances = [1e-5, 5e-5, 1e-4, 5e-4, 1e-3]
     all_tests_passed = True
-    test_results = []  # 用于存储每个测试的结果
+    test_results = []  # Store results of each test
     
-    # 固定alpha值，与C++版本保持一致
+    # Fixed alpha value, consistent with C++ version
     fixed_alpha = 3.5
     
     print("\n2. Testing different error tolerances")
     for tol in tolerances:
-        # 根据容限调整kmax，与C++版本保持一致
+        # Adjust kmax based on tolerance, consistent with C++ version
         if tol <= 1e-5:
-            kmax = [30, 30, 30]  # 对应C++的kmax=30
+            kmax = [30, 30, 30]  # Corresponding to kmax=30 in C++
         elif tol <= 1e-4:
-            kmax = [25, 25, 25]  # 对应C++的kmax=25
+            kmax = [25, 25, 25]  # Corresponding to kmax=25 in C++
         elif tol <= 5e-4:
-            kmax = [20, 20, 20]  # 对应C++的kmax=20
+            kmax = [20, 20, 20]  # Corresponding to kmax=20 in C++
         else:
-            kmax = [15, 15, 15]  # 对应C++的kmax=15
+            kmax = [15, 15, 15]  # Corresponding to kmax=15 in C++
         
         print(f"\n   Testing tolerance: {tol}")
         print(f"   Using alpha = {fixed_alpha} and kmax = {kmax}")
         
-        # 设置Ewald参数
+        # Set Ewald parameters
         try:
             pygcmc.setEwaldParameters(fixed_alpha, kmax)
             print("   Ewald parameters set successfully")
@@ -629,7 +629,7 @@ def test_ewald_error_tolerance():
             print(f"   Error setting Ewald parameters: {e}")
             continue
             
-        # 计算能量
+        # Calculate energy
         try:
             pygcmc.computeSystemEnergyEwald(state)
             print("   Ewald energy computed successfully")
@@ -638,14 +638,14 @@ def test_ewald_error_tolerance():
             all_tests_passed = False
             continue
         
-        # 保存ewald字典
+        # Save ewald dictionary
         result = pygcmc.computeSystemEnergyEwald(state)
         ewald_dict = result[2]
         
-        # 计算当前容限下的能量
-        energy = ewald_dict['total']  # 使用总Ewald能量
+        # Calculate energy at current tolerance
+        energy = ewald_dict['total']  # Use total Ewald energy
         
-        # 计算差异
+        # Calculate differences
         abs_diff = abs(energy - ref_energy)
         rel_diff = abs_diff/abs(ref_energy) if abs(ref_energy) > 1e-10 else abs_diff
         
@@ -653,7 +653,7 @@ def test_ewald_error_tolerance():
         print(f"   Absolute difference: {abs_diff:.6f} kJ/mol")
         print(f"   Relative difference: {rel_diff:.6f}")
         
-        # 检查是否在100*tolerance范围内
+        # Check if within 100*tolerance range
         test_passed = (rel_diff <= 100*tol)
         if not test_passed:
             print("   ERROR: Error exceeds 100 times the tolerance!")
@@ -661,10 +661,10 @@ def test_ewald_error_tolerance():
         else:
             print("   PASSED: Error within acceptable range (< 100*tol)")
         
-        # 添加测试结果的具体断言
-        assert rel_diff <= 100*tol, f"相对误差 {rel_diff} 超过了容限范围 (100*{tol}={100*tol})"
+        # Add specific assertion for test result
+        assert rel_diff <= 100*tol, f"Relative error {rel_diff} exceeds tolerance range (100*{tol}={100*tol})"
         
-        # 保存测试结果
+        # Save test result
         test_results.append({
             'tolerance': tol,
             'energy': energy,
@@ -672,13 +672,13 @@ def test_ewald_error_tolerance():
             'passed': test_passed
         })
         
-        # 验证参数计算策略
+        # Verify parameter calculation strategy
         expected_alpha = math.sqrt(-math.log(2*tol))/cutoff
         expected_kmax = int(2*expected_alpha*box_size/math.pi + 0.5)
         print(f"   Theoretical alpha for this tolerance: {expected_alpha:.6f}")
         print(f"   Theoretical kmax for this tolerance: {expected_kmax}")
         
-        # 计算能量分量比例
+        # Calculate energy component ratios
         if abs(ewald_dict['total']) > 1e-10:
             self_energy_ratio = abs(ewald_dict['self'] / ewald_dict['total'])
             real_space_ratio = abs(ewald_dict['real_space'] / ewald_dict['total'])
@@ -689,14 +689,14 @@ def test_ewald_error_tolerance():
         else:
             print("   Warning: Total energy near zero, cannot compute ratios")
     
-    # 验证误差随着kmax减小而增加的趋势（将第一个和最后一个测试结果进行比较）
+    # Verify trend of increasing error with decreasing kmax (compare first and last test results)
     if len(test_results) >= 2:
         first_test = test_results[0]
         last_test = test_results[-1]
-        assert last_test['rel_diff'] >= first_test['rel_diff'], "误差应随着kmax的减小而增加"
+        assert last_test['rel_diff'] >= first_test['rel_diff'], "Error should increase as kmax decreases"
     
     print(f"\nAll error tolerance tests {'PASSED' if all_tests_passed else 'FAILED'}")
-    # 使用all_tests_passed变量判断测试是否通过
+    # Use all_tests_passed variable to determine if test passed
     assert all_tests_passed, "Ewald error tolerance tests failed"
 
 def test_ewald_charge_neutrality():
@@ -748,102 +748,102 @@ def test_ewald_charge_neutrality():
         assert "neutral" in str(e).lower(), "Exception should mention charge neutrality"
 
 def read_nacl_crystal_data(file_path):
-    """读取NaCl晶体的原子位置和电荷信息"""
+    """Read atom positions and charge information for NaCl crystal"""
     atoms = []
-    # 获取当前测试文件的目录
+    # Get directory of current test file
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    # 构建数据文件的绝对路径
+    # Build absolute path to data file
     data_file = os.path.join(current_dir, '..', 'data', 'nacl_crystal.dat')
     
     with open(data_file, 'r') as f:
         for line in f:
-            # 跳过空行
+            # Skip empty lines
             if not line.strip():
                 continue
                 
-            # 解析形如 positions[0] = Vec3(0.141000,0.141000,0.141000); 的行
+            # Parse lines like positions[0] = Vec3(0.141000,0.141000,0.141000);
             if 'Vec3' in line:
-                # 提取坐标值
+                # Extract coordinate values
                 coords = line.split('Vec3(')[1].split(')')[0].split(',')
                 x, y, z = map(float, coords)
                 
-                # 创建原子
+                # Create atom
                 atom = MCAtom()
                 atom.x = x
                 atom.y = y
                 atom.z = z
-                # 根据索引设置电荷：前500个是Na+(+1)，后500个是Cl-(-1)
+                # Set charge based on index: first 500 are Na+(+1), remaining 500 are Cl-(-1)
                 index = len(atoms)
                 atom.charge = 1.0 if index < 500 else -1.0
                 atom.type = 0 if index < 500 else 1
                 atoms.append(atom)
     
-    print(f"\n成功读取了 {len(atoms)} 个原子的位置信息")
+    print(f"\nSuccessfully read position information for {len(atoms)} atoms")
     return atoms
 
 
 def test_ewald_exact():
     """
-    测试Ewald求和计算得到的能量与理论计算的Madelung能量的对比
-    改进版本：尽可能接近C++实现，同时保持残基组织方式
+    Test comparison of energy calculated by Ewald summation with theoretical Madelung energy
+    Improved version: as close as possible to C++ implementation while maintaining residue organization
     """
-    # 定义常量 - 与ewald.cpp完全相同的常数
+    # Define constants - identical to constants in ewald.cpp
     PI_M = math.pi
-    ONE_4PI_EPS0 = 138.935456  # 转换为kJ·mol^-1·nm·e^-2的库仑常数
-    eCharge = 1.6022e-19  # 元电荷，单位：库仑(C)
-    AVOGADRO = 6.02214076e23  # 阿伏伽德罗常数
+    ONE_4PI_EPS0 = 138.935456  # Converted to kJ·mol^-1·nm·e^-2 Coulomb constant
+    eCharge = 1.6022e-19  # Elementary charge, unit: Coulomb (C)
+    AVOGADRO = 6.02214076e23  # Avogadro's number
     
-    numParticles = 1000  # 与ewald.cpp一致的粒子数量
+    numParticles = 1000  # Consistent with ewald.cpp particle count
 
-    # 使用与ewald.cpp完全相同的参数
-    cutoff = 1.0                # 实空间截断，单位 nm
-    boxSize = 2.82              # 盒子边长，单位 nm - 与C++版本完全一致
-    ewaldTol = 1e-5             # 误差容限，与cpp保持一致
+    # Use exactly the same parameters as ewald.cpp
+    cutoff = 1.0                # Real space cutoff, unit nm
+    boxSize = 2.82              # Box length, unit nm - completely consistent with C++ version
+    ewaldTol = 1e-5             # Error tolerance, consistent with cpp
     
-    # 使用与cpp测试一致的参数估算方法
-    alpha = 3.5 / cutoff  # 使用推荐的经验值
+    # Use parameter estimation method consistent with cpp test
+    alpha = 3.5 / cutoff  # Use recommended empirical value
     kmax_value = int(10.0 * boxSize * alpha / PI_M)
     kmax = [kmax_value, kmax_value, kmax_value]
 
-    print("\n[Test] 运行 test_ewald_exact：使用面心立方结构模拟NaCl晶体")
-    print(f"使用参数：alpha = {alpha}, kmax = {kmax}, cutoff = {cutoff} nm")
-    print(f"目标粒子数量: {numParticles}")
+    print("\n[Test] Running test_ewald_exact: Simulating NaCl crystal using face-centered cubic structure")
+    print(f"Using parameters: alpha = {alpha}, kmax = {kmax}, cutoff = {cutoff} nm")
+    print(f"Target particle count: {numParticles}")
 
-    # 创建系统状态
+    # Create system state
     state = MCState()
     state.info.box = [boxSize, boxSize, boxSize]
     state.info.setTemperature(300.0)
     state.info.cutoff = cutoff
 
-    # 设置力场参数：完全禁用LJ相互作用，与ewald.cpp完全一致
+    # Set force field parameters: completely disable LJ interactions, identical to ewald.cpp
     ff = MCForceField()
     ff.numTotalTypes = 2
-    ff.ljSigma = [0.0, 0.0, 0.0, 0.0]  # 设为零
-    ff.ljEps = [0.0, 0.0, 0.0, 0.0]    # 设为零
+    ff.ljSigma = [0.0, 0.0, 0.0, 0.0]  # Set to zero
+    ff.ljEps = [0.0, 0.0, 0.0, 0.0]    # Set to zero
     state.forcefield = ff
 
-    # 创建面心立方晶格结构的NaCl晶体
+    # Create face-centered cubic lattice structure for NaCl crystal
     atoms = []
     
-    # 使用与test_ewald_exact_c_match完全一致的nDim计算方法
+    # Use completely consistent nDim calculation method with test_ewald_exact_c_match
     nDim = int(numParticles / 8)**(1/3) * 2
-    nDim = int(nDim)  # 确保是整数
-    if nDim % 2 != 0:  # 确保是偶数
+    nDim = int(nDim)  # Ensure it's an integer
+    if nDim % 2 != 0:  # Ensure it's even
         nDim += 1
     
-    # 使用与C++代码完全一致的晶格常数
+    # Use lattice constant completely consistent with C++ code
     latticeConstant = boxSize / nDim
     
-    print(f"创建NaCl晶体: nDim = {nDim}, latticeConstant = {latticeConstant:.6f} nm")
+    print(f"Creating NaCl crystal: nDim = {nDim}, latticeConstant = {latticeConstant:.6f} nm")
     
-    # 保留原始的存储方式，但使用相同的离子放置逻辑
+    # Retain original storage method, but use same ion placement logic
     ionCount = 0
     
     for i in range(nDim):
         for j in range(nDim):
             for k in range(nDim):
                 if (i + j + k) % 2 == 0 and ionCount < numParticles/2:
-                    # Na+ 离子
+                    # Na+ ion
                     na_atom = MCAtom()
                     na_atom.x = i * latticeConstant
                     na_atom.y = j * latticeConstant
@@ -851,7 +851,7 @@ def test_ewald_exact():
                     na_atom.charge = 1.0
                     na_atom.type = 0
                     
-                    # Cl- 离子
+                    # Cl- ion
                     cl_atom = MCAtom()
                     cl_atom.x = ((i+1) % nDim) * latticeConstant
                     cl_atom.y = ((j+1) % nDim) * latticeConstant
@@ -859,23 +859,23 @@ def test_ewald_exact():
                     cl_atom.charge = -1.0
                     cl_atom.type = 1
                     
-                    # 保持原始方式：交替添加Na+和Cl-
+                    # Keep original method: add Na+ and Cl- alternately
                     atoms.append(na_atom)
                     atoms.append(cl_atom)
                     
                     ionCount += 1
     
-    print(f"创建了 {len(atoms)} 个离子的面心立方结构（目标是{numParticles}个）")
+    print(f"Created face-centered cubic structure with {len(atoms)} ions (target was {numParticles})")
     
-    # 检查总电荷（应为零）
+    # Check total charge (should be zero)
     total_charge = sum(atom.charge for atom in atoms)
-    print(f"系统总电荷: {total_charge}")
+    print(f"Total system charge: {total_charge}")
     
-    # 将原子添加到状态中
+    # Add atoms to state
     state.atoms = atoms
     state.activeAtomCount = len(atoms)
 
-    # 创建残基（保持原始方式：每对Na+/Cl-作为一个残基）
+    # Create residues (keep original method: each Na+/Cl- pair as one residue)
     residues = []
     for i in range(ionCount):
         res = MCResidue()
@@ -888,105 +888,105 @@ def test_ewald_exact():
     state.residues = residues
     state.activeResidueCount = len(residues)
 
-    # 设置 Ewald 参数并计算能量
-    print("\n设置Ewald参数并计算能量...")
+    # Set Ewald parameters and calculate energy
+    print("\nSetting Ewald parameters and calculating energy...")
     pygcmc.setEwaldParameters(alpha, kmax)
-    print(f"设置的Ewald参数: alpha = {alpha}, kmax = {kmax}")
+    print(f"Set Ewald parameters: alpha = {alpha}, kmax = {kmax}")
     
-    # 计算能量
+    # Calculate energy
     result = pygcmc.computeSystemEnergyEwald(state)
-    ewald_dict = result[2]  # 保存ewald字典
+    ewald_dict = result[2]  # Save ewald dictionary
     
-    # 获取分解的能量 - 修改为从ewald_dict中获取
+    # Get decomposed energy - modified to get from ewald_dict
     electrostatic = ewald_dict['real_space'] + ewald_dict['reciprocal'] + ewald_dict['self']
     vdw = sum(res.energy_vdw for res in state.residues if res.active)
-    # 自己计算总能量，不使用ewald_dict['total']
+    # Calculate total energy ourselves, don't use ewald_dict['total']
     total = electrostatic + vdw
     
-    # 打印能量组成
-    print("\n=== 能量组成 ===")
-    print(f"静电能量：{electrostatic:.6f} kJ/mol")
-    print(f"范德华能量：{vdw:.6f} kJ/mol")
-    print(f"总能量：{total:.6f} kJ/mol")
-    print(f"字典中的总能量：{ewald_dict['total']:.6f} kJ/mol")
+    # Print energy components
+    print("\n=== Energy Components ===")
+    print(f"Electrostatic energy: {electrostatic:.6f} kJ/mol")
+    print(f"Van der Waals energy: {vdw:.6f} kJ/mol")
+    print(f"Total energy: {total:.6f} kJ/mol")
+    print(f"Total energy in dictionary: {ewald_dict['total']:.6f} kJ/mol")
     
-    # 获取COULOMB常数值进行对比
+    # Get COULOMB constant value for comparison
     print(f"pygcmc.COULOMB = {pygcmc.COULOMB}")
     
-    # 使用与C++完全一致的物理常数
-    a0 = 0.282e-9  # 米，NaCl晶胞边长
+    # Use physical constants completely consistent with C++
+    a0 = 0.282e-9  # Meters, NaCl unit cell length
     
-    # Madelung常数 - NaCl的Madelung常数
+    # Madelung constant - Madelung constant for NaCl
     madelung_constant = 1.7476  
 
-    # 理论能量计算，完全按照ewald.cpp的方式
+    # Theoretical energy calculation, exactly according to ewald.cpp method
     # E = - (M*e^2*N_A*numParticles)/(4*pi*epsilon0*a0*2*1000)
-    eps0 = 8.8542e-12  # 真空介电常数，F/m
+    eps0 = 8.8542e-12  # Vacuum permittivity, F/m
     theoretical_energy = -(madelung_constant * eCharge * eCharge * AVOGADRO * len(atoms)) / (4 * PI_M * eps0 * a0 * 2 * 1000)
     
-    print(f"理论能量：{theoretical_energy:.6f} kJ/mol (基于{len(atoms)}个离子)")
+    print(f"Theoretical energy: {theoretical_energy:.6f} kJ/mol (based on {len(atoms)} ions)")
     
-    # 计算相对误差
+    # Calculate relative error
     relative_error = abs(total - theoretical_energy) / abs(theoretical_energy)
-    print(f"相对误差：{relative_error:.6f}")
+    print(f"Relative error: {relative_error:.6f}")
     
-    # 与ewald.cpp输出对比
-    print("\n=== 与ewald.cpp结果对比 ===")
-    print(f"Python计算结果：{total:.6f} kJ/mol")
-    print(f"C++参考能量值：-430494 kJ/mol")
-    print(f"计算比例：{abs(total)/430494:.6f}")
+    # Compare with ewald.cpp output
+    print("\n=== Comparison with ewald.cpp results ===")
+    print(f"Python calculation result: {total:.6f} kJ/mol")
+    print(f"C++ reference energy value: -430494 kJ/mol")
+    print(f"Calculation ratio: {abs(total)/430494:.6f}")
     
-    # 用于分析差异的每个组件的比较
-    print("\n=== 能量组件对比 ===")
-    print("Python计算结果:")
-    print(f"  - 实空间能量：{ewald_dict['real_space']:.2f} kJ/mol")
-    print(f"  - 倒空间能量：{ewald_dict['reciprocal']:.2f} kJ/mol")
-    print(f"  - 自能：{ewald_dict['self']:.2f} kJ/mol")
-    print("C++参考结果:")
-    print("  - 实空间能量：-156562 kJ/mol")
-    print("  - 倒空间能量：419.213 kJ/mol")
-    print("  - 自能：-274351 kJ/mol")
+    # Component comparison for analyzing differences
+    print("\n=== Energy Component Comparison ===")
+    print("Python calculation results:")
+    print(f"  - Real space energy: {ewald_dict['real_space']:.2f} kJ/mol")
+    print(f"  - Reciprocal space energy: {ewald_dict['reciprocal']:.2f} kJ/mol")
+    print(f"  - Self energy: {ewald_dict['self']:.2f} kJ/mol")
+    print("C++ reference results:")
+    print("  - Real space energy: -156562 kJ/mol")
+    print("  - Reciprocal space energy: 419.213 kJ/mol")
+    print("  - Self energy: -274351 kJ/mol")
     
-    # 逐步缩小误差容限
-    adjusted_tolerance = 0.1  # 降低容限至10%，因为我们已经改进了算法
+    # Gradually reduce error tolerance
+    adjusted_tolerance = 0.1  # Reduce tolerance to 10%, as we've improved the algorithm
     if relative_error < adjusted_tolerance:
-        print(f"测试通过: 能量在调整的误差容限({adjusted_tolerance:.2f})范围内")
-        print("注意：继续改进可以进一步降低误差")
-        assert True  # 使用assert替代return True
+        print(f"Test passed: Energy within adjusted error tolerance ({adjusted_tolerance:.2f})")
+        print("Note: Further improvements can reduce error further")
+        assert True  # Use assert instead of return True
     else:
-        print(f"测试失败: 能量超出误差容限")
-        print("建议调整以下参数以减小误差:")
-        print("1. 考虑修改残基组织方式以与C++完全一致")
-        print("2. 确认计算公式的实现细节")
-        pytest.fail("Ewald能量计算与理论值偏差过大")
+        print(f"Test failed: Energy outside error tolerance")
+        print("Suggestions to reduce error:")
+        print("1. Consider modifying residue organization to match C++ completely")
+        print("2. Verify implementation details of calculation formulas")
+        pytest.fail("Ewald energy calculation deviates too much from theoretical value")
 
 def test_erfc_approx():
-    """测试 erfcApprox 函数的精度"""
-    import math  # 确保导入math模块
+    """Test the accuracy of erfcApprox function"""
+    import math  # Ensure math module is imported
     
-    print("\n[Test] 测试 erfcApprox 函数的精度")
+    print("\n[Test] Testing accuracy of erfcApprox function")
     
-    # 设置 Ewald 参数
+    # Set Ewald parameters
     alpha = 2.5
     cutoff = 1.0
     kmax = [8, 8, 8]
     
-    # 初始化 Ewald 参数
+    # Initialize Ewald parameters
     pygcmc.setEwaldParameters(alpha, kmax)
     
-    # 测试一系列距离值
+    # Test a series of distance values
     test_distances = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
     
-    print("\n距离          alpha*r         math.erfc               标准直接计算")
+    print("\nDistance      alpha*r         math.erfc           Standard Direct Calculation")
     print("-" * 90)
     
     for r in test_distances:
-        # 手动计算 erfc
+        # Calculate erfc manually
         alphaR = alpha * r
         erfc_std = math.erfc(alphaR)
         
-        # 显示结果
+        # Display results
         print(f"{r:.3f}           {alphaR:.3f}           {erfc_std:.8f}")
     
-    # 所有测试通过
+    # All tests passed
     assert True

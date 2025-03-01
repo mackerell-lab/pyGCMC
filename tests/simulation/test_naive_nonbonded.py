@@ -767,23 +767,23 @@ def test_all_residues_nonbonded():
     """
     state = pygcmc.MCState()
     
-    # 1. 设置力场
-    state.forcefield.numTotalTypes = 3  # 三种类型
+    # 1. Set up force field
+    state.forcefield.numTotalTypes = 3  # Three types
     state.forcefield.numMovementTypes = 3
     
-    # 设置力场参数 (3x3矩阵展平)
-    state.forcefield.ljEps = [1.0] * 9    # 所有相互作用eps=1.0
-    state.forcefield.ljSigma = [1.0] * 9  # 所有相互作用sigma=1.0
+    # Set up force field parameters (3x3 matrix flattened)
+    state.forcefield.ljEps = [1.0] * 9    # All interactions eps=1.0
+    state.forcefield.ljSigma = [1.0] * 9  # All interactions sigma=1.0
     
-    # 2. 设置三个原子，形成等边三角形
+    # 2. Set up three atoms forming an equilateral triangle
     atoms = []
-    # 在等边三角形顶点上放置原子
+    # Place atoms at the vertices of an equilateral triangle
     positions = [
-        (0.0, 0.0, 0.0),           # 原点
-        (1.0, 0.0, 0.0),           # x轴上1nm处
-        (0.5, 0.866, 0.0)          # 完成等边三角形
+        (0.0, 0.0, 0.0),           # Origin
+        (1.0, 0.0, 0.0),           # At 1nm on x-axis
+        (0.5, 0.866, 0.0)          # Complete the equilateral triangle
     ]
-    charges = [0.5, -0.5, 0.5]     # 交替电荷
+    charges = [0.5, -0.5, 0.5]     # Alternating charges
     
     for i, (x, y, z) in enumerate(positions):
         atom = pygcmc.MCAtom()
@@ -797,7 +797,7 @@ def test_all_residues_nonbonded():
     state.atoms = atoms
     state.activeAtomCount = 3
     
-    # 3. 设置三个residues
+    # 3. Set up three residues
     residues = []
     for i in range(3):
         res = pygcmc.MCResidue()
@@ -810,47 +810,47 @@ def test_all_residues_nonbonded():
     state.residues = residues
     state.activeResidueCount = 3
     
-    # 计算能量
+    # Calculate energy
     pygcmc.computeSystemEnergy(state)
     
-    # 验证每个residue都有能量
+    # Verify each residue has energy
     for i in range(3):
         energy = state.residues[i].energy_vdw + state.residues[i].energy_elec
         assert not math.isnan(energy), f"Residue {i} has NaN energy"
         assert not math.isinf(energy), f"Residue {i} has infinite energy"
     
-    # 计算总能量
+    # Calculate total energy
     total_vdw = sum(res.energy_vdw for res in state.residues)
     total_elec = sum(res.energy_elec for res in state.residues)
     total_energy = total_vdw + total_elec
     
-    # 总能量需要除以2，因为每个相互作用被计算了两次
+    # Total energy needs to be divided by 2 because each interaction was calculated twice
     system_energy = total_energy / 2.0
     
-    # 验证总能量合理性
+    # Verify the reasonableness of total energy
     assert system_energy < 1e6, "Total system energy too large"
     assert system_energy > -1e6, "Total system energy too negative"
     
-    # 验证能量的数量级合理性
-    # 对于我们的设置：
-    # - LJ能量在r=sigma时为0
-    # - 静电能量 = k_c * q1*q2/r
-    # 对于三个residue，有三对相互作用：
+    # Verify that energy magnitude is reasonable
+    # For our setup:
+    # - LJ energy is 0 at r=sigma
+    # - Electrostatic energy = k_c * q1*q2/r
+    # For three residues, there are three pairs of interactions:
     # 1. residue 0-1: q1=0.5, q2=-0.5, r=1.0
     # 2. residue 1-2: q1=-0.5, q2=0.5, r=1.0
     # 3. residue 2-0: q1=0.5, q2=0.5, r=1.0
-    # 每对相互作用计算一次，加到两个相关的residue上
+    # Each pair of interactions is calculated once and added to the two related residues
     COULOMB = 138.935458  # kJ·nm/mol/e²
     
-    # 计算每对相互作用的能量
-    e_01 = COULOMB * 0.5 * (-0.5) / 1.0  # residue 0-1 相互作用
-    e_12 = COULOMB * (-0.5) * 0.5 / 1.0  # residue 1-2 相互作用
-    e_20 = COULOMB * 0.5 * 0.5 / 1.0     # residue 2-0 相互作用
+    # Calculate energy for each interaction pair
+    e_01 = COULOMB * 0.5 * (-0.5) / 1.0  # residue 0-1 interaction
+    e_12 = COULOMB * (-0.5) * 0.5 / 1.0  # residue 1-2 interaction
+    e_20 = COULOMB * 0.5 * 0.5 / 1.0     # residue 2-0 interaction
     
-    # 总系统能量是所有相互作用的和（每个相互作用在代码中已经被加了两次）
+    # Total system energy is the sum of all interactions (each interaction has already been added twice in the code)
     expected_system_energy = (e_01 + e_12 + e_20)
     
-    rel_tol = 0.1  # 10%的相对误差容忍度
+    rel_tol = 0.1  # 10% relative error tolerance
     assert abs((system_energy - expected_system_energy) / expected_system_energy) < rel_tol, \
            f"System energy {system_energy} differs too much from expected {expected_system_energy}"
 
@@ -858,13 +858,13 @@ def test_all_residues_inactive():
     """Test all residues nonbonded energy with inactive residues."""
     state = pygcmc.MCState()
     
-    # 基本设置
+    # Basic setup
     state.forcefield.numTotalTypes = 2
     state.forcefield.numMovementTypes = 2
     state.forcefield.ljEps = [1.0] * 4
     state.forcefield.ljSigma = [1.0] * 4
     
-    # 设置两个原子
+    # Set up two atoms
     atom1 = pygcmc.MCAtom()
     atom1.x = 0.0
     atom1.y = 0.0
@@ -882,7 +882,7 @@ def test_all_residues_inactive():
     state.atoms = [atom1, atom2]
     state.activeAtomCount = 2
     
-    # 设置两个inactive residues
+    # Set up two inactive residues
     res1 = pygcmc.MCResidue()
     res1.active = False
     res1.type = 0
@@ -898,10 +898,10 @@ def test_all_residues_inactive():
     state.residues = [res1, res2]
     state.activeResidueCount = 0
     
-    # 计算能量
+    # Calculate energy
     pygcmc.computeSystemEnergy(state)
     
-    # 验证所有能量都是0
+    # Verify all energies are 0
     for res in state.residues:
         assert abs(res.energy_vdw) < 1e-6, "Inactive residue has non-zero VDW energy"
         assert abs(res.energy_elec) < 1e-6, "Inactive residue has non-zero electrostatic energy"
@@ -916,25 +916,25 @@ def test_cutoff_nonperiodic():
     """
     state = pygcmc.MCState()
     
-    # 1. 设置力场
-    state.forcefield.numTotalTypes = 3  # 三种类型
+    # 1. Set up force field
+    state.forcefield.numTotalTypes = 3  # Three types
     state.forcefield.numMovementTypes = 3
     
-    # 设置力场参数 (3x3矩阵展平)
-    state.forcefield.ljEps = [1.0] * 9    # 所有相互作用eps=1.0
-    state.forcefield.ljSigma = [1.0] * 9  # 所有相互作用sigma=1.0
+    # Set up force field parameters (3x3 matrix flattened)
+    state.forcefield.ljEps = [1.0] * 9    # All interactions eps=1.0
+    state.forcefield.ljSigma = [1.0] * 9  # All interactions sigma=1.0
     
-    # 设置截断距离
+    # Set cutoff distance
     state.info.cutoff = 1.5  # nm
     
-    # 2. 设置三个原子，在x轴上依次排列
+    # 2. Set up three atoms arranged sequentially on the x-axis
     atoms = []
     positions = [
-        (0.0, 0.0, 0.0),  # 原点
-        (1.0, 0.0, 0.0),  # x=1.0 nm，在截断距离内
-        (2.0, 0.0, 0.0)   # x=2.0 nm，超出截断距离
+        (0.0, 0.0, 0.0),  # Origin
+        (1.0, 0.0, 0.0),  # x=1.0 nm, within cutoff distance
+        (2.0, 0.0, 0.0)   # x=2.0 nm, beyond cutoff distance
     ]
-    charges = [0.5, -0.5, 0.5]  # 交替电荷
+    charges = [0.5, -0.5, 0.5]  # Alternating charges
     
     for i, (x, y, z) in enumerate(positions):
         atom = pygcmc.MCAtom()
@@ -948,7 +948,7 @@ def test_cutoff_nonperiodic():
     state.atoms = atoms
     state.activeAtomCount = 3
     
-    # 3. 设置三个residues
+    # 3. Set up three residues
     residues = []
     for i in range(3):
         res = pygcmc.MCResidue()
@@ -961,45 +961,45 @@ def test_cutoff_nonperiodic():
     state.residues = residues
     state.activeResidueCount = 3
     
-    # 计算能量
+    # Calculate energy
     pygcmc.computeSystemEnergyCutoff(state)
     
-    # 验证每个residue都有能量
+    # Verify each residue has energy
     for i in range(3):
         energy = state.residues[i].energy_vdw + state.residues[i].energy_elec
         assert not math.isnan(energy), f"Residue {i} has NaN energy"
         assert not math.isinf(energy), f"Residue {i} has infinite energy"
     
-    # 计算总能量
+    # Calculate total energy
     total_vdw = sum(res.energy_vdw for res in state.residues)
     total_elec = sum(res.energy_elec for res in state.residues)
     total_energy = total_vdw + total_elec
     
-    # 总能量需要除以2，因为每个相互作用被计算了两次
+    # Total energy needs to be divided by 2 because each interaction was calculated twice
     system_energy = total_energy / 2.0
     
-    # 验证总能量合理性
+    # Verify the reasonableness of total energy
     assert system_energy < 1e6, "Total system energy too large"
     assert system_energy > -1e6, "Total system energy too negative"
     
-    # 验证能量的数量级合理性
-    # 对于我们的设置：
-    # - LJ能量在r=sigma时为0
-    # - 静电能量 = k_c * q1*q2/r
-    # 只有residue 0-1的相互作用在截断距离内：
+    # Verify that energy magnitude is reasonable
+    # For our setup:
+    # - LJ energy is 0 at r=sigma
+    # - Electrostatic energy = k_c * q1*q2/r
+    # Only residue 0-1 interaction is within cutoff distance:
     # - q1=0.5, q2=-0.5, r=1.0
-    # - 每个相互作用的能量被完整地加到了两个residue上
+    # - The energy of each interaction is fully added to both residues
     COULOMB = 138.935458  # kJ·nm/mol/e²
-    expected_energy = 2.0 * COULOMB * 0.5 * (-0.5) / 1.0  # 一对原子间的相互作用能量，乘以2因为在代码中被加了两次
+    expected_energy = 2.0 * COULOMB * 0.5 * (-0.5) / 1.0  # Interaction energy between one pair of atoms, multiplied by 2 because it's added twice in the code
 
-    rel_tol = 0.1  # 10%的相对误差容忍度
+    rel_tol = 0.1  # 10% relative error tolerance
     assert abs((system_energy - expected_energy) / expected_energy) < rel_tol, \
            f"System energy {system_energy} differs too much from expected {expected_energy}"
     
-    # 验证residue 2的能量为0（因为它与其他residue的距离都超出截断）
+    # Verify that residue 2 energy is 0 (because its distance to other residues exceeds cutoff)
     res2_energy = state.residues[2].energy_vdw + state.residues[2].energy_elec
-    # residue 2应该有能量，因为它从residue 1的相互作用中获得能量
-    expected_res2_energy = COULOMB * 0.5 * (-0.5) / 1.0  # residue 0-1的相互作用
+    # residue 2 should have energy because it receives energy from interaction with residue 1
+    expected_res2_energy = COULOMB * 0.5 * (-0.5) / 1.0  # residue 0-1 interaction
     assert abs((res2_energy - expected_res2_energy) / expected_res2_energy) < rel_tol, \
            f"Residue 2 energy {res2_energy} differs too much from expected {expected_res2_energy}"
 
@@ -1013,23 +1013,23 @@ def test_pbc_basic():
     """
     state = pygcmc.MCState()
     
-    # 1. 设置力场
+    # 1. Set up force field
     state.forcefield.numTotalTypes = 2
     state.forcefield.numMovementTypes = 2
     state.forcefield.ljEps = [1.0] * 4
     state.forcefield.ljSigma = [1.0] * 4
     
-    # 设置大盒子和适当的截断
-    state.info.box = [10.0, 10.0, 10.0]  # 大盒子避免PBC效应
+    # Set up a large box and appropriate cutoff
+    state.info.box = [10.0, 10.0, 10.0]  # Large box to avoid PBC effects
     state.info.cutoff = 2.0  # nm
     
-    # 2. 设置两个原子在盒子的相对两侧
+    # 2. Set up two atoms on opposite sides of the box
     atoms = []
     positions = [
-        (0.5, 1.0, 1.0),    # 靠近盒子中间
-        (1.5, 1.0, 1.0)     # 靠近盒子中间
+        (0.5, 1.0, 1.0),    # Near the middle of the box
+        (1.5, 1.0, 1.0)     # Near the middle of the box
     ]
-    charges = [0.5, -0.5]   # 相反的电荷
+    charges = [0.5, -0.5]   # Opposite charges
     
     for i, (x, y, z) in enumerate(positions):
         atom = pygcmc.MCAtom()
@@ -1043,7 +1043,7 @@ def test_pbc_basic():
     state.atoms = atoms
     state.activeAtomCount = 2
     
-    # 3. 设置两个residues
+    # 3. Set up two residues
     residues = []
     for i in range(2):
         res = pygcmc.MCResidue()
@@ -1056,23 +1056,23 @@ def test_pbc_basic():
     state.residues = residues
     state.activeResidueCount = 2
     
-    # 计算PBC能量
+    # Calculate PBC energy
     pygcmc.computeSystemEnergyPBCCutoff(state)
     pbc_vdw = sum(res.energy_vdw for res in state.residues)
     pbc_elec = sum(res.energy_elec for res in state.residues)
     pbc_energy = (pbc_vdw + pbc_elec) / 2.0
     
-    # 通过PBC，原子间的实际距离应该是1.0 nm（而不是1.0 nm）
-    # 在x方向上：1.5 - 0.5 = 1.0，正好等于sigma
+    # Through PBC, the actual distance between atoms should be 1.0 nm (not 1.0 nm)
+    # In x direction: 1.5 - 0.5 = 1.0, exactly equal to sigma
     COULOMB = 138.935458  # kJ·nm/mol/e²
-    min_dist = 1.0  # 最小映像距离
-    expected_elec = COULOMB * 0.5 * (-0.5) / min_dist  # 静电能
+    min_dist = 1.0  # Minimum image distance
+    expected_elec = COULOMB * 0.5 * (-0.5) / min_dist  # Electrostatic energy
     
-    # LJ能量在r = sigma时为0
-    expected_vdw = 0.0  # 假设r ≈ sigma
+    # LJ energy is 0 at r = sigma
+    expected_vdw = 0.0  # Assuming r ≈ sigma
     expected_energy = expected_elec + expected_vdw
     
-    # 打印详细的调试信息
+    # Print detailed debug information
     print(f"\nDetailed energy comparison:")
     print(f"Box size: {state.info.box}")
     print(f"Cutoff distance: {state.info.cutoff} nm")
@@ -1085,19 +1085,19 @@ def test_pbc_basic():
     print(f"Actual electrostatic energy: {pbc_elec/2} kJ/mol")
     print(f"Actual total energy: {pbc_energy} kJ/mol")
     
-    # 分别检查VDW和静电能量
-    rel_tol = 0.1  # 10%的相对误差容忍度
+    # Check VDW and electrostatic energies separately
+    rel_tol = 0.1  # 10% relative error tolerance
     
-    # 检查静电能量
+    # Check electrostatic energy
     actual_elec = pbc_elec / 2.0
     assert abs((actual_elec - expected_elec) / expected_elec) < rel_tol, \
            f"Electrostatic energy {actual_elec} differs too much from expected {expected_elec}"
     
-    # 检查VDW能量（应该接近0，因为r ≈ sigma）
+    # Check VDW energy (should be close to 0 because r ≈ sigma)
     actual_vdw = pbc_vdw / 2.0
     assert abs(actual_vdw) < 10.0, f"VDW energy {actual_vdw} is too large"
     
-    # 检查总能量
+    # Check total energy
     assert abs((pbc_energy - expected_energy) / expected_energy) < rel_tol, \
            f"PBC energy {pbc_energy} differs too much from expected {expected_energy}"
 
@@ -1105,16 +1105,16 @@ def test_pbc_invalid_box():
     """Test PBC energy calculation with invalid box dimensions."""
     state = pygcmc.MCState()
     
-    # 设置基本状态
+    # Set up basic state
     state.forcefield.numTotalTypes = 1
     state.forcefield.numMovementTypes = 1
     state.forcefield.ljEps = [1.0]
     state.forcefield.ljSigma = [1.0]
     
-    # 设置无效的盒子尺寸
-    state.info.box = [0.0, 1.0, 1.0]  # x维度为0
+    # Set invalid box dimensions
+    state.info.box = [0.0, 1.0, 1.0]  # x dimension is 0
     
-    # 添加一个简单的原子和residue
+    # Add a simple atom and residue
     atom = pygcmc.MCAtom()
     state.atoms = [atom]
     
@@ -1123,7 +1123,7 @@ def test_pbc_invalid_box():
     state.residues = [res]
     state.activeResidueCount = 1
     
-    # 期望抛出异常
+    # Expect exception to be raised
     with pytest.raises(RuntimeError, match="Invalid box dimensions"):
         pygcmc.computeSystemEnergyPBCCutoff(state) 
 
@@ -1136,17 +1136,17 @@ def test_pbc_vs_nopbc():
     """
     state = pygcmc.MCState()
     
-    # 1. 设置力场
+    # 1. Set up force field
     state.forcefield.numTotalTypes = 2
     state.forcefield.numMovementTypes = 2
     state.forcefield.ljEps = [1.0] * 4
     state.forcefield.ljSigma = [1.0] * 4
     
-    # 设置大盒子和适当的截断
-    state.info.box = [10.0, 10.0, 10.0]  # 大盒子避免PBC效应
+    # Set up a large box and appropriate cutoff
+    state.info.box = [10.0, 10.0, 10.0]  # Large box to avoid PBC effects
     state.info.cutoff = 2.0  # nm
     
-    # 2. 设置两个在盒子中间的原子
+    # 2. Set up two atoms in the middle of the box
     atoms = []
     positions = [
         (4.0, 5.0, 5.0),
@@ -1166,7 +1166,7 @@ def test_pbc_vs_nopbc():
     state.atoms = atoms
     state.activeAtomCount = 2
     
-    # 3. 设置residues
+    # 3. Set up residues
     residues = []
     for i in range(2):
         res = pygcmc.MCResidue()
@@ -1179,25 +1179,25 @@ def test_pbc_vs_nopbc():
     state.residues = residues
     state.activeResidueCount = 2
     
-    # 计算两种能量
+    # Calculate both types of energy
     pygcmc.computeSystemEnergyCutoff(state)
     nopbc_vdw = sum(res.energy_vdw for res in state.residues)
     nopbc_elec = sum(res.energy_elec for res in state.residues)
     nopbc_energy = (nopbc_vdw + nopbc_elec) / 2.0
     
-    # 重置能量
+    # Reset energy
     for res in state.residues:
         res.energy_vdw = 0.0
         res.energy_elec = 0.0
     
-    # 计算PBC能量
+    # Calculate PBC energy
     pygcmc.computeSystemEnergyPBCCutoff(state)
     pbc_vdw = sum(res.energy_vdw for res in state.residues)
     pbc_elec = sum(res.energy_elec for res in state.residues)
     pbc_energy = (pbc_vdw + pbc_elec) / 2.0
     
-    # 对于盒子中间的原子，两种计算方法应该给出相同的结果
-    rel_tol = 1e-5  # 非常小的相对误差容忍度
+    # For atoms in the middle of the box, both calculation methods should give the same result
+    rel_tol = 1e-5  # Very small relative error tolerance
     assert abs((pbc_energy - nopbc_energy) / nopbc_energy) < rel_tol, \
            f"PBC energy {pbc_energy} differs from non-PBC energy {nopbc_energy}"
 
@@ -1210,24 +1210,24 @@ def test_pbc_cross_boundary():
     """
     state = pygcmc.MCState()
     
-    # 1. 设置力场
+    # 1. Set up force field
     state.forcefield.numTotalTypes = 3
     state.forcefield.numMovementTypes = 3
     state.forcefield.ljEps = [1.0] * 9
     state.forcefield.ljSigma = [1.0] * 9
     
-    # 设置盒子和截断
-    state.info.box = [3.0, 3.0, 3.0]  # 3.0 nm 的立方体盒子
+    # Set up box and cutoff
+    state.info.box = [3.0, 3.0, 3.0]  # 3.0 nm cubic box
     state.info.cutoff = 2.0  # nm
     
-    # 2. 设置三个原子：一个在盒子边缘，一个跨越边界，一个在盒子另一边
+    # 2. Set up three atoms: one near the box edge, one crossing the boundary, and one on the other side of the box
     atoms = []
     positions = [
-        (2.8, 1.5, 1.5),  # 靠近右边界
-        (0.1, 1.5, 1.5),  # 靠近左边界
-        (1.5, 1.5, 1.5)   # 在中间
+        (2.8, 1.5, 1.5),  # Near the right boundary
+        (0.1, 1.5, 1.5),  # Near the left boundary
+        (1.5, 1.5, 1.5)   # In the middle
     ]
-    charges = [0.5, 0.5, -1.0]  # 使中间原子与两边都有吸引力
+    charges = [0.5, 0.5, -1.0]  # Make the middle atom attractive to both sides
     
     for i, (x, y, z) in enumerate(positions):
         atom = pygcmc.MCAtom()
@@ -1241,7 +1241,7 @@ def test_pbc_cross_boundary():
     state.atoms = atoms
     state.activeAtomCount = 3
     
-    # 3. 设置residues
+    # 3. Set up residues
     residues = []
     for i in range(3):
         res = pygcmc.MCResidue()
@@ -1254,26 +1254,26 @@ def test_pbc_cross_boundary():
     state.residues = residues
     state.activeResidueCount = 3
     
-    # 计算PBC能量
+    # Calculate PBC energy
     pygcmc.computeSystemEnergyPBCCutoff(state)
     
-    # 验证所有residue都有合理的能量
+    # Verify all residues have reasonable energy
     for i, res in enumerate(state.residues):
         energy = res.energy_vdw + res.energy_elec
         assert not math.isnan(energy), f"Residue {i} has NaN energy"
         assert not math.isinf(energy), f"Residue {i} has infinite energy"
         assert abs(energy) < 1e6, f"Residue {i} has unreasonably large energy: {energy}"
     
-    # 通过PBC，原子0和1之间的最小距离应该是0.3 nm
-    # 而不是盒子中的实际距离2.7 nm
+    # Through PBC, the minimum distance between atoms 0 and 1 should be 0.3 nm
+    # instead of the actual distance of 2.7 nm in the box
     COULOMB = 138.935458  # kJ·nm/mol/e²
     
-    # 计算总能量
+    # Calculate total energy
     total_vdw = sum(res.energy_vdw for res in state.residues)
     total_elec = sum(res.energy_elec for res in state.residues)
     system_energy = (total_vdw + total_elec) / 2.0
     
-    # 验证能量是有限的且合理的
+    # Verify energy is finite and reasonable
     assert not math.isnan(system_energy), "System energy is NaN"
     assert not math.isinf(system_energy), "System energy is infinite"
-    assert abs(system_energy) < 1e6, f"System energy {system_energy} is unreasonably large" 
+    assert abs(system_energy) < 1e6, f"System energy {system_energy} is unreasonably large"
