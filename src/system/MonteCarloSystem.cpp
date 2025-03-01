@@ -138,7 +138,7 @@ void MonteCarloSystem::updateGeometricCenter(model::MCResidue& res) {
 }
 
 void MonteCarloSystem::setSwitchingFunction(bool enable, float r_on, float r_off) {
-    // 参数验证
+    // Parameter validation
     if (r_on >= r_off) {
         throw std::runtime_error("Invalid switching function parameters: r_on must be less than r_off");
     }
@@ -146,7 +146,7 @@ void MonteCarloSystem::setSwitchingFunction(bool enable, float r_on, float r_off
         throw std::runtime_error("Invalid switching function parameters: radii must be positive");
     }
 
-    // 设置MCState中的参数
+    // Set parameters in MCState
     state.info.use_switching = enable;
     state.info.r_on = r_on;
     state.info.r_off = r_off;
@@ -154,13 +154,13 @@ void MonteCarloSystem::setSwitchingFunction(bool enable, float r_on, float r_off
 
 float MonteCarloSystem::calculateSwitchingFunction(float r) const {
     if (!state.info.use_switching || r <= state.info.r_on) {
-        return 1.0f;  // 小于r_on时不使用切换函数
+        return 1.0f;  // No switching function applied when r <= r_on
     }
     if (r >= state.info.r_off) {
-        return 0.0f;  // 大于r_off时能量为零
+        return 0.0f;  // Energy is zero when r >= r_off
     }
     
-    // 计算CHARMM风格的切换函数
+    // Calculate CHARMM-style switching function
     // S(r) = [(r_off^2 - r^2)^2 * (r_off^2 + 2r^2 - 3r_on^2)] / (r_off^2 - r_on^2)^3
     float r2 = r * r;
     float ron2 = state.info.r_on * state.info.r_on;
@@ -278,17 +278,17 @@ static inline std::string trim(const std::string &s) {
 void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularInfo>& molecules)
 {
     // --------------------------------------------------------------------
-    // [1] 首先先收集"新分子"中的 residue types 和 atom types
+    // [1] First collect residue types and atom types from the "new molecules"
     // --------------------------------------------------------------------
-    // 直接使用当前状态的 type maps 作为基础
+    // Directly use the current state's type maps as a basis
     pygcmc::model::TypeMaps preResidueTypes = state.residueTypes;
     pygcmc::model::TypeMaps preAtomTypes = state.atomTypes;
 
-    // 记录运动分子的原子类型
+    // Record atom types of the movement molecules
     std::vector<int> newMovementAtomTypes;
     int numNewMovementTypes = 0;
 
-    // 添加新分子的类型
+    // Add types from new molecules
     for (const auto& info : molecules) {
         if (!info.molecular) {
             throw std::runtime_error("Movement molecular data is null");
@@ -300,10 +300,10 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
         std::transform(resName.begin(), resName.end(), resName.begin(),
                        [](unsigned char c){ return std::toupper(c); });
 
-        // 将该新 residue 名字放到 map 里
+        // Add this new residue name to the map
         preResidueTypes.getOrAddType(resName);
 
-        // 将该新 residue 的 atom type 放到 map 里，并记录其索引
+        // Add this new residue's atom types to the map and record their indices
         const auto& topology_atoms = info.molecular->topology_atoms;
         for (const auto& top_atom : topology_atoms) {
             int typeIdx = preAtomTypes.getOrAddType(top_atom.type);
@@ -320,7 +320,7 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
     }
 
     // --------------------------------------------------------------------
-    // [3] 新建一个新的 MCState，用上述新的 type maps
+    // [3] Create a new MCState using the new type maps above
     // --------------------------------------------------------------------
     pygcmc::model::MCState newState;
     newState.info = state.info;
@@ -328,12 +328,12 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
     newState.residueTypes = preResidueTypes;
     newState.atomTypes = preAtomTypes;
     
-    // 保留之前的 movement residues 信息
+    // Preserve previous movement residues information
     newState.movementResidues = state.movementResidues;
     newState.movementAtomTypes = state.movementAtomTypes;
     newState.numMovementAtomTypes = state.numMovementAtomTypes;
 
-    // 添加新的 movement atom types
+    // Add new movement atom types
     for (int typeIdx : newMovementAtomTypes) {
         if (std::find(newState.movementAtomTypes.begin(), newState.movementAtomTypes.end(), typeIdx) == newState.movementAtomTypes.end()) {
             newState.movementAtomTypes.push_back(typeIdx);
@@ -342,14 +342,14 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
     newState.numMovementAtomTypes = newState.movementAtomTypes.size();
 
     // --------------------------------------------------------------------
-    // [4] 重新索引现有的 residues 和 atoms
+    // [4] Reindex existing residues and atoms
     // --------------------------------------------------------------------
     std::vector<pygcmc::model::MCResidue> oldResidues;
     oldResidues.reserve(state.activeResidueCount);
     std::vector<std::vector<pygcmc::model::MCAtom>> oldResidueAtoms;
     oldResidueAtoms.reserve(state.activeResidueCount);
 
-    // 调试输出：先打印旧系统的 residue type 及残基
+    // Debug output: first print the old system's residue types and residues
     System::log(LogLevel::DEBUG, "\nOriginal (old) active Residues before reindex:");
     for (int i = 0; i < state.activeResidueCount; i++) {
         const auto& oldRes = state.residues[i];
@@ -365,9 +365,9 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
 
     for (int i = 0; i < state.activeResidueCount; i++) {
         const auto& oldRes = state.residues[i];
-        // 如果不想拷贝 inactive，可以自行判断。但你原先代码是一起拷过去再处理的
-        // 这里就不分是否 active。
-        // 取得旧名字
+        // If you don't want to copy inactive residues, you can filter them. But your original code copied them all and processed them later
+        // So here we don't differentiate active status.
+        // Get the old name
         std::string oldResName = state.residueTypes.getTypeName(oldRes.type);
         std::string oldResNameTrimmed = trim(oldResName);
         std::string oldResNameUpper   = oldResNameTrimmed;
@@ -376,21 +376,21 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
             [](unsigned char c){ return std::toupper(c); }
         );
 
-        // 构造一个新的 Residue，里面 type 改成在 newState.residueTypes 下的 index
+        // Construct a new Residue, with type changed to the index in newState.residueTypes
         pygcmc::model::MCResidue newRes = oldRes;
         newRes.type = newState.residueTypes.getOrAddType(oldResNameUpper);
 
-        // 把它压到临时数组
+        // Push it to the temporary array
         oldResidues.push_back(newRes);
 
-        // 下面收集它的 atoms，并重新映射 atom type
+        // Now collect its atoms and remap the atom types
         std::vector<pygcmc::model::MCAtom> theseAtoms;
         theseAtoms.reserve(newRes.atomCount);
         for (int j = 0; j < oldRes.atomCount; j++) {
             auto oldAtom = state.atoms[oldRes.atomStart + j];
-            // 去旧系统里拿 atom type 字符串
+            // Get the atom type string from the old system
             std::string oldAtomTypeName = state.atomTypes.getTypeName(oldAtom.type);
-            // 在新的 typeMaps 下找对应的新索引
+            // Find the corresponding new index in the new typeMaps
             int newAtomTypeIdx = newState.atomTypes.getOrAddType(oldAtomTypeName);
             oldAtom.type = newAtomTypeIdx;
             theseAtoms.push_back(oldAtom);
@@ -399,7 +399,7 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
     }
 
     // --------------------------------------------------------------------
-    // [5] 处理新的 movement molecules
+    // [5] Process new movement molecules
     // --------------------------------------------------------------------
     std::vector<std::string> insertionResNames;
     insertionResNames.reserve(molecules.size());
@@ -414,13 +414,13 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
         insertionResNames.push_back(resName);
     }
 
-    // 用来收集和分组
+    // For collection and grouping
     std::vector<std::vector<pygcmc::model::MCResidue>> matchingResidues(molecules.size());
     std::vector<std::vector<std::vector<pygcmc::model::MCAtom>>> matchingAtoms(molecules.size());
     std::vector<pygcmc::model::MCResidue> otherResidues;
     std::vector<std::vector<pygcmc::model::MCAtom>> otherAtoms;
 
-    // 第一遍：遍历 oldResidues，把所有残基（包括非活跃的）做匹配
+    // First pass: iterate through oldResidues, match all residues (including inactive ones)
     for (int i = 0; i < static_cast<int>(oldResidues.size()); i++) {
         const auto& oldRes = oldResidues[i];
         std::string oldResNameUpper = newState.residueTypes.getTypeName(oldRes.type);
@@ -458,7 +458,7 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
         }
     }
 
-    // 输出每种运动分子匹配到的残基数目
+    // Output the number of residues matched for each movement molecule type
     for (size_t m = 0; m < molecules.size(); m++) {
         System::log(LogLevel::DEBUG, "Movement molecule index ", m, " ('", 
                    insertionResNames[m], "') collected ", 
@@ -466,7 +466,7 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
     }
 
     // --------------------------------------------------------------------
-    // [6] 第二遍：构造 newState 的 residues 和 atoms
+    // [6] Second pass: construct residues and atoms for newState
     // --------------------------------------------------------------------
     newState.atoms.reserve(state.atoms.size());
     newState.residues.reserve(state.residues.size());
@@ -474,7 +474,7 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
     int newAtomStart = 0;
     int newResIdx = 0;
 
-    // 先把未匹配到的残基（otherResidues）放进 newState
+    // First put unmatched residues (otherResidues) into newState
     for (size_t i = 0; i < otherResidues.size(); i++) {
         pygcmc::model::MCResidue newRes = otherResidues[i];
         newRes.atomStart = newAtomStart;
@@ -487,17 +487,17 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
         newResIdx++;
     }
 
-    // 再把各个 molecules 匹配到的旧残基，以及新的不活跃拷贝加进去
+    // Then add old residues matched by each molecule and new inactive copies
     for (size_t m = 0; m < molecules.size(); m++) {
         const auto& molInfo = molecules[m];
         const auto& matches = matchingResidues[m];
         const auto& matchAtoms = matchingAtoms[m];
 
-        // 记录这个分子类型的起始位置
+        // Record the starting position for this molecule type
         int startIndexForThisGroup = newResIdx;
         int activeCountForThisGroup = static_cast<int>(matches.size());
 
-        // 添加"旧系统"里匹配到的活跃残基
+        // Add active residues matched from the "old system"
         for (size_t r = 0; r < matches.size(); r++) {
             pygcmc::model::MCResidue newRes = matches[r];
             newRes.atomStart = newAtomStart;
@@ -512,7 +512,7 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
             newResIdx++;
         }
 
-        // 检查这个类型是否已经存在于 movement residues 中
+        // Check if this type already exists in movement residues
         bool typeExists = false;
         std::string resName = insertionResNames[m];
         int existingIndex = -1;
@@ -525,14 +525,14 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
         }
 
         if (typeExists) {
-            // 如果类型已存在，我们需要保持原有的非活跃拷贝
+            // If the type already exists, we need to keep the original inactive copies
             const auto& existingInfo = newState.movementResidues[existingIndex];
-            // 从原有的非活跃拷贝开始位置继续添加
+            // Continue adding from the starting position of the original inactive copies
             startIndexForThisGroup = existingInfo.startIndex;
             activeCountForThisGroup = existingInfo.activeCount;
-            // 不需要添加新的 movement residue info
+            // No need to add new movement residue info
         } else {
-            // 添加不活跃拷贝
+            // Add inactive copies
             const auto& molRes = molInfo.molecular->residues[0];
             const auto& molAtoms = molRes->get_atoms();
             const auto& topRes = molInfo.molecular->topology_residues[0];
@@ -544,7 +544,7 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
                 newRes.atomCount = atomsPerResidue;
                 newRes.active = false;
                 newRes.fixed  = false;
-                // 新分子的 residue type 索引
+                // Residue type index for the new molecule
                 std::string rawName = molRes->get_resname();
                 std::string nameTrimmed = trim(rawName);
                 std::string resName = nameTrimmed;
@@ -554,7 +554,7 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
                 );
                 newRes.type = newState.residueTypes.getOrAddType(resName);
 
-                // 新分子的 atom type 索引
+                // New molecule's atom type indices
                 for (size_t i = 0; i < molAtoms.size(); i++) {
                     const auto& molAtom = molAtoms[i];
                     const auto& topAtom = molInfo.molecular->topology_atoms[topRes.atoms[i]];
@@ -572,7 +572,7 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
                 newResIdx++;
             }
 
-            // 添加新的 movement residue 信息
+            // Add new movement residue info
             pygcmc::model::MCMovementResidueInfo moveInfo;
             moveInfo.startIndex = startIndexForThisGroup;
             moveInfo.activeCount = activeCountForThisGroup;
@@ -582,18 +582,18 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
         }
     }
 
-    // 更新 newState 的活跃计数
+    // Update newState's active counts
     newState.activeResidueCount = newResIdx;
     newState.activeAtomCount = newAtomStart;
 
-    // 检查容量
+    // Check capacity
     if (newState.activeResidueCount > newState.info.maxResidues ||
         newState.activeAtomCount > newState.info.maxAtoms) {
         throw std::runtime_error("New state exceeds max capacity after movement insertion");
     }
 
     // --------------------------------------------------------------------
-    // [7] 打印最终映射和残基信息
+    // [7] Print final mapping and residue information
     // --------------------------------------------------------------------
     System::log(LogLevel::DEBUG, "\nFinal ResidueTypes mapping (newState):");
     for (size_t idx = 0; idx < newState.residueTypes.atomTypes.size(); idx++) {
@@ -611,7 +611,7 @@ void MonteCarloSystem::addMovementMolecules(const std::vector<MovementMolecularI
                    (newRes.active ? " (ACTIVE)" : " (INACTIVE)"));
     }
 
-    // 打印 movement residues 信息
+    // Print movement residues information
     System::log(LogLevel::DEBUG, "\nMovement Residues Info (newState):");
     for (const auto& info : newState.movementResidues) {
         System::log(LogLevel::DEBUG, "  Movement group: name='", info.resName,
@@ -629,7 +629,7 @@ void MonteCarloSystem::validateParameters(const model::ForceField& ff, const std
         throw std::runtime_error("Molecular system is null");
     }
 
-    // 检查所有原子的拓扑参数
+    // Check all atom topology parameters
     std::set<std::string> missingTopoTypes;
     for (const auto& res : molecular->topology_residues) {
         for (int atomIdx : res.atoms) {
@@ -639,7 +639,7 @@ void MonteCarloSystem::validateParameters(const model::ForceField& ff, const std
         }
     }
 
-    // 检查所有原子类型的LJ参数
+    // Check all atom type LJ parameters
     std::set<std::string> missingLJTypes;
     for (const auto& atom : molecular->topology_atoms) {
         try {
@@ -649,7 +649,7 @@ void MonteCarloSystem::validateParameters(const model::ForceField& ff, const std
         }
     }
 
-    // 如果有缺失的参数，生成详细的错误信息
+    // If there are missing parameters, generate detailed error information
     if (!missingTopoTypes.empty() || !missingLJTypes.empty()) {
         std::stringstream error;
         error << "Missing parameters detected:\n";
@@ -675,8 +675,8 @@ void MonteCarloSystem::validateParameters(const model::ForceField& ff, const std
 }
 
 void MonteCarloSystem::initializeForceField(const model::ForceField& ff) {
-    // 首先验证所有参数
-    validateParameters(ff, molecular);  // 需要保存molecular作为成员变量
+    // First verify all parameters
+    validateParameters(ff, molecular);  // Need to save molecular as member variable
 
     const auto& atomTypes = state.atomTypes;
     const int numTypes = atomTypes.atomTypes.size();
@@ -688,9 +688,9 @@ void MonteCarloSystem::initializeForceField(const model::ForceField& ff) {
     
     // Initialize force field parameters
     state.forcefield.numTotalTypes = numTypes;
-    state.forcefield.numMovementTypes = numMovementTypes;  // 保留以备将来优化
+    state.forcefield.numMovementTypes = numMovementTypes;  // Keep for future optimization
     
-    // 扩展数组大小到 numTotalTypes * numTotalTypes
+    // Extend array size to numTotalTypes * numTotalTypes
     state.forcefield.ljSigma.resize(numTypes * numTypes);
     state.forcefield.ljEps.resize(numTypes * numTypes);
 
@@ -698,40 +698,40 @@ void MonteCarloSystem::initializeForceField(const model::ForceField& ff) {
     const float ANGSTROM_TO_NM = 0.1f;  // 1 Å = 0.1 nm
     [[maybe_unused]] const float KCAL_TO_KJ = 4.184f;    // 1 kcal/mol = 4.184 kJ/mol
 
-    // 遍历所有可能的类型对
+    // Loop through all possible type pairs
     for (int i = 0; i < numTypes; ++i) {
         const std::string& type1 = atomTypes.atomTypes[i];
         
         for (int j = 0; j < numTypes; ++j) {
             const std::string& type2 = atomTypes.atomTypes[j];
-            const int pairIdx = i * numTypes + j;  // 二维数组索引
+            const int pairIdx = i * numTypes + j;  // 2D array index
             
-            // 首先尝试获取 NBFIX 参数
+            // First try to get NBFIX parameters
             auto [nbfix_params, has_nbfix] = ff.get_nbfix(type1, type2);
             
             try {
                 if (has_nbfix) {
-                    // 直接使用 NBFIX 参数
-                    // 将 Rmin 从 Å 转换为 nm
+                    // Use NBFIX parameters directly
+                    // Convert Rmin from Å to nm
                     const float sigma = static_cast<float>(nbfix_params.rmin / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
                     
-                    // 存储参数 (eps 单位为 kJ/mol, sigma 单位为 nm)
+                    // Store parameters (eps in kJ/mol, sigma in nm)
                     state.forcefield.ljSigma[pairIdx] = sigma;
                     state.forcefield.ljEps[pairIdx] = static_cast<float>(nbfix_params.epsilon) * KCAL_TO_KJ;
                 } else {
-                    // 获取两个类型的 LJ 参数
+                    // Get LJ parameters for two types
                     const auto& lj1 = ff.get_lj_params(type1);
                     const auto& lj2 = ff.get_lj_params(type2);
                     
-                    // 将 Rmin/2 从 Å 转换为 nm，然后转换为 sigma
+                    // Convert Rmin/2 from Å to nm, then to sigma
                     const float sigma1 = static_cast<float>(2.0 * lj1.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
                     const float sigma2 = static_cast<float>(2.0 * lj2.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
                     
-                    // 使用 Lorentz-Berthelot 组合规则
+                    // Use Lorentz-Berthelot combination rule
                     const float sigma_avg = 0.5f * (sigma1 + sigma2);
                     const float eps_avg = std::sqrt(lj1.epsilon * lj2.epsilon);
                     
-                    // 存储参数 (将 eps 转换为 kJ/mol)
+                    // Store parameters (convert eps to kJ/mol)
                     state.forcefield.ljSigma[pairIdx] = sigma_avg;
                     state.forcefield.ljEps[pairIdx] = eps_avg * KCAL_TO_KJ;
                 }

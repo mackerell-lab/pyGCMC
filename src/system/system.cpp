@@ -14,7 +14,7 @@ void System::initialize_parameters() {
     auto& mc_info = params_.get_mc_info();
     auto& bias_info = params_.get_bias_info();
 
-    // 设置水分子索引和密度
+    // Set water molecule index and density
     for (size_t i = 0; i < file_info.fragment_names.size(); i++) {
         if (file_info.fragment_names[i] == "sol") {
             fragment_info.water_density = fragment_info.conc_list[i];
@@ -23,27 +23,27 @@ void System::initialize_parameters() {
         }
     }
 
-    // 检查盒子定义
+    // Check box definition
     if (!basic_info.is_box) {
         throw std::runtime_error("Box size not defined!");
     }
 
-    // 处理空腔列表
+    // Process cavity list
     process_cavity_list();
 
-    // 初始化MC时间列表
+    // Initialize MC time list
     initialize_mc_time_list();
 
-    // 计算配对列表截断
+    // Calculate pair list cutoff
     energy_info.pairlist_cutoff = energy_info.fragment_cutoff + 
         mc_info.max_translation_dist * std::sqrt(3.0f) + 3.0f;
     energy_info.pairlist_cutoff_squared = 
         energy_info.pairlist_cutoff * energy_info.pairlist_cutoff;
 
-    // 计算beta值
+    // Calculate beta value
     mc_info.beta = 1.0f / (mc_info.BOLTZMANN * mc_info.temperature);
 
-    // 检查构型偏置参数
+    // Check configuration bias parameters
     if (bias_info.use_conf_bias && bias_info.num_conf_bias_trials < 1) {
         throw std::runtime_error("num_conf_bias_trial needs to be greater than 0");
     }
@@ -87,7 +87,7 @@ void System::initialize_mc_time_list() {
             mc_info.mc_time_cumulative[i-1] + mc_info.mc_time_list[i];
     }
 
-    // 归一化
+    // Normalize
     float total = mc_info.mc_time_cumulative.back();
     if (total != 1.0f) {
         for (float& time : mc_info.mc_time_cumulative) {
@@ -96,7 +96,7 @@ void System::initialize_mc_time_list() {
     }
 }
 
-// ... 其他现有的实现 ...
+// ... other existing implementations ...
 
 } // namespace system
 } // namespace pygcmc

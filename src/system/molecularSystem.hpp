@@ -12,7 +12,7 @@ namespace pygcmc {
 namespace system {
 
 /**
- * @brief 分子系统类，用于管理和操作分子数据
+ * @brief Molecular system class for managing and operating on molecular data
  */
 class MolecularSystem {
 public:
@@ -20,28 +20,28 @@ public:
     ~MolecularSystem() = default;
 
     /**
-     * @brief 合并Structure和Topology数据到Molecular对象
-     * @param structure 结构数据
-     * @param topology 拓扑数据
-     * @return 合并后的Molecular对象
+     * @brief Combine Structure and Topology data into a Molecular object
+     * @param structure Structure data
+     * @param topology Topology data
+     * @return Combined Molecular object
      */
     std::shared_ptr<model::Molecular> combine(
         const std::shared_ptr<model::Structure>& structure,
         const std::shared_ptr<model::Topology>& topology);
 
     /**
-     * @brief 合并多个Structure和Topology数据到Molecular对象
-     * @param structure 结构数据
-     * @param topologies 拓扑数据
-     * @return 合并后的Molecular对象
+     * @brief Combine multiple Structure and Topology data into a Molecular object
+     * @param structure Structure data
+     * @param topologies Topology data
+     * @return Combined Molecular object
      */
     std::shared_ptr<model::Molecular> combine_multiple(
         const std::shared_ptr<model::Structure>& structure,
         const std::vector<std::shared_ptr<model::Topology>>& topologies);
 
     /**
-     * @brief 获取当前的Molecular对象
-     * @return 当前的Molecular对象
+     * @brief Get the current Molecular object
+     * @return Current Molecular object
      */
     const std::shared_ptr<model::Molecular>& get_molecular() const { return molecular_; }
 
@@ -49,12 +49,12 @@ private:
     std::shared_ptr<model::Molecular> molecular_;
 
     /**
-     * @brief 检查残基序列是否匹配
-     * @param pdb_residues 结构中的残基序列
-     * @param topology 拓扑数据
-     * @param start_idx 起始索引
-     * @param matched_count 匹配的残基数量
-     * @return 是否匹配
+     * @brief Check if residue sequence matches
+     * @param pdb_residues Residue sequence in the structure
+     * @param topology Topology data
+     * @param start_idx Starting index
+     * @param matched_count Number of matched residues
+     * @return Whether it matches
      */
     bool match_residue_sequence(
         const std::vector<std::shared_ptr<model::Residue>>& pdb_residues,
@@ -63,19 +63,19 @@ private:
         size_t& matched_count);
 
     /**
-     * @brief 合并多个拓扑文件
-     * @param molecular 分子对象
-     * @param topologies 拓扑数据
+     * @brief Merge multiple topology files
+     * @param molecular Molecular object
+     * @param topologies Topology data
      */
     void merge_topologies(
         std::shared_ptr<model::Molecular>& molecular,
         const std::vector<std::shared_ptr<model::Topology>>& topologies);
 
     /**
-     * @brief 验证原子类型匹配
-     * @param pdb_res 结构中的残基
-     * @param top_res 拓扑中的残基
-     * @param topology 拓扑数据
+     * @brief Verify atom type matching
+     * @param pdb_res Residue in the structure
+     * @param top_res Residue in the topology
+     * @param topology Topology data
      */
     void verify_atom_types(
         const std::shared_ptr<model::Residue>& pdb_res,

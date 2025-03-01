@@ -254,44 +254,44 @@ public:
     void validateParameters(const model::ForceField& ff, const std::shared_ptr<model::Molecular>& molecular);
 
     /**
-     * @brief 设置或禁用CHARMM风格的平滑切换函数
+     * @brief Set or disable CHARMM-style smooth switching function
      * 
-     * @param enable 是否启用切换函数
-     * @param r_on 内截断半径 (nm)，开始衰减的距离
-     * @param r_off 外截断半径 (nm)，能量降为零的距离
+     * @param enable Whether to enable the switching function
+     * @param r_on Inner cutoff radius (nm), distance at which attenuation begins
+     * @param r_off Outer cutoff radius (nm), distance at which energy drops to zero
      */
     void setSwitchingFunction(bool enable, float r_on = 1.0f, float r_off = 1.2f);
 
     /**
-     * @brief 计算给定距离处的切换函数值
+     * @brief Calculate the switching function value at the given distance
      * 
-     * @param r 需要计算切换函数值的距离 (nm)
-     * @return 切换函数值，范围在[0,1]之间
+     * @param r Distance (nm) at which to calculate the switching function value
+     * @return Switching function value, ranging from [0,1]
      */
     float calculateSwitchingFunction(float r) const;
 
     /**
-     * @brief 获取当前是否启用切换函数
-     * @return 是否启用切换函数
+     * @brief Get whether the switching function is currently enabled
+     * @return Whether the switching function is enabled
      */
     bool isUsingSwitchingFunction() const { return state.info.use_switching; }
 
     /**
-     * @brief 获取内截断半径
-     * @return 内截断半径 (nm)
+     * @brief Get inner cutoff radius
+     * @return Inner cutoff radius (nm)
      */
     float getSwitchingROn() const { return state.info.r_on; }
 
     /**
-     * @brief 获取外截断半径
-     * @return 外截断半径 (nm)
+     * @brief Get outer cutoff radius
+     * @return Outer cutoff radius (nm)
      */
     float getSwitchingROff() const { return state.info.r_off; }
 
     /**
-     * @brief 将当前的switching function设置应用到外部state对象
+     * @brief Apply current switching function settings to external state object
      * 
-     * @param externalState 需要应用switching function设置的外部state对象
+     * @param externalState External state object to apply settings to
      */
     void applySwitchingToState(model::MCState& externalState) const {
         externalState.info.use_switching = state.info.use_switching;
@@ -300,8 +300,8 @@ public:
     }
 
     /**
-     * @brief 获取系统状态（可修改）
-     * @return 系统状态引用
+     * @brief Get system state (modifiable)
+     * @return Modifiable system state reference
      */
     model::MCState& getState() { return state; }
 

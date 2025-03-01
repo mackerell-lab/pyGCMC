@@ -9,7 +9,7 @@
 namespace pygcmc {
 namespace system {
 
-// 日志级别枚举
+// Log level enumeration
 enum class LogLevel {
     DEBUG,
     INFO,
@@ -19,11 +19,11 @@ enum class LogLevel {
 
 class System {
 public:
-    // 静态日志控制
+    // Static log control
     static bool verbose_;
     static LogLevel log_level_;
     
-    // 日志功能
+    // Logging functionality
     static void set_verbose(bool verbose) { verbose_ = verbose; }
     static void set_log_level(LogLevel level) { log_level_ = level; }
     
@@ -51,17 +51,17 @@ public:
         std::cout << ss.str() << std::endl;
     }
 
-    // 从param.hpp移过来的复杂功能
+    // Complex functionality moved from param.hpp
     void initialize_parameters();
     void process_cavity_list();
     void initialize_mc_time_list();
 
 private:
-    model::Param params_;  // 系统参数
-    // ... 其他现有的成员 ...
+    model::Param params_;  // System parameters
+    // ... other existing members ...
 };
 
-// 静态成员初始化
+// Static member initialization
 inline bool System::verbose_ = false;
 inline LogLevel System::log_level_ = LogLevel::INFO;
 
