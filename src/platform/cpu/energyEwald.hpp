@@ -104,7 +104,7 @@ void computeSystemEnergyEwald(model::MCState& state);
 void computeMovementEnergyEwald(model::MCState& state);
 
 // 内部计算函数声明
-std::pair<double, double> calcPairEnergyEwald(double r2, double sigma, double eps, double q1, double q2);
+std::pair<double, double> calcPairEnergyEwald(double r2, double sigma, double eps, double q1, double q2, const model::MCInfo& info, bool is_excluded = false);
 double computeReciprocalEnergy(model::MCState& state, bool movement_only);
 double computeSelfEnergy(model::MCState& state, bool movement_only);
 void computeRealSpaceEwald(model::MCState& state, bool movement_only, bool store_in_residues = true);

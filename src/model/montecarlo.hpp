@@ -92,6 +92,11 @@ struct MCInfo {
     float  volume;           ///< System volume (nm³)
     uint64_t seed;          ///< Random seed
 
+    // CHARMM-style switching function parameters
+    bool use_switching{false};  ///< Whether to use switching function (default: false)
+    float r_on{1.0f};           ///< Inner cutoff radius (nm) where switching starts
+    float r_off{1.2f};          ///< Outer cutoff radius (nm) where potential goes to zero
+
     /**
      * @brief Statistics for Monte Carlo moves
      * 

@@ -17,17 +17,15 @@ const float MAX_SAFE_ENERGY = 1e6f;     // kJ/mol
 // 调试标志
 bool energy_debug_output = false;
 
-// CHARMM-style switching function parameters (default: disabled)
-SwitchingFunctionParams switching_params;
-
 /**
  * @brief 配置 CHARMM 风格的平滑函数参数
  * 
+ * @param state MC状态，将在其中更新switching参数
  * @param use_switching 是否启用平滑函数
  * @param r_on 内截断半径 (ctonnb)
  * @param r_off 外截断半径 (ctofnb)
  */
-void setSwitchingFunction(bool use_switching, float r_on, float r_off) {
+void setSwitchingFunction(model::MCState& state, bool use_switching, float r_on, float r_off) {
     // Input validation
     if (r_on >= r_off) {
         throw std::runtime_error("Invalid switching function parameters: r_on must be less than r_off");
@@ -36,10 +34,10 @@ void setSwitchingFunction(bool use_switching, float r_on, float r_off) {
         throw std::runtime_error("Invalid switching function parameters: radii must be positive");
     }
 
-    // Set parameters
-    switching_params.use_switching = use_switching;
-    switching_params.r_on = r_on;
-    switching_params.r_off = r_off;
+    // Set parameters in MCState
+    state.info.use_switching = use_switching;
+    state.info.r_on = r_on;
+    state.info.r_off = r_off;
     
     if (energy_debug_output && use_switching) {
         platform::log(LogLevel::INFO, 

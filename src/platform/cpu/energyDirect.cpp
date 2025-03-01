@@ -15,7 +15,10 @@ namespace cpu {
 /**
  * @brief Calculate LJ and Coulomb energy with safety checks
  */
-inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, float q1, float q2, bool calc_coulomb = true) {
+inline std::pair<float, float> calcPairEnergy(
+    float r2, float sigma, float eps, float q1, float q2, 
+    const model::MCInfo& info,
+    bool calc_coulomb = true) {
     if (energy_debug_output) {
         std::stringstream ss;
         ss << std::fixed << std::setprecision(6);
@@ -51,30 +54,30 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
     float vdw_energy = 4.0f * eps * (sigma_r12 - sigma_r6);  // kJ/mol
     
     // Apply CHARMM switching function to LJ energy if enabled
-    if (switching_params.use_switching) {
+    if (info.use_switching) {
         // Apply switching if distance is between r_on and r_off
-        if (r > switching_params.r_on && r < switching_params.r_off) {
-            float switch_val = calculateSwitchingFunction(r);
+        if (r > info.r_on && r < info.r_off) {
+            float switch_val = calculateSwitchingFunction(r, info);
             vdw_energy *= switch_val;
             
             if (energy_debug_output) {
                 std::stringstream ss;
                 ss << std::fixed << std::setprecision(6);
                 ss << "\nCHARMM switching function applied:";
-                ss << "\n  r = " << r << " nm (between r_on=" << switching_params.r_on 
-                   << " and r_off=" << switching_params.r_off << ")";
+                ss << "\n  r = " << r << " nm (between r_on=" << info.r_on 
+                   << " and r_off=" << info.r_off << ")";
                 ss << "\n  switching function value = " << switch_val;
                 ss << "\n  original VDW energy = " << (4.0f * eps * (sigma_r12 - sigma_r6)) << " kJ/mol";
                 ss << "\n  scaled VDW energy = " << vdw_energy << " kJ/mol";
                 platform::log(LogLevel::DEBUG, ss.str());
             }
-        } else if (r >= switching_params.r_off) {
+        } else if (r >= info.r_off) {
             // Beyond outer cutoff radius, set to zero
             vdw_energy = 0.0f;
             
             if (energy_debug_output) {
                 platform::log(LogLevel::DEBUG, "Distance r = ", r, 
-                             " nm is beyond r_off = ", switching_params.r_off, 
+                             " nm is beyond r_off = ", info.r_off, 
                              " nm, setting VDW energy to zero");
             }
         }
@@ -273,7 +276,7 @@ inline void computeResidueNonbondedEnergy(
                 float q2 = atoms[atom_j].charge;
                 
                 // Calculate pair energy
-                auto [vdw, elec] = calcPairEnergy(r2, sigma, eps, q1, q2);
+                auto [vdw, elec] = calcPairEnergy(r2, sigma, eps, q1, q2, state.info, true);
                 
                 // Add energy components to current residue
                 residues[residue_idx].energy_vdw += vdw;

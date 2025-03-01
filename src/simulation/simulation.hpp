@@ -144,8 +144,8 @@ public:
     static void computeSystemVdwEnergyCutoff(model::MCState& state);
     
     // CHARMM switching function methods
-    static void enableSwitchingFunction(bool enable, float r_on, float r_off);
-    static float calculateSwitchingFunction(float r);
+    static void enableSwitchingFunction(model::MCState& state, bool enable, float r_on, float r_off);
+    static float calculateSwitchingFunction(const model::MCState& state, float r);
 
     // Ewald methods
     static void initializeEwaldParameters(float cutoff, const float box[3], 

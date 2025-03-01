@@ -121,12 +121,12 @@ void Simulation::computeSystemVdwEnergyCutoff(model::MCState& state) {
     platform::cpu::computeSystemVdwEnergyCutoff(state);
 }
 
-void Simulation::enableSwitchingFunction(bool enable, float r_on, float r_off) {
-    platform::cpu::setSwitchingFunction(enable, r_on, r_off);
+void Simulation::enableSwitchingFunction(model::MCState& state, bool enable, float r_on, float r_off) {
+    platform::cpu::setSwitchingFunction(state, enable, r_on, r_off);
 }
 
-float Simulation::calculateSwitchingFunction(float r) {
-    return platform::cpu::calculateSwitchingFunction(r);
+float Simulation::calculateSwitchingFunction(const model::MCState& state, float r) {
+    return platform::cpu::calculateSwitchingFunction(r, state.info);
 }
 
 void Simulation::setEwaldParameters(float alpha, const int kmax[3], float tolerance) {

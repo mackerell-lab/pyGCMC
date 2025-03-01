@@ -97,12 +97,15 @@ def test_switching_function():
     r_on = 1.0  # CHARMM 的 ctonnb (10 Å)
     r_off = 1.2  # CHARMM 的 ctofnb (12 Å)
     
+    # 创建测试系统
+    state = create_test_system()
+    
     # 启用平滑函数
-    pygcmc.enableSwitchingFunction(True, r_on, r_off)
+    pygcmc.enableSwitchingFunction(state, True, r_on, r_off)
     
     # 计算一系列距离上的平滑函数值
     distances = [0.9 + i * 0.4/50 for i in range(50)]  # 从0.9到1.3的50个点
-    switch_values = [pygcmc.calculateSwitchingFunction(r) for r in distances]
+    switch_values = [pygcmc.calculateSwitchingFunction(state, r) for r in distances]
     
     # 验证关键点的值
     for r, s in zip(distances, switch_values):
@@ -124,8 +127,8 @@ def test_switching_function():
             assert s == pytest.approx(expected, abs=1e-6), f"S({r}) calculation error"
             
     # 确保平滑函数在区间边界处连续（在r_on处值为1.0，在r_off处值为0.0）
-    s_at_ron = pygcmc.calculateSwitchingFunction(r_on)
-    s_at_roff = pygcmc.calculateSwitchingFunction(r_off)
+    s_at_ron = pygcmc.calculateSwitchingFunction(state, r_on)
+    s_at_roff = pygcmc.calculateSwitchingFunction(state, r_off)
     
     assert s_at_ron == pytest.approx(1.0), f"S({r_on}) should be 1.0"
     assert s_at_roff == pytest.approx(0.0), f"S({r_off}) should be 0.0"
@@ -148,7 +151,7 @@ def test_energy_with_switching():
     distances = [0.9 + i * 0.4/50 for i in range(50)]  # 从0.9到1.3的50个点
     
     # 计算标准硬截断LJ能量
-    pygcmc.enableSwitchingFunction(False, r_on, r_off)  # 禁用平滑函数
+    pygcmc.enableSwitchingFunction(state, False, r_on, r_off)  # 禁用平滑函数
     
     energies_hard_cutoff = []
     for r in distances:
@@ -157,7 +160,7 @@ def test_energy_with_switching():
         energies_hard_cutoff.append(state.residues[0].energy_vdw + state.residues[1].energy_vdw)
     
     # 计算带平滑函数的LJ能量
-    pygcmc.enableSwitchingFunction(True, r_on, r_off)  # 启用平滑函数
+    pygcmc.enableSwitchingFunction(state, True, r_on, r_off)  # 启用平滑函数
     
     energies_with_switching = []
     for r in distances:
@@ -178,7 +181,7 @@ def test_energy_with_switching():
             assert e_switch == pytest.approx(0.0), f"Energy should be 0 when r > r_off"
     
     # 禁用平滑函数，恢复默认状态
-    pygcmc.enableSwitchingFunction(False, r_on, r_off)
+    pygcmc.enableSwitchingFunction(state, False, r_on, r_off)
 
 def test_with_ewald():
     """
@@ -206,7 +209,7 @@ def test_with_ewald():
     distances = [0.9 + i * 0.4/20 for i in range(20)]  # 从0.9到1.3的20个点
     
     # 关闭平滑函数，计算普通Ewald
-    pygcmc.enableSwitchingFunction(False, r_on, r_off)
+    pygcmc.enableSwitchingFunction(state, False, r_on, r_off)
     
     energies_ewald = []
     for r in distances:
@@ -216,7 +219,7 @@ def test_with_ewald():
         energies_ewald.append(state.residues[0].energy_vdw + state.residues[1].energy_vdw)
     
     # 启用平滑函数
-    pygcmc.enableSwitchingFunction(True, r_on, r_off)
+    pygcmc.enableSwitchingFunction(state, True, r_on, r_off)
     
     energies_ewald_switching = []
     for r in distances:
@@ -238,7 +241,7 @@ def test_with_ewald():
             assert e_switch == pytest.approx(0.0)
     
     # 禁用平滑函数，恢复默认状态
-    pygcmc.enableSwitchingFunction(False, r_on, r_off)
+    pygcmc.enableSwitchingFunction(state, False, r_on, r_off)
 
 def test_print_switching_values():
     """
@@ -250,12 +253,15 @@ def test_print_switching_values():
     r_on = 1.0  # 10 Å
     r_off = 1.2  # 12 Å
     
+    # 创建测试系统
+    state = create_test_system()
+    
     # 启用平滑函数
-    pygcmc.enableSwitchingFunction(True, r_on, r_off)
+    pygcmc.enableSwitchingFunction(state, True, r_on, r_off)
     
     # 计算平滑函数的值
     key_distances = [0.8, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3]
-    switch_values = [pygcmc.calculateSwitchingFunction(r) for r in key_distances]
+    switch_values = [pygcmc.calculateSwitchingFunction(state, r) for r in key_distances]
     
     # 打印表头
     print("\nCHARMM Switching Function Values:")
@@ -267,7 +273,7 @@ def test_print_switching_values():
         print(f"{r:15.3f} | {s:15.4f}")
     
     # 禁用平滑函数，恢复默认状态
-    pygcmc.enableSwitchingFunction(False, r_on, r_off)
+    pygcmc.enableSwitchingFunction(state, False, r_on, r_off)
 
 def test_compare_energy_with_without_switching():
     """
@@ -294,7 +300,7 @@ def test_compare_energy_with_without_switching():
     
     # 1. Direct计算结果对比
     # 禁用平滑函数
-    pygcmc.enableSwitchingFunction(False, r_on, r_off)
+    pygcmc.enableSwitchingFunction(state, False, r_on, r_off)
     
     direct_no_switching = []
     for r in distances:
@@ -303,7 +309,7 @@ def test_compare_energy_with_without_switching():
         direct_no_switching.append(state.residues[0].energy_vdw + state.residues[1].energy_vdw)
     
     # 启用平滑函数
-    pygcmc.enableSwitchingFunction(True, r_on, r_off)
+    pygcmc.enableSwitchingFunction(state, True, r_on, r_off)
     
     direct_with_switching = []
     for r in distances:
@@ -313,7 +319,7 @@ def test_compare_energy_with_without_switching():
     
     # 2. Ewald计算结果对比
     # 禁用平滑函数
-    pygcmc.enableSwitchingFunction(False, r_on, r_off)
+    pygcmc.enableSwitchingFunction(state, False, r_on, r_off)
     
     ewald_no_switching_vdw = []
     ewald_no_switching_elec = []
@@ -324,7 +330,7 @@ def test_compare_energy_with_without_switching():
         ewald_no_switching_elec.append(state.residues[0].energy_elec + state.residues[1].energy_elec)
     
     # 启用平滑函数
-    pygcmc.enableSwitchingFunction(True, r_on, r_off)
+    pygcmc.enableSwitchingFunction(state, True, r_on, r_off)
     
     ewald_with_switching_vdw = []
     ewald_with_switching_elec = []
@@ -346,7 +352,7 @@ def test_compare_energy_with_without_switching():
         if idx < len(distances):
             r = distances[idx]
             # 在r_off处计算平滑函数值便于验证
-            switch_value = pygcmc.calculateSwitchingFunction(r) if r_on <= r <= r_off else (1.0 if r < r_on else 0.0)
+            switch_value = pygcmc.calculateSwitchingFunction(state, r) if r_on <= r <= r_off else (1.0 if r < r_on else 0.0)
             
             print(f"{r:10.3f} | {direct_no_switching[idx]:14.6f} | {direct_with_switching[idx]:14.6f} | "
                   f"{ewald_no_switching_vdw[idx]:16.6f} | {ewald_with_switching_vdw[idx]:16.6f}")
@@ -370,7 +376,7 @@ def test_compare_energy_with_without_switching():
         # 3. 在r_on和r_off之间，检查switching是否正确应用
         elif r_on <= r <= r_off:
             # 计算预期的switching值
-            switch_value = pygcmc.calculateSwitchingFunction(r)
+            switch_value = pygcmc.calculateSwitchingFunction(state, r)
             
             # 检查direct能量是否按switching缩放
             assert direct_with_switching[i] == pytest.approx(direct_no_switching[i] * switch_value, abs=1e-5), \
@@ -392,7 +398,7 @@ def test_compare_energy_with_without_switching():
                 print(f"{r:10.3f} | {ewald_no_switching_elec[idx]:18.6f} | {ewald_with_switching_elec[idx]:18.6f}")
     
     # 禁用平滑函数，恢复默认状态
-    pygcmc.enableSwitchingFunction(False, r_on, r_off)
+    pygcmc.enableSwitchingFunction(state, False, r_on, r_off)
 
 if __name__ == "__main__":
     # 运行测试函数

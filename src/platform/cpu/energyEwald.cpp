@@ -135,8 +135,10 @@ void setEwaldParameters(double alpha, const int kmax[3], double tolerance) {
  * For excluded pairs: -erf(αr)/r to compensate for reciprocal space
  */
 inline std::pair<double, double> calcPairEnergyEwald(
-    double r2, double sigma, double eps, double q1, double q2, bool is_excluded = false) {
-    
+    double r2, double sigma, double eps, double q1, double q2, 
+    const model::MCInfo& info,
+    bool is_excluded)
+{    
     // Apply minimum safe distance
     if (r2 < MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE) {
         r2 = MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE;
@@ -151,12 +153,12 @@ inline std::pair<double, double> calcPairEnergyEwald(
     double vdw_energy = 4.0 * eps * (sigma_r12 - sigma_r6);
     
     // Apply CHARMM switching function to VDW energy if enabled
-    if (switching_params.use_switching) {
+    if (info.use_switching) {
         double r_float = static_cast<float>(r); // Convert to float for switching function
         
         // Apply switching if distance is between r_on and r_off
-        if (r_float > switching_params.r_on && r_float < switching_params.r_off) {
-            float switch_val = calculateSwitchingFunction(r_float);
+        if (r_float > info.r_on && r_float < info.r_off) {
+            float switch_val = calculateSwitchingFunction(r_float, info);
             vdw_energy *= switch_val;
             
             if (energy_debug_output) {
@@ -165,14 +167,14 @@ inline std::pair<double, double> calcPairEnergyEwald(
                     " nm, switch=", switch_val, 
                     ", scaled energy=", vdw_energy);
             }
-        } else if (r_float >= switching_params.r_off) {
+        } else if (r_float >= info.r_off) {
             // Beyond outer cutoff radius, set to zero
             vdw_energy = 0.0;
             
             if (energy_debug_output) {
                 platform::log(LogLevel::DEBUG, 
                     "Ewald VDW zero: r=", r_float, 
-                    " nm beyond r_off=", switching_params.r_off);
+                    " nm beyond r_off=", info.r_off);
             }
         }
     }
