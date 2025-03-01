@@ -628,6 +628,9 @@ void init_model(py::module& m) {
         .def_readwrite("max_types", &pygcmc::model::MCInfo::maxTypes)
         .def_readwrite("volume", &pygcmc::model::MCInfo::volume)
         .def_readwrite("seed", &pygcmc::model::MCInfo::seed)
+        .def_readwrite("use_switching", &pygcmc::model::MCInfo::use_switching)
+        .def_readwrite("r_on", &pygcmc::model::MCInfo::r_on)
+        .def_readwrite("r_off", &pygcmc::model::MCInfo::r_off)
         .def("setTemperature", &pygcmc::model::MCInfo::setTemperature, "Set temperature in Kelvin and calculate beta");
 
     // Bind GCMCInfo::Statistics

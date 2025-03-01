@@ -209,7 +209,7 @@ void init_system(py::module& m) {
         .def("get_active_atom_count", &pygcmc::system::MonteCarloSystem::getActiveAtomCount)
         .def("get_active_residue_count", &pygcmc::system::MonteCarloSystem::getActiveResidueCount)
         .def("set_switching_function", &pygcmc::system::MonteCarloSystem::setSwitchingFunction,
-             py::arg("enable"), py::arg("r_on") = 0.8f, py::arg("r_off") = 1.2f,
+             py::arg("enable"), py::arg("r_on") = 1.0f, py::arg("r_off") = 1.2f,
              "设置或禁用CHARMM风格的平滑切换函数")
         .def("calculate_switching_function", &pygcmc::system::MonteCarloSystem::calculateSwitchingFunction,
              py::arg("r"), "计算给定距离处的切换函数值")
