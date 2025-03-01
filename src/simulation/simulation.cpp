@@ -127,7 +127,7 @@ void Simulation::setEwaldParameters(float alpha, const int kmax[3], float tolera
 
 void Simulation::initializeEwaldParameters(float cutoff, const float box[3], 
                                         float alpha, float tolerance) {
-    // 转换 float 参数为 double
+    // Convert float parameters to double
     double cutoff_d = static_cast<double>(cutoff);
     double box_d[3] = {
         static_cast<double>(box[0]),

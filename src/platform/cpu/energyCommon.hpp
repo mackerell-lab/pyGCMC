@@ -132,7 +132,7 @@ inline void logEnergyDebug(const std::string& message) {
     }
 }
 
-// 前置声明所有direct计算中的函数，避免歧义
+// Forward declarations for all direct calculation functions to avoid ambiguity
 void computeMovementEnergy(model::MCState& state);
 void computeMovementEnergyCutoff(model::MCState& state);
 void computeSystemEnergy(model::MCState& state);
@@ -171,7 +171,7 @@ inline double getTotalEnergy(const model::MCState& state) {
 }
 
 inline double getEwaldTotalEnergy(const model::MCState& state) {
-    // 计算所有residue中的能量（包含vdw能量和实空间静电能量）
+    // Calculate energy from all residues (including vdw energy and real-space electrostatic energy)
     double residue_total = 0.0;
     for (const auto& residue : state.residues) {
         if (residue.active) {
@@ -179,7 +179,7 @@ inline double getEwaldTotalEnergy(const model::MCState& state) {
         }
     }
     
-    // 加上EwaldEnergy中的倒空间能量和自能
+    // Add reciprocal-space energy and self-energy from EwaldEnergy
     return residue_total + state.ewald_energy.reciprocal + state.ewald_energy.self;
 }
 

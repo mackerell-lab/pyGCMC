@@ -15,30 +15,30 @@ namespace pygcmc {
 namespace model {
 
 /**
- * @brief 分子结构类,用于表示分子的完整结构信息
+ * @brief Molecular structure class, used to represent the complete structural information of a molecule
  */
 class Structure {
 public:
-    // 二级结构信息
+    // Secondary structure information
     struct SecondaryStructure {
-        std::string id;          // 结构标识符
-        std::string initResName; // 起始残基名
-        char initChainId;        // 起始链ID
-        int initSeqNum;         // 起始序号
-        char initICode;         // 起始插入码
-        std::string endResName;  // 终止残基名
-        char endChainId;        // 终止链ID
-        int endSeqNum;          // 终止序号
-        char endICode;          // 终止插入码
-        int structureClass;     // 结构类型
+        std::string id;          // Structure identifier
+        std::string initResName; // Initial residue name
+        char initChainId;        // Initial chain ID
+        int initSeqNum;         // Initial sequence number
+        char initICode;         // Initial insertion code
+        std::string endResName;  // Terminal residue name
+        char endChainId;        // Terminal chain ID
+        int endSeqNum;          // Terminal sequence number
+        char endICode;          // Terminal insertion code
+        int structureClass;     // Structure type
     };
 
-    // 链终止信息
+    // Chain termination information
     struct TerminalInfo {
-        char chainId;           // 链ID
-        int resSeq;            // 残基序号
-        char iCode;            // 插入码
-        std::string resName;    // 残基名
+        char chainId;           // Chain ID
+        int resSeq;            // Residue sequence number
+        char iCode;            // Insertion code
+        std::string resName;    // Residue name
     };
 
     Structure() = default;
@@ -65,7 +65,7 @@ public:
     void add_ssbond(const std::string& ssbond) { ssbonds_.push_back(ssbond); }
     void set_box_dimensions(const std::vector<double>& dimensions) { boxDimensions_ = dimensions; }
 
-    // 清除所有数据
+    // Clear all data
     void clear() {
         atoms_.clear();
         residues_.clear();

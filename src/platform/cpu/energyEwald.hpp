@@ -12,37 +12,37 @@ namespace pygcmc {
 namespace platform {
 namespace cpu {
 
-// Ewald计算的常量
-static const int NUM_TABLE_POINTS = 20000;  // 从2048增加到20000以提高精度
+// Constants for Ewald calculation
+static const int NUM_TABLE_POINTS = 20000;  // Increased from 2048 to 20000 for higher precision
 static const double TWO_OVER_SQRT_PI = 2.0/std::sqrt(M_PI);
 
-// Ewald参数结构体
+// Ewald parameters structure
 struct EwaldParams {
-    double alpha{1.0};     // 改为double以提高精度
-    int kmax[3]{15,15,15}; // 从6,6,6增加到15,15,15以提高收敛性
+    double alpha{1.0};     // Changed to double for higher precision
+    int kmax[3]{15,15,15}; // Increased from 6,6,6 to 15,15,15 for better convergence
     double tolerance{1e-5f};
     bool initialized{false};
-    double cutoff{0.0};    // 改为double
+    double cutoff{0.0};    // Changed to double
     
-    // 查找表，用于优化计算
-    std::vector<double> erfcTable;      // 改为double
+    // Lookup tables for optimization
+    std::vector<double> erfcTable;      // Changed to double
     std::vector<double> ewaldScaleTable;
-    double ewaldDX;                     // 改为double
+    double ewaldDX;                     // Changed to double
     double ewaldDXInv;
     double erfcDXInv;
     
-    // 倒空间优化的exp(ikr)表
-    std::vector<std::complex<double>> expIkrTable;  // 改为double
+    // Reciprocal space optimization with exp(ikr) tables
+    std::vector<std::complex<double>> expIkrTable;  // Changed to double
     std::vector<std::complex<double>> expIkrXY;
     int maxK;
     
-    // 表格管理方法
+    // Table management methods
     void initializeTables(double cutoff);
     void initializeExpIkrTable(int numAtoms);
     double erfcApprox(double r) const;
     double ewaldScaleApprox(double r) const;
     
-    // 误差估计方法
+    // Error estimation methods
     double estimateRealSpaceError() const {
         return std::erfc(alpha * cutoff);
     }
@@ -61,49 +61,49 @@ struct EwaldParams {
     }
 };
 
-// 全局Ewald参数
+// Global Ewald parameters
 extern EwaldParams ewald_params;
 
-// 函数声明
+// Function declarations
 void setEwaldParameters(double alpha, const int kmax[3], double tolerance = 1e-5);
 void autoAdjustParameters(double error_tolerance, double cutoff_distance, const double box[3]);
 
 /**
- * @brief 初始化Ewald参数
+ * @brief Initialize Ewald parameters
  * 
- * @param cutoff 截断距离
- * @param box 盒子尺寸
- * @param alpha Ewald分离参数（如果<=0则自动计算）
- * @param tolerance 精度控制参数
+ * @param cutoff Cutoff distance
+ * @param box Box dimensions
+ * @param alpha Ewald separation parameter (if <=0, automatically calculated)
+ * @param tolerance Precision control parameter
  */
 inline void initializeEwaldParameters(double cutoff, const double box[3], 
                                      double alpha = 0.0, double tolerance = 1e-5) {
-    // 如果未指定alpha，自动计算最优值
+    // If alpha is not specified, calculate the optimal value
     if (alpha <= 0.0) {
         autoAdjustParameters(tolerance, cutoff, box);
     } else {
-        // 使用用户指定的alpha值
-        int kmax[3] = {15, 15, 15}; // 默认值
+        // Use the specified alpha value
+        int kmax[3] = {15, 15, 15}; // Default value
         setEwaldParameters(alpha, kmax, tolerance);
         ewald_params.initializeTables(cutoff);
     }
 }
 
 /**
- * @brief 使用Ewald方法计算系统能量
+ * @brief Use Ewald method to calculate system energy
  * 
- * @param state MC状态
+ * @param state MC state
  */
 void computeSystemEnergyEwald(model::MCState& state);
 
 /**
- * @brief 使用Ewald方法计算运动残基的能量
+ * @brief Use Ewald method to calculate energy of moving residue
  * 
- * @param state MC状态
+ * @param state MC state
  */
 void computeMovementEnergyEwald(model::MCState& state);
 
-// 内部计算函数声明
+// Internal calculation function declarations
 std::pair<double, double> calcPairEnergyEwald(double r2, double sigma, double eps, double q1, double q2, const model::MCInfo& info, bool is_excluded = false);
 double computeReciprocalEnergy(model::MCState& state, bool movement_only);
 double computeSelfEnergy(model::MCState& state, bool movement_only);

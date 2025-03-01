@@ -143,8 +143,8 @@ public:
     // Energy calculation methods exposed to Python
     static void computeSystemVdwEnergyCutoff(model::MCState& state);
     
-    // CHARMM切换函数相关方法已移至MonteCarloSystem类
-    // 在此注释掉以避免用户使用过时接口
+    // CHARMM switching function related methods have been moved to MonteCarloSystem class
+    // Commented out here to prevent users from using deprecated interfaces
     
     // Ewald methods
     static void initializeEwaldParameters(float cutoff, const float box[3], 

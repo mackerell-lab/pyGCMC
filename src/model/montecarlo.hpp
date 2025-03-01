@@ -243,10 +243,10 @@ struct MCState {
 
     // Ewald energy components
     struct EwaldEnergy {
-        double real_space{0.0};     ///< 实空间部分能量 (kJ/mol)
-        double reciprocal{0.0};     ///< 倒空间部分能量 (kJ/mol)
-        double self{0.0};           ///< 自能校正项 (kJ/mol)
-        double total{0.0};          ///< 总 Ewald 能量 (kJ/mol)
+        double real_space{0.0};     ///< Real space energy component (kJ/mol)
+        double reciprocal{0.0};     ///< Reciprocal space energy component (kJ/mol)
+        double self{0.0};           ///< Self-energy correction term (kJ/mol)
+        double total{0.0};          ///< Total Ewald energy (kJ/mol)
     } ewald_energy;
 
     // Constructor to initialize counts
