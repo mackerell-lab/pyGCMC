@@ -24,6 +24,16 @@ enum class EnergyMethod {
     EWALD    // Ewald summation method
 };
 
+// CHARMM-style switching function parameters
+struct SwitchingFunctionParams {
+    bool use_switching{false};  // Whether to use switching function (default: false)
+    float r_on{0.8f};           // Inner cutoff radius (nm) where switching starts
+    float r_off{1.0f};          // Outer cutoff radius (nm) where potential goes to zero
+};
+
+// Global switching function parameters
+extern SwitchingFunctionParams switching_params;
+
 // Common utility functions
 inline float capEnergy(float energy) {
     return std::min(std::max(energy, -MAX_SAFE_ENERGY), MAX_SAFE_ENERGY);
@@ -51,6 +61,46 @@ inline double calculateVdwEnergy(double r2, double sigma, double eps) {
     double sigma_r12 = sigma_r6 * sigma_r6;
     return 4.0 * eps * (sigma_r12 - sigma_r6);
 }
+
+// Calculate CHARMM switching function S(r)
+inline float calculateSwitchingFunction(float r) {
+    if (!switching_params.use_switching || r <= switching_params.r_on) {
+        return 1.0f;  // No switching below r_on
+    }
+    if (r >= switching_params.r_off) {
+        return 0.0f;  // Zero potential beyond r_off
+    }
+    
+    // Calculate CHARMM-style switching function
+    // S(r) = [(r_off^2 - r^2)^2 * (r_off^2 + 2r^2 - 3r_on^2)] / (r_off^2 - r_on^2)^3
+    float r2 = r * r;
+    float ron2 = switching_params.r_on * switching_params.r_on;
+    float roff2 = switching_params.r_off * switching_params.r_off;
+    
+    float numerator = (roff2 - r2) * (roff2 - r2) * (roff2 + 2.0f*r2 - 3.0f*ron2);
+    float denominator = (roff2 - ron2) * (roff2 - ron2) * (roff2 - ron2);
+    
+    return numerator / denominator;
+}
+
+// Calculate VDW energy with CHARMM switching function applied
+inline double calculateSwitchedVdwEnergy(double r2, double sigma, double eps) {
+    float r = std::sqrt(r2);
+    
+    // Get the basic LJ energy
+    double energy = calculateVdwEnergy(r2, sigma, eps);
+    
+    // Apply switching function if enabled and necessary
+    if (switching_params.use_switching) {
+        float switch_val = calculateSwitchingFunction(r);
+        energy *= switch_val;
+    }
+    
+    return energy;
+}
+
+// Configure CHARMM-style switching function
+void setSwitchingFunction(bool use_switching, float r_on, float r_off);
 
 // Verify system neutrality
 inline void checkSystemNeutrality(const model::MCState& state) {

@@ -140,6 +140,17 @@ public:
     static void computeSystemEnergyEwald(model::MCState& state);
     static void computeMovementEnergyEwald(model::MCState& state);
 
+    // Energy calculation methods exposed to Python
+    static void computeSystemVdwEnergyCutoff(model::MCState& state);
+    
+    // CHARMM switching function methods
+    static void enableSwitchingFunction(bool enable, float r_on, float r_off);
+    static float calculateSwitchingFunction(float r);
+
+    // Ewald methods
+    static void initializeEwaldParameters(float cutoff, const float box[3], 
+                                          float alpha = 0.0f, float tolerance = 1e-5f);
+
 private:
     std::unique_ptr<platform::IPlatform> platform_;
 };

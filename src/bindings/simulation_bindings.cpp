@@ -26,9 +26,23 @@ void init_simulation_bindings(py::module& m) {
           
     m.def("computeSystemEnergyPBCCutoff", &simulation::Simulation::computeSystemEnergyPBCCutoff,
           "Calculate nonbonded energies for the full system with periodic boundary conditions and cutoff");
+    
+    m.def("computeSystemVdwEnergyCutoff", &simulation::Simulation::computeSystemVdwEnergyCutoff,
+          "Calculate VDW energies for the full system with distance cutoff");
           
     m.def("setEnergyDebugOutput", &simulation::Simulation::setEnergyDebugOutput,
           "Enable or disable debug output for energy calculations");
+    
+    // CHARMM switching function bindings
+    m.def("enableSwitchingFunction", &simulation::Simulation::enableSwitchingFunction,
+          "Enable or disable CHARMM-style switching function for LJ potential",
+          py::arg("enable"),
+          py::arg("r_on") = 0.8f,
+          py::arg("r_off") = 1.2f);
+          
+    m.def("calculateSwitchingFunction", &simulation::Simulation::calculateSwitchingFunction,
+          "Calculate CHARMM switching function value at a given distance",
+          py::arg("r"));
 
     // Ewald parameters are stored as static variables in the implementation
     m.def("setEwaldParameters",
@@ -43,6 +57,21 @@ void init_simulation_bindings(py::module& m) {
         "Set parameters for Ewald summation",
         py::arg("alpha"),
         py::arg("kmax"),
+        py::arg("tolerance") = 1e-5f);
+    
+    m.def("initializeEwaldParameters",
+        [](float cutoff, const std::vector<float>& box, float alpha, float tolerance) {
+            if (box.size() != 3) {
+                throw std::runtime_error("box must have exactly three elements");
+            }
+            // Convert to array and call function
+            float box_array[3] = {box[0], box[1], box[2]};
+            simulation::Simulation::initializeEwaldParameters(cutoff, box_array, alpha, tolerance);
+        },
+        "Initialize Ewald parameters with automatic optimization",
+        py::arg("cutoff"),
+        py::arg("box"),
+        py::arg("alpha") = 0.0f,
         py::arg("tolerance") = 1e-5f);
           
     m.def("computeSystemEnergyEwald", 

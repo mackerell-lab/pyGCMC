@@ -50,6 +50,36 @@ inline std::pair<float, float> calcPairEnergy(float r2, float sigma, float eps, 
     float sigma_r12 = sigma_r6 * sigma_r6;  // (σ/r)¹²
     float vdw_energy = 4.0f * eps * (sigma_r12 - sigma_r6);  // kJ/mol
     
+    // Apply CHARMM switching function to LJ energy if enabled
+    if (switching_params.use_switching) {
+        // Apply switching if distance is between r_on and r_off
+        if (r > switching_params.r_on && r < switching_params.r_off) {
+            float switch_val = calculateSwitchingFunction(r);
+            vdw_energy *= switch_val;
+            
+            if (energy_debug_output) {
+                std::stringstream ss;
+                ss << std::fixed << std::setprecision(6);
+                ss << "\nCHARMM switching function applied:";
+                ss << "\n  r = " << r << " nm (between r_on=" << switching_params.r_on 
+                   << " and r_off=" << switching_params.r_off << ")";
+                ss << "\n  switching function value = " << switch_val;
+                ss << "\n  original VDW energy = " << (4.0f * eps * (sigma_r12 - sigma_r6)) << " kJ/mol";
+                ss << "\n  scaled VDW energy = " << vdw_energy << " kJ/mol";
+                platform::log(LogLevel::DEBUG, ss.str());
+            }
+        } else if (r >= switching_params.r_off) {
+            // Beyond outer cutoff radius, set to zero
+            vdw_energy = 0.0f;
+            
+            if (energy_debug_output) {
+                platform::log(LogLevel::DEBUG, "Distance r = ", r, 
+                             " nm is beyond r_off = ", switching_params.r_off, 
+                             " nm, setting VDW energy to zero");
+            }
+        }
+    }
+    
     // Calculate Coulomb energy only if requested
     float elec_energy = 0.0f;
     if (calc_coulomb) {

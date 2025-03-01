@@ -17,6 +17,38 @@ const float MAX_SAFE_ENERGY = 1e6f;     // kJ/mol
 // 调试标志
 bool energy_debug_output = false;
 
+// CHARMM-style switching function parameters (default: disabled)
+SwitchingFunctionParams switching_params;
+
+/**
+ * @brief 配置 CHARMM 风格的平滑函数参数
+ * 
+ * @param use_switching 是否启用平滑函数
+ * @param r_on 内截断半径 (ctonnb)
+ * @param r_off 外截断半径 (ctofnb)
+ */
+void setSwitchingFunction(bool use_switching, float r_on, float r_off) {
+    // Input validation
+    if (r_on >= r_off) {
+        throw std::runtime_error("Invalid switching function parameters: r_on must be less than r_off");
+    }
+    if (r_on <= 0.0f || r_off <= 0.0f) {
+        throw std::runtime_error("Invalid switching function parameters: radii must be positive");
+    }
+
+    // Set parameters
+    switching_params.use_switching = use_switching;
+    switching_params.r_on = r_on;
+    switching_params.r_off = r_off;
+    
+    if (energy_debug_output && use_switching) {
+        platform::log(LogLevel::INFO, 
+            "CHARMM switching function enabled: r_on=", r_on, " nm, r_off=", r_off, " nm");
+    } else if (energy_debug_output) {
+        platform::log(LogLevel::INFO, "CHARMM switching function disabled");
+    }
+}
+
 /**
  * @brief 统一系统能量计算接口
  * 

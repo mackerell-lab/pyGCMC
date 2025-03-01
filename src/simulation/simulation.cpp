@@ -108,49 +108,44 @@ void Simulation::computeSystemEnergyPBC(model::MCState& state) {
 }
 
 void Simulation::computeSystemEnergyPBCCutoff(model::MCState& state) {
-    // Validate box dimensions before proceeding
-    if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
-        throw std::runtime_error("Invalid box dimensions for PBC calculation");
-    }
-    
     if (is_debug_enabled()) {
-        log(LogLevel::DEBUG, "Computing PBC nonbonded energy (with cutoff): box=", 
-            state.info.box[0], "x", state.info.box[1], "x", state.info.box[2], " nm");
+        log(LogLevel::DEBUG, "Computing nonbonded energy for all active residues with PBC and cutoff");
     }
-    
     platform::cpu::computeSystemEnergyPBCCutoff(state);
-    
-    // Only log total energy in debug mode
-    if (is_debug_enabled()) {
-        float total_vdw = 0.0f;
-        float total_elec = 0.0f;
-        for (int i = 0; i < state.activeResidueCount; ++i) {
-            if (state.residues[i].active) {
-                total_vdw += state.residues[i].energy_vdw;
-                total_elec += state.residues[i].energy_elec;
-            }
-        }
-        
-        total_vdw /= 2.0f;
-        total_elec /= 2.0f;
-        
-        log(LogLevel::DEBUG, "Total system energy with PBC (with cutoff): vdw=", total_vdw, 
-            ", elec=", total_elec, 
-            ", total=", (total_vdw + total_elec));
-    }
 }
 
-void Simulation::setEnergyDebugOutput(bool enable) {
-    // Set both simulation-level and platform-level debug output
-    if (enable) {
-        set_verbose(true);
-        set_log_level(LogLevel::DEBUG);
+void Simulation::computeSystemVdwEnergyCutoff(model::MCState& state) {
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing VDW energy for all active residues with cutoff");
     }
-    platform::cpu::setEnergyDebugOutput(enable);
+    platform::cpu::computeSystemVdwEnergyCutoff(state);
+}
+
+void Simulation::enableSwitchingFunction(bool enable, float r_on, float r_off) {
+    platform::cpu::setSwitchingFunction(enable, r_on, r_off);
+}
+
+float Simulation::calculateSwitchingFunction(float r) {
+    return platform::cpu::calculateSwitchingFunction(r);
 }
 
 void Simulation::setEwaldParameters(float alpha, const int kmax[3], float tolerance) {
     platform::cpu::setEwaldParameters(alpha, kmax, tolerance);
+}
+
+void Simulation::initializeEwaldParameters(float cutoff, const float box[3], 
+                                        float alpha, float tolerance) {
+    // 转换 float 参数为 double
+    double cutoff_d = static_cast<double>(cutoff);
+    double box_d[3] = {
+        static_cast<double>(box[0]),
+        static_cast<double>(box[1]),
+        static_cast<double>(box[2])
+    };
+    double alpha_d = static_cast<double>(alpha);
+    double tolerance_d = static_cast<double>(tolerance);
+    
+    platform::cpu::initializeEwaldParameters(cutoff_d, box_d, alpha_d, tolerance_d);
 }
 
 void Simulation::computeSystemEnergyEwald(model::MCState& state) {
@@ -165,6 +160,15 @@ void Simulation::computeMovementEnergyEwald(model::MCState& state) {
         log(LogLevel::DEBUG, "Computing Ewald energy for movement residues");
     }
     platform::cpu::computeMovementEnergyEwald(state);
+}
+
+void Simulation::setEnergyDebugOutput(bool enable) {
+    // Set both simulation-level and platform-level debug output
+    if (enable) {
+        set_verbose(true);
+        set_log_level(LogLevel::DEBUG);
+    }
+    platform::cpu::setEnergyDebugOutput(enable);
 }
 
 } // namespace simulation
