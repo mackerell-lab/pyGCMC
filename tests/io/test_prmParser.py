@@ -1155,10 +1155,10 @@ def test_parse_multiple_files_with_invalid():
         _ = pygcmc.PRMParser.parse_files([water_ions_file, "nonexistent.str"])
 
 # def test_atom_priority_ordering():
-#     """测试参数排序规则是否符合CHARMM规范"""
+#     """Test if parameter sorting rules conform to CHARMM specifications"""
 #     ff = pygcmc.ForceField()
-    
-#     # 测试键参数排序 - 使用正确的 CHARMM 格式
+#     
+#     # Test bond parameter sorting - using correct CHARMM format
 #     content = """
 # BONDS
 # !V(bond) = Kb(b - b0)**2
@@ -1171,9 +1171,9 @@ def test_parse_multiple_files_with_invalid():
 # """
 #     pygcmc.PRMParser.parse_string(content, ff)
 #     assert ff.get_bond_params("CT1", "CS") is not None
-#     assert ff.get_bond_params("CS", "CT1") is None  # 应自动排序存储
-    
-#     # 测试二面角反转规则
+#     assert ff.get_bond_params("CS", "CT1") is None  # Should automatically sort when storing
+#     
+#     # Test dihedral angle inversion rules
 #     content = """
 # DIHEDRALS
 # !V(dihedral) = Kchi(1 + cos(n(chi) - delta))

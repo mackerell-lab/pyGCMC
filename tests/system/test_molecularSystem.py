@@ -441,7 +441,7 @@ def test_combine_multiple_vs_single():
 
     # Compare CMAP entries
     def normalize_cmap(atoms):
-        # 只比较标准化的5个原子
+        # Only compare standardized 5 atoms
         return tuple(atoms)
             
     cmaps_multi = set(normalize_cmap(c.atoms) for c in mol_multiple.standard_cmaps)
@@ -471,7 +471,7 @@ def test_combine_multiple_vs_single():
         for c in sorted(extra_cmaps):
             residues = [mol_multiple.atoms[atom_id].get_resname() for atom_id in c if atom_id >= 0]
             print(f"CMAP: {'-'.join(str(x) for x in c)} ({', '.join(residues)})")
-            # 打印原始格式信息
+            # Print original format information
             orig_cmap = next(cmap for cmap in mol_multiple.standard_cmaps if tuple(cmap.atoms) == c)
             print(f"Original format: {'-'.join(str(x) for x in orig_cmap.raw_atoms)}")
             print(f"Format type: {'PSF' if orig_cmap.is_psf_format else 'TOP'}")

@@ -7,7 +7,7 @@ import os
 import math
 import sys
 
-# 设置日志级别为INFO，以便查看调试输出
+# Set log level to INFO to view debug output
 pygcmc.System.set_log_level(pygcmc.LogLevel.INFO)
 
 def create_test_system(box_size=4.0):
@@ -24,7 +24,7 @@ def create_test_system(box_size=4.0):
     # Set box size and temperature
     state.info.box = [box_size, box_size, box_size]
     state.info.setTemperature(300.0)  # 300K
-    state.info.cutoff = 1.2  # 1.2 nm cutoff (12 Å) - 使用 CHARMM 的 ctofnb 值作为截断
+    state.info.cutoff = 1.2  # 1.2 nm cutoff (12 Å) - Using CHARMM's ctofnb value as cutoff
     
     # Set force field parameters
     ff = MCForceField()
@@ -88,44 +88,44 @@ def create_test_system(box_size=4.0):
 
 def test_switching_function():
     """
-    测试CHARMM平滑函数的计算
+    Test the calculation of CHARMM switching function
     """
-    # 在不同的距离下计算平滑函数的值
-    # 按照 CHARMM 的约定:
-    # ctonnb = 1.0 - inner cutoff (r_on)，平滑衰减开始处 (10 Å)
-    # ctofnb = 1.2 - outer cutoff (r_off)，势能最终衰减至 0 处 (12 Å)
-    r_on = 1.0  # CHARMM 的 ctonnb (10 Å)
-    r_off = 1.2  # CHARMM 的 ctofnb (12 Å)
+    # Calculate switching function values at different distances
+    # According to CHARMM convention:
+    # ctonnb = 1.0 - inner cutoff (r_on), where smooth decay begins (10 Å)
+    # ctofnb = 1.2 - outer cutoff (r_off), where potential finally decays to 0 (12 Å)
+    r_on = 1.0  # CHARMM's ctonnb (10 Å)
+    r_off = 1.2  # CHARMM's ctofnb (12 Å)
     
-    # 创建测试系统（仅为存储数据使用）
+    # Create test system (only for data storage)
     state = create_test_system()
     
-    # 创建MonteCarloSystem对象并设置切换函数参数
+    # Create MonteCarloSystem object and set switching function parameters
     mc_system = pygcmc.MonteCarloSystem()
     
-    # 直接设置状态中的switching function参数
+    # Directly set switching function parameters in the state
     state.info.use_switching = True
     state.info.r_on = r_on
     state.info.r_off = r_off
     
-    # 为了保持测试的一致性，仍然使用mc_system中的calculate_switching_function方法
-    # 同时设置mc_system中的参数，以确保计算结果一致
+    # To maintain test consistency, still use the calculate_switching_function method of mc_system
+    # At the same time, set parameters in mc_system to ensure consistent calculation results
     mc_system.set_switching_function(True, r_on, r_off)
     
-    # 计算一系列距离上的平滑函数值
-    distances = [0.9 + i * 0.4/50 for i in range(50)]  # 从0.9到1.3的50个点
+    # Calculate switching function values at different distances
+    distances = [0.9 + i * 0.4/50 for i in range(50)]  # 50 points from 0.9 to 1.3
     
-    # 使用新接口计算值
+    # Use new interface to calculate values
     switch_values = [mc_system.calculate_switching_function(r) for r in distances]
     
-    # 验证关键点的值
+    # Verify key point values
     for r, s in zip(distances, switch_values):
         if r <= r_on:
             assert s == pytest.approx(1.0), f"S({r}) should be 1.0 when r <= r_on"
         elif r >= r_off:
             assert s == pytest.approx(0.0), f"S({r}) should be 0.0 when r >= r_off"
         else:
-            # 根据公式计算预期值进行验证
+            # Verify expected value based on formula
             r2 = r * r
             ron2 = r_on * r_on
             roff2 = r_off * r_off
@@ -134,124 +134,124 @@ def test_switching_function():
             denominator = (roff2 - ron2) * (roff2 - ron2) * (roff2 - ron2)
             expected = numerator / denominator
             
-            # 增加容差值以适应浮点精度差异
+            # Increase tolerance to accommodate floating point precision differences
             assert s == pytest.approx(expected, abs=1e-6), f"S({r}) calculation error"
             
-    # 确保平滑函数在区间边界处连续（在r_on处值为1.0，在r_off处值为0.0）
+    # Ensure switching function is continuous at interval boundaries (value is 1.0 at r_on, 0.0 at r_off)
     s_at_ron = mc_system.calculate_switching_function(r_on)
     s_at_roff = mc_system.calculate_switching_function(r_off)
     
     assert s_at_ron == pytest.approx(1.0), f"S({r_on}) should be 1.0"
     assert s_at_roff == pytest.approx(0.0), f"S({r_off}) should be 0.0"
     
-    # 禁用切换函数（在state中和mc_system中都设置，保持一致性）
+    # Disable switching function (set in state and mc_system to maintain consistency)
     state.info.use_switching = False
     mc_system.set_switching_function(False)
 
 def test_energy_with_switching():
     """
-    测试使用平滑截断计算能量
+    Test energy calculation using smooth cutoff
     """
-    # 创建测试系统
+    # Create test system
     state = create_test_system()
     
-    # 设置平滑函数参数
-    # 按照 CHARMM 的约定:
-    # ctonnb = 1.0 - inner cutoff (r_on)，平滑衰减开始处 (10 Å)
-    # ctofnb = 1.2 - outer cutoff (r_off)，势能最终衰减至 0 处 (12 Å)
-    r_on = 1.0   # 内截断半径 (10 Å)
-    r_off = 1.2  # 外截断半径 (12 Å)
+    # Set switching function parameters
+    # According to CHARMM convention:
+    # ctonnb = 1.0 - inner cutoff (r_on), where smooth decay begins (10 Å)
+    # ctofnb = 1.2 - outer cutoff (r_off), where potential finally decays to 0 (12 Å)
+    r_on = 1.0   # Inner cutoff radius (10 Å)
+    r_off = 1.2  # Outer cutoff radius (12 Å)
     
-    # 创建MonteCarloSystem对象
+    # Create MonteCarloSystem object
     mc_system = pygcmc.MonteCarloSystem()
     
-    # 设置第二个原子的位置
-    distances = [0.9 + i * 0.4/50 for i in range(50)]  # 从0.9到1.3的50个点
+    # Set position of second atom
+    distances = [0.9 + i * 0.4/50 for i in range(50)]  # 50 points from 0.9 to 1.3
     
-    # 计算标准硬截断LJ能量
-    # 直接设置状态中的switching function参数（禁用平滑函数）
+    # Calculate standard hard cutoff LJ energy
+    # Directly set switching function parameters (disable switching function)
     state.info.use_switching = False
     state.info.r_on = r_on
     state.info.r_off = r_off
     
     energies_hard_cutoff = []
     for r in distances:
-        state.atoms[1].x = r  # 设置距离
-        pygcmc.computeSystemEnergy(state)  # 使用默认方法计算能量
+        state.atoms[1].x = r  # Set distance
+        pygcmc.computeSystemEnergy(state)  # Use default method to calculate energy
         energies_hard_cutoff.append(state.residues[0].energy_vdw + state.residues[1].energy_vdw)
     
-    # 计算带平滑函数的LJ能量
-    # 直接设置状态中的switching function参数（启用平滑函数）
+    # Calculate LJ energy with switching function
+    # Directly set switching function parameters (enable switching function)
     state.info.use_switching = True
     state.info.r_on = r_on
     state.info.r_off = r_off
     
     energies_with_switching = []
     for r in distances:
-        state.atoms[1].x = r  # 设置距离
-        pygcmc.computeSystemEnergy(state)  # 使用默认方法计算能量
+        state.atoms[1].x = r  # Set distance
+        pygcmc.computeSystemEnergy(state)  # Use default method to calculate energy
         energies_with_switching.append(state.residues[0].energy_vdw + state.residues[1].energy_vdw)
     
-    # 对比两种方法
+    # Compare two methods
     for i, r in enumerate(distances):
         e_hard = energies_hard_cutoff[i]
         e_switch = energies_with_switching[i]
         
-        # 打印结果观察
+        # Print results for observation
         print(f"r={r:.3f}, 无切换={e_hard:.6f}, 有切换={e_switch:.6f}")
         
-        # 小于r_on时，两种方法应该产生相同的能量
+        # When r < r_on, both methods should produce the same energy
         if r < r_on:
             assert e_hard == pytest.approx(e_switch), f"Energy should be the same when r < r_on"
-        # 大于r_off时，平滑函数应该使能量为0
+        # When r > r_off, switching function should make energy 0
         elif r > r_off:
             assert e_switch == pytest.approx(0.0), f"Energy should be 0 when r > r_off"
-        # 在r_on和r_off之间，检查switching是否正确应用
+        # In r_on and r_off, check if switching is correctly applied
         elif r_on <= r <= r_off:
-            # 计算预期的switching值
+            # Calculate expected switching value
             switch_value = mc_system.calculate_switching_function(r)
-            # 不再严格要求能量等于原始能量乘以switching值
-            # 而是验证：1. 能量在0和原始能量之间 2. 能量随距离增加而减小
+            # No longer strictly require energy to equal original energy multiplied by switching value
+            # Instead, verify: 1. Energy between 0 and original energy 2. Energy decreases with distance
             assert 0.0 <= abs(e_switch) <= abs(e_hard), \
                   f"Energy with switching should be between 0 and original energy at r={r}"
             
-            # 如果不是第一个r_on和r_off之间的点，确保能量单调递减（绝对值递减）
+            # If not the first point between r_on and r_off, ensure energy decreases monotonically (absolute value decreases)
             if i > 0 and r_on <= distances[i-1] <= r_off:
                 assert abs(e_switch) <= abs(energies_with_switching[i-1]), \
                       f"Energy magnitude should decrease as r increases in switching region"
     
-    # 禁用切换函数
+    # Disable switching function
     state.info.use_switching = False
 
 def test_with_ewald():
     """
-    测试带Ewald求和的平滑函数
+    Test switching function with Ewald summation
     """
-    # 创建测试系统
+    # Create test system
     state = create_test_system()
     
-    # 设置原子电荷
+    # Set atom charges
     state.atoms[0].charge = 1.0
     state.atoms[1].charge = -1.0
     
-    # 设置Ewald参数
+    # Set Ewald parameters
     state.info.setTemperature(300.0)  # 300K
     pygcmc.initializeEwaldParameters(state.info.cutoff, state.info.box)
     
-    # 设置平滑函数参数
-    # 按照 CHARMM 的约定:
-    # ctonnb = 1.0 - inner cutoff (r_on)，平滑衰减开始处 (10 Å)
-    # ctofnb = 1.2 - outer cutoff (r_off)，势能最终衰减至 0 处 (12 Å)
-    r_on = 1.0   # 内截断半径 (10 Å)
-    r_off = 1.2  # 外截断半径 (12 Å)
+    # Set switching function parameters
+    # According to CHARMM convention:
+    # ctonnb = 1.0 - inner cutoff (r_on), where smooth decay begins (10 Å)
+    # ctofnb = 1.2 - outer cutoff (r_off), where potential finally decays to 0 (12 Å)
+    r_on = 1.0   # Inner cutoff radius (10 Å)
+    r_off = 1.2  # Outer cutoff radius (12 Å)
     
-    # 创建MonteCarloSystem对象
+    # Create MonteCarloSystem object
     mc_system = pygcmc.MonteCarloSystem()
     
-    # 设置第二个原子的位置
-    distances = [0.9 + i * 0.4/20 for i in range(20)]  # 从0.9到1.3的20个点
+    # Set position of second atom
+    distances = [0.9 + i * 0.4/20 for i in range(20)]  # 20 points from 0.9 to 1.3
     
-    # 关闭平滑函数，计算普通Ewald
+    # Close switching function, calculate ordinary Ewald
     state.info.use_switching = False
     state.info.r_on = r_on
     state.info.r_off = r_off
@@ -259,11 +259,11 @@ def test_with_ewald():
     energies_ewald = []
     for r in distances:
         state.atoms[1].x = r
-        pygcmc.computeSystemEnergyEwald(state)  # 使用Ewald方法计算能量
-        # 只记录VDW能量部分
+        pygcmc.computeSystemEnergyEwald(state)  # Use Ewald method to calculate energy
+        # Record only VDW energy part
         energies_ewald.append(state.residues[0].energy_vdw + state.residues[1].energy_vdw)
     
-    # 启用平滑函数
+    # Enable switching function
     state.info.use_switching = True
     state.info.r_on = r_on
     state.info.r_off = r_off
@@ -271,123 +271,123 @@ def test_with_ewald():
     energies_ewald_switching = []
     for r in distances:
         state.atoms[1].x = r
-        pygcmc.computeSystemEnergyEwald(state)  # 使用Ewald方法计算能量
-        # 只记录VDW能量部分
+        pygcmc.computeSystemEnergyEwald(state)  # Use Ewald method to calculate energy
+        # Record only VDW energy part
         energies_ewald_switching.append(state.residues[0].energy_vdw + state.residues[1].energy_vdw)
     
-    # 对比平滑前后的VDW能量
+    # Compare switching before and after VDW energy
     for i, r in enumerate(distances):
         e_normal = energies_ewald[i]
         e_switch = energies_ewald_switching[i]
         
         print(f"Ewald r={r:.3f}, 无切换={e_normal:.6f}, 有切换={e_switch:.6f}")
         
-        # 小于r_on时，能量应相同
+        # When r < r_on, energy should be the same
         if r < r_on:
             assert e_normal == pytest.approx(e_switch)
-        # 大于r_off时，平滑后VDW能量应为0
+        # When r > r_off, switching VDW energy should be 0
         elif r > r_off:
             assert e_switch == pytest.approx(0.0)
-        # 在r_on和r_off之间，检查switching是否正确应用
+        # In r_on and r_off, check if switching is correctly applied
         elif r_on <= r <= r_off:
-            # 计算预期的switching值
+            # Calculate expected switching value
             switch_value = mc_system.calculate_switching_function(r)
-            # 不再严格要求能量等于原始能量乘以switching值
-            # 而是验证：1. 能量在0和原始能量之间 2. 能量随距离增加而减小
+            # No longer strictly require energy to equal original energy multiplied by switching value
+            # Instead, verify: 1. Energy between 0 and original energy 2. Energy decreases with distance
             assert 0.0 <= abs(e_switch) <= abs(e_normal), \
                   f"Ewald VDW energy with switching should be between 0 and original energy at r={r}"
             
-            # 如果不是第一个r_on和r_off之间的点，确保能量单调递减（绝对值递减）
+            # If not the first point between r_on and r_off, ensure energy decreases monotonically (absolute value decreases)
             if i > 0 and r_on <= distances[i-1] <= r_off:
                 assert abs(e_switch) <= abs(energies_ewald_switching[i-1]), \
                       f"Energy magnitude should decrease as r increases in switching region"
     
-    # 禁用平滑函数，恢复默认状态
+    # Disable switching function, restore default state
     state.info.use_switching = False
 
 def test_print_switching_values():
     """
-    打印平滑函数值和能量数据，用于调试和文档目的
+    Print switching function values and energy data for debugging and documentation purposes
     """
-    # 按照 CHARMM 的约定:
-    # ctonnb = 1.0 - inner cutoff，平滑衰减开始处 (10 Å)
-    # ctofnb = 1.2 - outer cutoff，势能最终衰减至 0 处 (12 Å)
+    # According to CHARMM convention:
+    # ctonnb = 1.0 - inner cutoff, where smooth decay begins (10 Å)
+    # ctofnb = 1.2 - outer cutoff, where potential finally decays to 0 (12 Å)
     r_on = 1.0  # 10 Å
     r_off = 1.2  # 12 Å
     
-    # 创建MonteCarloSystem对象
+    # Create MonteCarloSystem object
     mc_system = pygcmc.MonteCarloSystem()
     
-    # 设置平滑函数参数 - 仅设置mc_system的参数用于calculate_switching_function调用
+    # Set switching function parameters - Only set mc_system parameters for calculate_switching_function call
     mc_system.set_switching_function(True, r_on, r_off)
     
-    # 计算平滑函数的值
+    # Calculate switching function values
     key_distances = [0.8, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3]
     switch_values = [mc_system.calculate_switching_function(r) for r in key_distances]
     
-    # 打印表头
+    # Print header
     print("\nCHARMM Switching Function Values:")
     print(f"{'Distance (nm)':15s} | {'Switch Value':15s}")
     print("-" * 33)
     
-    # 打印平滑函数值
+    # Print switching function values
     for r, s in zip(key_distances, switch_values):
         print(f"{r:15.3f} | {s:15.4f}")
     
-    # 禁用切换函数
+    # Disable switching function
     mc_system.set_switching_function(False)
 
 def test_compare_energy_with_without_switching():
     """
-    详细对比有无switching函数下的能量计算结果
-    同时包含direct计算和Ewald计算方法
+    Detailed comparison of energy calculation results with and without switching function
+    Also includes direct calculation and Ewald calculation methods
     """
-    # 创建测试系统
+    # Create test system
     state = create_test_system()
     
-    # 设置原子电荷，用于Ewald计算
+    # Set atom charges, for Ewald calculation
     state.atoms[0].charge = 1.0
     state.atoms[1].charge = -1.0
     
-    # 设置Ewald参数
+    # Set Ewald parameters
     state.info.setTemperature(300.0)  # 300K
     pygcmc.initializeEwaldParameters(state.info.cutoff, state.info.box)
     
-    # 设置平滑函数参数
-    r_on = 1.0   # 内截断半径 (10 Å)
-    r_off = 1.2  # 外截断半径 (12 Å)
+    # Set switching function parameters
+    r_on = 1.0   # Inner cutoff radius (10 Å)
+    r_off = 1.2  # Outer cutoff radius (12 Å)
     
-    # 创建MonteCarloSystem对象
+    # Create MonteCarloSystem object
     mc_system = pygcmc.MonteCarloSystem()
     
-    # 在r_on附近取更多的点，更好展示switching效果
-    distances = [0.7 + i * 0.8/50 for i in range(51)]  # 从0.7到1.5的51个点
+    # Take more points near r_on for better switching effect
+    distances = [0.7 + i * 0.8/50 for i in range(51)]  # 51 points from 0.7 to 1.5
     
-    # 1. Direct计算结果对比
-    # 禁用平滑函数
+    # 1. Direct calculation result comparison
+    # Disable switching function
     state.info.use_switching = False
     state.info.r_on = r_on
     state.info.r_off = r_off
     
     direct_no_switching = []
     for r in distances:
-        state.atoms[1].x = r  # 设置距离
-        pygcmc.computeSystemEnergy(state)  # 使用direct方法计算能量
+        state.atoms[1].x = r  # Set distance
+        pygcmc.computeSystemEnergy(state)  # Use direct method to calculate energy
         direct_no_switching.append(state.residues[0].energy_vdw + state.residues[1].energy_vdw)
     
-    # 启用平滑函数
+    # Enable switching function
     state.info.use_switching = True
     state.info.r_on = r_on
     state.info.r_off = r_off
     
     direct_with_switching = []
     for r in distances:
-        state.atoms[1].x = r  # 设置距离
-        pygcmc.computeSystemEnergy(state)  # 使用direct方法计算能量
+        state.atoms[1].x = r  # Set distance
+        pygcmc.computeSystemEnergy(state)  # Use direct method to calculate energy
         direct_with_switching.append(state.residues[0].energy_vdw + state.residues[1].energy_vdw)
     
-    # 2. Ewald计算结果对比
-    # 禁用平滑函数
+    # 2. Ewald calculation result comparison
+    # Disable switching function
     state.info.use_switching = False
     state.info.r_on = r_on
     state.info.r_off = r_off
@@ -395,12 +395,12 @@ def test_compare_energy_with_without_switching():
     ewald_no_switching_vdw = []
     ewald_no_switching_elec = []
     for r in distances:
-        state.atoms[1].x = r  # 设置距离
-        pygcmc.computeSystemEnergyEwald(state)  # 使用Ewald方法计算能量
+        state.atoms[1].x = r  # Set distance
+        pygcmc.computeSystemEnergyEwald(state)  # Use Ewald method to calculate energy
         ewald_no_switching_vdw.append(state.residues[0].energy_vdw + state.residues[1].energy_vdw)
         ewald_no_switching_elec.append(state.residues[0].energy_elec + state.residues[1].energy_elec)
     
-    # 启用平滑函数
+    # Enable switching function
     state.info.use_switching = True
     state.info.r_on = r_on
     state.info.r_off = r_off
@@ -408,68 +408,68 @@ def test_compare_energy_with_without_switching():
     ewald_with_switching_vdw = []
     ewald_with_switching_elec = []
     for r in distances:
-        state.atoms[1].x = r  # 设置距离
-        pygcmc.computeSystemEnergyEwald(state)  # 使用Ewald方法计算能量
+        state.atoms[1].x = r  # Set distance
+        pygcmc.computeSystemEnergyEwald(state)  # Use Ewald method to calculate energy
         ewald_with_switching_vdw.append(state.residues[0].energy_vdw + state.residues[1].energy_vdw)
         ewald_with_switching_elec.append(state.residues[0].energy_elec + state.residues[1].energy_elec)
     
-    # 打印结果并验证
-    print("\n能量计算对比结果 (带switching vs 不带switching):")
-    print(f"{'距离(nm)':10s} | {'Direct无切换':14s} | {'Direct有切换':14s} | {'Ewald VDW无切换':16s} | {'Ewald VDW有切换':16s}")
+    # Print results and verify
+    print("\nEnergy calculation comparison results (with switching vs without switching):")
+    print(f"{'Distance(nm)':10s} | {'Direct no switching':14s} | {'Direct with switching':14s} | {'Ewald VDW no switching':16s} | {'Ewald VDW with switching':16s}")
     print("-" * 80)
     
-    # 打印部分关键结果点
-    key_indices = [0, 10, 20, 25, 30, 35, 40, 45, 50]  # 选择几个关键点展示
+    # Print some key result points
+    key_indices = [0, 10, 20, 25, 30, 35, 40, 45, 50]  # Select several key points for display
     
     for idx in key_indices:
         if idx < len(distances):
             r = distances[idx]
-            # 在r_off处计算平滑函数值便于验证
+            # Calculate switching value at r_off for verification
             switch_value = mc_system.calculate_switching_function(r) if r_on <= r <= r_off else (1.0 if r < r_on else 0.0)
             
             print(f"{r:10.3f} | {direct_no_switching[idx]:14.6f} | {direct_with_switching[idx]:14.6f} | "
                   f"{ewald_no_switching_vdw[idx]:16.6f} | {ewald_with_switching_vdw[idx]:16.6f}")
     
-    # 进行验证
+    # Perform verification
     for i, r in enumerate(distances):
-        # 1. 距离小于r_on时，能量应该相同
+        # 1. When r < r_on, energy should be the same
         if r < r_on:
             assert direct_no_switching[i] == pytest.approx(direct_with_switching[i]), \
                   f"Direct energy should be the same when r < r_on, at r={r}"
             assert ewald_no_switching_vdw[i] == pytest.approx(ewald_with_switching_vdw[i]), \
                   f"Ewald VDW energy should be the same when r < r_on, at r={r}"
                   
-        # 2. 距离大于r_off时，使用switching的能量应为0
+        # 2. When r > r_off, energy with switching should be 0
         elif r > r_off:
             assert direct_with_switching[i] == pytest.approx(0.0), \
                   f"Direct energy with switching should be 0 when r > r_off, at r={r}"
             assert ewald_with_switching_vdw[i] == pytest.approx(0.0), \
                   f"Ewald VDW energy with switching should be 0 when r > r_off, at r={r}"
                   
-        # 3. 在r_on和r_off之间，检查switching是否正确应用
+        # 3. In r_on and r_off, check if switching is correctly applied
         elif r_on <= r <= r_off:
-            # 计算预期的switching值
+            # Calculate expected switching value
             switch_value = mc_system.calculate_switching_function(r)
             
-            # 检查direct能量是否在合理范围内
+            # Check direct energy is within reasonable range
             assert 0.0 <= abs(direct_with_switching[i]) <= abs(direct_no_switching[i]), \
                   f"Direct energy with switching should be between 0 and original energy at r={r}"
             
-            # 检查Ewald VDW能量是否在合理范围内
+            # Check Ewald VDW energy is within reasonable range
             assert 0.0 <= abs(ewald_with_switching_vdw[i]) <= abs(ewald_no_switching_vdw[i]), \
                   f"Ewald VDW energy with switching should be between 0 and original energy at r={r}"
             
-            # 检查能量是否单调递减（如果不是第一个r_on和r_off之间的点）
+            # Check energy decreases monotonically (if not the first point between r_on and r_off)
             if i > 0 and r_on <= distances[i-1] <= r_off:
                 assert abs(direct_with_switching[i]) <= abs(direct_with_switching[i-1]), \
                       f"Direct energy magnitude should decrease as r increases in switching region"
                 assert abs(ewald_with_switching_vdw[i]) <= abs(ewald_with_switching_vdw[i-1]), \
                       f"Ewald VDW energy magnitude should decrease as r increases in switching region"
     
-    # 电荷能量测试 - 只检查关键点
-    if ewald_no_switching_elec[0] != 0:  # 确保有电荷能量
-        print("\n静电能量对比结果 (Ewald):")
-        print(f"{'距离(nm)':10s} | {'Ewald静电无切换':18s} | {'Ewald静电有切换':18s}")
+    # Charge energy test - Only check key points
+    if ewald_no_switching_elec[0] != 0:  # Ensure there is charge energy
+        print("\nCharge energy comparison results (Ewald):")
+        print(f"{'Distance(nm)':10s} | {'Ewald charge no switching':18s} | {'Ewald charge with switching':18s}")
         print("-" * 60)
         
         for idx in key_indices:
@@ -477,48 +477,48 @@ def test_compare_energy_with_without_switching():
                 r = distances[idx]
                 print(f"{r:10.3f} | {ewald_no_switching_elec[idx]:18.6f} | {ewald_with_switching_elec[idx]:18.6f}")
     
-    # 禁用平滑函数，恢复默认状态
+    # Disable switching function, restore default state
     state.info.use_switching = False
 
 def test_monte_carlo_system_switching_function():
     """
-    测试通过MonteCarloSystem类使用CHARMM平滑函数的新接口
+    Test using CHARMM switching function through MonteCarloSystem class new interface
     """
-    # 创建系统
-    r_on = 1.0  # 内截断半径
-    r_off = 1.2  # 外截断半径
+    # Create system
+    r_on = 1.0  # Inner cutoff radius
+    r_off = 1.2  # Outer cutoff radius
     
-    # 创建一个测试系统，用于存储状态
+    # Create a test system, for storing state
     state = create_test_system()
     
-    # 创建MonteCarloSystem对象
+    # Create MonteCarloSystem object
     mc_system = pygcmc.MonteCarloSystem()
     
-    # 设置切换函数参数
+    # Set switching function parameters
     mc_system.set_switching_function(True, r_on, r_off)
     
-    # 对应地设置state中的参数
+    # Correspondly set parameters in state
     state.info.use_switching = True
     state.info.r_on = r_on
     state.info.r_off = r_off
     
-    # 验证参数是否正确设置
-    assert mc_system.is_using_switching_function() == True, "切换函数应该被启用"
-    assert mc_system.get_switching_r_on() == pytest.approx(r_on), "r_on参数应正确设置"
-    assert mc_system.get_switching_r_off() == pytest.approx(r_off), "r_off参数应正确设置"
+    # Verify parameter setting
+    assert mc_system.is_using_switching_function() == True, "Switching function should be enabled"
+    assert mc_system.get_switching_r_on() == pytest.approx(r_on), "r_on parameter should be correctly set"
+    assert mc_system.get_switching_r_off() == pytest.approx(r_off), "r_off parameter should be correctly set"
     
-    # 计算不同距离的切换函数值
-    distances = [0.9 + i * 0.4/50 for i in range(50)]  # 从0.9到1.3的50个点
+    # Calculate switching function values at different distances
+    distances = [0.9 + i * 0.4/50 for i in range(50)]  # 50 points from 0.9 to 1.3
     switch_values = [mc_system.calculate_switching_function(r) for r in distances]
     
-    # 验证函数值
+    # Verify function values
     for r, s in zip(distances, switch_values):
         if r <= r_on:
-            assert s == pytest.approx(1.0), f"S({r}) 在 r <= r_on 时应为 1.0"
+            assert s == pytest.approx(1.0), f"S({r}) should be 1.0 when r <= r_on"
         elif r >= r_off:
-            assert s == pytest.approx(0.0), f"S({r}) 在 r >= r_off 时应为 0.0"
+            assert s == pytest.approx(0.0), f"S({r}) should be 0.0 when r >= r_off"
         else:
-            # 根据公式计算预期值
+            # Calculate expected value based on formula
             r2 = r * r
             ron2 = r_on * r_on
             roff2 = r_off * r_off
@@ -527,60 +527,60 @@ def test_monte_carlo_system_switching_function():
             denominator = (roff2 - ron2) * (roff2 - ron2) * (roff2 - ron2)
             expected = numerator / denominator
             
-            assert s == pytest.approx(expected, abs=1e-6), f"S({r}) 计算错误"
+            assert s == pytest.approx(expected, abs=1e-6), f"S({r}) calculation error"
     
-    # 禁用切换函数
+    # Disable switching function
     mc_system.set_switching_function(False)
     state.info.use_switching = False
-    assert mc_system.is_using_switching_function() == False, "切换函数应该被禁用"
+    assert mc_system.is_using_switching_function() == False, "Switching function should be disabled"
 
 def test_internal_switching_function():
     """
-    通过能量计算结果直接测试内部实现的switching function
+    Test switching function through energy calculation results directly
     
-    这个测试通过比较有/无switching function时的能量比值，
-    来间接测试内部实现的switching function是否符合预期
+    This test indirectly tests whether the internal implemented switching function meets expectations
+    by comparing energy ratios with/without switching function
     """
-    # 创建测试系统
+    # Create test system
     state = create_test_system()
     
-    # 设置平滑函数参数
-    r_on = 1.0   # 内截断半径
-    r_off = 1.2  # 外截断半径
+    # Set switching function parameters
+    r_on = 1.0   # Inner cutoff radius
+    r_off = 1.2  # Outer cutoff radius
     
-    # 选择在r_on到r_off之间的距离进行测试
+    # Select distances between r_on and r_off for testing
     test_distances = [1.02, 1.05, 1.08, 1.10, 1.15, 1.18]
     
-    print("\n内部Switching Function测试（通过能量比值验证）:")
-    print(f"{'距离(nm)':10s} | {'无切换能量':14s} | {'有切换能量':14s} | {'实际比值':10s} | {'预期切换值':10s} | {'误差':10s}")
+    print("\nInternal Switching Function test (through energy ratio verification):")
+    print(f"{'Distance(nm)':10s} | {'Energy without switching':14s} | {'Energy with switching':14s} | {'Actual ratio':10s} | {'Expected switching value':10s} | {'Error':10s}")
     print("-" * 75)
     
     for r in test_distances:
-        # 设置粒子间距离
+        # Set particle distance
         state.atoms[1].x = r
         state.atoms[1].y = 0.0
         state.atoms[1].z = 0.0
         
-        # 1. 计算不使用switching function的能量
+        # 1. Calculate energy without switching function
         state.info.use_switching = False
         pygcmc.computeSystemEnergy(state)
         energy_no_switch = state.residues[0].energy_vdw + state.residues[1].energy_vdw
         
-        # 如果能量为0，跳过这个距离点
+        # If energy is 0, skip this distance point
         if abs(energy_no_switch) < 1e-10:
             continue
         
-        # 2. 计算使用switching function的能量
+        # 2. Calculate energy with switching function
         state.info.use_switching = True
         state.info.r_on = r_on
         state.info.r_off = r_off
         pygcmc.computeSystemEnergy(state)
         energy_with_switch = state.residues[0].energy_vdw + state.residues[1].energy_vdw
         
-        # 3. 计算能量比值，即实际的switching function值
+        # 3. Calculate energy ratio, i.e., actual switching function value
         actual_switch = energy_with_switch / energy_no_switch if energy_no_switch != 0 else 0
         
-        # 4. 计算理论上的switching function值
+        # 4. Calculate theoretical switching function value
         r2 = r * r
         ron2 = r_on * r_on
         roff2 = r_off * r_off
@@ -589,75 +589,75 @@ def test_internal_switching_function():
         denominator = (roff2 - ron2) * (roff2 - ron2) * (roff2 - ron2)
         expected_switch = numerator / denominator
         
-        # 计算误差
+        # Calculate error
         error = abs(actual_switch - expected_switch)
         
-        # 打印结果
+        # Print results
         print(f"{r:10.3f} | {energy_no_switch:14.6f} | {energy_with_switch:14.6f} | "
               f"{actual_switch:10.6f} | {expected_switch:10.6f} | {error:10.6f}")
         
-        # 验证误差在可接受范围内
+        # Verify error is within acceptable range
         assert actual_switch == pytest.approx(expected_switch, abs=1e-4), \
                f"At r={r}, switching function value differs: {actual_switch} vs expected {expected_switch}"
     
-    # 还原测试状态
+    # Restore test state
     state.info.use_switching = False
 
 def test_internal_switching_function_ewald():
     """
-    通过Ewald能量计算结果直接测试内部实现的switching function
+    Test switching function through Ewald energy calculation results directly
     
-    这个测试使用Ewald计算方法，通过比较有/无switching function时的VDW能量比值，
-    来间接测试内部实现的switching function是否符合预期
+    This test uses Ewald calculation method, indirectly tests whether the internal implemented switching function meets expectations
+    by comparing VDW energy ratios with/without switching function
     """
-    # 创建测试系统
+    # Create test system
     state = create_test_system()
     
-    # 设置原子电荷用于Ewald计算
+    # Set atom charges for Ewald calculation
     state.atoms[0].charge = 1.0
     state.atoms[1].charge = -1.0
     
-    # 设置Ewald参数
+    # Set Ewald parameters
     state.info.setTemperature(300.0)  # 300K
     pygcmc.initializeEwaldParameters(state.info.cutoff, state.info.box)
     
-    # 设置平滑函数参数
-    r_on = 1.0   # 内截断半径
-    r_off = 1.2  # 外截断半径
+    # Set switching function parameters
+    r_on = 1.0   # Inner cutoff radius
+    r_off = 1.2  # Outer cutoff radius
     
-    # 选择在r_on到r_off之间的距离进行测试
+    # Select distances between r_on and r_off for testing
     test_distances = [1.02, 1.05, 1.08, 1.10, 1.15, 1.18]
     
-    print("\n内部Switching Function测试（通过Ewald VDW能量比值验证）:")
-    print(f"{'距离(nm)':10s} | {'无切换VDW':14s} | {'有切换VDW':14s} | {'实际比值':10s} | {'预期切换值':10s} | {'误差':10s}")
+    print("\nInternal Switching Function test (through Ewald VDW energy ratio verification):")
+    print(f"{'Distance(nm)':10s} | {'VDW without switching':14s} | {'VDW with switching':14s} | {'Actual ratio':10s} | {'Expected switching value':10s} | {'Error':10s}")
     print("-" * 75)
     
     for r in test_distances:
-        # 设置粒子间距离
+        # Set particle distance
         state.atoms[1].x = r
         state.atoms[1].y = 0.0
         state.atoms[1].z = 0.0
         
-        # 1. 计算不使用switching function的能量
+        # 1. Calculate energy without switching function
         state.info.use_switching = False
         pygcmc.computeSystemEnergyEwald(state)
         vdw_no_switch = state.residues[0].energy_vdw + state.residues[1].energy_vdw
         
-        # 如果能量为0，跳过这个距离点
+        # If energy is 0, skip this distance point
         if abs(vdw_no_switch) < 1e-10:
             continue
         
-        # 2. 计算使用switching function的能量
+        # 2. Calculate energy with switching function
         state.info.use_switching = True
         state.info.r_on = r_on
         state.info.r_off = r_off
         pygcmc.computeSystemEnergyEwald(state)
         vdw_with_switch = state.residues[0].energy_vdw + state.residues[1].energy_vdw
         
-        # 3. 计算能量比值，即实际的switching function值
+        # 3. Calculate energy ratio, i.e., actual switching function value
         actual_switch = vdw_with_switch / vdw_no_switch if vdw_no_switch != 0 else 0
         
-        # 4. 计算理论上的switching function值
+        # 4. Calculate theoretical switching function value
         r2 = r * r
         ron2 = r_on * r_on
         roff2 = r_off * r_off
@@ -666,43 +666,43 @@ def test_internal_switching_function_ewald():
         denominator = (roff2 - ron2) * (roff2 - ron2) * (roff2 - ron2)
         expected_switch = numerator / denominator
         
-        # 计算误差
+        # Calculate error
         error = abs(actual_switch - expected_switch)
         
-        # 打印结果
+        # Print results
         print(f"{r:10.3f} | {vdw_no_switch:14.6f} | {vdw_with_switch:14.6f} | "
               f"{actual_switch:10.6f} | {expected_switch:10.6f} | {error:10.6f}")
         
-        # 验证误差在可接受范围内
+        # Verify error is within acceptable range
         assert actual_switch == pytest.approx(expected_switch, abs=1e-4), \
                f"At r={r}, switching function value differs: {actual_switch} vs expected {expected_switch}"
     
-    # 还原测试状态
+    # Restore test state
     state.info.use_switching = False
 
 def test_mcs_energy_calculation_with_switching():
     """
-    测试MonteCarloSystem对象是否能正确影响能量计算
-    这个测试检查切换函数参数是否从MCS传递到MCState
+    Test whether MonteCarloSystem object can correctly affect energy calculation
+    This test checks whether switching function parameters are passed from MCS to MCState
     """
-    # 创建测试系统
+    # Create test system
     state = create_test_system()
     
-    # 设置平滑函数参数
-    r_on = 1.0   # 内截断半径
-    r_off = 1.2  # 外截断半径
+    # Set switching function parameters
+    r_on = 1.0   # Inner cutoff radius
+    r_off = 1.2  # Outer cutoff radius
     
-    # 创建MonteCarloSystem对象
+    # Create MonteCarloSystem object
     mc_system = pygcmc.MonteCarloSystem()
     
-    # 打印可用方法
-    print("\n测试MonteCarloSystem与能量计算的关联")
-    print(f"MCS切换函数方法: {dir(mc_system)}")
+    # Print available methods
+    print("\nTest MonteCarloSystem and energy calculation association")
+    print(f"MCS switching function method: {dir(mc_system)}")
     
-    # 设置一个粒子距离，使其在r_off以上
-    state.atoms[1].x = 1.25  # 距离大于r_off
+    # Set a particle distance, so it's above r_off
+    state.atoms[1].x = 1.25  # Distance greater than r_off
     
-    # 先计算不启用切换函数的能量
+    # First calculate energy without switching function
     state.info.use_switching = False
     state.info.r_on = r_on
     state.info.r_off = r_off
@@ -710,36 +710,36 @@ def test_mcs_energy_calculation_with_switching():
     pygcmc.computeSystemEnergy(state)
     energy_no_switching = state.residues[0].energy_vdw + state.residues[1].energy_vdw
     
-    print(f"距离 = 1.25 (> r_off), 无切换函数能量 = {energy_no_switching}")
+    print(f"Distance = 1.25 (> r_off), energy without switching function = {energy_no_switching}")
     
-    # 再计算启用切换函数后的能量
+    # Then calculate energy with switching function
     state.info.use_switching = True
     state.info.r_on = r_on
     state.info.r_off = r_off
     
-    # 确认设置被正确应用
-    # 由于MCInfo私有属性不能直接访问，但我们可以通过特殊方式测试它们是否被设置
-    state.atoms[1].x = 1.25  # 确保距离不变
+    # Verify setting is correctly applied
+    # Since MCInfo private attribute cannot be directly accessed, but we can test them through special way
+    state.atoms[1].x = 1.25  # Ensure distance remains unchanged
     pygcmc.computeSystemEnergy(state)
     energy_with_switching = state.residues[0].energy_vdw + state.residues[1].energy_vdw
     
-    print(f"距离 = 1.25 (> r_off), 有切换函数能量 = {energy_with_switching}")
+    print(f"Distance = 1.25 (> r_off), energy with switching function = {energy_with_switching}")
     
-    # 验证切换函数是否正确应用
+    # Verify switching function is correctly applied
     if energy_with_switching != 0.0:
-        print(f"警告: 切换函数可能未正确应用! 能量应为0，但获得了{energy_with_switching}")
+        print(f"Warning: Switching function may not be correctly applied! Energy should be 0, but got {energy_with_switching}")
     
     assert energy_with_switching == pytest.approx(0.0, abs=1e-8), \
            f"Energy with switching should be 0 when r > r_off, but got {energy_with_switching}"
     
-    # 测试完毕后禁用切换函数
+    # Test completed, disable switching function
     state.info.use_switching = False
 
 if __name__ == "__main__":
-    # 运行测试函数
+    # Run test functions
     test_print_switching_values()
-    # 运行新增的对比测试
+    # Run new comparison test
     test_compare_energy_with_without_switching() 
-    # 运行内部switching function测试
+    # Run internal switching function test
     test_internal_switching_function()
     test_internal_switching_function_ewald() 
