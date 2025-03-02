@@ -16,36 +16,36 @@ extern const float MIN_SAFE_DISTANCE;
 extern const float MAX_SAFE_ENERGY;
 
 /**
- * @brief 使用直接计算方法计算系统的非键能量
+ * @brief Calculate system non-bonded energy using direct calculation method
  * 
- * @param state 系统状态
- * @param use_cutoff 是否使用距离截断
- * @param use_pbc 是否使用周期性边界条件
+ * @param state System state
+ * @param use_cutoff Whether to use distance cutoff
+ * @param use_pbc Whether to use periodic boundary conditions
  */
 void computeSystemEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc);
 
 /**
- * @brief 使用直接计算方法计算运动残基的非键能量
+ * @brief Calculate non-bonded energy for movement residues using direct calculation method
  * 
- * @param state 系统状态
- * @param use_cutoff 是否使用距离截断
- * @param use_pbc 是否使用周期性边界条件
+ * @param state System state
+ * @param use_cutoff Whether to use distance cutoff
+ * @param use_pbc Whether to use periodic boundary conditions
  */
 void computeMovementEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc);
 
 /**
- * @brief 仅计算系统的范德华能量（带截断）
+ * @brief Calculate only van der Waals energy for the system (with cutoff)
  * 
- * 此函数仅计算范德华相互作用，不计算静电相互作用。
- * 主要用于与Ewald求和方法配合使用，其中静电相互作用单独处理。
+ * This function only calculates van der Waals interactions, not electrostatic interactions.
+ * Mainly used in conjunction with the Ewald summation method, where electrostatic interactions are handled separately.
  * 
- * @param state 系统状态
- * @param use_cutoff 是否使用距离截断（一般为true）
- * @param use_pbc 是否使用周期性边界条件
+ * @param state System state
+ * @param use_cutoff Whether to use distance cutoff (generally true)
+ * @param use_pbc Whether to use periodic boundary conditions
  */
 void computeSystemVdwEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc);
 
-// 以下是为了兼容旧接口而保留的函数
+// Functions retained for compatibility with old interfaces
 void computeMovementEnergy(model::MCState& state);
 void computeMovementEnergyCutoff(model::MCState& state);
 void computeSystemEnergy(model::MCState& state);

@@ -2,10 +2,10 @@
 
 #pragma once
 
-// 首先包含通用接口
+// First include common interfaces
 #include "energyCommon.hpp"
 
-// 然后包含实现
+// Then include implementations
 #include "energyDirect.hpp"
 #include "energyEwald.hpp"
 
@@ -14,32 +14,32 @@ namespace platform {
 namespace cpu {
 
 /**
- * @brief CPU平台能量计算模块
+ * @brief CPU Platform Energy Calculation Module
  * 
- * 本模块提供了CPU平台上的能量计算功能，包括：
- * 1. 直接计算方法（Direct）：使用显式求和计算范德华和库仑相互作用
- * 2. Ewald求和方法：针对周期性系统的长程静电相互作用进行优化计算
+ * This module provides energy calculation functionality on the CPU platform, including:
+ * 1. Direct calculation method (Direct): Uses explicit summation to calculate van der Waals and Coulomb interactions
+ * 2. Ewald summation method: Optimized calculation for long-range electrostatic interactions in periodic systems
  * 
- * 基本用法示例：
+ * Basic usage examples:
  * 
- * // 直接计算（无截断、无PBC）：
+ * // Direct calculation (no cutoff, no PBC):
  * computeSystemEnergy(state, EnergyMethod::DIRECT, false, false);
  * 
- * // 直接计算（有截断、有PBC）：
+ * // Direct calculation (with cutoff, with PBC):
  * computeSystemEnergy(state, EnergyMethod::DIRECT, true, true);
  * 
- * // Ewald求和（自动使用PBC和截断）：
+ * // Ewald summation (automatically uses PBC and cutoff):
  * computeSystemEnergy(state, EnergyMethod::EWALD);
  * 
- * 注意：使用Ewald方法时需要先初始化Ewald参数：
+ * Note: When using the Ewald method, Ewald parameters must be initialized first:
  * initializeEwaldParameters(cutoff, box);
  */
 
 /**
- * @brief 获取能量计算方法的名称
+ * @brief Get the name of the energy calculation method
  * 
- * @param method 能量计算方法枚举
- * @return 方法的字符串名称
+ * @param method Energy calculation method enum
+ * @return String name of the method
  */
 inline std::string getEnergyMethodName(EnergyMethod method) {
     switch (method) {
@@ -50,11 +50,11 @@ inline std::string getEnergyMethodName(EnergyMethod method) {
 }
 
 /**
- * @brief 获取当前系统的总能量
+ * @brief Get the total energy of the current system
  * 
- * @param state 系统状态
- * @param method 使用的能量计算方法
- * @return 总能量（kJ/mol）
+ * @param state System state
+ * @param method Energy calculation method to use
+ * @return Total energy (kJ/mol)
  */
 inline double getTotalEnergy(const model::MCState& state, EnergyMethod method) {
     if (method == EnergyMethod::EWALD) {
