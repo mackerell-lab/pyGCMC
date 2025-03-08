@@ -129,7 +129,7 @@ void computeRealSpacePME(model::MCState& state, bool movement_only, bool store_i
 void spreadChargesOntoGrid(model::MCState& state, bool movement_only);
 void performFFTForward();
 void performFFTBackward();
-void computeEnergyFromGrid(double& energy);
+void computeEnergyFromGrid(double& energy, const double box[3]);
 void computeBSplineCoefficients(double fractional, int order, std::vector<double>& coefficients);
 
 } // namespace cpu

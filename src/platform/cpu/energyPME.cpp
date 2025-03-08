@@ -681,10 +681,7 @@ void performFFTBackward() {
  * 
  * @param energy Output energy
  */
-void computeEnergyFromGrid(double& energy) {
-    const auto& box = pme_params.cutoff > 0.0 ? 
-                    std::array<double, 3>{pme_params.cutoff, pme_params.cutoff, pme_params.cutoff} : 
-                    std::array<double, 3>{1.0, 1.0, 1.0};
+void computeEnergyFromGrid(double& energy, const double box[3]) {
     double volume = box[0] * box[1] * box[2];
     double recipCoeff = COULOMB * 4.0 * M_PI / volume;
     
@@ -724,9 +721,6 @@ void computeEnergyFromGrid(double& energy) {
                 double bz = pme_params.bsplineModuli[2][iz];
                 double m2_term = m2 != 0.0 ? std::exp(-M_PI * M_PI * m2 / (pme_params.alpha * pme_params.alpha)) / m2 : 0.0;
                 
-                // Complex conjugate of structure factor - not actually needed in this calculation
-                // std::complex<double> conjStructureFactor = std::conj(pme_params.pmeGrid[gridIndex]);
-                
                 // Energy contribution for this k-vector
                 double term = recipCoeff * m2_term * bx * by * bz * 
                              std::norm(pme_params.pmeGrid[gridIndex]) * 0.5;
@@ -745,7 +739,12 @@ void computeEnergyFromGrid(double& energy) {
  * @return double Reciprocal space energy
  */
 double computeReciprocalPME(model::MCState& state, bool movement_only) {
-    // 不再需要box变量，直接使用state.info.box时需要时再引用
+    // 使用state.info.box，这是正确的盒子尺寸
+    const auto& box = state.info.box;
+    // 将float盒子尺寸转换为double类型
+    double box_double[3] = {static_cast<double>(box[0]), 
+                           static_cast<double>(box[1]), 
+                           static_cast<double>(box[2])};
     const auto& atoms = state.atoms;
     
     // Check system neutrality
@@ -765,7 +764,7 @@ double computeReciprocalPME(model::MCState& state, bool movement_only) {
     
     // Compute energy from the grid
     double recipEnergy = 0.0;
-    computeEnergyFromGrid(recipEnergy);
+    computeEnergyFromGrid(recipEnergy, box_double);
     
     return recipEnergy;
 }
@@ -849,11 +848,8 @@ void computeRealSpacePME(model::MCState& state, bool movement_only, bool store_i
             if(!in_movement) continue;
         }
         
-        for(int r2 = 0; r2 < state.activeResidueCount; r2++) {
+        for(int r2 = r1 + 1; r2 < state.activeResidueCount; r2++) {
             if(!residues[r2].active) continue;
-            
-            // Skip self-interactions in real space
-            if(r1 == r2) continue;
             
             // Loop over atoms in each residue
             for(int i = residues[r1].atomStart; 
