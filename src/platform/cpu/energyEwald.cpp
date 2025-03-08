@@ -6,7 +6,7 @@
 #include <sstream>
 #include <iomanip>  // For output formatting
 #include <algorithm>
-#include <iostream>  // 添加标准输出库
+#include <iostream>  // Add standard output library
 
 namespace pygcmc {
 namespace platform {
@@ -23,7 +23,7 @@ void EwaldParams::initializeTables(double cutoff) {
     ewaldDXInv = 1.0/ewaldDX;
     erfcDXInv = 1.0/(ewaldDX*alpha);
     
-    // 添加调试输出
+    // Add debug output
     platform::log(LogLevel::INFO, 
         "initializeTables: cutoff=", cutoff,
         " alpha=", alpha,
@@ -35,14 +35,14 @@ void EwaldParams::initializeTables(double cutoff) {
     erfcTable.resize(NUM_TABLE_POINTS + 4);
     ewaldScaleTable.resize(NUM_TABLE_POINTS + 4);
     
-    // 打印表格的前几个和最后几个值
+    // Print the first few and last few values of the table
     for(int i = 0; i < NUM_TABLE_POINTS + 4; i++) {
         double r = i * ewaldDX;
         double alphaR = alpha * r;
         erfcTable[i] = std::erfc(alphaR);
         // We don't need ewaldScaleTable anymore as we handle exclusions differently
         
-        // 只打印前5个和最后5个值
+        // Only print the first 5 and last 5 values
         if (i < 5 || i > NUM_TABLE_POINTS - 1) {
             platform::log(LogLevel::INFO, 
                 "erfcTable[", i, "]: r=", r, 
@@ -59,11 +59,11 @@ void EwaldParams::initializeExpIkrTable(int numAtoms) {
 }
 
 double EwaldParams::erfcApprox(double r) const {
-    // 直接使用std::erfc计算，与Ewald.cpp保持一致
+    // Use std::erfc directly for calculation, consistent with Ewald.cpp
     double alphaR = alpha * r;
     double result = std::erfc(alphaR);
     
-    // 保留调试输出，只在DEBUG级别记录
+    // Keep debug output, but only log at DEBUG level
     platform::log(LogLevel::DEBUG, 
         "erfcApprox: r=", r, 
         " alpha=", alpha,
@@ -82,7 +82,7 @@ double EwaldParams::ewaldScaleApprox(double r) const {
 }
 
 void autoAdjustParameters(double error_tolerance, double cutoff_distance, const double box[3]) {
-    // 检查cutoff是否小于盒子长度的一半
+    // Check if cutoff is less than half the box length
     double minBoxSize = std::min(box[0], std::min(box[1], box[2]));
     if (cutoff_distance >= 0.5 * minBoxSize) {
         throw std::runtime_error("Cutoff distance must be less than half the smallest box dimension");
@@ -105,9 +105,9 @@ void autoAdjustParameters(double error_tolerance, double cutoff_distance, const 
 }
 
 /**
- * @brief 设置Ewald计算参数
+ * @brief Set Ewald calculation parameters
  * 
- * @param alpha Ewald分离参数 (nm^-1)
+ * @param alpha Ewald separation parameter (nm^-1)
  * @param kmax Maximum reciprocal space wave vectors
  * @param tolerance Precision control
  */
@@ -188,9 +188,9 @@ inline std::pair<double, double> calcPairEnergyEwald(
         double erf_term = 1.0 - erfc_term;  // erf(x) = 1 - erfc(x)
         elec_energy = -COULOMB * q1 * q2 * erf_term / r;  // Note the negative sign
     } else {
-        // Normal pairs get erfc(αr)/r - 这里改为与Ewald.cpp一致，先计算erfc(αr)/r
+        // Normal pairs get erfc(αr)/r - modified to match Ewald.cpp, calculate erfc(αr)/r first
         double erfc_term = ewald_params.erfcApprox(r) / r;
-        // 不立即乘COULOMB，而是在最后统一乘
+        // Don't multiply by COULOMB immediately, apply it uniformly at the end
         elec_energy = q1 * q2 * erfc_term;
     }
     
@@ -203,18 +203,18 @@ inline std::pair<double, double> calcPairEnergyEwald(
 }
 
 /**
- * @brief Calculate reciprocal space energy - 修改为与Ewald.cpp一致的实现
+ * @brief Calculate reciprocal space energy - Modified to match Ewald.cpp implementation
  * 
  * Uses 4π/V coefficient and sums over all k-vectors, then multiplies by 1/2
  */
 double computeReciprocalEnergy(model::MCState& state, bool movement_only) {
-    // 使用 Ewald.cpp 中的实现方式，按照正确的公式计算
+    // Use the implementation approach from Ewald.cpp, following the correct formula
     const auto& box = state.info.box;
     const auto& atoms = state.atoms;
     double volume = box[0] * box[1] * box[2];
     int numAtoms = static_cast<int>(atoms.size());
 
-    // 检查系统中性
+    // Check system neutrality
     double totalCharge = 0.0;
     for(const auto& atom : atoms) {
         totalCharge += static_cast<double>(atom.charge);
@@ -224,17 +224,17 @@ double computeReciprocalEnergy(model::MCState& state, bool movement_only) {
     }
 
     typedef std::complex<double> Complex;
-    // 直接使用COULOMB前缀因子，与Ewald.cpp保持一致
+    // Use COULOMB prefix factor directly, consistent with Ewald.cpp
     const double recipCoeff = COULOMB * 4.0 * M_PI / volume;
     const double factorEwald = -1.0 / (4.0 * ewald_params.alpha * ewald_params.alpha);
 
     double total_energy = 0.0;
 
-    // 按照Ewald.cpp的方式计算k空间求和
+    // Calculate k-space summation following Ewald.cpp approach
     for (int rx = -ewald_params.kmax[0]; rx <= ewald_params.kmax[0]; rx++) {
         for (int ry = -ewald_params.kmax[1]; ry <= ewald_params.kmax[1]; ry++) {
             for (int rz = -ewald_params.kmax[2]; rz <= ewald_params.kmax[2]; rz++) {
-                // 跳过 k = 0
+                // Skip k = 0
                 if (rx == 0 && ry == 0 && rz == 0) continue;
 
                 double kx = rx * TWO_PI / box[0];
@@ -266,25 +266,25 @@ double computeReciprocalEnergy(model::MCState& state, bool movement_only) {
                 double ak = std::exp(k2 * factorEwald) / k2;
                 double structureFactorNorm = std::norm(structureFactor);
 
-                // 按照Ewald.cpp的方式累加能量
+                // Accumulate energy following Ewald.cpp approach
                 total_energy += recipCoeff * ak * structureFactorNorm;
             }
         }
     }
 
-    // 乘以 0.5，与Ewald.cpp一致
+    // Multiply by 0.5, consistent with Ewald.cpp
     total_energy *= 0.5;
 
     return total_energy;
 }
 
 /**
- * @brief Calculate self-energy correction - 修改为与Ewald.cpp一致的实现
+ * @brief Calculate self-energy correction - Modified to match Ewald.cpp implementation
  * 
  * Computes -sum_i (q_i^2 * alpha)/(sqrt(pi)) * COULOMB
  */
 double computeSelfEnergy(model::MCState& state, bool movement_only) {
-    // 使用与Ewald.cpp一致的自能计算公式
+    // Use self-energy calculation formula consistent with Ewald.cpp
     double self_energy = 0.0;
     
     if(movement_only) {
@@ -307,21 +307,21 @@ double computeSelfEnergy(model::MCState& state, bool movement_only) {
         }
     }
     
-    // 按照Ewald.cpp的公式计算
+    // Calculate according to Ewald.cpp formula
     self_energy = -COULOMB * ewald_params.alpha / SQRT_PI * self_energy;
     
     return self_energy;
 }
 
 /**
- * @brief Calculate real-space part of Ewald sum - 与Ewald.cpp完全一致的实现
+ * @brief Calculate real-space part of Ewald sum - Implementation fully consistent with Ewald.cpp
  * 
- * 按照与Ewald.cpp完全一致的方式计算实空间能量:
+ * Calculate real-space energy in a way fully consistent with Ewald.cpp:
  * V_real(r) = q_i * q_j * erfc(α*r)/r
  * 
- * @param state MC状态
- * @param movement_only 是否只计算运动残基
- * @param store_in_residues 是否将能量存储在残基中
+ * @param state MC state
+ * @param movement_only Whether to calculate only for moving residues
+ * @param store_in_residues Whether to store energy in residues
  */
 void computeRealSpaceEwald(model::MCState& state, bool movement_only, bool store_in_residues) {
     const auto& box = state.info.box;
@@ -329,21 +329,21 @@ void computeRealSpaceEwald(model::MCState& state, bool movement_only, bool store
     auto& residues = state.residues;
     const float cutoff2 = ewald_params.cutoff * ewald_params.cutoff;
 
-    // 重置静电能量
+    // Reset electrostatic energy
     for(auto& residue : residues) {
         if(residue.active) {
             residue.energy_elec = 0.0f;
         }
     }
     
-    // 实空间总能量
+    // Real-space total energy
     double real_space_total = 0.0;
     
-    // 添加调试信息
+    // Add debug information
     int debug_count = 0;
     const int max_debug_pairs = 5;
 
-    // Loop over all residue pairs - 保持现有的残基循环结构
+    // Loop over all residue pairs - maintain existing residue loop structure
     for(int r1 = 0; r1 < state.activeResidueCount; r1++) {
         if(!residues[r1].active) continue;
         if(movement_only) {
@@ -361,20 +361,20 @@ void computeRealSpaceEwald(model::MCState& state, bool movement_only, bool store
         for(int r2 = r1 + 1; r2 < state.activeResidueCount; r2++) {
             if(!residues[r2].active) continue;
 
-            // 完全采用Ewald.cpp中的原子对计算方法
+            // Fully adopt the atom pair calculation method from Ewald.cpp
             for(int i = residues[r1].atomStart; 
                 i < residues[r1].atomStart + residues[r1].atomCount; i++) {
                 
                 for(int j = residues[r2].atomStart;
                     j < residues[r2].atomStart + residues[r2].atomCount; j++) {
                     
-                    // 计算最小像距离 - 使用与Ewald.cpp相同的方法
+                    // Calculate minimum image distance - using the same method as Ewald.cpp
                     float dx = atoms[i].x - atoms[j].x;
                     float dy = atoms[i].y - atoms[j].y;
                     float dz = atoms[i].z - atoms[j].z;
 
-                    // 应用PBC - 使用与Ewald.cpp相同的方法
-                    // 如果差值大于盒子的一半，则减去盒子尺寸
+                    // Apply PBC - using the same method as Ewald.cpp
+                    // If the difference is greater than half the box size, subtract the box dimension
                     if(dx > box[0]/2) dx -= box[0];
                     else if(dx < -box[0]/2) dx += box[0];
                     if(dy > box[1]/2) dy -= box[1];
@@ -384,21 +384,21 @@ void computeRealSpaceEwald(model::MCState& state, bool movement_only, bool store
 
                     float r2 = dx*dx + dy*dy + dz*dz;
 
-                    // 仅计算在截断范围内的对
+                    // Only calculate for pairs within cutoff range
                     if(r2 < cutoff2) {
-                        // 使用与Ewald.cpp完全相同的算法
+                        // Use exactly the same algorithm as Ewald.cpp
                         float r = std::sqrt(r2);
                         float qi = atoms[i].charge;
                         float qj = atoms[j].charge;
 
-                        // 直接计算erfc(αr)/r
+                        // Calculate erfc(αr)/r directly
                         double alphaR = ewald_params.alpha * r;
                         double term = std::erfc(alphaR) / r;
                         
-                        // 计算能量贡献 - 与Ewald.cpp完全一致
+                        // Calculate energy contribution - fully consistent with Ewald.cpp
                         double pair_energy = qi * qj * term;
 
-                        // 打印调试信息
+                        // Print debug information
                         if (debug_count < max_debug_pairs) {
                             platform::log(LogLevel::INFO, 
                                 "Debug energyEwald: Atom pair (", i, ",", j, "): ",
@@ -410,12 +410,12 @@ void computeRealSpaceEwald(model::MCState& state, bool movement_only, bool store
                             debug_count++;
                         }
 
-                        // 累加到总能量
+                        // Accumulate to total energy
                         real_space_total += pair_energy;
                         
-                        // 根据参数决定如何存储能量
+                        // Decide how to store energy based on parameters
                         if (store_in_residues) {
-                            // 每个残基只获得一半的对相互作用能量
+                            // Each residue gets half of the pair interaction energy
                             residues[r1].energy_elec += pair_energy / 2.0f;
                             residues[r2].energy_elec += pair_energy / 2.0f;
                         }
@@ -425,22 +425,22 @@ void computeRealSpaceEwald(model::MCState& state, bool movement_only, bool store
         }
     }
     
-    // 存储总实空间能量（尚未乘以COULOMB）
+    // Store total real-space energy (not yet multiplied by COULOMB)
     state.ewald_energy.real_space = real_space_total;
 }
 
 /**
- * @brief 使用Ewald方法计算系统能量
+ * @brief Calculate system energy using Ewald method
  */
 void computeSystemEnergyEwald(model::MCState& state) {
-    // 输出库仑常数值，帮助调试
+    // Output Coulomb constant value for debugging
     platform::log(LogLevel::INFO, "COULOMB constant in energyEwald.cpp = ", COULOMB);
 
     if (!ewald_params.initialized) {
         throw std::runtime_error("Ewald parameters not initialized");
     }
     
-    // 检查PBC条件
+    // Check PBC conditions
     if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
         throw std::runtime_error("Ewald method requires periodic boundary conditions");
     }
@@ -454,45 +454,45 @@ void computeSystemEnergyEwald(model::MCState& state) {
             minBoxSize/2, " nm). This may affect minimum image convention.");
     }
     
-    // 重置 Ewald 能量
+    // Reset Ewald energy components
     state.ewald_energy.real_space = 0.0;
     state.ewald_energy.reciprocal = 0.0;
     state.ewald_energy.self = 0.0;
     state.ewald_energy.total = 0.0;
     
-    // 清除残基的静电能量
+    // Clear electrostatic energy in residues
     for(auto& residue : state.residues) {
         if(residue.active) {
             residue.energy_elec = 0.0f;
         }
     }
     
-    // 实空间部分计算 - 将能量存储在残基中
+    // Real-space part calculation - store energy in residues
     computeRealSpaceEwald(state, false, true);
     
-    // 计算实空间总能量，与Ewald.cpp完全一致，乘以COULOMB
+    // Calculate total real-space energy, fully consistent with Ewald.cpp, multiply by COULOMB
     double real_space_total = state.ewald_energy.real_space * COULOMB;
     state.ewald_energy.real_space = real_space_total;
     
-    // 同样，对残基中的能量应用COULOMB常数
+    // Similarly, apply COULOMB constant to energies in residues
     for(auto& residue : state.residues) {
         if(residue.active) {
             residue.energy_elec *= COULOMB;
         }
     }
     
-    // VDW能量使用纯LJ计算
+    // VDW energy uses pure LJ calculation
     computeSystemVdwEnergyDirect(state, true, true);
     
-    // 倒空间部分 - 全局计算
+    // Reciprocal space part - global calculation
     double recip_energy = computeReciprocalEnergy(state, false);
     state.ewald_energy.reciprocal = recip_energy;
     
-    // 自能校正
+    // Self-energy correction
     double self_energy = computeSelfEnergy(state, false);
     state.ewald_energy.self = self_energy;
     
-    // 计算总能量 - 从residues获取能量(包含vdw和实空间静电)，加上倒空间和自能
+    // Calculate total energy - get energy from residues (includes vdw and real-space electrostatics), add reciprocal and self-energy
     double residue_total = 0.0;
     for (const auto& residue : state.residues) {
         if (residue.active) {
@@ -501,7 +501,7 @@ void computeSystemEnergyEwald(model::MCState& state) {
     }
     state.ewald_energy.total = residue_total + state.ewald_energy.reciprocal + state.ewald_energy.self;
     
-    // 使用platform::log替代std::cout
+    // Use platform::log instead of std::cout
     platform::log(LogLevel::INFO, "\n========== Ewald Energy Components ==========");
     platform::log(LogLevel::INFO, "Real Space Energy:     ", state.ewald_energy.real_space, " kJ/mol");
     platform::log(LogLevel::INFO, "Reciprocal Space Energy: ", state.ewald_energy.reciprocal, " kJ/mol");
@@ -511,14 +511,14 @@ void computeSystemEnergyEwald(model::MCState& state) {
 }
 
 /**
- * @brief 使用Ewald方法计算movement residues的能量
+ * @brief Calculate energy of movement residues using Ewald method
  */
 void computeMovementEnergyEwald(model::MCState& state) {
     if (!ewald_params.initialized) {
         throw std::runtime_error("Ewald parameters not initialized");
     }
     
-    // 检查PBC条件
+    // Check PBC conditions
     if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
         throw std::runtime_error("Ewald method requires periodic boundary conditions");
     }
@@ -532,13 +532,13 @@ void computeMovementEnergyEwald(model::MCState& state) {
             minBoxSize/2, " nm). This may affect minimum image convention.");
     }
     
-    // 重置 Ewald 能量
+    // Reset Ewald energy components
     state.ewald_energy.real_space = 0.0;
     state.ewald_energy.reciprocal = 0.0;
     state.ewald_energy.self = 0.0;
     state.ewald_energy.total = 0.0;
     
-    // 清除相关残基的静电能量
+    // Clear electrostatic energy for relevant residues
     for(const auto& movementInfo : state.movementResidues) {
         for(int i = movementInfo.startIndex;
             i < movementInfo.startIndex + movementInfo.activeCount; i++) {
@@ -548,14 +548,14 @@ void computeMovementEnergyEwald(model::MCState& state) {
         }
     }
     
-    // 实空间部分 - 将能量存储在残基中，并与Ewald.cpp完全一致
+    // Real-space part - store energy in residues, fully consistent with Ewald.cpp
     computeRealSpaceEwald(state, true, true);
     
-    // 计算实空间总能量并乘以COULOMB - 与Ewald.cpp完全一致
+    // Calculate total real-space energy and multiply by COULOMB - fully consistent with Ewald.cpp
     double real_space_total = state.ewald_energy.real_space * COULOMB;
     state.ewald_energy.real_space = real_space_total;
     
-    // 对残基中的能量应用COULOMB常数
+    // Apply COULOMB constant to energies in residues
     for(const auto& movementInfo : state.movementResidues) {
         for(int i = movementInfo.startIndex;
             i < movementInfo.startIndex + movementInfo.activeCount; i++) {
@@ -565,18 +565,18 @@ void computeMovementEnergyEwald(model::MCState& state) {
         }
     }
     
-    // VDW能量使用纯LJ计算
+    // VDW energy uses pure LJ calculation
     computeSystemVdwEnergyDirect(state, true, true);
     
-    // 倒空间部分 - 与Ewald.cpp保持一致
+    // Reciprocal space part - consistent with Ewald.cpp
     double recip_energy = computeReciprocalEnergy(state, true);
     state.ewald_energy.reciprocal = recip_energy;
     
-    // 自能校正 - 与Ewald.cpp保持一致
+    // Self-energy correction - consistent with Ewald.cpp
     double self_energy = computeSelfEnergy(state, true);
     state.ewald_energy.self = self_energy;
     
-    // 计算总能量 - 从相关residues获取能量(包含vdw和实空间静电)，加上倒空间和自能
+    // Calculate total energy - get energy from relevant residues (includes vdw and real-space electrostatics), add reciprocal and self-energy
     double residue_total = 0.0;
     for(const auto& movementInfo : state.movementResidues) {
         for(int i = movementInfo.startIndex;
@@ -588,7 +588,7 @@ void computeMovementEnergyEwald(model::MCState& state) {
     }
     state.ewald_energy.total = residue_total + state.ewald_energy.reciprocal + state.ewald_energy.self;
     
-    // 使用platform::log替代std::cout
+    // Use platform::log instead of std::cout
     platform::log(LogLevel::INFO, "\n========== Movement Ewald Energy Components ==========");
     platform::log(LogLevel::INFO, "Real Space Energy:     ", state.ewald_energy.real_space, " kJ/mol");
     platform::log(LogLevel::INFO, "Reciprocal Space Energy: ", state.ewald_energy.reciprocal, " kJ/mol");
