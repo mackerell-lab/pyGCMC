@@ -114,23 +114,23 @@ def test_pme_initialization():
     print(f"PME parameters set. Ready to compute energy.")
     
     # Calculate energy
-    pygcmc.computeSystemEnergyPME(state)
+    elec_energy, vdw_energy, ewald_dict = pygcmc.computeSystemEnergyPME(state)
     
     # Check that energy components are reasonable
-    assert state.ewald_energy.real_space != 0.0
-    assert state.ewald_energy.reciprocal != 0.0
-    assert state.ewald_energy.self != 0.0
-    assert state.ewald_energy.total != 0.0
+    assert ewald_dict["real_space"] != 0.0
+    assert ewald_dict["reciprocal"] != 0.0
+    assert ewald_dict["self"] != 0.0
+    assert ewald_dict["total"] != 0.0
     
-    print(f"PME energy components: real_space={state.ewald_energy.real_space:.6f}, "
-          f"reciprocal={state.ewald_energy.reciprocal:.6f}, "
-          f"self={state.ewald_energy.self:.6f}, "
-          f"total={state.ewald_energy.total:.6f}")
+    print(f"PME energy components: real_space={ewald_dict['real_space']:.6f}, "
+          f"reciprocal={ewald_dict['reciprocal']:.6f}, "
+          f"self={ewald_dict['self']:.6f}, "
+          f"total={ewald_dict['total']:.6f}")
     
     # Check that total energy is the sum of components
-    assert abs(state.ewald_energy.total - (state.ewald_energy.real_space + 
-                                         state.ewald_energy.reciprocal + 
-                                         state.ewald_energy.self)) < 1e-6
+    assert abs(ewald_dict["total"] - (ewald_dict["real_space"] + 
+                                    ewald_dict["reciprocal"] + 
+                                    ewald_dict["self"] + vdw_energy)) < 1e-6
 
 def test_pme_vs_ewald():
     """
@@ -152,22 +152,22 @@ def test_pme_vs_ewald():
     # First calculate with Ewald
     pygcmc.setEwaldParameters(alpha, kmax)
     pygcmc.initializeEwaldParameters(cutoff, box, alpha)
-    pygcmc.computeSystemEnergyEwald(state)
+    ewald_elec, ewald_vdw, ewald_dict = pygcmc.computeSystemEnergyEwald(state)
     
-    ewald_real = state.ewald_energy.real_space
-    ewald_recip = state.ewald_energy.reciprocal
-    ewald_self = state.ewald_energy.self
-    ewald_total = state.ewald_energy.total
+    ewald_real = ewald_dict["real_space"]
+    ewald_recip = ewald_dict["reciprocal"]
+    ewald_self = ewald_dict["self"]
+    ewald_total = ewald_dict["total"]
     
     # Then calculate with PME
     pygcmc.setPMEParameters(alpha, mesh_size)
     pygcmc.initializePMEParameters(cutoff, box, alpha)
-    pygcmc.computeSystemEnergyPME(state)
+    pme_elec, pme_vdw, pme_dict = pygcmc.computeSystemEnergyPME(state)
     
-    pme_real = state.ewald_energy.real_space
-    pme_recip = state.ewald_energy.reciprocal
-    pme_self = state.ewald_energy.self
-    pme_total = state.ewald_energy.total
+    pme_real = pme_dict["real_space"]
+    pme_recip = pme_dict["reciprocal"]
+    pme_self = pme_dict["self"]
+    pme_total = pme_dict["total"]
     
     # Print comparison
     print("Comparison of Ewald and PME energies:")
@@ -206,8 +206,8 @@ def test_pme_spline_order():
         pygcmc.initializePMEParameters(cutoff, box, alpha, mesh_size, spline_order)
         
         # Calculate energy
-        pygcmc.computeSystemEnergyPME(state)
-        total_energy = state.ewald_energy.total
+        _, _, pme_dict = pygcmc.computeSystemEnergyPME(state)
+        total_energy = pme_dict["total"]
         energies.append(total_energy)
         
         print(f"Spline order {spline_order}: total energy = {total_energy:.6f}")
@@ -241,8 +241,8 @@ def test_pme_error_tolerance():
         pygcmc.initializePMEParameters(cutoff, box, 0.0, None, 4, tol)
         
         # Calculate energy
-        pygcmc.computeSystemEnergyPME(state)
-        total_energy = state.ewald_energy.total
+        _, _, pme_dict = pygcmc.computeSystemEnergyPME(state)
+        total_energy = pme_dict["total"]
         energies.append(total_energy)
         
         print(f"Error tolerance {tol}: total energy = {total_energy:.6f}")
@@ -280,12 +280,12 @@ def test_pme_movement_energy():
     state.movementResidues.append(movement_info)
     
     # First calculate full system energy
-    pygcmc.computeSystemEnergyPME(state)
-    full_energy = state.ewald_energy.total
+    _, _, system_pme_dict = pygcmc.computeSystemEnergyPME(state)
+    full_energy = system_pme_dict["total"]
     
     # Then calculate movement energy
-    pygcmc.computeMovementEnergyPME(state)
-    movement_energy = state.ewald_energy.total
+    _, _, movement_pme_dict = pygcmc.computeMovementEnergyPME(state)
+    movement_energy = movement_pme_dict["total"]
     
     print(f"Full system energy: {full_energy:.6f}")
     print(f"Movement energy: {movement_energy:.6f}")
