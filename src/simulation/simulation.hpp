@@ -139,6 +139,11 @@ public:
     static void setEwaldParameters(float alpha, const int kmax[3], float tolerance = 1e-5f);
     static void computeSystemEnergyEwald(model::MCState& state);
     static void computeMovementEnergyEwald(model::MCState& state);
+    
+    // PME method interfaces
+    static void setPMEParameters(float alpha, const int meshSize[3], int splineOrder = 4, float tolerance = 1e-5f);
+    static void computeSystemEnergyPME(model::MCState& state);
+    static void computeMovementEnergyPME(model::MCState& state);
 
     // Energy calculation methods exposed to Python
     static void computeSystemVdwEnergyCutoff(model::MCState& state);
@@ -149,6 +154,11 @@ public:
     // Ewald methods
     static void initializeEwaldParameters(float cutoff, const float box[3], 
                                           float alpha = 0.0f, float tolerance = 1e-5f);
+                                          
+    // PME methods
+    static void initializePMEParameters(float cutoff, const float box[3], 
+                                       float alpha = 0.0f, const int* meshSize = nullptr,
+                                       int splineOrder = 4, float tolerance = 1e-5f);
 
 private:
     std::unique_ptr<platform::IPlatform> platform_;

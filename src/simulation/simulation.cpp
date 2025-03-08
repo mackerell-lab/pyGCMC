@@ -1,6 +1,7 @@
 // src/simulation/simulation.cpp
 #include "simulation.hpp"
 #include "../platform/cpu/energy.hpp"
+#include "../platform/cpu/energyPME.hpp"
 #include <cmath>
 
 namespace pygcmc {
@@ -161,6 +162,51 @@ void Simulation::setEnergyDebugOutput(bool enable) {
         set_log_level(LogLevel::DEBUG);
     }
     platform::cpu::setEnergyDebugOutput(enable);
+}
+
+// PME相关方法的实现
+void Simulation::setPMEParameters(float alpha, const int meshSize[3], int splineOrder, float tolerance) {
+    platform::cpu::setPMEParameters(alpha, meshSize, splineOrder, tolerance);
+}
+
+void Simulation::initializePMEParameters(float cutoff, const float box[3], 
+                                       float alpha, const int* meshSize,
+                                       int splineOrder, float tolerance) {
+    // Convert float parameters to double
+    double cutoff_d = static_cast<double>(cutoff);
+    double box_d[3] = {
+        static_cast<double>(box[0]),
+        static_cast<double>(box[1]),
+        static_cast<double>(box[2])
+    };
+    double alpha_d = static_cast<double>(alpha);
+    double tolerance_d = static_cast<double>(tolerance);
+    
+    // Handle meshSize conversion
+    int meshSize_d[3] = {0, 0, 0};
+    if (meshSize != nullptr) {
+        meshSize_d[0] = meshSize[0];
+        meshSize_d[1] = meshSize[1];
+        meshSize_d[2] = meshSize[2];
+    }
+    
+    platform::cpu::initializePMEParameters(cutoff_d, box_d, alpha_d, 
+                                         meshSize != nullptr ? meshSize_d : nullptr, 
+                                         splineOrder, tolerance_d);
+}
+
+void Simulation::computeSystemEnergyPME(model::MCState& state) {
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing PME energy for all active residues");
+    }
+    platform::cpu::computeSystemEnergyPME(state);
+}
+
+void Simulation::computeMovementEnergyPME(model::MCState& state) {
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing PME energy for movement residues");
+    }
+    platform::cpu::computeMovementEnergyPME(state);
 }
 
 } // namespace simulation

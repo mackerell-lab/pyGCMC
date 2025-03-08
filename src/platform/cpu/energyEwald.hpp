@@ -12,9 +12,9 @@ namespace pygcmc {
 namespace platform {
 namespace cpu {
 
-// Constants for Ewald calculation
-static const int NUM_TABLE_POINTS = 20000;  // Increased from 2048 to 20000 for higher precision
-static const double TWO_OVER_SQRT_PI = 2.0/std::sqrt(M_PI);
+// Constants for Ewald calculation already defined in energyCommon.hpp
+// static const int NUM_TABLE_POINTS = 20000;
+// static const double TWO_OVER_SQRT_PI = 2.0/std::sqrt(M_PI);
 
 // Ewald parameters structure
 struct EwaldParams {

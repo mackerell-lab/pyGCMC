@@ -3,6 +3,7 @@
 #include "energyCommon.hpp"
 #include "energyDirect.hpp"
 #include "energyEwald.hpp"
+#include "energyPME.hpp"
 #include <stdexcept>
 
 namespace pygcmc {
@@ -21,7 +22,7 @@ bool energy_debug_output = false;
  * @brief Unified system energy calculation interface
  * 
  * @param state MC state
- * @param method Energy calculation method (DIRECT or EWALD)
+ * @param method Energy calculation method (DIRECT, EWALD, or PME)
  * @param use_cutoff Whether to use cutoff
  * @param use_pbc Whether to use periodic boundary conditions
  */
@@ -48,6 +49,14 @@ void computeSystemEnergy(model::MCState& state,
             }
             computeSystemEnergyEwald(state);
             break;
+            
+        case EnergyMethod::PME:
+            // Use Particle Mesh Ewald method (requires periodic boundary conditions)
+            if (!use_pbc) {
+                throw std::runtime_error("PME method requires periodic boundary conditions");
+            }
+            computeSystemEnergyPME(state);
+            break;
     }
 }
 
@@ -55,7 +64,7 @@ void computeSystemEnergy(model::MCState& state,
  * @brief Unified movement residue energy calculation interface
  * 
  * @param state MC state
- * @param method Energy calculation method (DIRECT or EWALD)
+ * @param method Energy calculation method (DIRECT, EWALD, or PME)
  * @param use_cutoff Whether to use cutoff
  * @param use_pbc Whether to use periodic boundary conditions
  */
@@ -81,6 +90,14 @@ void computeMovementEnergy(model::MCState& state,
                 throw std::runtime_error("Ewald method requires periodic boundary conditions");
             }
             computeMovementEnergyEwald(state);
+            break;
+            
+        case EnergyMethod::PME:
+            // Use Particle Mesh Ewald method (requires periodic boundary conditions)
+            if (!use_pbc) {
+                throw std::runtime_error("PME method requires periodic boundary conditions");
+            }
+            computeMovementEnergyPME(state);
             break;
     }
 }

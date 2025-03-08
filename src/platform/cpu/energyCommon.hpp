@@ -15,13 +15,18 @@ extern const float COULOMB;      // Coulomb constant in GROMACS MD units [kJ·nm
 extern const float MIN_SAFE_DISTANCE;  // Minimum allowed distance (1% of sigma)
 extern const float MAX_SAFE_ENERGY;    // Maximum allowed energy per interaction
 
+// Constants for Ewald and PME calculations
+static const int NUM_TABLE_POINTS = 20000;  // High precision table size for approximations
+static const double TWO_OVER_SQRT_PI = 2.0/std::sqrt(M_PI);  // Constant for Ewald calculations
+
 // Debug output control
 extern bool energy_debug_output;
 
 // Energy calculation method enumeration
 enum class EnergyMethod {
     DIRECT,  // Direct calculation method
-    EWALD    // Ewald summation method
+    EWALD,   // Ewald summation method
+    PME      // Particle Mesh Ewald method
 };
 
 // Common utility functions
@@ -152,12 +157,14 @@ void computeMovementEnergy(model::MCState& state,
                           bool use_cutoff = false, 
                           bool use_pbc = false);
 
-// Declare Direct and Ewald calculation functions (internal use)
+// Declare Direct, Ewald and PME calculation functions (internal use)
 void computeSystemEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc);
 void computeMovementEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc);
 void computeSystemVdwEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc);
 void computeSystemEnergyEwald(model::MCState& state);
 void computeMovementEnergyEwald(model::MCState& state);
+void computeSystemEnergyPME(model::MCState& state);
+void computeMovementEnergyPME(model::MCState& state);
 
 // Get total energy function
 inline double getTotalEnergy(const model::MCState& state) {
