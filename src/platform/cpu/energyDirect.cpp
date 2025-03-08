@@ -9,7 +9,7 @@ namespace pygcmc {
 namespace platform {
 namespace cpu {
 
-// 现在使用通用的debug标志，而不是局部变量
+// Now using the common debug flag instead of a local variable
 // static bool debug_output = false;
 
 /**
@@ -506,13 +506,13 @@ void computeSystemVdwEnergyCutoff(model::MCState& state) {
 }
 
 /**
- * @brief 统一的系统能量计算函数(直接计算方法)
+ * @brief Unified system energy calculation function (Direct method)
  * 
- * 使用直接计算方法计算系统中所有原子间的非键相互作用能量。
+ * Uses the direct calculation method to compute non-bonded interaction energies between all atoms in the system.
  * 
- * @param state 系统状态
- * @param use_cutoff 是否使用距离截断
- * @param use_pbc 是否使用周期性边界条件
+ * @param state System state
+ * @param use_cutoff Whether to use distance cutoff
+ * @param use_pbc Whether to use periodic boundary conditions
  */
 void computeSystemEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc) {
     if (use_pbc) {
@@ -525,26 +525,26 @@ void computeSystemEnergyDirect(model::MCState& state, bool use_cutoff, bool use_
         if (use_cutoff) {
             computeSystemEnergyCutoff(state);
         } else {
-            // 直接使用本地函数，无需作用域限定
-            // 这样可以绕过歧义问题
+            // Use local function directly, no scope qualification needed
+            // This avoids ambiguity issues
             computeNonbondedEnergy(state, false, false, false);
         }
     }
 }
 
 /**
- * @brief 统一的运动残基能量计算函数(直接计算方法)
+ * @brief Unified energy calculation function for movement residues (Direct method)
  * 
- * 使用直接计算方法计算运动残基与系统中其他原子间的非键相互作用能量。
+ * Uses the direct calculation method to compute non-bonded interaction energies between movement residues and other atoms in the system.
  * 
- * @param state 系统状态
- * @param use_cutoff 是否使用距离截断
- * @param use_pbc 是否使用周期性边界条件
+ * @param state System state
+ * @param use_cutoff Whether to use distance cutoff
+ * @param use_pbc Whether to use periodic boundary conditions
  */
 void computeMovementEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc) {
     if (use_pbc) {
-        // 目前没有专门的PBC版本的运动残基能量计算函数
-        // 我们使用完整系统计算，这可能会稍慢一些
+        // Currently there is no dedicated PBC version of movement residue energy calculation function
+        // We use the full system calculation, which might be slightly slower
         if (use_cutoff) {
             computeSystemEnergyPBCCutoff(state);
         } else {
@@ -554,27 +554,27 @@ void computeMovementEnergyDirect(model::MCState& state, bool use_cutoff, bool us
         if (use_cutoff) {
             computeMovementEnergyCutoff(state);
         } else {
-            // 直接使用本地函数，无需作用域限定
-            // 这样可以绕过歧义问题
+            // Use local function directly, no scope qualification needed
+            // This avoids ambiguity issues
             computeNonbondedEnergy(state, false, true, false);
         }
     }
 }
 
 /**
- * @brief 仅计算范德华能量的统一接口函数
+ * @brief Unified interface function for calculating van der Waals energy only
  * 
- * 使用直接计算方法仅计算范德华相互作用能量，不计算静电能。
+ * Uses the direct calculation method to compute only van der Waals interaction energies, without electrostatic energy.
  * 
- * @param state 系统状态
- * @param use_cutoff 是否使用距离截断
- * @param use_pbc 是否使用周期性边界条件
+ * @param state System state
+ * @param use_cutoff Whether to use distance cutoff
+ * @param use_pbc Whether to use periodic boundary conditions
  */
 void computeSystemVdwEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc) {
     if (use_cutoff) {
         computeSystemVdwEnergyCutoff(state);
     } else {
-        // 如果没有专门的不带截断的VDW能量计算函数，使用通用计算函数但只保留VDW部分
+        // If there's no dedicated function for VDW energy calculation without cutoff, use the general function but only keep the VDW part
         computeNonbondedEnergy(state, use_cutoff, false, use_pbc, true);
     }
 }
