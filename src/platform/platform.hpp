@@ -4,6 +4,7 @@
 #include <string>
 #include <sstream>
 #include <iostream>
+#include <vector>
 
 // Forward declarations for energy calculation methods
 namespace pygcmc {

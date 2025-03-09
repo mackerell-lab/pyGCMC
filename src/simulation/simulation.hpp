@@ -7,6 +7,7 @@
 #include <memory>
 #include <sstream>
 #include <iostream>
+#include <vector>
 
 namespace pygcmc {
 namespace simulation {

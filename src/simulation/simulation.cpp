@@ -170,8 +170,8 @@ void Simulation::setPMEParameters(float alpha, const int meshSize[3], int spline
 }
 
 void Simulation::initializePMEParameters(float cutoff, const float box[3], 
-                                       float alpha, const int* meshSize,
-                                       int splineOrder, float tolerance) {
+                                      float alpha, const int* meshSize,
+                                      int splineOrder, float tolerance) {
     // Convert float parameters to double
     double cutoff_d = static_cast<double>(cutoff);
     double box_d[3] = {
@@ -191,8 +191,8 @@ void Simulation::initializePMEParameters(float cutoff, const float box[3],
     }
     
     platform::cpu::initializePMEParameters(cutoff_d, box_d, alpha_d, 
-                                         meshSize != nullptr ? meshSize_d : nullptr, 
-                                         splineOrder, tolerance_d);
+                                        meshSize != nullptr ? meshSize_d : nullptr, 
+                                        splineOrder, tolerance_d);
 }
 
 void Simulation::computeSystemEnergyPME(model::MCState& state) {

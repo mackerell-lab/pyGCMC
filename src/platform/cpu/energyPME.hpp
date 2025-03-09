@@ -87,9 +87,10 @@ inline void initializePMEParameters(double cutoff, const double box[3],
                                   double tolerance = 1e-5) {
     // If alpha is not specified, calculate the optimal value
     if (alpha <= 0.0) {
+        // 自动调整参数包括调用initializeTables和initializeBsplines
         autoAdjustPMEParameters(tolerance, cutoff, box);
     } else {
-        // Use the specified alpha value
+        // Use the specified parameters
         int mSize[3] = {64, 64, 64}; // Default value
         
         // If mesh size is provided, use it
@@ -99,10 +100,17 @@ inline void initializePMEParameters(double cutoff, const double box[3],
             mSize[2] = meshSize[2];
         }
         
+        // Set parameters and initialize tables
         setPMEParameters(alpha, mSize, splineOrder, tolerance);
         pme_params.initializeTables(cutoff);
         pme_params.initializeBsplines();
     }
+    
+    // Log the final parameters for debugging
+    platform::log(LogLevel::INFO, "PME parameters initialized: alpha = ", pme_params.alpha,
+                 ", mesh size = [", pme_params.meshSize[0], ",", pme_params.meshSize[1], ",", pme_params.meshSize[2], "]",
+                 ", spline order = ", pme_params.splineOrder,
+                 ", initialized = ", pme_params.initialized);
 }
 
 /**
