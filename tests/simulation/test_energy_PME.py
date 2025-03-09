@@ -145,6 +145,7 @@ def test_pme_vs_ewald():
     alpha = 0.3
     kmax = [5, 5, 5]
     mesh_size = [16, 16, 16]
+    spline_order = 4  # 显式设置样条阶数
     
     box = [box_size, box_size, box_size]
     cutoff = box_size / 2.0
@@ -160,8 +161,14 @@ def test_pme_vs_ewald():
     ewald_total = ewald_dict["total"]
     
     # Then calculate with PME
-    pygcmc.setPMEParameters(alpha, mesh_size)
-    pygcmc.initializePMEParameters(cutoff, box, alpha)
+    pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
+    pygcmc.initializePMEParameters(cutoff, box, alpha, mesh_size, spline_order)
+    
+    # 添加调试输出
+    print(f"\nPME Debug Info:")
+    print(f"Alpha: {alpha}, Mesh Size: {mesh_size}, Spline Order: {spline_order}")
+    print(f"Box: {box}, Cutoff: {cutoff}")
+    
     pme_elec, pme_vdw, pme_dict = pygcmc.computeSystemEnergyPME(state)
     
     pme_real = pme_dict["real_space"]
