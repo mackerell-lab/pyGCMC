@@ -15,6 +15,34 @@ const double PI2 = 6.28318530717958647692;
 // 在C++中，我们使用std::complex<double>替代C的complex类型
 using cmplx = std::complex<double>;
 
+
+// 计算n位二进制数x的位反转值
+int bit_reverse(int x, int n) {
+    int result = 0;
+    for (int i = 0; i < n; i++) {
+        result = (result << 1) | (x & 1);
+        x >>= 1;
+    }
+    return result;
+}
+
+// 应用位反转排序使FFT结果与FFTW兼容
+void apply_bit_reverse(cmplx* A, int k) {
+    const int m = 1 << k;
+    std::vector<cmplx> temp(m);
+    
+    // 将数据复制到临时数组，按位反转顺序重排
+    for (int i = 0; i < m; i++) {
+        int j = bit_reverse(i, k);
+        temp[i] = A[j];
+    }
+    
+    // 复制回原数组
+    for (int i = 0; i < m; i++) {
+        A[i] = temp[i];
+    }
+}
+
 // 生成FFT权重
 void tfft_genw(int i, int b, cmplx z, cmplx *w) {
     if(b == 0)
@@ -78,52 +106,32 @@ void tfft_fft(int k, cmplx *A, const cmplx *w) {
         u <<= 2;
         v >>= 2;
     }
+    
+    // 添加位反转排序，使结果与FFTW兼容
+    apply_bit_reverse(A, k);
 }
 
-// 执行反向FFT
+// 执行反向FFT (使用共轭方法确保与FFTW一致)
 void tfft_ifft(int k, cmplx *A, const cmplx *w) {
     const int m = 1 << k;
-    int u = m/4;
-    int v = 1;
-    int i, j;
-    for(i=2;i<=k;i+=2) {
-        int jh;
-        for(jh=0;jh<u;jh++) {
-            cmplx wj = std::conj(w[jh<<1]);
-            cmplx wj2 = std::conj(w[jh]);
-            cmplx wj3 = wj2 * wj;
-            int je;
-            for(j = jh << i, je = j+v;j<je; j++) {
-                cmplx tmp0 = A[j];
-                cmplx tmp1 = A[j+v];
-                cmplx tmp2 = A[j+2*v];
-                cmplx tmp3 = A[j+3*v];
-
-                cmplx ttmp0 = tmp0 + tmp1;
-                cmplx ttmp1 = tmp0 - tmp1;
-                cmplx ttmp2 = tmp2 + tmp3;
-                cmplx ttmp3 = std::complex<double>(0, 1) * (tmp2 - tmp3);
-
-                A[j] = ttmp0 + ttmp2;
-                A[j+v] = wj * (ttmp1 + ttmp3);
-                A[j+2*v] = wj2 * (ttmp0 - ttmp2);
-                A[j+3*v] = wj3 * (ttmp1 - ttmp3);
-            }
-        }
-        u >>= 2;
-        v <<= 2;
+    
+    // 步骤1: 对输入数据取共轭
+    for (int i = 0; i < m; i++) {
+        A[i] = std::conj(A[i]);
     }
-    if(k&1) {
-        for(j = 0;j<m/2; j++) {
-            cmplx Ajv = A[j+(m/2)];
-            A[j+(m/2)] = A[j] - Ajv;
-            A[j] += Ajv;
-        }
+    
+    // 步骤2: 使用前向FFT变换
+    tfft_fft(k, A, w);
+    
+    // 步骤3: 对结果再次取共轭并归一化
+    for (int i = 0; i < m; i++) {
+        A[i] = std::conj(A[i]) / static_cast<double>(m);
     }
 }
 
 // 卷积器
-[[maybe_unused]] void tfft_convolver(int k, cmplx *A, const cmplx *w) {
+[[maybe_unused]]
+void tfft_convolver(int k, cmplx *A, const cmplx *w) {
     int i, y;
     const int m = 1 << k;
 
@@ -145,6 +153,149 @@ void tfft_ifft(int k, cmplx *A, const cmplx *w) {
     }
 
     tfft_ifft(k-1, A, w);
+}
+
+// 修正后的fft_1d_batch函数，正确处理3D索引
+void fft_1d_batch(cmplx* data, int dimension, int nx, int ny, int nz, bool inverse) {
+    // 根据维度选择变换大小和处理方式
+    int transform_size;
+    int num_transforms;
+    
+    switch (dimension) {
+        case 0: // X方向
+            transform_size = nx;
+            num_transforms = ny * nz;
+            break;
+        case 1: // Y方向
+            transform_size = ny;
+            num_transforms = nx * nz;
+            break;
+        case 2: // Z方向
+            transform_size = nz;
+            num_transforms = nx * ny;
+            break;
+        default:
+            throw std::invalid_argument("Invalid dimension for 3D FFT");
+    }
+    
+    // 检查是否为2的幂
+    if ((transform_size & (transform_size - 1)) != 0) {
+        throw std::runtime_error("FFT size must be a power of 2");
+    }
+    
+    // 计算log2(transform_size)
+    int k = 0;
+    int temp = transform_size;
+    while (temp >>= 1) ++k;
+    
+    // 初始化FFT权重
+    std::vector<cmplx> weights(transform_size);
+    tfft_init(k, weights.data());
+    
+    // 临时缓冲区用于单个变换
+    std::vector<cmplx> buffer(transform_size);
+    
+    // 处理每个一维变换
+    for (int t = 0; t < num_transforms; t++) {
+        int y, z, x;
+        
+        // 根据维度计算对应的二维索引 (t -> x,y,z 中的两个)
+        switch (dimension) {
+            case 0: // X方向: t = y + z*ny, 对每个y,z执行变换，遍历所有x
+                y = t % ny;
+                z = t / ny;
+                
+                // 将数据读入缓冲区
+                for (int x = 0; x < nx; x++) {
+                    buffer[x] = data[x + y*nx + z*nx*ny];
+                }
+                
+                // 执行FFT/IFFT
+                if (inverse) {
+                    tfft_ifft(k, buffer.data(), weights.data());
+                } else {
+                    tfft_fft(k, buffer.data(), weights.data());
+                }
+                
+                // 将结果写回
+                for (int x = 0; x < nx; x++) {
+                    data[x + y*nx + z*nx*ny] = buffer[x];
+                }
+                break;
+                
+            case 1: // Y方向: t = x + z*nx, 对每个x,z执行变换，遍历所有y
+                x = t % nx;
+                z = t / nx;
+                
+                // 将数据读入缓冲区
+                for (int y = 0; y < ny; y++) {
+                    buffer[y] = data[x + y*nx + z*nx*ny];
+                }
+                
+                // 执行FFT/IFFT
+                if (inverse) {
+                    tfft_ifft(k, buffer.data(), weights.data());
+                } else {
+                    tfft_fft(k, buffer.data(), weights.data());
+                }
+                
+                // 将结果写回
+                for (int y = 0; y < ny; y++) {
+                    data[x + y*nx + z*nx*ny] = buffer[y];
+                }
+                break;
+                
+            case 2: // Z方向: t = x + y*nx, 对每个x,y执行变换，遍历所有z
+                x = t % nx;
+                y = t / nx;
+                
+                // 将数据读入缓冲区
+                for (int z = 0; z < nz; z++) {
+                    buffer[z] = data[x + y*nx + z*nx*ny];
+                }
+                
+                // 执行FFT/IFFT
+                if (inverse) {
+                    tfft_ifft(k, buffer.data(), weights.data());
+                } else {
+                    tfft_fft(k, buffer.data(), weights.data());
+                }
+                
+                // 将结果写回
+                for (int z = 0; z < nz; z++) {
+                    data[x + y*nx + z*nx*ny] = buffer[z];
+                }
+                break;
+        }
+    }
+}
+
+// 使用修正的fft_1d_batch函数重写3D前向FFT
+[[maybe_unused]]
+void fft3D_forward(cmplx* data, int nx, int ny, int nz) {
+    // 验证所有尺寸都是2的幂
+    if ((nx & (nx - 1)) != 0 || (ny & (ny - 1)) != 0 || (nz & (nz - 1)) != 0) {
+        throw std::runtime_error("All 3D FFT dimensions must be powers of 2");
+    }
+    
+    // 按X、Y、Z顺序执行三次1D FFT
+    fft_1d_batch(data, 0, nx, ny, nz, false); // X方向
+    fft_1d_batch(data, 1, nx, ny, nz, false); // Y方向
+    fft_1d_batch(data, 2, nx, ny, nz, false); // Z方向
+}
+
+// 使用修正的fft_1d_batch函数重写3D逆FFT
+[[maybe_unused]]
+void fft3D_backward(cmplx* data, int nx, int ny, int nz) {
+    // 验证所有尺寸都是2的幂
+    if ((nx & (nx - 1)) != 0 || (ny & (ny - 1)) != 0 || (nz & (nz - 1)) != 0) {
+        throw std::runtime_error("All 3D FFT dimensions must be powers of 2");
+    }
+    
+    // 按Z、Y、X顺序执行三次1D IFFT (与前向顺序相反)
+    fft_1d_batch(data, 2, nx, ny, nz, true); // Z方向
+    fft_1d_batch(data, 1, nx, ny, nz, true); // Y方向
+    fft_1d_batch(data, 0, nx, ny, nz, true); // X方向
 }
 
 } // anonymous namespace
@@ -270,13 +421,9 @@ void PMEParams::initializeBsplines() {
                         bspline = 0.0;
                     else
                         bspline = 1.0 / (sum * size * size);
-                } else {
-                    bspline = bspline * bspline;
                 }
             } else {
                 // 对于4阶及以下的处理
-                bspline = bspline * bspline;
-                
                 // 低阶样条的额外检查
                 if (bspline < 1e-10 && m <= splineOrder) {
                     double sum = 0.0;
@@ -389,9 +536,20 @@ void autoAdjustPMEParameters(double error_tolerance, double cutoff_distance, con
         }
     }
     
-    // Ensure alpha is reasonable
-    if (alpha < 0.2 / cutoff_distance)
-        alpha = 0.2 / cutoff_distance;
+    // 新增：限制alpha参数的变化范围，减少自能量随误差容忍度的剧烈波动
+    // 根据经验，使用适度的alpha范围 (1.0 - 3.0)/cutoff
+    double minAlpha = 1.0 / cutoff_distance;
+    double maxAlpha = 3.0 / cutoff_distance;
+    
+    if (alpha < minAlpha) {
+        platform::log(LogLevel::WARNING, "PME alpha parameter too small, adjusting from ", 
+                    alpha, " to ", minAlpha);
+        alpha = minAlpha;
+    } else if (alpha > maxAlpha) {
+        platform::log(LogLevel::WARNING, "PME alpha parameter too large, adjusting from ", 
+                    alpha, " to ", maxAlpha);
+        alpha = maxAlpha;
+    }
     
     // Now determine the mesh dimensions
     int meshSize[3];
@@ -692,83 +850,8 @@ void performFFTForward() {
         throw std::runtime_error("PME grid size must be a power of 2 for this FFT implementation");
     }
     
-    int log2_nx = 0;
-    while ((1 << log2_nx) < nx) log2_nx++;
-    
-    int log2_ny = 0;
-    while ((1 << log2_ny) < ny) log2_ny++;
-    
-    int log2_nz = 0;
-    while ((1 << log2_nz) < nz) log2_nz++;
-    
-    // 初始化FFT权重
-    fft_weights.resize(nx > ny ? (nx > nz ? nx : nz) : (ny > nz ? ny : nz));
-    
-    // 执行X方向FFT
-    std::vector<cmplx> row_data(nx);
-    tfft_init(log2_nx, fft_weights.data());
-    for (int y = 0; y < ny; y++) {
-        for (int z = 0; z < nz; z++) {
-            // 提取一行数据
-            for (int x = 0; x < nx; x++) {
-                int index = x * ny * nz + y * nz + z;
-                row_data[x] = pme_params.pmeGrid[index];
-            }
-            
-            // 执行1D FFT
-            tfft_fft(log2_nx, row_data.data(), fft_weights.data());
-            
-            // 写回结果
-            for (int x = 0; x < nx; x++) {
-                int index = x * ny * nz + y * nz + z;
-                pme_params.pmeGrid[index] = row_data[x];
-            }
-        }
-    }
-    
-    // 执行Y方向FFT
-    row_data.resize(ny);
-    tfft_init(log2_ny, fft_weights.data());
-    for (int x = 0; x < nx; x++) {
-        for (int z = 0; z < nz; z++) {
-            // 提取一列数据
-            for (int y = 0; y < ny; y++) {
-                int index = x * ny * nz + y * nz + z;
-                row_data[y] = pme_params.pmeGrid[index];
-            }
-            
-            // 执行1D FFT
-            tfft_fft(log2_ny, row_data.data(), fft_weights.data());
-            
-            // 写回结果
-            for (int y = 0; y < ny; y++) {
-                int index = x * ny * nz + y * nz + z;
-                pme_params.pmeGrid[index] = row_data[y];
-            }
-        }
-    }
-    
-    // 执行Z方向FFT
-    row_data.resize(nz);
-    tfft_init(log2_nz, fft_weights.data());
-    for (int x = 0; x < nx; x++) {
-        for (int y = 0; y < ny; y++) {
-            // 提取一行数据
-            for (int z = 0; z < nz; z++) {
-                int index = x * ny * nz + y * nz + z;
-                row_data[z] = pme_params.pmeGrid[index];
-            }
-            
-            // 执行1D FFT
-            tfft_fft(log2_nz, row_data.data(), fft_weights.data());
-            
-            // 写回结果
-            for (int z = 0; z < nz; z++) {
-                int index = x * ny * nz + y * nz + z;
-                pme_params.pmeGrid[index] = row_data[z];
-            }
-        }
-    }
+    // 直接使用fft3D_forward函数进行3D FFT
+    fft3D_forward(pme_params.pmeGrid.data(), nx, ny, nz);
 }
 
 /**
@@ -789,83 +872,13 @@ void performFFTBackward() {
         throw std::runtime_error("PME grid size must be a power of 2 for this FFT implementation");
     }
     
-    int log2_nx = 0;
-    while ((1 << log2_nx) < nx) log2_nx++;
+    // 直接使用fft3D_backward函数进行3D逆FFT
+    fft3D_backward(pme_params.pmeGrid.data(), nx, ny, nz);
     
-    int log2_ny = 0;
-    while ((1 << log2_ny) < ny) log2_ny++;
-    
-    int log2_nz = 0;
-    while ((1 << log2_nz) < nz) log2_nz++;
-    
-    // 初始化FFT权重
-    fft_weights.resize(nx > ny ? (nx > nz ? nx : nz) : (ny > nz ? ny : nz));
-    
-    // 执行Z方向IFFT
-    std::vector<cmplx> row_data(nz);
-    tfft_init(log2_nz, fft_weights.data());
-    for (int x = 0; x < nx; x++) {
-        for (int y = 0; y < ny; y++) {
-            // 提取一行数据
-            for (int z = 0; z < nz; z++) {
-                int index = x * ny * nz + y * nz + z;
-                row_data[z] = pme_params.pmeGrid[index];
-            }
-            
-            // 执行1D IFFT
-            tfft_ifft(log2_nz, row_data.data(), fft_weights.data());
-            
-            // 写回结果
-            for (int z = 0; z < nz; z++) {
-                int index = x * ny * nz + y * nz + z;
-                pme_params.pmeGrid[index] = row_data[z];
-            }
-        }
-    }
-    
-    // 执行Y方向IFFT
-    row_data.resize(ny);
-    tfft_init(log2_ny, fft_weights.data());
-    for (int x = 0; x < nx; x++) {
-        for (int z = 0; z < nz; z++) {
-            // 提取一列数据
-            for (int y = 0; y < ny; y++) {
-                int index = x * ny * nz + y * nz + z;
-                row_data[y] = pme_params.pmeGrid[index];
-            }
-            
-            // 执行1D IFFT
-            tfft_ifft(log2_ny, row_data.data(), fft_weights.data());
-            
-            // 写回结果
-            for (int y = 0; y < ny; y++) {
-                int index = x * ny * nz + y * nz + z;
-                pme_params.pmeGrid[index] = row_data[y];
-            }
-        }
-    }
-    
-    // 执行X方向IFFT
-    row_data.resize(nx);
-    tfft_init(log2_nx, fft_weights.data());
-    for (int y = 0; y < ny; y++) {
-        for (int z = 0; z < nz; z++) {
-            // 提取一行数据
-            for (int x = 0; x < nx; x++) {
-                int index = x * ny * nz + y * nz + z;
-                row_data[x] = pme_params.pmeGrid[index];
-            }
-            
-            // 执行1D IFFT
-            tfft_ifft(log2_nx, row_data.data(), fft_weights.data());
-            
-            // 写回结果
-            for (int x = 0; x < nx; x++) {
-                int index = x * ny * nz + y * nz + z;
-                double scale = static_cast<double>(nx * ny * nz);
-                pme_params.pmeGrid[index] = row_data[x] / scale; // 需要重新缩放
-            }
-        }
+    // 应用额外的缩放因子 - fft3D_backward中有些缩放，但我们额外需要全局缩放
+    double scale = static_cast<double>(nx * ny * nz);
+    for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
+        pme_params.pmeGrid[i] /= scale;
     }
 }
 
@@ -876,7 +889,7 @@ void performFFTBackward() {
  */
 void computeEnergyFromGrid(double& energy, const double box[3]) {
     double volume = box[0] * box[1] * box[2];
-    double recipCoeff = COULOMB * 4.0 * M_PI / volume;
+    double scaleFactor = COULOMB * 4.0 * M_PI / volume;
     
     energy = 0.0;
     
@@ -926,9 +939,10 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                 double kz_sq = kz * kz;
                 
                 // Compute squared magnitude of k-vector
-                double m2 = (kx_sq / (box[0] * box[0])) + 
+                double msq = (4.0 * M_PI * M_PI) * (
+                           (kx_sq / (box[0] * box[0])) + 
                            (ky_sq / (box[1] * box[1])) + 
-                           (kz_sq / (box[2] * box[2]));
+                           (kz_sq / (box[2] * box[2])));
                 
                 // B-spline influence function
                 double bx = pme_params.bsplineModuli[0][ix];
@@ -936,7 +950,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                 double bz = pme_params.bsplineModuli[2][iz];
                 
                 // 确保 B 样条权重不为零 (关键修复)
-                if (m2 > 0 && (bx == 0.0 || by == 0.0 || bz == 0.0)) {
+                if (msq > 0 && (bx == 0.0 || by == 0.0 || bz == 0.0)) {
                     // 为非零频率重新计算 B 样条权重
                     double factor_x = 2.0 * M_PI / pme_params.meshSize[0];
                     double factor_y = 2.0 * M_PI / pme_params.meshSize[1];
@@ -974,21 +988,46 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                     }
                 }
                 
-                double m2_term = m2 != 0.0 ? std::exp(-M_PI * M_PI * m2 / (pme_params.alpha * pme_params.alpha)) / m2 : 0.0;
+                // 添加(2π)²因子以修正波矢计算
+                double m2 = (4.0 * M_PI * M_PI) * msq;
                 
-                // Energy contribution for this k-vector
-                double gridValue = std::norm(pme_params.pmeGrid[gridIndex]);
-                double term = recipCoeff * m2_term * bx * by * bz * gridValue * 0.5;
-                
-                // 记录一些能量贡献值用于调试
-                if ((ix <= 2 && iy <= 2 && iz <= 2) || gridValue > 1e-6) {
-                    platform::log(LogLevel::DEBUG, "Grid[", ix, ",", iy, ",", iz, "] = ", 
-                                 gridValue, ", bx*by*bz = ", bx*by*bz, 
-                                 ", m2_term = ", m2_term, ", term = ", term);
+                // B样条修正：B样条模数应该在分母而不是乘在分母的m2上
+                // 只需m2用于exponent term，B样条模数单独作为分母
+                double bsplineProduct = bx * by * bz;
+                // 处理极小的分母值
+                if (bsplineProduct < 1e-10) {
+                    // Skip this term if it would cause instability
+                    if (std::abs(bsplineProduct) < 1e-12)
+                        continue;
+                    
+                    // For very small but non-zero bspline product, use a minimum value
+                    bsplineProduct = 1e-10;
                 }
                 
-                energy += term;
-                totalContribution += std::abs(term);
+                // 由于m2现已包含(2π)²因子，应相应调整指数项
+                // 从 exp(-π²·m2/(α²)) 更改为 exp(-m2/(4·α²))
+                double m2_term = m2 != 0.0 ? std::exp(-m2 / (4.0 * pme_params.alpha * pme_params.alpha)) / m2 : 0.0;
+                
+                // Get squared magnitude of complex grid value
+                double gridMagnitudeSq = std::norm(pme_params.pmeGrid[gridIndex]);
+                
+                // 增加0.5系数并额外除以一次bsplineProduct，以确保正确的B样条模数幂次
+                // 原始公式: double energyTerm = scaleFactor * m2_term * gridMagnitudeSq / bsplineProduct;
+                // 1. 增加0.5系数
+                // 2. 除以bsplineProduct的平方，而不是bsplineProduct
+                double bsplineProductSquared = bsplineProduct * bsplineProduct;
+                if (bsplineProductSquared < 1e-12) bsplineProductSquared = 1e-12;
+                double energyTerm = 0.5 * scaleFactor * m2_term * gridMagnitudeSq / bsplineProductSquared;
+                
+                // 记录一些能量贡献值用于调试
+                if ((ix <= 2 && iy <= 2 && iz <= 2) || gridMagnitudeSq > 1e-6) {
+                    platform::log(LogLevel::DEBUG, "Grid[", ix, ",", iy, ",", iz, "] = ", 
+                                 gridMagnitudeSq, ", bx*by*bz = ", bx*by*bz, 
+                                 ", m2_term = ", m2_term, ", term = ", energyTerm);
+                }
+                
+                energy += energyTerm;
+                totalContribution += std::abs(energyTerm);
             }
         }
     }
@@ -1084,27 +1123,35 @@ double computeReciprocalPME(model::MCState& state, bool movement_only) {
                 double bz = pme_params.bsplineModuli[2][mz];
                 
                 // Calculate influence function
-                double m2 = msq;
-                double denom = m2 * bx * by * bz;
-                
+                // 添加(2π)²因子以修正波矢计算
+                double m2 = (4.0 * M_PI * M_PI) * msq;
+                // B样条修正：B样条模数应该在分母而不是乘在分母的m2上
+                // 只需m2用于exponent term，B样条模数单独作为分母
+                double bsplineProduct = bx * by * bz;
                 // 处理极小的分母值
-                if (denom < 1e-10) {
+                if (bsplineProduct < 1e-10) {
                     // Skip this term if it would cause instability
-                    if (m2 < 1e-10 || std::abs(bx*by*bz) < 1e-10)
+                    if (std::abs(bsplineProduct) < 1e-12)
                         continue;
                     
-                    // For very small but non-zero denom, use a minimum value
-                    denom = 1e-10;
+                    // For very small but non-zero bspline product, use a minimum value
+                    bsplineProduct = 1e-10;
                 }
                 
-                // Compute exponential term
-                double expTerm = std::exp(-M_PI*M_PI*m2/(pme_params.alpha*pme_params.alpha));
+                // 由于m2现已包含(2π)²因子，应相应调整指数项
+                // 从 exp(-π²·m2/(α²)) 更改为 exp(-m2/(4·α²))
+                double m2_term = m2 != 0.0 ? std::exp(-m2 / (4.0 * pme_params.alpha * pme_params.alpha)) / m2 : 0.0;
                 
                 // Get squared magnitude of complex grid value
                 double gridMagnitudeSq = std::norm(pme_params.pmeGrid[gridIndex]);
                 
-                // 精确匹配OpenMM的计算公式
-                double energyTerm = scaleFactor * expTerm * gridMagnitudeSq / denom;
+                // 增加0.5系数并额外除以一次bsplineProduct，以确保正确的B样条模数幂次
+                // 原始公式: double energyTerm = scaleFactor * m2_term * gridMagnitudeSq / bsplineProduct;
+                // 1. 增加0.5系数
+                // 2. 除以bsplineProduct的平方，而不是bsplineProduct
+                double bsplineProductSquared = bsplineProduct * bsplineProduct;
+                if (bsplineProductSquared < 1e-12) bsplineProductSquared = 1e-12;
+                double energyTerm = 0.5 * scaleFactor * m2_term * gridMagnitudeSq / bsplineProductSquared;
                 
                 // 跟踪最大能量贡献
                 if (std::abs(energyTerm) > std::abs(maxEnergyTerm)) {
