@@ -403,7 +403,9 @@ void PMEParams::initializeBsplines() {
             }
             
             // 计算B样条函数的傅里叶变换
-            double bspline = numerator * numerator;
+            double bspline;
+            // 对于任意阶数的B样条，使用相应的幂
+            bspline = std::pow(numerator, splineOrder);
             
             // 修正系数 - 关键是这里的算法
             if (splineOrder > 4) {
@@ -781,16 +783,15 @@ void spreadChargesOntoGrid(model::MCState& state, bool movement_only) {
             
             // Compute B-spline coefficients - optimized version based on OpenMM
             if (order == 4) {
-                // Optimized path for common case of 4th-order B-splines
+                // Replace incorrect optimization with correct 4th-order B-spline calculation
                 double w = dr[dim];
-                thetai[dim][0] = 0.5 * (1.0 - w) * (1.0 - w);
-                thetai[dim][1] = 0.5 * (1.0 + w) * (1.0 - w) + 0.5 * (1.0 - w) * (1.0 + w);
-                thetai[dim][2] = 0.5 * (1.0 + w) * (1.0 + w);
-                double div = 1.0 / 6.0;
-                thetai[dim][0] = div * thetai[dim][0];
-                thetai[dim][1] = div * (thetai[dim][1] + 1.0);
-                thetai[dim][2] = div * thetai[dim][2];
-                thetai[dim][3] = 0.0; // Zero the 4th coefficient for safety
+                double w2 = w * w;
+                double w3 = w2 * w;
+                double oneSixth = 1.0 / 6.0;
+                thetai[dim][0] = oneSixth * (1.0 - w) * (1.0 - w) * (1.0 - w);
+                thetai[dim][1] = oneSixth * (4.0 - 6.0 * w2 + 3.0 * w3);
+                thetai[dim][2] = oneSixth * (1.0 + 3.0 * w + 3.0 * w2 - 3.0 * w3);
+                thetai[dim][3] = oneSixth * w3;
             } else {
                 // General B-spline calculation for other orders
                 computeBSplineCoefficients(dr[dim], order, splineCoefficients);
@@ -1013,11 +1014,10 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                 
                 // 增加0.5系数并额外除以一次bsplineProduct，以确保正确的B样条模数幂次
                 // 原始公式: double energyTerm = scaleFactor * m2_term * gridMagnitudeSq / bsplineProduct;
-                // 1. 增加0.5系数
-                // 2. 除以bsplineProduct的平方，而不是bsplineProduct
-                double bsplineProductSquared = bsplineProduct * bsplineProduct;
-                if (bsplineProductSquared < 1e-12) bsplineProductSquared = 1e-12;
-                double energyTerm = 0.5 * scaleFactor * m2_term * gridMagnitudeSq / bsplineProductSquared;
+                // 修正为使用与splineOrder匹配的幂次
+                double bsplinePower = std::pow(bsplineProduct, pme_params.splineOrder/2.0);
+                if (bsplinePower < 1e-12) bsplinePower = 1e-12;
+                double energyTerm = 0.5 * scaleFactor * m2_term * gridMagnitudeSq / bsplinePower;
                 
                 // 记录一些能量贡献值用于调试
                 if ((ix <= 2 && iy <= 2 && iz <= 2) || gridMagnitudeSq > 1e-6) {
@@ -1147,11 +1147,10 @@ double computeReciprocalPME(model::MCState& state, bool movement_only) {
                 
                 // 增加0.5系数并额外除以一次bsplineProduct，以确保正确的B样条模数幂次
                 // 原始公式: double energyTerm = scaleFactor * m2_term * gridMagnitudeSq / bsplineProduct;
-                // 1. 增加0.5系数
-                // 2. 除以bsplineProduct的平方，而不是bsplineProduct
-                double bsplineProductSquared = bsplineProduct * bsplineProduct;
-                if (bsplineProductSquared < 1e-12) bsplineProductSquared = 1e-12;
-                double energyTerm = 0.5 * scaleFactor * m2_term * gridMagnitudeSq / bsplineProductSquared;
+                // 修正为使用与splineOrder匹配的幂次
+                double bsplinePower = std::pow(bsplineProduct, pme_params.splineOrder/2.0);
+                if (bsplinePower < 1e-12) bsplinePower = 1e-12;
+                double energyTerm = 0.5 * scaleFactor * m2_term * gridMagnitudeSq / bsplinePower;
                 
                 // 跟踪最大能量贡献
                 if (std::abs(energyTerm) > std::abs(maxEnergyTerm)) {
