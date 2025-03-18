@@ -663,6 +663,177 @@ def test_pme_small_mesh():
     print(f"Accuracy with mesh=16: Total error={abs(pme_dict['total'] - reference_energy) / abs(reference_energy):.6f}, "
           f"Recip error={recip_error:.6f}")
 
+def test_ewald_vs_pme_random():
+    """
+    Compare Ewald and PME methods using a random particle system.
+    
+    This test is modeled after the testEwaldVsPME function in pme.cpp.
+    It creates a random distribution of charged particles (rather than a crystal lattice)
+    and compares energy calculations between standard Ewald and PME methods.
+    """
+    import random
+    
+    # Create a random particle system similar to pme.cpp's testEwaldVsPME
+    num_particles = 100
+    box_size = 3.0
+    cutoff = 1.0
+    
+    # Create a new state with random positions
+    state = MCState()
+    
+    # Set box size and temperature
+    state.info.box = [box_size, box_size, box_size]
+    state.info.setTemperature(300.0)  # 300K
+    state.info.cutoff = cutoff
+    
+    # Set force field parameters for simple ions
+    ff = MCForceField()
+    ff.numTotalTypes = 2  # Positive and negative ions
+    
+    # Simple LJ parameters
+    sigma = 0.3  # nm
+    epsilon = 0.1  # kJ/mol
+    
+    # Set LJ parameter matrix (identical parameters for simplicity)
+    ff.ljSigma = [sigma, sigma, sigma, sigma]
+    ff.ljEps = [epsilon, epsilon, epsilon, epsilon]
+    
+    state.forcefield = ff
+    
+    # Generate random particles with alternating charges
+    random.seed(98765)  # Use same seed as in pme.cpp
+    
+    atoms = []
+    residues = []
+    
+    print(f"\nCreating random system with {num_particles} particles...")
+    
+    for i in range(num_particles):
+        # Create a new atom
+        atom = MCAtom()
+        
+        # Random position within box
+        atom.x = random.random() * box_size
+        atom.y = random.random() * box_size
+        atom.z = random.random() * box_size
+        
+        # Alternating charges
+        if i < num_particles/2:
+            atom.charge = 1.0  # Positive
+            atom.type = 0
+        else:
+            atom.charge = -1.0  # Negative
+            atom.type = 1
+        
+        atoms.append(atom)
+        
+        # Create one residue per atom for simplicity
+        if i % 2 == 0:  # Create a residue for each pair of atoms
+            res = MCResidue()
+            res.atomStart = i
+            res.atomCount = 2 if i < num_particles-1 else 1  # Handle last atom
+            res.active = True
+            res.fixed = False
+            residues.append(res)
+    
+    state.atoms = atoms
+    state.residues = residues
+    state.activeAtomCount = len(atoms)
+    state.activeResidueCount = len(residues)
+    
+    # System parameters
+    box = [box_size, box_size, box_size]
+    
+    # Set parameters for standard Ewald calculation (reference)
+    alpha_ewald = 2.5 / cutoff  # Same as in pme.cpp
+    kmax_ewald = [8, 8, 8]  # Higher precision for reference
+    
+    # Calculate with standard Ewald
+    pygcmc.setEwaldParameters(alpha_ewald, kmax_ewald)
+    pygcmc.initializeEwaldParameters(cutoff, box, alpha_ewald)
+    ewald_elec, ewald_vdw, ewald_dict = pygcmc.computeSystemEnergyEwald(state)
+    
+    ewald_real = ewald_dict["real_space"]
+    ewald_recip = ewald_dict["reciprocal"]
+    ewald_self = ewald_dict["self"]
+    ewald_total = ewald_dict["total"]
+    
+    # Set parameters for standard PME calculation
+    alpha_pme = alpha_ewald  # Use same alpha for comparison
+    mesh_size_pme = [32, 32, 32]  # Standard mesh size
+    spline_order_pme = 5  # Same as in pme.cpp
+    
+    # Calculate with PME
+    pygcmc.setPMEParameters(alpha_pme, mesh_size_pme, spline_order_pme)
+    pygcmc.initializePMEParameters(cutoff, box, alpha_pme, mesh_size_pme, spline_order_pme)
+    pme_elec, pme_vdw, pme_dict = pygcmc.computeSystemEnergyPME(state)
+    
+    pme_real = pme_dict["real_space"]
+    pme_recip = pme_dict["reciprocal"]
+    pme_self = pme_dict["self"]
+    pme_total = pme_dict["total"]
+    
+    # Set parameters for high-precision PME calculation (should match Ewald closely)
+    mesh_size_high = [64, 64, 64]  # Higher precision mesh
+    spline_order_high = 6  # Higher order for better accuracy
+    
+    # Calculate with high-precision PME
+    pygcmc.setPMEParameters(alpha_pme, mesh_size_high, spline_order_high)
+    pygcmc.initializePMEParameters(cutoff, box, alpha_pme, mesh_size_high, spline_order_high)
+    high_pme_elec, high_pme_vdw, high_pme_dict = pygcmc.computeSystemEnergyPME(state)
+    
+    high_pme_real = high_pme_dict["real_space"]
+    high_pme_recip = high_pme_dict["reciprocal"]
+    high_pme_self = high_pme_dict["self"]
+    high_pme_total = high_pme_dict["total"]
+    
+    # Calculate relative errors for standard PME vs Ewald
+    real_rel_error = abs(ewald_real - pme_real) / max(abs(ewald_real), 1.0)
+    recip_rel_error = abs(ewald_recip - pme_recip) / max(abs(ewald_recip), 1.0)
+    self_rel_error = abs(ewald_self - pme_self) / max(abs(ewald_self), 1.0)
+    total_rel_error = abs(ewald_total - pme_total) / max(abs(ewald_total), 1.0)
+    
+    # Calculate relative errors for high-precision PME vs Ewald
+    high_real_rel_error = abs(ewald_real - high_pme_real) / max(abs(ewald_real), 1.0)
+    high_recip_rel_error = abs(ewald_recip - high_pme_recip) / max(abs(ewald_recip), 1.0)
+    high_self_rel_error = abs(ewald_self - high_pme_self) / max(abs(ewald_self), 1.0)
+    high_total_rel_error = abs(ewald_total - high_pme_total) / max(abs(ewald_total), 1.0)
+    
+    # Print comparison
+    print("\nEwald vs PME Comparison for Random System:")
+    print(f"Parameters: Alpha={alpha_pme:.4f}, Cutoff={cutoff:.2f}nm, Box={box_size:.2f}nm")
+    print(f"Standard PME: Mesh={mesh_size_pme}, Spline Order={spline_order_pme}")
+    print(f"High-Precision PME: Mesh={mesh_size_high}, Spline Order={spline_order_high}")
+    print(f"Ewald: kmax={kmax_ewald}")
+    
+    print("\nEnergy Comparison:")
+    print(f"                  Real Space      Reciprocal     Self           Total")
+    print(f"Ewald:            {ewald_real:.6f}    {ewald_recip:.6f}    {ewald_self:.6f}    {ewald_total:.6f}")
+    print(f"Standard PME:     {pme_real:.6f}    {pme_recip:.6f}    {pme_self:.6f}    {pme_total:.6f}")
+    print(f"High-Prec. PME:   {high_pme_real:.6f}    {high_pme_recip:.6f}    {high_pme_self:.6f}    {high_pme_total:.6f}")
+    
+    print("\nRelative Errors (vs Ewald):")
+    print(f"                  Real Space      Reciprocal     Self           Total")
+    print(f"Standard PME:     {real_rel_error:.6f}    {recip_rel_error:.6f}    {self_rel_error:.6f}    {total_rel_error:.6f}")
+    print(f"High-Prec. PME:   {high_real_rel_error:.6f}    {high_recip_rel_error:.6f}    {high_self_rel_error:.6f}    {high_total_rel_error:.6f}")
+    
+    # Verify results meet accuracy requirements
+    # Standard PME should have reasonable accuracy
+    assert real_rel_error < 0.01, "Real-space energies don't match for standard PME"
+    assert self_rel_error < 0.01, "Self energies don't match for standard PME"
+    assert recip_rel_error < 0.05, f"Reciprocal space error ({recip_rel_error:.2%}) exceeds threshold for standard PME"
+    assert total_rel_error < 0.05, f"Total energy error ({total_rel_error:.2%}) exceeds threshold for standard PME"
+    
+    # High-precision PME should have excellent accuracy
+    assert high_real_rel_error < 0.001, "Real-space energies don't match for high-precision PME"
+    assert high_self_rel_error < 0.001, "Self energies don't match for high-precision PME"
+    assert high_recip_rel_error < 0.01, f"Reciprocal space error ({high_recip_rel_error:.2%}) exceeds threshold for high-precision PME"
+    assert high_total_rel_error < 0.01, f"Total energy error ({high_total_rel_error:.2%}) exceeds threshold for high-precision PME"
+    
+    print(f"\nTest passed: PME accuracy is within expected thresholds")
+    print(f"Standard PME total energy error: {total_rel_error:.2%}")
+    print(f"High-precision PME total energy error: {high_total_rel_error:.2%}")
+    
 if __name__ == "__main__":
     test_pme_initialization()
     test_pme_vs_ewald()
@@ -672,3 +843,4 @@ if __name__ == "__main__":
     test_pme_mesh_accuracy()
     test_pme_alpha_dependency()
     test_pme_small_mesh()
+    test_ewald_vs_pme_random()
