@@ -1486,6 +1486,12 @@ def test_pme_grid_operations():
     """
     print("\nRunning test_pme_grid_operations...")
     
+    # 启用详细日志输出
+    print("\nEnabling detailed logging...")
+    # 启用能量计算的调试输出
+    pygcmc.setEnergyDebugOutput(True)
+    print("Energy debug output enabled")
+    
     # Create a very simple system: two atoms, one positive and one negative
     state = MCState()
     
