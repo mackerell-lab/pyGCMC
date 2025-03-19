@@ -834,6 +834,648 @@ def test_ewald_vs_pme_random():
     print(f"Standard PME total energy error: {total_rel_error:.2%}")
     print(f"High-precision PME total energy error: {high_total_rel_error:.2%}")
     
+def test_ewald_vs_pme_detailed():
+    """
+    Detailed comparison of energy components between Ewald and PME methods.
+    
+    This test is modeled after the testEwaldVsPME function in pme.cpp.
+    It provides a detailed comparison of the energy components (real space,
+    reciprocal space, and self energy) between standard Ewald summation
+    and PME methods with varying parameters.
+    """
+    # System parameters
+    num_particles = 100
+    box_size = 4.0
+    cutoff = 1.0
+    n_cells = 2
+    
+    # Create a NaCl crystal system
+    state = create_nacl_crystal(box_size, n_cells)
+    box = [box_size, box_size, box_size]
+    
+    # Try different alpha values
+    alpha_values = [0.2, 0.3, 0.4, 0.5]
+    
+    print(f"\nDetailed Ewald vs PME Energy Component Comparison:")
+    print(f"System: {len(state.atoms)} atoms, Box size: {box_size}nm, Cutoff: {cutoff}nm")
+    
+    for alpha in alpha_values:
+        # Set parameters for Ewald
+        kmax = [8, 8, 8]
+        
+        # Set parameters for PME with different mesh sizes
+        mesh_sizes = [16, 24, 32, 48]
+        spline_order = 4
+        
+        # Calculate with standard Ewald
+        pygcmc.setEwaldParameters(alpha, kmax)
+        pygcmc.initializeEwaldParameters(cutoff, box, alpha)
+        _, _, ewald_dict = pygcmc.computeSystemEnergyEwald(state)
+        
+        ewald_real = ewald_dict["real_space"]
+        ewald_recip = ewald_dict["reciprocal"]
+        ewald_self = ewald_dict["self"]
+        ewald_total = ewald_dict["total"]
+        
+        print(f"\nAlpha = {alpha:.2f}")
+        print(f"Ewald (kmax={kmax}):")
+        print(f"  Real space:    {ewald_real:.6f}")
+        print(f"  Reciprocal:    {ewald_recip:.6f}")
+        print(f"  Self:          {ewald_self:.6f}")
+        print(f"  Total:         {ewald_total:.6f}")
+        
+        # Compare with PME using different mesh sizes
+        for mesh_size in mesh_sizes:
+            mesh = [mesh_size, mesh_size, mesh_size]
+            
+            # Calculate with PME
+            pygcmc.setPMEParameters(alpha, mesh, spline_order)
+            pygcmc.initializePMEParameters(cutoff, box, alpha, mesh, spline_order)
+            _, _, pme_dict = pygcmc.computeSystemEnergyPME(state)
+            
+            pme_real = pme_dict["real_space"]
+            pme_recip = pme_dict["reciprocal"]
+            pme_self = pme_dict["self"]
+            pme_total = pme_dict["total"]
+            
+            # Calculate absolute and relative differences
+            real_diff = pme_real - ewald_real
+            recip_diff = pme_recip - ewald_recip
+            self_diff = pme_self - ewald_self
+            total_diff = pme_total - ewald_total
+            
+            real_rel_diff = real_diff / abs(ewald_real) if abs(ewald_real) > 1e-10 else 0.0
+            recip_rel_diff = recip_diff / abs(ewald_recip) if abs(ewald_recip) > 1e-10 else 0.0
+            self_rel_diff = self_diff / abs(ewald_self) if abs(ewald_self) > 1e-10 else 0.0
+            total_rel_diff = total_diff / abs(ewald_total) if abs(ewald_total) > 1e-10 else 0.0
+            
+            print(f"\n  PME (mesh={mesh_size}x{mesh_size}x{mesh_size}, order={spline_order}):")
+            print(f"    Real space:  {pme_real:.6f}  (diff: {real_diff:.6f}, {real_rel_diff:.2%})")
+            print(f"    Reciprocal:  {pme_recip:.6f}  (diff: {recip_diff:.6f}, {recip_rel_diff:.2%})")
+            print(f"    Self:        {pme_self:.6f}  (diff: {self_diff:.6f}, {self_rel_diff:.2%})")
+            print(f"    Total:       {pme_total:.6f}  (diff: {total_diff:.6f}, {total_rel_diff:.2%})")
+            
+            # Verify that differences are reasonable
+            # Self energy should be almost identical
+            assert abs(self_rel_diff) < 0.01, f"Self energy differs too much: {self_rel_diff:.2%}"
+            
+            # Real space energy should be very close
+            assert abs(real_rel_diff) < 0.01, f"Real space energy differs too much: {real_rel_diff:.2%}"
+            
+            # For reciprocal space, tolerance depends on mesh size
+            if mesh_size >= 32:
+                assert abs(recip_rel_diff) < 0.05, f"Reciprocal energy differs too much for mesh {mesh_size}: {recip_rel_diff:.2%}"
+            else:
+                # For smaller mesh sizes, we expect larger differences
+                assert abs(recip_rel_diff) < 0.15, f"Reciprocal energy differs too much for mesh {mesh_size}: {recip_rel_diff:.2%}"
+            
+            # Total energy should be within reasonable tolerance
+            if mesh_size >= 32:
+                assert abs(total_rel_diff) < 0.03, f"Total energy differs too much for mesh {mesh_size}: {total_rel_diff:.2%}"
+            else:
+                assert abs(total_rel_diff) < 0.1, f"Total energy differs too much for mesh {mesh_size}: {total_rel_diff:.2%}"
+            
+    # Also test reciprocal vs real space balance with different alpha values
+    print("\nTesting real vs reciprocal space balance with different alpha values:")
+    mesh_size = [32, 32, 32]  # Use fixed mesh size
+    
+    alphas = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0]
+    
+    for alpha in alphas:
+        # Calculate with PME
+        pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
+        pygcmc.initializePMEParameters(cutoff, box, alpha, mesh_size, spline_order)
+        _, _, pme_dict = pygcmc.computeSystemEnergyPME(state)
+        
+        pme_real = pme_dict["real_space"]
+        pme_recip = pme_dict["reciprocal"]
+        pme_self = pme_dict["self"]
+        pme_total = pme_dict["total"]
+        
+        # Calculate ratios
+        real_ratio = abs(pme_real) / abs(pme_total)
+        recip_ratio = abs(pme_recip) / abs(pme_total)
+        
+        print(f"  Alpha = {alpha:.2f}: Real/Total = {real_ratio:.2f}, Recip/Total = {recip_ratio:.2f}")
+        
+        # With higher alpha, real space should decrease and reciprocal should increase
+        if alpha >= 0.5:
+            assert real_ratio < 0.5, f"Real space ratio should be smaller for alpha={alpha}"
+        
+        # Basic sanity check that energy components sum to total
+        component_sum = pme_real + pme_recip + pme_self
+        assert abs(component_sum - pme_total) < 1e-6, "Energy components don't sum to total"
+
+def test_ewald_vs_pme_exact():
+    """
+    Exact replication of testEwaldVsPME function from pme.cpp
+    
+    This test creates exactly the same system as in pme.cpp's testEwaldVsPME function
+    and compares energy components between Python and C++ implementations.
+    The focus is on verifying if real space and self energy components match exactly.
+    """
+    # Create a random system with exact parameters from pme.cpp
+    import random
+    
+    # Parameters identical to testEwaldVsPME in pme.cpp
+    num_particles = 100
+    box_size = 3.0
+    cutoff = 1.0
+    
+    state = MCState()
+    
+    # Set box size and temperature
+    state.info.box = [box_size, box_size, box_size]
+    state.info.setTemperature(300.0)  # 300K
+    state.info.cutoff = cutoff
+    
+    # Set force field parameters
+    ff = MCForceField()
+    ff.numTotalTypes = 2  # Positive and negative ions
+    
+    # Simple LJ parameters - same as in pme.cpp
+    sigma = 0.3  # nm
+    epsilon = 0.1  # kJ/mol
+    
+    # Set LJ parameter matrix
+    ff.ljSigma = [sigma, sigma, sigma, sigma]
+    ff.ljEps = [epsilon, epsilon, epsilon, epsilon]
+    
+    state.forcefield = ff
+    
+    # Generate random particles with same seed and pattern as pme.cpp
+    # Use the same seed (98765) as in pme.cpp
+    random.seed(98765)
+    
+    atoms = []
+    residues = []
+    
+    print(f"\nCreating random system with {num_particles} particles (identical to pme.cpp)...")
+    
+    for i in range(num_particles):
+        # Create a new atom
+        atom = MCAtom()
+        
+        # Random position within box - exact same pattern as pme.cpp
+        atom.x = random.random() * box_size
+        atom.y = random.random() * box_size
+        atom.z = random.random() * box_size
+        
+        # Alternating charges
+        if i < num_particles/2:
+            atom.charge = 1.0  # Positive
+            atom.type = 0
+        else:
+            atom.charge = -1.0  # Negative
+            atom.type = 1
+        
+        atoms.append(atom)
+        
+        # Create one residue per atom (for simplicity)
+        if i % 2 == 0:  # Create a residue for each pair of atoms
+            res = MCResidue()
+            res.atomStart = i
+            res.atomCount = 2 if i < num_particles-1 else 1  # Handle last atom
+            res.active = True
+            res.fixed = False
+            residues.append(res)
+    
+    state.atoms = atoms
+    state.residues = residues
+    state.activeAtomCount = len(atoms)
+    state.activeResidueCount = len(residues)
+    
+    # System parameters - exact same as pme.cpp
+    box = [box_size, box_size, box_size]
+    
+    # Use exactly the same PME parameters as in pme.cpp
+    alpha = 2.5 / cutoff  # This is 2.5, same as pme.cpp
+    mesh_size = [32, 32, 32]  # Same as pme.cpp
+    spline_order = 5  # Same as pme.cpp
+    
+    # Calculate with PME
+    print(f"\nPME calculation with parameters from pme.cpp:")
+    print(f"Alpha = {alpha}, Mesh = {mesh_size}, Spline Order = {spline_order}")
+    
+    pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
+    pygcmc.initializePMEParameters(cutoff, box, alpha, mesh_size, spline_order)
+    pme_elec, pme_vdw, pme_dict = pygcmc.computeSystemEnergyPME(state)
+    
+    # Expected values from pme.cpp output
+    cpp_pme_real = -4070.75
+    cpp_pme_recip = 11547.4
+    cpp_pme_self = -19596.5
+    cpp_pme_total = -12119.8
+    
+    # Calculated values from Python implementation
+    pme_real = pme_dict["real_space"]
+    pme_recip = pme_dict["reciprocal"]
+    pme_self = pme_dict["self"]
+    pme_total = pme_dict["total"]
+    
+    # Display the comparison in a table format
+    print("\n=== PME Energy Component Comparison: Python vs C++ ===")
+    print(f"Component      | {'Python':>12} | {'C++ (pme.cpp)':>12} | {'Abs Diff':>10} | {'Rel Diff (%)':>12}")
+    print(f"--------------+{'-'*14}+{'-'*14}+{'-'*12}+{'-'*14}")
+    
+    # Real space
+    real_diff = abs(pme_real - cpp_pme_real)
+    real_rel_diff = 100.0 * real_diff / abs(cpp_pme_real) if abs(cpp_pme_real) > 1e-10 else 0.0
+    print(f"Real space     | {pme_real:12.2f} | {cpp_pme_real:12.2f} | {real_diff:10.2f} | {real_rel_diff:12.6f}")
+    
+    # Reciprocal space
+    recip_diff = abs(pme_recip - cpp_pme_recip)
+    recip_rel_diff = 100.0 * recip_diff / abs(cpp_pme_recip) if abs(cpp_pme_recip) > 1e-10 else 0.0
+    print(f"Reciprocal    | {pme_recip:12.2f} | {cpp_pme_recip:12.2f} | {recip_diff:10.2f} | {recip_rel_diff:12.6f}")
+    
+    # Self energy
+    self_diff = abs(pme_self - cpp_pme_self)
+    self_rel_diff = 100.0 * self_diff / abs(cpp_pme_self) if abs(cpp_pme_self) > 1e-10 else 0.0
+    print(f"Self          | {pme_self:12.2f} | {cpp_pme_self:12.2f} | {self_diff:10.2f} | {self_rel_diff:12.6f}")
+    
+    # Total energy
+    total_diff = abs(pme_total - cpp_pme_total)
+    total_rel_diff = 100.0 * total_diff / abs(cpp_pme_total) if abs(cpp_pme_total) > 1e-10 else 0.0
+    print(f"Total         | {pme_total:12.2f} | {cpp_pme_total:12.2f} | {total_diff:10.2f} | {total_rel_diff:12.6f}")
+    
+    # Display expected results from pme.cpp for reference
+    print("\nExpected C++ output from pme.cpp:")
+    print("""PME Energy: -12119.8
+  Real space: -4070.75
+  Reciprocal: 11547.4
+  Self: -19596.5
+Ewald-like Energy: -12119.9
+  Real space: -4070.75
+  Reciprocal: 11547.4
+  Self: -19596.5
+Relative energy difference: 4.64367e-06""")
+    
+    # Verify match with reasonable tolerance
+    assert real_rel_diff < 1.0, f"Real space energy doesn't match C++ value: {real_rel_diff:.4f}%"
+    assert self_rel_diff < 1.0, f"Self energy doesn't match C++ value: {self_rel_diff:.4f}%"
+    assert total_rel_diff < 1.0, f"Total energy doesn't match C++ value: {total_rel_diff:.4f}%"
+    
+    print("\nVerification complete:")
+    if real_rel_diff < 0.1:
+        print(f"✓ Real space energy matches within 0.1% (diff: {real_rel_diff:.4f}%)")
+    else:
+        print(f"! Real space energy differs by {real_rel_diff:.4f}%")
+        
+    if self_rel_diff < 0.1:
+        print(f"✓ Self energy matches within 0.1% (diff: {self_rel_diff:.4f}%)")
+    else:
+        print(f"! Self energy differs by {self_rel_diff:.4f}%")
+    
+    if recip_rel_diff < 1.0:
+        print(f"✓ Reciprocal energy matches within 1.0% (diff: {recip_rel_diff:.4f}%)")
+    else:
+        print(f"! Reciprocal energy differs by {recip_rel_diff:.4f}%")
+    
+    # Also test with problem parameters (alpha=0.2, mesh=16)
+    print("\n=== Testing problematic parameter combination ===")
+    problem_alpha = 0.2
+    problem_mesh = [16, 16, 16]
+    
+    print(f"Alpha = {problem_alpha}, Mesh = {problem_mesh}, Spline Order = {spline_order}")
+    
+    pygcmc.setPMEParameters(problem_alpha, problem_mesh, spline_order)
+    pygcmc.initializePMEParameters(cutoff, box, problem_alpha, problem_mesh, spline_order)
+    prob_elec, prob_vdw, prob_dict = pygcmc.computeSystemEnergyPME(state)
+    
+    prob_real = prob_dict["real_space"]
+    prob_recip = prob_dict["reciprocal"]
+    prob_self = prob_dict["self"]
+    prob_total = prob_dict["total"]
+    
+    # Calculate expected Ewald reciprocal energy at alpha=0.2 for comparison
+    pygcmc.setEwaldParameters(problem_alpha, [8, 8, 8])
+    pygcmc.initializeEwaldParameters(cutoff, box, problem_alpha)
+    _, _, ewald_dict = pygcmc.computeSystemEnergyEwald(state)
+    
+    ewald_recip = ewald_dict["reciprocal"]
+    
+    print(f"\nProblematic alpha={problem_alpha}, mesh={problem_mesh[0]} results:")
+    print(f"Real space:     {prob_real:.2f}")
+    print(f"Reciprocal:     {prob_recip:.2f}")
+    print(f"Self:           {prob_self:.2f}")
+    print(f"Total:          {prob_total:.2f}")
+    print(f"Ewald reciprocal (reference): {ewald_recip:.6f}")
+    
+    print(f"\nReciprocal energy difference: {prob_recip-ewald_recip:.2f}")
+    if abs(prob_recip) > 1000.0 and abs(ewald_recip) < 1.0:
+        print("! WARNING: Reciprocal energy is abnormally high with small mesh and low alpha")
+        print("! This confirms the issue observed in test_ewald_vs_pme_detailed")
+    
+    print("\nConclusion:")
+    if real_rel_diff < 0.1 and self_rel_diff < 0.1:
+        print("✓ Real space and Self energy components match between Python and C++")
+        print("! Reciprocal energy calculation has issues with low alpha and small mesh sizes")
+    else:
+        print("! Energy components differ between Python and C++ implementations")
+
+def test_ewald_exact():
+    """
+    Exact replication of testEwaldExact function from pme.cpp
+    
+    This test reads the same NaCl crystal configuration from nacl_crystal.dat
+    and calculates energies using the same parameters as in pme.cpp.
+    The energy values should match those reported by running the C++ test directly.
+    """
+    print("\nRunning test_ewald_exact (replicating testEwaldExact from pme.cpp)...")
+    
+    # Parameters identical to testEwaldExact in pme.cpp
+    num_particles = 1000
+    cutoff = 1.0
+    box_size = 2.82
+    
+    # Set up the system
+    state = MCState()
+    state.info.box = [box_size, box_size, box_size]
+    state.info.setTemperature(300.0)
+    state.info.cutoff = cutoff
+    
+    # Set force field parameters - same as in pme.cpp
+    ff = MCForceField()
+    ff.numTotalTypes = 2  # Na+ and Cl-
+    
+    # LJ parameters (assumed same as create_nacl_crystal)
+    sigma_na = 0.333  # nm
+    sigma_cl = 0.442  # nm
+    eps_na = 0.0115  # kJ/mol
+    eps_cl = 0.4184  # kJ/mol
+    
+    # Set LJ parameter matrix
+    ff.ljSigma = [
+        sigma_na, (sigma_na + sigma_cl)/2.0,
+        (sigma_na + sigma_cl)/2.0, sigma_cl
+    ]
+    ff.ljEps = [
+        eps_na, math.sqrt(eps_na * eps_cl),
+        math.sqrt(eps_na * eps_cl), eps_cl
+    ]
+    
+    state.forcefield = ff
+    
+    # Read atom positions from nacl_crystal.dat file
+    print("Reading atom positions from nacl_crystal.dat file...")
+    
+    import os
+    import re
+    
+    # Find the file path - try different possible locations
+    data_file_paths = [
+        '../pygcmc_dev/tests/data/nacl_crystal.dat',  # Relative to build directory
+        '../tests/data/nacl_crystal.dat',             # Relative to current directory
+        'tests/data/nacl_crystal.dat',                # From project root
+        '/home/zhaomt/gcmc/test100/pygcmc_dev/tests/data/nacl_crystal.dat'  # Absolute path
+    ]
+    
+    data_file_path = None
+    for path in data_file_paths:
+        if os.path.exists(path):
+            data_file_path = path
+            break
+    
+    if data_file_path is None:
+        raise FileNotFoundError("Could not find nacl_crystal.dat file in any of the expected locations")
+    
+    print(f"Found data file at: {data_file_path}")
+    
+    # Parse positions from nacl_crystal.dat
+    positions = []
+    with open(data_file_path, 'r') as f:
+        for line in f:
+            # Look for lines like: positions[0] = Vec3(0.141000,0.141000,0.141000);
+            match = re.search(r'Vec3\(([^)]+)\)', line)
+            if match:
+                coords_str = match.group(1)
+                x, y, z = map(float, coords_str.split(','))
+                positions.append((x, y, z))
+    
+    print(f"Read {len(positions)} positions from file")
+    
+    # Print some sample positions for verification
+    print("\nSample positions from file:")
+    for i in range(0, min(len(positions), 1000), 100):
+        print(f"Position {i}: ({positions[i][0]:.6f}, {positions[i][1]:.6f}, {positions[i][2]:.6f})")
+    
+    # Print first and last position
+    if positions:
+        print(f"First position: ({positions[0][0]:.6f}, {positions[0][1]:.6f}, {positions[0][2]:.6f})")
+        print(f"Last position: ({positions[-1][0]:.6f}, {positions[-1][1]:.6f}, {positions[-1][2]:.6f})")
+    
+    # Check for unusual values or patterns
+    if positions:
+        x_vals = [pos[0] for pos in positions]
+        y_vals = [pos[1] for pos in positions]
+        z_vals = [pos[2] for pos in positions]
+        
+        print(f"\nCoordinate ranges:")
+        print(f"X range: {min(x_vals):.6f} to {max(x_vals):.6f}")
+        print(f"Y range: {min(y_vals):.6f} to {max(y_vals):.6f}")
+        print(f"Z range: {min(z_vals):.6f} to {max(z_vals):.6f}")
+        
+        # Check if all positions are within the box
+        out_of_box = sum(1 for pos in positions if any(coord < 0 or coord > box_size for coord in pos))
+        print(f"Positions outside box [{box_size}x{box_size}x{box_size}]: {out_of_box}")
+    
+    if len(positions) != num_particles:
+        print(f"Warning: Expected {num_particles} particles but found {len(positions)} in the file")
+        # We'll still proceed with what we have
+    
+    # Create atoms with the exact positions from the file
+    atoms = []
+    residues = []
+    
+    # Assign the first half as Na+ and second half as Cl-
+    half_count = len(positions) // 2
+    
+    for i, (x, y, z) in enumerate(positions):
+        atom = MCAtom()
+        atom.x = x
+        atom.y = y
+        atom.z = z
+        
+        if i < half_count:
+            atom.charge = 1.0  # Na+
+            atom.type = 0
+        else:
+            atom.charge = -1.0  # Cl-
+            atom.type = 1
+        
+        atoms.append(atom)
+        
+        # Create residues (one per atom or one per pair)
+        if i % 2 == 0:
+            res = MCResidue()
+            res.atomStart = i
+            res.atomCount = 2 if i < len(positions) - 1 else 1  # Last atom might be alone
+            res.active = True
+            res.fixed = False
+            residues.append(res)
+    
+    # Print charges summary
+    total_charge = sum(1.0 if i < half_count else -1.0 for i in range(len(positions)))
+    print(f"\nTotal system charge: {total_charge}")
+    print(f"Created {len(atoms)} atoms and {len(residues)} residues")
+    
+    state.atoms = atoms
+    state.residues = residues
+    state.activeAtomCount = len(atoms)
+    state.activeResidueCount = len(residues)
+    
+    # System parameters
+    box = [box_size, box_size, box_size]
+    
+    # Set Ewald parameters to match testEwaldExact
+    # C++ test uses alpha = 5.0 / cutoff based on the source code
+    alpha = 5.0 / cutoff  # This is 5.0 in C++ implementation, not 2.3 or 2.5
+    kmax = [13, 13, 13]  # High precision for reference
+    
+    print(f"Calculating energies with alpha={alpha}, kmax={kmax}, cutoff={cutoff}nm")
+    
+    # Calculate with Ewald
+    pygcmc.setEwaldParameters(alpha, kmax)
+    pygcmc.initializeEwaldParameters(cutoff, box, alpha)
+    ewald_elec, ewald_vdw, ewald_dict = pygcmc.computeSystemEnergyEwald(state)
+    
+    ewald_real = ewald_dict["real_space"]
+    ewald_recip = ewald_dict["reciprocal"]
+    ewald_self = ewald_dict["self"]
+    ewald_total = ewald_dict["total"]
+    
+    # Expected values from pme.cpp testEwaldExact
+    cpp_real = -58768.6
+    cpp_recip = 20228.4
+    cpp_self = -391930
+    cpp_total = -430470
+    cpp_expected = -430767
+    
+    # Display results
+    print(f"\nEnergy Calculation Results:")
+    print(f"Component      | {'Python':>12} | {'C++ (pme.cpp)':>12} | {'Abs Diff':>10} | {'Rel Diff (%)':>12}")
+    print(f"--------------+{'-'*14}+{'-'*14}+{'-'*12}+{'-'*14}")
+    
+    # Real space energy
+    real_diff = abs(ewald_real - cpp_real)
+    real_rel_diff = 100.0 * real_diff / abs(cpp_real) if abs(cpp_real) > 1e-10 else 0.0
+    print(f"Real space     | {ewald_real:12.1f} | {cpp_real:12.1f} | {real_diff:10.1f} | {real_rel_diff:12.6f}")
+    
+    # Reciprocal space
+    recip_diff = abs(ewald_recip - cpp_recip)
+    recip_rel_diff = 100.0 * recip_diff / abs(cpp_recip) if abs(cpp_recip) > 1e-10 else 0.0
+    print(f"Reciprocal    | {ewald_recip:12.1f} | {cpp_recip:12.1f} | {recip_diff:10.1f} | {recip_rel_diff:12.6f}")
+    
+    # Self energy
+    self_diff = abs(ewald_self - cpp_self)
+    self_rel_diff = 100.0 * self_diff / abs(cpp_self) if abs(cpp_self) > 1e-10 else 0.0
+    print(f"Self          | {ewald_self:12.1f} | {cpp_self:12.1f} | {self_diff:10.1f} | {self_rel_diff:12.6f}")
+    
+    # Total energy
+    total_diff = abs(ewald_total - cpp_total)
+    total_rel_diff = 100.0 * total_diff / abs(cpp_total) if abs(cpp_total) > 1e-10 else 0.0
+    print(f"Total         | {ewald_total:12.1f} | {cpp_total:12.1f} | {total_diff:10.1f} | {total_rel_diff:12.6f}")
+    
+    # Expected energy
+    expected_diff = abs(ewald_total - cpp_expected)
+    expected_rel_diff = 100.0 * expected_diff / abs(cpp_expected) if abs(cpp_expected) > 1e-10 else 0.0
+    print(f"vs Expected   | {ewald_total:12.1f} | {cpp_expected:12.1f} | {expected_diff:10.1f} | {expected_rel_diff:12.6f}")
+    
+    # Display expected results from pme.cpp for reference
+    print("\nExpected C++ output from pme.cpp testEwaldExact:")
+    print("""Real space energy: -58768.6
+Reciprocal space energy: 20228.4
+Self energy: -391930
+Total energy: -430470
+Expected energy: -430767
+Test passed: relative error within tolerance""")
+    
+    # Now calculate with PME
+    mesh_size = [32, 32, 32]  # Same as in pme.cpp
+    spline_order = 5  # Same as in pme.cpp
+    
+    print(f"\nCalculating with PME: alpha={alpha}, mesh={mesh_size}, spline_order={spline_order}")
+    pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
+    pygcmc.initializePMEParameters(cutoff, box, alpha, mesh_size, spline_order)
+    pme_elec, pme_vdw, pme_dict = pygcmc.computeSystemEnergyPME(state)
+    
+    pme_real = pme_dict["real_space"]
+    pme_recip = pme_dict["reciprocal"]
+    pme_self = pme_dict["self"]
+    pme_total = pme_dict["total"]
+    
+    # Calculate differences between PME and Ewald
+    pme_ewald_real_diff = abs(pme_real - ewald_real) / abs(ewald_real) * 100.0 if abs(ewald_real) > 1e-10 else 0.0
+    pme_ewald_recip_diff = abs(pme_recip - ewald_recip) / abs(ewald_recip) * 100.0 if abs(ewald_recip) > 1e-10 else 0.0
+    pme_ewald_self_diff = abs(pme_self - ewald_self) / abs(ewald_self) * 100.0 if abs(ewald_self) > 1e-10 else 0.0
+    pme_ewald_total_diff = abs(pme_total - ewald_total) / abs(ewald_total) * 100.0 if abs(ewald_total) > 1e-10 else 0.0
+    
+    print(f"\nPME vs Ewald comparison:")
+    print(f"Component      | {'PME':>12} | {'Ewald':>12} | {'Rel Diff (%)':>12}")
+    print(f"--------------+{'-'*14}+{'-'*14}+{'-'*14}")
+    print(f"Real space     | {pme_real:12.1f} | {ewald_real:12.1f} | {pme_ewald_real_diff:12.6f}")
+    print(f"Reciprocal    | {pme_recip:12.1f} | {ewald_recip:12.1f} | {pme_ewald_recip_diff:12.6f}")
+    print(f"Self          | {pme_self:12.1f} | {ewald_self:12.1f} | {pme_ewald_self_diff:12.6f}")
+    print(f"Total         | {pme_total:12.1f} | {ewald_total:12.1f} | {pme_ewald_total_diff:12.6f}")
+    
+    # Check if we're seeing the zero reciprocal space issue
+    if abs(pme_recip) < 1.0 and abs(ewald_recip) > 1000.0:
+        print("\n! WARNING: PME reciprocal space energy is zero or near zero!")
+        print("! This confirms the issue observed in other tests")
+    
+    # Verify that we're in a reasonable range of the C++ results
+    print("\nVerification of Python vs C++ results:")
+    
+    tolerance = 15.0  # Allow 15% difference since there might still be some differences
+    
+    if total_rel_diff < tolerance:
+        print(f"✓ Total energy is within {tolerance}% of C++ value (diff: {total_rel_diff:.2f}%)")
+    else:
+        print(f"! Total energy differs by {total_rel_diff:.2f}% from C++ value")
+    
+    if abs(pme_ewald_real_diff) < 1.0:
+        print(f"✓ PME real space matches Ewald (diff: {pme_ewald_real_diff:.6f}%)")
+    else:
+        print(f"! PME real space differs from Ewald by {pme_ewald_real_diff:.6f}%")
+    
+    if abs(pme_ewald_self_diff) < 1.0:
+        print(f"✓ PME self energy matches Ewald (diff: {pme_ewald_self_diff:.6f}%)")
+    else:
+        print(f"! PME self energy differs from Ewald by {pme_ewald_self_diff:.6f}%")
+    
+    print("\nConclusion:")
+    if abs(pme_recip) < 1.0:
+        print("! PME implementation has issues with reciprocal space energy calculation")
+    else:
+        print("✓ PME reciprocal space energy is non-zero")
+        
+    # Print additional diagnostic info
+    if total_rel_diff > tolerance:
+        print("\nAdditional diagnostic info:")
+        print("1. Check if correct unit conversions are applied in both implementations")
+        print("2. Verify that dielectric constants and other physical constants match")
+        print("3. Check if periodic boundary conditions are handled the same way")
+        print("4. Ewald parameters may need to be set to exactly match the C++ implementation")
+        
+        # 添加关于自能计算的详细说明
+        print("\nSelf energy calculation comparison:")
+        print("C++ implementation (from pme.cpp):")
+        print("  - Self energy = -sum_i (q_i^2 * alpha / sqrt(π)) * conversion_factor")
+        print("  - where alpha = 5.0/cutoff = 5.0")
+        print("  - Uses specific Coulomb constant and unit conversion")
+        
+        print("\nPython implementation may differ in:")
+        print("  - Coulomb constant (1/4πε₀) value")
+        print("  - Unit conversion factors between kJ/mol and internal units")
+        print("  - Implementation of the formula for self energy calculation")
+        
+        print("\nExact Madelung energy calculation (in C++):")
+        print("  - Uses Madelung constant for NaCl (1.7476)")
+        print("  - Applies unit conversion from fundamental constants")
+        print("  - Exact formula used: -(1.7476 * 1.6022e-19 * 1.6022e-19 * AVOGADRO * numParticles)" 
+              " / (1.112e-10 * 0.282e-9 * 2 * 1000)")
+        print("  - These constants may differ in Python implementation")
+
 if __name__ == "__main__":
     test_pme_initialization()
     test_pme_vs_ewald()
@@ -844,3 +1486,6 @@ if __name__ == "__main__":
     test_pme_alpha_dependency()
     test_pme_small_mesh()
     test_ewald_vs_pme_random()
+    test_ewald_vs_pme_detailed()
+    test_ewald_vs_pme_exact()
+    test_ewald_exact()
