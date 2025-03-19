@@ -691,6 +691,15 @@ void spreadChargesOntoGrid(model::MCState& state, bool movement_only) {
     // 计数器 - 了解有多少原子的电荷被扩散
     int processedAtoms = 0;
     double totalCharge = 0.0;
+    double totalSpreadCharge = 0.0;  // 跟踪实际扩散到网格上的电荷总量
+    
+    // 增加粒子调试信息
+    platform::log(LogLevel::INFO, "First few atoms:");
+    for (int i = 0; i < std::min(5, state.activeAtomCount); i++) {
+        platform::log(LogLevel::INFO, "Atom ", i, ": position = (",
+                     atoms[i].x, ", ", atoms[i].y, ", ", atoms[i].z,
+                     "), charge = ", atoms[i].charge);
+    }
     
     // Calculate spline coefficients for each atom
     const int order = pme_params.splineOrder;
@@ -724,16 +733,27 @@ void spreadChargesOntoGrid(model::MCState& state, bool movement_only) {
         
         // Apply periodic boundary conditions
         // Wrap coordinates to primary box (0 to box size)
-        while (posInBox[0] < 0) posInBox[0] += box[0];
-        while (posInBox[0] >= box[0]) posInBox[0] -= box[0];
-        while (posInBox[1] < 0) posInBox[1] += box[1];
-        while (posInBox[1] >= box[1]) posInBox[1] -= box[1];
-        while (posInBox[2] < 0) posInBox[2] += box[2];
-        while (posInBox[2] >= box[2]) posInBox[2] -= box[2];
+        for (int dim = 0; dim < 3; dim++) {
+            while (posInBox[dim] < 0) posInBox[dim] += box[dim];
+            while (posInBox[dim] >= box[dim]) posInBox[dim] -= box[dim];
+        }
+        
+        // Debug output for certain atoms
+        if (n < 5 || n % 200 == 0) {
+            platform::log(LogLevel::INFO, "Atom ", n, " (charge = ", charge, 
+                         "): wrapped position = (", posInBox[0], ", ", 
+                         posInBox[1], ", ", posInBox[2], ")");
+        }
         
         // Convert to fractional coordinates (0-1)
         double scale[3] = { 1.0 / box[0], 1.0 / box[1], 1.0 / box[2] };
         double t[3] = { posInBox[0] * scale[0], posInBox[1] * scale[1], posInBox[2] * scale[2] };
+        
+        // 增加分数坐标检查
+        if (n < 5 || n % 200 == 0) {
+            platform::log(LogLevel::INFO, "Atom ", n, ": fractional coordinates = (",
+                         t[0], ", ", t[1], ", ", t[2], ")");
+        }
         
         // Convert to grid coordinates and compute B-spline coefficients
         int gridIndex[3];
@@ -774,8 +794,26 @@ void spreadChargesOntoGrid(model::MCState& state, bool movement_only) {
             }
         }
         
+        // 打印网格索引信息
+        if (n < 5 || n % 200 == 0) {
+            platform::log(LogLevel::INFO, "Atom ", n, ": grid indices = (",
+                         gridIndex[0], ", ", gridIndex[1], ", ", gridIndex[2], ")");
+            
+            // B样条系数的和应该是1
+            double sum0 = 0, sum1 = 0, sum2 = 0;
+            for (int i = 0; i < order; i++) {
+                sum0 += thetai[0][i];
+                sum1 += thetai[1][i];
+                sum2 += thetai[2][i];
+            }
+            platform::log(LogLevel::INFO, "B-spline coefficient sums: ",
+                         sum0, ", ", sum1, ", ", sum2, " (should be ~1.0)");
+        }
+        
         // Spread charge to nearby grid points using B-spline weights
         // Optimized for better cache performance and numerical stability
+        double atomSpreadCharge = 0.0;  // 跟踪这个原子扩散到网格上的总电荷
+        
         for (int ix = 0; ix < order; ix++) {
             int xindex = (gridIndex[0] + ix) % pme_params.meshSize[0];
             double xterm = charge * thetai[0][ix];
@@ -792,16 +830,49 @@ void spreadChargesOntoGrid(model::MCState& state, bool movement_only) {
                     int index = xindex * pme_params.meshSize[1] * pme_params.meshSize[2] + 
                                 yindex * pme_params.meshSize[2] + zindex;
                     
+                    // 确保索引在有效范围内
+                    if (index < 0 || index >= static_cast<int>(pme_params.pmeGrid.size())) {
+                        platform::log(LogLevel::ERROR, "Invalid grid index ", index,
+                                     " for atom ", n, " at position (", posInBox[0], ", ",
+                                     posInBox[1], ", ", posInBox[2], ")");
+                        continue;
+                    }
+                    
                     // Atomic increment of grid value to ensure thread safety
                     pme_params.pmeGrid[index] += std::complex<double>(weight, 0.0);
+                    atomSpreadCharge += weight;
                 }
             }
         }
         
+        // 检查原子电荷是否保持不变
+        if (n < 5 || n % 200 == 0 || std::abs(atomSpreadCharge - charge) > 1e-6) {
+            platform::log(LogLevel::INFO, "Atom ", n, ": original charge = ", charge,
+                         ", spread charge = ", atomSpreadCharge,
+                         ", difference = ", atomSpreadCharge - charge);
+        }
+        
+        totalSpreadCharge += atomSpreadCharge;
         processedAtoms++;
     }
     
-    platform::log(LogLevel::INFO, "Processed ", processedAtoms, " atoms for PME. Total charge = ", totalCharge);
+    platform::log(LogLevel::INFO, "Processed ", processedAtoms, " atoms for PME. Total charge = ", 
+                 totalCharge, ", Total spread charge = ", totalSpreadCharge, 
+                 ", Difference = ", totalSpreadCharge - totalCharge);
+    
+    // 检查网格上有多少非零点
+    int nonZeroPoints = 0;
+    double maxGridCharge = 0.0;
+    for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
+        double charge = std::abs(pme_params.pmeGrid[i].real());
+        if (charge > 1e-10) {
+            nonZeroPoints++;
+            maxGridCharge = std::max(maxGridCharge, charge);
+        }
+    }
+    platform::log(LogLevel::INFO, "Non-zero grid points: ", nonZeroPoints,
+                 " out of ", pme_params.pmeGrid.size(),
+                 ", Max grid charge = ", maxGridCharge);
 }
 
 /**
@@ -817,15 +888,51 @@ void performFFTForward() {
     int ny = pme_params.meshSize[1];
     int nz = pme_params.meshSize[2];
     
+    platform::log(LogLevel::INFO, "Starting 3D FFT with grid size: [", 
+                 nx, ", ", ny, ", ", nz, "]");
+    
+    // 在FFT之前记录一些格点值
+    platform::log(LogLevel::INFO, "Some grid values before FFT:");
+    for (int i = 0; i < std::min(5, nx); i++) {
+        for (int j = 0; j < std::min(5, ny); j++) {
+            for (int k = 0; k < std::min(5, nz); k++) {
+                int idx = i * ny * nz + j * nz + k;
+                platform::log(LogLevel::INFO, "Grid[", i, ",", j, ",", k, "] = ", 
+                             pme_params.pmeGrid[idx].real(), " + ", 
+                             pme_params.pmeGrid[idx].imag(), "i");
+            }
+        }
+    }
+    
     // 验证网格尺寸是2的幂
     if ((nx & (nx - 1)) != 0 || (ny & (ny - 1)) != 0 || (nz & (nz - 1)) != 0) {
         throw std::runtime_error("PME grid size must be a power of 2 for this FFT implementation");
     }
     
     // 直接使用fft3D_forward函数进行3D FFT
+    platform::log(LogLevel::INFO, "Performing FFT along X dimension...");
     CustomFFT::fft_1d_batch(pme_params.pmeGrid.data(), 0, nx, ny, nz, false);
+    
+    platform::log(LogLevel::INFO, "Performing FFT along Y dimension...");
     CustomFFT::fft_1d_batch(pme_params.pmeGrid.data(), 1, nx, ny, nz, false);
+    
+    platform::log(LogLevel::INFO, "Performing FFT along Z dimension...");
     CustomFFT::fft_1d_batch(pme_params.pmeGrid.data(), 2, nx, ny, nz, false);
+    
+    // 在FFT之后记录一些格点值
+    platform::log(LogLevel::INFO, "Some grid values after FFT:");
+    for (int i = 0; i < std::min(5, nx); i++) {
+        for (int j = 0; j < std::min(5, ny); j++) {
+            for (int k = 0; k < std::min(5, nz); k++) {
+                int idx = i * ny * nz + j * nz + k;
+                platform::log(LogLevel::INFO, "Grid[", i, ",", j, ",", k, "] = ", 
+                             pme_params.pmeGrid[idx].real(), " + ", 
+                             pme_params.pmeGrid[idx].imag(), "i");
+            }
+        }
+    }
+    
+    platform::log(LogLevel::INFO, "3D FFT completed successfully");
 }
 
 /**
@@ -841,14 +948,22 @@ void performFFTBackward() {
     int ny = pme_params.meshSize[1];
     int nz = pme_params.meshSize[2];
     
+    platform::log(LogLevel::INFO, "Starting 3D backward FFT with grid size: [", 
+                 nx, ", ", ny, ", ", nz, "]");
+    
     // 验证网格尺寸是2的幂
     if ((nx & (nx - 1)) != 0 || (ny & (ny - 1)) != 0 || (nz & (nz - 1)) != 0) {
         throw std::runtime_error("PME grid size must be a power of 2 for this FFT implementation");
     }
     
     // 直接使用fft3D_backward函数进行3D逆FFT
+    platform::log(LogLevel::INFO, "Performing backward FFT along Z dimension...");
     CustomFFT::fft_1d_batch(pme_params.pmeGrid.data(), 2, nx, ny, nz, true);
+    
+    platform::log(LogLevel::INFO, "Performing backward FFT along Y dimension...");
     CustomFFT::fft_1d_batch(pme_params.pmeGrid.data(), 1, nx, ny, nz, true);
+    
+    platform::log(LogLevel::INFO, "Performing backward FFT along X dimension...");
     CustomFFT::fft_1d_batch(pme_params.pmeGrid.data(), 0, nx, ny, nz, true);
     
     // 应用额外的缩放因子 - fft3D_backward中有些缩放，但我们额外需要全局缩放
@@ -856,6 +971,8 @@ void performFFTBackward() {
     for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
         pme_params.pmeGrid[i] /= scale;
     }
+    
+    platform::log(LogLevel::INFO, "3D backward FFT completed successfully");
 }
 
 /**
@@ -1042,11 +1159,39 @@ double computeReciprocalPME(model::MCState& state, bool movement_only) {
                  pme_params.meshSize[0], ",", pme_params.meshSize[1], ",", pme_params.meshSize[2], "]",
                  ", spline order = ", pme_params.splineOrder);
     
+    // 添加辅助函数来检查网格上的电荷总和
+    auto checkGridTotalCharge = [&]() {
+        double totalGridCharge = 0.0;
+        double maxGridCharge = 0.0;
+        int nonZeroPoints = 0;
+        
+        for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
+            double charge = pme_params.pmeGrid[i].real();
+            totalGridCharge += charge;
+            maxGridCharge = std::max(maxGridCharge, std::abs(charge));
+            if (std::abs(charge) > 1e-10) nonZeroPoints++;
+        }
+        
+        platform::log(LogLevel::INFO, "PME grid stats: total charge = ", totalGridCharge, 
+                     ", max charge = ", maxGridCharge, 
+                     ", non-zero points = ", nonZeroPoints, 
+                     " out of ", pme_params.pmeGrid.size());
+    };
+    
     // 将电荷分配到网格上
     spreadChargesOntoGrid(state, movement_only);
     
+    // 检查初始网格状态
+    platform::log(LogLevel::INFO, "Grid status after charge spreading:");
+    checkGridTotalCharge();
+    
     // 执行前向傅里叶变换
+    platform::log(LogLevel::INFO, "Performing forward FFT...");
     performFFTForward();
+    
+    // 检查FFT后网格状态
+    platform::log(LogLevel::INFO, "Grid status after forward FFT:");
+    checkGridTotalCharge();
     
     // 计算体积和缩放因子 - 完全按照pme.cpp中的实现
     double volume = box_double[0] * box_double[1] * box_double[2];
@@ -1064,11 +1209,13 @@ double computeReciprocalPME(model::MCState& state, bool movement_only) {
         {0.0, 0.0, 1.0/box_double[2]}
     };
     
-    // 移除未使用的变量
-    // double boxfactor = (2.0 * M_PI) / volume;
+    // 添加boxfactor - 与pme.cpp保持一致
+    double boxfactor = M_PI * box_double[0] * box_double[1] * box_double[2];
+    platform::log(LogLevel::INFO, "Box volume = ", volume, ", boxfactor = ", boxfactor);
     
     // alpha的平方倒数
-    double factor = 1.0 / (4.0 * pme_params.alpha * pme_params.alpha);
+    double factor = M_PI * M_PI / (pme_params.alpha * pme_params.alpha);
+    platform::log(LogLevel::INFO, "Alpha squared inverse factor = ", factor);
     
     // 获取网格维度
     int nx = pme_params.meshSize[0];
@@ -1083,19 +1230,27 @@ double computeReciprocalPME(model::MCState& state, bool movement_only) {
     // 能量累加器
     double esum = 0.0;
     
-    // Debug计数器
-    int nonzero_count = 0;
+    // Virial项 (可选) - 与pme.cpp保持一致
+    double virxx = 0, virxy = 0, virxz = 0;
+    double viryy = 0, viryz = 0, virzz = 0;
+    
+    // 添加计数器跟踪能量贡献
+    int totalFreqPoints = 0;
+    int nonZeroContributions = 0;
+    double maxContribution = 0.0;
     
     // 计算倒空间能量 - 严格按照pme.cpp中的pme_reciprocal_convolution实现
     for (int kx = 0; kx < nx; kx++) {
         // 计算频率
         int mx = (kx < maxkx) ? kx : (kx - nx);
         double mhx = mx * recip_vectors[0][0];
-        double bx = pme_params.bsplineModuli[0][kx];
+        // 注意这里与pme.cpp的不同 - 在pme.cpp中是乘以boxfactor
+        double bx = boxfactor * pme_params.bsplineModuli[0][kx];
         
         for (int ky = 0; ky < ny; ky++) {
             int my = (ky < maxky) ? ky : (ky - ny);
-            double mhy = my * recip_vectors[1][1];
+            // 修正这里的计算以匹配pme.cpp
+            double mhy = mx * recip_vectors[1][0] + my * recip_vectors[1][1];
             double by = pme_params.bsplineModuli[1][ky];
             
             for (int kz = 0; kz < nz; kz++) {
@@ -1104,8 +1259,11 @@ double computeReciprocalPME(model::MCState& state, bool movement_only) {
                     continue;
                 }
                 
+                totalFreqPoints++;
+                
                 int mz = (kz < maxkz) ? kz : (kz - nz);
-                double mhz = mz * recip_vectors[2][2];
+                // 修正这里的计算以匹配pme.cpp
+                double mhz = mx * recip_vectors[2][0] + my * recip_vectors[2][1] + mz * recip_vectors[2][2];
                 
                 // 计算网格索引 - 确保与FFT使用相同的索引方式
                 int gridIndex = kx * ny * nz + ky * nz + kz;
@@ -1114,11 +1272,11 @@ double computeReciprocalPME(model::MCState& state, bool movement_only) {
                 double d1 = pme_params.pmeGrid[gridIndex].real();
                 double d2 = pme_params.pmeGrid[gridIndex].imag();
                 
-                // 计算结构因子的平方
+                // 检查结构因子是否为零
                 double struct2 = d1*d1 + d2*d2;
-                
-                // 如果结构因子太小，则跳过以提高效率
-                if (struct2 < 1e-12) continue;
+                if (struct2 < 1e-12) {
+                    continue;  // 结构因子太小，跳过这一点
+                }
                 
                 // 计算波矢长度的平方
                 double m2 = mhx*mhx + mhy*mhy + mhz*mhz;
@@ -1132,27 +1290,56 @@ double computeReciprocalPME(model::MCState& state, bool movement_only) {
                     denom = 1e-10;
                 }
                 
-                // 计算能量项系数 - 这里是与pme.cpp的关键差异
+                // 计算能量项系数 - 使用pme.cpp的公式
                 double eterm = one_4pi_eps * std::exp(-factor * m2) / denom;
+                
+                // 关键修改: 更新网格数据 - 这是pme.cpp中的做法
+                pme_params.pmeGrid[gridIndex] = std::complex<double>(d1 * eterm, d2 * eterm);
+                
+                // 计算结构因子的平方
                 
                 // 计算能量贡献
                 double ets2 = eterm * struct2;
                 esum += ets2;
                 
-                // 调试输出
-                if (nonzero_count < 5 && struct2 > 1e-6) {
-                    platform::log(LogLevel::DEBUG, "Grid[", kx, ",", ky, ",", kz, "] (k=[", mx, ",", my, ",", mz, "]): ",
-                                 "value=[", d1, ",", d2, "], struct2=", struct2,
-                                 ", m2=", m2, ", eterm=", eterm, 
-                                 ", energy=", ets2);
-                    nonzero_count++;
+                // 跟踪非零贡献
+                if (std::abs(ets2) > 1e-10) {
+                    nonZeroContributions++;
+                    maxContribution = std::max(maxContribution, std::abs(ets2));
+                    
+                    // 打印一些显著的贡献
+                    if (std::abs(ets2) > 10.0 || (kx < 3 && ky < 3 && kz < 3)) {
+                        platform::log(LogLevel::INFO, "Significant energy contribution at [", 
+                                     kx, ",", ky, ",", kz, "]: ", ets2,
+                                     ", m2=", m2, ", struct2=", struct2, 
+                                     ", bx=", bx, ", by=", by, ", bz=", bz);
+                    }
                 }
+                
+                // 添加virial贡献计算 - 与pme.cpp保持一致
+                double vfactor = 2.0 * (1.0 - factor * m2);
+                virxx += vfactor * mhx * mhx * ets2;
+                virxy += vfactor * mhx * mhy * ets2;
+                virxz += vfactor * mhx * mhz * ets2;
+                viryy += vfactor * mhy * mhy * ets2;
+                viryz += vfactor * mhy * mhz * ets2;
+                virzz += vfactor * mhz * mhz * ets2;
             }
         }
     }
     
+    platform::log(LogLevel::INFO, "PME reciprocal space statistics: processed ", 
+                 totalFreqPoints, " frequency points, found ", 
+                 nonZeroContributions, " non-zero contributions, max contribution = ", 
+                 maxContribution, ", raw energy sum = ", esum);
+    
     // 按照pme.cpp中的方式缩放能量 - 使用0.5系数
     double recipEnergy = 0.5 * esum;
+    
+    // 可以存储virial项 (可选)
+    // state.virial.xx += virxx;
+    // state.virial.xy += virxy;
+    // 等等...
     
     platform::log(LogLevel::INFO, "PME reciprocal energy = ", recipEnergy);
     return recipEnergy;
@@ -1166,8 +1353,14 @@ double computeReciprocalPME(model::MCState& state, bool movement_only) {
  * @return double Self-energy
  */
 double computeSelfEnergyPME(model::MCState& state, bool movement_only) {
+    platform::log(LogLevel::INFO, "Computing self energy with alpha = ", pme_params.alpha);
+    
     // Self-energy calculation same as Ewald
     double self_energy = 0.0;
+    
+    // 跟踪电荷平方和
+    double sum_q2 = 0.0;
+    int count = 0;
     
     if(movement_only) {
         for(const auto& movementInfo : state.movementResidues) {
@@ -1178,19 +1371,50 @@ double computeSelfEnergyPME(model::MCState& state, bool movement_only) {
                 for(int j = state.residues[i].atomStart;
                     j < state.residues[i].atomStart + state.residues[i].atomCount; j++) {
                     double charge = state.atoms[j].charge;
-                    self_energy += charge * charge;
+                    double q2 = charge * charge;
+                    sum_q2 += q2;
+                    
+                    if (count < 5) {
+                        platform::log(LogLevel::INFO, "Atom ", j, 
+                                     " charge = ", charge, 
+                                     ", q² = ", q2);
+                        count++;
+                    }
                 }
             }
         }
     } else {
         for(int i = 0; i < state.activeAtomCount; i++) {
             double charge = state.atoms[i].charge;
-            self_energy += charge * charge;
+            double q2 = charge * charge;
+            sum_q2 += q2;
+            
+            if (i < 5) {
+                platform::log(LogLevel::INFO, "Atom ", i, 
+                             " charge = ", charge, 
+                             ", q² = ", q2);
+            }
         }
     }
     
-    // Self-energy formula same as Ewald
-    self_energy = -COULOMB * pme_params.alpha / std::sqrt(M_PI) * self_energy;
+    platform::log(LogLevel::INFO, "Sum of q² = ", sum_q2);
+    
+    // Self-energy formula from pme.cpp: -ONE_4PI_EPS0 * alpha / sqrt(M_PI) * sum_q2
+    // 确保我们使用完全相同的公式
+    double prefactor = -COULOMB * pme_params.alpha / sqrt(M_PI);
+    self_energy = prefactor * sum_q2;
+    
+    platform::log(LogLevel::INFO, "Self energy prefactor = ", prefactor, 
+                 ", resulting self energy = ", self_energy);
+    
+    // 以下是原始计算方式，不修改返回值，但添加比较输出
+    double original_self_energy = -COULOMB * pme_params.alpha / std::sqrt(M_PI) * sum_q2;
+    
+    // 检查两种计算方式是否一致
+    if (std::abs(self_energy - original_self_energy) > 1e-10) {
+        platform::log(LogLevel::WARNING, "Self energy calculation mismatch: ", 
+                     self_energy, " vs ", original_self_energy);
+    }
     
     return self_energy;
 }
@@ -1362,6 +1586,7 @@ void computeMovementEnergyPME(model::MCState& state) {
 } // namespace cpu
 } // namespace platform
 } // namespace pygcmc
+
 
 
 
