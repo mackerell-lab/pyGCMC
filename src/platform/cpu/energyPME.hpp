@@ -22,6 +22,8 @@ struct PMEParams {
     double tolerance{1e-5f};
     bool initialized{false};
     double cutoff{0.0};    
+    double epsilon_r{1.0}; // Relative dielectric constant
+    double box[3]{1.0, 1.0, 1.0}; // Box dimensions, default to unit box
     
     // Lookup tables for optimization
     std::vector<double> erfcTable;      
@@ -41,6 +43,7 @@ struct PMEParams {
     // Table management methods
     void initializeTables(double cutoff);
     void initializeBsplines();
+    void setBox(const double newBox[3]);
     double erfcApprox(double r) const;
     double ewaldScaleApprox(double r) const;
     
@@ -85,6 +88,9 @@ inline void initializePMEParameters(double cutoff, const double box[3],
                                   const int* meshSize = nullptr,
                                   int splineOrder = DEFAULT_SPLINE_ORDER,
                                   double tolerance = 1e-5) {
+    // 设置盒子尺寸 - 确保B样条初始化使用正确的体积
+    pme_params.setBox(box);
+    
     // If alpha is not specified, calculate the optimal value
     if (alpha <= 0.0) {
         // 自动调整参数包括调用initializeTables和initializeBsplines

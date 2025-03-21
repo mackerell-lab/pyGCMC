@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <complex>
+#include <chrono>
 
 // Optional: Include library for FFT if needed
 // #include <fftw3.h>
@@ -264,6 +265,22 @@ void fft_1d_batch(cmplx* data, int dimension, int nx, int ny, int nz, bool inver
     }
 }
 
+// 3D forward FFT - requires grid dimensions to be powers of 2
+void fft3D_forward(cmplx* data, int nx, int ny, int nz) {
+    // Execute three 1D FFTs in X, Y, Z order
+    fft_1d_batch(data, 0, nx, ny, nz, false); // X direction
+    fft_1d_batch(data, 1, nx, ny, nz, false); // Y direction
+    fft_1d_batch(data, 2, nx, ny, nz, false); // Z direction
+}
+
+// 3D inverse FFT - requires grid dimensions to be powers of 2
+void fft3D_backward(cmplx* data, int nx, int ny, int nz) {
+    // Execute three 1D IFFTs in Z, Y, X order (reverse of forward order)
+    fft_1d_batch(data, 2, nx, ny, nz, true); // Z direction
+    fft_1d_batch(data, 1, nx, ny, nz, true); // Y direction
+    fft_1d_batch(data, 0, nx, ny, nz, true); // X direction
+}
+
 // Convolver function
 [[maybe_unused]]
 void tfft_convolver(int k, cmplx *A, const cmplx *w) {
@@ -304,6 +321,9 @@ PMEParams pme_params;
 // 添加FFT相关成员变量
 std::vector<std::complex<double>> fft_weights;
 
+// 全局变量用于保存FFT后的网格数据
+std::vector<std::complex<double>> fftGridBackup;
+
 /**
  * @brief Initialize lookup tables for erfc and scaling functions
  * 
@@ -342,10 +362,22 @@ void PMEParams::initializeTables(double cutoff) {
 }
 
 /**
- * @brief Initialize B-splines for PME
+ * @brief Set box dimensions for PME calculations
+ * 
+ * @param newBox New box dimensions
+ */
+void PMEParams::setBox(const double newBox[3]) {
+    for (int i = 0; i < 3; i++) {
+        box[i] = newBox[i];
+    }
+    platform::log(LogLevel::INFO, "PME box dimensions set to [", box[0], ", ", box[1], ", ", box[2], "]");
+}
+
+/**
+ * @brief Initialize B-splines for PME - 完全按照pme.cpp中的pme_calculate_bsplines_moduli实现
  */
 void PMEParams::initializeBsplines() {
-    // 初始化B-spline模数 - 基于pme.cpp中的pme_calculate_bsplines_moduli实现
+    // 初始化B-spline模数 - 完全基于pme.cpp中的pme_calculate_bsplines_moduli实现
     platform::log(LogLevel::INFO, "Initializing B-splines with order = ", splineOrder, 
                  " and mesh size = [", meshSize[0], ",", meshSize[1], ",", meshSize[2], "]");
     
@@ -355,62 +387,75 @@ void PMEParams::initializeBsplines() {
         splineOrder = 2;
     }
     
-    // 初始化 bsplineModuli 数组 - 对齐pme.cpp中的实现
+    // 计算体积和boxfactor - 与pme.cpp中的正交盒子实现保持一致
+    double boxVolume = box[0] * box[1] * box[2];
+    
+    // 如果体积为零（未设置盒子），使用单位体积
+    if (boxVolume < 1e-10) {
+        platform::log(LogLevel::WARNING, "Box volume near zero, using unit volume for boxfactor");
+        boxVolume = 1.0;
+    }
+    
+    double boxfactor = M_PI * boxVolume;
+    platform::log(LogLevel::INFO, "Initializing B-splines with boxfactor = ", boxfactor, 
+                 " (box volume = ", boxVolume, ")");
+    
+    // 初始化 bsplineModuli 数组 - 精确对齐pme.cpp
     for (int dim = 0; dim < 3; dim++) {
         int size = meshSize[dim];
         bsplineModuli[dim].resize(size);
         
-        // 初始化为0
-        std::fill(bsplineModuli[dim].begin(), bsplineModuli[dim].end(), 0.0);
+        // 对于每个网格点，计算B样条模数
+        for (int i = 0; i < size; i++) {
+            // 计算m值 - 与pme.cpp一致
+            int m = (i < size/2) ? i : (size - i);
             
-        // 设置DC分量(k=0)
-        bsplineModuli[dim][0] = 1.0;
-        
-        // 计算B样条模数
-        for (int i = 1; i < size; i++) {
-            double m = (i < size/2) ? i : (size - i);
-            if (m == 0) continue;  // 跳过0波数(已经设置为1.0)
+            // 零频率点特殊处理 - 与pme.cpp一致
+            if (m == 0) {
+                bsplineModuli[dim][i] = 1.0;
+                // 只对第一个维度(x)应用boxfactor - 这是pme.cpp中的关键特性
+                if (dim == 0) {
+                    bsplineModuli[dim][i] *= boxfactor;
+                }
+                continue;
+            }
             
-            // 计算(sin(π·m/N)/m)^p，其中p是样条阶数
+            // 计算B样条模数 (sin(πm/N)/(πm/N))^p - 与pme.cpp完全一致
             double arg = M_PI * m / size;
-            double eigval;
+            // 对于非常小的角度，使用泰勒展开近似
+            double sinc = (arg < 1e-7) ? 1.0 - arg*arg/6.0 : sin(arg) / arg;
             
-            // 使用与pme.cpp中相同的方法计算B样条模数
-            if (arg < 1.0e-7) {
-                // 对于非常小的arg，使用泰勒展开避免数值不稳定
-                eigval = 1.0 - (arg*arg)/6.0;
-            } else {
-                eigval = sin(arg) / arg;
-            }
+            // 计算sinc函数的p次方 - 与pme.cpp一致
+            bsplineModuli[dim][i] = pow(sinc, splineOrder);
             
-            // 计算B样条的傅里叶变换: (sin(πm/N)/(πm/N))^p
-            bsplineModuli[dim][i] = pow(eigval, splineOrder);
-            
-            // 对于超过样条阶数的频率，额外校正
-            if (m > splineOrder && bsplineModuli[dim][i] < 1e-7) {
-                // 使用样条函数的精确傅里叶变换
-                double sum = 0.0;
-                for (int j = 1; j <= splineOrder; j++) {
-                    sum += pow(sin(arg * j) / (arg * j), 2);
-                }
-                
-                // 避免除以非常小的数
-                if (sum > 1e-7) {
-                    bsplineModuli[dim][i] = sum > 0 ? 1.0 / (sum * size * size) : 0.0;
-                }
-            }
-            
-            // 确保小值有合理的下限 - 这有助于避免倒空间中的奇异性
+            // 检查是否需要近似0值 - 保持数值稳定性
             if (bsplineModuli[dim][i] < 1e-10) {
-                bsplineModuli[dim][i] = 1e-10;
+                bsplineModuli[dim][i] = 1e-10;  // 避免除零
             }
             
-            // 调试信息
-            if (m <= splineOrder || i < 10 || i > size-10) {
-                platform::log(LogLevel::DEBUG, "B-spline[", dim, "][", i, "] = ", 
-                              bsplineModuli[dim][i], " (m=", m, ")");
+            // 计算B样条模值的倒数平方 - 与pme.cpp一致
+            bsplineModuli[dim][i] = 1.0 / (bsplineModuli[dim][i] * bsplineModuli[dim][i]);
+            
+            // 只对第一个维度(x)应用boxfactor - 这是pme.cpp中的关键特性
+            if (dim == 0) {
+                bsplineModuli[dim][i] *= boxfactor;
             }
         }
+    }
+    
+    // 输出B样条模数和统计信息
+    double maxModuli[3] = {0.0, 0.0, 0.0};
+    double minModuli[3] = {std::numeric_limits<double>::max(), 
+                          std::numeric_limits<double>::max(), 
+                          std::numeric_limits<double>::max()};
+    
+    for (int dim = 0; dim < 3; dim++) {
+        for (size_t i = 0; i < bsplineModuli[dim].size(); i++) {
+            maxModuli[dim] = std::max(maxModuli[dim], bsplineModuli[dim][i]);
+            minModuli[dim] = std::min(minModuli[dim], bsplineModuli[dim][i]);
+        }
+        std::cout << "Dimension " << dim << " B-spline moduli range: [" 
+                 << minModuli[dim] << ", " << maxModuli[dim] << "]" << std::endl;
     }
     
     // 分配PME网格
@@ -547,14 +592,14 @@ void autoAdjustPMEParameters(double error_tolerance, double cutoff_distance, con
     platform::log(LogLevel::INFO, "Auto-selected PME parameters: alpha = ", alpha,
                  ", mesh size = [", meshSize[0], ",", meshSize[1], ",", meshSize[2], "]");
     
-    // Set the parameters
+    // 设置参数 - setPMEParameters会初始化B样条
     setPMEParameters(alpha, meshSize);
     
-    // 关键修复：初始化查找表并设置initialized标志
+    // 初始化查找表
     pme_params.initializeTables(cutoff_distance);
     
-    // 确保B样条也被初始化
-    pme_params.initializeBsplines();
+    // 标记PME初始化完成
+    pme_params.initialized = true;
 }
 
 /**
@@ -597,11 +642,17 @@ void setPMEParameters(double alpha, const int meshSize[3], int splineOrder, doub
     
     pme_params.tolerance = tolerance;
     
+    // 设置介电常数 - 通常为1.0
+    pme_params.epsilon_r = 1.0;
+    
     // 详细日志输出
     platform::log(LogLevel::INFO, "PME parameters set: alpha = ", alpha,
                  ", mesh size = [", pme_params.meshSize[0], ",", pme_params.meshSize[1], ",", pme_params.meshSize[2], "]",
                  ", spline order = ", pme_params.splineOrder,
                  ", tolerance = ", tolerance);
+    
+    // 初始化B样条 - 与pme.cpp中的pme_init函数一致
+    pme_params.initializeBsplines();
 }
 
 /**
@@ -636,37 +687,60 @@ std::pair<double, double> calcPairEnergyPME(
 }
 
 /**
- * @brief Compute B-spline coefficients
+ * @brief Compute B-spline coefficients exactly like pme.cpp
  * 
  * @param fractional Fractional position (0-1)
  * @param order Spline order
  * @param coefficients Output coefficients
  */
 void computeBSplineCoefficients(double fractional, int order, std::vector<double>& coefficients) {
-    coefficients.resize(order + 1);
+    // 确保coefficients大小正确
+    coefficients.resize(order);
     
-    // For order 1, it's just linear interpolation
-    if (order == 1) {
-        coefficients[0] = 1.0 - fractional;
-        coefficients[1] = fractional;
-        return;
+    // 清零所有系数
+    for (int i = 0; i < order; i++) {
+        coefficients[i] = 0.0;
     }
     
-    // B-spline recursive formula for higher orders
-    coefficients[0] = 1.0;
+    // 获取小数部分
+    double dr = fractional;
     
-    for (int k = 1; k <= order; k++) {
-        double div = 1.0 / k;
-        double term = fractional * coefficients[0];
-        coefficients[0] *= (1.0 - fractional) * div;
+    // 初始化二阶B样条基本系数
+    coefficients[0] = 1.0 - dr;
+    coefficients[1] = dr;
+    
+    // 递归计算B样条系数，从三阶到order阶(不包括最后一步)
+    for (int k = 3; k < order; k++) {
+        double div = 1.0 / (k - 1.0);
+        coefficients[k-1] = div * dr * coefficients[k-2];
         
-        for (int i = 1; i < k; i++) {
-            double saved = term;
-            term = fractional * coefficients[i];
-            coefficients[i] = ((1.0 - fractional) * coefficients[i-1] + saved) * div;
+        for (int i = 1; i < (k-1); i++) {
+            coefficients[k-i-1] = div * ((dr+i) * coefficients[k-i-2] + 
+                                         (k-i-dr) * coefficients[k-i-1]);
         }
         
-        coefficients[k] = term * div;
+        coefficients[0] = div * (1.0-dr) * coefficients[0];
+    }
+    
+    // 最后一步：特殊处理k=order的情况
+    double div = 1.0 / (order - 1);
+    coefficients[order-1] = div * dr * coefficients[order-2];
+    
+    for (int i = 1; i < (order-1); i++) {
+        coefficients[order-i-1] = div * ((dr+i) * coefficients[order-i-2] + 
+                                        (order-i-dr) * coefficients[order-i-1]);
+    }
+    coefficients[0] = div * (1.0-dr) * coefficients[0];
+    
+    // 验证系数总和
+    double sum = 0.0;
+    for (int i = 0; i < order; i++) {
+        sum += coefficients[i];
+    }
+    
+    // 只在偏差大时警告
+    if (std::abs(sum - 1.0) > 1e-5) {
+        std::cerr << "警告: B样条系数总和 (" << sum << ") 与1相差较大" << std::endl;
     }
 }
 
@@ -677,302 +751,480 @@ void computeBSplineCoefficients(double fractional, int order, std::vector<double
  * @param movement_only Whether to process only moving atoms
  */
 void spreadChargesOntoGrid(model::MCState& state, bool movement_only) {
-    const auto& box = state.info.box;
+    // 记录开始处理
+    platform::log(LogLevel::DEBUG, "Spreading charges onto PME grid");
+    
+    // 直接访问成员变量而不是使用getter方法
     const auto& atoms = state.atoms;
+    // 对于positions，使用atoms直接访问坐标
+    const auto& info = state.info;
+    // 修改类型从double到float以匹配info.box的类型
+    const float* box = info.box;
     
-    platform::log(LogLevel::INFO, "Spreading charges onto PME grid for ", 
-                 movement_only ? "moving atoms" : "all atoms");
-    platform::log(LogLevel::INFO, "Grid dimensions: [",
-                 pme_params.meshSize[0], ",", pme_params.meshSize[1], ",", pme_params.meshSize[2], "]");
+    // 初始化总电荷和非零网格点计数
+    double totalGridCharge = 0.0;
+    int nonZeroPoints = 0;
+    int updatedPoints = 0;
     
-    // 添加系统总电荷计算
-    double systemTotalCharge = 0.0;
-    for(int i = 0; i < state.activeAtomCount; i++) {
-        systemTotalCharge += static_cast<double>(atoms[i].charge);
+    // 计算总系统电荷
+    double totalCharge = 0.0;
+    for (int i = 0; i < state.activeAtomCount; ++i) {
+        totalCharge += atoms[i].charge;
     }
-    platform::log(LogLevel::INFO, "System total charge before spreading: ", systemTotalCharge);
     
-    // Reset the grid
+    // 输出总系统电荷 - 保留这个关键信息
+    platform::log(LogLevel::INFO, "Total system charge: ", totalCharge);
+    
+    // 计算倒易晶格矢量 - 确保与pme.cpp一致
+    double recipBoxVectors[3][3] = {{0}};
+    
+    // 正确处理盒子向量 - 对角盒子简化处理
+    double periodicBoxVectors[3][3] = {
+        {box[0], 0.0, 0.0},
+        {0.0, box[1], 0.0},
+        {0.0, 0.0, box[2]}
+    };
+    
+    // 检查是否是对角盒子 - 不需要输出
+    bool isDiagonalBox = true;  // 由于我们强制设置为对角盒子，所以始终为true
+    
+    if (isDiagonalBox) {
+        // 对角盒子的简单计算
+        recipBoxVectors[0][0] = 2.0 * M_PI / box[0]; // 2π/a
+        recipBoxVectors[1][1] = 2.0 * M_PI / box[1]; // 2π/b 
+        recipBoxVectors[2][2] = 2.0 * M_PI / box[2]; // 2π/c
+    } else {
+        // 非对角盒子需要完全计算倒格矢向量
+        double det = periodicBoxVectors[0][0] * (periodicBoxVectors[1][1] * periodicBoxVectors[2][2] - periodicBoxVectors[1][2] * periodicBoxVectors[2][1]) -
+                     periodicBoxVectors[0][1] * (periodicBoxVectors[1][0] * periodicBoxVectors[2][2] - periodicBoxVectors[1][2] * periodicBoxVectors[2][0]) +
+                     periodicBoxVectors[0][2] * (periodicBoxVectors[1][0] * periodicBoxVectors[2][1] - periodicBoxVectors[1][1] * periodicBoxVectors[2][0]);
+        
+        // 计算叉积和倒易晶格向量
+        recipBoxVectors[0][0] = 2.0 * M_PI * (periodicBoxVectors[1][1] * periodicBoxVectors[2][2] - periodicBoxVectors[1][2] * periodicBoxVectors[2][1]) / det;
+        recipBoxVectors[0][1] = 2.0 * M_PI * (periodicBoxVectors[0][2] * periodicBoxVectors[2][1] - periodicBoxVectors[0][1] * periodicBoxVectors[2][2]) / det;
+        recipBoxVectors[0][2] = 2.0 * M_PI * (periodicBoxVectors[0][1] * periodicBoxVectors[1][2] - periodicBoxVectors[0][2] * periodicBoxVectors[1][1]) / det;
+        
+        recipBoxVectors[1][0] = 2.0 * M_PI * (periodicBoxVectors[1][2] * periodicBoxVectors[2][0] - periodicBoxVectors[1][0] * periodicBoxVectors[2][2]) / det;
+        recipBoxVectors[1][1] = 2.0 * M_PI * (periodicBoxVectors[0][0] * periodicBoxVectors[2][2] - periodicBoxVectors[0][2] * periodicBoxVectors[2][0]) / det;
+        recipBoxVectors[1][2] = 2.0 * M_PI * (periodicBoxVectors[0][2] * periodicBoxVectors[1][0] - periodicBoxVectors[0][0] * periodicBoxVectors[1][2]) / det;
+        
+        recipBoxVectors[2][0] = 2.0 * M_PI * (periodicBoxVectors[1][0] * periodicBoxVectors[2][1] - periodicBoxVectors[1][1] * periodicBoxVectors[2][0]) / det;
+        recipBoxVectors[2][1] = 2.0 * M_PI * (periodicBoxVectors[0][1] * periodicBoxVectors[2][0] - periodicBoxVectors[0][0] * periodicBoxVectors[2][1]) / det;
+        recipBoxVectors[2][2] = 2.0 * M_PI * (periodicBoxVectors[0][0] * periodicBoxVectors[1][1] - periodicBoxVectors[0][1] * periodicBoxVectors[1][0]) / det;
+    }
+    
+    // 删除原子位置打印信息
+    
+    // 重置网格 - 确保所有点初始化为0
     std::fill(pme_params.pmeGrid.begin(), pme_params.pmeGrid.end(), std::complex<double>(0.0, 0.0));
     
-    // 计数器 - 了解有多少原子的电荷被扩散
-    int processedAtoms = 0;
-    double totalCharge = 0.0;
-    double totalSpreadCharge = 0.0;  // 跟踪实际扩散到网格上的电荷总量
+    // 删除网格点初始值的输出
     
-    // 增加粒子调试信息
-    platform::log(LogLevel::INFO, "First few atoms:");
-    for (int i = 0; i < std::min(5, state.activeAtomCount); i++) {
-        platform::log(LogLevel::INFO, "Atom ", i, ": position = (",
-                     atoms[i].x, ", ", atoms[i].y, ", ", atoms[i].z,
-                     "), charge = ", atoms[i].charge);
-    }
-    
-    // 添加详细的网格初始化状态检查
-    int nonZeroGridPointsInit = 0;
-    for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
-        if (std::abs(pme_params.pmeGrid[i].real()) > 1e-10) {
-            nonZeroGridPointsInit++;
-        }
-    }
-    platform::log(LogLevel::INFO, "Grid status after initialization: ", 
-                 nonZeroGridPointsInit, " non-zero points out of ", pme_params.pmeGrid.size());
-    
-    // Calculate spline coefficients for each atom
-    const int order = pme_params.splineOrder;
-    std::vector<double> splineCoefficients(order+1);
-    
-    // For each atom, spread its charge on the grid
-    for (int n = 0; n < state.activeAtomCount; n++) {
-        // Skip if not in movement group for movement-only calculation
-        if (movement_only) {
-            bool in_movement = false;
-            for (const auto& movementInfo : state.movementResidues) {
-                if (n >= movementInfo.startIndex && 
-                    n < movementInfo.startIndex + movementInfo.activeCount) {
-                    in_movement = true;
-                    break;
-                }
-            }
-            if (!in_movement) continue;
-        }
-        
-        double charge = atoms[n].charge;
-        totalCharge += charge;
-        
-        if (std::abs(charge) < 1e-10) {
-            platform::log(LogLevel::INFO, "Skipping atom ", n, " due to near-zero charge: ", charge);
-            continue; // Skip atoms with zero charge
-        }
-        
-        // Convert atom coordinates to fractional coordinates (0-1 range)
-        double posInBox[3];
-        posInBox[0] = atoms[n].x;
-        posInBox[1] = atoms[n].y;
-        posInBox[2] = atoms[n].z;
-        
-        // Apply periodic boundary conditions
-        // Wrap coordinates to primary box (0 to box size)
-        for (int dim = 0; dim < 3; dim++) {
-            while (posInBox[dim] < 0) posInBox[dim] += box[dim];
-            while (posInBox[dim] >= box[dim]) posInBox[dim] -= box[dim];
-        }
-        
-        // Debug output for certain atoms
-        if (n < 5 || n % 200 == 0 || state.activeAtomCount <= 10) {
-            platform::log(LogLevel::INFO, "Atom ", n, " (charge = ", charge, 
-                         "): wrapped position = (", posInBox[0], ", ", 
-                         posInBox[1], ", ", posInBox[2], ")");
-        }
-        
-        // Convert to fractional coordinates (0-1)
-        double scale[3] = { 1.0 / box[0], 1.0 / box[1], 1.0 / box[2] };
-        double t[3] = { posInBox[0] * scale[0], posInBox[1] * scale[1], posInBox[2] * scale[2] };
-        
-        // 增加分数坐标检查
-        if (n < 5 || n % 200 == 0 || state.activeAtomCount <= 10) {
-            platform::log(LogLevel::INFO, "Atom ", n, ": fractional coordinates = (",
-                         t[0], ", ", t[1], ", ", t[2], ")");
-        }
-        
-        // Convert to grid coordinates and compute B-spline coefficients
-        int gridIndex[3];
-        double dr[3];
-        std::vector<std::vector<double>> thetai(3, std::vector<double>(order));
-        
-        for (int dim = 0; dim < 3; dim++) {
-            // Grid coordinates
-            t[dim] = t[dim] * pme_params.meshSize[dim];
-            
-            // Integer and fractional parts
-            gridIndex[dim] = (int) std::floor(t[dim]);
-            dr[dim] = t[dim] - gridIndex[dim];
-            
-            // Ensure grid index is within bounds
-            gridIndex[dim] = gridIndex[dim] % pme_params.meshSize[dim];
-            if (gridIndex[dim] < 0) gridIndex[dim] += pme_params.meshSize[dim];
-            
-            // Compute B-spline coefficients - optimized version based on OpenMM
-            if (order == 4) {
-                // Replace incorrect optimization with correct 4th-order B-spline calculation
-                double w = dr[dim];
-                double w2 = w * w;
-                double w3 = w2 * w;
-                double oneSixth = 1.0 / 6.0;
-                thetai[dim][0] = oneSixth * (1.0 - w) * (1.0 - w) * (1.0 - w);
-                thetai[dim][1] = oneSixth * (4.0 - 6.0 * w2 + 3.0 * w3);
-                thetai[dim][2] = oneSixth * (1.0 + 3.0 * w + 3.0 * w2 - 3.0 * w3);
-                thetai[dim][3] = oneSixth * w3;
-            } else {
-                // General B-spline calculation for other orders
-                computeBSplineCoefficients(dr[dim], order, splineCoefficients);
-                
-                // Copy coefficients to thetai array
-                for (int i = 0; i < order; i++) {
-                    thetai[dim][i] = splineCoefficients[i];
-                }
-            }
-        }
-        
-        // 打印网格索引信息
-        if (n < 5 || n % 200 == 0 || state.activeAtomCount <= 10) {
-            platform::log(LogLevel::INFO, "Atom ", n, ": grid indices = (",
-                         gridIndex[0], ", ", gridIndex[1], ", ", gridIndex[2], ")");
-            
-            // B样条系数的和应该是1
-            double sum0 = 0, sum1 = 0, sum2 = 0;
-            for (int i = 0; i < order; i++) {
-                sum0 += thetai[0][i];
-                sum1 += thetai[1][i];
-                sum2 += thetai[2][i];
-            }
-            platform::log(LogLevel::INFO, "B-spline coefficient sums: ",
-                         sum0, ", ", sum1, ", ", sum2, " (should be ~1.0)");
-            
-            // 统计将被分配的点数
-            int numPointsForAtom = order * order * order;
-            platform::log(LogLevel::INFO, "Atom ", n, " will spread charge to ", 
-                         numPointsForAtom, " grid points");
-        }
-        
-        // Spread charge to nearby grid points using B-spline weights
-        // Optimized for better cache performance and numerical stability
-        double atomSpreadCharge = 0.0;  // 跟踪这个原子扩散到网格上的总电荷
-        
-        for (int ix = 0; ix < order; ix++) {
-            int xindex = (gridIndex[0] + ix) % pme_params.meshSize[0];
-            double xterm = charge * thetai[0][ix];
-            
-            for (int iy = 0; iy < order; iy++) {
-                int yindex = (gridIndex[1] + iy) % pme_params.meshSize[1];
-                double xyterm = xterm * thetai[1][iy];
-                
-                for (int iz = 0; iz < order; iz++) {
-                    int zindex = (gridIndex[2] + iz) % pme_params.meshSize[2];
-                    double weight = xyterm * thetai[2][iz];
-                    
-                    // Calculate linear index
-                    int index = xindex * pme_params.meshSize[1] * pme_params.meshSize[2] + 
-                                yindex * pme_params.meshSize[2] + zindex;
-                    
-                    // 确保索引在有效范围内
-                    if (index < 0 || index >= static_cast<int>(pme_params.pmeGrid.size())) {
-                        platform::log(LogLevel::ERROR, "Invalid grid index ", index,
-                                     " for atom ", n, " at position (", posInBox[0], ", ",
-                                     posInBox[1], ", ", posInBox[2], ")");
-                        continue;
-                    }
-                    
-                    // 输出一些网格点的细节信息
-                    if (n < 2 && ix < 2 && iy < 2 && iz < 2) {
-                        platform::log(LogLevel::INFO, "Grid point [", xindex, ",", yindex, ",", zindex, 
-                                     "] (index ", index, "): adding charge weight ", weight, 
-                                     ", current value = ", pme_params.pmeGrid[index].real());
-                    }
-                    
-                    // Atomic increment of grid value to ensure thread safety
-                    pme_params.pmeGrid[index] += std::complex<double>(weight, 0.0);
-                    atomSpreadCharge += weight;
-                }
-            }
-        }
-        
-        // 检查原子电荷是否保持不变
-        if (n < 5 || n % 200 == 0 || std::abs(atomSpreadCharge - charge) > 1e-6 || state.activeAtomCount <= 10) {
-            platform::log(LogLevel::INFO, "Atom ", n, ": original charge = ", charge,
-                         ", spread charge = ", atomSpreadCharge,
-                         ", difference = ", atomSpreadCharge - charge);
-        }
-        
-        totalSpreadCharge += atomSpreadCharge;
-        processedAtoms++;
-    }
-    
-    platform::log(LogLevel::INFO, "Processed ", processedAtoms, " atoms for PME. Total charge = ", 
-                 totalCharge, ", Total spread charge = ", totalSpreadCharge, 
-                 ", Difference = ", totalSpreadCharge - totalCharge);
-    
-    // 检查网格上有多少非零点
-    int nonZeroPoints = 0;
-    double minGridCharge = 0.0;
-    double maxGridCharge = 0.0;
-    double sumGridCharge = 0.0;
-    double sumAbsGridCharge = 0.0;
-    
-    for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
-        double charge = pme_params.pmeGrid[i].real();
-        sumGridCharge += charge;
-        sumAbsGridCharge += std::abs(charge);
-        
-        if (std::abs(charge) > 1e-10) {
-            nonZeroPoints++;
-            
-            if (charge < minGridCharge) minGridCharge = charge;
-            if (charge > maxGridCharge) maxGridCharge = charge;
-        }
-    }
-    
-    platform::log(LogLevel::INFO, "Non-zero grid points: ", nonZeroPoints,
-                 " out of ", pme_params.pmeGrid.size(),
-                 " (", (100.0 * nonZeroPoints / pme_params.pmeGrid.size()), "%)");
-    platform::log(LogLevel::INFO, "Grid charge statistics: sum = ", sumGridCharge,
-                 ", abs sum = ", sumAbsGridCharge,
-                 ", min = ", minGridCharge, ", max = ", maxGridCharge);
-    
-    // 检查网格电荷和系统总电荷的差异
-    double chargeDiff = std::abs(sumGridCharge - systemTotalCharge);
-    if (chargeDiff > 1e-6) {
-        platform::log(LogLevel::WARNING, "Grid total charge (", sumGridCharge, 
-                    ") differs from system total charge (", systemTotalCharge, 
-                    ") by ", chargeDiff);
-    } else {
-        platform::log(LogLevel::INFO, "Grid total charge matches system total charge within tolerance");
-    }
-    
-    // 添加详细的网格值分布信息
-    double chargeThresholds[] = {1e-10, 1e-8, 1e-6, 1e-4, 1e-2, 1e-1, 1.0};
-    int chargeCounts[8] = {0};
-    
-    for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
-        double charge = std::abs(pme_params.pmeGrid[i].real());
-        for (int j = 0; j < 7; j++) {
-            if (charge <= chargeThresholds[j]) {
-                chargeCounts[j]++;
-                break;
-            }
-            if (j == 6) { // 大于所有阈值
-                chargeCounts[7]++;
-            }
-        }
-    }
-    
-    platform::log(LogLevel::INFO, "Grid charge distribution:");
-    platform::log(LogLevel::INFO, "  <= 1e-10: ", chargeCounts[0], " points");
-    platform::log(LogLevel::INFO, "  1e-10 - 1e-8: ", chargeCounts[1], " points");
-    platform::log(LogLevel::INFO, "  1e-8 - 1e-6: ", chargeCounts[2], " points");
-    platform::log(LogLevel::INFO, "  1e-6 - 1e-4: ", chargeCounts[3], " points");
-    platform::log(LogLevel::INFO, "  1e-4 - 1e-2: ", chargeCounts[4], " points");
-    platform::log(LogLevel::INFO, "  1e-2 - 1e-1: ", chargeCounts[5], " points");
-    platform::log(LogLevel::INFO, "  1e-1 - 1.0: ", chargeCounts[6], " points");
-    platform::log(LogLevel::INFO, "  > 1.0: ", chargeCounts[7], " points");
-    
-    // 打印一些网格点的值
-    platform::log(LogLevel::INFO, "Sample grid points after charge spreading:");
+    // 准备B样条插值表格
     int nx = pme_params.meshSize[0];
     int ny = pme_params.meshSize[1];
     int nz = pme_params.meshSize[2];
-    int gridPoints[][3] = {
-        {0, 0, 0}, {nx/4, ny/4, nz/4}, {nx/2, ny/2, nz/2}, 
-        {3*nx/4, 3*ny/4, 3*nz/4}, {nx-1, ny-1, nz-1}
-    };
+    int order = pme_params.splineOrder;
     
-    for (int i = 0; i < 5; i++) {
-        int x = gridPoints[i][0];
-        int y = gridPoints[i][1];
-        int z = gridPoints[i][2];
-        int index = x * ny * nz + y * nz + z;
-        platform::log(LogLevel::INFO, "  Grid[", x, ",", y, ",", z, "] = ", 
-                     pme_params.pmeGrid[index].real());
+    // 创建临时数组 - 因为没有resizeTempSplineArrays函数
+    // 创建用于B样条系数的临时数组
+    std::vector<std::vector<double>> bsplines_theta(3);
+    for (int d = 0; d < 3; d++) {
+        bsplines_theta[d].resize(order * state.activeAtomCount, 0.0);
+    }
+    
+    // 创建用于网格索引和分数部分的临时数组
+    std::vector<std::vector<int>> gridIndices(state.activeAtomCount, std::vector<int>(3, 0));
+    std::vector<std::vector<double>> gridFractions(state.activeAtomCount, std::vector<double>(3, 0.0));
+    
+    // 计算所有原子的网格索引和分数偏移
+    for (int atomIdx = 0; atomIdx < state.activeAtomCount; atomIdx++) {
+        // 检查是否为移动原子 - 使用state.movementResidues代替isAtomMoved
+        bool isMovementAtom = !movement_only;  // 默认情况下处理所有原子
+        
+        if (movement_only) {
+            for (const auto& movementInfo : state.movementResidues) {
+                for (int k = 0; k < state.activeResidueCount; ++k) {
+                    if (state.residues[k].active) {
+                        int atomStart = state.residues[k].atomStart;
+                        int atomEnd = atomStart + state.residues[k].atomCount;
+                        
+                        if (atomIdx >= atomStart && atomIdx < atomEnd) {
+                            if (k >= movementInfo.startIndex && 
+                                k < movementInfo.startIndex + movementInfo.activeCount) {
+                                isMovementAtom = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (isMovementAtom) break;
+            }
+        }
+        
+        if (!isMovementAtom) continue;
+        
+        // 从atoms直接获取位置
+        float pos[3] = {atoms[atomIdx].x, atoms[atomIdx].y, atoms[atomIdx].z};
+        
+        // 将位置转换为分数坐标
+        double fractional[3];
+        for (int d = 0; d < 3; d++) {
+            // 计算分数坐标 - 修复：确保与pme.cpp一致
+            // 使用倒易格矢量来计算分数坐标，而不是简单的除法
+            fractional[d] = 0.0;
+            for (int j = 0; j < 3; j++) {
+                fractional[d] += pos[j] * recipBoxVectors[j][d] / (2.0 * M_PI);
+            }
+            
+            // 确保在[0,1)范围内，处理周期性边界条件
+            fractional[d] -= floor(fractional[d]);
+            // 将分数坐标缩放到网格上
+            fractional[d] *= pme_params.meshSize[d];
+        }
+        
+        // 计算网格索引和分数部分 - 修复：移除错误的offset
+        for (int d = 0; d < 3; d++) {
+            gridFractions[atomIdx][d] = fractional[d] - floor(fractional[d]);
+            // 修复：移除错误的-order/2偏移，与pme.cpp保持一致
+            gridIndices[atomIdx][d] = static_cast<int>(floor(fractional[d]));
+            // 确保网格索引在正确范围内
+            if (gridIndices[atomIdx][d] < 0) 
+                gridIndices[atomIdx][d] += pme_params.meshSize[d];
+        }
+    }
+    
+    // 计算所有原子的B样条系数
+    for (int atomIdx = 0; atomIdx < state.activeAtomCount; atomIdx++) {
+        // 使用上面相同的移动原子检查
+        bool isMovementAtom = !movement_only;
+        
+        if (movement_only) {
+            for (const auto& movementInfo : state.movementResidues) {
+                for (int k = 0; k < state.activeResidueCount; ++k) {
+                    if (state.residues[k].active) {
+                        int atomStart = state.residues[k].atomStart;
+                        int atomEnd = atomStart + state.residues[k].atomCount;
+                        
+                        if (atomIdx >= atomStart && atomIdx < atomEnd) {
+                            if (k >= movementInfo.startIndex && 
+                                k < movementInfo.startIndex + movementInfo.activeCount) {
+                                isMovementAtom = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (isMovementAtom) break;
+            }
+        }
+        
+        if (!isMovementAtom) continue;
+        
+        double* thetax = &bsplines_theta[0][atomIdx * order];
+        double* thetay = &bsplines_theta[1][atomIdx * order];
+        double* thetaz = &bsplines_theta[2][atomIdx * order];
+        
+        // 计算三个维度的B样条系数
+        std::vector<double> coefficients(order);
+        
+        // X维度B样条
+        computeBSplineCoefficients(gridFractions[atomIdx][0], order, coefficients);
+        for (int i = 0; i < order; i++) {
+            thetax[i] = coefficients[i];
+        }
+        
+        
+        // Y维度B样条
+        computeBSplineCoefficients(gridFractions[atomIdx][1], order, coefficients);
+        for (int i = 0; i < order; i++) {
+            thetay[i] = coefficients[i];
+        }
+        
+        // Z维度B样条
+        computeBSplineCoefficients(gridFractions[atomIdx][2], order, coefficients);
+        for (int i = 0; i < order; i++) {
+            thetaz[i] = coefficients[i];
+        }
+    }
+    
+    
+    std::cout << "Calculated grid indices and B-spline coefficients for " 
+              << state.activeAtomCount << " atoms" << std::endl;
+    
+    // 输出前10个原子的电荷值
+    std::cout << "前10个原子的电荷值:" << std::endl;
+    for (int i = 0; i < std::min(10, state.activeAtomCount); i++) {
+        std::cout << "  原子[" << i << "] 电荷 = " << atoms[i].charge << std::endl;
+    }
+    
+    // 显示一些原子的B样条系数
+    for (int i = 0; i < state.activeAtomCount; i += 100) {
+        if (i < state.activeAtomCount) {
+            std::cout << "原子 " << i << " 的网格索引: [" 
+                      << gridIndices[i][0] << ", " 
+                      << gridIndices[i][1] << ", " 
+                      << gridIndices[i][2] << "]" << std::endl;
+        }
+    }
+    
+    // 将电荷分布到网格上
+    for (int atomIdx = 0; atomIdx < state.activeAtomCount; atomIdx++) {
+        // 使用上面相同的移动原子检查
+        bool isMovementAtom = !movement_only;
+        
+        if (movement_only) {
+            for (const auto& movementInfo : state.movementResidues) {
+                for (int k = 0; k < state.activeResidueCount; ++k) {
+                    if (state.residues[k].active) {
+                        int atomStart = state.residues[k].atomStart;
+                        int atomEnd = atomStart + state.residues[k].atomCount;
+                        
+                        if (atomIdx >= atomStart && atomIdx < atomEnd) {
+                            if (k >= movementInfo.startIndex && 
+                                k < movementInfo.startIndex + movementInfo.activeCount) {
+                                isMovementAtom = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (isMovementAtom) break;
+            }
+        }
+        
+        if (!isMovementAtom) continue;
+        
+        double charge = atoms[atomIdx].charge;
+        
+        // 获取网格索引和B样条系数
+        int x0index = gridIndices[atomIdx][0];
+        int y0index = gridIndices[atomIdx][1];
+        int z0index = gridIndices[atomIdx][2];
+        
+        double* thetax = &bsplines_theta[0][atomIdx * order];
+        double* thetay = &bsplines_theta[1][atomIdx * order];
+        double* thetaz = &bsplines_theta[2][atomIdx * order];
+        
+        // 将电荷分布到网格上 - 完全按照pme_grid_spread_charge
+        for (int ix = 0; ix < order; ix++) {
+            int xindex = (x0index + ix) % nx;
+            
+            for (int iy = 0; iy < order; iy++) {
+                int yindex = (y0index + iy) % ny;
+                
+                for (int iz = 0; iz < order; iz++) {
+                    int zindex = (z0index + iz) % nz;
+                    
+                    // 计算网格索引 - 确保与pme.cpp完全一致
+                    // 原始是xindex * ny * nz + yindex * nz + zindex，这个公式是正确的
+                    int index = xindex * ny * nz + yindex * nz + zindex;
+                    
+                    // 确保索引不越界
+                    if (index >= 0 && static_cast<size_t>(index) < pme_params.pmeGrid.size()) {
+                        // 计算B样条权重（三个方向的乘积）
+                        double weight = thetax[ix] * thetay[iy] * thetaz[iz];
+                        
+                        // 将电荷分布到网格点 - 使用与pme.cpp相同的方式
+                        double chargeContribution = charge * weight;
+                        
+                        // 关键修复：直接将贡献添加到网格点，与pme.cpp一致
+                        // 在pme.cpp中使用的是: pme->grid[index] += chargeContribution;
+                        // 这只影响实部，因为chargeContribution是real
+                        pme_params.pmeGrid[index] += chargeContribution;
+                        
+                        // 更新统计信息
+                        totalGridCharge += chargeContribution;
+                        if (std::abs(chargeContribution) > 1e-10) {
+                            nonZeroPoints++;
+                            
+                            // 追踪前10个更新的网格点
+                            if (updatedPoints < 10) {
+                                std::cout << "更新网格点[" << index << "]: 电荷=" << charge 
+                                          << ", 权重=" << weight
+                                          << ", 贡献=" << chargeContribution << std::endl;
+                                updatedPoints++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // 输出处理进度
+    int atomIdx = state.activeAtomCount - 1; // 使用最后一个处理的原子索引
+    if ((atomIdx + 1) % 1000000 == 0) {
+        platform::log(LogLevel::DEBUG, "Processed ", atomIdx + 1, " atoms");
+    }
+    
+    // 输出电荷分布完成信息
+    platform::log(LogLevel::INFO, "Charge spreading complete: ", state.activeAtomCount, 
+                 " atoms processed, total grid charge = ", totalGridCharge,
+                 ", non-zero grid points = ", nonZeroPoints);
+    
+    std::cout << "Charge spreading complete: " << state.activeAtomCount 
+              << " atoms processed, total grid charge = " << totalGridCharge
+              << ", non-zero grid points = " << nonZeroPoints << std::endl;
+    
+    // 分析网格信息
+    std::cout << "网格大小: " << pme_params.pmeGrid.size() << std::endl;
+    
+    // 统计并输出非零网格点
+    int displayCount = 0;
+    for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
+        if (std::abs(pme_params.pmeGrid[i].real()) > 1e-10) {
+            if (displayCount < 5) {
+                std::cout << "非零网格点 " << displayCount << ": 索引=" << i 
+                          << ", 值=" << pme_params.pmeGrid[i].real() << std::endl;
+            }
+            displayCount++;
+        }
+    }
+    
+    // 分析原子0的电荷分布
+    if (state.activeAtomCount > 0) {
+        int atomIdx = 0;
+        int x0 = gridIndices[atomIdx][0];
+        int y0 = gridIndices[atomIdx][1];
+        int z0 = gridIndices[atomIdx][2];
+        
+        std::cout << "原子0: 电荷=" << atoms[atomIdx].charge 
+                  << ", 网格索引=[" << x0 << "," << y0 << "," << z0 << "]" << std::endl;
+        
+        // 分析原子0周围的网格点
+        for (int ix = 0; ix < order; ix++) {
+            int xindex = (x0 + ix) % nx;
+            
+            for (int iy = 0; iy < order; iy++) {
+                int yindex = (y0 + iy) % ny;
+                
+                for (int iz = 0; iz < order; iz++) {
+                    int zindex = (z0 + iz) % nz;
+                    int index = xindex * ny * nz + yindex * nz + zindex;
+                    
+                    if (index >= 0 && static_cast<size_t>(index) < pme_params.pmeGrid.size()) {
+                        std::cout << "  网格点[" << xindex << "," << yindex << "," << zindex 
+                                  << "] (索引 " << index << "): " 
+                                  << pme_params.pmeGrid[index].real() << std::endl;
+                    }
+                }
+            }
+        }
+    }
+    
+    // 添加标准位置格点输出 - 用于与pme.cpp比较
+    std::cout << "\n===== 电荷分布后的标准格点值比较 =====\n";
+    const int keyIndices[] = {0, 1, nx, ny, nz, nx*ny, nx*nz, ny*nz};
+    std::cout << "格点总数: " << pme_params.pmeGrid.size() << std::endl;
+    for (int i : keyIndices) {
+        if (i < static_cast<int>(pme_params.pmeGrid.size())) {
+            std::cout << "格点[" << i << "]: " << pme_params.pmeGrid[i].real() 
+                      << " + " << pme_params.pmeGrid[i].imag() << "i" << std::endl;
+        }
+    }
+    
+    // 特定的三维坐标
+    const int keyCoords[][3] = {{0,0,1}, {0,1,0}, {1,0,0}, {1,1,1}, {2,2,2}};
+    for (const auto& coord : keyCoords) {
+        int idx = ((coord[0] % nx) * ny * nz) + ((coord[1] % ny) * nz) + (coord[2] % nz);
+        if (idx < static_cast<int>(pme_params.pmeGrid.size())) {
+            std::cout << "格点[" << coord[0] << "," << coord[1] << "," << coord[2] 
+                      << "] (索引=" << idx << "): " << pme_params.pmeGrid[idx].real() 
+                      << " + " << pme_params.pmeGrid[idx].imag() << "i" << std::endl;
+        }
+    }
+    
+    // 在原本的处理之后，添加详细的第一个原子电荷分布分析
+    // 使用正确的成员变量名称
+    if (state.activeAtomCount > 0) {
+        std::cout << "\n===== [energyPME] 第一个原子电荷分布分析 =====\n";
+        
+        // 假设第一个原子的索引是0
+        int atomIndex = 0;
+        
+        // 直接从atoms中获取电荷和位置
+        double atomCharge = state.atoms[atomIndex].charge;
+        float posX = state.atoms[atomIndex].x;
+        float posY = state.atoms[atomIndex].y;
+        float posZ = state.atoms[atomIndex].z;
+        
+        std::cout << "原子索引: " << atomIndex << ", 电荷: " << atomCharge 
+                  << ", 位置: [" << posX << "," << posY << "," << posZ << "]\n";
+        
+        // 正确计算原子在PME网格中的位置
+        // 首先计算分数坐标 - 在[0,1)范围内
+        double fractionPosX = posX / box[0];
+        double fractionPosY = posY / box[1];
+        double fractionPosZ = posZ / box[2];
+        
+        // 确保在[0,1)范围内
+        fractionPosX -= floor(fractionPosX);
+        fractionPosY -= floor(fractionPosY);
+        fractionPosZ -= floor(fractionPosZ);
+        
+        // 然后计算网格坐标
+        double gridX = fractionPosX * nx;
+        double gridY = fractionPosY * ny;
+        double gridZ = fractionPosZ * nz;
+        
+        // 计算网格索引和小数部分
+        int gridIX = static_cast<int>(floor(gridX));
+        int gridIY = static_cast<int>(floor(gridY));
+        int gridIZ = static_cast<int>(floor(gridZ));
+        
+        double fractionX = gridX - gridIX;
+        double fractionY = gridY - gridIY; 
+        double fractionZ = gridZ - gridIZ;
+        
+        // 计算B样条的起始索引，考虑B样条的顺序
+        int startIX = gridIX - order/2;
+        if (startIX < 0) startIX += nx;
+        
+        int startIY = gridIY - order/2;
+        if (startIY < 0) startIY += ny;
+        
+        int startIZ = gridIZ - order/2;
+        if (startIZ < 0) startIZ += nz;
+        
+        std::cout << "网格坐标位置: [" << gridX << "," << gridY << "," << gridZ << "]\n";
+        std::cout << "网格整数索引: [" << gridIX << "," << gridIY << "," << gridIZ << "]\n";
+        std::cout << "网格小数部分: [" << fractionX << "," << fractionY << "," << fractionZ << "]\n";
+        
+        // 计算并显示B样条系数
+        std::vector<double> bsCoeffsX(order), bsCoeffsY(order), bsCoeffsZ(order);
+        
+        // 使用已有的函数计算B样条系数
+        computeBSplineCoefficients(fractionX, order, bsCoeffsX);
+        computeBSplineCoefficients(fractionY, order, bsCoeffsY);
+        computeBSplineCoefficients(fractionZ, order, bsCoeffsZ);
+        
+        std::cout << "X方向B样条系数: ";
+        for (int i = 0; i < order; i++) {
+            std::cout << bsCoeffsX[i] << " ";
+        }
+        std::cout << "\n";
+        
+        std::cout << "Y方向B样条系数: ";
+        for (int i = 0; i < order; i++) {
+            std::cout << bsCoeffsY[i] << " ";
+        }
+        std::cout << "\n";
+        
+        std::cout << "Z方向B样条系数: ";
+        for (int i = 0; i < order; i++) {
+            std::cout << bsCoeffsZ[i] << " ";
+        }
+        std::cout << "\n";
+    }
+    
+    // 对某些原子的网格索引和B样条系数输出日志
+    if (platform::verbose_ && platform::log_level_ <= LogLevel::DEBUG) {
+        // 仅在DEBUG日志级别时输出少数原子的信息
+        for (int i = 0; i < std::min(3, state.activeAtomCount); i++) {
+            platform::log(LogLevel::DEBUG, "Atom ", i, " grid index: [", 
+                         gridIndices[i][0], ", ", gridIndices[i][1], ", ", gridIndices[i][2], "]");
+        }
     }
 }
 
@@ -982,157 +1234,59 @@ void spreadChargesOntoGrid(model::MCState& state, bool movement_only) {
  * Uses custom FFT implementation
  */
 void performFFTForward() {
-    platform::log(LogLevel::INFO, "Starting FFT forward transform");
+    platform::log(LogLevel::INFO, "Performing forward FFT on PME grid");
+    std::cout << "Performing forward FFT on PME grid" << std::endl;
     
-    // 检查网格尺寸是否合理
-    if (pme_params.meshSize[0] <= 0 || pme_params.meshSize[1] <= 0 || pme_params.meshSize[2] <= 0) {
-        platform::log(LogLevel::ERROR, "Invalid PME grid size: ", pme_params.meshSize[0], "x",
-            pme_params.meshSize[1], "x", pme_params.meshSize[2]);
-        return;
-    }
-    
-    // 计算FFT前的网格总电荷和最大值
-    double sumCharge = 0.0;
-    double maxCharge = 0.0;
-    int nonZeroPoints = 0;
-    
-    for (int i = 0; i < pme_params.meshSize[0] * pme_params.meshSize[1] * pme_params.meshSize[2]; ++i) {
-        sumCharge += pme_params.pmeGrid[i].real();
-        maxCharge = std::max(maxCharge, std::abs(pme_params.pmeGrid[i].real()));
-        if (std::abs(pme_params.pmeGrid[i].real()) > 1e-10) {
-            nonZeroPoints++;
-        }
-    }
-    
-    log(LogLevel::INFO, "Grid before FFT: sum=", sumCharge, 
-        ", max=", maxCharge, ", non-zero=", nonZeroPoints);
-    
-    // 输出一些示例网格点
-    log(LogLevel::INFO, "Sample grid points before FFT:");
-    for (int i = 0; i < 5 && i < pme_params.meshSize[0]; ++i) {
-        for (int j = 0; j < 5 && j < pme_params.meshSize[1]; ++j) {
-            for (int k = 0; k < 5 && k < pme_params.meshSize[2]; ++k) {
-                int index = k + pme_params.meshSize[2] * (j + pme_params.meshSize[1] * i);
-                if (std::abs(pme_params.pmeGrid[index].real()) > 1e-10) {
-                    log(LogLevel::INFO, "  Grid[", i, ",", j, ",", k, "] = ", 
-                        pme_params.pmeGrid[index].real(), " + ", pme_params.pmeGrid[index].imag(), "i");
-                }
-            }
-        }
-    }
-    
-    // 检查网格尺寸是2的幂次方
-    auto isPowerOfTwo = [](int n) { return (n > 0) && ((n & (n - 1)) == 0); };
-    if (!isPowerOfTwo(pme_params.meshSize[0]) || !isPowerOfTwo(pme_params.meshSize[1]) || !isPowerOfTwo(pme_params.meshSize[2])) {
-        log(LogLevel::ERROR, "PME grid dimensions must be powers of 2 for our FFT implementation");
-    }
-    
-    // 执行X方向的FFT
-    log(LogLevel::INFO, "Performing X-dimension FFT");
-    CustomFFT::fft_1d_batch(pme_params.pmeGrid.data(), 0, pme_params.meshSize[0], pme_params.meshSize[1], pme_params.meshSize[2], false);
-    
-    // 执行Y方向的FFT
-    log(LogLevel::INFO, "Performing Y-dimension FFT");
-    CustomFFT::fft_1d_batch(pme_params.pmeGrid.data(), 1, pme_params.meshSize[0], pme_params.meshSize[1], pme_params.meshSize[2], false);
-    
-    // 执行Z方向的FFT
-    log(LogLevel::INFO, "Performing Z-dimension FFT");
-    CustomFFT::fft_1d_batch(pme_params.pmeGrid.data(), 2, pme_params.meshSize[0], pme_params.meshSize[1], pme_params.meshSize[2], false);
-    
-    // 计算FFT后的网格状态
-    // 删除未使用的变量
-    double maxNorm = 0.0;
-    double totalNorm = 0.0;
-    int maxNormX = 0, maxNormY = 0, maxNormZ = 0;
-    int nonZeroAfterFFT = 0;
-    
-    // 检查第一个点(对应于k=(0,0,0))，该值应当接近于0（对于中性系统）
-    std::complex<double> k0 = pme_params.pmeGrid[0];
-    log(LogLevel::INFO, "Value at k=0: ", k0.real(), " + ", k0.imag(), "i");
-    
-    // 计算FFT后的网格统计信息
-    for (int i = 0; i < pme_params.meshSize[0]; ++i) {
-        for (int j = 0; j < pme_params.meshSize[1]; ++j) {
-            for (int k = 0; k < pme_params.meshSize[2]; ++k) {
-                int index = k + pme_params.meshSize[2] * (j + pme_params.meshSize[1] * i);
-                double norm = std::norm(pme_params.pmeGrid[index]);  // 复数的模平方
-                totalNorm += norm;
-                
-                if (norm > 1e-10) {
-                    nonZeroAfterFFT++;
-                }
-                
-                if (norm > maxNorm) {
-                    maxNorm = norm;
-                    maxNormX = i;
-                    maxNormY = j;
-                    maxNormZ = k;
-                }
-            }
-        }
-    }
-    
-    // 输出FFT后的统计信息
-    log(LogLevel::INFO, "FFT completed. Max norm = ", std::sqrt(maxNorm), 
-        " at [", maxNormX, ",", maxNormY, ",", maxNormZ, "]");
-    log(LogLevel::INFO, "Non-zero points after FFT: ", nonZeroAfterFFT);
-    log(LogLevel::INFO, "Total norm after FFT: ", std::sqrt(totalNorm));
-    
-    // 输出一些示例网格点
-    log(LogLevel::INFO, "Sample grid points after FFT:");
-    for (int i = 0; i < 5 && i < pme_params.meshSize[0]; ++i) {
-        for (int j = 0; j < 5 && j < pme_params.meshSize[1]; ++j) {
-            for (int k = 0; k < 5 && k < pme_params.meshSize[2]; ++k) {
-                int index = k + pme_params.meshSize[2] * (j + pme_params.meshSize[1] * i);
-                if (std::norm(pme_params.pmeGrid[index]) > 1e-10) {
-                    log(LogLevel::INFO, "  Grid[", i, ",", j, ",", k, "] = ", 
-                        pme_params.pmeGrid[index].real(), " + ", pme_params.pmeGrid[index].imag(), "i");
-                }
-            }
-        }
-    }
-    
-    log(LogLevel::INFO, "3D FFT transform completed successfully");
-}
-
-/**
- * @brief Perform backward FFT on the grid
- * 
- * Uses custom FFT implementation
- */
-void performFFTBackward() {
-    platform::log(LogLevel::DEBUG, "Performing 3D backward FFT on PME grid");
-    
-    // 确定FFT的大小 (确保是2的幂)
+    // 确定网格尺寸
     int nx = pme_params.meshSize[0];
     int ny = pme_params.meshSize[1];
     int nz = pme_params.meshSize[2];
     
-    platform::log(LogLevel::INFO, "Starting 3D backward FFT with grid size: [", 
-                 nx, ", ", ny, ", ", nz, "]");
-    
     // 验证网格尺寸是2的幂
     if ((nx & (nx - 1)) != 0 || (ny & (ny - 1)) != 0 || (nz & (nz - 1)) != 0) {
-        throw std::runtime_error("PME grid size must be a power of 2 for this FFT implementation");
+        throw std::runtime_error("PME grid size must be a power of 2 for FFT");
     }
     
-    // 直接使用fft3D_backward函数进行3D逆FFT
-    platform::log(LogLevel::INFO, "Performing backward FFT along Z dimension...");
-    CustomFFT::fft_1d_batch(pme_params.pmeGrid.data(), 2, nx, ny, nz, true);
-    
-    platform::log(LogLevel::INFO, "Performing backward FFT along Y dimension...");
-    CustomFFT::fft_1d_batch(pme_params.pmeGrid.data(), 1, nx, ny, nz, true);
-    
-    platform::log(LogLevel::INFO, "Performing backward FFT along X dimension...");
-    CustomFFT::fft_1d_batch(pme_params.pmeGrid.data(), 0, nx, ny, nz, true);
-    
-    // 应用额外的缩放因子 - fft3D_backward中有些缩放，但我们额外需要全局缩放
-    double scale = static_cast<double>(nx * ny * nz);
-    for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
-        pme_params.pmeGrid[i] /= scale;
+    // 保存FFT前的网格统计数据 - 使用与pme.cpp一致的方法：只检查实部
+    int nonZeroBeforeFFT = 0;
+    for (const auto& val : pme_params.pmeGrid) {
+        if (std::abs(val.real()) > 1e-10) {
+            nonZeroBeforeFFT++;
+        }
     }
     
-    platform::log(LogLevel::INFO, "3D backward FFT completed successfully");
+    platform::log(LogLevel::INFO, "Grid before FFT: non-zero points = ", nonZeroBeforeFFT);
+    // 添加直接输出到控制台
+    std::cout << "Grid before FFT: non-zero points = " << nonZeroBeforeFFT << std::endl;
+    
+    // 创建FFT前的备份
+    fftGridBackup = pme_params.pmeGrid;
+    
+    // 执行3D FFT - 完全按照pme.cpp中的实现
+    // 在pme.cpp中，这是通过fftw_execute调用CustomFFT::fft3D_forward实现的
+    CustomFFT::fft3D_forward(pme_params.pmeGrid.data(), nx, ny, nz);
+    
+    // 简化FFT后的统计信息
+    int nonZeroAfterFFT = 0;
+    for (const auto& val : pme_params.pmeGrid) {
+        if (std::norm(val) > 1e-10) {
+            nonZeroAfterFFT++;
+        }
+    }
+    
+    // 只保留日志输出，移除控制台输出
+    platform::log(LogLevel::INFO, "Grid after FFT: non-zero points = ", nonZeroAfterFFT);
+    
+    // 移除大部分详细的网格点值输出，仅在DEBUG级别保留少量信息
+    if (platform::verbose_ && platform::log_level_ <= LogLevel::DEBUG) {
+        platform::log(LogLevel::DEBUG, "First few grid points after FFT:");
+        for (int i = 0; i < 3 && i < static_cast<int>(pme_params.pmeGrid.size()); i++) {
+            platform::log(LogLevel::DEBUG, "  Grid point[", i, "] = ", 
+                         pme_params.pmeGrid[i].real(), " + ", pme_params.pmeGrid[i].imag(), "i");
+        }
+    }
+    
+    // 删除额外的标准位置格点输出和特定三维坐标的输出
 }
 
 /**
@@ -1141,328 +1295,244 @@ void performFFTBackward() {
  * @param energy Output energy
  */
 void computeEnergyFromGrid(double& energy, const double box[3]) {
-    double volume = box[0] * box[1] * box[2];
-    double scaleFactor = COULOMB * 4.0 * M_PI / volume;
+    // 记录开始处理
+    platform::log(LogLevel::DEBUG, "Computing energy from PME grid");
     
+    // 初始化计数器和能量
+    int nonZeroPoints = 0;
+    int significantEnergyPoints = 0;
     energy = 0.0;
     
-    platform::log(LogLevel::INFO, "Computing energy from grid with box = [", 
-                 box[0], ",", box[1], ",", box[2], "], volume = ", volume);
-    platform::log(LogLevel::INFO, "Mesh size = [", 
-                 pme_params.meshSize[0], ",", pme_params.meshSize[1], ",", pme_params.meshSize[2], "]");
+    // 获取网格尺寸
+    int nx = pme_params.meshSize[0];
+    int ny = pme_params.meshSize[1];
+    int nz = pme_params.meshSize[2];
     
-    // 计算倒空间能量贡献总和
-    double totalContribution = 0.0;
+    // 获取并计算常数
+    double alpha = pme_params.alpha;
     
-    // 检查 B 样条模数是否正确初始化
-    bool bsplinesInitialized = true;
-    for (int dim = 0; dim < 3; dim++) {
-        if (pme_params.bsplineModuli[dim].empty()) {
-            bsplinesInitialized = false;
-            platform::log(LogLevel::ERROR, "B-spline moduli for dimension ", dim, " not initialized!");
-        }
-    }
+    // 计算倒易晶格矢量
+    double recipBoxVectors[3][3] = {{0}};
     
-    if (!bsplinesInitialized) {
-        platform::log(LogLevel::WARNING, "Initializing B-splines before energy calculation");
-        pme_params.initializeBsplines();
-    }
+    // 正确处理盒子向量
+    double periodicBoxVectors[3][3] = {
+        {box[0], 0.0, 0.0},
+        {0.0, box[1], 0.0},
+        {0.0, 0.0, box[2]}
+    };
     
-    // Compute reciprocal space energy from the grid
-    for (int ix = 0; ix < pme_params.meshSize[0]; ix++) {
-        int kx = ix;
-        if (kx > pme_params.meshSize[0]/2) kx -= pme_params.meshSize[0];
+    // 对角盒子检查
+    bool isDiagonalBox = true;  // 强制为对角盒子
+    
+    if (isDiagonalBox) {
+        // 对角盒子的简单计算
+        recipBoxVectors[0][0] = 2.0 * M_PI / box[0]; // 2π/a
+        recipBoxVectors[1][1] = 2.0 * M_PI / box[1]; // 2π/b 
+        recipBoxVectors[2][2] = 2.0 * M_PI / box[2]; // 2π/c
+    } else {
+        // 非对角盒子需要完全计算倒格矢向量
+        double det = periodicBoxVectors[0][0] * (periodicBoxVectors[1][1] * periodicBoxVectors[2][2] - periodicBoxVectors[1][2] * periodicBoxVectors[2][1]) -
+                     periodicBoxVectors[0][1] * (periodicBoxVectors[1][0] * periodicBoxVectors[2][2] - periodicBoxVectors[1][2] * periodicBoxVectors[2][0]) +
+                     periodicBoxVectors[0][2] * (periodicBoxVectors[1][0] * periodicBoxVectors[2][1] - periodicBoxVectors[1][1] * periodicBoxVectors[2][0]);
         
-        for (int iy = 0; iy < pme_params.meshSize[1]; iy++) {
-            int ky = iy;
-            if (ky > pme_params.meshSize[1]/2) ky -= pme_params.meshSize[1];
-            
-            for (int iz = 0; iz < pme_params.meshSize[2]; iz++) {
-                int kz = iz;
-                if (kz > pme_params.meshSize[2]/2) kz -= pme_params.meshSize[2];
-                
-                // Skip k = 0 case
-                if (kx == 0 && ky == 0 && kz == 0) continue;
-                
-                int gridIndex = ix * pme_params.meshSize[1] * pme_params.meshSize[2] +
-                                iy * pme_params.meshSize[2] + iz;
-                
-                double kx_sq = kx * kx;
-                double ky_sq = ky * ky;
-                double kz_sq = kz * kz;
-                
-                // Compute squared magnitude of k-vector
-                double msq = (4.0 * M_PI * M_PI) * (
-                           (kx_sq / (box[0] * box[0])) + 
-                           (ky_sq / (box[1] * box[1])) + 
-                           (kz_sq / (box[2] * box[2])));
-                
-                // B-spline influence function
-                double bx = pme_params.bsplineModuli[0][ix];
-                double by = pme_params.bsplineModuli[1][iy];
-                double bz = pme_params.bsplineModuli[2][iz];
-                
-                // 确保 B 样条权重不为零 (关键修复)
-                if (msq > 0 && (bx == 0.0 || by == 0.0 || bz == 0.0)) {
-                    // 为非零频率重新计算 B 样条权重
-                    double factor_x = 2.0 * M_PI / pme_params.meshSize[0];
-                    double factor_y = 2.0 * M_PI / pme_params.meshSize[1];
-                    double factor_z = 2.0 * M_PI / pme_params.meshSize[2];
-                    
-                    int m_x = ix > pme_params.meshSize[0]/2 ? pme_params.meshSize[0] - ix : ix;
-                    int m_y = iy > pme_params.meshSize[1]/2 ? pme_params.meshSize[1] - iy : iy;
-                    int m_z = iz > pme_params.meshSize[2]/2 ? pme_params.meshSize[2] - iz : iz;
-                    
-                    if (m_x > 0 && bx == 0.0) {
-                        double w = factor_x * m_x;
-                        bx = 1.0;
-                        for (int j = 2; j <= pme_params.splineOrder; j++) {
-                            double sin_term = std::sin(j * w / 2.0) / w;
-                            bx = 4.0 * sin_term * sin_term * bx;
-                        }
-                    }
-                    
-                    if (m_y > 0 && by == 0.0) {
-                        double w = factor_y * m_y;
-                        by = 1.0;
-                        for (int j = 2; j <= pme_params.splineOrder; j++) {
-                            double sin_term = std::sin(j * w / 2.0) / w;
-                            by = 4.0 * sin_term * sin_term * by;
-                        }
-                    }
-                    
-                    if (m_z > 0 && bz == 0.0) {
-                        double w = factor_z * m_z;
-                        bz = 1.0;
-                        for (int j = 2; j <= pme_params.splineOrder; j++) {
-                            double sin_term = std::sin(j * w / 2.0) / w;
-                            bz = 4.0 * sin_term * sin_term * bz;
-                        }
-                    }
-                }
-                
-                // 添加(2π)²因子以修正波矢计算
-                double m2 = (4.0 * M_PI * M_PI) * msq;
-                
-                // B样条修正：B样条模数应该在分母而不是乘在分母的m2上
-                // 只需m2用于exponent term，B样条模数单独作为分母
-                double bsplineProduct = bx * by * bz;
-                // 处理极小的分母值
-                if (bsplineProduct < 1e-10) {
-                    // Skip this term if it would cause instability
-                    if (std::abs(bsplineProduct) < 1e-12)
-                        continue;
-                    
-                    // For very small but non-zero bspline product, use a minimum value
-                    bsplineProduct = 1e-10;
-                }
-                
-                // 由于m2现已包含(2π)²因子，应相应调整指数项
-                // 从 exp(-π²·m2/(α²)) 更改为 exp(-m2/(4·α²))
-                double m2_term = m2 != 0.0 ? std::exp(-m2 / (4.0 * pme_params.alpha * pme_params.alpha)) / m2 : 0.0;
-                
-                // Get squared magnitude of complex grid value
-                double gridMagnitudeSq = std::norm(pme_params.pmeGrid[gridIndex]);
-                
-                // 增加0.5系数并额外除以一次bsplineProduct，以确保正确的B样条模数幂次
-                // 原始公式: double energyTerm = scaleFactor * m2_term * gridMagnitudeSq / bsplineProduct;
-                // 修正为使用与splineOrder匹配的幂次
-                double bsplinePower = std::pow(bsplineProduct, pme_params.splineOrder/2.0);
-                if (bsplinePower < 1e-12) bsplinePower = 1e-12;
-                double energyTerm = 0.5 * scaleFactor * m2_term * gridMagnitudeSq / bsplinePower;
-                
-                // 记录一些能量贡献值用于调试
-                if ((ix <= 2 && iy <= 2 && iz <= 2) || gridMagnitudeSq > 1e-6) {
-                    platform::log(LogLevel::DEBUG, "Grid[", ix, ",", iy, ",", iz, "] = ", 
-                                 gridMagnitudeSq, ", bx*by*bz = ", bx*by*bz, 
-                                 ", m2_term = ", m2_term, ", term = ", energyTerm);
-                }
-                
-                energy += energyTerm;
-                totalContribution += std::abs(energyTerm);
-            }
-        }
-    }
-    
-    platform::log(LogLevel::INFO, "Total reciprocal energy = ", energy, 
-                 ", total contribution = ", totalContribution);
-}
-
-/**
- * @brief Compute reciprocal space energy using PME - 完全基于pme.cpp中的pme_reciprocal_convolution实现
- * 
- * @param state MC state
- * @param movement_only Whether to compute only for moving atoms
- * @return double Reciprocal space energy
- */
-double computeReciprocalPME(model::MCState& state, bool movement_only) {
-    double energy = 0.0;
-    
-    // 检查PME是否已初始化
-    if (!pme_params.initialized) {
-        platform::log(LogLevel::ERROR, "PME not initialized for reciprocal space calculation");
-        return 0.0;
-    }
-    
-    platform::log(LogLevel::INFO, "Starting PME reciprocal space calculation");
-    
-    // 分发电荷到网格
-    spreadChargesOntoGrid(state, movement_only);
-    
-    // 计算FFT前的网格总值
-    double gridSumBefore = 0.0;
-    double maxValueBefore = 0.0;
-    int nonZeroPointsBefore = 0;
-    
-    platform::log(LogLevel::INFO, "Checking grid before FFT:");
-    for (int i = 0; i < pme_params.meshSize[0] * pme_params.meshSize[1] * pme_params.meshSize[2]; ++i) {
-        gridSumBefore += std::abs(pme_params.pmeGrid[i].real());
-        maxValueBefore = std::max(maxValueBefore, std::abs(pme_params.pmeGrid[i].real()));
-        if (std::abs(pme_params.pmeGrid[i].real()) > 1e-10) {
-            nonZeroPointsBefore++;
-        }
-    }
-    
-    platform::log(LogLevel::INFO, "  Grid sum before FFT: ", gridSumBefore);
-    platform::log(LogLevel::INFO, "  Max value before FFT: ", maxValueBefore);
-    platform::log(LogLevel::INFO, "  Non-zero points before FFT: ", nonZeroPointsBefore, " out of ", 
-        pme_params.meshSize[0] * pme_params.meshSize[1] * pme_params.meshSize[2]);
-    
-    // 执行FFT变换
-    performFFTForward();
-    
-    platform::log(LogLevel::INFO, "FFT forward completed");
-    
-    // 转换网格
-    double box[3];
-    for (int i = 0; i < 3; ++i) {
-        box[i] = state.info.box[i];
-    }
-    
-    // 计算卷积并获取能量
-    // 注意：波矢量计算是reciprocal空间能量计算的关键
-    platform::log(LogLevel::INFO, "Starting reciprocal space convolution...");
-    
-    // 记录box和阿尔法值，这些是计算能量的关键参数
-    platform::log(LogLevel::INFO, "Box: [", box[0], ", ", box[1], ", ", box[2], "]");
-    platform::log(LogLevel::INFO, "Alpha: ", pme_params.alpha);
-    platform::log(LogLevel::INFO, "Grid dimensions: [", pme_params.meshSize[0], ", ", 
-        pme_params.meshSize[1], ", ", pme_params.meshSize[2], "]");
-    
-    // 用于保存卷积计算后的最大值和非零点个数
-    double maxValueAfterConvolution = 0.0;
-    int nonZeroPointsAfterConvolution = 0;
-    double sumEnergy = 0.0;  // 跟踪累积的能量
-    
-    // 计算盒子因子（Box Factor），这是计算能量的关键步骤
-    double boxfactor = (box[0] * box[1] * box[2]) / (M_PI * 2.0);
-    platform::log(LogLevel::INFO, "Box factor: ", boxfactor);
-    
-    // 计算能量因子（Alpha平方的倒数），用于能量计算
-    double alpha_squared_inv = 1.0 / (4.0 * pme_params.alpha * pme_params.alpha);
-    platform::log(LogLevel::INFO, "Alpha squared inverse: ", alpha_squared_inv);
-    
-    // 循环计算倒空间卷积
-    int significantContributions = 0;  // 跟踪能量贡献显著的点
-    
-    // 保存几个最大能量贡献点的信息
-    std::vector<std::tuple<int, int, int, double>> topContributions;
-    
-    // 遍历倒空间网格
-    for (int kx = 0; kx < pme_params.meshSize[0]; ++kx) {
-        int mx = (kx > pme_params.meshSize[0]/2) ? kx - pme_params.meshSize[0] : kx;
+        // 计算叉积和倒易晶格向量
+        recipBoxVectors[0][0] = 2.0 * M_PI * (periodicBoxVectors[1][1] * periodicBoxVectors[2][2] - periodicBoxVectors[1][2] * periodicBoxVectors[2][1]) / det;
+        recipBoxVectors[0][1] = 2.0 * M_PI * (periodicBoxVectors[0][2] * periodicBoxVectors[2][1] - periodicBoxVectors[0][1] * periodicBoxVectors[2][2]) / det;
+        recipBoxVectors[0][2] = 2.0 * M_PI * (periodicBoxVectors[0][1] * periodicBoxVectors[1][2] - periodicBoxVectors[0][2] * periodicBoxVectors[1][1]) / det;
         
-        for (int ky = 0; ky < pme_params.meshSize[1]; ++ky) {
-            int my = (ky > pme_params.meshSize[1]/2) ? ky - pme_params.meshSize[1] : ky;
+        recipBoxVectors[1][0] = 2.0 * M_PI * (periodicBoxVectors[1][2] * periodicBoxVectors[2][0] - periodicBoxVectors[1][0] * periodicBoxVectors[2][2]) / det;
+        recipBoxVectors[1][1] = 2.0 * M_PI * (periodicBoxVectors[0][0] * periodicBoxVectors[2][2] - periodicBoxVectors[0][2] * periodicBoxVectors[2][0]) / det;
+        recipBoxVectors[1][2] = 2.0 * M_PI * (periodicBoxVectors[0][2] * periodicBoxVectors[1][0] - periodicBoxVectors[0][0] * periodicBoxVectors[1][2]) / det;
+        
+        recipBoxVectors[2][0] = 2.0 * M_PI * (periodicBoxVectors[1][0] * periodicBoxVectors[2][1] - periodicBoxVectors[1][1] * periodicBoxVectors[2][0]) / det;
+        recipBoxVectors[2][1] = 2.0 * M_PI * (periodicBoxVectors[0][1] * periodicBoxVectors[2][0] - periodicBoxVectors[0][0] * periodicBoxVectors[2][1]) / det;
+        recipBoxVectors[2][2] = 2.0 * M_PI * (periodicBoxVectors[0][0] * periodicBoxVectors[1][1] - periodicBoxVectors[0][1] * periodicBoxVectors[1][0]) / det;
+    }
+    
+    // 计算必要的因子 - 与pme.cpp保持一致
+    const double one_4pi_eps = COULOMB / pme_params.epsilon_r;
+    const double factor = M_PI * M_PI / (alpha * alpha);  // 修改为与pme.cpp一致的公式
+    // 不需要再声明boxfactor，因为它在B样条初始化时已经被应用到第一维的bsplineModuli中
+    // const double boxfactor = M_PI * volume;  // 移除这一行，避免重复应用
+    
+    // 创建临时副本，因为我们将修改网格数据
+    std::vector<std::complex<double>> gridCopy = pme_params.pmeGrid;
+    
+    // 计算能量 - 精确匹配pme.cpp中的实现
+    double energySum = 0.0;
+    
+    // 确定最大k值，用于周期性处理 - 与pme.cpp保持一致
+    int maxkx = (nx + 1) / 2;
+    int maxky = (ny + 1) / 2;
+    int maxkz = (nz + 1) / 2;
+    
+    for (int kx = 0; kx < nx; kx++) {
+        // Calculate frequency - 使用与pme.cpp相同的变量名
+        double mx = (kx < maxkx) ? kx : (kx - nx);
+        double mhx = mx * recipBoxVectors[0][0];
+        // 不再乘以boxfactor，因为在初始化时已经应用过了
+        double bx = pme_params.bsplineModuli[0][kx];
+        
+        for (int ky = 0; ky < ny; ky++) {
+            double my = (ky < maxky) ? ky : (ky - ny);
+            double mhy = mx * recipBoxVectors[1][0] + my * recipBoxVectors[1][1];
+            double by = pme_params.bsplineModuli[1][ky];
             
-            for (int kz = 0; kz < pme_params.meshSize[2]; ++kz) {
-                int mz = (kz > pme_params.meshSize[2]/2) ? kz - pme_params.meshSize[2] : kz;
-                
-                // 跳过k=(0,0,0)，这不给能量贡献
-                if (mx == 0 && my == 0 && mz == 0) {
+            for (int kz = 0; kz < nz; kz++) {
+                // Skip zero frequency term for neutral systems
+                if (kx == 0 && ky == 0 && kz == 0) {
                     continue;
                 }
                 
-                // 计算波矢量
-                double mx_volume = 2.0 * M_PI * mx / box[0];
-                double my_volume = 2.0 * M_PI * my / box[1];
-                double mz_volume = 2.0 * M_PI * mz / box[2];
+                double mz = (kz < maxkz) ? kz : (kz - nz);
+                double mhz = mx * recipBoxVectors[2][0] + my * recipBoxVectors[2][1] + mz * recipBoxVectors[2][2];
                 
-                double msq = mx_volume*mx_volume + my_volume*my_volume + mz_volume*mz_volume;
+                // 网格索引
+                int gridIndex = kx * ny * nz + ky * nz + kz;
                 
-                // 计算结构因子
-                int index = kz + pme_params.meshSize[2] * (ky + pme_params.meshSize[1] * kx);
-                std::complex<double> S = pme_params.pmeGrid[index];
+                // 获取当前网格值
+                double gridReal = gridCopy[gridIndex].real();
+                double gridImag = gridCopy[gridIndex].imag();
                 
-                // 计算能量因子
-                double factor = std::exp(-msq * alpha_squared_inv) / msq;
+                // 计算倒格点的长度平方 m²
+                double m2 = mhx * mhx + mhy * mhy + mhz * mhz;
                 
-                // 移除未使用的m2变量及注释
+                // 获取第三维B样条调制因子
+                double bz = pme_params.bsplineModuli[2][kz];
                 
-                // 能量贡献
-                double prefactor = 2.0 * boxfactor * factor;  // 这里的2.0是考虑了共轭对称性
-                double gridValue = prefactor * (S.real()*S.real() + S.imag()*S.imag());
+                // 计算分母 - 注意这里使用bx已经包含了boxfactor
+                double denom = m2 * bx * by * bz;
                 
-                // 更新统计信息
-                if (std::abs(gridValue) > 1e-10) {
-                    nonZeroPointsAfterConvolution++;
-                    maxValueAfterConvolution = std::max(maxValueAfterConvolution, std::abs(gridValue));
-                    
-                    // 保存最大的能量贡献
-                    if (std::abs(gridValue) > 1e-6) {
-                        significantContributions++;
-                        if (topContributions.size() < 10 || std::abs(gridValue) > std::abs(std::get<3>(topContributions.back()))) {
-                            topContributions.push_back(std::make_tuple(mx, my, mz, gridValue));
-                            std::sort(topContributions.begin(), topContributions.end(),
-                                    [](const auto& a, const auto& b) {
-                                        return std::abs(std::get<3>(a)) > std::abs(std::get<3>(b));
-                                    });
-                            if (topContributions.size() > 10) {
-                                topContributions.pop_back();
-                            }
-                        }
-                    }
+                // 数值稳定性 - 与pme.cpp一致
+                if (denom < 1e-10) {
+                    denom = 1e-10;
                 }
                 
+                // *关键修复* - 完全按照pme.cpp的方式计算eterm
+                double eterm = one_4pi_eps * std::exp(-factor * m2) / denom;
+                
+                // 修改网格值 - 与pme.cpp保持一致
+                // 这是关键的修复点: pme.cpp在这里更新了网格数据
+                gridCopy[gridIndex].real(gridReal * eterm);
+                gridCopy[gridIndex].imag(gridImag * eterm);
+                
+                // 计算结构因子 
+                double structFactor = gridReal * gridReal + gridImag * gridImag;
+                
+                // 计算能量贡献
+                double energyTerm = eterm * structFactor;
+                
                 // 累加能量
-                sumEnergy += gridValue;
+                energySum += energyTerm;
+                
+                // 统计信息
+                nonZeroPoints++;
+                if (std::abs(energyTerm) > 1e-10) {
+                    significantEnergyPoints++;
+                }
+                
+                // 调试输出特定点的计算细节 (仅在高级调试模式下)
+                if (platform::verbose_ && platform::log_level_ <= LogLevel::DEBUG) {
+                    if ((kx == 1 && ky == 0 && kz == 0) || 
+                        (kx == 0 && ky == 1 && kz == 0) || 
+                        (kx == 0 && ky == 0 && kz == 1)) {
+                        std::cout << "计算点[" << kx << "," << ky << "," << kz << "]:" << std::endl;
+                        std::cout << "  mx,my,mz = [" << mx << "," << my << "," << mz << "]" << std::endl;
+                        std::cout << "  mhx,mhy,mhz = [" << mhx << "," << mhy << "," << mhz << "]" << std::endl;
+                        std::cout << "  m2 = " << m2 << std::endl;
+                        std::cout << "  bx,by,bz = [" << bx << "," << by << "," << bz << "]" << std::endl;
+                        std::cout << "  denom = " << denom << std::endl;
+                        std::cout << "  eterm = " << eterm << std::endl;
+                        std::cout << "  原始网格值 = " << gridReal << " + " << gridImag << "i" << std::endl;
+                        std::cout << "  更新后网格值 = " << gridCopy[gridIndex].real() << " + " << gridCopy[gridIndex].imag() << "i" << std::endl;
+                        std::cout << "  struct2 = " << structFactor << std::endl;
+                        std::cout << "  能量贡献 = " << energyTerm << std::endl;
+                        std::cout << "  累计能量 = " << energySum << std::endl;
+                    }
+                }
             }
         }
     }
     
-    // 最终能量计算
-    energy = 0.5 * sumEnergy;  // 0.5因子考虑了双重计算
+    // 最终能量计算 - 已经与pme.cpp一致，乘以0.5
+    energy = 0.5 * energySum;
     
-    // 输出调试信息
-    platform::log(LogLevel::INFO, "PME reciprocal space convolution completed");
-    platform::log(LogLevel::INFO, "Max value after convolution: ", maxValueAfterConvolution);
-    platform::log(LogLevel::INFO, "Non-zero points after convolution: ", nonZeroPointsAfterConvolution);
-    platform::log(LogLevel::INFO, "Significant energy contributions: ", significantContributions);
-    platform::log(LogLevel::INFO, "Raw sum energy: ", sumEnergy);
-    platform::log(LogLevel::INFO, "Final reciprocal energy (with 0.5 factor): ", energy);
+    // 输出日志
+    platform::log(LogLevel::INFO, "PME reciprocal energy: ", energy);
+    platform::log(LogLevel::DEBUG, "Raw energy sum: ", energySum);
+    platform::log(LogLevel::DEBUG, "Final energy: ", energy);
     
-    // 输出最大的能量贡献
-    platform::log(LogLevel::INFO, "Top energy contributions:");
-    for (const auto& contribution : topContributions) {
-        platform::log(LogLevel::INFO, "  Wave vector (", std::get<0>(contribution), ", ", 
-            std::get<1>(contribution), ", ", std::get<2>(contribution), 
-            "): Energy = ", std::get<3>(contribution));
+    // DEBUG级别的额外信息
+    if (platform::verbose_ && platform::log_level_ <= LogLevel::DEBUG) {
+        platform::log(LogLevel::DEBUG, "Non-zero points in energy calculation: ", nonZeroPoints);
+        platform::log(LogLevel::DEBUG, "Significant energy points: ", significantEnergyPoints);
+        platform::log(LogLevel::DEBUG, "Energy parameters: one_4pi_eps=", one_4pi_eps, 
+                     ", factor=", factor);
+    }
+}
+
+/**
+ * @brief Compute reciprocal space energy using PME
+ */
+double computeReciprocalPME(model::MCState& state, bool movement_only) {
+    platform::log(LogLevel::INFO, "Computing PME reciprocal space energy");
+    
+    // 精简系统信息输出
+    platform::log(LogLevel::INFO, "Box: [", state.info.box[0], ", ", 
+                 state.info.box[1], ", ", state.info.box[2], "], Alpha: ", pme_params.alpha);
+    
+    // 简化系统电荷检查
+    double totalCharge = 0.0;
+    for (int i = 0; i < state.activeAtomCount; i++) {
+        totalCharge += state.atoms[i].charge;
     }
     
-    // 确保能量值合理
-    if (std::abs(energy) < 1e-10) {
-        platform::log(LogLevel::WARNING, "PME reciprocal energy is zero or near zero!");
+    if (std::abs(totalCharge) > 1e-6) {
+        platform::log(LogLevel::WARNING, "System is not neutral! Total charge = ", totalCharge);
     }
     
-    // 检查能量符号
-    if (energy > 0) {
-        platform::log(LogLevel::INFO, "Reciprocal energy is positive - this is expected for typically charged systems");
-    } else if (energy < 0) {
-        platform::log(LogLevel::INFO, "Reciprocal energy is negative - check if this is expected for your system");
+    // PME网格检查
+    if (pme_params.pmeGrid.empty()) {
+        platform::log(LogLevel::ERROR, "PME grid not initialized!");
+        return 0.0;
     }
     
-    platform::log(LogLevel::INFO, "Computed PME reciprocal energy: ", energy);
-    return energy;
+    // 初始化B样条函数
+    if (pme_params.bsplineModuli[0].empty() || 
+        pme_params.bsplineModuli[1].empty() || 
+        pme_params.bsplineModuli[2].empty()) {
+        platform::log(LogLevel::INFO, "Initializing B-splines for PME calculation...");
+        pme_params.initializeBsplines();
+    }
+    
+    // 重置网格
+    std::fill(pme_params.pmeGrid.begin(), pme_params.pmeGrid.end(), std::complex<double>(0.0, 0.0));
+    
+    // 执行PME计算步骤
+    spreadChargesOntoGrid(state, movement_only);
+    performFFTForward();
+    
+    // 将box转换为double数组
+    double box[3];
+    for (int i = 0; i < 3; i++) {
+        box[i] = static_cast<double>(state.info.box[i]);
+    }
+    
+    // 更新PME参数中的盒子尺寸，确保B样条和能量计算使用相同的体积
+    pme_params.setBox(box);
+    
+    // 计算能量
+    double energy = 0.0;
+    computeEnergyFromGrid(energy, box);
+    
+    // 能量已经包含Coulomb常数，不需要再次乘以
+    double reciprocal_energy = energy;
+    
+    platform::log(LogLevel::INFO, "Reciprocal space energy = ", reciprocal_energy);
+    // 添加直接输出到控制台
+    std::cout << "Reciprocal space energy = " << reciprocal_energy << std::endl;
+    
+    return reciprocal_energy;
 }
 
 /**
@@ -1490,29 +1560,33 @@ double computeSelfEnergyPME(model::MCState& state, bool movement_only) {
                 
                 for(int j = state.residues[i].atomStart;
                     j < state.residues[i].atomStart + state.residues[i].atomCount; j++) {
-                    double charge = state.atoms[j].charge;
-                    double q2 = charge * charge;
-                    sum_q2 += q2;
-                    
-                    if (count < 5) {
-                        platform::log(LogLevel::INFO, "Atom ", j, 
-                                     " charge = ", charge, 
-                                     ", q² = ", q2);
-                        count++;
+                    if (j < state.activeAtomCount) { // 确保索引有效
+                        double charge = state.atoms[j].charge;
+                        double q2 = charge * charge;
+                        sum_q2 += q2;
+                        
+                        if (count < 5) {
+                            platform::log(LogLevel::INFO, "Atom ", j, 
+                                        " charge = ", charge, 
+                                        ", q² = ", q2);
+                            count++;
+                        }
                     }
                 }
             }
         }
-    } else {
+    }
+    else {
         for(int i = 0; i < state.activeAtomCount; i++) {
+            // 不再检查active成员
             double charge = state.atoms[i].charge;
             double q2 = charge * charge;
             sum_q2 += q2;
             
             if (i < 5) {
                 platform::log(LogLevel::INFO, "Atom ", i, 
-                             " charge = ", charge, 
-                             ", q² = ", q2);
+                            " charge = ", charge, 
+                            ", q² = ", q2);
             }
         }
     }
@@ -1520,22 +1594,14 @@ double computeSelfEnergyPME(model::MCState& state, bool movement_only) {
     platform::log(LogLevel::INFO, "Sum of q² = ", sum_q2);
     
     // Self-energy formula from pme.cpp: -ONE_4PI_EPS0 * alpha / sqrt(M_PI) * sum_q2
-    // 确保我们使用完全相同的公式
+    // 确保我们使用完全相同的公式，包括COULOMB常数
     double prefactor = -COULOMB * pme_params.alpha / sqrt(M_PI);
     self_energy = prefactor * sum_q2;
     
     platform::log(LogLevel::INFO, "Self energy prefactor = ", prefactor, 
                  ", resulting self energy = ", self_energy);
     
-    // 以下是原始计算方式，不修改返回值，但添加比较输出
-    double original_self_energy = -COULOMB * pme_params.alpha / std::sqrt(M_PI) * sum_q2;
-    
-    // 检查两种计算方式是否一致
-    if (std::abs(self_energy - original_self_energy) > 1e-10) {
-        platform::log(LogLevel::WARNING, "Self energy calculation mismatch: ", 
-                     self_energy, " vs ", original_self_energy);
-    }
-    
+    // 自能量已经乘以COULOMB常数，不需要在别处再乘
     return self_energy;
 }
 
@@ -1587,8 +1653,13 @@ void computeRealSpacePME(model::MCState& state, bool movement_only, bool store_i
             // Loop over atoms in each residue
             for(int i = residues[r1].atomStart; 
                 i < residues[r1].atomStart + residues[r1].atomCount; i++) {
+                // 确保原子索引有效
+                if(i >= state.activeAtomCount) continue;
+                
                 for(int j = residues[r2].atomStart; 
                     j < residues[r2].atomStart + residues[r2].atomCount; j++) {
+                    // 确保原子索引有效
+                    if(j >= state.activeAtomCount) continue;
                     
                     float dx = atoms[i].x - atoms[j].x;
                     float dy = atoms[i].y - atoms[j].y;
@@ -1650,27 +1721,29 @@ void computeRealSpacePME(model::MCState& state, bool movement_only, bool store_i
  * @brief Calculate system energy using PME method
  */
 void computeSystemEnergyPME(model::MCState& state) {
-    // Output Coulomb constant value for debugging
-    platform::log(LogLevel::INFO, "COULOMB constant in energyPME.cpp = ", COULOMB);
-
     if (!pme_params.initialized) {
         throw std::runtime_error("PME parameters not initialized. Call initializePMEParameters() first.");
     }
     
-    // Calculate all components of PME energy
+    // 对整个系统计算能量
+    // 1. 首先计算实空间部分 - 需要乘以COULOMB因子
     computeRealSpacePME(state, false, true);
+    
+    // 2. 然后计算倒空间部分 - computeReciprocalPME已经包含COULOMB因子
     state.ewald_energy.reciprocal = computeReciprocalPME(state, false);
+    
+    // 3. 最后计算自能部分 - computeSelfEnergyPME已经包含COULOMB因子
     state.ewald_energy.self = computeSelfEnergyPME(state, false);
     
-    // Apply Coulomb factor to all components
+    // 仅对实空间能量乘以COULOMB系数
     state.ewald_energy.real_space *= COULOMB;
     
-    // Total energy is the sum of all components
+    // 计算总能量
     state.ewald_energy.total = state.ewald_energy.real_space + 
                              state.ewald_energy.reciprocal + 
                              state.ewald_energy.self;
     
-    platform::log(LogLevel::INFO, "PME energy components: real_space=", state.ewald_energy.real_space,
+    platform::log(LogLevel::INFO, "PME system energy components: real_space=", state.ewald_energy.real_space,
                  " reciprocal=", state.ewald_energy.reciprocal,
                  " self=", state.ewald_energy.self,
                  " total=", state.ewald_energy.total);
@@ -1689,7 +1762,8 @@ void computeMovementEnergyPME(model::MCState& state) {
     state.ewald_energy.reciprocal = computeReciprocalPME(state, true);
     state.ewald_energy.self = computeSelfEnergyPME(state, true);
     
-    // Apply Coulomb factor to all components
+    // Apply Coulomb factor only to real-space component
+    // 注意: computeReciprocalPME和computeSelfEnergyPME现在已经包含COULOMB因子
     state.ewald_energy.real_space *= COULOMB;
     
     // Total energy is the sum of all components
@@ -1701,6 +1775,49 @@ void computeMovementEnergyPME(model::MCState& state) {
                  " reciprocal=", state.ewald_energy.reciprocal,
                  " self=", state.ewald_energy.self,
                  " total=", state.ewald_energy.total);
+}
+
+/**
+ * @brief Perform backward FFT on the grid
+ * 
+ * Uses custom FFT implementation, matches pme.cpp implementation
+ */
+void performFFTBackward() {
+    platform::log(LogLevel::INFO, "Performing backward FFT on PME grid");
+    
+    // 确定网格尺寸
+    int nx = pme_params.meshSize[0];
+    int ny = pme_params.meshSize[1];
+    int nz = pme_params.meshSize[2];
+    
+    // 验证网格尺寸是2的幂
+    if ((nx & (nx - 1)) != 0 || (ny & (ny - 1)) != 0 || (nz & (nz - 1)) != 0) {
+        throw std::runtime_error("PME grid size must be a power of 2 for FFT");
+    }
+    
+    // 记录FFT前的网格统计
+    int nonZeroBeforeFFT = 0;
+    for (const auto& val : pme_params.pmeGrid) {
+        if (std::norm(val) > 1e-10) {
+            nonZeroBeforeFFT++;
+        }
+    }
+    
+    platform::log(LogLevel::INFO, "Grid before backward FFT: non-zero points = ", nonZeroBeforeFFT);
+    
+    // 执行3D反向FFT - 完全按照pme.cpp中的实现
+    // 在pme.cpp中，这是通过fftw_execute调用CustomFFT::fft3D_backward实现的
+    CustomFFT::fft3D_backward(pme_params.pmeGrid.data(), nx, ny, nz);
+    
+    // FFT后的简要统计
+    int nonZeroAfterFFT = 0;
+    for (const auto& val : pme_params.pmeGrid) {
+        if (std::abs(val.real()) > 1e-10) {
+            nonZeroAfterFFT++;
+        }
+    }
+    
+    platform::log(LogLevel::INFO, "Grid after backward FFT: non-zero points = ", nonZeroAfterFFT);
 }
 
 } // namespace cpu
