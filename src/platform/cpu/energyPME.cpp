@@ -1,13 +1,31 @@
 #include "energyPME.hpp"
 #include "platform/platform.hpp"
-#include <cmath>
+#include "model/residue.hpp"
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 #include <complex>
 #include <chrono>
+#include <set>
+#include <tuple>
 
 // Optional: Include library for FFT if needed
 // #include <fftw3.h>
+
+// 定义复数类型别名
+using cmplx = std::complex<double>;
+// Coulomb常数 (kcal·mol⁻¹·e⁻²)
+static const double COULOMB = 332.0716;
+
+namespace {
+    // FFTW Plan相关常量
+    static const unsigned FFTW_MEASURE = 0;
+    static const int FFTW_FORWARD = -1;
+    static const int FFTW_BACKWARD = 1;
+    
+    // 用于诊断的计时器
+    auto t_start = std::chrono::high_resolution_clock::now();
+}
 
 namespace {
 // 定义PI2
@@ -396,9 +414,8 @@ void PMEParams::initializeBsplines() {
         boxVolume = 1.0;
     }
     
-    double boxfactor = M_PI * boxVolume;
-    platform::log(LogLevel::INFO, "Initializing B-splines with boxfactor = ", boxfactor, 
-                 " (box volume = ", boxVolume, ")");
+    // 注意：不再在这里应用boxfactor，将按照pme.cpp的做法在能量计算时应用
+    platform::log(LogLevel::INFO, "Initializing B-splines with box volume = ", boxVolume);
     
     // 初始化 bsplineModuli 数组 - 精确对齐pme.cpp
     for (int dim = 0; dim < 3; dim++) {
@@ -413,10 +430,6 @@ void PMEParams::initializeBsplines() {
             // 零频率点特殊处理 - 与pme.cpp一致
             if (m == 0) {
                 bsplineModuli[dim][i] = 1.0;
-                // 不再对第一个维度预先应用boxfactor - 将在能量计算时应用，与pme.cpp保持一致
-                // if (dim == 0) {
-                //     bsplineModuli[dim][i] *= boxfactor;
-                // }
                 continue;
             }
             
@@ -435,11 +448,6 @@ void PMEParams::initializeBsplines() {
             
             // 计算B样条模值的倒数平方 - 与pme.cpp一致
             bsplineModuli[dim][i] = 1.0 / (bsplineModuli[dim][i] * bsplineModuli[dim][i]);
-            
-            // 不再对第一个维度预先应用boxfactor - 将在能量计算时应用，与pme.cpp保持一致
-            // if (dim == 0) {
-            //     bsplineModuli[dim][i] *= boxfactor;
-            // }
         }
     }
     
@@ -995,6 +1003,35 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
     // 分析网格信息
     std::cout << "网格大小: " << pme_params.pmeGrid.size() << std::endl;
     
+    // 添加查找并显示最大值的网格点
+    std::cout << "\n===== 电荷分布后最大值网格点 =====\n";
+    std::vector<std::pair<size_t, double>> topValues;
+    for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
+        double realVal = std::abs(pme_params.pmeGrid[i].real());
+        if (realVal > 1e-8) {  // 使用较大阈值找出明显的非零值
+            topValues.push_back({i, realVal});
+        }
+    }
+    
+    // 按值大小排序
+    std::sort(topValues.begin(), topValues.end(), 
+              [](const auto& a, const auto& b) { return a.second > b.second; });
+    
+    // 输出前10个最大值点
+    int maxValueCount = 0;
+    for (const auto& [idx, val] : topValues) {
+        if (maxValueCount >= 10) break;
+        // 计算三维索引
+        int x = (idx / (ny * nz));
+        int y = (idx - x * ny * nz) / nz;
+        int z = idx - x * ny * nz - y * nz;
+        
+        std::cout << "Top " << (maxValueCount + 1) << ": 格点[" << x << "," << y << "," << z 
+                  << "] (索引=" << idx << "): " << pme_params.pmeGrid[idx].real() 
+                  << " + " << pme_params.pmeGrid[idx].imag() << "i, |val| = " << val << std::endl;
+        maxValueCount++;
+    }
+    
     // 统计并输出非零网格点
     int displayCount = 0;
     for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
@@ -1204,36 +1241,34 @@ void performFFTForward() {
         throw std::runtime_error("PME grid size must be a power of 2 for FFT");
     }
     
-    // 保存FFT前的网格统计数据 - 使用与pme.cpp一致的方法：只检查实部
+    // 保存FFT前的网格统计数据 - 完全匹配pme.cpp的方式
     int nonZeroBeforeFFT = 0;
-    for (const auto& val : pme_params.pmeGrid) {
-        if (std::abs(val.real()) > 1e-10) {
+    for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
+        // 只检查实部，与pme.cpp一致
+        if (std::abs(pme_params.pmeGrid[i].real()) > 1e-10) {
             nonZeroBeforeFFT++;
         }
     }
     
     platform::log(LogLevel::INFO, "Grid before FFT: non-zero points = ", nonZeroBeforeFFT);
-    // 添加直接输出到控制台
     std::cout << "Grid before FFT: non-zero points = " << nonZeroBeforeFFT << std::endl;
     
     // 创建FFT前的备份
     fftGridBackup = pme_params.pmeGrid;
     
-    // 执行3D FFT - 完全按照pme.cpp中的实现
-    // 在pme.cpp中，这是通过fftw_execute调用CustomFFT::fft3D_forward实现的
+    // 执行3D FFT - 确保完全按照pme.cpp中的实现
     CustomFFT::fft3D_forward(pme_params.pmeGrid.data(), nx, ny, nz);
     
-    // 简化FFT后的统计信息
+    // FFT后的统计信息 - 确保与pme.cpp完全一致
     int nonZeroAfterFFT = 0;
-    for (const auto& val : pme_params.pmeGrid) {
-        if (std::norm(val) > 1e-10) {
+    for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
+        // 使用std::norm(val) > 1e-10，与pme.cpp完全一致
+        if (std::norm(pme_params.pmeGrid[i]) > 1e-10) {
             nonZeroAfterFFT++;
         }
     }
     
-    // 只保留日志输出，移除控制台输出
     platform::log(LogLevel::INFO, "Grid after FFT: non-zero points = ", nonZeroAfterFFT);
-    // 添加控制台输出，确保这个信息一定会显示
     std::cout << "Grid after FFT: non-zero points = " << nonZeroAfterFFT << std::endl;
     
     // 添加详细的FFT后关键网格点值输出 - 与pme.cpp一致
@@ -1260,6 +1295,35 @@ void performFFTForward() {
         }
     }
     
+    // 添加查找并显示最大值的网格点
+    std::cout << "\n===== FFT后最大值网格点 =====\n";
+    std::vector<std::pair<size_t, double>> topValues;
+    for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
+        double normVal = std::norm(pme_params.pmeGrid[i]);
+        if (normVal > 1e-8) {  // 使用较大阈值找出明显的非零值
+            topValues.push_back({i, normVal});
+        }
+    }
+    
+    // 按值大小排序
+    std::sort(topValues.begin(), topValues.end(), 
+              [](const auto& a, const auto& b) { return a.second > b.second; });
+    
+    // 输出前10个最大值点
+    int count = 0;
+    for (const auto& [idx, val] : topValues) {
+        if (count >= 10) break;
+        // 计算三维索引
+        int x = (idx / (ny * nz));
+        int y = (idx - x * ny * nz) / nz;
+        int z = idx - x * ny * nz - y * nz;
+        
+        std::cout << "Top " << (count + 1) << ": 格点[" << x << "," << y << "," << z 
+                  << "] (索引=" << idx << "): " << pme_params.pmeGrid[idx].real() 
+                  << " + " << pme_params.pmeGrid[idx].imag() << "i, |val|² = " << val << std::endl;
+        count++;
+    }
+    
     // 移除大部分详细的网格点值输出，仅在DEBUG级别保留少量信息
     if (platform::verbose_ && platform::log_level_ <= LogLevel::DEBUG) {
         platform::log(LogLevel::DEBUG, "First few grid points after FFT:");
@@ -1281,24 +1345,22 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
     
     // 计算盒子体积并输出关键参数 - 与pme.cpp一致
     double volume = box[0] * box[1] * box[2];
+    // 修复：使用与pme.cpp一致的常量
+    double one_4pi_eps = COULOMB/pme_params.epsilon_r;
+    double factor = M_PI*M_PI/(pme_params.alpha*pme_params.alpha);
     const double boxfactor = M_PI * volume;  // 用于调试输出和B样条调制因子
     
     std::cout << "Computing energy from grid with box = [" << box[0] << "," << box[1] << "," 
               << box[2] << "], alpha = " << pme_params.alpha << ", volume = " << volume << std::endl;
-    
-    // 初始化计数器和能量
-    // 这些变量已经被替换为pointsProcessed和significantPoints
-    // int nonZeroPoints = 0;
-    // int significantEnergyPoints = 0;
-    energy = 0.0;
+    std::cout << "Energy parameters: one_4pi_eps = " << one_4pi_eps
+              << ", factor = " << factor << ", boxfactor = " << boxfactor << std::endl;
+              
+    std::cout << "Updating grid data before energy calculation" << std::endl;
     
     // 获取网格尺寸
     int nx = pme_params.meshSize[0];
     int ny = pme_params.meshSize[1];
     int nz = pme_params.meshSize[2];
-    
-    // 获取并计算常数
-    double alpha = pme_params.alpha;
     
     // 计算倒易晶格矢量
     double recipBoxVectors[3][3] = {{0}};
@@ -1315,230 +1377,242 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
     
     // 重要修复 - 使用与pme.cpp完全一致的倒格矢计算
     if (isDiagonalBox) {
-        // 简化的对角盒子计算 - 与pme.cpp保持一致
-        recipBoxVectors[0][0] = 2.0 * M_PI / box[0]; 
-        recipBoxVectors[1][1] = 2.0 * M_PI / box[1]; 
-        recipBoxVectors[2][2] = 2.0 * M_PI / box[2]; 
+        // 简化的对角盒子计算 - 确保与pme.cpp一致（修改计算方式）
+        recipBoxVectors[0][0] = 1.0 / box[0]; 
+        recipBoxVectors[1][1] = 1.0 / box[1]; 
+        recipBoxVectors[2][2] = 1.0 / box[2]; 
     } else {
-        // 非对角盒子需要完全计算倒格矢向量
+        // 非对角盒子计算也需要调整
         double det = periodicBoxVectors[0][0] * (periodicBoxVectors[1][1] * periodicBoxVectors[2][2] - periodicBoxVectors[1][2] * periodicBoxVectors[2][1]) -
                      periodicBoxVectors[0][1] * (periodicBoxVectors[1][0] * periodicBoxVectors[2][2] - periodicBoxVectors[1][2] * periodicBoxVectors[2][0]) +
                      periodicBoxVectors[0][2] * (periodicBoxVectors[1][0] * periodicBoxVectors[2][1] - periodicBoxVectors[1][1] * periodicBoxVectors[2][0]);
         
-        // 计算叉积和倒易晶格向量
-        recipBoxVectors[0][0] = 2.0 * M_PI * (periodicBoxVectors[1][1] * periodicBoxVectors[2][2] - periodicBoxVectors[1][2] * periodicBoxVectors[2][1]) / det;
-        recipBoxVectors[0][1] = 2.0 * M_PI * (periodicBoxVectors[0][2] * periodicBoxVectors[2][1] - periodicBoxVectors[0][1] * periodicBoxVectors[2][2]) / det;
-        recipBoxVectors[0][2] = 2.0 * M_PI * (periodicBoxVectors[0][1] * periodicBoxVectors[1][2] - periodicBoxVectors[0][2] * periodicBoxVectors[1][1]) / det;
+        // 计算叉积和倒易晶格向量（简化表达式）
+        recipBoxVectors[0][0] = (periodicBoxVectors[1][1] * periodicBoxVectors[2][2] - periodicBoxVectors[1][2] * periodicBoxVectors[2][1]) / det;
+        recipBoxVectors[0][1] = (periodicBoxVectors[0][2] * periodicBoxVectors[2][1] - periodicBoxVectors[0][1] * periodicBoxVectors[2][2]) / det;
+        recipBoxVectors[0][2] = (periodicBoxVectors[0][1] * periodicBoxVectors[1][2] - periodicBoxVectors[0][2] * periodicBoxVectors[1][1]) / det;
         
-        recipBoxVectors[1][0] = 2.0 * M_PI * (periodicBoxVectors[1][2] * periodicBoxVectors[2][0] - periodicBoxVectors[1][0] * periodicBoxVectors[2][2]) / det;
-        recipBoxVectors[1][1] = 2.0 * M_PI * (periodicBoxVectors[0][0] * periodicBoxVectors[2][2] - periodicBoxVectors[0][2] * periodicBoxVectors[2][0]) / det;
-        recipBoxVectors[1][2] = 2.0 * M_PI * (periodicBoxVectors[0][2] * periodicBoxVectors[1][0] - periodicBoxVectors[0][0] * periodicBoxVectors[1][2]) / det;
+        recipBoxVectors[1][0] = (periodicBoxVectors[1][2] * periodicBoxVectors[2][0] - periodicBoxVectors[1][0] * periodicBoxVectors[2][2]) / det;
+        recipBoxVectors[1][1] = (periodicBoxVectors[0][0] * periodicBoxVectors[2][2] - periodicBoxVectors[0][2] * periodicBoxVectors[2][0]) / det;
+        recipBoxVectors[1][2] = (periodicBoxVectors[0][2] * periodicBoxVectors[1][0] - periodicBoxVectors[0][0] * periodicBoxVectors[1][2]) / det;
         
-        recipBoxVectors[2][0] = 2.0 * M_PI * (periodicBoxVectors[1][0] * periodicBoxVectors[2][1] - periodicBoxVectors[1][1] * periodicBoxVectors[2][0]) / det;
-        recipBoxVectors[2][1] = 2.0 * M_PI * (periodicBoxVectors[0][1] * periodicBoxVectors[2][0] - periodicBoxVectors[0][0] * periodicBoxVectors[2][1]) / det;
-        recipBoxVectors[2][2] = 2.0 * M_PI * (periodicBoxVectors[0][0] * periodicBoxVectors[1][1] - periodicBoxVectors[0][1] * periodicBoxVectors[1][0]) / det;
+        recipBoxVectors[2][0] = (periodicBoxVectors[1][0] * periodicBoxVectors[2][1] - periodicBoxVectors[1][1] * periodicBoxVectors[2][0]) / det;
+        recipBoxVectors[2][1] = (periodicBoxVectors[0][1] * periodicBoxVectors[2][0] - periodicBoxVectors[0][0] * periodicBoxVectors[2][1]) / det;
+        recipBoxVectors[2][2] = (periodicBoxVectors[0][0] * periodicBoxVectors[1][1] - periodicBoxVectors[0][1] * periodicBoxVectors[1][0]) / det;
     }
     
-    // 添加倒格矢输出 - 与pme.cpp保持一致
+    // 输出倒格矢 - 与pme.cpp完全一致
     std::cout << "Reciprocal lattice vectors:" << std::endl;
-    for(int i=0; i<3; i++) {
-        std::cout << "  b" << (i+1) << " = [" 
-                  << recipBoxVectors[i][0] << ", "
-                  << recipBoxVectors[i][1] << ", " 
-                  << recipBoxVectors[i][2] << "]" << std::endl;
+    std::cout << "  b1 = [" << recipBoxVectors[0][0] << ", " 
+              << recipBoxVectors[0][1] << ", " << recipBoxVectors[0][2] << "]" << std::endl;
+    std::cout << "  b2 = [" << recipBoxVectors[1][0] << ", " 
+              << recipBoxVectors[1][1] << ", " << recipBoxVectors[1][2] << "]" << std::endl;
+    std::cout << "  b3 = [" << recipBoxVectors[2][0] << ", " 
+              << recipBoxVectors[2][1] << ", " << recipBoxVectors[2][2] << "]" << std::endl;
+    
+    // 统计原始网格数据
+    int nonZeroGridBefore = 0;
+    for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
+        if (std::norm(pme_params.pmeGrid[i]) > 1e-10) {
+            nonZeroGridBefore++;
+        }
     }
+    std::cout << "Grid before energy calculation: non-zero points = " << nonZeroGridBefore << std::endl;
     
-    // 计算必要的因子 - 与pme.cpp保持一致
-    const double one_4pi_eps = COULOMB / pme_params.epsilon_r;
-    const double factor = M_PI * M_PI / (alpha * alpha);  // 修改为与pme.cpp一致的公式
-    
-    // 输出关键能量计算参数 - 与pme.cpp一致
-    std::cout << "Energy parameters: one_4pi_eps = " << one_4pi_eps 
-              << ", factor = " << factor << ", boxfactor = " << boxfactor << std::endl;
-    
-    std::cout << "Updating grid data before energy calculation" << std::endl;
-    
-    // 计算能量 - 精确匹配pme.cpp中的实现
-    double energySum = 0.0;
+    // 初始化能量和点计数
+    energy = 0.0;
     int pointsProcessed = 0;
     int significantPoints = 0;
     
-    // 添加能量贡献记录，用于调试比较
-    double contributions[3][3][3] = {{{0}}};
+    int maxkx = (nx+1)/2;
+    int maxky = (ny+1)/2;
+    int maxkz = (nz+1)/2;
     
-    // 确定最大k值，用于周期性处理 - 与pme.cpp保持一致
-    int maxkx = (nx + 1) / 2;
-    int maxky = (ny + 1) / 2;
-    int maxkz = (nz + 1) / 2;
+    // 保存原始值和能量贡献信息用于后续统计
+    struct GridPointData {
+        int kx, ky, kz;
+        double mx, my, mz;
+        double mhx, mhy, mhz;
+        double m2;
+        double bx, by, bz;
+        double denom;
+        double eterm;
+        std::complex<double> originalValue;
+        std::complex<double> updatedValue;
+        double struct2;
+        double energyContrib;
+        bool isSignificant;
+    };
     
-    // 因为我们将修改网格数据，所以不再需要副本
-    // std::vector<std::complex<double>> gridCopy = pme_params.pmeGrid;
+    std::vector<GridPointData> monitoredPoints;
+    std::vector<GridPointData> significantEnergyPoints;
     
-    // 初始化粘度相关变量 - 与pme.cpp一致
-    double virxx = 0, virxy = 0, virxz = 0;
-    double viryy = 0, viryz = 0, virzz = 0;
+    // 监控特定点
+    std::set<std::tuple<int,int,int>> monitorIndices = {
+        {0,0,1}, {0,1,0}, {1,0,0}, {1,1,1}, {2,2,2}, {5,5,5}, {10,10,10}
+    };
     
+    // 以下是完全按照pme.cpp的方式计算能量
     for (int kx = 0; kx < nx; kx++) {
-        // Calculate frequency - 使用与pme.cpp相同的变量名
-        double mx = (kx < maxkx) ? kx : (kx - nx);
+        // 计算频率
+        double mx = (kx < maxkx) ? kx : (kx-nx);
         double mhx = mx * recipBoxVectors[0][0];
-        // 关键修复：在这里应用boxfactor，与pme.cpp保持一致
+        // 按照pme.cpp的方式，将boxfactor应用于第一维的B样条
         double bx = boxfactor * pme_params.bsplineModuli[0][kx];
         
         for (int ky = 0; ky < ny; ky++) {
-            double my = (ky < maxky) ? ky : (ky - ny);
-            // 关键修复：mhy的计算方式需要与pme.cpp完全一致
-            double mhy = mx * recipBoxVectors[1][0] + my * recipBoxVectors[1][1];
+            double my = (ky < maxky) ? ky : (ky-ny);
+            double mhy = my * recipBoxVectors[1][1]; // 简化对角盒子，与pme.cpp一致
             double by = pme_params.bsplineModuli[1][ky];
             
             for (int kz = 0; kz < nz; kz++) {
-                // Skip zero frequency term for neutral systems
+                // 跳过零频率项 - 对中性系统
                 if (kx == 0 && ky == 0 && kz == 0) {
                     continue;
                 }
                 
-                double mz = (kz < maxkz) ? kz : (kz - nz);
-                // 关键修复：mhz的计算方式需要与pme.cpp完全一致
-                double mhz = mx * recipBoxVectors[2][0] + my * recipBoxVectors[2][1] + mz * recipBoxVectors[2][2];
+                double mz = (kz < maxkz) ? kz : (kz-nz);
+                double mhz = mz * recipBoxVectors[2][2]; // 简化对角盒子，与pme.cpp一致
                 
-                // 网格索引
-                int gridIndex = kx * ny * nz + ky * nz + kz;
+                // 获取网格数据
+                int index = kx * ny * nz + ky * nz + kz;
+                double d1 = pme_params.pmeGrid[index].real();
+                double d2 = pme_params.pmeGrid[index].imag();
                 
-                // 获取当前网格值
-                double gridReal = pme_params.pmeGrid[gridIndex].real();
-                double gridImag = pme_params.pmeGrid[gridIndex].imag();
-                
-                // 计算倒格点的长度平方 m²
+                // 计算卷积
                 double m2 = mhx * mhx + mhy * mhy + mhz * mhz;
-                
-                // 获取第三维B样条调制因子
                 double bz = pme_params.bsplineModuli[2][kz];
-                
-                // 计算分母 - 注意现在bx已经包含了boxfactor
+                // 修正：按照pme.cpp的方式组合这些因子
                 double denom = m2 * bx * by * bz;
                 
-                // 数值稳定性 - 与pme.cpp一致
+                // 提高数值稳定性
                 if (denom < 1e-10) {
                     denom = 1e-10;
                 }
                 
-                // 关键修复 - 完全按照pme.cpp的方式计算eterm
-                double eterm = one_4pi_eps * std::exp(-factor * m2) / denom;
+                // 修正：pme.cpp的能量计算公式
+                double eterm = one_4pi_eps * exp(-factor * m2) / denom;
+                double struct2 = d1*d1 + d2*d2;
+                double energyContrib = eterm * struct2;
                 
-                // 修改网格值 - 与pme.cpp保持一致
-                // 这是关键的修复点: pme.cpp在这里更新了网格数据
-                pme_params.pmeGrid[gridIndex].real(gridReal * eterm);
-                pme_params.pmeGrid[gridIndex].imag(gridImag * eterm);
+                // 构建监控点数据
+                GridPointData pointData;
+                pointData.kx = kx;
+                pointData.ky = ky;
+                pointData.kz = kz;
+                pointData.mx = mx;
+                pointData.my = my;
+                pointData.mz = mz;
+                pointData.mhx = mhx;
+                pointData.mhy = mhy;
+                pointData.mhz = mhz;
+                pointData.m2 = m2;
+                pointData.bx = bx;
+                pointData.by = by;
+                pointData.bz = bz;
+                pointData.denom = denom;
+                pointData.eterm = eterm;
+                pointData.originalValue = std::complex<double>(d1, d2);
+                pointData.struct2 = struct2;
+                pointData.energyContrib = energyContrib;
+                pointData.isSignificant = (energyContrib > 1e-4);
                 
-                // 计算能量贡献 - 修改以匹配pme.cpp
-                double struct2 = gridReal * gridReal + gridImag * gridImag;
-                double ets2 = eterm * struct2;
-                energySum += ets2;
-                
-                // 统计处理点和有显著贡献的点
-                pointsProcessed++;
-                if (ets2 > 1e-8) {
-                    significantPoints++;
+                // 是否为监控点
+                if (monitorIndices.find(std::make_tuple(kx, ky, kz)) != monitorIndices.end()) {
+                    monitoredPoints.push_back(pointData);
                 }
                 
-                // 记录关键点的能量贡献
-                if (kx < 3 && ky < 3 && kz < 3) {
-                    contributions[kx][ky][kz] = ets2;
+                // 收集有显著能量贡献的点
+                if (pointData.isSignificant) {
+                    significantEnergyPoints.push_back(pointData);
                 }
                 
-                // 调试输出 - 关键观察点，与pme.cpp一致
+                // 特殊调试输出 - 类似于pme.cpp中的监控点
                 if ((kx == 0 && ky == 0 && kz == 1) || 
                     (kx == 0 && ky == 1 && kz == 0) || 
-                    (kx == 1 && ky == 0 && kz == 0)) {
-                    std::cout << "比较点[" << kx << "," << ky << "," << kz << "]:" << std::endl;
+                    (kx == 1 && ky == 0 && kz == 0) ||
+                    (kx == 1 && ky == 1 && kz == 1) ||
+                    (kx == 2 && ky == 2 && kz == 2)) {
+                    std::cout << "网格点[" << kx << "," << ky << "," << kz << "] 处理:" << std::endl;
                     std::cout << "  mx,my,mz = [" << mx << "," << my << "," << mz << "]" << std::endl;
                     std::cout << "  mhx,mhy,mhz = [" << mhx << "," << mhy << "," << mhz << "]" << std::endl;
-                    std::cout << "  m2 = " << m2 << std::endl;
-                    std::cout << "  bx,by,bz = [" << bx << "," << by << "," << bz << "]" << std::endl;
-                    std::cout << "  denom = " << denom << std::endl;
-                    std::cout << "  eterm = " << eterm << std::endl;
-                    std::cout << "  原始网格值 = " << gridReal << " + " << gridImag << "i" << std::endl;
-                    std::cout << "  更新后网格值 = " << pme_params.pmeGrid[gridIndex].real() << " + " << pme_params.pmeGrid[gridIndex].imag() << "i" << std::endl;
-                    std::cout << "  struct2 = " << struct2 << std::endl;
-                    std::cout << "  能量贡献 = " << ets2 << std::endl;
-                    std::cout << "  累计能量 = " << energySum << std::endl;
+                    std::cout << "  m2 = " << m2 << ", eterm = " << eterm << std::endl;
+                    std::cout << "  grid = [" << d1 << "," << d2 << "]" << std::endl;
+                    std::cout << "  energy contrib = " << energyContrib << std::endl;
                 }
                 
-                // 计算粘度贡献 - 与pme.cpp一致
-                double vfactor = 2.0 * (1.0 - factor * m2);
-                virxx += vfactor * mhx * mhx * ets2;
-                virxy += vfactor * mhx * mhy * ets2;
-                virxz += vfactor * mhx * mhz * ets2;
-                viryy += vfactor * mhy * mhy * ets2;
-                viryz += vfactor * mhy * mhz * ets2;
-                virzz += vfactor * mhz * mhz * ets2;
+                // 与pme.cpp一致：更新网格值
+                pme_params.pmeGrid[index] = std::complex<double>(d1 * eterm, d2 * eterm);
+                // 保存更新后的值
+                pointData.updatedValue = pme_params.pmeGrid[index];
+                
+                // 累积能量
+                energy += energyContrib;
+                
+                // 计数处理的点
+                pointsProcessed++;
+                if (energyContrib > 1e-10) {
+                    significantPoints++;
+                }
             }
         }
     }
     
-    // 输出处理的点数和有显著贡献的点数 - 与pme.cpp一致
-    std::cout << "Processed " << pointsProcessed << " grid points, "
-              << significantPoints << " have significant energy contributions" << std::endl;
+    // 与pme.cpp一致：乘以0.5
+    double rawEnergy = energy;
+    energy *= 0.5;
     
-    // 输出关键点的能量贡献 - 与pme.cpp保持一致
-    std::cout << "Energy contributions from key grid points:" << std::endl;
-    for (int kx = 0; kx < 3; kx++) {
-        for (int ky = 0; ky < 3; ky++) {
-            for (int kz = 0; kz < 3; kz++) {
-                if (kx == 0 && ky == 0 && kz == 0) continue; // 跳过零频率点
-                std::cout << "  (" << kx << "," << ky << "," << kz << ") = " 
-                          << contributions[kx][ky][kz] << std::endl;
-            }
-        }
-    }
+    // 输出重要统计信息
+    platform::log(LogLevel::INFO, "PME reciprocal energy = ", energy);
     
-    // 计算并输出网格更新后的非零点数
+    // 记录非零更新点的数量
     int nonZeroUpdated = 0;
-    for (int i = 0; i < nx * ny * nz; i++) {
+    for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
         if (std::norm(pme_params.pmeGrid[i]) > 1e-10) {
             nonZeroUpdated++;
         }
     }
-    std::cout << "Grid after update: non-zero points = " << nonZeroUpdated << std::endl;
     
-    // 计算最终能量 - 乘以0.5因子，与pme.cpp一致
-    energy = 0.5 * energySum;
-    
-    // 输出能量总结 - 与pme.cpp一致
-    std::cout << "Raw energy sum = " << energySum << std::endl;
-    std::cout << "Final energy from grid (with scaling) = " << energy << std::endl;
-    
-    // 输出粘度项 - 与pme.cpp一致
-    std::cout << "Virial terms: xx=" << virxx << ", xy=" << virxy << ", xz=" << virxz
-              << ", yy=" << viryy << ", yz=" << viryz << ", zz=" << virzz << std::endl;
-    
-    // 添加详细的倒空间能量计算结果输出 - 与pme.cpp一致
-    std::cout << "\n===== [energyPME] 倒空间能量计算结果 =====\n";
+    // 添加与pme.cpp一致的倒空间能量结果标题和格式
+    std::cout << "\n===== [energyPME.cpp] 倒空间能量计算结果 =====\n";
     std::cout << "总计算点数: " << pointsProcessed << std::endl;
     std::cout << "有意义能量点数: " << significantPoints << std::endl;
-    std::cout << "原始能量和: " << energySum << std::endl;
+    std::cout << "原始能量和: " << rawEnergy << std::endl;
     std::cout << "最终倒空间能量: " << energy << " (已乘以0.5)" << std::endl;
+    std::cout << "非零网格点数量: 计算前=" << nonZeroGridBefore << ", 计算后=" << nonZeroUpdated << std::endl;
     
-    // 添加能量计算后的标准格点输出 - 与pme.cpp保持一致
-    std::cout << "\n===== [energyPME] 能量计算后的标准格点值比较 =====\n";
-    const int keyIndices[] = {0, 1, nx, ny, nz, nx*ny, nx*nz, ny*nz};
-    for (int i : keyIndices) {
-        if (i < nx * ny * nz) {
-            std::cout << "格点[" << i << "]: " << pme_params.pmeGrid[i].real() 
-                      << " + " << pme_params.pmeGrid[i].imag() << "i" << std::endl;
+    // 输出所有监控点的详细信息
+    if (!monitoredPoints.empty()) {
+        std::cout << "\n监控点能量贡献:\n";
+        for (const auto& point : monitoredPoints) {
+            std::cout << "  [" << point.kx << "," << point.ky << "," << point.kz << "] = " 
+                      << point.energyContrib << " (显著: " 
+                      << (point.isSignificant ? "是" : "否") << ")\n";
         }
     }
     
-    // 特定的三维坐标 - 与pme.cpp保持一致
-    const int keyCoords[][3] = {{0,0,1}, {0,1,0}, {1,0,0}, {1,1,1}, {2,2,2}};
-    for (const auto& coord : keyCoords) {
-        int idx = ((coord[0] % nx) * ny * nz) + ((coord[1] % ny) * nz) + (coord[2] % nz);
-        if (idx < nx * ny * nz) {
-            std::cout << "格点[" << coord[0] << "," << coord[1] << "," << coord[2] 
-                      << "] (索引=" << idx << "): " << pme_params.pmeGrid[idx].real() 
-                      << " + " << pme_params.pmeGrid[idx].imag() << "i" << std::endl;
-        }
+    // 按能量贡献排序
+    std::sort(significantEnergyPoints.begin(), significantEnergyPoints.end(),
+              [](const auto& a, const auto& b) { return a.energyContrib > b.energyContrib; });
+              
+    // 添加能量贡献最大的点的统计
+    std::cout << "\n===== 能量贡献最大的网格点 =====\n";
+    
+    // 输出前10个能量贡献最大的点
+    int topEnergyCount = 0;
+    for (const auto& point : significantEnergyPoints) {
+        if (topEnergyCount >= 10) break;
+        
+        int index = point.kx * ny * nz + point.ky * nz + point.kz;
+        std::cout << "Top " << (topEnergyCount + 1) << ": 格点[" << point.kx << "," << point.ky << "," << point.kz 
+                  << "] (索引=" << index << "): 能量贡献 = " << point.energyContrib 
+                  << ", 值 = " << pme_params.pmeGrid[index].real() 
+                  << " + " << pme_params.pmeGrid[index].imag() << "i" << std::endl;
+        topEnergyCount++;
     }
+    
+    std::cout << "总倒空间能量: " << rawEnergy << std::endl;
+    std::cout << "最终倒空间能量（乘以0.5）: " << energy << std::endl;
 }
 
 /**
@@ -1868,7 +1942,7 @@ void performFFTBackward() {
     // 记录FFT前的网格统计
     int nonZeroBeforeFFT = 0;
     for (const auto& val : pme_params.pmeGrid) {
-        if (std::norm(val) > 1e-10) {
+        if (std::abs(val.real()) > 1e-10) {
             nonZeroBeforeFFT++;
         }
     }
