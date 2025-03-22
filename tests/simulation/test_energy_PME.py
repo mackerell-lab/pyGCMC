@@ -1717,6 +1717,155 @@ def test_cutoff_dependence():
     print("PME and Ewald results should be consistent for all cutoff values")
     print("test_cutoff_dependence completed successfully")
 
+def test_ewald_vs_pme_comparison():
+    """
+    Test consistency between Ewald and PME methods, replicating testEwaldVsPME from pme.cpp
+    
+    This test compares the energy calculations between a standard PME implementation
+    and a high precision PME implementation that mimics the Ewald method.
+    """
+    print("\nRunning test_ewald_vs_pme_comparison (replicating testEwaldVsPME from pme.cpp)...")
+    
+    # Create an amorphous salt system of random particles
+    num_particles = 100
+    box_size = 3.0
+    cutoff = 1.0
+    
+    # Create the state
+    state = MCState()
+    state.info.box = [box_size, box_size, box_size]
+    state.info.cutoff = cutoff
+    state.info.setTemperature(300.0)
+    
+    # Set a simple force field
+    ff = MCForceField()
+    ff.numTotalTypes = 1  # Single atom type for simplicity
+    ff.ljSigma = [0.3]  # Dummy LJ parameters - size matches numTotalTypes^2
+    ff.ljEps = [0.0]  # Set LJ epsilon to zero to eliminate LJ interactions
+    
+    state.forcefield = ff
+    
+    # Create atoms with random positions with fixed seed
+    import random
+    random.seed(98765)  # Same seed as in the C++ version
+    
+    atoms = []
+    
+    print(f"Creating a system with {num_particles} randomly positioned particles...")
+    
+    # Generate random positions and set alternating charges
+    for i in range(num_particles):
+        atom = MCAtom()
+        # 设置原子位置
+        x = random.uniform(0, box_size)
+        y = random.uniform(0, box_size)
+        z = random.uniform(0, box_size)
+        atom.x = x
+        atom.y = y
+        atom.z = z
+        
+        # 设置电荷 - 交替正负电荷
+        if i < num_particles // 2:
+            atom.charge = 1.0  # Na+
+        else:
+            atom.charge = -1.0  # Cl-
+            
+        # 设置原子类型 - 所有原子使用同一类型
+        atom.type = 0  # 使用type而不是atomType
+        
+        atoms.append(atom)
+    
+    # Set up the state
+    state.atoms = atoms
+    
+    # Calculate total charge to verify system is neutral
+    total_charge = sum(atom.charge for atom in atoms)
+    print(f"Total system charge: {total_charge}")
+    assert abs(total_charge) < 1e-10, "System must be charge neutral"
+    
+    # Method 1: PME with standard parameters
+    alpha_pme = 2.5 / cutoff
+    grid_size_pme = 32  # Power of 2, as in C++ version
+    spline_order_pme = 5  # As in C++ version
+    
+    # Method 2: PME with high precision parameters to mimic Ewald
+    alpha_ewald = alpha_pme  # Same alpha
+    grid_size_ewald = 64  # Higher precision grid, still power of 2
+    spline_order_ewald = 6  # Higher order interpolation, as in C++ version
+    
+    # Setup box for both methods
+    box = state.info.box
+    
+    # Initialize parameters for standard PME
+    pme_mesh_standard = [grid_size_pme, grid_size_pme, grid_size_pme]
+    pygcmc.setPMEParameters(alpha_pme, pme_mesh_standard, spline_order_pme)
+    pygcmc.initializePMEParameters(cutoff, box, alpha_pme, pme_mesh_standard, spline_order_pme)
+    
+    # Initialize parameters for high precision PME (Ewald-like)
+    pme_mesh_ewald = [grid_size_ewald, grid_size_ewald, grid_size_ewald]
+    
+    # Store current PME parameters
+    original_alpha = alpha_pme
+    original_mesh = pme_mesh_standard
+    original_order = spline_order_pme
+    
+    # Calculate PME energy with standard parameters
+    _, _, pme_dict = pygcmc.computeSystemEnergyPME(state)
+    
+    # Extract energy components for standard PME
+    energy_pme_real = pme_dict["real_space"]
+    energy_pme_recip = pme_dict["reciprocal"]
+    energy_pme_self = pme_dict["self"]
+    energy_pme_total = pme_dict["total"]
+    
+    # Now calculate with high precision parameters (Ewald-like)
+    # Set new parameters
+    pygcmc.setPMEParameters(alpha_ewald, pme_mesh_ewald, spline_order_ewald)
+    pygcmc.initializePMEParameters(cutoff, box, alpha_ewald, pme_mesh_ewald, spline_order_ewald)
+    
+    # Calculate energy with high precision parameters
+    _, _, ewald_dict = pygcmc.computeSystemEnergyPME(state)
+    
+    # Extract energy components for Ewald-like PME
+    energy_ewald_real = ewald_dict["real_space"]
+    energy_ewald_recip = ewald_dict["reciprocal"]
+    energy_ewald_self = ewald_dict["self"]
+    energy_ewald_total = ewald_dict["total"]
+    
+    # Restore original parameters
+    pygcmc.setPMEParameters(original_alpha, original_mesh, original_order)
+    pygcmc.initializePMEParameters(cutoff, box, original_alpha, original_mesh, original_order)
+    
+    # Compare results as in the C++ version
+    print("PME Energy (standard parameters):")
+    print(f"  Total:      {energy_pme_total:.6f}")
+    print(f"  Real space: {energy_pme_real:.6f}")
+    print(f"  Reciprocal: {energy_pme_recip:.6f}")
+    print(f"  Self:       {energy_pme_self:.6f}")
+    
+    print("Ewald-like Energy (high precision parameters):")
+    print(f"  Total:      {energy_ewald_total:.6f}")
+    print(f"  Real space: {energy_ewald_real:.6f}")
+    print(f"  Reciprocal: {energy_ewald_recip:.6f}")
+    print(f"  Self:       {energy_ewald_self:.6f}")
+    
+    # Calculate relative differences
+    abs_ewald_total = abs(energy_ewald_total)
+    scale_factor = abs_ewald_total if abs_ewald_total > 1.0 else 1.0
+    
+    rel_diff_total = abs(energy_pme_total - energy_ewald_total) / scale_factor
+    rel_diff_real = abs(energy_pme_real - energy_ewald_real) / (abs(energy_ewald_real) if abs(energy_ewald_real) > 1.0 else 1.0)
+    rel_diff_recip = abs(energy_pme_recip - energy_ewald_recip) / (abs(energy_ewald_recip) if abs(energy_ewald_recip) > 1.0 else 1.0)
+    
+    print(f"Relative energy difference (total): {rel_diff_total:.6f}")
+    print(f"Real space relative difference:     {rel_diff_real:.6f}")
+    print(f"Reciprocal space relative difference: {rel_diff_recip:.6f}")
+    
+    # Assert that the difference is small - tolerate up to 1% difference
+    assert rel_diff_total < 0.01, f"Total energy differs by more than 1%: {rel_diff_total:.6f}"
+    
+    print("test_ewald_vs_pme_comparison completed successfully")
+
 if __name__ == "__main__":
     test_pme_initialization()
     test_pme_vs_ewald()
@@ -1731,3 +1880,4 @@ if __name__ == "__main__":
     test_pme_grid_operations()
     test_pme_parameters()
     test_cutoff_dependence()  # 添加新测试
+    test_ewald_vs_pme_comparison()  # 添加新测试
