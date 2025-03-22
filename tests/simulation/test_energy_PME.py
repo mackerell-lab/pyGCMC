@@ -5,7 +5,7 @@ import pygcmc
 import os
 from pygcmc import MCState, MCInfo, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
 
-# 直接复制create_nacl_crystal函数代码
+# Direct copy of create_nacl_crystal function code
 def create_nacl_crystal(box_size, n_cells):
     """
     Create a NaCl crystal model
@@ -96,21 +96,21 @@ def test_pme_initialization():
     n_cells = 2
     state = create_nacl_crystal(box_size, n_cells)
     
-    # 设置系统的box尺寸
+    # Set system box size
     box = [box_size, box_size, box_size]
     cutoff = box_size / 2.0
     
-    # 明确设置PME参数，不使用自动调整
+    # Explicitly set PME parameters, without using auto-adjust
     alpha = 0.3
     mesh_size = [32, 32, 32]
     spline_order = 4
     
-    # 确保使用带有所有参数的显式调用
+    # Ensure using explicit call with all parameters
     print(f"Initializing PME with parameters: alpha={alpha}, mesh_size={mesh_size}, cutoff={cutoff}")
     pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
     pygcmc.initializePMEParameters(cutoff, box, alpha, mesh_size, spline_order)
     
-    # 输出参数便于调试
+    # Output parameters for debugging
     print(f"PME parameters set. Ready to compute energy.")
     
     # Calculate energy
@@ -149,7 +149,7 @@ def test_pme_vs_ewald():
     kmax = [5, 5, 5]
     # Use a reasonable mesh size for accuracy
     mesh_size = [32, 32, 32]
-    spline_order = 4  # 4阶B样条通常有良好的精度/性能平衡
+    spline_order = 4  # 4th order B-splines typically have good precision/performance balance
     
     box = [box_size, box_size, box_size]
     cutoff = box_size / 2.0
@@ -168,7 +168,7 @@ def test_pme_vs_ewald():
     pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
     pygcmc.initializePMEParameters(cutoff, box, alpha, mesh_size, spline_order)
     
-    # 添加调试输出
+    # Add debug output
     print(f"\nPME vs Ewald Comparison:")
     print(f"Alpha: {alpha}, Mesh Size: {mesh_size}, Spline Order: {spline_order}")
     print(f"Box: {box}, Cutoff: {cutoff}")
@@ -226,7 +226,7 @@ def test_pme_spline_order():
     
     # Calculate reference energy using very high order spline
     # This will be our "ground truth" for comparison
-    pygcmc.setPMEParameters(alpha, mesh_size, 6)  # 6阶作为参考值
+    pygcmc.setPMEParameters(alpha, mesh_size, 6)  # 6th order as reference value
     pygcmc.initializePMEParameters(cutoff, box, alpha, mesh_size, 6)
     _, _, reference_dict = pygcmc.computeSystemEnergyPME(state)
     reference_energy = reference_dict["total"]
@@ -321,23 +321,23 @@ def test_pme_error_tolerance():
         print(f"Tolerance {tol:.1e}: real={real_energy:.2f}, recip={recip_energy:.2f}, "
               f"self={self_energy:.2f}, total={total_energy:.2f}")
     
-    # 检查自能量（self energy）应该相对稳定
+    # Check that self energy remains relatively stable
     self_energies = [r['self'] for r in results]
     self_mean = sum(self_energies) / len(self_energies)
     self_max_diff = max([abs(e - self_mean) for e in self_energies])
     
     print(f"\nSelf energy: mean={self_mean:.2f}, max deviation={self_max_diff:.2f}")
     
-    # 检查至少最后两个tolerance的能量应该逐渐收敛
-    finer_tols = results[-2:]  # 取最小的两个tolerance值
+    # Check that energies converge for the last two tolerances
+    finer_tols = results[-2:]  # Take the two smallest tolerances
     finer_diff = abs(finer_tols[0]['total'] - finer_tols[1]['total'])
     print(f"Energy difference between {tolerances[-2]:.1e} and {tolerances[-1]:.1e}: {finer_diff:.2f}")
     
-    # 允许不同tolerance下的能量有较大差异，但最后两个值应较为接近
+    # Allow some variation in energy between different tolerances, but last two values should be close
     assert finer_diff < 0.5 * abs(finer_tols[0]['total']), \
            "Energy does not converge with stricter tolerance"
     
-    # 自能量应当保持相对稳定
+    # Self energy should remain relatively stable
     assert self_max_diff < 0.2 * abs(self_mean), \
            "Self energy varies too much with different tolerances"
 
@@ -1166,7 +1166,7 @@ def test_ewald_exact():
     }
     # Function does not return anything (implicitly returns None)
 
-# 在文件顶部添加全局变量用于存储结果
+# Add global variable at the top of the file to store results
 ewald_exact_results = {}
 
 def test_pme_grid_operations():
@@ -1179,15 +1179,15 @@ def test_pme_grid_operations():
     """
     print("\nRunning test_pme_grid_operations...")
     
-    # 设置日志级别为INFO，以便查看详细的调试输出
+    # Set log level to INFO to view detailed debug output
     import pygcmc
-    # 首先设置System日志级别
+    # First set System log level
     pygcmc.System.set_log_level(pygcmc.LogLevel.INFO)
-    # 启用能量计算的调试输出
+    # Enable debug output for energy calculations
     pygcmc.setEnergyDebugOutput(True)
-    # 删除不存在的API调用
-    # 修改为输出一个提示
-    print("(注意：我们已经启用了详细日志，现在将执行测试)")
+    # Remove non-existent API call
+    # Change to output a prompt
+    print("(Note: We have enabled detailed logging, now executing the test)")
     
     # Create a very simple system: two atoms, one positive and one negative
     state = MCState()
@@ -1204,7 +1204,7 @@ def test_pme_grid_operations():
     # Create a force field with two atom types
     force_field = MCForceField()
     
-    # Add atom types (sodium and chloride) - 设置力场参数
+    # Add atom types (sodium and chloride) - set force field parameters
     force_field.numTotalTypes = 2  # Na+ and Cl-
     
     # Define LJ parameters
@@ -1213,7 +1213,7 @@ def test_pme_grid_operations():
     eps_na = 1.0    # kJ/mol
     eps_cl = 1.0    # kJ/mol
     
-    # Set LJ parameter matrix (对角和混合项)
+    # Set LJ parameter matrix (diagonal and mixed terms)
     force_field.ljSigma = [
         sigma_na, (sigma_na + sigma_cl)/2.0,
         (sigma_na + sigma_cl)/2.0, sigma_cl
@@ -1223,11 +1223,11 @@ def test_pme_grid_operations():
         math.sqrt(eps_na * eps_cl), eps_cl
     ]
     
-    # 直接创建atoms和residues列表
+    # Direct creation of atoms and residues lists
     atoms = []
     residues = []
     
-    # 创建第一个原子 - Na+
+    # Create first atom - Na+
     atom1 = MCAtom()
     atom1.x = 1.0
     atom1.y = 1.5
@@ -1236,7 +1236,7 @@ def test_pme_grid_operations():
     atom1.type = 0  # Na+
     atoms.append(atom1)
     
-    # 创建第二个原子 - Cl-
+    # Create second atom - Cl-
     atom2 = MCAtom()
     atom2.x = 2.0
     atom2.y = 1.5
@@ -1245,15 +1245,15 @@ def test_pme_grid_operations():
     atom2.type = 1  # Cl-
     atoms.append(atom2)
     
-    # 创建一个残基包含这两个原子
+    # Create a residue containing these two atoms
     res = MCResidue()
-    res.atomStart = 0  # 第一个原子的索引
-    res.atomCount = 2  # 两个原子
+    res.atomStart = 0  # index of the first atom
+    res.atomCount = 2  # two atoms
     res.active = True
     res.fixed = False
     residues.append(res)
     
-    # 设置state的原子和残基
+    # Set state's atoms and residues
     state.atoms = atoms
     state.residues = residues
     state.activeAtomCount = len(atoms)
@@ -1269,21 +1269,21 @@ def test_pme_grid_operations():
     mesh_size = [32, 32, 32]
     spline_order = 5
     
-    # Initialize PME parameters - 使用pygcmc模块而不是platform.cpu
+    # Initialize PME parameters - use pygcmc module instead of platform.cpu
     pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
     
-    # 初始化PME参数
+    # Initialize PME parameters
     box = [box_size, box_size, box_size]
     pygcmc.initializePMEParameters(cutoff, box, alpha, mesh_size, spline_order)
     
     # Calculate standard Ewald energy as reference
     print("\n2. Calculating standard Ewald energy...")
-    # 设置Ewald参数
-    kmax = [8, 8, 8]  # 用于Ewald计算的k空间矢量数
+    # Set Ewald parameters
+    kmax = [8, 8, 8]  # Number of k-space vectors for Ewald calculation
     pygcmc.setEwaldParameters(alpha, kmax)
     pygcmc.initializeEwaldParameters(cutoff, box, alpha)
     
-    # 使用Ewald计算能量
+    # Calculate energy using Ewald
     ewald_elec, ewald_vdw, ewald_dict = pygcmc.computeSystemEnergyEwald(state)
     
     ewald_real = ewald_dict["real_space"]
@@ -1348,12 +1348,12 @@ def test_pme_grid_operations():
         print("The PME reciprocal space energy is non-zero, but differs from Ewald.")
         print("This suggests the PME implementation needs further refinement.")
     
-    # 打印附加信息表明我们添加的调试输出
+    # Print additional information showing our added debug output
     print("\nNote: Additional debug information should appear in the logs above.")
     print("If no additional information is shown, check that log level settings are correct.")
     
-    # 确保测试不会因为PME reciprocal能量为0而失败
-    # 这只是一个诊断测试，我们期望发现问题，而不是解决它
+    # Ensure test doesn't fail because PME reciprocal energy is zero
+    # This is just a diagnostic test, we expect to find problems, not fix them
     assert True, "This test is for diagnostic purposes only"
 
 def test_pme_parameters():
@@ -1750,14 +1750,14 @@ def test_ewald_vs_pme_comparison():
     random.seed(98765)  # Same seed as in the C++ version
     
     atoms = []
-    residues = []  # 添加residues列表
+    residues = []  # Add residues list
     
     print(f"Creating a system with {num_particles} randomly positioned particles...")
     
     # Generate random positions and set alternating charges
     for i in range(num_particles):
         atom = MCAtom()
-        # 设置原子位置
+        # Set atom position
         x = random.uniform(0, box_size)
         y = random.uniform(0, box_size)
         z = random.uniform(0, box_size)
@@ -1765,36 +1765,36 @@ def test_ewald_vs_pme_comparison():
         atom.y = y
         atom.z = z
         
-        # 设置电荷 - 交替正负电荷
+        # Set charge - alternating positive and negative charges
         if i < num_particles // 2:
             atom.charge = 1.0  # Na+
         else:
             atom.charge = -1.0  # Cl-
             
-        # 设置原子类型 - 使用不同原子类型与C++版本一致
-        atom.type = 0 if i < num_particles // 2 else 1  # Na+类型为0，Cl-类型为1
+        # Set atom type - use different atom types to match C++ version
+        atom.type = 0 if i < num_particles // 2 else 1  # Na+ type 0, Cl- type 1
         
         atoms.append(atom)
         
-        # 像test_ewald_vs_pme_random一样创建residues
-        if i % 2 == 0:  # 每两个原子一个残基
+        # Create residues as in test_ewald_vs_pme_random
+        if i % 2 == 0:  # One residue for every two atoms
             res = MCResidue()
             res.atomStart = i
-            res.atomCount = 2 if i < num_particles-1 else 1  # 处理最后一个原子
+            res.atomCount = 2 if i < num_particles-1 else 1  # Handle last atom
             res.active = True
             res.fixed = False
             residues.append(res)
     
-    # 设置活性原子和残基计数
+    # Set active atom and residue counts
     state.atoms = atoms
-    state.residues = residues  # 设置残基
-    state.activeAtomCount = len(atoms)  # 添加活性原子计数
-    state.activeResidueCount = len(residues)  # 添加活性残基计数
+    state.residues = residues  # Set residues
+    state.activeAtomCount = len(atoms)  # Add active atom count
+    state.activeResidueCount = len(residues)  # Add active residue count
     
-    # 更新力场参数，支持两种原子类型
-    ff.numTotalTypes = 2  # 修改为2种原子类型(Na+和Cl-)
-    ff.ljSigma = [0.3, 0.3, 0.3, 0.3]  # 扩展为2×2矩阵
-    ff.ljEps = [0.0, 0.0, 0.0, 0.0]    # 扩展为2×2矩阵
+    # Update force field parameters to support two atom types
+    ff.numTotalTypes = 2  # Change to 2 atom types (Na+ and Cl-)
+    ff.ljSigma = [0.3, 0.3, 0.3, 0.3]  # Expand to 2x2 matrix
+    ff.ljEps = [0.0, 0.0, 0.0, 0.0]    # Expand to 2x2 matrix
     
     state.forcefield = ff
     
@@ -1899,5 +1899,5 @@ if __name__ == "__main__":
     test_ewald_exact()
     test_pme_grid_operations()
     test_pme_parameters()
-    test_cutoff_dependence()  # 添加新测试
-    test_ewald_vs_pme_comparison()  # 添加新测试
+    test_cutoff_dependence()  # Add new test
+    test_ewald_vs_pme_comparison()  # Add new test
