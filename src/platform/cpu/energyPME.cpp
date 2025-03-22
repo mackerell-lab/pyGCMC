@@ -498,16 +498,16 @@ void PMEParams::initializeBsplines() {
             maxModuli[dim] = std::max(maxModuli[dim], bsplineModuli[dim][i]);
             minModuli[dim] = std::min(minModuli[dim], bsplineModuli[dim][i]);
         }
-        std::cout << "Dimension " << dim << " B-spline moduli range: [" 
-                 << minModuli[dim] << ", " << maxModuli[dim] << "]" << std::endl;
+        platform::log(LogLevel::DEBUG, "Dimension " + std::to_string(dim) + " B-spline moduli range: [" 
+                     + std::to_string(minModuli[dim]) + ", " + std::to_string(maxModuli[dim]) + "]");
     }
     
     // 关键调试输出：显示[5,5,5]点的B样条调制因子值
     if (meshSize[0] > 5 && meshSize[1] > 5 && meshSize[2] > 5) {
-        std::cout << "B-spline moduli at [5,5,5]: ["
-                 << bsplineModuli[0][5] << ", "
-                 << bsplineModuli[1][5] << ", " 
-                 << bsplineModuli[2][5] << "]" << std::endl;
+        platform::log(LogLevel::DEBUG, "B-spline moduli at [5,5,5]: ["
+                     + std::to_string(bsplineModuli[0][5]) + ", "
+                     + std::to_string(bsplineModuli[1][5]) + ", " 
+                     + std::to_string(bsplineModuli[2][5]) + "]");
     }
     
     // 分配PME网格
@@ -792,7 +792,7 @@ void computeBSplineCoefficients(double fractional, int order, std::vector<double
     
     // 只在偏差大时警告
     if (std::abs(sum - 1.0) > 1e-5) {
-        std::cerr << "警告: B样条系数总和 (" << sum << ") 与1相差较大" << std::endl;
+        platform::log(LogLevel::WARNING, "警告: B样条系数总和 (" + std::to_string(sum) + ") 与1相差较大");
     }
 }
 
@@ -807,7 +807,7 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
     platform::log(LogLevel::DEBUG, "Spreading charges onto PME grid");
     
     // 添加控制台输出，与pme.cpp保持一致
-    std::cout << "Spreading charges onto PME grid" << std::endl;
+    platform::log(LogLevel::DEBUG, "Spreading charges onto PME grid");
     
     // 直接访问成员变量而不是使用getter方法
     const auto& atoms = state.atoms;
@@ -824,18 +824,18 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
     
     // 输出总系统电荷 - 保留这个关键信息
     platform::log(LogLevel::INFO, "Total system charge: ", totalCharge);
-    std::cout << "Total system charge: " << totalCharge << std::endl;
+    platform::log(LogLevel::DEBUG, "Total system charge: " + std::to_string(totalCharge));
     
     // 检查前10个网格点的初始值
-    std::cout << "初始10个网格点的值:" << std::endl;
+    platform::log(LogLevel::DEBUG, "初始10个网格点的值:");
     for (int i = 0; i < 10 && i < static_cast<int>(pme_params.pmeGrid.size()); i++) {
-        std::cout << "  网格点[" << i << "] = " << pme_params.pmeGrid[i].real() << std::endl;
+        platform::log(LogLevel::DEBUG, "  网格点[" + std::to_string(i) + "] = " + std::to_string(pme_params.pmeGrid[i].real()));
     }
     
     // 打印一些原子的电荷值，验证是否有非零电荷
-    std::cout << "前10个原子的电荷值:" << std::endl;
+    platform::log(LogLevel::DEBUG, "前10个原子的电荷值:");
     for (int i = 0; i < 10 && i < state.activeAtomCount; i++) {
-        std::cout << "  原子[" << i << "] 电荷 = " << atoms[i].charge << std::endl;
+        platform::log(LogLevel::DEBUG, "  原子[" + std::to_string(i) + "] 电荷 = " + std::to_string(atoms[i].charge));
     }
     
     // 计算倒易晶格矢量 - 确保与pme.cpp一致
@@ -899,10 +899,10 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
     // 打印每100个原子的网格索引信息 - 如果有足够多的原子
     for (int i = 0; i < std::min(500, state.activeAtomCount); i += 100) {
         if (i < static_cast<int>(gridIndices.size())) {
-            std::cout << "原子 " << i << " 的网格索引: [" 
-                    << gridIndices[i][0] << ", " 
-                    << gridIndices[i][1] << ", " 
-                    << gridIndices[i][2] << "]" << std::endl;
+            platform::log(LogLevel::DEBUG, "原子 " + std::to_string(i) + " 的网格索引: [" 
+                    + std::to_string(gridIndices[i][0]) + ", " 
+                    + std::to_string(gridIndices[i][1]) + ", " 
+                    + std::to_string(gridIndices[i][2]) + "]");
         }
     }
     
@@ -1017,9 +1017,9 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
                             
                             // 追踪前10个更新的网格点 - 修改为使用与pme.cpp相同的格式
                             if (updatedPoints < 10) {
-                                std::cout << "更新网格点[" << index << "]: 电荷=" << charge 
-                                          << ", 权重=" << weight
-                                          << ", 贡献=" << chargeContribution << std::endl;
+                                platform::log(LogLevel::DEBUG, "更新网格点[" + std::to_string(index) + "]: 电荷=" + std::to_string(charge) 
+                                          + ", 权重=" + std::to_string(weight)
+                                          + ", 贡献=" + std::to_string(chargeContribution));
                                 updatedPoints++;
                             }
                         }
@@ -1040,15 +1040,15 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
                  " atoms processed, total grid charge = ", totalGridCharge,
                  ", non-zero grid points = ", nonZeroPoints);
     
-    std::cout << "Charge spreading complete: " << state.activeAtomCount 
-              << " atoms processed, total grid charge = " << totalGridCharge
-              << ", non-zero grid points = " << nonZeroPoints << std::endl;
+    platform::log(LogLevel::DEBUG, "Charge spreading complete: " + std::to_string(state.activeAtomCount) 
+              + " atoms processed, total grid charge = " + std::to_string(totalGridCharge)
+              + ", non-zero grid points = " + std::to_string(nonZeroPoints));
     
     // 分析网格信息
-    std::cout << "网格大小: " << pme_params.pmeGrid.size() << std::endl;
+    platform::log(LogLevel::DEBUG, "网格大小: " + std::to_string(pme_params.pmeGrid.size()));
     
     // 添加查找并显示最大值的网格点
-    std::cout << "\n===== 电荷分布后最大值网格点 =====\n";
+    platform::log(LogLevel::DEBUG, "\n===== 电荷分布后最大值网格点 =====");
     std::vector<std::pair<size_t, double>> topValues;
     for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
         double realVal = std::abs(pme_params.pmeGrid[i].real());
@@ -1070,9 +1070,9 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
         int y = (idx - x * ny * nz) / nz;
         int z = idx - x * ny * nz - y * nz;
         
-        std::cout << "Top " << (maxValueCount + 1) << ": 格点[" << x << "," << y << "," << z 
-                  << "] (索引=" << idx << "): " << pme_params.pmeGrid[idx].real() 
-                  << " + " << pme_params.pmeGrid[idx].imag() << "i, |val| = " << val << std::endl;
+        platform::log(LogLevel::DEBUG, "Top " + std::to_string(maxValueCount + 1) + ": 格点[" + std::to_string(x) + "," + std::to_string(y) + "," + std::to_string(z) 
+                  + "] (索引=" + std::to_string(idx) + "): " + std::to_string(pme_params.pmeGrid[idx].real()) 
+                  + " + " + std::to_string(pme_params.pmeGrid[idx].imag()) + "i, |val| = " + std::to_string(val));
         maxValueCount++;
     }
     
@@ -1081,8 +1081,8 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
     for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
         if (std::abs(pme_params.pmeGrid[i].real()) > 1e-10) {
             if (displayCount < 5) {
-                std::cout << "非零网格点 " << displayCount << ": 索引=" << i 
-                          << ", 值=" << pme_params.pmeGrid[i].real() << std::endl;
+                platform::log(LogLevel::DEBUG, "非零网格点 " + std::to_string(displayCount) + ": 索引=" + std::to_string(i) 
+                          + ", 值=" + std::to_string(pme_params.pmeGrid[i].real()));
             }
             displayCount++;
         }
@@ -1095,8 +1095,8 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
         int y0 = gridIndices[atomIdx][1];
         int z0 = gridIndices[atomIdx][2];
         
-        std::cout << "原子0: 电荷=" << atoms[atomIdx].charge 
-                  << ", 网格索引=[" << x0 << "," << y0 << "," << z0 << "]" << std::endl;
+        platform::log(LogLevel::DEBUG, "原子0: 电荷=" + std::to_string(atoms[atomIdx].charge) 
+                  + ", 网格索引=[" + std::to_string(x0) + "," + std::to_string(y0) + "," + std::to_string(z0) + "]");
         
         // 分析原子0周围的网格点
         for (int ix = 0; ix < order; ix++) {
@@ -1110,9 +1110,9 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
                     int index = xindex * ny * nz + yindex * nz + zindex;
                     
                     if (index >= 0 && static_cast<size_t>(index) < pme_params.pmeGrid.size()) {
-                        std::cout << "  网格点[" << xindex << "," << yindex << "," << zindex 
-                                  << "] (索引 " << index << "): " 
-                                  << pme_params.pmeGrid[index].real() << std::endl;
+                        platform::log(LogLevel::DEBUG, "  网格点[" + std::to_string(xindex) + "," + std::to_string(yindex) + "," + std::to_string(zindex) 
+                                  + "] (索引 " + std::to_string(index) + "): " 
+                                  + std::to_string(pme_params.pmeGrid[index].real()));
                     }
                 }
             }
@@ -1120,13 +1120,13 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
     }
     
     // 添加标准位置格点输出 - 用于与pme.cpp比较
-    std::cout << "\n===== 电荷分布后的标准格点值比较 =====\n";
+    platform::log(LogLevel::DEBUG, "\n===== 电荷分布后的标准格点值比较 =====");
     const int keyIndices[] = {0, 1, nx, ny, nz, nx*ny, nx*nz, ny*nz};
-    std::cout << "格点总数: " << pme_params.pmeGrid.size() << std::endl;
+    platform::log(LogLevel::DEBUG, "格点总数: " + std::to_string(pme_params.pmeGrid.size()));
     for (int i : keyIndices) {
         if (i < static_cast<int>(pme_params.pmeGrid.size())) {
-            std::cout << "格点[" << i << "]: " << pme_params.pmeGrid[i].real() 
-                      << " + " << pme_params.pmeGrid[i].imag() << "i" << std::endl;
+            platform::log(LogLevel::DEBUG, "格点[" + std::to_string(i) + "]: " + std::to_string(pme_params.pmeGrid[i].real()) 
+                      + " + " + std::to_string(pme_params.pmeGrid[i].imag()) + "i");
         }
     }
     
@@ -1135,16 +1135,16 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
     for (const auto& coord : keyCoords) {
         int idx = ((coord[0] % nx) * ny * nz) + ((coord[1] % ny) * nz) + (coord[2] % nz);
         if (idx < static_cast<int>(pme_params.pmeGrid.size())) {
-            std::cout << "格点[" << coord[0] << "," << coord[1] << "," << coord[2] 
-                      << "] (索引=" << idx << "): " << pme_params.pmeGrid[idx].real() 
-                      << " + " << pme_params.pmeGrid[idx].imag() << "i" << std::endl;
+            platform::log(LogLevel::DEBUG, "格点[" + std::to_string(coord[0]) + "," + std::to_string(coord[1]) + "," + std::to_string(coord[2]) 
+                      + "] (索引=" + std::to_string(idx) + "): " + std::to_string(pme_params.pmeGrid[idx].real()) 
+                      + " + " + std::to_string(pme_params.pmeGrid[idx].imag()) + "i");
         }
     }
     
     // 在原本的处理之后，添加详细的第一个原子电荷分布分析
     // 使用正确的成员变量名称
     if (state.activeAtomCount > 0) {
-        std::cout << "\n===== [energyPME] 第一个原子电荷分布分析 =====\n";
+        platform::log(LogLevel::DEBUG, "\n===== [energyPME] 第一个原子电荷分布分析 =====");
         
         // 假设第一个原子的索引是0
         int atomIndex = 0;
@@ -1155,8 +1155,8 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
         float posY = state.atoms[atomIndex].y;
         float posZ = state.atoms[atomIndex].z;
         
-        std::cout << "原子索引: " << atomIndex << ", 电荷: " << atomCharge 
-                  << ", 位置: [" << posX << "," << posY << "," << posZ << "]\n";
+        platform::log(LogLevel::DEBUG, "原子索引: " + std::to_string(atomIndex) + ", 电荷: " + std::to_string(atomCharge) 
+                  + ", 位置: [" + std::to_string(posX) + "," + std::to_string(posY) + "," + std::to_string(posZ) + "]");
         
         // 正确计算原子在PME网格中的位置
         // 首先计算分数坐标 - 在[0,1)范围内
@@ -1193,9 +1193,9 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
         int startIZ = gridIZ - order/2;
         if (startIZ < 0) startIZ += nz;
         
-        std::cout << "网格坐标位置: [" << gridX << "," << gridY << "," << gridZ << "]\n";
-        std::cout << "网格整数索引: [" << gridIX << "," << gridIY << "," << gridIZ << "]\n";
-        std::cout << "网格小数部分: [" << fractionX << "," << fractionY << "," << fractionZ << "]\n";
+        platform::log(LogLevel::DEBUG, "网格坐标位置: [" + std::to_string(gridX) + "," + std::to_string(gridY) + "," + std::to_string(gridZ) + "]");
+        platform::log(LogLevel::DEBUG, "网格整数索引: [" + std::to_string(gridIX) + "," + std::to_string(gridIY) + "," + std::to_string(gridIZ) + "]");
+        platform::log(LogLevel::DEBUG, "网格小数部分: [" + std::to_string(fractionX) + "," + std::to_string(fractionY) + "," + std::to_string(fractionZ) + "]");
         
         // 计算并显示B样条系数
         std::vector<double> bsCoeffsX(order), bsCoeffsY(order), bsCoeffsZ(order);
@@ -1205,26 +1205,12 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
         computeBSplineCoefficients(fractionY, order, bsCoeffsY);
         computeBSplineCoefficients(fractionZ, order, bsCoeffsZ);
         
-        std::cout << "X方向B样条系数: ";
-        for (int i = 0; i < order; i++) {
-            std::cout << bsCoeffsX[i] << " ";
-        }
-        std::cout << "\n";
-        
-        std::cout << "Y方向B样条系数: ";
-        for (int i = 0; i < order; i++) {
-            std::cout << bsCoeffsY[i] << " ";
-        }
-        std::cout << "\n";
-        
-        std::cout << "Z方向B样条系数: ";
-        for (int i = 0; i < order; i++) {
-            std::cout << bsCoeffsZ[i] << " ";
-        }
-        std::cout << "\n";
+        platform::log(LogLevel::DEBUG, "X方向B样条系数: " + std::to_string(bsCoeffsX[0]) + " " + std::to_string(bsCoeffsX[1]) + " " + std::to_string(bsCoeffsX[2]) + " " + std::to_string(bsCoeffsX[3]));
+        platform::log(LogLevel::DEBUG, "Y方向B样条系数: " + std::to_string(bsCoeffsY[0]) + " " + std::to_string(bsCoeffsY[1]) + " " + std::to_string(bsCoeffsY[2]) + " " + std::to_string(bsCoeffsY[3]));
+        platform::log(LogLevel::DEBUG, "Z方向B样条系数: " + std::to_string(bsCoeffsZ[0]) + " " + std::to_string(bsCoeffsZ[1]) + " " + std::to_string(bsCoeffsZ[2]) + " " + std::to_string(bsCoeffsZ[3]));
         
         // 添加与pme.cpp一致的电荷分布输出
-        std::cout << "\n电荷分布到的网格点及其值:\n";
+        platform::log(LogLevel::DEBUG, "\n电荷分布到的网格点及其值:");
         
         // 使用不同的变量名，避免冲突
         int gridIndexX = gridIX;
@@ -1246,10 +1232,10 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
                         double weight = bsCoeffsX[ix] * bsCoeffsY[iy] * bsCoeffsZ[iz];
                         double chargeContribution = atomCharge * weight;
                         
-                        std::cout << "网格点[" << xindex << "," << yindex << "," << zindex
-                                  << "], 索引: " << index 
-                                  << ", 接收电荷: " << chargeContribution
-                                  << ", 电荷系数: " << weight << std::endl;
+                        platform::log(LogLevel::DEBUG, "网格点[" + std::to_string(xindex) + "," + std::to_string(yindex) + "," + std::to_string(zindex)
+                                  + "], 索引: " + std::to_string(index) 
+                                  + ", 接收电荷: " + std::to_string(chargeContribution)
+                                  + ", 电荷系数: " + std::to_string(weight));
                     }
                 }
             }
@@ -1273,9 +1259,11 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
  */
 void performFFTForward() {
     platform::log(LogLevel::INFO, "Performing forward FFT on PME grid");
-    std::cout << "Performing forward FFT on PME grid" << std::endl;
     
-    // 确定网格尺寸
+    // 控制台输出 - 与pme.cpp一致
+    platform::log(LogLevel::DEBUG, "Performing forward FFT on PME grid");
+    
+    // 获取网格尺寸
     int nx = pme_params.meshSize[0];
     int ny = pme_params.meshSize[1];
     int nz = pme_params.meshSize[2];
@@ -1295,7 +1283,7 @@ void performFFTForward() {
     }
     
     platform::log(LogLevel::INFO, "Grid before FFT: non-zero points = ", nonZeroBeforeFFT);
-    std::cout << "Grid before FFT: non-zero points = " << nonZeroBeforeFFT << std::endl;
+    platform::log(LogLevel::DEBUG, "Grid before FFT: non-zero points = " + std::to_string(nonZeroBeforeFFT));
     
     // 创建FFT前的备份
     fftGridBackup = pme_params.pmeGrid;
@@ -1313,18 +1301,18 @@ void performFFTForward() {
     }
     
     platform::log(LogLevel::INFO, "Grid after FFT: non-zero points = ", nonZeroAfterFFT);
-    std::cout << "Grid after FFT: non-zero points = " << nonZeroAfterFFT << std::endl;
+    platform::log(LogLevel::DEBUG, "Grid after FFT: non-zero points = " + std::to_string(nonZeroAfterFFT));
     
     // 添加详细的FFT后关键网格点值输出 - 与pme.cpp一致
-    std::cout << "\n===== FFT后的标准格点值比较 =====\n";
-    std::cout << "格点总数: " << pme_params.pmeGrid.size() << std::endl;
+    platform::log(LogLevel::DEBUG, "\n===== FFT后的标准格点值比较 =====");
+    platform::log(LogLevel::DEBUG, "格点总数: " + std::to_string(pme_params.pmeGrid.size()));
     
     // 输出关键索引点
     const int keyIndices[] = {0, 1, 32, nx, ny, nz, nx*ny, nx*nz, ny*nz};
     for (int i : keyIndices) {
         if (i < static_cast<int>(pme_params.pmeGrid.size())) {
-            std::cout << "格点[" << i << "]: " << pme_params.pmeGrid[i].real() 
-                      << " + " << pme_params.pmeGrid[i].imag() << "i" << std::endl;
+            platform::log(LogLevel::DEBUG, "格点[" + std::to_string(i) + "]: " + std::to_string(pme_params.pmeGrid[i].real()) 
+                      + " + " + std::to_string(pme_params.pmeGrid[i].imag()) + "i");
         }
     }
     
@@ -1333,14 +1321,14 @@ void performFFTForward() {
     for (const auto& coord : keyCoords) {
         int idx = ((coord[0] % nx) * ny * nz) + ((coord[1] % ny) * nz) + (coord[2] % nz);
         if (idx < static_cast<int>(pme_params.pmeGrid.size())) {
-            std::cout << "格点[" << coord[0] << "," << coord[1] << "," << coord[2] 
-                      << "] (索引=" << idx << "): " << pme_params.pmeGrid[idx].real() 
-                      << " + " << pme_params.pmeGrid[idx].imag() << "i" << std::endl;
+            platform::log(LogLevel::DEBUG, "格点[" + std::to_string(coord[0]) + "," + std::to_string(coord[1]) + "," + std::to_string(coord[2]) 
+                      + "] (索引=" + std::to_string(idx) + "): " + std::to_string(pme_params.pmeGrid[idx].real()) 
+                      + " + " + std::to_string(pme_params.pmeGrid[idx].imag()) + "i");
         }
     }
     
     // 添加查找并显示最大值的网格点
-    std::cout << "\n===== FFT后最大值网格点 =====\n";
+    platform::log(LogLevel::DEBUG, "\n===== FFT后最大值网格点 =====");
     std::vector<std::pair<size_t, double>> topValues;
     for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
         double normVal = std::norm(pme_params.pmeGrid[i]);
@@ -1362,9 +1350,9 @@ void performFFTForward() {
         int y = (idx - x * ny * nz) / nz;
         int z = idx - x * ny * nz - y * nz;
         
-        std::cout << "Top " << (count + 1) << ": 格点[" << x << "," << y << "," << z 
-                  << "] (索引=" << idx << "): " << pme_params.pmeGrid[idx].real() 
-                  << " + " << pme_params.pmeGrid[idx].imag() << "i, |val|² = " << val << std::endl;
+        platform::log(LogLevel::DEBUG, "Top " + std::to_string(count + 1) + ": 格点[" + std::to_string(x) + "," + std::to_string(y) + "," + std::to_string(z) 
+                  + "] (索引=" + std::to_string(idx) + "): " + std::to_string(pme_params.pmeGrid[idx].real()) 
+                  + " + " + std::to_string(pme_params.pmeGrid[idx].imag()) + "i, |val|² = " + std::to_string(val));
         count++;
     }
     
@@ -1395,12 +1383,15 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
     // 计算boxfactor: 完全按照pme.cpp的方式
     double boxfactor = M_PI * volume;
     
-    std::cout << "Computing energy from grid with box = [" << box[0] << "," << box[1] << "," 
-              << box[2] << "], alpha = " << pme_params.alpha << ", volume = " << volume << std::endl;
-    std::cout << "Energy parameters: one_4pi_eps = " << one_4pi_eps
-              << ", factor = " << factor << ", boxfactor = " << boxfactor << std::endl;
-              
-    std::cout << "Updating grid data before energy calculation" << std::endl;
+    platform::log(LogLevel::DEBUG, "Computing energy from grid with box = [" + std::to_string(box[0]) + "," + 
+                 std::to_string(box[1]) + "," + std::to_string(box[2]) + "], alpha = " + 
+                 std::to_string(pme_params.alpha) + ", volume = " + std::to_string(volume));
+    
+    platform::log(LogLevel::DEBUG, "Energy parameters: one_4pi_eps = " + std::to_string(one_4pi_eps) + 
+                 ", factor = " + std::to_string(factor) + ", boxfactor = " + 
+                 std::to_string(boxfactor));
+                 
+    platform::log(LogLevel::DEBUG, "Updating grid data before energy calculation");
     
     // 获取网格尺寸
     int nx = pme_params.meshSize[0];
@@ -1446,13 +1437,13 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
     }
     
     // 输出倒格矢
-    std::cout << "Reciprocal lattice vectors:" << std::endl;
-    std::cout << "  b1 = [" << recipBoxVectors[0][0] << ", " 
-              << recipBoxVectors[0][1] << ", " << recipBoxVectors[0][2] << "]" << std::endl;
-    std::cout << "  b2 = [" << recipBoxVectors[1][0] << ", " 
-              << recipBoxVectors[1][1] << ", " << recipBoxVectors[1][2] << "]" << std::endl;
-    std::cout << "  b3 = [" << recipBoxVectors[2][0] << ", " 
-              << recipBoxVectors[2][1] << ", " << recipBoxVectors[2][2] << "]" << std::endl;
+    platform::log(LogLevel::DEBUG, "Reciprocal lattice vectors:");
+    platform::log(LogLevel::DEBUG, "  b1 = [" + std::to_string(recipBoxVectors[0][0]) + ", " + 
+                 std::to_string(recipBoxVectors[0][1]) + ", " + std::to_string(recipBoxVectors[0][2]) + "]");
+    platform::log(LogLevel::DEBUG, "  b2 = [" + std::to_string(recipBoxVectors[1][0]) + ", " + 
+                 std::to_string(recipBoxVectors[1][1]) + ", " + std::to_string(recipBoxVectors[1][2]) + "]");
+    platform::log(LogLevel::DEBUG, "  b3 = [" + std::to_string(recipBoxVectors[2][0]) + ", " + 
+                 std::to_string(recipBoxVectors[2][1]) + ", " + std::to_string(recipBoxVectors[2][2]) + "]");
     
     // 统计原始网格数据
     int nonZeroGridBefore = 0;
@@ -1461,10 +1452,10 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
             nonZeroGridBefore++;
         }
     }
-    std::cout << "Grid before energy calculation: non-zero points = " << nonZeroGridBefore << std::endl;
+    platform::log(LogLevel::DEBUG, "Grid before energy calculation: non-zero points = " + std::to_string(nonZeroGridBefore));
     
     // 单独输出[5,5,5]网格点的调试信息
-    std::cout << "\n===== [energyPME.cpp] 特别关注网格点[5,5,5] =====\n";
+    platform::log(LogLevel::DEBUG, "\n===== [energyPME.cpp] 特别关注网格点[5,5,5] =====");
     
     // 初始化能量和点计数
     energy = 0.0;
@@ -1586,20 +1577,20 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                 
                 // [5,5,5]点的特别输出 - 与pme.cpp格式保持一致
                 if (kx == 5 && ky == 5 && kz == 5) {
-                    std::cout << "网格点[" << kx << "," << ky << "," << kz << "] 处理前:" << std::endl;
-                    std::cout << "  网格索引 = " << index << std::endl;
-                    std::cout << "  mx,my,mz = [" << mx << "," << my << "," << mz << "]" << std::endl;
-                    std::cout << "  mhx,mhy,mhz = [" << mhx << "," << mhy << "," << mhz << "]" << std::endl;
-                    std::cout << "  m2 = " << m2 << std::endl;
-                    std::cout << "  bx,by,bz = [" << bx << "," << by << "," << bz << "]" << std::endl;
-                    std::cout << "  boxfactor = " << boxfactor << std::endl;
-                    std::cout << "  B样条调制因子 = [" << pme_params.bsplineModuli[0][kx] << ","
-                            << pme_params.bsplineModuli[1][ky] << "," << pme_params.bsplineModuli[2][kz] << "]" << std::endl;
-                    std::cout << "  denom = " << denom << std::endl;
-                    std::cout << "  eterm = " << eterm << std::endl;
-                    std::cout << "  one_4pi_eps = " << one_4pi_eps << std::endl; 
-                    std::cout << "  exp(-factor*m2) = " << exp(-factor*m2) << std::endl;
-                    std::cout << "  原始网格值 = " << d1 << " + " << d2 << "i" << std::endl;
+                    platform::log(LogLevel::DEBUG, "网格点[" + std::to_string(kx) + "," + std::to_string(ky) + "," + std::to_string(kz) + "] 处理前:");
+                    platform::log(LogLevel::DEBUG, "  网格索引 = " + std::to_string(index));
+                    platform::log(LogLevel::DEBUG, "  mx,my,mz = [" + std::to_string(mx) + "," + std::to_string(my) + "," + std::to_string(mz) + "]");
+                    platform::log(LogLevel::DEBUG, "  mhx,mhy,mhz = [" + std::to_string(mhx) + "," + std::to_string(mhy) + "," + std::to_string(mhz) + "]");
+                    platform::log(LogLevel::DEBUG, "  m2 = " + std::to_string(m2));
+                    platform::log(LogLevel::DEBUG, "  bx,by,bz = [" + std::to_string(bx) + "," + std::to_string(by) + "," + std::to_string(bz) + "]");
+                    platform::log(LogLevel::DEBUG, "  boxfactor = " + std::to_string(boxfactor));
+                    platform::log(LogLevel::DEBUG, "  B样条调制因子 = [" + std::to_string(pme_params.bsplineModuli[0][kx]) + "," +
+                               std::to_string(pme_params.bsplineModuli[1][ky]) + "," + std::to_string(pme_params.bsplineModuli[2][kz]) + "]");
+                    platform::log(LogLevel::DEBUG, "  denom = " + std::to_string(denom));
+                    platform::log(LogLevel::DEBUG, "  eterm = " + std::to_string(eterm));
+                    platform::log(LogLevel::DEBUG, "  one_4pi_eps = " + std::to_string(one_4pi_eps)); 
+                    platform::log(LogLevel::DEBUG, "  exp(-factor*m2) = " + std::to_string(exp(-factor*m2)));
+                    platform::log(LogLevel::DEBUG, "  原始网格值 = " + std::to_string(d1) + " + " + std::to_string(d2) + "i");
                 }
                 
                 // 更新网格值 - 精确复制pme.cpp方式
@@ -1617,12 +1608,12 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                 
                 // 更新完点后的输出 - 仅对[5,5,5]点
                 if (kx == 5 && ky == 5 && kz == 5) {
-                    std::cout << "  更新后网格值 = " << updatedValue.real() << " + " << updatedValue.imag() << "i" << std::endl;
-                    std::cout << "  struct2 = " << struct2 << std::endl; 
-                    std::cout << "  能量贡献 = " << energyContrib << std::endl;
-                    std::cout << "  累计能量 = " << energy << std::endl;
-                    std::cout << "  能量显著？ " << (energyContrib > 1e-8 ? "是" : "否") << std::endl;
-                    std::cout << std::endl;
+                    platform::log(LogLevel::DEBUG, "  更新后网格值 = " + std::to_string(updatedValue.real()) + " + " + std::to_string(updatedValue.imag()) + "i");
+                    platform::log(LogLevel::DEBUG, "  struct2 = " + std::to_string(struct2)); 
+                    platform::log(LogLevel::DEBUG, "  能量贡献 = " + std::to_string(energyContrib));
+                    platform::log(LogLevel::DEBUG, "  累计能量 = " + std::to_string(energy));
+                    platform::log(LogLevel::DEBUG, "  能量显著？ " + std::string(energyContrib > 1e-8 ? "是" : "否"));
+                    platform::log(LogLevel::DEBUG, "");
                 }
                 
                 // 特殊调试输出 - 类似于pme.cpp中的监控点
@@ -1631,12 +1622,12 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                     (kx == 1 && ky == 0 && kz == 0) ||
                     (kx == 1 && ky == 1 && kz == 1) ||
                     (kx == 2 && ky == 2 && kz == 2)) {
-                    std::cout << "网格点[" << kx << "," << ky << "," << kz << "] 处理:" << std::endl;
-                    std::cout << "  mx,my,mz = [" << mx << "," << my << "," << mz << "]" << std::endl;
-                    std::cout << "  mhx,mhy,mhz = [" << mhx << "," << mhy << "," << mhz << "]" << std::endl;
-                    std::cout << "  m2 = " << m2 << ", eterm = " << eterm << std::endl;
-                    std::cout << "  grid = [" << d1 << "," << d2 << "]" << std::endl;
-                    std::cout << "  energy contrib = " << energyContrib << std::endl;
+                    platform::log(LogLevel::DEBUG, "网格点[" + std::to_string(kx) + "," + std::to_string(ky) + "," + std::to_string(kz) + "] 处理:");
+                    platform::log(LogLevel::DEBUG, "  mx,my,mz = [" + std::to_string(mx) + "," + std::to_string(my) + "," + std::to_string(mz) + "]");
+                    platform::log(LogLevel::DEBUG, "  mhx,mhy,mhz = [" + std::to_string(mhx) + "," + std::to_string(mhy) + "," + std::to_string(mhz) + "]");
+                    platform::log(LogLevel::DEBUG, "  m2 = " + std::to_string(m2) + ", eterm = " + std::to_string(eterm));
+                    platform::log(LogLevel::DEBUG, "  grid = [" + std::to_string(d1) + "," + std::to_string(d2) + "]");
+                    platform::log(LogLevel::DEBUG, "  energy contrib = " + std::to_string(energyContrib));
                 }
             }
         }
@@ -1658,45 +1649,23 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
     }
     
     // 添加与pme.cpp一致的倒空间能量结果标题和格式
-    std::cout << "\n===== [energyPME.cpp] 倒空间能量计算结果 =====\n";
-    std::cout << "总计算点数: " << pointsProcessed << std::endl;
-    std::cout << "有意义能量点数: " << significantPoints << std::endl;
-    std::cout << "原始能量和: " << rawEnergy << std::endl;
-    std::cout << "最终倒空间能量: " << energy << " (已乘以0.5)" << std::endl;
-    std::cout << "非零网格点数量: 计算前=" << nonZeroGridBefore << ", 计算后=" << nonZeroUpdated << std::endl;
+    platform::log(LogLevel::DEBUG, "\n===== [energyPME.cpp] 倒空间能量计算结果 =====");
+    platform::log(LogLevel::DEBUG, "总计算点数: " + std::to_string(pointsProcessed));
+    platform::log(LogLevel::DEBUG, "有意义能量点数: " + std::to_string(significantPoints));
+    platform::log(LogLevel::DEBUG, "原始能量和: " + std::to_string(rawEnergy));
+    platform::log(LogLevel::DEBUG, "最终倒空间能量: " + std::to_string(energy) + " (已乘以0.5)");
+    platform::log(LogLevel::DEBUG, "非零网格点数量: 计算前=" + std::to_string(nonZeroGridBefore) + ", 计算后=" + std::to_string(nonZeroUpdated));
     
     // 输出所有监控点的详细信息
     if (!monitoredPoints.empty()) {
-        std::cout << "\n监控点能量贡献:\n";
+        platform::log(LogLevel::DEBUG, "\n监控点能量贡献:");
         for (const auto& point : monitoredPoints) {
-            std::cout << "  [" << point.kx << "," << point.ky << "," << point.kz << "] = " 
-                      << point.energyContrib << " (显著: " 
-                      << (point.isSignificant ? "是" : "否") << ")\n";
+            platform::log(LogLevel::DEBUG, "  [" + std::to_string(point.kx) + "," 
+                        + std::to_string(point.ky) + "," + std::to_string(point.kz) + "] = " 
+                        + std::to_string(point.energyContrib) + " (显著: " 
+                        + std::string(point.isSignificant ? "是" : "否") + ")");
         }
     }
-    
-    // 按能量贡献排序
-    std::sort(significantEnergyPoints.begin(), significantEnergyPoints.end(),
-              [](const auto& a, const auto& b) { return a.energyContrib > b.energyContrib; });
-              
-    // 添加能量贡献最大的点的统计
-    std::cout << "\n===== 能量贡献最大的网格点 =====\n";
-    
-    // 输出前10个能量贡献最大的点
-    int topEnergyCount = 0;
-    for (const auto& point : significantEnergyPoints) {
-        if (topEnergyCount >= 10) break;
-        
-        int index = point.kx * ny * nz + point.ky * nz + point.kz;
-        std::cout << "Top " << (topEnergyCount + 1) << ": 格点[" << point.kx << "," << point.ky << "," << point.kz 
-                  << "] (索引=" << index << "): 能量贡献 = " << point.energyContrib 
-                  << ", 值 = " << pme_params.pmeGrid[index].real() 
-                  << " + " << pme_params.pmeGrid[index].imag() << "i" << std::endl;
-        topEnergyCount++;
-    }
-    
-    std::cout << "总倒空间能量: " << rawEnergy << std::endl;
-    std::cout << "最终倒空间能量（乘以0.5）: " << energy << std::endl;
 }
 
 /**
@@ -1758,7 +1727,7 @@ double computeReciprocalPME(model::MCState& state, bool movement_only) {
     
     platform::log(LogLevel::INFO, "Reciprocal space energy = ", reciprocal_energy);
     // 添加直接输出到控制台
-    std::cout << "Reciprocal space energy = " << reciprocal_energy << std::endl;
+    platform::log(LogLevel::DEBUG, "Reciprocal space energy = " + std::to_string(reciprocal_energy));
     
     return reciprocal_energy;
 }
