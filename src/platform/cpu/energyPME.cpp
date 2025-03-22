@@ -339,7 +339,8 @@ PMEParams pme_params;
 // Add FFT related member variables
 std::vector<std::complex<double>> fft_weights;
 
-// Global variable to hold FFT'd grid data
+// FFT网格数据备份，用于调试模式下比较前后FFT结果差异
+// 注意：只在调试模式下使用，通过platform::is_debug_mode()函数控制
 std::vector<std::complex<double>> fftGridBackup;
 
 /**
@@ -989,8 +990,15 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
     
     // Distribute charges to grid
     double totalGridCharge = 0.0;
+    
+    // 统计变量，仅在debug模式下使用
     int nonZeroPoints = 0;
     int updatedPoints = 0;
+    
+    if (!platform::is_debug_mode()) {
+        nonZeroPoints = -1;  // 标记为非调试模式
+        updatedPoints = -1;
+    }
     
     for (int atomIdx = 0; atomIdx < state.activeAtomCount; atomIdx++) {
         double charge = atoms[atomIdx].charge;
@@ -1031,18 +1039,22 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
                         // This only affects the real part, as chargeContribution is real
                         pme_params.pmeGrid[index] += chargeContribution;
                         
-                        // Update statistics
-                        totalGridCharge += chargeContribution;
-                        if (std::abs(chargeContribution) > 1e-10) {
-                            nonZeroPoints++;
-                            
-                            // Track first 10 updated grid points - modified to use same format as pme.cpp
-                            if (updatedPoints < 10) {
-                                platform::log(LogLevel::DEBUG, "Updated grid point[" + std::to_string(index) + "]: charge=" + std::to_string(charge) 
-                                          + ", weight=" + std::to_string(weight)
-                                          + ", contribution=" + std::to_string(chargeContribution));
-                                updatedPoints++;
+                        // Update statistics - 仅在debug模式下执行
+                        if (platform::is_debug_mode()) {
+                            totalGridCharge += chargeContribution;
+                            if (std::abs(chargeContribution) > 1e-10) {
+                                nonZeroPoints++;
+                                
+                                // Track first 10 updated grid points - modified to use same format as pme.cpp
+                                if (updatedPoints < 10) {
+                                    platform::log(LogLevel::DEBUG, "Updated grid point[" + std::to_string(index) + "]: charge=" + std::to_string(charge) 
+                                              + ", weight=" + std::to_string(weight)
+                                              + ", contribution=" + std::to_string(chargeContribution));
+                                    updatedPoints++;
+                                }
                             }
+                        } else {
+                            totalGridCharge += chargeContribution; // 总电荷仍需计算
                         }
                     }
                 }
@@ -1052,18 +1064,24 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
     
     // Output processing progress
     int atomIdx = state.activeAtomCount - 1; // Use index of last processed atom
-    if ((atomIdx + 1) % 1000000 == 0) {
+    if (platform::is_debug_mode() && (atomIdx + 1) % 1000000 == 0) {
         platform::log(LogLevel::DEBUG, "Processed ", atomIdx + 1, " atoms");
     }
     
     // Output charge distribution completion info
-    platform::log(LogLevel::INFO, "Charge spreading complete: ", state.activeAtomCount, 
-                 " atoms processed, total grid charge = ", totalGridCharge,
-                 ", non-zero grid points = ", nonZeroPoints);
-    
-    platform::log(LogLevel::DEBUG, "Charge spreading complete: " + std::to_string(state.activeAtomCount) 
-              + " atoms processed, total grid charge = " + std::to_string(totalGridCharge)
-              + ", non-zero grid points = " + std::to_string(nonZeroPoints));
+    if (platform::is_debug_mode()) {
+        platform::log(LogLevel::INFO, "Charge spreading complete: ", state.activeAtomCount, 
+                    " atoms processed, total grid charge = ", totalGridCharge,
+                    ", non-zero grid points = ", nonZeroPoints);
+        
+        platform::log(LogLevel::DEBUG, "Charge spreading complete: " + std::to_string(state.activeAtomCount)
+                    + " atoms processed, total grid charge = " + std::to_string(totalGridCharge)
+                    + ", non-zero grid points = " + std::to_string(nonZeroPoints));
+    } else {
+        // 非调试模式下仅输出基本信息
+        platform::log(LogLevel::INFO, "Charge spreading complete: ", state.activeAtomCount, 
+                    " atoms processed, total grid charge = ", totalGridCharge);
+    }
     
     // Analyze grid information
     platform::log(LogLevel::DEBUG, "Grid size: " + std::to_string(pme_params.pmeGrid.size()));
@@ -1282,6 +1300,13 @@ void performFFTForward() {
     // Console output - same as pme.cpp
     platform::log(LogLevel::DEBUG, "Performing forward FFT on PME grid");
     
+    // 为了调试备份数据，仅在debug模式下执行
+    if (platform::is_debug_mode()) {
+        // 在debug模式下备份网格数据用于比较
+        fftGridBackup.resize(pme_params.pmeGrid.size());
+        std::copy(pme_params.pmeGrid.begin(), pme_params.pmeGrid.end(), fftGridBackup.begin());
+    }
+    
     // Only execute test code in debug mode
     if (platform::is_debug_mode()) {
         // Calculate non-zero points before FFT
@@ -1300,15 +1325,14 @@ void performFFTForward() {
     // Use custom FFT implementation
     CustomFFT::fft3D_forward(pme_params.pmeGrid.data(), nx, ny, nz);
     
-    // Calculate non-zero points after FFT (moved outside debug check to ensure it's always calculated)
-    int nonZeroAfterFFT = 0;
-    for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
-        if (std::abs(pme_params.pmeGrid[i]) > 1e-10) nonZeroAfterFFT++;
-    }
-    platform::log(LogLevel::INFO, "Grid after FFT: non-zero points = ", nonZeroAfterFFT);
-    
-    // Only execute detailed test output in debug mode
+    // 非零点计数 - 仅在debug模式下进行详细计数
     if (platform::is_debug_mode()) {
+        // Calculate non-zero points after FFT
+        int nonZeroAfterFFT = 0;
+        for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
+            if (std::abs(pme_params.pmeGrid[i]) > 1e-10) nonZeroAfterFFT++;
+        }
+        platform::log(LogLevel::INFO, "Grid after FFT: non-zero points = ", nonZeroAfterFFT);
         platform::log(LogLevel::DEBUG, "Grid after FFT: non-zero points = " + std::to_string(nonZeroAfterFFT));
         
         // Standard grid point value comparison
@@ -1318,8 +1342,8 @@ void performFFTForward() {
         // Output first few grid points
         for (int i = 0; i < std::min(5, static_cast<int>(pme_params.pmeGrid.size())); i++) {
             platform::log(LogLevel::DEBUG, "Grid point[" + std::to_string(i) + "]: " + std::to_string(pme_params.pmeGrid[i].real()) 
-                        + " + " + std::to_string(pme_params.pmeGrid[i].imag()) + "i, |val|² = " 
-                        + std::to_string(std::norm(pme_params.pmeGrid[i])));
+                         + " + " + std::to_string(pme_params.pmeGrid[i].imag()) + "i, |val|² = " 
+                         + std::to_string(std::norm(pme_params.pmeGrid[i])));
         }
         
         // Output a few standard grid coordinates
@@ -1479,8 +1503,15 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
     
     // Initialize energy and point counters
     energy = 0.0;
+    
+    // 统计计数器，仅在debug模式下使用
     int pointsProcessed = 0;
     int significantPoints = 0;
+    
+    if (!platform::is_debug_mode()) {
+        pointsProcessed = -1; // 标记为非调试模式，避免无效计数
+        significantPoints = -1;
+    }
     
     int maxkx = (nx+1)/2;
     int maxky = (ny+1)/2;
@@ -1646,10 +1677,14 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                 
                 // Accumulate energy
                 energy += energyContrib;
-                pointsProcessed++;
                 
-                if (energyContrib > 1e-8) {
-                    significantPoints++;
+                // 仅在debug模式下进行计数统计
+                if (platform::is_debug_mode()) {
+                    pointsProcessed++;
+                    
+                    if (energyContrib > 1e-8) {
+                        significantPoints++;
+                    }
                 }
                 
                 // Output after point update - only for point [5,5,5]
@@ -2042,6 +2077,26 @@ void performFFTBackward() {
             if (std::abs(pme_params.pmeGrid[i]) > 1e-10) nonZeroBeforeFFT++;
         }
         platform::log(LogLevel::DEBUG, "Grid before backward FFT: non-zero points = " + std::to_string(nonZeroBeforeFFT));
+        
+        // 使用备份数据进行比较
+        if (!fftGridBackup.empty() && fftGridBackup.size() == pme_params.pmeGrid.size()) {
+            platform::log(LogLevel::DEBUG, "Comparing current grid with backup grid from forward FFT");
+            double maxDiff = 0.0;
+            int diffPoints = 0;
+            
+            for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
+                double diff = std::abs(pme_params.pmeGrid[i] - fftGridBackup[i]);
+                if (diff > 1e-10) {
+                    diffPoints++;
+                    maxDiff = std::max(maxDiff, diff);
+                }
+            }
+            
+            platform::log(LogLevel::DEBUG, "Grid comparison: " + std::to_string(diffPoints) + 
+                         " points differ, max difference = " + std::to_string(maxDiff));
+        } else {
+            platform::log(LogLevel::DEBUG, "No backup grid data available for comparison");
+        }
     }
     
     // Use custom FFT implementation
