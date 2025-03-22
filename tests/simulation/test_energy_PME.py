@@ -1750,6 +1750,7 @@ def test_ewald_vs_pme_comparison():
     random.seed(98765)  # Same seed as in the C++ version
     
     atoms = []
+    residues = []  # 添加residues列表
     
     print(f"Creating a system with {num_particles} randomly positioned particles...")
     
@@ -1770,13 +1771,32 @@ def test_ewald_vs_pme_comparison():
         else:
             atom.charge = -1.0  # Cl-
             
-        # 设置原子类型 - 所有原子使用同一类型
-        atom.type = 0  # 使用type而不是atomType
+        # 设置原子类型 - 使用不同原子类型与C++版本一致
+        atom.type = 0 if i < num_particles // 2 else 1  # Na+类型为0，Cl-类型为1
         
         atoms.append(atom)
+        
+        # 像test_ewald_vs_pme_random一样创建residues
+        if i % 2 == 0:  # 每两个原子一个残基
+            res = MCResidue()
+            res.atomStart = i
+            res.atomCount = 2 if i < num_particles-1 else 1  # 处理最后一个原子
+            res.active = True
+            res.fixed = False
+            residues.append(res)
     
-    # Set up the state
+    # 设置活性原子和残基计数
     state.atoms = atoms
+    state.residues = residues  # 设置残基
+    state.activeAtomCount = len(atoms)  # 添加活性原子计数
+    state.activeResidueCount = len(residues)  # 添加活性残基计数
+    
+    # 更新力场参数，支持两种原子类型
+    ff.numTotalTypes = 2  # 修改为2种原子类型(Na+和Cl-)
+    ff.ljSigma = [0.3, 0.3, 0.3, 0.3]  # 扩展为2×2矩阵
+    ff.ljEps = [0.0, 0.0, 0.0, 0.0]    # 扩展为2×2矩阵
+    
+    state.forcefield = ff
     
     # Calculate total charge to verify system is neutral
     total_charge = sum(atom.charge for atom in atoms)
