@@ -164,7 +164,7 @@ void Simulation::setEnergyDebugOutput(bool enable) {
     platform::cpu::setEnergyDebugOutput(enable);
 }
 
-// PME相关方法的实现
+// Implementation of PME-related methods
 void Simulation::setPMEParameters(float alpha, const int meshSize[3], int splineOrder, float tolerance) {
     platform::cpu::setPMEParameters(alpha, meshSize, splineOrder, tolerance);
 }

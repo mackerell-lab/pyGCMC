@@ -135,7 +135,7 @@ void init_simulation_bindings(py::module& m) {
         },
         "Calculate movement residue energy using Ewald summation");
     
-    // PME绑定
+    // PME bindings
     m.def("setPMEParameters",
         [](float alpha, const std::vector<int>& meshSize, int splineOrder, float tolerance) {
             if (meshSize.size() != 3) {
