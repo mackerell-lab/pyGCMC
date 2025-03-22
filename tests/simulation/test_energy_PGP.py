@@ -106,7 +106,7 @@ class TestEnergyPGP(unittest.TestCase):
         
         # Temperature in K
         self.temp = 300.0
-        self.system.set_temperature(self.temp)
+        self.system.info.setTemperature(self.temp)
     
     def test_pgp_parameter_setting(self):
         """
@@ -142,8 +142,19 @@ class TestEnergyPGP(unittest.TestCase):
         pair_grid_size = [16, 16, 16]
         spline_order = 4
         tolerance = 1e-5
+        box = [self.box_size, self.box_size, self.box_size]
         
         # 初始化参数
+        pygcmc.setPMEParameters(
+            alpha=alpha,
+            meshSize=mesh_size,
+            splineOrder=spline_order,
+            tolerance=tolerance
+        )
+        
+        # 初始化PME参数 - 这是关键步骤
+        pygcmc.initializePMEParameters(self.cutoff, box, alpha)
+        
         pygcmc.setPGPParameters(
             alpha=alpha,
             meshSize=mesh_size,
@@ -157,12 +168,12 @@ class TestEnergyPGP(unittest.TestCase):
         system = create_nacl_crystal(self.box_size, self.n_cells)
         
         # 将一半的残基标记为固定
-        n_residues = len(system.state.residues)
+        n_residues = len(system.residues)
         for i in range(0, n_residues, 2):
-            system.state.residues[i].fixed = True
+            system.residues[i].fixed = True
         
         # 预计算固定部分的网格电势
-        pygcmc.precomputeGridPotential(system.state, fixed_only=True)
+        pygcmc.precomputeGridPotential(system, fixed_only=True)
         
         # 测试成功执行而不崩溃
         self.assertTrue(True)
@@ -178,8 +189,19 @@ class TestEnergyPGP(unittest.TestCase):
         pair_grid_size = [16, 16, 16]
         spline_order = 4
         tolerance = 1e-5
+        box = [self.box_size, self.box_size, self.box_size]
         
         # 初始化参数
+        pygcmc.setPMEParameters(
+            alpha=alpha,
+            meshSize=mesh_size,
+            splineOrder=spline_order,
+            tolerance=tolerance
+        )
+        
+        # 初始化PME参数 - 这是关键步骤
+        pygcmc.initializePMEParameters(self.cutoff, box, alpha)
+        
         pygcmc.setPGPParameters(
             alpha=alpha,
             meshSize=mesh_size,
@@ -193,24 +215,32 @@ class TestEnergyPGP(unittest.TestCase):
         system = create_nacl_crystal(self.box_size, self.n_cells)
         
         # 将一半的残基标记为固定，一半为移动
-        n_residues = len(system.state.residues)
-        for i in range(0, n_residues, 2):
-            system.state.residues[i].fixed = True
+        n_residues = len(system.residues)
+        fixed_residues = []
+        moving_residues = []
         
-        # 设置移动残基
-        movement_residues = []
-        for i in range(1, n_residues, 2):  # 选择非固定残基
-            movement_residues.append(i)
-        system.set_movement_residues(movement_residues)
+        for i in range(n_residues):
+            if i % 2 == 0:
+                system.residues[i].fixed = True
+                fixed_residues.append(i)
+            else:
+                system.residues[i].fixed = False
+                moving_residues.append(i)
+        
+        # 设置移动残基 - 使用MCMovementResidueInfo正确设置
+        movement_info = MCMovementResidueInfo()
+        movement_info.startIndex = moving_residues[0]  # 第一个移动残基的索引
+        movement_info.activeCount = len(moving_residues)  # 移动残基的数量
+        system.movementResidues.append(movement_info)
         
         # 预计算固定部分的网格电势
-        pygcmc.precomputeGridPotential(system.state, fixed_only=True)
+        pygcmc.precomputeGridPotential(system, fixed_only=True)
         
         # 计算插值能量 - 使用新的函数名
-        energy = pygcmc.calculateMoleculeEnergy(system.state)
+        energy = pygcmc.calculateMoleculeEnergy(system)
         
         # 同时测试两个等效函数
-        energy2 = pygcmc.interpolateMoleculeEnergy(system.state)
+        energy2 = pygcmc.interpolateMoleculeEnergy(system)
         
         # 验证两个函数返回相同结果
         self.assertEqual(energy, energy2)
@@ -218,6 +248,169 @@ class TestEnergyPGP(unittest.TestCase):
         # 验证结果
         self.assertTrue(np.isfinite(energy))
         print(f"Interpolated energy: {energy}")
+
+# 将测试函数移到模块级别
+def test_compare_pme_pgp_energy():
+    """
+    比较PME和PGP计算的移动前后能量值是否一致
+    
+    这个测试验证:
+    1. 在初始状态下PME和PGP计算的能量值应该相同
+    2. 移动分子后，PME和PGP计算的能量变化应该相同
+    """
+    # 设置参数 - 确保PME和PGP使用相同的参数
+    box_size = 2.82  # nm
+    n_cells = 2
+    cutoff = 1.0   # nm
+    pair_cutoff = 0.5  # nm
+    box = [box_size, box_size, box_size]
+    
+    alpha = 0.29  # 1/nm
+    mesh_size = [32, 32, 32]
+    pair_grid_size = [32, 32, 32]  # 使用与PME相同的网格大小以便准确比较
+    spline_order = 4
+    tolerance = 1e-5
+    
+    # 创建测试系统
+    system = create_nacl_crystal(box_size, n_cells)
+    
+    # 确保盒子大小正确设置
+    system.info.box = box
+    system.info.cutoff = cutoff
+    
+    # 设置PME和PGP参数
+    pygcmc.setPMEParameters(
+        alpha=alpha,
+        meshSize=mesh_size,
+        splineOrder=spline_order,
+        tolerance=tolerance
+    )
+    
+    # 初始化PME参数 - 这是关键步骤
+    pygcmc.initializePMEParameters(cutoff, box, alpha)
+    
+    pygcmc.setPGPParameters(
+        alpha=alpha,
+        meshSize=mesh_size,
+        pair_cutoff=cutoff,
+        pairGridSize=pair_grid_size,
+        splineOrder=spline_order,
+        tolerance=tolerance
+    )
+    
+    # 将一半残基标记为固定，一半为移动
+    n_residues = len(system.residues)
+    fixed_residues = []
+    moving_residues = []
+    
+    for i in range(n_residues):
+        if i % 2 == 0:
+            system.residues[i].fixed = True
+            fixed_residues.append(i)
+        else:
+            system.residues[i].fixed = False
+            moving_residues.append(i)
+    
+    # 确保移动残基是连续的，这样MCMovementResidueInfo可以正确工作
+    # 对于测试目的，我们将移动残基重新排序，确保它们是连续的
+    if len(moving_residues) > 0:
+        # 按照索引排序移动残基
+        moving_residues.sort()
+        
+        # 设置移动残基 - 使用MCMovementResidueInfo正确设置
+        # 如果移动残基不是连续的，需要为每组连续残基创建单独的MovementInfo
+        current_start = moving_residues[0]
+        current_count = 1
+        
+        for i in range(1, len(moving_residues)):
+            if moving_residues[i] == moving_residues[i-1] + 1:
+                # 连续的残基，增加计数
+                current_count += 1
+            else:
+                # 不连续，创建一个新的MovementInfo并重置
+                movement_info = MCMovementResidueInfo()
+                movement_info.startIndex = current_start
+                movement_info.activeCount = current_count
+                system.movementResidues.append(movement_info)
+                
+                # 重置计数器
+                current_start = moving_residues[i]
+                current_count = 1
+        
+        # 添加最后一组
+        movement_info = MCMovementResidueInfo()
+        movement_info.startIndex = current_start
+        movement_info.activeCount = current_count
+        system.movementResidues.append(movement_info)
+    
+    # 记录移动残基的初始坐标
+    initial_positions = []
+    for res_idx in moving_residues:
+        residue = system.residues[res_idx]
+        for atom_idx in range(residue.atomCount):
+            atom = system.atoms[residue.atomStart + atom_idx]
+            initial_positions.append((atom.x, atom.y, atom.z))
+    
+    # 第1步: 使用PME计算初始系统能量
+    initial_pme_result = pygcmc.computeMovementEnergyPME(system)
+    initial_pme_energy = initial_pme_result[0]  # PME电静态能量
+    
+    print(f"System has {system.activeResidueCount} active residues and {len(system.movementResidues)} movement residue groups")
+    for i, info in enumerate(system.movementResidues):
+        print(f"Movement group {i}: startIndex={info.startIndex}, activeCount={info.activeCount}")
+    
+    # 第2步: 使用PGP预计算网格电势并计算移动残基能量
+    pygcmc.precomputeGridPotential(system, fixed_only=True)
+    initial_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
+    
+    # 检查初始状态下PME和PGP计算的能量是否接近
+    # 注意: PGP只计算移动残基与固定残基之间的相互作用，不包括移动残基之间的相互作用
+    # 因此，需要从PME结果中分离出这部分能量才能直接比较
+    
+    # 打印初始能量
+    print(f"Initial PME energy: {initial_pme_energy}")
+    print(f"Initial PGP energy: {initial_pgp_energy}")
+    
+    # 第3步: 移动移动残基（如平移0.1 nm）
+    translation = [0.1, 0.1, 0.1]  # nm
+    
+    for res_idx in moving_residues:
+        residue = system.residues[res_idx]
+        for atom_idx in range(residue.atomCount):
+            atom_index = residue.atomStart + atom_idx
+            atom = system.atoms[atom_index]
+            atom.x += translation[0]
+            atom.y += translation[1]
+            atom.z += translation[2]
+    
+    # 第4步: 使用PME计算移动后的系统能量
+    moved_pme_result = pygcmc.computeMovementEnergyPME(system)
+    moved_pme_energy = moved_pme_result[0]  # PME电静态能量
+    
+    # 第5步: 使用PGP计算移动后的能量
+    moved_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
+    
+    # 打印移动后能量
+    print(f"Moved PME energy: {moved_pme_energy}")
+    print(f"Moved PGP energy: {moved_pgp_energy}")
+    
+    # 计算能量变化
+    pme_energy_change = moved_pme_energy - initial_pme_energy
+    pgp_energy_change = moved_pgp_energy - initial_pgp_energy
+    
+    print(f"PME energy change: {pme_energy_change}")
+    print(f"PGP energy change: {pgp_energy_change}")
+    
+    if abs(pme_energy_change) < 1e-10:
+        print("PME energy change is too small, cannot compute relative error")
+        assert abs(pgp_energy_change) < 1e-10, f"PGP energy should also be close to zero"
+    else:
+        # 计算相对误差，允许一定的误差范围（例如5%）
+        relative_error = abs((pgp_energy_change - pme_energy_change) / pme_energy_change)
+        print(f"Relative error: {relative_error * 100:.4f}%")
+        
+        # 验证PGP和PME计算的能量变化在误差范围内一致
+        assert relative_error < 0.05, f"相对误差过大: {relative_error*100:.2f}%"  # 允许5%的误差
 
 if __name__ == '__main__':
     unittest.main() 

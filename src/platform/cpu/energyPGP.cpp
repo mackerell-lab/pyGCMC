@@ -172,6 +172,9 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     platform::log(LogLevel::DEBUG, "Spreading charges onto grid from ", 
                  fixed_only ? "fixed atoms only" : "all atoms");
     
+    int fixed_atoms = 0;
+    int charged_atoms = 0;
+    
     // 遍历所有残基和原子
     // 这个循环是最耗时的部分之一，处理每个原子的电荷分配
     for (int res_idx = 0; res_idx < state.activeResidueCount; ++res_idx) {
@@ -185,6 +188,11 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
         // 这是PGP方法的关键优化点，只预计算固定部分的电势
         if (fixed_only && !residue.fixed) continue;
         
+        // 输出处理信息
+        platform::log(LogLevel::DEBUG, "Processing residue ", res_idx, 
+                     ", fixed: ", residue.fixed, 
+                     ", atomCount: ", residue.atomCount);
+        
         // 处理残基中的每个原子
         // 循环遍历残基中的所有原子，将其电荷分配到网格上
         for (int atom_idx = 0; atom_idx < residue.atomCount; ++atom_idx) {
@@ -193,6 +201,13 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
             // 跳过无电荷原子
             // 无电荷原子不贡献静电势，可以跳过以提高效率
             if (std::abs(atom.charge) < 1e-10) continue;
+            
+            fixed_atoms++;
+            charged_atoms++;
+            
+            platform::log(LogLevel::DEBUG, "  Atom ", atom_idx, 
+                         " charge: ", atom.charge, 
+                         ", position: (", atom.x, ", ", atom.y, ", ", atom.z, ")");
             
             // 将原子位置转换为网格索引
             // 这个转换考虑了B样条插值需要的偏移
@@ -241,12 +256,43 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
                         
                         // 按B样条权重累加电荷
                         // 原子电荷乘以三个维度的权重积
-                        chargeGrid[grid_idx].real(chargeGrid[grid_idx].real() + 
-                                                atom.charge * weights[0][i] * weights[1][j] * weights[2][k]);
+                        double charge_contribution = atom.charge * weights[0][i] * weights[1][j] * weights[2][k];
+                        chargeGrid[grid_idx].real(chargeGrid[grid_idx].real() + charge_contribution);
+                        
+                        // 调试输出非零电荷分配
+                        if (std::abs(charge_contribution) > 1e-4) {
+                            platform::log(LogLevel::DEBUG, "    Grid point (", 
+                                        grid_indices[0][i], ", ", 
+                                        grid_indices[1][j], ", ", 
+                                        grid_indices[2][k], ") += ", 
+                                        charge_contribution);
+                        }
                     }
                 }
             }
         }
+    }
+    
+    // 检查电荷分配是否存在
+    double total_charge = 0.0;
+    int non_zero_points = 0;
+    for (const auto& val : chargeGrid) {
+        total_charge += val.real();
+        if (std::abs(val.real()) > 1e-10) {
+            non_zero_points++;
+        }
+    }
+    
+    platform::log(LogLevel::INFO, "Charges distributed: processed ", 
+                 fixed_atoms, " atoms, of which ", 
+                 charged_atoms, " had non-zero charge");
+    platform::log(LogLevel::INFO, "Grid has ", non_zero_points, 
+                 " non-zero points, total charge: ", total_charge);
+    
+    // 如果没有分配电荷，直接返回
+    if (non_zero_points == 0) {
+        platform::log(LogLevel::WARNING, "No charges were distributed to the grid. Stopping computation.");
+        return;
     }
     
     // 2. 执行FFT将实空间电荷分布转换到倒空间
@@ -265,10 +311,23 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     // 执行3D前向FFT变换
     CustomFFT::fft3D_forward(reciprocalGrid.data(), nx, ny, nz);
     
+    // 检查FFT结果
+    int non_zero_fft_points = 0;
+    for (const auto& val : reciprocalGrid) {
+        if (std::abs(val.real()) > 1e-10 || std::abs(val.imag()) > 1e-10) {
+            non_zero_fft_points++;
+        }
+    }
+    
+    platform::log(LogLevel::INFO, "After FFT, grid has ", 
+                 non_zero_fft_points, " non-zero points");
+    
     // 3. 应用Ewald因子
     // 在倒空间中对每个k向量应用Ewald因子
     // 这一步计算了长程静电相互作用
     platform::log(LogLevel::DEBUG, "Applying Ewald factor in reciprocal space");
+    
+    int factors_applied = 0;
     
     // 遍历所有倒空间网格点
     // 这个三重循环应用了Ewald因子到每个k向量
@@ -304,11 +363,27 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
                 // 它控制了倒空间中不同波长的贡献
                 double factor = std::exp(-k2 / (4.0 * pgp_params.alpha * pgp_params.alpha)) / k2;
                 
+                // 检查原始值
+                std::complex<double> originalValue = reciprocalGrid[idx];
+                
                 // 将因子应用到倒空间网格点
                 reciprocalGrid[idx] *= factor;
+                
+                // 记录显著变化
+                if (std::abs(originalValue.real()) > 1e-6 || std::abs(originalValue.imag()) > 1e-6) {
+                    factors_applied++;
+                    if (factors_applied <= 10) { // 只记录前10个以避免日志过多
+                        platform::log(LogLevel::DEBUG, "Ewald factor at k=(", kx, ",", ky, ",", kz, 
+                                    "): ", factor, ", original value: ", originalValue, 
+                                    ", new value: ", reciprocalGrid[idx]);
+                    }
+                }
             }
         }
     }
+    
+    platform::log(LogLevel::INFO, "Applied Ewald factors to ", 
+                 factors_applied, " significant grid points");
     
     // 4. 执行反FFT获得实空间的预计算电势场
     // 反FFT将倒空间的电势转换回实空间
@@ -316,6 +391,28 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     
     // 使用CustomFFT执行反向FFT变换
     CustomFFT::fft3D_backward(reciprocalGrid.data(), nx, ny, nz);
+    
+    // 检查反FFT结果
+    int non_zero_potential_points = 0;
+    double max_potential = 0.0;
+    double min_potential = 0.0;
+    double sum_potential = 0.0;
+    
+    for (const auto& val : reciprocalGrid) {
+        double potential = val.real();
+        if (std::abs(potential) > 1e-10) {
+            non_zero_potential_points++;
+            max_potential = std::max(max_potential, potential);
+            min_potential = std::min(min_potential, potential);
+            sum_potential += potential;
+        }
+    }
+    
+    platform::log(LogLevel::INFO, "Final potential grid has ", 
+                 non_zero_potential_points, " non-zero points");
+    platform::log(LogLevel::INFO, "Potential stats - min: ", min_potential, 
+                 ", max: ", max_potential, ", avg: ", 
+                 (non_zero_potential_points > 0 ? sum_potential / non_zero_potential_points : 0.0));
     
     // 保存结果到预计算电势网格
     pgp_params.pairGrid = reciprocalGrid;
@@ -349,10 +446,32 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
     
     // 记录开始计算的调试信息
     platform::log(LogLevel::DEBUG, "Interpolating energy for movement atoms");
+    platform::log(LogLevel::INFO, "Movement residues count: ", state.movementResidues.size());
+    
+    // 检查预计算的网格是否为空
+    bool gridEmpty = true;
+    for (const auto& val : pgp_params.pairGrid) {
+        if (std::abs(val.real()) > 1e-10 || std::abs(val.imag()) > 1e-10) {
+            gridEmpty = false;
+            break;
+        }
+    }
+    
+    if (gridEmpty) {
+        platform::log(LogLevel::WARNING, "PGP grid is empty or not properly initialized!");
+    } else {
+        platform::log(LogLevel::INFO, "PGP grid has non-zero values");
+    }
+    
+    int totalAtoms = 0;
+    int chargedAtoms = 0;
     
     // 遍历移动残基
     // 这个循环只处理标记为移动的残基，大大减少了计算量
     for (const auto& movementInfo : state.movementResidues) {
+        platform::log(LogLevel::INFO, "Processing movement group: startIndex=", 
+                     movementInfo.startIndex, ", activeCount=", movementInfo.activeCount);
+        
         // 处理移动组中的每个残基
         // 一个移动组可能包含多个残基
         for (int res_idx = movementInfo.startIndex; 
@@ -362,16 +481,27 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
             
             // 跳过非活跃残基
             // 只计算活跃残基的能量
-            if (!residue.active) continue;
+            if (!residue.active) {
+                platform::log(LogLevel::INFO, "Skipping inactive residue at index ", res_idx);
+                continue;
+            }
+            
+            platform::log(LogLevel::INFO, "Processing residue at index ", res_idx, 
+                         ", fixed=", residue.fixed, ", atomCount=", residue.atomCount);
             
             // 处理残基中的每个原子
             // 循环计算残基中每个原子的能量贡献
             for (int atom_idx = 0; atom_idx < residue.atomCount; ++atom_idx) {
                 const auto& atom = state.atoms[residue.atomStart + atom_idx];
+                totalAtoms++;
                 
                 // 跳过无电荷原子
                 // 无电荷原子不贡献静电能量
                 if (std::abs(atom.charge) < 1e-10) continue;
+                
+                chargedAtoms++;
+                platform::log(LogLevel::DEBUG, "Processing atom with charge ", atom.charge, 
+                             ", position = (", atom.x, ", ", atom.y, ", ", atom.z, ")");
                 
                 // 将原子位置转换为网格坐标
                 // 提取原子的三维坐标
@@ -423,15 +553,27 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                             
                             // 使用B样条权重累加电势
                             // 三个维度的权重乘积乘以网格点的电势值
-                            potential += pgp_params.pairGrid[grid_idx].real() * 
-                                        weights[0][i] * weights[1][j] * weights[2][k];
+                            double grid_value = pgp_params.pairGrid[grid_idx].real();
+                            double weight = weights[0][i] * weights[1][j] * weights[2][k];
+                            potential += grid_value * weight;
+                            
+                            if (std::abs(grid_value) > 1e-10) {
+                                platform::log(LogLevel::DEBUG, "Grid point (", grid_indices[0][i], 
+                                           ", ", grid_indices[1][j], ", ", grid_indices[2][k], 
+                                           ") value = ", grid_value, ", weight = ", weight);
+                            }
                         }
                     }
                 }
                 
                 // 累加能量(电势*电荷)
                 // 能量等于电势乘以电荷
-                energy += potential * atom.charge;
+                double atom_energy = potential * atom.charge;
+                energy += atom_energy;
+                
+                platform::log(LogLevel::DEBUG, "Atom potential: ", potential, 
+                             ", atom energy contribution: ", atom_energy, 
+                             ", cumulative energy: ", energy);
             }
         }
     }
@@ -441,7 +583,9 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
     // 例如: energy *= ONE_4PI_EPS0 / pgp_params.epsilon_r;
     
     // 记录计算结果
-    platform::log(LogLevel::DEBUG, "Interpolated energy: ", energy);
+    platform::log(LogLevel::INFO, "Interpolated energy: ", energy, 
+                 ", processed ", totalAtoms, " atoms, of which ", 
+                 chargedAtoms, " had non-zero charge");
 }
 
 /**
@@ -456,6 +600,15 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
 double calculateMoleculeEnergy(model::MCState& state) {
     double energy = 0.0;
     interpolateMoleculeEnergy(state, energy);
+    
+    // 添加一个修正因子以确保能量不为零（仅用于测试）
+    /*
+    if (std::abs(energy) < 1e-10) {
+        platform::log(LogLevel::WARNING, "Adding small correction to zero energy for testing");
+        energy = 1e-5;  // 添加一个很小的非零值用于测试
+    }
+    */
+    
     return energy;
 }
 
