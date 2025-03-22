@@ -250,22 +250,25 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     }
     
     // 2. 执行FFT将实空间电荷分布转换到倒空间
-    // 注意：这里是FFT变换的占位符，实际实现中应使用FFTW等库
+    // 使用CustomFFT进行前向FFT变换
     platform::log(LogLevel::DEBUG, "Performing forward FFT on charge grid");
     
-    // FFT占位符(在实际代码中，应替换为真正的FFT实现)
-    // 例如，可以使用FFTW库：
-    // fftw_plan plan = fftw_plan_dft_3d(nx, ny, nz, chargeGrid, reciprocalGrid, FFTW_FORWARD, FFTW_ESTIMATE);
-    // fftw_execute(plan);
-    std::vector<std::complex<double>> reciprocalGrid = chargeGrid;  // 在实际代码中，这将是FFT结果
+    // 使用CustomFFT执行前向FFT变换
+    // 从energyPME.cpp中使用同样的FFT实现
+    int nx = pgp_params.pair_grid_size[0];
+    int ny = pgp_params.pair_grid_size[1];
+    int nz = pgp_params.pair_grid_size[2];
+    
+    // 备份chargeGrid以便调试
+    std::vector<std::complex<double>> reciprocalGrid = chargeGrid;
+    
+    // 执行3D前向FFT变换
+    CustomFFT::fft3D_forward(reciprocalGrid.data(), nx, ny, nz);
     
     // 3. 应用Ewald因子
     // 在倒空间中对每个k向量应用Ewald因子
     // 这一步计算了长程静电相互作用
     platform::log(LogLevel::DEBUG, "Applying Ewald factor in reciprocal space");
-    int nx = pgp_params.pair_grid_size[0];
-    int ny = pgp_params.pair_grid_size[1];
-    int nz = pgp_params.pair_grid_size[2];
     
     // 遍历所有倒空间网格点
     // 这个三重循环应用了Ewald因子到每个k向量
@@ -311,11 +314,11 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     // 反FFT将倒空间的电势转换回实空间
     platform::log(LogLevel::DEBUG, "Performing inverse FFT to get potential grid");
     
-    // 反FFT占位符(在实际代码中，应替换为真正的FFT实现)
-    // 例如：
-    // fftw_plan plan_backward = fftw_plan_dft_3d(nx, ny, nz, reciprocalGrid, pgp_params.pairGrid, FFTW_BACKWARD, FFTW_ESTIMATE);
-    // fftw_execute(plan_backward);
-    pgp_params.pairGrid = reciprocalGrid;  // 在实际代码中，这将是反FFT结果
+    // 使用CustomFFT执行反向FFT变换
+    CustomFFT::fft3D_backward(reciprocalGrid.data(), nx, ny, nz);
+    
+    // 保存结果到预计算电势网格
+    pgp_params.pairGrid = reciprocalGrid;
     
     // 记录预计算完成信息
     // 这有助于确认预计算过程已成功完成
@@ -439,6 +442,21 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
     
     // 记录计算结果
     platform::log(LogLevel::DEBUG, "Interpolated energy: ", energy);
+}
+
+/**
+ * @brief 通过插值计算移动分子的能量，并返回计算结果
+ * 
+ * 这是interpolateMoleculeEnergy的包装函数，直接返回计算得到的能量值
+ * 方便Python调用和测试。
+ * 
+ * @param state 系统状态，包含移动分子的信息及预计算的电势网格
+ * @return 计算得到的能量值
+ */
+double calculateMoleculeEnergy(model::MCState& state) {
+    double energy = 0.0;
+    interpolateMoleculeEnergy(state, energy);
+    return energy;
 }
 
 } // namespace cpu

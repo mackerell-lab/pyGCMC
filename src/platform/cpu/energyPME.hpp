@@ -3,12 +3,22 @@
 #include "model/montecarlo.hpp"
 #include "platform/platform.hpp"
 #include "energyCommon.hpp"
+#include <array>
 #include <vector>
 #include <complex>
 
 namespace pygcmc {
 namespace platform {
 namespace cpu {
+
+// Define complex number type alias for consistency
+using cmplx = std::complex<double>;
+
+// Add declarations for the CustomFFT namespace functions
+namespace CustomFFT {
+    void fft3D_forward(cmplx* data, int nx, int ny, int nz);
+    void fft3D_backward(cmplx* data, int nx, int ny, int nz);
+}
 
 // Constants for PME calculation already defined in energyCommon.hpp
 // static const int NUM_TABLE_POINTS = 20000;
@@ -145,6 +155,9 @@ void performFFTForward();
 void performFFTBackward();
 void computeEnergyFromGrid(double& energy, const double box[3]);
 void computeBSplineCoefficients(double fractional, int order, std::vector<double>& coefficients);
+
+// Enable for debug output
+extern void setEnergyDebugOutput(bool enable);
 
 } // namespace cpu
 } // namespace platform

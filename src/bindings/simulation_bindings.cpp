@@ -329,6 +329,26 @@ void init_simulation_bindings(py::module& m) {
         返回:
             float: 计算得到的能量值
         )docstring");
+        
+    // 添加新的函数绑定：calculateMoleculeEnergy
+    m.def("calculateMoleculeEnergy",
+        [](model::MCState& state) {
+            return platform::cpu::calculateMoleculeEnergy(state);
+        },
+        "Calculate molecule energy by interpolating from the precomputed grid potential (alternative function)",
+        py::arg("state"),
+        R"docstring(
+        通过插值计算移动分子的能量 (Precomputed Grid-Potential Particle Mesh Ewald)
+
+        这是与interpolateMoleculeEnergy等价的函数，提供更直观的命名。
+        通过B样条插值从预计算的电势网格中获取移动分子的能量值。
+        
+        参数:
+            state (MCState): 系统状态，包含移动分子信息
+        
+        返回:
+            float: 计算得到的能量值
+        )docstring");
 }
 
 } // namespace bindings

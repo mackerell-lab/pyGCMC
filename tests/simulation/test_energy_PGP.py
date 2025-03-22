@@ -206,8 +206,14 @@ class TestEnergyPGP(unittest.TestCase):
         # 预计算固定部分的网格电势
         pygcmc.precomputeGridPotential(system.state, fixed_only=True)
         
-        # 计算插值能量
-        energy = pygcmc.interpolateMoleculeEnergy(system.state)
+        # 计算插值能量 - 使用新的函数名
+        energy = pygcmc.calculateMoleculeEnergy(system.state)
+        
+        # 同时测试两个等效函数
+        energy2 = pygcmc.interpolateMoleculeEnergy(system.state)
+        
+        # 验证两个函数返回相同结果
+        self.assertEqual(energy, energy2)
         
         # 验证结果
         self.assertTrue(np.isfinite(energy))

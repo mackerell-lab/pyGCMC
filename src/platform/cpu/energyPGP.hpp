@@ -158,6 +158,17 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only = true);
  */
 void interpolateMoleculeEnergy(model::MCState& state, double& energy);
 
+/**
+ * @brief 通过插值计算移动分子的能量，并返回计算结果
+ * 
+ * 这是interpolateMoleculeEnergy的包装函数，直接返回计算得到的能量值，
+ * 方便Python调用和测试。该函数内部创建能量变量并调用原始的interpolateMoleculeEnergy函数。
+ * 
+ * @param state 系统状态，包含移动分子的信息及预计算的电势网格
+ * @return 计算得到的能量值
+ */
+double calculateMoleculeEnergy(model::MCState& state);
+
 } // namespace cpu
 } // namespace platform
 } // namespace pygcmc 

@@ -33,6 +33,21 @@ const double PI2 = 6.28318530717958647692;
 
 // In C++, we use std::complex<double> instead of C's complex type
 using cmplx = std::complex<double>;
+}  // 结束匿名命名空间
+
+namespace pygcmc {
+namespace platform {
+namespace cpu {
+
+// Global parameters instance
+PMEParams pme_params;
+
+// Add FFT related member variables
+std::vector<std::complex<double>> fft_weights;
+
+// FFT网格数据备份，用于调试模式下比较前后FFT结果差异
+// 注意：只在调试模式下使用，通过platform::is_debug_mode()函数控制
+std::vector<std::complex<double>> fftGridBackup;
 
 namespace CustomFFT {
 
@@ -326,22 +341,6 @@ void tfft_convolver(int k, cmplx *A, const cmplx *w) {
 }
 
 } // namespace CustomFFT
-
-} // anonymous namespace
-
-namespace pygcmc {
-namespace platform {
-namespace cpu {
-
-// Global parameters instance
-PMEParams pme_params;
-
-// Add FFT related member variables
-std::vector<std::complex<double>> fft_weights;
-
-// FFT网格数据备份，用于调试模式下比较前后FFT结果差异
-// 注意：只在调试模式下使用，通过platform::is_debug_mode()函数控制
-std::vector<std::complex<double>> fftGridBackup;
 
 /**
  * @brief Initialize lookup tables for erfc and scaling functions
