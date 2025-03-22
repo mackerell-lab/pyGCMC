@@ -849,15 +849,17 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
     platform::log(LogLevel::DEBUG, "Total system charge: " + std::to_string(totalCharge));
     
     // Check the initial values of the first 10 grid points
-    platform::log(LogLevel::DEBUG, "Initial values of the first 10 grid points:");
-    for (int i = 0; i < 10 && i < static_cast<int>(pme_params.pmeGrid.size()); i++) {
-        platform::log(LogLevel::DEBUG, "  Grid point[" + std::to_string(i) + "] = " + std::to_string(pme_params.pmeGrid[i].real()));
-    }
-    
-    // Print some atom charge values to verify if there are non-zero charges
-    platform::log(LogLevel::DEBUG, "Charge values of the first 10 atoms:");
-    for (int i = 0; i < 10 && i < state.activeAtomCount; i++) {
-        platform::log(LogLevel::DEBUG, "  Atom[" + std::to_string(i) + "] charge = " + std::to_string(atoms[i].charge));
+    if (platform::is_debug_mode()) {
+        platform::log(LogLevel::DEBUG, "Initial values of the first 10 grid points:");
+        for (int i = 0; i < 10 && i < static_cast<int>(pme_params.pmeGrid.size()); i++) {
+            platform::log(LogLevel::DEBUG, "  Grid point[" + std::to_string(i) + "] = " + std::to_string(pme_params.pmeGrid[i].real()));
+        }
+        
+        // Print some atom charge values to verify if there are non-zero charges
+        platform::log(LogLevel::DEBUG, "Charge values of the first 10 atoms:");
+        for (int i = 0; i < 10 && i < state.activeAtomCount; i++) {
+            platform::log(LogLevel::DEBUG, "  Atom[" + std::to_string(i) + "] charge = " + std::to_string(atoms[i].charge));
+        }
     }
     
     // Calculate reciprocal lattice vectors - ensure consistent with pme.cpp
@@ -1478,23 +1480,27 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
         recipBoxVectors[2][2] = (periodicBoxVectors[0][0] * periodicBoxVectors[1][1] - periodicBoxVectors[0][1] * periodicBoxVectors[1][0]) / det;
     }
     
-    // Output reciprocal lattice vectors
-    platform::log(LogLevel::DEBUG, "Reciprocal lattice vectors:");
-    platform::log(LogLevel::DEBUG, "  b1 = [" + std::to_string(recipBoxVectors[0][0]) + ", " + 
-                 std::to_string(recipBoxVectors[0][1]) + ", " + std::to_string(recipBoxVectors[0][2]) + "]");
-    platform::log(LogLevel::DEBUG, "  b2 = [" + std::to_string(recipBoxVectors[1][0]) + ", " + 
-                 std::to_string(recipBoxVectors[1][1]) + ", " + std::to_string(recipBoxVectors[1][2]) + "]");
-    platform::log(LogLevel::DEBUG, "  b3 = [" + std::to_string(recipBoxVectors[2][0]) + ", " + 
-                 std::to_string(recipBoxVectors[2][1]) + ", " + std::to_string(recipBoxVectors[2][2]) + "]");
-    
-    // Count original grid data
+    // 声明计数变量
     int nonZeroGridBefore = 0;
-    for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
-        if (std::norm(pme_params.pmeGrid[i]) > 1e-10) {
-            nonZeroGridBefore++;
+    
+    // Output reciprocal lattice vectors
+    if (platform::is_debug_mode()) {
+        platform::log(LogLevel::DEBUG, "Reciprocal lattice vectors:");
+        platform::log(LogLevel::DEBUG, "  b1 = [" + std::to_string(recipBoxVectors[0][0]) + ", " + 
+                    std::to_string(recipBoxVectors[0][1]) + ", " + std::to_string(recipBoxVectors[0][2]) + "]");
+        platform::log(LogLevel::DEBUG, "  b2 = [" + std::to_string(recipBoxVectors[1][0]) + ", " + 
+                    std::to_string(recipBoxVectors[1][1]) + ", " + std::to_string(recipBoxVectors[1][2]) + "]");
+        platform::log(LogLevel::DEBUG, "  b3 = [" + std::to_string(recipBoxVectors[2][0]) + ", " + 
+                    std::to_string(recipBoxVectors[2][1]) + ", " + std::to_string(recipBoxVectors[2][2]) + "]");
+        
+        // Count original grid data
+        for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
+            if (std::norm(pme_params.pmeGrid[i]) > 1e-10) {
+                nonZeroGridBefore++;
+            }
         }
+        platform::log(LogLevel::DEBUG, "Grid before energy calculation: non-zero points = " + std::to_string(nonZeroGridBefore));
     }
-    platform::log(LogLevel::DEBUG, "Grid before energy calculation: non-zero points = " + std::to_string(nonZeroGridBefore));
     
     // 只在debug_mode启用时执行以下代码
     if (platform::is_debug_mode()) {
