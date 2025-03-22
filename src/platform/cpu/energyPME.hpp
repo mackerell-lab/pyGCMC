@@ -88,12 +88,12 @@ inline void initializePMEParameters(double cutoff, const double box[3],
                                   const int* meshSize = nullptr,
                                   int splineOrder = DEFAULT_SPLINE_ORDER,
                                   double tolerance = 1e-5) {
-    // 设置盒子尺寸 - 确保B样条初始化使用正确的体积
+    // Set box dimensions - ensure B-spline initialization uses correct volume
     pme_params.setBox(box);
     
     // If alpha is not specified, calculate the optimal value
     if (alpha <= 0.0) {
-        // 自动调整参数包括调用initializeTables和initializeBsplines
+        // Auto-adjust parameters includes calling initializeTables and initializeBsplines
         autoAdjustPMEParameters(tolerance, cutoff, box);
     } else {
         // Use the specified parameters
