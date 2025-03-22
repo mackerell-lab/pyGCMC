@@ -919,12 +919,14 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
     std::vector<std::vector<double>> gridFractions(state.activeAtomCount, std::vector<double>(3, 0.0));
     
     // Print grid index information for every 100 atoms - if there are enough atoms
-    for (int i = 0; i < std::min(500, state.activeAtomCount); i += 100) {
-        if (i < static_cast<int>(gridIndices.size())) {
-            platform::log(LogLevel::DEBUG, "Atom " + std::to_string(i) + " grid index: [" 
-                    + std::to_string(gridIndices[i][0]) + ", " 
-                    + std::to_string(gridIndices[i][1]) + ", " 
-                    + std::to_string(gridIndices[i][2]) + "]");
+    if (platform::is_debug_mode()) {
+        for (int i = 0; i < std::min(500, state.activeAtomCount); i += 100) {
+            if (i < static_cast<int>(gridIndices.size())) {
+                platform::log(LogLevel::DEBUG, "Atom " + std::to_string(i) + " grid index: [" 
+                        + std::to_string(gridIndices[i][0]) + ", " 
+                        + std::to_string(gridIndices[i][1]) + ", " 
+                        + std::to_string(gridIndices[i][2]) + "]");
+            }
         }
     }
     
@@ -1084,197 +1086,201 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
     }
     
     // Analyze grid information
-    platform::log(LogLevel::DEBUG, "Grid size: " + std::to_string(pme_params.pmeGrid.size()));
-    
-    // Add lookup and display for grid points with maximum values
-    platform::log(LogLevel::DEBUG, "\n===== Maximum value grid points after charge distribution =====");
-    std::vector<std::pair<size_t, double>> topValues;
-    for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
-        double realVal = std::abs(pme_params.pmeGrid[i].real());
-        if (realVal > 1e-8) {  // Use larger threshold to find obvious non-zero values
-            topValues.push_back({i, realVal});
-        }
-    }
-    
-    // Sort by value size
-    std::sort(topValues.begin(), topValues.end(), 
-              [](const auto& a, const auto& b) { return a.second > b.second; });
-    
-    // Output first 10 maximum value points
-    int maxValueCount = 0;
-    for (const auto& [idx, val] : topValues) {
-        if (maxValueCount >= 10) break;
-        // Calculate 3D indices
-        int x = (idx / (ny * nz));
-        int y = (idx - x * ny * nz) / nz;
-        int z = idx - x * ny * nz - y * nz;
-        
-        platform::log(LogLevel::DEBUG, "Top " + std::to_string(maxValueCount + 1) + ": grid point[" + std::to_string(x) + "," + std::to_string(y) + "," + std::to_string(z) 
-                  + "] (index=" + std::to_string(idx) + "): " + std::to_string(pme_params.pmeGrid[idx].real()) 
-                  + " + " + std::to_string(pme_params.pmeGrid[idx].imag()) + "i, |val| = " + std::to_string(val));
-        maxValueCount++;
-    }
-    
-    // Count and output non-zero grid points
-    int displayCount = 0;
-    for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
-        if (std::abs(pme_params.pmeGrid[i].real()) > 1e-10) {
-            if (displayCount < 5) {
-                platform::log(LogLevel::DEBUG, "Non-zero grid point " + std::to_string(displayCount) + ": index=" + std::to_string(i) 
-                          + ", value=" + std::to_string(pme_params.pmeGrid[i].real()));
+    if (platform::is_debug_mode()) {
+        platform::log(LogLevel::DEBUG, "Grid size: " + std::to_string(pme_params.pmeGrid.size()));
+
+        // Add lookup and display for grid points with maximum values
+        platform::log(LogLevel::DEBUG, "\n===== Maximum value grid points after charge distribution =====");
+        std::vector<std::pair<size_t, double>> topValues;
+        for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
+            double realVal = std::abs(pme_params.pmeGrid[i].real());
+            if (realVal > 1e-8) {  // Use larger threshold to find obvious non-zero values
+                topValues.push_back({i, realVal});
             }
-            displayCount++;
         }
-    }
-    
-    // Analyze charge distribution for atom 0
-    if (state.activeAtomCount > 0) {
-        int atomIdx = 0;
-        int x0 = gridIndices[atomIdx][0];
-        int y0 = gridIndices[atomIdx][1];
-        int z0 = gridIndices[atomIdx][2];
-        
-        platform::log(LogLevel::DEBUG, "Atom 0: charge=" + std::to_string(atoms[atomIdx].charge) 
-                  + ", grid index=[" + std::to_string(x0) + "," + std::to_string(y0) + "," + std::to_string(z0) + "]");
-        
-        // Analyze grid points around atom 0
-        for (int ix = 0; ix < order; ix++) {
-            int xindex = (x0 + ix) % nx;
+
+        // Sort by value size
+        std::sort(topValues.begin(), topValues.end(), 
+                [](const auto& a, const auto& b) { return a.second > b.second; });
+
+        // Output first 10 maximum value points
+        int maxValueCount = 0;
+        for (const auto& [idx, val] : topValues) {
+            if (maxValueCount >= 10) break;
+            // Calculate 3D indices
+            int x = (idx / (ny * nz));
+            int y = (idx - x * ny * nz) / nz;
+            int z = idx - x * ny * nz - y * nz;
             
-            for (int iy = 0; iy < order; iy++) {
-                int yindex = (y0 + iy) % ny;
+            platform::log(LogLevel::DEBUG, "Top " + std::to_string(maxValueCount + 1) + ": grid point[" + std::to_string(x) + "," + std::to_string(y) + "," + std::to_string(z) 
+                    + "] (index=" + std::to_string(idx) + "): " + std::to_string(pme_params.pmeGrid[idx].real()) 
+                    + " + " + std::to_string(pme_params.pmeGrid[idx].imag()) + "i, |val| = " + std::to_string(val));
+            maxValueCount++;
+        }
+
+        // Count and output non-zero grid points
+        int displayCount = 0;
+        for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
+            if (std::abs(pme_params.pmeGrid[i].real()) > 1e-10) {
+                if (displayCount < 5) {
+                    platform::log(LogLevel::DEBUG, "Non-zero grid point " + std::to_string(displayCount) + ": index=" + std::to_string(i) 
+                            + ", value=" + std::to_string(pme_params.pmeGrid[i].real()));
+                }
+                displayCount++;
+            }
+        }
+
+        // Analyze charge distribution for atom 0
+        if (state.activeAtomCount > 0) {
+            int atomIdx = 0;
+            int x0 = gridIndices[atomIdx][0];
+            int y0 = gridIndices[atomIdx][1];
+            int z0 = gridIndices[atomIdx][2];
+            
+            platform::log(LogLevel::DEBUG, "Atom 0: charge=" + std::to_string(atoms[atomIdx].charge) 
+                    + ", grid index=[" + std::to_string(x0) + "," + std::to_string(y0) + "," + std::to_string(z0) + "]");
+            
+            // Analyze grid points around atom 0
+            for (int ix = 0; ix < order; ix++) {
+                int xindex = (x0 + ix) % nx;
                 
-                for (int iz = 0; iz < order; iz++) {
-                    int zindex = (z0 + iz) % nz;
-                    int index = xindex * ny * nz + yindex * nz + zindex;
+                for (int iy = 0; iy < order; iy++) {
+                    int yindex = (y0 + iy) % ny;
                     
-                    if (index >= 0 && static_cast<size_t>(index) < pme_params.pmeGrid.size()) {
-                        platform::log(LogLevel::DEBUG, "  Grid point[" + std::to_string(xindex) + "," + std::to_string(yindex) + "," + std::to_string(zindex) 
-                                  + "] (index " + std::to_string(index) + "): " 
-                                  + std::to_string(pme_params.pmeGrid[index].real()));
+                    for (int iz = 0; iz < order; iz++) {
+                        int zindex = (z0 + iz) % nz;
+                        int index = xindex * ny * nz + yindex * nz + zindex;
+                        
+                        if (index >= 0 && static_cast<size_t>(index) < pme_params.pmeGrid.size()) {
+                            platform::log(LogLevel::DEBUG, "  Grid point[" + std::to_string(xindex) + "," + std::to_string(yindex) + "," + std::to_string(zindex) 
+                                    + "] (index " + std::to_string(index) + "): " 
+                                    + std::to_string(pme_params.pmeGrid[index].real()));
+                        }
                     }
                 }
             }
         }
-    }
-    
-    // Add standard grid point output - for comparison with pme.cpp
-    platform::log(LogLevel::DEBUG, "\n===== Standard grid point values comparison after charge distribution =====");
-    const int keyIndices[] = {0, 1, nx, ny, nz, nx*ny, nx*nz, ny*nz};
-    platform::log(LogLevel::DEBUG, "Total grid points: " + std::to_string(pme_params.pmeGrid.size()));
-    for (int i : keyIndices) {
-        if (i < static_cast<int>(pme_params.pmeGrid.size())) {
-            platform::log(LogLevel::DEBUG, "Grid point[" + std::to_string(i) + "]: " + std::to_string(pme_params.pmeGrid[i].real()) 
-                      + " + " + std::to_string(pme_params.pmeGrid[i].imag()) + "i");
+
+        // Add standard grid point output - for comparison with pme.cpp
+        platform::log(LogLevel::DEBUG, "\n===== Standard grid point values comparison after charge distribution =====");
+        const int keyIndices[] = {0, 1, nx, ny, nz, nx*ny, nx*nz, ny*nz};
+        platform::log(LogLevel::DEBUG, "Total grid points: " + std::to_string(pme_params.pmeGrid.size()));
+        for (int i : keyIndices) {
+            if (i < static_cast<int>(pme_params.pmeGrid.size())) {
+                platform::log(LogLevel::DEBUG, "Grid point[" + std::to_string(i) + "]: " + std::to_string(pme_params.pmeGrid[i].real()) 
+                        + " + " + std::to_string(pme_params.pmeGrid[i].imag()) + "i");
+            }
         }
-    }
-    
-    // Specific 3D coordinates
-    const int keyCoords[][3] = {{0,0,1}, {0,1,0}, {1,0,0}, {1,1,1}, {2,2,2}};
-    for (const auto& coord : keyCoords) {
-        int idx = ((coord[0] % nx) * ny * nz) + ((coord[1] % ny) * nz) + (coord[2] % nz);
-        if (idx < static_cast<int>(pme_params.pmeGrid.size())) {
-            platform::log(LogLevel::DEBUG, "Grid point[" + std::to_string(coord[0]) + "," + std::to_string(coord[1]) + "," + std::to_string(coord[2]) 
-                      + "] (index=" + std::to_string(idx) + "): " + std::to_string(pme_params.pmeGrid[idx].real()) 
-                      + " + " + std::to_string(pme_params.pmeGrid[idx].imag()) + "i");
+
+        // Specific 3D coordinates
+        const int keyCoords[][3] = {{0,0,1}, {0,1,0}, {1,0,0}, {1,1,1}, {2,2,2}};
+        for (const auto& coord : keyCoords) {
+            int idx = ((coord[0] % nx) * ny * nz) + ((coord[1] % ny) * nz) + (coord[2] % nz);
+            if (idx < static_cast<int>(pme_params.pmeGrid.size())) {
+                platform::log(LogLevel::DEBUG, "Grid point[" + std::to_string(coord[0]) + "," + std::to_string(coord[1]) + "," + std::to_string(coord[2]) 
+                        + "] (index=" + std::to_string(idx) + "): " + std::to_string(pme_params.pmeGrid[idx].real()) 
+                        + " + " + std::to_string(pme_params.pmeGrid[idx].imag()) + "i");
+            }
         }
     }
     
     // After the original processing, add detailed analysis of the first atom's charge distribution
     // Use correct member variable names
-    if (state.activeAtomCount > 0) {
-        platform::log(LogLevel::DEBUG, "\n===== [energyPME] Detailed analysis of first atom's charge distribution =====");
-        
-        // Assume the index of the first atom is 0
-        int atomIndex = 0;
-        
-        // Directly get charge and position from atoms
-        double atomCharge = state.atoms[atomIndex].charge;
-        float posX = state.atoms[atomIndex].x;
-        float posY = state.atoms[atomIndex].y;
-        float posZ = state.atoms[atomIndex].z;
-        
-        platform::log(LogLevel::DEBUG, "Atom index: " + std::to_string(atomIndex) + ", charge: " + std::to_string(atomCharge) 
-                  + ", position: [" + std::to_string(posX) + "," + std::to_string(posY) + "," + std::to_string(posZ) + "]");
-        
-        // Calculate the atom's position on the PME grid
-        // First calculate fractional coordinates - in [0,1) range
-        double fractionPosX = posX / box[0];
-        double fractionPosY = posY / box[1];
-        double fractionPosZ = posZ / box[2];
-        
-        // Ensure in [0,1) range
-        fractionPosX -= floor(fractionPosX);
-        fractionPosY -= floor(fractionPosY);
-        fractionPosZ -= floor(fractionPosZ);
-        
-        // Then calculate grid coordinates
-        double gridX = fractionPosX * nx;
-        double gridY = fractionPosY * ny;
-        double gridZ = fractionPosZ * nz;
-        
-        // Calculate grid indices and fractional parts
-        int gridIX = static_cast<int>(floor(gridX));
-        int gridIY = static_cast<int>(floor(gridY));
-        int gridIZ = static_cast<int>(floor(gridZ));
-        
-        double fractionX = gridX - gridIX;
-        double fractionY = gridY - gridIY; 
-        double fractionZ = gridZ - gridIZ;
-        
-        // Calculate the starting index for B-spline, considering the order
-        int startIX = gridIX - order/2;
-        if (startIX < 0) startIX += nx;
-        
-        int startIY = gridIY - order/2;
-        if (startIY < 0) startIY += ny;
-        
-        int startIZ = gridIZ - order/2;
-        if (startIZ < 0) startIZ += nz;
-        
-        platform::log(LogLevel::DEBUG, "Grid coordinates: [" + std::to_string(gridX) + "," + std::to_string(gridY) + "," + std::to_string(gridZ) + "]");
-        platform::log(LogLevel::DEBUG, "Grid integer indices: [" + std::to_string(gridIX) + "," + std::to_string(gridIY) + "," + std::to_string(gridIZ) + "]");
-        platform::log(LogLevel::DEBUG, "Grid fractional parts: [" + std::to_string(fractionX) + "," + std::to_string(fractionY) + "," + std::to_string(fractionZ) + "]");
-        
-        // Calculate and display B-spline coefficients
-        std::vector<double> bsCoeffsX(order), bsCoeffsY(order), bsCoeffsZ(order);
-        
-        // Use existing function to calculate B-spline coefficients
-        computeBSplineCoefficients(fractionX, order, bsCoeffsX);
-        computeBSplineCoefficients(fractionY, order, bsCoeffsY);
-        computeBSplineCoefficients(fractionZ, order, bsCoeffsZ);
-        
-        platform::log(LogLevel::DEBUG, "X direction B-spline coefficients: " + std::to_string(bsCoeffsX[0]) + " " + std::to_string(bsCoeffsX[1]) + " " + std::to_string(bsCoeffsX[2]) + " " + std::to_string(bsCoeffsX[3]));
-        platform::log(LogLevel::DEBUG, "Y direction B-spline coefficients: " + std::to_string(bsCoeffsY[0]) + " " + std::to_string(bsCoeffsY[1]) + " " + std::to_string(bsCoeffsY[2]) + " " + std::to_string(bsCoeffsY[3]));
-        platform::log(LogLevel::DEBUG, "Z direction B-spline coefficients: " + std::to_string(bsCoeffsZ[0]) + " " + std::to_string(bsCoeffsZ[1]) + " " + std::to_string(bsCoeffsZ[2]) + " " + std::to_string(bsCoeffsZ[3]));
-        
-        // Add charge distribution output consistent with pme.cpp
-        platform::log(LogLevel::DEBUG, "\nGrid points and their values where charge is distributed:");
-        
-        // Use different variable names to avoid conflicts
-        int gridIndexX = gridIX;
-        int gridIndexY = gridIY;
-        int gridIndexZ = gridIZ;
-        
-        // Output charge distribution around the atom
-        for (int ix = 0; ix < order; ix++) {
-            int xindex = (gridIndexX + ix) % nx;
+    if (platform::is_debug_mode()) {
+        if (state.activeAtomCount > 0) {
+            platform::log(LogLevel::DEBUG, "\n===== [energyPME] Detailed analysis of first atom's charge distribution =====");
             
-            for (int iy = 0; iy < order; iy++) {
-                int yindex = (gridIndexY + iy) % ny;
+            // Assume the index of the first atom is 0
+            int atomIndex = 0;
+            
+            // Directly get charge and position from atoms
+            double atomCharge = state.atoms[atomIndex].charge;
+            float posX = state.atoms[atomIndex].x;
+            float posY = state.atoms[atomIndex].y;
+            float posZ = state.atoms[atomIndex].z;
+            
+            platform::log(LogLevel::DEBUG, "Atom index: " + std::to_string(atomIndex) + ", charge: " + std::to_string(atomCharge) 
+                      + ", position: [" + std::to_string(posX) + "," + std::to_string(posY) + "," + std::to_string(posZ) + "]");
+            
+            // Calculate the atom's position on the PME grid
+            // First calculate fractional coordinates - in [0,1) range
+            double fractionPosX = posX / box[0];
+            double fractionPosY = posY / box[1];
+            double fractionPosZ = posZ / box[2];
+            
+            // Ensure in [0,1) range
+            fractionPosX -= floor(fractionPosX);
+            fractionPosY -= floor(fractionPosY);
+            fractionPosZ -= floor(fractionPosZ);
+            
+            // Then calculate grid coordinates
+            double gridX = fractionPosX * nx;
+            double gridY = fractionPosY * ny;
+            double gridZ = fractionPosZ * nz;
+            
+            // Calculate grid indices and fractional parts
+            int gridIX = static_cast<int>(floor(gridX));
+            int gridIY = static_cast<int>(floor(gridY));
+            int gridIZ = static_cast<int>(floor(gridZ));
+            
+            double fractionX = gridX - gridIX;
+            double fractionY = gridY - gridIY; 
+            double fractionZ = gridZ - gridIZ;
+            
+            // Calculate the starting index for B-spline, considering the order
+            int startIX = gridIX - order/2;
+            if (startIX < 0) startIX += nx;
+            
+            int startIY = gridIY - order/2;
+            if (startIY < 0) startIY += ny;
+            
+            int startIZ = gridIZ - order/2;
+            if (startIZ < 0) startIZ += nz;
+            
+            platform::log(LogLevel::DEBUG, "Grid coordinates: [" + std::to_string(gridX) + "," + std::to_string(gridY) + "," + std::to_string(gridZ) + "]");
+            platform::log(LogLevel::DEBUG, "Grid integer indices: [" + std::to_string(gridIX) + "," + std::to_string(gridIY) + "," + std::to_string(gridIZ) + "]");
+            platform::log(LogLevel::DEBUG, "Grid fractional parts: [" + std::to_string(fractionX) + "," + std::to_string(fractionY) + "," + std::to_string(fractionZ) + "]");
+            
+            // Calculate and display B-spline coefficients
+            std::vector<double> bsCoeffsX(order), bsCoeffsY(order), bsCoeffsZ(order);
+            
+            // Use existing function to calculate B-spline coefficients
+            computeBSplineCoefficients(fractionX, order, bsCoeffsX);
+            computeBSplineCoefficients(fractionY, order, bsCoeffsY);
+            computeBSplineCoefficients(fractionZ, order, bsCoeffsZ);
+            
+            platform::log(LogLevel::DEBUG, "X direction B-spline coefficients: " + std::to_string(bsCoeffsX[0]) + " " + std::to_string(bsCoeffsX[1]) + " " + std::to_string(bsCoeffsX[2]) + " " + std::to_string(bsCoeffsX[3]));
+            platform::log(LogLevel::DEBUG, "Y direction B-spline coefficients: " + std::to_string(bsCoeffsY[0]) + " " + std::to_string(bsCoeffsY[1]) + " " + std::to_string(bsCoeffsY[2]) + " " + std::to_string(bsCoeffsY[3]));
+            platform::log(LogLevel::DEBUG, "Z direction B-spline coefficients: " + std::to_string(bsCoeffsZ[0]) + " " + std::to_string(bsCoeffsZ[1]) + " " + std::to_string(bsCoeffsZ[2]) + " " + std::to_string(bsCoeffsZ[3]));
+            
+            // Add charge distribution output consistent with pme.cpp
+            platform::log(LogLevel::DEBUG, "\nGrid points and their values where charge is distributed:");
+            
+            // Use different variable names to avoid conflicts
+            int gridIndexX = gridIX;
+            int gridIndexY = gridIY;
+            int gridIndexZ = gridIZ;
+            
+            // Output charge distribution around the atom
+            for (int ix = 0; ix < order; ix++) {
+                int xindex = (gridIndexX + ix) % nx;
                 
-                for (int iz = 0; iz < order; iz++) {
-                    int zindex = (gridIndexZ + iz) % nz;
-                    int index = xindex * ny * nz + yindex * nz + zindex;
+                for (int iy = 0; iy < order; iy++) {
+                    int yindex = (gridIndexY + iy) % ny;
                     
-                    if (index >= 0 && static_cast<size_t>(index) < pme_params.pmeGrid.size()) {
-                        double weight = bsCoeffsX[ix] * bsCoeffsY[iy] * bsCoeffsZ[iz];
-                        double chargeContribution = atomCharge * weight;
+                    for (int iz = 0; iz < order; iz++) {
+                        int zindex = (gridIndexZ + iz) % nz;
+                        int index = xindex * ny * nz + yindex * nz + zindex;
                         
-                        platform::log(LogLevel::DEBUG, "Grid point[" + std::to_string(xindex) + "," + std::to_string(yindex) + "," + std::to_string(zindex)
-                                  + "], index: " + std::to_string(index) 
-                                  + ", received charge: " + std::to_string(chargeContribution)
-                                  + ", charge coefficient: " + std::to_string(weight));
+                        if (index >= 0 && static_cast<size_t>(index) < pme_params.pmeGrid.size()) {
+                            double weight = bsCoeffsX[ix] * bsCoeffsY[iy] * bsCoeffsZ[iz];
+                            double chargeContribution = atomCharge * weight;
+                            
+                            platform::log(LogLevel::DEBUG, "Grid point[" + std::to_string(xindex) + "," + std::to_string(yindex) + "," + std::to_string(zindex)
+                                      + "], index: " + std::to_string(index) 
+                                      + ", received charge: " + std::to_string(chargeContribution)
+                                      + ", charge coefficient: " + std::to_string(weight));
+                        }
                     }
                 }
             }
