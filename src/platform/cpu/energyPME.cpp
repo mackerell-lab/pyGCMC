@@ -417,37 +417,72 @@ void PMEParams::initializeBsplines() {
     // 注意：不再在这里应用boxfactor，将按照pme.cpp的做法在能量计算时应用
     platform::log(LogLevel::INFO, "Initializing B-splines with box volume = ", boxVolume);
     
-    // 初始化 bsplineModuli 数组 - 精确对齐pme.cpp
+    // 找到最大网格尺寸
+    int nmax = 0;
     for (int dim = 0; dim < 3; dim++) {
-        int size = meshSize[dim];
-        bsplineModuli[dim].resize(size);
+        nmax = (meshSize[dim] > nmax) ? meshSize[dim] : nmax;
+        bsplineModuli[dim].resize(meshSize[dim]);
+    }
+    
+    // 创建临时数组，与pme.cpp完全一致
+    std::vector<double> data(splineOrder, 0.0);
+    std::vector<double> ddata(splineOrder, 0.0);
+    std::vector<double> bsplines_data(nmax, 0.0);
+    
+    // 初始化data数组 - 与pme.cpp一致
+    data[0] = 1.0;
+    
+    // 计算B样条系数 - 与pme.cpp一致
+    for (int k = 3; k <= splineOrder; k++) {
+        double div = 1.0/(k-1.0);
+        data[k-1] = 0.0;
+        for (int l = 1; l < (k-1); l++) {
+            data[k-l-1] = div*(l*data[k-l-2] + (k-l)*data[k-l-1]);
+        }
+        data[0] = div*data[0];
+    }
+    
+    // 计算微分 - 与pme.cpp一致
+    ddata[0] = -data[0];
+    for (int k = 1; k < splineOrder; k++) {
+        ddata[k] = data[k-1] - data[k];
+    }
+    
+    // 计算最终系数 - 与pme.cpp一致
+    double div = 1.0/(splineOrder-1);
+    data[splineOrder-1] = 0.0;
+    for (int l = 1; l < (splineOrder-1); l++) {
+        data[splineOrder-l-1] = div*(l*data[splineOrder-l-2] + (splineOrder-l)*data[splineOrder-l-1]);
+    }
+    data[0] = div*data[0];
+    
+    // 初始化bsplines_data - 与pme.cpp一致
+    for (int i = 0; i < nmax; i++) {
+        bsplines_data[i] = 0.0;
+    }
+    for (int i = 1; i <= splineOrder; i++) {
+        bsplines_data[i] = data[i-1];
+    }
+    
+    // 计算每个维度的B样条调制因子 - 完全与pme.cpp一致
+    for (int dim = 0; dim < 3; dim++) {
+        int ndata = meshSize[dim];
+        for (int i = 0; i < ndata; i++) {
+            double sc = 0.0, ss = 0.0;
+            for (int j = 0; j < ndata; j++) {
+                double arg = (2.0*M_PI*i*j)/ndata;
+                sc += bsplines_data[j]*cos(arg);
+                ss += bsplines_data[j]*sin(arg);
+            }
+            bsplineModuli[dim][i] = sc*sc + ss*ss;
+        }
         
-        // 对于每个网格点，计算B样条模数
-        for (int i = 0; i < size; i++) {
-            // 计算m值 - 与pme.cpp一致
-            int m = (i < size/2) ? i : (size - i);
-            
-            // 零频率点特殊处理 - 与pme.cpp一致
-            if (m == 0) {
-                bsplineModuli[dim][i] = 1.0;
-                continue;
+        // 提高数值稳定性 - 与pme.cpp一致
+        for (int i = 0; i < ndata; i++) {
+            if (bsplineModuli[dim][i] < 1.0e-7) {
+                bsplineModuli[dim][i] = (bsplineModuli[dim][(i-1+ndata)%ndata] + 
+                                      bsplineModuli[dim][(i+1)%ndata])/2.0;
             }
-            
-            // 计算B样条模数 (sin(πm/N)/(πm/N))^p - 与pme.cpp完全一致
-            double arg = M_PI * m / size;
-            // 对于非常小的角度，使用泰勒展开近似
-            double sinc = (arg < 1e-7) ? 1.0 - arg*arg/6.0 : sin(arg) / arg;
-            
-            // 计算sinc函数的p次方 - 与pme.cpp一致
-            bsplineModuli[dim][i] = pow(sinc, splineOrder);
-            
-            // 检查是否需要近似0值 - 保持数值稳定性
-            if (bsplineModuli[dim][i] < 1e-10) {
-                bsplineModuli[dim][i] = 1e-10;  // 避免除零
-            }
-            
-            // 计算B样条模值的倒数平方 - 与pme.cpp一致
-            bsplineModuli[dim][i] = 1.0 / (bsplineModuli[dim][i] * bsplineModuli[dim][i]);
         }
     }
     
@@ -1345,10 +1380,11 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
     
     // 计算盒子体积并输出关键参数 - 与pme.cpp一致
     double volume = box[0] * box[1] * box[2];
-    // 修复：使用与pme.cpp一致的常量
-    double one_4pi_eps = COULOMB/pme_params.epsilon_r;
+    // 精确使用与pme.cpp一致的常量
+    double one_4pi_eps = 138.935456/pme_params.epsilon_r; // 确保使用与pme.cpp相同的库仑常数
     double factor = M_PI*M_PI/(pme_params.alpha*pme_params.alpha);
-    const double boxfactor = M_PI * volume;  // 用于调试输出和B样条调制因子
+    // 计算boxfactor: 在pme.cpp中，这是体积的pi倍
+    double boxfactor = M_PI * volume;
     
     std::cout << "Computing energy from grid with box = [" << box[0] << "," << box[1] << "," 
               << box[2] << "], alpha = " << pme_params.alpha << ", volume = " << volume << std::endl;
@@ -1419,6 +1455,9 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
     }
     std::cout << "Grid before energy calculation: non-zero points = " << nonZeroGridBefore << std::endl;
     
+    // 单独输出[5,5,5]网格点的调试信息
+    std::cout << "\n===== [energyPME.cpp] 特别关注网格点[5,5,5] =====\n";
+    
     // 初始化能量和点计数
     energy = 0.0;
     int pointsProcessed = 0;
@@ -1457,12 +1496,14 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
         // 计算频率
         double mx = (kx < maxkx) ? kx : (kx-nx);
         double mhx = mx * recipBoxVectors[0][0];
-        // 按照pme.cpp的方式，将boxfactor应用于第一维的B样条
+        // 按照pme.cpp的方式进行计算 - 只对第一维的B样条调制因子应用boxfactor
         double bx = boxfactor * pme_params.bsplineModuli[0][kx];
         
         for (int ky = 0; ky < ny; ky++) {
             double my = (ky < maxky) ? ky : (ky-ny);
-            double mhy = my * recipBoxVectors[1][1]; // 简化对角盒子，与pme.cpp一致
+            // 修正：与pme.cpp完全一致，考虑非对角项
+            double mhy = mx*recipBoxVectors[1][0] + my*recipBoxVectors[1][1];
+            // 注意：与pme.cpp一致，by不使用boxfactor
             double by = pme_params.bsplineModuli[1][ky];
             
             for (int kz = 0; kz < nz; kz++) {
@@ -1472,7 +1513,8 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                 }
                 
                 double mz = (kz < maxkz) ? kz : (kz-nz);
-                double mhz = mz * recipBoxVectors[2][2]; // 简化对角盒子，与pme.cpp一致
+                // 修正：与pme.cpp完全一致，考虑非对角项
+                double mhz = mx*recipBoxVectors[2][0] + my*recipBoxVectors[2][1] + mz*recipBoxVectors[2][2];
                 
                 // 获取网格数据
                 int index = kx * ny * nz + ky * nz + kz;
@@ -1482,7 +1524,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                 // 计算卷积
                 double m2 = mhx * mhx + mhy * mhy + mhz * mhz;
                 double bz = pme_params.bsplineModuli[2][kz];
-                // 修正：按照pme.cpp的方式组合这些因子
+                // 修正：与pme.cpp一致的denom计算，不包含额外的boxfactor
                 double denom = m2 * bx * by * bz;
                 
                 // 提高数值稳定性
@@ -1490,7 +1532,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                     denom = 1e-10;
                 }
                 
-                // 修正：pme.cpp的能量计算公式
+                // 修正：确保能量计算公式完全与pme.cpp一致
                 double eterm = one_4pi_eps * exp(-factor * m2) / denom;
                 double struct2 = d1*d1 + d2*d2;
                 double energyContrib = eterm * struct2;
@@ -1518,13 +1560,55 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                 pointData.isSignificant = (energyContrib > 1e-4);
                 
                 // 是否为监控点
-                if (monitorIndices.find(std::make_tuple(kx, ky, kz)) != monitorIndices.end()) {
+                bool isMonitorPoint = (monitorIndices.find(std::make_tuple(kx, ky, kz)) != monitorIndices.end());
+                if (isMonitorPoint) {
                     monitoredPoints.push_back(pointData);
                 }
                 
                 // 收集有显著能量贡献的点
                 if (pointData.isSignificant) {
                     significantEnergyPoints.push_back(pointData);
+                }
+                
+                // [5,5,5]点的特别输出 - 与pme.cpp格式保持一致
+                if (kx == 5 && ky == 5 && kz == 5) {
+                    std::cout << "网格点[" << kx << "," << ky << "," << kz << "] 处理前:" << std::endl;
+                    std::cout << "  网格索引 = " << index << std::endl;
+                    std::cout << "  mx,my,mz = [" << mx << "," << my << "," << mz << "]" << std::endl;
+                    std::cout << "  mhx,mhy,mhz = [" << mhx << "," << mhy << "," << mhz << "]" << std::endl;
+                    std::cout << "  m2 = " << m2 << std::endl;
+                    std::cout << "  bx,by,bz = [" << bx << "," << by << "," << bz << "]" << std::endl;
+                    std::cout << "  boxfactor = " << boxfactor << std::endl;
+                    std::cout << "  B样条调制因子 = [" << pme_params.bsplineModuli[0][kx] << ","
+                            << pme_params.bsplineModuli[1][ky] << "," << pme_params.bsplineModuli[2][kz] << "]" << std::endl;
+                    std::cout << "  denom = " << denom << std::endl;
+                    std::cout << "  eterm = " << eterm << std::endl;
+                    std::cout << "  one_4pi_eps = " << one_4pi_eps << std::endl; 
+                    std::cout << "  exp(-factor*m2) = " << exp(-factor*m2) << std::endl;
+                    std::cout << "  原始网格值 = " << d1 << " + " << d2 << "i" << std::endl;
+                }
+                
+                // 更新网格值
+                std::complex<double> updatedValue(d1 * eterm, d2 * eterm);
+                pme_params.pmeGrid[index] = updatedValue;
+                pointData.updatedValue = updatedValue;
+
+                // 累计能量
+                energy += energyContrib;
+                pointsProcessed++;
+                
+                if (energyContrib > 1e-8) {
+                    significantPoints++;
+                }
+                
+                // 更新完点后的输出 - 仅对[5,5,5]点
+                if (kx == 5 && ky == 5 && kz == 5) {
+                    std::cout << "  更新后网格值 = " << updatedValue.real() << " + " << updatedValue.imag() << "i" << std::endl;
+                    std::cout << "  struct2 = " << struct2 << std::endl; 
+                    std::cout << "  能量贡献 = " << energyContrib << std::endl;
+                    std::cout << "  累计能量 = " << energy << std::endl;
+                    std::cout << "  能量显著？ " << (energyContrib > 1e-8 ? "是" : "否") << std::endl;
+                    std::cout << std::endl;
                 }
                 
                 // 特殊调试输出 - 类似于pme.cpp中的监控点
@@ -1539,20 +1623,6 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                     std::cout << "  m2 = " << m2 << ", eterm = " << eterm << std::endl;
                     std::cout << "  grid = [" << d1 << "," << d2 << "]" << std::endl;
                     std::cout << "  energy contrib = " << energyContrib << std::endl;
-                }
-                
-                // 与pme.cpp一致：更新网格值
-                pme_params.pmeGrid[index] = std::complex<double>(d1 * eterm, d2 * eterm);
-                // 保存更新后的值
-                pointData.updatedValue = pme_params.pmeGrid[index];
-                
-                // 累积能量
-                energy += energyContrib;
-                
-                // 计数处理的点
-                pointsProcessed++;
-                if (energyContrib > 1e-10) {
-                    significantPoints++;
                 }
             }
         }
