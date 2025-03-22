@@ -395,7 +395,7 @@ void PMEParams::setBox(const double newBox[3]) {
  * @brief Initialize B-splines for PME - 完全按照pme.cpp中的pme_calculate_bsplines_moduli实现
  */
 void PMEParams::initializeBsplines() {
-    // 初始化B-spline模数 - 完全基于pme.cpp中的pme_calculate_bsplines_moduli实现
+    // 精确复制pme.cpp中的pme_calculate_bsplines_moduli实现
     platform::log(LogLevel::INFO, "Initializing B-splines with order = ", splineOrder, 
                  " and mesh size = [", meshSize[0], ",", meshSize[1], ",", meshSize[2], "]");
     
@@ -414,7 +414,6 @@ void PMEParams::initializeBsplines() {
         boxVolume = 1.0;
     }
     
-    // 注意：不再在这里应用boxfactor，将按照pme.cpp的做法在能量计算时应用
     platform::log(LogLevel::INFO, "Initializing B-splines with box volume = ", boxVolume);
     
     // 找到最大网格尺寸
@@ -424,16 +423,18 @@ void PMEParams::initializeBsplines() {
         bsplineModuli[dim].resize(meshSize[dim]);
     }
     
-    // 创建临时数组，与pme.cpp完全一致
+    // 精确复制pme.cpp的初始化逻辑
     std::vector<double> data(splineOrder, 0.0);
     std::vector<double> ddata(splineOrder, 0.0);
     std::vector<double> bsplines_data(nmax, 0.0);
     
-    // 初始化data数组 - 与pme.cpp一致
-    data[0] = 1.0;
+    // 完全按照pme.cpp的初始化顺序
+    data[splineOrder-1] = 0.0; // 明确设置尾部为0
+    data[1] = 0.0; // 明确设置data[1]为0，与pme.cpp一致
+    data[0] = 1.0; // 初始条件
     
-    // 计算B样条系数 - 与pme.cpp一致
-    for (int k = 3; k <= splineOrder; k++) {
+    // 计算B样条系数 - 精确复制pme.cpp
+    for (int k = 3; k < splineOrder; k++) {
         double div = 1.0/(k-1.0);
         data[k-1] = 0.0;
         for (int l = 1; l < (k-1); l++) {
@@ -442,21 +443,21 @@ void PMEParams::initializeBsplines() {
         data[0] = div*data[0];
     }
     
-    // 计算微分 - 与pme.cpp一致
+    // 计算微分 - 精确复制pme.cpp
     ddata[0] = -data[0];
     for (int k = 1; k < splineOrder; k++) {
         ddata[k] = data[k-1] - data[k];
     }
     
-    // 计算最终系数 - 与pme.cpp一致
-    double div = 1.0/(splineOrder-1);
+    // 计算最终系数 - 精确复制pme.cpp
+    double div = 1.0/(splineOrder-1.0); // 确保是浮点除法
     data[splineOrder-1] = 0.0;
     for (int l = 1; l < (splineOrder-1); l++) {
         data[splineOrder-l-1] = div*(l*data[splineOrder-l-2] + (splineOrder-l)*data[splineOrder-l-1]);
     }
     data[0] = div*data[0];
     
-    // 初始化bsplines_data - 与pme.cpp一致
+    // 初始化bsplines_data - 精确复制pme.cpp
     for (int i = 0; i < nmax; i++) {
         bsplines_data[i] = 0.0;
     }
@@ -464,7 +465,7 @@ void PMEParams::initializeBsplines() {
         bsplines_data[i] = data[i-1];
     }
     
-    // 计算每个维度的B样条调制因子 - 完全与pme.cpp一致
+    // 计算每个维度的B样条调制因子 - 精确复制pme.cpp
     for (int dim = 0; dim < 3; dim++) {
         int ndata = meshSize[dim];
         for (int i = 0; i < ndata; i++) {
@@ -477,7 +478,7 @@ void PMEParams::initializeBsplines() {
             bsplineModuli[dim][i] = sc*sc + ss*ss;
         }
         
-        // 提高数值稳定性 - 与pme.cpp一致
+        // 提高数值稳定性 - 精确复制pme.cpp
         for (int i = 0; i < ndata; i++) {
             if (bsplineModuli[dim][i] < 1.0e-7) {
                 bsplineModuli[dim][i] = (bsplineModuli[dim][(i-1+ndata)%ndata] + 
@@ -499,6 +500,14 @@ void PMEParams::initializeBsplines() {
         }
         std::cout << "Dimension " << dim << " B-spline moduli range: [" 
                  << minModuli[dim] << ", " << maxModuli[dim] << "]" << std::endl;
+    }
+    
+    // 关键调试输出：显示[5,5,5]点的B样条调制因子值
+    if (meshSize[0] > 5 && meshSize[1] > 5 && meshSize[2] > 5) {
+        std::cout << "B-spline moduli at [5,5,5]: ["
+                 << bsplineModuli[0][5] << ", "
+                 << bsplineModuli[1][5] << ", " 
+                 << bsplineModuli[2][5] << "]" << std::endl;
     }
     
     // 分配PME网格
@@ -1378,12 +1387,12 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
     // 记录开始处理
     platform::log(LogLevel::DEBUG, "Computing energy from PME grid");
     
-    // 计算盒子体积并输出关键参数 - 与pme.cpp一致
+    // 精确使用与pme.cpp一致的计算方法
     double volume = box[0] * box[1] * box[2];
-    // 精确使用与pme.cpp一致的常量
+    // 使用与pme.cpp完全相同的常数
     double one_4pi_eps = 138.935456/pme_params.epsilon_r; // 确保使用与pme.cpp相同的库仑常数
     double factor = M_PI*M_PI/(pme_params.alpha*pme_params.alpha);
-    // 计算boxfactor: 在pme.cpp中，这是体积的pi倍
+    // 计算boxfactor: 完全按照pme.cpp的方式
     double boxfactor = M_PI * volume;
     
     std::cout << "Computing energy from grid with box = [" << box[0] << "," << box[1] << "," 
@@ -1401,7 +1410,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
     // 计算倒易晶格矢量
     double recipBoxVectors[3][3] = {{0}};
     
-    // 正确处理盒子向量
+    // 正确处理盒子向量 - 与pme.cpp保持完全一致
     double periodicBoxVectors[3][3] = {
         {box[0], 0.0, 0.0},
         {0.0, box[1], 0.0},
@@ -1411,9 +1420,8 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
     // 对角盒子检查
     bool isDiagonalBox = true;  // 强制为对角盒子
     
-    // 重要修复 - 使用与pme.cpp完全一致的倒格矢计算
+    // 与pme.cpp完全一致的倒格矢计算
     if (isDiagonalBox) {
-        // 简化的对角盒子计算 - 确保与pme.cpp一致（修改计算方式）
         recipBoxVectors[0][0] = 1.0 / box[0]; 
         recipBoxVectors[1][1] = 1.0 / box[1]; 
         recipBoxVectors[2][2] = 1.0 / box[2]; 
@@ -1423,7 +1431,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                      periodicBoxVectors[0][1] * (periodicBoxVectors[1][0] * periodicBoxVectors[2][2] - periodicBoxVectors[1][2] * periodicBoxVectors[2][0]) +
                      periodicBoxVectors[0][2] * (periodicBoxVectors[1][0] * periodicBoxVectors[2][1] - periodicBoxVectors[1][1] * periodicBoxVectors[2][0]);
         
-        // 计算叉积和倒易晶格向量（简化表达式）
+        // 计算叉积和倒易晶格向量
         recipBoxVectors[0][0] = (periodicBoxVectors[1][1] * periodicBoxVectors[2][2] - periodicBoxVectors[1][2] * periodicBoxVectors[2][1]) / det;
         recipBoxVectors[0][1] = (periodicBoxVectors[0][2] * periodicBoxVectors[2][1] - periodicBoxVectors[0][1] * periodicBoxVectors[2][2]) / det;
         recipBoxVectors[0][2] = (periodicBoxVectors[0][1] * periodicBoxVectors[1][2] - periodicBoxVectors[0][2] * periodicBoxVectors[1][1]) / det;
@@ -1437,7 +1445,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
         recipBoxVectors[2][2] = (periodicBoxVectors[0][0] * periodicBoxVectors[1][1] - periodicBoxVectors[0][1] * periodicBoxVectors[1][0]) / det;
     }
     
-    // 输出倒格矢 - 与pme.cpp完全一致
+    // 输出倒格矢
     std::cout << "Reciprocal lattice vectors:" << std::endl;
     std::cout << "  b1 = [" << recipBoxVectors[0][0] << ", " 
               << recipBoxVectors[0][1] << ", " << recipBoxVectors[0][2] << "]" << std::endl;
@@ -1491,19 +1499,22 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
         {0,0,1}, {0,1,0}, {1,0,0}, {1,1,1}, {2,2,2}, {5,5,5}, {10,10,10}
     };
     
-    // 以下是完全按照pme.cpp的方式计算能量
+    // 完全按照pme.cpp的方式计算能量
     for (int kx = 0; kx < nx; kx++) {
         // 计算频率
         double mx = (kx < maxkx) ? kx : (kx-nx);
         double mhx = mx * recipBoxVectors[0][0];
-        // 按照pme.cpp的方式进行计算 - 只对第一维的B样条调制因子应用boxfactor
+        
+        // 关键修改: 确保与pme.cpp完全一致的计算方式
+        // 精确复制pme.cpp的B样条调制因子应用方式
         double bx = boxfactor * pme_params.bsplineModuli[0][kx];
         
         for (int ky = 0; ky < ny; ky++) {
             double my = (ky < maxky) ? ky : (ky-ny);
-            // 修正：与pme.cpp完全一致，考虑非对角项
+            // 与pme.cpp一致，考虑非对角项
             double mhy = mx*recipBoxVectors[1][0] + my*recipBoxVectors[1][1];
-            // 注意：与pme.cpp一致，by不使用boxfactor
+            
+            // 注意: 不在by上应用boxfactor，与pme.cpp保持一致
             double by = pme_params.bsplineModuli[1][ky];
             
             for (int kz = 0; kz < nz; kz++) {
@@ -1513,7 +1524,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                 }
                 
                 double mz = (kz < maxkz) ? kz : (kz-nz);
-                // 修正：与pme.cpp完全一致，考虑非对角项
+                // 与pme.cpp一致，考虑非对角项
                 double mhz = mx*recipBoxVectors[2][0] + my*recipBoxVectors[2][1] + mz*recipBoxVectors[2][2];
                 
                 // 获取网格数据
@@ -1523,8 +1534,11 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                 
                 // 计算卷积
                 double m2 = mhx * mhx + mhy * mhy + mhz * mhz;
+                
+                // 不在bz上应用boxfactor，与pme.cpp保持一致
                 double bz = pme_params.bsplineModuli[2][kz];
-                // 修正：与pme.cpp一致的denom计算，不包含额外的boxfactor
+                
+                // 与pme.cpp完全一致的denom计算
                 double denom = m2 * bx * by * bz;
                 
                 // 提高数值稳定性
@@ -1532,7 +1546,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                     denom = 1e-10;
                 }
                 
-                // 修正：确保能量计算公式完全与pme.cpp一致
+                // 确保能量计算公式完全与pme.cpp一致
                 double eterm = one_4pi_eps * exp(-factor * m2) / denom;
                 double struct2 = d1*d1 + d2*d2;
                 double energyContrib = eterm * struct2;
@@ -1588,7 +1602,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                     std::cout << "  原始网格值 = " << d1 << " + " << d2 << "i" << std::endl;
                 }
                 
-                // 更新网格值
+                // 更新网格值 - 精确复制pme.cpp方式
                 std::complex<double> updatedValue(d1 * eterm, d2 * eterm);
                 pme_params.pmeGrid[index] = updatedValue;
                 pointData.updatedValue = updatedValue;
