@@ -274,7 +274,21 @@ void init_simulation_bindings(py::module& m) {
         py::arg("pair_cutoff"),
         py::arg("pairGridSize"),
         py::arg("splineOrder") = 4,
-        py::arg("tolerance") = 1e-5f);
+        py::arg("tolerance") = 1e-5f,
+        R"docstring(
+        设置PGP-PME (Precomputed Grid-Potential Particle Mesh Ewald)算法参数
+
+        PGP-PME是一种针对蒙特卡洛模拟优化的长程静电相互作用计算方法。它通过预计算
+        系统中固定部分的静电势网格，大大加速了能量评估过程。
+
+        参数:
+            alpha (float): Ewald分离参数，控制实空间和倒空间计算的平衡
+            meshSize (list[int]): PME网格尺寸 [nx, ny, nz]
+            pair_cutoff (float): 配对相互作用截断距离
+            pairGridSize (list[int]): 预计算电势网格尺寸 [nx, ny, nz]
+            splineOrder (int, optional): B样条插值阶数，默认为4
+            tolerance (float, optional): 精度容限，默认为1e-5
+        )docstring");
         
     // 新增的PGP核心函数绑定
     m.def("precomputeGridPotential",
@@ -283,7 +297,17 @@ void init_simulation_bindings(py::module& m) {
         },
         "Precompute the electrostatic grid potential for fixed parts of the system",
         py::arg("state"),
-        py::arg("fixed_only") = true);
+        py::arg("fixed_only") = true,
+        R"docstring(
+        预计算系统中固定部分的电势网格 (Precomputed Grid-Potential Particle Mesh Ewald)
+
+        这是PGP-PME算法的核心函数之一，负责计算并存储系统中固定部分的静电势场。
+        该预计算步骤只需在系统固定部分发生变化时执行一次，显著提高蒙特卡洛模拟效率。
+
+        参数:
+            state (MCState): 系统状态，包含原子坐标、电荷和盒子信息
+            fixed_only (bool, optional): 是否只计算固定部分，默认为True
+        )docstring");
         
     m.def("interpolateMoleculeEnergy",
         [](model::MCState& state) {
@@ -292,7 +316,19 @@ void init_simulation_bindings(py::module& m) {
             return energy;
         },
         "Calculate molecule energy by interpolating from the precomputed grid potential",
-        py::arg("state"));
+        py::arg("state"),
+        R"docstring(
+        通过插值计算移动分子的能量 (Precomputed Grid-Potential Particle Mesh Ewald)
+
+        这是PGP-PME算法的另一个核心函数，通过B样条插值从预计算的电势网格中
+        快速评估移动分子的能量，避免了直接计算分子间相互作用。
+
+        参数:
+            state (MCState): 系统状态，包含移动分子信息
+        
+        返回:
+            float: 计算得到的能量值
+        )docstring");
 }
 
 } // namespace bindings

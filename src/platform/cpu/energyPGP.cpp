@@ -6,10 +6,10 @@
 
 /**
  * @file energyPGP.cpp
- * @brief Implementation of Precomputed Grid-Potential PME for Monte Carlo (PGP-PME-MC)
+ * @brief Implementation of Precomputed Grid-Potential Particle Mesh Ewald for Monte Carlo (PGP-PME-MC)
  * 
- * PGP-PME是一种为蒙特卡洛模拟优化的粒子网格Ewald方法。它通过预计算系统中固定部分的
- * 静电势网格，大大加速了在MC模拟中计算小分子能量变化的过程。
+ * PGP-PME (Precomputed Grid-Potential Particle Mesh Ewald)是一种为蒙特卡洛模拟优化的粒子网格Ewald方法。
+ * 它通过预计算系统中固定部分的静电势网格，大大加速了在MC模拟中计算小分子能量变化的过程。
  * 
  * 算法关键特点：
  * 1. 预计算(Precomputed): 系统中固定部分的静电势被预先计算并存储在网格中

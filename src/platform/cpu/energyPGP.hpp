@@ -12,9 +12,9 @@ namespace platform {
 namespace cpu {
 
 /**
- * @brief PGP-PME算法参数结构体
+ * @brief PGP-PME算法参数结构体 (Precomputed Grid-Potential Particle Mesh Ewald)
  * 
- * 该结构体包含了Precomputed Grid-Potential PME算法所需的所有参数和数据结构。
+ * 该结构体包含了Precomputed Grid-Potential Particle Mesh Ewald算法所需的所有参数和数据结构。
  * PGP-PME是一种优化的PME方法，通过预计算电势网格加速蒙特卡洛模拟中的能量评估。
  * 
  * 主要包含以下几类参数：
@@ -74,7 +74,7 @@ struct PGPParams {
 extern PGPParams pgp_params;
 
 /**
- * @brief 设置PGP-PME算法的所有参数
+ * @brief 设置PGP-PME (Precomputed Grid-Potential Particle Mesh Ewald)算法的所有参数
  * 
  * 该函数是PGP-PME算法配置的入口点，设置所有运行PGP-PME所需的参数。
  * 它首先配置标准PME参数，然后添加PGP特有的网格和截断参数，最后初始化预计算网格。
@@ -104,8 +104,9 @@ void setPGPParameters(double alpha, const int meshSize[3], double pair_cutoff,
 /**
  * @brief 预计算系统中固定部分的网格电势
  * 
- * 这是PGP-PME算法的核心函数之一，负责预计算系统中固定部分的静电势场。
- * 它将固定部分的电荷分布到网格上，通过FFT变换计算电势，并存储结果供后续能量计算使用。
+ * 这是Precomputed Grid-Potential Particle Mesh Ewald算法的核心函数之一，
+ * 负责预计算系统中固定部分的静电势场。它将固定部分的电荷分布到网格上，
+ * 通过FFT变换计算电势，并存储结果供后续能量计算使用。
  * 预计算步骤只需在系统固定部分发生变化时执行一次，大大提高了蒙特卡洛模拟的效率。
  * 
  * 算法原理：
@@ -133,9 +134,10 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only = true);
 /**
  * @brief 通过插值计算移动分子的能量
  * 
- * 该函数是PGP-PME算法的另一个核心函数，用于在预计算的电势场中快速评估移动分子的能量。
- * 利用预计算的电势网格，通过B样条插值方法高效计算移动分子在该电势场中的能量，
- * 避免了直接计算分子间相互作用，大大加速了蒙特卡洛模拟中的能量评估。
+ * 该函数是Precomputed Grid-Potential Particle Mesh Ewald算法的另一个核心函数，
+ * 用于在预计算的电势场中快速评估移动分子的能量。利用预计算的电势网格，
+ * 通过B样条插值方法高效计算移动分子在该电势场中的能量，避免了直接计算分子间相互作用，
+ * 大大加速了蒙特卡洛模拟中的能量评估。
  * 
  * 算法原理：
  * 1. 遍历所有标记为移动的残基和原子

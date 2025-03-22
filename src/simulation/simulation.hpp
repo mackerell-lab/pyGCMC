@@ -171,6 +171,22 @@ public:
                                          const int* pairGridSize = nullptr,
                                          int splineOrder = 4, float tolerance = 1e-5f);
 
+    /**
+     * 设置PGP-PME (Precomputed Grid-Potential Particle Mesh Ewald)算法参数
+     * 
+     * 配置用于加速蒙特卡洛模拟中电荷相互作用计算的PGP-PME算法参数。
+     * 该方法优化了传统PME方法，特别适用于MC模拟中移动部分与固定部分间的相互作用计算。
+     * 
+     * @param alpha Ewald分离参数
+     * @param meshSize PME网格大小
+     * @param pair_cutoff 配对相互作用截断距离
+     * @param pairGridSize 预计算电势网格大小
+     * @param splineOrder B样条插值阶数
+     * @param tolerance 误差容限
+     */
+    void setPGPParameters(double alpha, const std::array<int, 3>& meshSize, double pair_cutoff,
+                          const std::array<int, 3>& pairGridSize, int splineOrder, double tolerance);
+
 private:
     std::unique_ptr<platform::IPlatform> platform_;
 };
