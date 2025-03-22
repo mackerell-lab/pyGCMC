@@ -806,8 +806,29 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
     // Log the start of processing
     platform::log(LogLevel::DEBUG, "Spreading charges onto PME grid");
     
-    // Add console output to match pme.cpp
-    platform::log(LogLevel::DEBUG, "Spreading charges onto PME grid");
+    // 只在debug_mode启用时执行以下代码
+    if (platform::is_debug_mode()) {
+        platform::log(LogLevel::DEBUG, "Spreading charges onto PME grid");
+        
+        // Calculate total system charge
+        double totalCharge = 0.0;
+        for (int i = 0; i < state.activeAtomCount; i++) {
+            totalCharge += state.atoms[i].charge;
+        }
+        platform::log(LogLevel::DEBUG, "Total system charge: " + std::to_string(totalCharge));
+        
+        // Output initial grid values
+        platform::log(LogLevel::DEBUG, "Initial values of the first 10 grid points:");
+        for (int i = 0; i < 10 && i < static_cast<int>(pme_params.pmeGrid.size()); i++) {
+            platform::log(LogLevel::DEBUG, "  Grid point[" + std::to_string(i) + "] = " + std::to_string(pme_params.pmeGrid[i].real()));
+        }
+        
+        // Output charge values
+        platform::log(LogLevel::DEBUG, "Charge values of the first 10 atoms:");
+        for (int i = 0; i < 10 && i < state.activeAtomCount; i++) {
+            platform::log(LogLevel::DEBUG, "  Atom[" + std::to_string(i) + "] charge = " + std::to_string(state.atoms[i].charge));
+        }
+    }
     
     // Directly access member variables instead of using getter methods
     const auto& atoms = state.atoms;
@@ -1243,7 +1264,7 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
     }
     
     // Output grid index and B-spline coefficients for some atoms
-    if (platform::verbose_ && platform::log_level_ <= LogLevel::DEBUG) {
+    if (platform::verbose_ && platform::log_level_ <= LogLevel::DEBUG && platform::is_debug_mode()) {
         // Output info for a few atoms at DEBUG log level
         for (int i = 0; i < std::min(3, state.activeAtomCount); i++) {
             platform::log(LogLevel::DEBUG, "Atom ", i, " grid index: [", 
@@ -1258,106 +1279,97 @@ void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement
  * Uses custom FFT implementation
  */
 void performFFTForward() {
-    platform::log(LogLevel::INFO, "Performing forward FFT on PME grid");
-    
     // Console output - same as pme.cpp
     platform::log(LogLevel::DEBUG, "Performing forward FFT on PME grid");
+    
+    // Only execute test code in debug mode
+    if (platform::is_debug_mode()) {
+        // Calculate non-zero points before FFT
+        int nonZeroBeforeFFT = 0;
+        for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
+            if (std::abs(pme_params.pmeGrid[i]) > 1e-10) nonZeroBeforeFFT++;
+        }
+        platform::log(LogLevel::DEBUG, "Grid before FFT: non-zero points = " + std::to_string(nonZeroBeforeFFT));
+    }
     
     // Get grid dimensions
     int nx = pme_params.meshSize[0];
     int ny = pme_params.meshSize[1];
     int nz = pme_params.meshSize[2];
     
-    // Verify grid size is a power of 2 for FFT
-    if ((nx & (nx - 1)) != 0 || (ny & (ny - 1)) != 0 || (nz & (nz - 1)) != 0) {
-        throw std::runtime_error("PME grid size must be a power of 2 for FFT");
-    }
-    
-    // Save grid statistics before FFT - exactly matching pme.cpp's method
-    int nonZeroBeforeFFT = 0;
-    for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
-        // Only check real part, same as pme.cpp
-        if (std::abs(pme_params.pmeGrid[i].real()) > 1e-10) {
-            nonZeroBeforeFFT++;
-        }
-    }
-    
-    platform::log(LogLevel::INFO, "Grid before FFT: non-zero points = ", nonZeroBeforeFFT);
-    platform::log(LogLevel::DEBUG, "Grid before FFT: non-zero points = " + std::to_string(nonZeroBeforeFFT));
-    
-    // Create backup of grid before FFT
-    fftGridBackup = pme_params.pmeGrid;
-    
-    // Execute 3D FFT - ensure exactly following pme.cpp implementation
+    // Use custom FFT implementation
     CustomFFT::fft3D_forward(pme_params.pmeGrid.data(), nx, ny, nz);
     
-    // FFT statistics - ensure exactly matching pme.cpp
+    // Calculate non-zero points after FFT (moved outside debug check to ensure it's always calculated)
     int nonZeroAfterFFT = 0;
     for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
-        // Use std::norm(val) > 1e-10, same as pme.cpp
-        if (std::norm(pme_params.pmeGrid[i]) > 1e-10) {
-            nonZeroAfterFFT++;
-        }
+        if (std::abs(pme_params.pmeGrid[i]) > 1e-10) nonZeroAfterFFT++;
     }
-    
     platform::log(LogLevel::INFO, "Grid after FFT: non-zero points = ", nonZeroAfterFFT);
-    platform::log(LogLevel::DEBUG, "Grid after FFT: non-zero points = " + std::to_string(nonZeroAfterFFT));
     
-    // Add detailed FFT output - same as pme.cpp
-    platform::log(LogLevel::DEBUG, "\n===== Standard grid point values comparison after FFT =====");
-    platform::log(LogLevel::DEBUG, "Total grid points: " + std::to_string(pme_params.pmeGrid.size()));
-    
-    // Output key indices
-    const int keyIndices[] = {0, 1, 32, nx, ny, nz, nx*ny, nx*nz, ny*nz};
-    for (int i : keyIndices) {
-        if (i < static_cast<int>(pme_params.pmeGrid.size())) {
-            platform::log(LogLevel::DEBUG, "Grid point[" + std::to_string(i) + "]: " + std::to_string(pme_params.pmeGrid[i].real()) 
-                      + " + " + std::to_string(pme_params.pmeGrid[i].imag()) + "i");
-        }
-    }
-    
-    // Specific 3D coordinates
-    const int keyCoords[][3] = {{0,0,1}, {0,1,0}, {1,0,0}, {1,1,1}, {2,2,2}};
-    for (const auto& coord : keyCoords) {
-        int idx = ((coord[0] % nx) * ny * nz) + ((coord[1] % ny) * nz) + (coord[2] % nz);
-        if (idx < static_cast<int>(pme_params.pmeGrid.size())) {
-            platform::log(LogLevel::DEBUG, "Grid point[" + std::to_string(coord[0]) + "," + std::to_string(coord[1]) + "," + std::to_string(coord[2]) 
-                      + "] (index=" + std::to_string(idx) + "): " + std::to_string(pme_params.pmeGrid[idx].real()) 
-                      + " + " + std::to_string(pme_params.pmeGrid[idx].imag()) + "i");
-        }
-    }
-    
-    // Add lookup and display for grid points with maximum values
-    platform::log(LogLevel::DEBUG, "\n===== Maximum value grid points after FFT =====");
-    std::vector<std::pair<size_t, double>> topValues;
-    for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
-        double normVal = std::norm(pme_params.pmeGrid[i]);
-        if (normVal > 1e-8) {  // Use larger threshold to find obvious non-zero values
-            topValues.push_back({i, normVal});
-        }
-    }
-    
-    // Sort by value size
-    std::sort(topValues.begin(), topValues.end(), 
-              [](const auto& a, const auto& b) { return a.second > b.second; });
-    
-    // Output first 10 maximum value points
-    int count = 0;
-    for (const auto& [idx, val] : topValues) {
-        if (count >= 10) break;
-        // Calculate 3D indices
-        int x = (idx / (ny * nz));
-        int y = (idx - x * ny * nz) / nz;
-        int z = idx - x * ny * nz - y * nz;
+    // Only execute detailed test output in debug mode
+    if (platform::is_debug_mode()) {
+        platform::log(LogLevel::DEBUG, "Grid after FFT: non-zero points = " + std::to_string(nonZeroAfterFFT));
         
-        platform::log(LogLevel::DEBUG, "Top " + std::to_string(count + 1) + ": grid point[" + std::to_string(x) + "," + std::to_string(y) + "," + std::to_string(z) 
-                  + "] (index=" + std::to_string(idx) + "): " + std::to_string(pme_params.pmeGrid[idx].real()) 
-                  + " + " + std::to_string(pme_params.pmeGrid[idx].imag()) + "i, |val|² = " + std::to_string(val));
-        count++;
+        // Standard grid point value comparison
+        platform::log(LogLevel::DEBUG, "\n===== Standard grid point values comparison after FFT =====");
+        platform::log(LogLevel::DEBUG, "Total grid points: " + std::to_string(pme_params.pmeGrid.size()));
+        
+        // Output first few grid points
+        for (int i = 0; i < std::min(5, static_cast<int>(pme_params.pmeGrid.size())); i++) {
+            platform::log(LogLevel::DEBUG, "Grid point[" + std::to_string(i) + "]: " + std::to_string(pme_params.pmeGrid[i].real()) 
+                        + " + " + std::to_string(pme_params.pmeGrid[i].imag()) + "i, |val|² = " 
+                        + std::to_string(std::norm(pme_params.pmeGrid[i])));
+        }
+        
+        // Output a few standard grid coordinates
+        const int numCoords = 4;
+        const int standardCoords[numCoords][3] = {{0,0,0}, {5,5,5}, {10,10,10}, {20,20,20}};
+        for (int i = 0; i < numCoords; i++) {
+            const int* coord = standardCoords[i];
+            int index = coord[0] * ny * nz + coord[1] * nz + coord[2];
+            if (index >= 0 && static_cast<size_t>(index) < pme_params.pmeGrid.size()) {
+                platform::log(LogLevel::DEBUG, "Grid point[" + std::to_string(coord[0]) + "," + std::to_string(coord[1]) + "," + std::to_string(coord[2]) 
+                            + "] (index=" + std::to_string(index) + "): " + std::to_string(pme_params.pmeGrid[index].real()) 
+                            + " + " + std::to_string(pme_params.pmeGrid[index].imag()) + "i, |val|² = " 
+                            + std::to_string(std::norm(pme_params.pmeGrid[index])));
+            }
+        }
+        
+        // Find max value grid points
+        platform::log(LogLevel::DEBUG, "\n===== Maximum value grid points after FFT =====");
+        
+        // Find top 10 grid values by magnitude
+        std::vector<std::pair<int, double>> topValues;
+        for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
+            double val = std::norm(pme_params.pmeGrid[i]);
+            if (val > 1e-10) {
+                topValues.push_back({static_cast<int>(i), val});
+            }
+        }
+        
+        // Sort by magnitude
+        std::sort(topValues.begin(), topValues.end(), 
+                 [](const auto& a, const auto& b) { return a.second > b.second; });
+        
+        // Output top values
+        int count = 0;
+        for (const auto& [idx, val] : topValues) {
+            if (count >= 10) break;
+            // Calculate 3D indices
+            int x = (idx / (ny * nz));
+            int y = (idx - x * ny * nz) / nz;
+            int z = idx - x * ny * nz - y * nz;
+            
+            platform::log(LogLevel::DEBUG, "Top " + std::to_string(count + 1) + ": grid point[" + std::to_string(x) + "," + std::to_string(y) + "," + std::to_string(z) 
+                        + "] (index=" + std::to_string(idx) + "): " + std::to_string(pme_params.pmeGrid[idx].real()) 
+                        + " + " + std::to_string(pme_params.pmeGrid[idx].imag()) + "i, |val|² = " + std::to_string(val));
+            count++;
+        }
     }
     
-    // Remove most of detailed grid point value output, keep only a few at DEBUG level
-    if (platform::verbose_ && platform::log_level_ <= LogLevel::DEBUG) {
+    // Output grid index and B-spline coefficients for some atoms
+    if (platform::verbose_ && platform::log_level_ <= LogLevel::DEBUG && platform::is_debug_mode()) {
         platform::log(LogLevel::DEBUG, "First few grid points after FFT:");
         for (int i = 0; i < 3 && i < static_cast<int>(pme_params.pmeGrid.size()); i++) {
             platform::log(LogLevel::DEBUG, "  Grid point[", i, "] = ", 
@@ -1454,8 +1466,16 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
     }
     platform::log(LogLevel::DEBUG, "Grid before energy calculation: non-zero points = " + std::to_string(nonZeroGridBefore));
     
-    // Special debug output for grid point [5,5,5]
-    platform::log(LogLevel::DEBUG, "\n===== [energyPME.cpp] Special focus on grid point [5,5,5] =====");
+    // 只在debug_mode启用时执行以下代码
+    if (platform::is_debug_mode()) {
+        platform::log(LogLevel::DEBUG, "Computing energy from grid with box = [" + std::to_string(box[0]) + "," +
+                    std::to_string(box[1]) + "," + std::to_string(box[2]) + "]");
+        
+        platform::log(LogLevel::DEBUG, "Energy parameters: one_4pi_eps = " + std::to_string(one_4pi_eps) +
+                    ", factor = " + std::to_string(factor));
+        
+        platform::log(LogLevel::DEBUG, "Updating grid data before energy calculation");
+    }
     
     // Initialize energy and point counters
     energy = 0.0;
@@ -1466,7 +1486,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
     int maxky = (ny+1)/2;
     int maxkz = (nz+1)/2;
     
-    // Save original values and energy contributions for later statistics
+    // 定义监控点数据结构
     struct GridPointData {
         int kx, ky, kz;
         double mx, my, mz;
@@ -1482,13 +1502,18 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
         bool isSignificant;
     };
     
+    // 监控点数据和收集变量，仅在debug模式下使用
     std::vector<GridPointData> monitoredPoints;
     std::vector<GridPointData> significantEnergyPoints;
+    std::set<std::tuple<int,int,int>> monitorIndices;
     
-    // Monitor specific points
-    std::set<std::tuple<int,int,int>> monitorIndices = {
-        {0,0,1}, {0,1,0}, {1,0,0}, {1,1,1}, {2,2,2}, {5,5,5}, {10,10,10}
-    };
+    // 仅在debug模式下初始化监控点数据
+    if (platform::is_debug_mode()) {
+        // Monitor specific points
+        monitorIndices = {
+            {0,0,1}, {0,1,0}, {1,0,0}, {1,1,1}, {2,2,2}, {5,5,5}, {10,10,10}
+        };
+    }
     
     // Calculate energy exactly as in pme.cpp
     for (int kx = 0; kx < nx; kx++) {
@@ -1542,62 +1567,83 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                 double struct2 = d1*d1 + d2*d2;
                 double energyContrib = eterm * struct2;
                 
-                // Build monitoring point data
-                GridPointData pointData;
-                pointData.kx = kx;
-                pointData.ky = ky;
-                pointData.kz = kz;
-                pointData.mx = mx;
-                pointData.my = my;
-                pointData.mz = mz;
-                pointData.mhx = mhx;
-                pointData.mhy = mhy;
-                pointData.mhz = mhz;
-                pointData.m2 = m2;
-                pointData.bx = bx;
-                pointData.by = by;
-                pointData.bz = bz;
-                pointData.denom = denom;
-                pointData.eterm = eterm;
-                pointData.originalValue = std::complex<double>(d1, d2);
-                pointData.struct2 = struct2;
-                pointData.energyContrib = energyContrib;
-                pointData.isSignificant = (energyContrib > 1e-4);
-                
-                // Build monitoring point data
-                bool isMonitorPoint = (monitorIndices.find(std::make_tuple(kx, ky, kz)) != monitorIndices.end());
-                if (isMonitorPoint) {
-                    monitoredPoints.push_back(pointData);
-                }
-                
-                // Collect points with significant energy contributions
-                if (pointData.isSignificant) {
-                    significantEnergyPoints.push_back(pointData);
-                }
-                
-                // Special output for point [5,5,5] - maintaining consistent format with pme.cpp
-                if (kx == 5 && ky == 5 && kz == 5) {
-                    platform::log(LogLevel::DEBUG, "Grid point[" + std::to_string(kx) + "," + std::to_string(ky) + "," + std::to_string(kz) + "] before processing:");
-                    platform::log(LogLevel::DEBUG, "  Grid index = " + std::to_string(index));
-                    platform::log(LogLevel::DEBUG, "  mx,my,mz = [" + std::to_string(mx) + "," + std::to_string(my) + "," + std::to_string(mz) + "]");
-                    platform::log(LogLevel::DEBUG, "  mhx,mhy,mhz = [" + std::to_string(mhx) + "," + std::to_string(mhy) + "," + std::to_string(mhz) + "]");
-                    platform::log(LogLevel::DEBUG, "  m2 = " + std::to_string(m2));
-                    platform::log(LogLevel::DEBUG, "  bx,by,bz = [" + std::to_string(bx) + "," + std::to_string(by) + "," + std::to_string(bz) + "]");
-                    platform::log(LogLevel::DEBUG, "  boxfactor = " + std::to_string(boxfactor));
-                    platform::log(LogLevel::DEBUG, "  B-spline moduli = [" + std::to_string(pme_params.bsplineModuli[0][kx]) + "," +
-                               std::to_string(pme_params.bsplineModuli[1][ky]) + "," + std::to_string(pme_params.bsplineModuli[2][kz]) + "]");
-                    platform::log(LogLevel::DEBUG, "  denom = " + std::to_string(denom));
-                    platform::log(LogLevel::DEBUG, "  eterm = " + std::to_string(eterm));
-                    platform::log(LogLevel::DEBUG, "  one_4pi_eps = " + std::to_string(one_4pi_eps)); 
-                    platform::log(LogLevel::DEBUG, "  exp(-factor*m2) = " + std::to_string(exp(-factor*m2)));
-                    platform::log(LogLevel::DEBUG, "  Original grid value = " + std::to_string(d1) + " + " + std::to_string(d2) + "i");
+                // Build monitoring point data - 仅在debug模式下执行
+                if (platform::is_debug_mode()) {
+                    GridPointData pointData;
+                    pointData.kx = kx;
+                    pointData.ky = ky;
+                    pointData.kz = kz;
+                    pointData.mx = mx;
+                    pointData.my = my;
+                    pointData.mz = mz;
+                    pointData.mhx = mhx;
+                    pointData.mhy = mhy;
+                    pointData.mhz = mhz;
+                    pointData.m2 = m2;
+                    pointData.bx = bx;
+                    pointData.by = by;
+                    pointData.bz = bz;
+                    pointData.denom = denom;
+                    pointData.eterm = eterm;
+                    pointData.originalValue = std::complex<double>(d1, d2);
+                    pointData.struct2 = struct2;
+                    pointData.energyContrib = energyContrib;
+                    pointData.isSignificant = (energyContrib > 1e-4);
+                    
+                    // 检查是否为监控点
+                    bool isMonitorPoint = (monitorIndices.find(std::make_tuple(kx, ky, kz)) != monitorIndices.end());
+                    if (isMonitorPoint) {
+                        monitoredPoints.push_back(pointData);
+                    }
+                    
+                    // 收集能量贡献显著的点
+                    if (pointData.isSignificant) {
+                        significantEnergyPoints.push_back(pointData);
+                    }
+                    
+                    // 特殊输出点[5,5,5] - 保持与pme.cpp一致的格式
+                    if (kx == 5 && ky == 5 && kz == 5) {
+                        platform::log(LogLevel::DEBUG, "Grid point[" + std::to_string(kx) + "," + std::to_string(ky) + "," + std::to_string(kz) + "] before processing:");
+                        platform::log(LogLevel::DEBUG, "  Grid index = " + std::to_string(index));
+                        platform::log(LogLevel::DEBUG, "  mx,my,mz = [" + std::to_string(mx) + "," + std::to_string(my) + "," + std::to_string(mz) + "]");
+                        platform::log(LogLevel::DEBUG, "  mhx,mhy,mhz = [" + std::to_string(mhx) + "," + std::to_string(mhy) + "," + std::to_string(mhz) + "]");
+                        platform::log(LogLevel::DEBUG, "  m2 = " + std::to_string(m2));
+                        platform::log(LogLevel::DEBUG, "  bx,by,bz = [" + std::to_string(bx) + "," + std::to_string(by) + "," + std::to_string(bz) + "]");
+                        platform::log(LogLevel::DEBUG, "  boxfactor = " + std::to_string(boxfactor));
+                        platform::log(LogLevel::DEBUG, "  B-spline moduli = [" + std::to_string(pme_params.bsplineModuli[0][kx]) + "," +
+                                   std::to_string(pme_params.bsplineModuli[1][ky]) + "," + std::to_string(pme_params.bsplineModuli[2][kz]) + "]");
+                        platform::log(LogLevel::DEBUG, "  denom = " + std::to_string(denom));
+                        platform::log(LogLevel::DEBUG, "  eterm = " + std::to_string(eterm));
+                        platform::log(LogLevel::DEBUG, "  one_4pi_eps = " + std::to_string(one_4pi_eps)); 
+                        platform::log(LogLevel::DEBUG, "  exp(-factor*m2) = " + std::to_string(exp(-factor*m2)));
+                        platform::log(LogLevel::DEBUG, "  Original grid value = " + std::to_string(d1) + " + " + std::to_string(d2) + "i");
+                    }
                 }
                 
                 // Update grid value - exactly reproduce pme.cpp method
                 std::complex<double> updatedValue(d1 * eterm, d2 * eterm);
                 pme_params.pmeGrid[index] = updatedValue;
-                pointData.updatedValue = updatedValue;
-
+                
+                // 更新的网格值输出 - 仅在debug模式下执行
+                if (platform::is_debug_mode() && kx == 5 && ky == 5 && kz == 5) {
+                    platform::log(LogLevel::DEBUG, "  Updated grid value = " + std::to_string(updatedValue.real()) + " + " + std::to_string(updatedValue.imag()) + "i");
+                    platform::log(LogLevel::DEBUG, "  struct2 = " + std::to_string(struct2));
+                    platform::log(LogLevel::DEBUG, "  Energy contribution = " + std::to_string(energyContrib));
+                    platform::log(LogLevel::DEBUG, "  Accumulated energy = " + std::to_string(energy));
+                    platform::log(LogLevel::DEBUG, "  Significant energy? " + std::string(energyContrib > 1e-8 ? "Yes" : "No"));
+                    platform::log(LogLevel::DEBUG, "");
+                }
+                
+                // 保存更新的值到监控点数据 - 仅在debug模式下执行
+                if (platform::is_debug_mode() && (monitorIndices.find(std::make_tuple(kx, ky, kz)) != monitorIndices.end())) {
+                    for (auto& point : monitoredPoints) {
+                        if (point.kx == kx && point.ky == ky && point.kz == kz) {
+                            point.updatedValue = updatedValue;
+                            break;
+                        }
+                    }
+                }
+                
                 // Accumulate energy
                 energy += energyContrib;
                 pointsProcessed++;
@@ -1607,7 +1653,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                 }
                 
                 // Output after point update - only for point [5,5,5]
-                if (kx == 5 && ky == 5 && kz == 5) {
+                if (platform::is_debug_mode() && kx == 5 && ky == 5 && kz == 5) {
                     platform::log(LogLevel::DEBUG, "  Updated grid value = " + std::to_string(updatedValue.real()) + " + " + std::to_string(updatedValue.imag()) + "i");
                     platform::log(LogLevel::DEBUG, "  struct2 = " + std::to_string(struct2)); 
                     platform::log(LogLevel::DEBUG, "  Energy contribution = " + std::to_string(energyContrib));
@@ -1617,11 +1663,11 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                 }
                 
                 // Special debug output - similar to monitoring points in pme.cpp
-                if ((kx == 0 && ky == 0 && kz == 1) || 
+                if (platform::is_debug_mode() && ((kx == 0 && ky == 0 && kz == 1) || 
                     (kx == 0 && ky == 1 && kz == 0) || 
                     (kx == 1 && ky == 0 && kz == 0) ||
                     (kx == 1 && ky == 1 && kz == 1) ||
-                    (kx == 2 && ky == 2 && kz == 2)) {
+                    (kx == 2 && ky == 2 && kz == 2))) {
                     platform::log(LogLevel::DEBUG, "Grid point[" + std::to_string(kx) + "," + std::to_string(ky) + "," + std::to_string(kz) + "] processing:");
                     platform::log(LogLevel::DEBUG, "  mx,my,mz = [" + std::to_string(mx) + "," + std::to_string(my) + "," + std::to_string(mz) + "]");
                     platform::log(LogLevel::DEBUG, "  mhx,mhy,mhz = [" + std::to_string(mhx) + "," + std::to_string(mhy) + "," + std::to_string(mhz) + "]");
@@ -1648,22 +1694,25 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
         }
     }
     
-    // Add reciprocal space energy results title and format consistent with pme.cpp
-    platform::log(LogLevel::DEBUG, "\n===== [energyPME.cpp] Reciprocal Space Energy Calculation Results =====");
-    platform::log(LogLevel::DEBUG, "Total points processed: " + std::to_string(pointsProcessed));
-    platform::log(LogLevel::DEBUG, "Significant energy points: " + std::to_string(significantPoints));
-    platform::log(LogLevel::DEBUG, "Raw energy sum: " + std::to_string(rawEnergy));
-    platform::log(LogLevel::DEBUG, "Final reciprocal space energy: " + std::to_string(energy) + " (multiplied by 0.5)");
-    platform::log(LogLevel::DEBUG, "Non-zero grid points: before calculation=" + std::to_string(nonZeroGridBefore) + ", after calculation=" + std::to_string(nonZeroUpdated));
-    
-    // Output detailed information for all monitoring points
-    if (!monitoredPoints.empty()) {
-        platform::log(LogLevel::DEBUG, "\nMonitoring points energy contributions:");
-        for (const auto& point : monitoredPoints) {
-            platform::log(LogLevel::DEBUG, "  [" + std::to_string(point.kx) + "," 
-                        + std::to_string(point.ky) + "," + std::to_string(point.kz) + "] = " 
-                        + std::to_string(point.energyContrib) + " (significant: " 
-                        + std::string(point.isSignificant ? "yes" : "no") + ")");
+    // 只在debug_mode模式下输出详细统计信息
+    if (platform::is_debug_mode()) {
+        // Add reciprocal space energy results title and format consistent with pme.cpp
+        platform::log(LogLevel::DEBUG, "\n===== [energyPME.cpp] Reciprocal Space Energy Calculation Results =====");
+        platform::log(LogLevel::DEBUG, "Total points processed: " + std::to_string(pointsProcessed));
+        platform::log(LogLevel::DEBUG, "Significant energy points: " + std::to_string(significantPoints));
+        platform::log(LogLevel::DEBUG, "Raw energy sum: " + std::to_string(rawEnergy));
+        platform::log(LogLevel::DEBUG, "Final reciprocal space energy: " + std::to_string(energy) + " (multiplied by 0.5)");
+        platform::log(LogLevel::DEBUG, "Non-zero grid points: before calculation=" + std::to_string(nonZeroGridBefore) + ", after calculation=" + std::to_string(nonZeroUpdated));
+        
+        // Output detailed information for all monitoring points
+        if (!monitoredPoints.empty()) {
+            platform::log(LogLevel::DEBUG, "\nMonitoring points energy contributions:");
+            for (const auto& point : monitoredPoints) {
+                platform::log(LogLevel::DEBUG, "  [" + std::to_string(point.kx) + "," 
+                            + std::to_string(point.ky) + "," + std::to_string(point.kz) + "] = " 
+                            + std::to_string(point.energyContrib) + " (significant: " 
+                            + std::string(point.isSignificant ? "yes" : "no") + ")");
+            }
         }
     }
 }
@@ -1980,41 +2029,41 @@ void computeMovementEnergyPME(model::MCState& state) {
  * Uses custom FFT implementation, matches pme.cpp implementation
  */
 void performFFTBackward() {
-    platform::log(LogLevel::INFO, "Performing backward FFT on PME grid");
-    
-    // Determine grid dimensions
+    // Get grid dimensions
     int nx = pme_params.meshSize[0];
     int ny = pme_params.meshSize[1];
     int nz = pme_params.meshSize[2];
     
-    // Verify grid dimensions are powers of 2
-    if ((nx & (nx - 1)) != 0 || (ny & (ny - 1)) != 0 || (nz & (nz - 1)) != 0) {
-        throw std::runtime_error("PME grid size must be a power of 2 for FFT");
-    }
-    
-    // Record grid statistics before FFT
-    int nonZeroBeforeFFT = 0;
-    for (const auto& val : pme_params.pmeGrid) {
-        if (std::abs(val.real()) > 1e-10) {
-            nonZeroBeforeFFT++;
+    // Only execute test code in debug mode
+    if (platform::is_debug_mode()) {
+        // Calculate non-zero points before backward FFT
+        int nonZeroBeforeFFT = 0;
+        for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
+            if (std::abs(pme_params.pmeGrid[i]) > 1e-10) nonZeroBeforeFFT++;
         }
+        platform::log(LogLevel::DEBUG, "Grid before backward FFT: non-zero points = " + std::to_string(nonZeroBeforeFFT));
     }
     
-    platform::log(LogLevel::INFO, "Grid before backward FFT: non-zero points = ", nonZeroBeforeFFT);
-    
-    // Perform 3D backward FFT - exactly as implemented in pme.cpp
-    // In pme.cpp, this is done by calling CustomFFT::fft3D_backward through fftw_execute
+    // Use custom FFT implementation
     CustomFFT::fft3D_backward(pme_params.pmeGrid.data(), nx, ny, nz);
     
-    // Brief statistics after FFT
-    int nonZeroAfterFFT = 0;
-    for (const auto& val : pme_params.pmeGrid) {
-        if (std::abs(val.real()) > 1e-10) {
-            nonZeroAfterFFT++;
+    // Only execute test code in debug mode
+    if (platform::is_debug_mode()) {
+        // Calculate non-zero points after backward FFT
+        int nonZeroAfterFFT = 0;
+        for (size_t i = 0; i < pme_params.pmeGrid.size(); i++) {
+            if (std::abs(pme_params.pmeGrid[i]) > 1e-10) nonZeroAfterFFT++;
+        }
+        platform::log(LogLevel::DEBUG, "Grid after backward FFT: non-zero points = " + std::to_string(nonZeroAfterFFT));
+        
+        // Output grid values after backward FFT for comparison
+        platform::log(LogLevel::DEBUG, "\nFirst few grid points after backward FFT:");
+        for (int i = 0; i < 5 && i < static_cast<int>(pme_params.pmeGrid.size()); i++) {
+            platform::log(LogLevel::DEBUG, "  Grid point[" + std::to_string(i) + "] = " 
+                        + std::to_string(pme_params.pmeGrid[i].real()) + " + " 
+                        + std::to_string(pme_params.pmeGrid[i].imag()) + "i");
         }
     }
-    
-    platform::log(LogLevel::INFO, "Grid after backward FFT: non-zero points = ", nonZeroAfterFFT);
 }
 
 } // namespace cpu

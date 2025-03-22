@@ -19,7 +19,7 @@ inline std::pair<float, float> calcPairEnergy(
     float r2, float sigma, float eps, float q1, float q2, 
     const model::MCInfo& info,
     bool calc_coulomb = true) {
-    if (energy_debug_output) {
+    if (getEnergyDebugOutput()) {
         std::stringstream ss;
         ss << std::fixed << std::setprecision(6);
         ss << "\n=== calcPairEnergy called ===";
@@ -34,7 +34,7 @@ inline std::pair<float, float> calcPairEnergy(
 
     // Apply minimum safe distance for numerical stability
     if (r2 < MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE) {
-        if (energy_debug_output) {
+        if (getEnergyDebugOutput()) {
             platform::log(LogLevel::DEBUG, "Distance below MIN_SAFE_DISTANCE, using r2 = ", 
                          MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE);
         }
@@ -43,7 +43,7 @@ inline std::pair<float, float> calcPairEnergy(
     
     float r = std::sqrt(r2);
     
-    if (energy_debug_output) {
+    if (getEnergyDebugOutput()) {
         platform::log(LogLevel::DEBUG, "Distance r = ", r, " nm");
     }
     
@@ -60,7 +60,7 @@ inline std::pair<float, float> calcPairEnergy(
             float switch_val = calculateSwitchingFunction(r, info);
             vdw_energy *= switch_val;
             
-            if (energy_debug_output) {
+            if (getEnergyDebugOutput()) {
                 std::stringstream ss;
                 ss << std::fixed << std::setprecision(6);
                 ss << "\nCHARMM switching function applied:";
@@ -75,7 +75,7 @@ inline std::pair<float, float> calcPairEnergy(
             // Beyond outer cutoff radius, set to zero
             vdw_energy = 0.0f;
             
-            if (energy_debug_output) {
+            if (getEnergyDebugOutput()) {
                 platform::log(LogLevel::DEBUG, "Distance r = ", r, 
                              " nm is beyond r_off = ", info.r_off, 
                              " nm, setting VDW energy to zero");
@@ -89,7 +89,7 @@ inline std::pair<float, float> calcPairEnergy(
         elec_energy = COULOMB * q1 * q2 / r;  // kJ/mol
     }
 
-    if (energy_debug_output) {
+    if (getEnergyDebugOutput()) {
         std::stringstream ss;
         ss << std::fixed << std::setprecision(6);
         ss << "\nEnergy calculation details:";
@@ -107,7 +107,7 @@ inline std::pair<float, float> calcPairEnergy(
     }
     
     // Apply energy capping for numerical stability
-    if (energy_debug_output && (std::abs(vdw_energy) > MAX_SAFE_ENERGY || std::abs(elec_energy) > MAX_SAFE_ENERGY)) {
+    if (getEnergyDebugOutput() && (std::abs(vdw_energy) > MAX_SAFE_ENERGY || std::abs(elec_energy) > MAX_SAFE_ENERGY)) {
         std::stringstream ss;
         ss << "\nEnergy capping applied:";
         ss << "\n  Original VDW energy = " << vdw_energy << " kJ/mol";
@@ -120,7 +120,7 @@ inline std::pair<float, float> calcPairEnergy(
     elec_energy = std::min(elec_energy, MAX_SAFE_ENERGY);
     elec_energy = std::max(elec_energy, -MAX_SAFE_ENERGY);
     
-    if (energy_debug_output && (std::abs(vdw_energy) > MAX_SAFE_ENERGY || std::abs(elec_energy) > MAX_SAFE_ENERGY)) {
+    if (getEnergyDebugOutput() && (std::abs(vdw_energy) > MAX_SAFE_ENERGY || std::abs(elec_energy) > MAX_SAFE_ENERGY)) {
         std::stringstream ss;
         ss << "\nAfter individual capping:";
         ss << "\n  Capped VDW energy = " << vdw_energy << " kJ/mol";
@@ -135,7 +135,7 @@ inline std::pair<float, float> calcPairEnergy(
         float scale = MAX_SAFE_ENERGY / total_energy;
         vdw_energy *= scale;
         elec_energy *= scale;
-        if (energy_debug_output) {
+        if (getEnergyDebugOutput()) {
             std::stringstream ss;
             ss << "\nTotal energy exceeded MAX_SAFE_ENERGY:";
             ss << "\n  Original total = " << original_total << " kJ/mol";
@@ -149,7 +149,7 @@ inline std::pair<float, float> calcPairEnergy(
         float scale = -MAX_SAFE_ENERGY / total_energy;
         vdw_energy *= scale;
         elec_energy *= scale;
-        if (energy_debug_output) {
+        if (getEnergyDebugOutput()) {
             std::stringstream ss;
             ss << "\nTotal energy below -MAX_SAFE_ENERGY:";
             ss << "\n  Original total = " << original_total << " kJ/mol";
@@ -161,7 +161,7 @@ inline std::pair<float, float> calcPairEnergy(
         }
     }
 
-    if (energy_debug_output) {
+    if (getEnergyDebugOutput()) {
         std::stringstream ss;
         ss << std::fixed << std::setprecision(6);
         ss << "\n=== calcPairEnergy returning ===";
@@ -251,7 +251,7 @@ inline void computeResidueNonbondedEnergy(
                     dy -= box[1] * std::round(dy / box[1]);
                     dz -= box[2] * std::round(dz / box[2]);
                     
-                    if (energy_debug_output) {
+                    if (getEnergyDebugOutput()) {
                         std::stringstream ss;
                         ss << "\nPBC distance calculation:";
                         ss << "\n  Original dx,dy,dz: " << (atoms[atom_j].x - atoms[atom_i].x)
@@ -290,7 +290,7 @@ inline void computeResidueNonbondedEnergy(
  * @brief Universal function for calculating all nonbonded interactions
  */
 void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movement_only = false, bool use_pbc = false, bool vdw_only = false) {
-    if (energy_debug_output) {
+    if (getEnergyDebugOutput()) {
         std::stringstream ss;
         ss << "\n=== Starting nonbonded energy calculation ===";
         ss << "\nSystem state info:";
@@ -361,7 +361,7 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
 
         // Calculate energies only for movement residues
         for (const auto& movementInfo : state.movementResidues) {
-            if (energy_debug_output) {
+            if (getEnergyDebugOutput()) {
                 platform::log(LogLevel::DEBUG, "\nProcessing movement residue group: ", movementInfo.resName);
                 platform::log(LogLevel::DEBUG, "  Start index: ", movementInfo.startIndex);
                 platform::log(LogLevel::DEBUG, "  Active count: ", movementInfo.activeCount);
@@ -384,7 +384,7 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
                  ++i) {
                 if (!residues[i].active) continue;
 
-                if (energy_debug_output) {
+                if (getEnergyDebugOutput()) {
                     platform::log(LogLevel::DEBUG, "\nProcessing movement residue ", i);
                     platform::log(LogLevel::DEBUG, "  Atom start: ", residues[i].atomStart);
                     platform::log(LogLevel::DEBUG, "  Atom count: ", residues[i].atomCount);
@@ -425,7 +425,7 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
     }
 
     // Output final energies if debug is enabled
-    if (energy_debug_output) {
+    if (getEnergyDebugOutput()) {
         platform::log(LogLevel::DEBUG, "\n=== Final energies for all residues ===");
         float total_vdw = 0.0f;
         float total_elec = 0.0f;
@@ -465,7 +465,7 @@ void computeSystemEnergyCutoff(model::MCState& state) {
 }
 
 void computeSystemEnergyPBC(model::MCState& state) {
-    if (energy_debug_output) {
+    if (getEnergyDebugOutput()) {
         std::stringstream ss;
         ss << "\n=== Starting PBC nonbonded energy calculation (no cutoff) ===";
         ss << "\nBox dimensions: " << state.info.box[0] << " x " 
@@ -483,7 +483,7 @@ void computeSystemEnergyPBC(model::MCState& state) {
 }
 
 void computeSystemEnergyPBCCutoff(model::MCState& state) {
-    if (energy_debug_output) {
+    if (getEnergyDebugOutput()) {
         std::stringstream ss;
         ss << "\n=== Starting PBC nonbonded energy calculation (with cutoff) ===";
         ss << "\nBox dimensions: " << state.info.box[0] << " x " 

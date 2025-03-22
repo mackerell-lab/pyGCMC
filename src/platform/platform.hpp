@@ -33,10 +33,15 @@ enum class LogLevel {
 // Static logging control
 static bool verbose_ = false;
 static LogLevel log_level_ = LogLevel::INFO;
+static bool debug_mode_ = false;  // Default to false to disable test output code
 
 // Logging functions
 inline void set_verbose(bool verbose) { verbose_ = verbose; }
 inline void set_log_level(LogLevel level) { log_level_ = level; }
+inline void set_debug_mode(bool debug_mode) { debug_mode_ = debug_mode; }
+
+// Helper to check if debug mode is enabled (for test output)
+inline bool is_debug_mode() { return debug_mode_; }
 
 template<typename... Args>
 inline void log(LogLevel level, Args... args) {

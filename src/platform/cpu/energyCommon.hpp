@@ -22,6 +22,11 @@ static const double TWO_OVER_SQRT_PI = 2.0/std::sqrt(M_PI);  // Constant for Ewa
 // Debug output control
 extern bool energy_debug_output;
 
+// Function to get energy debug output status (using platform's debug_mode)
+inline bool getEnergyDebugOutput() {
+    return platform::is_debug_mode();
+}
+
 // Energy calculation method enumeration
 enum class EnergyMethod {
     DIRECT,  // Direct calculation method
@@ -125,14 +130,15 @@ inline void validateBox(const float box[3], float cutoff = 0.0f) {
     }
 }
 
-// Set energy debug output
+// Replace setEnergyDebugOutput function
 inline void setEnergyDebugOutput(bool enable) {
     energy_debug_output = enable;
+    // Also update the platform's debug mode for consistency
+    platform::set_debug_mode(enable);
 }
 
-// Debug output helper function
 inline void logEnergyDebug(const std::string& message) {
-    if (energy_debug_output) {
+    if (getEnergyDebugOutput()) {
         platform::log(LogLevel::DEBUG, message);
     }
 }
