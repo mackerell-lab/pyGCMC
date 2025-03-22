@@ -145,6 +145,12 @@ public:
     static void setPMEParameters(float alpha, const int meshSize[3], int splineOrder = 4, float tolerance = 1e-5f);
     static void computeSystemEnergyPME(model::MCState& state);
     static void computeMovementEnergyPME(model::MCState& state);
+    
+    // PGP method interfaces
+    static void setPGPParameters(float alpha, const int meshSize[3], float pair_cutoff, 
+                                  const int pairGridSize[3], int splineOrder = 4, float tolerance = 1e-5f);
+    static void computeSystemEnergyPGP(model::MCState& state);
+    static void computeMovementEnergyPGP(model::MCState& state);
 
     // Energy calculation methods exposed to Python
     static void computeSystemVdwEnergyCutoff(model::MCState& state);
@@ -160,6 +166,12 @@ public:
     static void initializePMEParameters(float cutoff, const float box[3], 
                                        float alpha = 0.0f, const int* meshSize = nullptr,
                                        int splineOrder = 4, float tolerance = 1e-5f);
+    
+    // PGP methods
+    static void initializePGPParameters(float cutoff, float pair_cutoff, const float box[3], 
+                                         float alpha = 0.0f, const int* meshSize = nullptr,
+                                         const int* pairGridSize = nullptr,
+                                         int splineOrder = 4, float tolerance = 1e-5f);
 
 private:
     std::unique_ptr<platform::IPlatform> platform_;

@@ -12,6 +12,8 @@ add_library(pygcmc_platform STATIC
     cpu/energyDirect.cpp
     cpu/energyPME.hpp
     cpu/energyPME.cpp
+    cpu/energyPGP.hpp
+    cpu/energyPGP.cpp
     # Future source files like cpuPlatform.cpp, cudaPlatform.cu, etc. can be added here
 )
 
