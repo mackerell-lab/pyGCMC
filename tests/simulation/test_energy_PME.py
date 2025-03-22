@@ -1377,11 +1377,11 @@ def test_pme_parameters():
     state.info.setTemperature(300.0)
     state.info.cutoff = 2.0  # Same as in C++ version
     
-    # Set a simple force field (just for atom types, since we're mainly testing electrostatics)
+    # Set a simple force field
     ff = MCForceField()
     ff.numTotalTypes = 1  # Single atom type for simplicity
-    ff.ljSigma = [0.3, 0.3, 0.3, 0.3]  # Dummy LJ parameters
-    ff.ljEps = [0.1, 0.1, 0.1, 0.1]
+    ff.ljSigma = [0.3]  # Dummy LJ parameters - size matches numTotalTypes^2
+    ff.ljEps = [0.0]  # Set LJ epsilon to zero to eliminate LJ interactions
     
     state.forcefield = ff
     
@@ -1571,6 +1571,8 @@ def test_cutoff_dependence():
     1. Total energy should remain stable across different cutoffs
     2. As cutoff increases, real-space contribution increases and reciprocal contribution decreases
     3. Self energy should be identical across implementations
+    
+    This test now also compares PME results with standard Ewald method to verify consistency.
     """
     print("\nRunning test_cutoff_dependence (replicating testCutoffDependence from pme.cpp)...")
     
@@ -1587,8 +1589,8 @@ def test_cutoff_dependence():
     # Set a simple force field
     ff = MCForceField()
     ff.numTotalTypes = 1  # Single atom type for simplicity
-    ff.ljSigma = [0.3, 0.3, 0.3, 0.3]  # Dummy LJ parameters
-    ff.ljEps = [0.0, 0.0, 0.0, 0.0]  # Set LJ epsilon to zero to eliminate LJ interactions
+    ff.ljSigma = [0.3]  # Dummy LJ parameters - size matches numTotalTypes^2
+    ff.ljEps = [0.0]  # Set LJ epsilon to zero to eliminate LJ interactions
     
     state.forcefield = ff
     
@@ -1638,7 +1640,10 @@ def test_cutoff_dependence():
     box = [box_size, box_size, box_size]
     
     # Table header
-    print("\nCutoff\tAlpha\tTotal Energy\tReal Space\tReciprocal\tSelf\tReal/Total\tRecip/Total")
+    print("\nComparison of PME and Ewald energy components as a function of cutoff:")
+    print("\n" + "-"*100)
+    print(f"{'Cutoff':6s} | {'Alpha':8s} | {'Method':10s} | {'Total Energy':14s} | {'Real Space':14s} | {'Reciprocal':14s} | {'Self':14s} | {'Real/Total':10s} | {'Recip/Total':10s} | {'PME/Ewald Ratio':14s}")
+    print("-"*100)
     
     # Test a range of cutoffs
     cutoff_values = [0.5 + 0.25 * i for i in range(9)]  # 0.5 to 2.5 in steps of 0.25
@@ -1660,6 +1665,27 @@ def test_cutoff_dependence():
         mesh_size = [grid_size, grid_size, grid_size]
         spline_order = 5  # Same as C++ version
         
+        # Setup for Ewald calculation
+        kmax = [grid_size // 2, grid_size // 2, grid_size // 2]  # Reasonable kmax based on grid size
+        
+        # Initialize Ewald with current parameters and calculate
+        pygcmc.setEwaldParameters(alpha, kmax)
+        pygcmc.initializeEwaldParameters(cutoff, box, alpha)
+        _, _, ewald_dict = pygcmc.computeSystemEnergyEwald(state)
+        
+        # Extract Ewald energy components
+        ewald_real = ewald_dict["real_space"]
+        ewald_recip = ewald_dict["reciprocal"]
+        ewald_self = ewald_dict["self"]
+        ewald_total = ewald_dict["total"]
+        
+        # Calculate Ewald ratios
+        ewald_real_ratio = ewald_real / ewald_total if abs(ewald_total) > 1e-10 else 0.0
+        ewald_recip_ratio = ewald_recip / ewald_total if abs(ewald_total) > 1e-10 else 0.0
+        
+        # Print Ewald results
+        print(f"{cutoff:6.2f} | {alpha:8.6f} | {'Ewald':10s} | {ewald_total:14.2f} | {ewald_real:14.2f} | {ewald_recip:14.2f} | {ewald_self:14.2f} | {ewald_real_ratio:10.6f} | {ewald_recip_ratio:10.6f} | {'N/A':14s}")
+        
         # Initialize PME with current parameters
         pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
         pygcmc.initializePMEParameters(cutoff, box, alpha, mesh_size, spline_order)
@@ -1668,23 +1694,27 @@ def test_cutoff_dependence():
         _, _, pme_dict = pygcmc.computeSystemEnergyPME(state)
         
         # Extract energy components
-        real_space_energy = pme_dict["real_space"]
-        reciprocal_energy = pme_dict["reciprocal"]
-        self_energy = pme_dict["self"]
-        total_energy = pme_dict["total"]
+        pme_real = pme_dict["real_space"]
+        pme_recip = pme_dict["reciprocal"]
+        pme_self = pme_dict["self"]
+        pme_total = pme_dict["total"]
         
         # Calculate ratios
-        real_ratio = real_space_energy / total_energy if abs(total_energy) > 1e-10 else 0.0
-        recip_ratio = reciprocal_energy / total_energy if abs(total_energy) > 1e-10 else 0.0
+        pme_real_ratio = pme_real / pme_total if abs(pme_total) > 1e-10 else 0.0
+        pme_recip_ratio = pme_recip / pme_total if abs(pme_total) > 1e-10 else 0.0
         
-        # Print results in the same format as C++ version
-        print(f"{cutoff:.2f}\t{alpha:.6f}\t{total_energy:.2f}\t{real_space_energy:.2f}\t"
-              f"{reciprocal_energy:.2f}\t{self_energy:.2f}\t{real_ratio:.6f}\t{recip_ratio:.6f}")
+        # Calculate PME to Ewald ratio for total energy
+        pme_ewald_ratio = pme_total / ewald_total if abs(ewald_total) > 1e-10 else 1.0
+        
+        # Print PME results
+        print(f"{cutoff:6.2f} | {alpha:8.6f} | {'PME':10s} | {pme_total:14.2f} | {pme_real:14.2f} | {pme_recip:14.2f} | {pme_self:14.2f} | {pme_real_ratio:10.6f} | {pme_recip_ratio:10.6f} | {pme_ewald_ratio:14.6f}")
+        print("-"*100)
     
     # Verify that the total energy is reasonably consistent across different cutoffs
     # (This should be the case if the PME implementation is correct)
     print("\nTest completed - verify that total energy is reasonably consistent across cutoffs")
     print("The real/reciprocal energy balance should shift with cutoff and alpha values")
+    print("PME and Ewald results should be consistent for all cutoff values")
     print("test_cutoff_dependence completed successfully")
 
 if __name__ == "__main__":
