@@ -149,8 +149,6 @@ public:
     // PGP method interfaces
     static void setPGPParameters(float alpha, const int meshSize[3], float pair_cutoff, 
                                   const int pairGridSize[3], int splineOrder = 4, float tolerance = 1e-5f);
-    static void computeSystemEnergyPGP(model::MCState& state);
-    static void computeMovementEnergyPGP(model::MCState& state);
 
     // Energy calculation methods exposed to Python
     static void computeSystemVdwEnergyCutoff(model::MCState& state);

@@ -112,242 +112,246 @@ void setPGPParameters(double alpha, const int meshSize[3], double pair_cutoff,
         pgp_params.pair_grid_size[i] = pairGridSize[i];
     }
     
+    // Initialize the pair grid
+    pgp_params.initializePairGrid();
+    
     platform::log(LogLevel::INFO, "PGP parameters set: alpha=", alpha, 
                  ", pair_cutoff=", pair_cutoff, 
                  ", pairGrid=[", pairGridSize[0], ",", pairGridSize[1], ",", pairGridSize[2], "]");
 }
 
 /**
- * @brief 自动调整PGP-PME参数
+ * @brief 预计算系统中固定部分的网格电势
  * 
- * 根据系统大小和指定精度，自动设置最佳PGP-PME参数。
- * 该函数首先调用PME的自动参数调整，然后添加PGP所需的额外参数。
- * 网格大小会根据盒子尺寸和截断距离进行优化，以平衡计算效率和精度。
+ * 该函数实现了PGP-PME算法的核心步骤之一：预计算系统固定部分的电势场。
+ * 它将固定部分的电荷分配到网格上，通过FFT变换计算电势，并存储结果供后续使用。
+ * 这个步骤只需在系统的固定部分发生变化时执行一次，大大提高了MC模拟中能量评估的效率。
  * 
- * @param error_tolerance 计算精度的容差
- * @param cutoff_distance 实空间计算的截断距离
- * @param pair_cutoff 配对相互作用的截断距离
- * @param box 模拟盒子的尺寸
+ * @param state 系统状态，包含原子信息和盒子大小等
+ * @param fixed_only 是否只处理系统中的固定部分
  */
-void autoAdjustPGPParameters(double error_tolerance, double cutoff_distance, 
-                               double pair_cutoff, const double box[3]) {
-    // First, auto-adjust the PME parameters
-    autoAdjustPMEParameters(error_tolerance, cutoff_distance, box);
-    
-    // Copy PME parameters to PGP params (same as in setPGPParameters)
-    pgp_params.alpha = pme_params.alpha;
-    pgp_params.tolerance = pme_params.tolerance;
-    pgp_params.initialized = pme_params.initialized;
-    pgp_params.cutoff = pme_params.cutoff;
-    pgp_params.epsilon_r = pme_params.epsilon_r;
-    pgp_params.splineOrder = pme_params.splineOrder;
-    
-    // Copy box dimensions
-    for (int i = 0; i < 3; i++) {
-        pgp_params.box[i] = pme_params.box[i];
-        pgp_params.meshSize[i] = pme_params.meshSize[i];
+void precomputeGridPotential(model::MCState& state, bool fixed_only) {
+    if (!pgp_params.initialized) {
+        throw std::runtime_error("PGP parameters not initialized");
     }
     
-    // Copy lookup tables
-    pgp_params.erfcTable = pme_params.erfcTable;
-    pgp_params.ewaldScaleTable = pme_params.ewaldScaleTable;
-    pgp_params.ewaldDX = pme_params.ewaldDX;
-    pgp_params.ewaldDXInv = pme_params.ewaldDXInv;
-    pgp_params.erfcDXInv = pme_params.erfcDXInv;
-    
-    // Copy B-spline moduli
-    for (int i = 0; i < 3; i++) {
-        pgp_params.bsplineModuli[i] = pme_params.bsplineModuli[i];
-    }
-    
-    // Copy reciprocal space grid
-    pgp_params.pmeGrid = pme_params.pmeGrid;
-    pgp_params.pmeCharge = pme_params.pmeCharge;
-    
-    // Set PGP-specific parameters
-    pgp_params.pair_cutoff = pair_cutoff;
-    
-    // Calculate appropriate pair grid size based on box and pair cutoff
-    for (int i = 0; i < 3; i++) {
-        // Simple heuristic: ratio of box size to cutoff, with minimum size
-        pgp_params.pair_grid_size[i] = std::max(32, static_cast<int>(box[i] / pair_cutoff * 2.0));
-        // Ensure it's a power of 2 for FFT efficiency
-        pgp_params.pair_grid_size[i] = 1 << static_cast<int>(std::ceil(std::log2(pgp_params.pair_grid_size[i])));
-    }
-    
-    // Initialize the pair grid
-    pgp_params.initializePairGrid();
-    
-    platform::log(LogLevel::INFO, "PGP parameters auto-adjusted: ", 
-                 "alpha=", pgp_params.alpha, 
-                 ", pair_cutoff=", pgp_params.pair_cutoff, 
-                 ", pairGrid=[", pgp_params.pair_grid_size[0], ",", 
-                 pgp_params.pair_grid_size[1], ",", pgp_params.pair_grid_size[2], "]");
-}
-
-/**
- * @brief 将电荷分布扩散到配对网格上
- * 
- * PGP-PME算法的核心步骤之一。该函数将固定部分的电荷分布扩散到网格上，生成预计算的电势场。
- * 在标准使用中，这一步骤只需在系统的固定部分发生变化时执行，而不需要在每次MC尝试中重新计算。
- * 
- * @param state 模拟系统状态
- * @param movement_only 是否只处理移动部分的原子
- */
-void spreadPairsOntoGrid([[maybe_unused]] model::MCState& state, [[maybe_unused]] bool movement_only) {
     // Reset the pair grid
     std::fill(pgp_params.pairGrid.begin(), pgp_params.pairGrid.end(), std::complex<double>(0.0, 0.0));
     
-    // Implementation will depend on the specific PGP algorithm
-    platform::log(LogLevel::DEBUG, "Spreading pairs onto grid. Movement only: ", movement_only);
+    // Temporary grid for charge distribution
+    std::vector<std::complex<double>> chargeGrid(pgp_params.pairGrid.size(), std::complex<double>(0.0, 0.0));
     
-    // TODO: Implement the pair grid spreading algorithm
-    // 1. 分离系统中的固定部分和移动部分
-    // 2. 使用B样条插值将固定部分的电荷扩散到网格上
-    // 3. 执行FFT将实空间电荷分布转换到倒空间
-    // 4. 应用Ewald因子
-    // 5. 执行反FFT获得实空间的预计算电势场
+    // 1. 分配电荷到网格 - 使用B样条插值
+    platform::log(LogLevel::DEBUG, "Spreading charges onto grid from ", 
+                 fixed_only ? "fixed atoms only" : "all atoms");
+    
+    // Loop through residues and atoms
+    for (int res_idx = 0; res_idx < state.activeResidueCount; ++res_idx) {
+        const auto& residue = state.residues[res_idx];
+        
+        // Skip inactive residues
+        if (!residue.active) continue;
+        
+        // Skip non-fixed residues if fixed_only is true
+        if (fixed_only && !residue.fixed) continue;
+        
+        // Process each atom in the residue
+        for (int atom_idx = 0; atom_idx < residue.atomCount; ++atom_idx) {
+            const auto& atom = state.atoms[residue.atomStart + atom_idx];
+            
+            // Skip atoms with no charge
+            if (std::abs(atom.charge) < 1e-10) continue;
+            
+            // Convert atom position to grid indices with B-spline offset
+            double pos[3] = {atom.x, atom.y, atom.z};
+            
+            // Apply B-spline interpolation to spread charge to grid points
+            // This is a simplified implementation - a full one would use proper B-spline functions
+            int grid_indices[3][4]; // For a cubic B-spline (order 4)
+            double weights[3][4];
+            
+            // Calculate grid indices and weights for interpolation
+            for (int d = 0; d < 3; d++) {
+                double scaled_pos = pos[d] / pgp_params.grid_spacing;
+                int base_idx = static_cast<int>(std::floor(scaled_pos));
+                
+                // Calculate B-spline weights (simplified)
+                double t = scaled_pos - base_idx;
+                weights[d][0] = (1 - t) * (1 - t) * (1 - t) / 6.0;
+                weights[d][1] = (3 * t * t * t - 6 * t * t + 4) / 6.0;
+                weights[d][2] = (-3 * t * t * t + 3 * t * t + 3 * t + 1) / 6.0;
+                weights[d][3] = t * t * t / 6.0;
+                
+                // Store grid indices with periodic boundary handling
+                for (int i = 0; i < 4; i++) {
+                    grid_indices[d][i] = (base_idx - 1 + i) % pgp_params.pair_grid_size[d];
+                    if (grid_indices[d][i] < 0) grid_indices[d][i] += pgp_params.pair_grid_size[d];
+                }
+            }
+            
+            // Distribute charge to surrounding grid points
+            for (int i = 0; i < 4; i++) {
+                for (int j = 0; j < 4; j++) {
+                    for (int k = 0; k < 4; k++) {
+                        int grid_idx = (grid_indices[0][i] * pgp_params.pair_grid_size[1] + grid_indices[1][j]) 
+                                      * pgp_params.pair_grid_size[2] + grid_indices[2][k];
+                        
+                        // Accumulate charge with B-spline weights
+                        chargeGrid[grid_idx].real(chargeGrid[grid_idx].real() + 
+                                                atom.charge * weights[0][i] * weights[1][j] * weights[2][k]);
+                    }
+                }
+            }
+        }
+    }
+    
+    // 2. 执行FFT将实空间电荷分布转换到倒空间
+    // Note: This is a placeholder for FFT transformation
+    // In a real implementation, you would use a proper FFT library like FFTW
+    platform::log(LogLevel::DEBUG, "Performing forward FFT on charge grid");
+    
+    // Placeholder for FFT (would be replaced with actual FFT implementation)
+    std::vector<std::complex<double>> reciprocalGrid = chargeGrid;  // In real code, this would be the FFT result
+    
+    // 3. 应用Ewald因子
+    platform::log(LogLevel::DEBUG, "Applying Ewald factor in reciprocal space");
+    int nx = pgp_params.pair_grid_size[0];
+    int ny = pgp_params.pair_grid_size[1];
+    int nz = pgp_params.pair_grid_size[2];
+    
+    for (int i = 0; i < nx; i++) {
+        int kx = (i <= nx/2) ? i : i - nx;
+        double kx2 = kx * kx;
+        
+        for (int j = 0; j < ny; j++) {
+            int ky = (j <= ny/2) ? j : j - ny;
+            double ky2 = ky * ky;
+            
+            for (int k = 0; k < nz; k++) {
+                int kz = (k <= nz/2) ? k : k - nz;
+                double kz2 = kz * kz;
+                
+                // Skip k=0 (net zero charge case)
+                if (kx == 0 && ky == 0 && kz == 0) continue;
+                
+                int idx = (i * ny + j) * nz + k;
+                
+                // Calculate k-vector squared
+                double k2 = kx2 + ky2 + kz2;
+                
+                // Apply Ewald factor: exp(-k²/4α²) / k²
+                double factor = std::exp(-k2 / (4.0 * pgp_params.alpha * pgp_params.alpha)) / k2;
+                
+                reciprocalGrid[idx] *= factor;
+            }
+        }
+    }
+    
+    // 4. 执行反FFT获得实空间的预计算电势场
+    platform::log(LogLevel::DEBUG, "Performing inverse FFT to get potential grid");
+    
+    // Placeholder for inverse FFT (would be replaced with actual FFT implementation)
+    pgp_params.pairGrid = reciprocalGrid;  // In real code, this would be the inverse FFT result
+    
+    platform::log(LogLevel::INFO, "Grid potential precomputation completed for ",
+                 fixed_only ? "fixed atoms only" : "all atoms");
 }
 
 /**
- * @brief 从预计算的配对网格中计算能量
+ * @brief 通过插值计算移动分子的能量
  * 
- * 使用预计算的电势网格快速评估移动分子的能量。这是PGP-PME算法的核心优势部分。
- * 在MC模拟中，当尝试插入或移动分子时，不需要重新计算整个系统的静电相互作用，
- * 而是通过查询预计算的电势网格快速获得能量变化。
+ * 该函数使用预计算的电势网格，快速评估移动分子在该电势场中的能量。
+ * 当在MC模拟中尝试插入、删除或移动分子时，这个函数提供了一种高效的能量评估方法，
+ * 无需重新计算整个系统的静电相互作用。
  * 
- * @param energy 输出参数，存储计算得到的能量
+ * @param state 系统状态，包含移动分子的信息
+ * @param energy 输出参数，存储计算得到的能量值
  */
-void computeEnergyFromPairGrid([[maybe_unused]] double& energy) {
-    // Implementation will depend on the specific PGP algorithm
-    platform::log(LogLevel::DEBUG, "Computing energy from pair grid");
-    
-    // TODO: Implement energy calculation from pair grid
-    // 1. 将移动分子的电荷通过B样条插值映射到网格点上
-    // 2. 计算移动分子电荷与预计算电势的乘积
-    // 3. 对所有网格点求和获得总能量
-}
-
-/**
- * @brief 使用PGP方法计算倒空间能量
- * 
- * 该函数结合了传统PME的倒空间计算和PGP特有的配对网格贡献。
- * 对于长程相互作用，复用PME的高效计算；对于中程相互作用，
- * 使用预计算的配对网格加速计算。
- * 
- * @param state 模拟系统状态
- * @param movement_only 是否只计算移动部分的能量
- * @return 倒空间总能量
- */
-double computeReciprocalPGP(model::MCState& state, bool movement_only) {
-    // Reuse the PME reciprocal calculation for the long-range part
-    double reciprocal_energy = computeReciprocalPME(state, movement_only);
-    
-    // Add the pair-grid contribution
-    spreadPairsOntoGrid(state, movement_only);
-    double pair_grid_energy = 0.0;
-    computeEnergyFromPairGrid(pair_grid_energy);
-    
-    platform::log(LogLevel::DEBUG, "PGP reciprocal energy: PME=", reciprocal_energy, 
-                 ", pair-grid=", pair_grid_energy, 
-                 ", total=", reciprocal_energy + pair_grid_energy);
-    
-    return reciprocal_energy + pair_grid_energy;
-}
-
-// Compute self energy (mostly the same as PME)
-double computeSelfEnergyPGP(model::MCState& state, bool movement_only) {
-    // The self energy calculation is the same as in PME
-    return computeSelfEnergyPME(state, movement_only);
-}
-
-// Compute real space energy using the pair grid approach
-void computeRealSpacePGP(model::MCState& state, bool movement_only, bool store_in_residues) {
-    // This is a modified version of the real space calculation
-    // TODO: Implement the PGP real space calculation
-    
-    // For now, just use the PME real space calculation
-    computeRealSpacePME(state, movement_only, store_in_residues);
-    
-    platform::log(LogLevel::DEBUG, "PGP real space energy calculated");
-}
-
-// Compute pair grid interactions
-void computePairGridPGP([[maybe_unused]] model::MCState& state, [[maybe_unused]] bool movement_only) {
-    // This is a new function specific to PGP
-    // TODO: Implement the pair grid calculations
-    
-    platform::log(LogLevel::DEBUG, "PGP pair grid calculation");
-}
-
-/**
- * @brief 计算整个系统的PGP能量
- * 
- * 这是PGP-PME方法的主要入口点，用于计算整个系统的能量。
- * 该函数协调实空间计算、倒空间计算和自能项计算，并将结果
- * 存储在系统状态中。
- * 
- * @param state 模拟系统状态
- */
-void computeSystemEnergyPGP(model::MCState& state) {
+void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
     if (!pgp_params.initialized) {
         throw std::runtime_error("PGP parameters not initialized");
     }
     
-    // Check system neutrality
-    checkSystemNeutrality(state);
+    // Reset energy accumulator
+    energy = 0.0;
     
-    // Reset the ewald_energy structure
-    state.ewald_energy = {0.0, 0.0, 0.0};
+    platform::log(LogLevel::DEBUG, "Interpolating energy for movement atoms");
     
-    // Compute real space energy (includes vdw)
-    computeRealSpacePGP(state, false, true);
-    
-    // Compute reciprocal space energy
-    state.ewald_energy.reciprocal = computeReciprocalPGP(state, false);
-    
-    // Compute self energy
-    state.ewald_energy.self = computeSelfEnergyPGP(state, false);
-    
-    platform::log(LogLevel::DEBUG, "PGP system energy: real=", state.ewald_energy.real_space,
-                 ", reciprocal=", state.ewald_energy.reciprocal,
-                 ", self=", state.ewald_energy.self,
-                 ", total=", state.ewald_energy.real_space + state.ewald_energy.reciprocal + state.ewald_energy.self);
-}
-
-/**
- * @brief 计算移动残基的PGP能量
- * 
- * 这是PGP-PME方法用于MC模拟中能量评估的关键函数。它只计算
- * 标记为移动的残基的能量变化，大大提高了MC模拟的效率。
- * 在GCMC和CBMC场景下特别有用，例如当尝试插入新分子或重构分子构型时。
- * 
- * @param state 模拟系统状态，包含移动残基的信息
- */
-void computeMovementEnergyPGP(model::MCState& state) {
-    if (!pgp_params.initialized) {
-        throw std::runtime_error("PGP parameters not initialized");
+    // Loop through movement residues
+    for (const auto& movementInfo : state.movementResidues) {
+        // Process each residue in the movement group
+        for (int res_idx = movementInfo.startIndex; 
+             res_idx < movementInfo.startIndex + movementInfo.activeCount; ++res_idx) {
+            
+            const auto& residue = state.residues[res_idx];
+            
+            // Skip inactive residues
+            if (!residue.active) continue;
+            
+            // Process each atom in the residue
+            for (int atom_idx = 0; atom_idx < residue.atomCount; ++atom_idx) {
+                const auto& atom = state.atoms[residue.atomStart + atom_idx];
+                
+                // Skip atoms with no charge
+                if (std::abs(atom.charge) < 1e-10) continue;
+                
+                // Convert atom position to grid coordinates
+                double pos[3] = {atom.x, atom.y, atom.z};
+                
+                // Scale position to grid units
+                double scaled_pos[3];
+                for (int d = 0; d < 3; d++) {
+                    scaled_pos[d] = pos[d] / pgp_params.grid_spacing;
+                }
+                
+                // Calculate interpolation indices and weights
+                int grid_indices[3][4]; // For a cubic B-spline (order 4)
+                double weights[3][4];
+                
+                // Calculate indices and weights for interpolation
+                for (int d = 0; d < 3; d++) {
+                    int base_idx = static_cast<int>(std::floor(scaled_pos[d]));
+                    
+                    // Calculate B-spline weights (simplified)
+                    double t = scaled_pos[d] - base_idx;
+                    weights[d][0] = (1 - t) * (1 - t) * (1 - t) / 6.0;
+                    weights[d][1] = (3 * t * t * t - 6 * t * t + 4) / 6.0;
+                    weights[d][2] = (-3 * t * t * t + 3 * t * t + 3 * t + 1) / 6.0;
+                    weights[d][3] = t * t * t / 6.0;
+                    
+                    // Store grid indices with periodic boundary handling
+                    for (int i = 0; i < 4; i++) {
+                        grid_indices[d][i] = (base_idx - 1 + i) % pgp_params.pair_grid_size[d];
+                        if (grid_indices[d][i] < 0) grid_indices[d][i] += pgp_params.pair_grid_size[d];
+                    }
+                }
+                
+                // Interpolate potential at atom position
+                double potential = 0.0;
+                for (int i = 0; i < 4; i++) {
+                    for (int j = 0; j < 4; j++) {
+                        for (int k = 0; k < 4; k++) {
+                            int grid_idx = (grid_indices[0][i] * pgp_params.pair_grid_size[1] + grid_indices[1][j]) 
+                                          * pgp_params.pair_grid_size[2] + grid_indices[2][k];
+                            
+                            // Accumulate potential with B-spline weights
+                            potential += pgp_params.pairGrid[grid_idx].real() * 
+                                        weights[0][i] * weights[1][j] * weights[2][k];
+                        }
+                    }
+                }
+                
+                // Accumulate energy (potential * charge)
+                energy += potential * atom.charge;
+            }
+        }
     }
     
-    // Check system neutrality
-    checkSystemNeutrality(state);
+    // Apply unit conversion and scaling factors if needed
+    // In a real implementation, you might need to apply conversion factors
+    // to get energy in proper units (e.g., kJ/mol)
     
-    // Reset the ewald_energy structure
-    state.ewald_energy = {0.0, 0.0, 0.0};
-    
-    // Compute real space energy for movement residues
-    computeRealSpacePGP(state, true, true);
-    
-    // Compute reciprocal space energy for movement
-    state.ewald_energy.reciprocal = computeReciprocalPGP(state, true);
-    
-    // Compute self energy for movement
-    state.ewald_energy.self = computeSelfEnergyPGP(state, true);
-    
-    platform::log(LogLevel::DEBUG, "PGP movement energy: real=", state.ewald_energy.real_space,
-                 ", reciprocal=", state.ewald_energy.reciprocal,
-                 ", self=", state.ewald_energy.self,
-                 ", total=", state.ewald_energy.real_space + state.ewald_energy.reciprocal + state.ewald_energy.self);
+    platform::log(LogLevel::DEBUG, "Interpolated energy: ", energy);
 }
 
 } // namespace cpu

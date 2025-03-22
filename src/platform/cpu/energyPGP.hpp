@@ -55,6 +55,28 @@ extern PGPParams pgp_params;
 void setPGPParameters(double alpha, const int meshSize[3], double pair_cutoff, 
                         const int pairGridSize[3], int splineOrder = 4, double tolerance = 1e-5);
 
+/**
+ * @brief 预计算系统中固定部分的网格电势
+ * 
+ * 该函数将系统中固定部分的电荷分配到网格上，通过FFT变换计算
+ * 电势场，并保存到pairGrid中供后续能量计算使用。
+ * 
+ * @param state 系统状态
+ * @param fixed_only 是否只处理固定部分
+ */
+void precomputeGridPotential(model::MCState& state, bool fixed_only = true);
+
+/**
+ * @brief 通过插值计算移动分子的能量
+ * 
+ * 该函数使用预计算的电势网格，通过插值方法快速计算移动分子
+ * 在电势场中的能量。
+ * 
+ * @param state 系统状态
+ * @param energy 计算得到的能量值
+ */
+void interpolateMoleculeEnergy(model::MCState& state, double& energy);
+
 // Auto-adjust PGP parameters based on error tolerance and box size
 void autoAdjustPGPParameters(double error_tolerance, double cutoff_distance, 
                                double pair_cutoff, const double box[3]);

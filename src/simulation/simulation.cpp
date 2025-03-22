@@ -229,51 +229,5 @@ void Simulation::setPGPParameters(float alpha, const int meshSize[3], float pair
         ", tolerance=", tolerance);
 }
 
-void Simulation::initializePGPParameters(float cutoff, float pair_cutoff, const float box[3], 
-                                         float alpha, [[maybe_unused]] const int* meshSize, 
-                                         [[maybe_unused]] const int* pairGridSize, 
-                                         int splineOrder, float tolerance) {
-    // Convert float parameters to double
-    double cutoff_d = static_cast<double>(cutoff);
-    double pair_cutoff_d = static_cast<double>(pair_cutoff);
-    double box_d[3] = {
-        static_cast<double>(box[0]),
-        static_cast<double>(box[1]),
-        static_cast<double>(box[2])
-    };
-    double tolerance_d = static_cast<double>(tolerance);
-    
-    // Call platform implementation with only needed parameters
-    platform::cpu::autoAdjustPGPParameters(tolerance_d, cutoff_d, pair_cutoff_d, box_d);
-    
-    log(LogLevel::INFO, "PGP parameters initialized with cutoff=", cutoff, 
-        ", pair_cutoff=", pair_cutoff,
-        ", alpha=", alpha != 0.0f ? std::to_string(alpha) : "auto",
-        ", splineOrder=", splineOrder,
-        ", tolerance=", tolerance);
-}
-
-void Simulation::computeSystemEnergyPGP(model::MCState& state) {
-    // Check box dimensions for PBC (using state.info.box)
-    if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
-        throw std::runtime_error("Invalid box dimensions for PGP calculation");
-    }
-    
-    // Call the platform implementation
-    log(LogLevel::DEBUG, "Computing system energy with PGP");
-    platform::cpu::computeSystemEnergyPGP(state);
-}
-
-void Simulation::computeMovementEnergyPGP(model::MCState& state) {
-    // Check box dimensions for PBC (using state.info.box)
-    if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
-        throw std::runtime_error("Invalid box dimensions for PGP calculation");
-    }
-    
-    // Call the platform implementation
-    log(LogLevel::DEBUG, "Computing movement energy with PGP");
-    platform::cpu::computeMovementEnergyPGP(state);
-}
-
 } // namespace simulation
 } // namespace pygcmc
