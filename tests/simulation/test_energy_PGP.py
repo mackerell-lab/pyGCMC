@@ -518,6 +518,3 @@ def test_compare_pme_pgp_energy():
         
         # 验证PGP和PME计算的能量变化在误差范围内一致
         assert relative_error < 0.1, f"相对误差过大: {relative_error*100:.2f}%"  # 允许10%的误差
-
-if __name__ == '__main__':
-    unittest.main() 
