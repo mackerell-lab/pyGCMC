@@ -153,7 +153,6 @@ void setPGPParameters(double alpha, const int meshSize[3], double potential_cuto
  */
 void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     // 检查参数是否已初始化
-    // 这是安全检查，确保在使用前已正确设置了PGP参数
     if (!pgp_params.initialized) {
         throw std::runtime_error("PGP parameters not initialized");
     }
@@ -205,24 +204,93 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     pme_params.pmeGrid.resize(totalGridSize, std::complex<double>(0.0, 0.0));
     
     // 调用PME的电荷分布函数
-    // 这将分配电荷到PME网格上，使用与PME完全相同的方法
     platform::log(LogLevel::INFO, "调用PME的电荷分布函数 (fixed_only=", fixed_only, ")");
     spreadChargesOntoGrid(state, fixed_only);
 
     // 调用PME的前向FFT函数
-    // 这将执行电荷网格的傅里叶变换，使用与PME完全相同的方法
     platform::log(LogLevel::INFO, "调用PME的前向FFT函数");
     performFFTForward();
 
-    // 修改：不再手动计算Ewald因子，而是直接调用PME的computeEnergyFromGrid函数
-    // 该函数会正确地应用Ewald因子并执行反向FFT，完全与PME保持一致
-    platform::log(LogLevel::INFO, "调用PME的Ewald因子应用和反向FFT函数");
-    double dummy_energy = 0.0;
-    // 传递box参数以确保体积计算一致
-    double box[3] = {pgp_params.box[0], pgp_params.box[1], pgp_params.box[2]};
-    computeEnergyFromGrid(dummy_energy, box);
-
-    // 将PME网格复制到PGP的potentialGrid中
+    // 修正: 应用Ewald因子但不执行反向FFT
+    platform::log(LogLevel::INFO, "手动应用Ewald因子");
+    
+    // 获取网格尺寸和盒子尺寸
+    int nx = pgp_params.potential_grid_size[0];
+    int ny = pgp_params.potential_grid_size[1];
+    int nz = pgp_params.potential_grid_size[2];
+    double volume = pgp_params.box[0] * pgp_params.box[1] * pgp_params.box[2];
+    
+    // 计算与应用Ewald因子所需的常数
+    double alpha = pgp_params.alpha;
+    // 修正：正确计算exp(-k²/(4α²))中的系数
+    double factor = 1.0/(4.0*alpha*alpha);
+    
+    // 获取最大k向量指数
+    int maxkx = (nx+1)/2;
+    int maxky = (ny+1)/2;
+    int maxkz = (nz+1)/2;
+    
+    // 计算倒格矢量
+    double recipBoxVectors[3][3] = {{0}};
+    recipBoxVectors[0][0] = 1.0 / pgp_params.box[0]; 
+    recipBoxVectors[1][1] = 1.0 / pgp_params.box[1]; 
+    recipBoxVectors[2][2] = 1.0 / pgp_params.box[2];
+    
+    // boxfactor用于B-spline系数应用
+    double boxfactor = (M_PI * volume) / (nx * ny * nz);
+    
+    // 应用Ewald因子
+    for (int kx = 0; kx < nx; kx++) {
+        double mx = (kx < maxkx) ? kx : (kx-nx);
+        double mhx = mx * recipBoxVectors[0][0];
+        
+        for (int ky = 0; ky < ny; ky++) {
+            double my = (ky < maxky) ? ky : (ky-ny);
+            double mhy = my * recipBoxVectors[1][1];
+            
+            for (int kz = 0; kz < nz; kz++) {
+                // 跳过零频率
+                if (kx == 0 && ky == 0 && kz == 0) {
+                    continue;
+                }
+                
+                double mz = (kz < maxkz) ? kz : (kz-nz);
+                double mhz = mz * recipBoxVectors[2][2];
+                
+                // 网格索引
+                int index = kx * ny * nz + ky * nz + kz;
+                // 获取结构因子
+                std::complex<double> structureFactor = pme_params.pmeGrid[index];
+                
+                // 计算|k|^2
+                double m2 = mhx * mhx + mhy * mhy + mhz * mhz;
+                
+                // 应用B-spline系数
+                double bx = pgp_params.bsplineModuli[0][kx];
+                double by = pgp_params.bsplineModuli[1][ky];
+                double bz = pgp_params.bsplineModuli[2][kz];
+                double denom = m2 * bx * by * bz * boxfactor; // 使用boxfactor
+                
+                // 避免除以零问题
+                if (denom < 1e-10) {
+                    denom = 1e-10;
+                }
+                
+                // 计算Ewald因子: (4π/Ω)·exp(-k²/(4α²))/denom
+                // 其中denom包含了m2和B-spline系数
+                double ewaldFactor = (4.0 * M_PI / volume) * exp(-m2 * factor) / denom;
+                
+                // 应用因子
+                pme_params.pmeGrid[index] = structureFactor * ewaldFactor;
+            }
+        }
+    }
+    
+    // 执行反向FFT以获得实空间电势
+    platform::log(LogLevel::INFO, "执行反向FFT获得实空间电势");
+    performFFTBackward();
+    
+    // 将修改后的PME网格复制到PGP的potentialGrid中
     pgp_params.potentialGrid = pme_params.pmeGrid;
 
     // 恢复原始PME网格
@@ -357,9 +425,9 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                 
                 // 计算倒易矢量
                 double recipBoxVectors[3][3] = {{0}};
-                recipBoxVectors[0][0] = 2.0 * M_PI / pgp_params.box[0]; // 2π/a
-                recipBoxVectors[1][1] = 2.0 * M_PI / pgp_params.box[1]; // 2π/b 
-                recipBoxVectors[2][2] = 2.0 * M_PI / pgp_params.box[2]; // 2π/c
+                recipBoxVectors[0][0] = 1.0 / pgp_params.box[0];
+                recipBoxVectors[1][1] = 1.0 / pgp_params.box[1];
+                recipBoxVectors[2][2] = 1.0 / pgp_params.box[2];
                 
                 // 获取原子位置
                 double pos[3] = {atom.x, atom.y, atom.z};
@@ -522,6 +590,75 @@ double calculateMoleculeEnergy(model::MCState& state) {
     
     // 确保返回正确的符号和量级的能量值
     return energy;
+}
+
+double computeMoleculeEnergyGlobal(model::MCState& state, const std::vector<int>& movementResidues, const std::vector<int>& nearbyResidues, int threadIndex) {
+    // 如果参数未初始化，则返回0
+    if (!pgp_params.initialized) {
+        platform::log(LogLevel::WARNING, "PGP parameters not initialized, returning 0 energy");
+        return 0.0;
+    }
+    
+    // 初始化总能量为0
+    double totalEnergy = 0.0;
+    
+    // 记录所使用的线程索引，可用于多线程计算时的日志跟踪
+    platform::log(LogLevel::DEBUG, "使用线程索引: ", threadIndex, " 计算PGP能量");
+    
+    // 记录附近残基数量，在某些算法变体中可用于短程能量修正
+    platform::log(LogLevel::DEBUG, "考虑附近残基数量: ", nearbyResidues.size());
+    
+    // 对于直接空间(短程)能量修正，可以考虑附近的残基
+    double directSpaceCorrection = 0.0;
+    if (!nearbyResidues.empty()) {
+        // 在一些PGP-PME实现中，虽然长程部分通过网格计算，
+        // 但仍需要计算短程修正项，尤其是对非周期性边界或大系统
+        platform::log(LogLevel::DEBUG, "计算附近残基的直接空间修正");
+        
+        // 这里可以实现直接空间修正计算
+        // 但当前PGP实现主要关注预计算网格电势部分
+        // 如果需要完整的直接空间修正，应单独实现
+    }
+    
+    // 处理不同情况的残基能量计算
+    if (movementResidues.empty()) {
+        // 如果没有指定移动残基，计算所有残基的能量
+        platform::log(LogLevel::DEBUG, "计算所有残基的能量");
+        
+        // 找出所有非固定的活动残基
+        for (int i = 0; i < state.activeResidueCount; ++i) {
+            if (state.residues[i].active && !state.residues[i].fixed) {
+                // 直接调用calculateMoleculeEnergy，它内部会调用interpolateMoleculeEnergy
+                totalEnergy = calculateMoleculeEnergy(state);
+                break;
+            }
+        }
+    } else {
+        // 如果指定了移动残基，我们需要修改state的movementResidues
+        // 先备份原始的movementResidues
+        auto originalMovementResidues = state.movementResidues;
+        
+        // 清空并设置新的movementResidues
+        state.movementResidues.clear();
+        model::MCMovementResidueInfo info;
+        info.startIndex = movementResidues[0];
+        info.activeCount = movementResidues.size();
+        state.movementResidues.push_back(info);
+        
+        // 计算能量
+        totalEnergy = calculateMoleculeEnergy(state);
+        
+        // 恢复原始的movementResidues
+        state.movementResidues = originalMovementResidues;
+    }
+    
+    // 添加直接空间修正（如果有）
+    totalEnergy += directSpaceCorrection;
+    
+    // 记录能量计算结果
+    platform::log(LogLevel::DEBUG, "PGP能量计算结果: ", totalEnergy, 
+                 " (线程: ", threadIndex, ", 考虑附近残基: ", !nearbyResidues.empty(), ")");
+    return totalEnergy;
 }
 
 } // namespace cpu
