@@ -201,168 +201,159 @@ def create_long_distance_system(box_size):
     
     return state
 
-class TestEnergyPGP(unittest.TestCase):
+def test_pgp_parameter_setting():
     """
-    Test the PGP (Pair-Grid PME) implementation
+    Test that PGP parameters can be set properly
     """
+    # Just test that the parameter setting doesn't throw an exception
+    alpha = 0.29  # 1/nm
+    mesh_size = [32, 32, 32]
+    pair_grid_size = [16, 16, 16]
+    spline_order = 4
+    tolerance = 1e-5
+    pair_cutoff = 0.5  # nm
     
-    def setUp(self):
-        """
-        Set up a NaCl crystal system for testing.
-        """
-        # Create a basic NaCl crystal for testing
-        self.box_size = 2.82  # nm, approximately 28.2 Å
-        self.n_cells = 2      # 2x2x2 supercell
-        self.system = create_nacl_crystal(self.box_size, self.n_cells)
-        
-        # Set cutoff within 1/2 box size to avoid problems with PBCs
-        self.cutoff = 1.0   # nm
-        self.pair_cutoff = 0.5  # nm
-        
-        # Temperature in K
-        self.temp = 300.0
-        self.system.info.setTemperature(self.temp)
+    # Set the parameters
+    pygcmc.setPGPParameters(
+        alpha=alpha,
+        meshSize=mesh_size,
+        pair_cutoff=pair_cutoff,
+        pairGridSize=pair_grid_size,
+        splineOrder=spline_order,
+        tolerance=tolerance
+    )
     
-    def test_pgp_parameter_setting(self):
-        """
-        Test that PGP parameters can be set properly
-        """
-        # Just test that the parameter setting doesn't throw an exception
-        alpha = 0.29  # 1/nm
-        mesh_size = [32, 32, 32]
-        pair_grid_size = [16, 16, 16]
-        spline_order = 4
-        tolerance = 1e-5
+    # This test passes if setPGPParameters doesn't throw an exception
+    assert True, "Parameters set successfully"
         
-        # Set the parameters
-        pygcmc.setPGPParameters(
-            alpha=alpha,
-            meshSize=mesh_size,
-            pair_cutoff=self.pair_cutoff,
-            pairGridSize=pair_grid_size,
-            splineOrder=spline_order,
-            tolerance=tolerance
-        )
+def test_precompute_grid_potential():
+    """
+    Test precomputing the grid potential
+    """
+    # 设置基本参数
+    box_size = 2.82  # nm, approximately 28.2 Å
+    n_cells = 2      # 2x2x2 supercell
+    cutoff = 1.0   # nm
+    pair_cutoff = 0.5  # nm
+    
+    # 设置PGP参数
+    alpha = 0.29  # 1/nm
+    mesh_size = [32, 32, 32]
+    pair_grid_size = [16, 16, 16]
+    spline_order = 4
+    tolerance = 1e-5
+    box = [box_size, box_size, box_size]
+    
+    # 初始化参数
+    pygcmc.setPMEParameters(
+        alpha=alpha,
+        meshSize=mesh_size,
+        splineOrder=spline_order,
+        tolerance=tolerance
+    )
+    
+    # 初始化PME参数 - 这是关键步骤
+    pygcmc.initializePMEParameters(cutoff, box, alpha)
+    
+    pygcmc.setPGPParameters(
+        alpha=alpha,
+        meshSize=mesh_size,
+        pair_cutoff=pair_cutoff,
+        pairGridSize=pair_grid_size,
+        splineOrder=spline_order,
+        tolerance=tolerance
+    )
+    
+    # 创建一个包含固定和移动部分的模型
+    system = create_nacl_crystal(box_size, n_cells)
+    
+    # 将一半的残基标记为固定
+    n_residues = len(system.residues)
+    for i in range(0, n_residues, 2):
+        system.residues[i].fixed = True
+    
+    # 预计算固定部分的网格电势
+    pygcmc.precomputeGridPotential(system, fixed_only=True)
+    
+    # 测试成功执行而不崩溃
+    assert True, "Grid potential precomputation succeeded"
+    print("Grid potential precomputation succeeded")
         
-        # This test passes if setPGPParameters doesn't throw an exception
-        self.assertTrue(True)
-        
-    def test_precompute_grid_potential(self):
-        """
-        Test precomputing the grid potential
-        """
-        # 设置PGP参数
-        alpha = 0.29  # 1/nm
-        mesh_size = [32, 32, 32]
-        pair_grid_size = [16, 16, 16]
-        spline_order = 4
-        tolerance = 1e-5
-        box = [self.box_size, self.box_size, self.box_size]
-        
-        # 初始化参数
-        pygcmc.setPMEParameters(
-            alpha=alpha,
-            meshSize=mesh_size,
-            splineOrder=spline_order,
-            tolerance=tolerance
-        )
-        
-        # 初始化PME参数 - 这是关键步骤
-        pygcmc.initializePMEParameters(self.cutoff, box, alpha)
-        
-        pygcmc.setPGPParameters(
-            alpha=alpha,
-            meshSize=mesh_size,
-            pair_cutoff=self.pair_cutoff,
-            pairGridSize=pair_grid_size,
-            splineOrder=spline_order,
-            tolerance=tolerance
-        )
-        
-        # 创建一个包含固定和移动部分的模型
-        system = create_nacl_crystal(self.box_size, self.n_cells)
-        
-        # 将一半的残基标记为固定
-        n_residues = len(system.residues)
-        for i in range(0, n_residues, 2):
+def test_interpolate_molecule_energy():
+    """
+    Test interpolating molecule energy from the precomputed grid
+    """
+    # 设置基本参数
+    box_size = 2.82  # nm, approximately 28.2 Å
+    n_cells = 2      # 2x2x2 supercell
+    cutoff = 1.0   # nm
+    pair_cutoff = 0.5  # nm
+    
+    # 设置PGP参数
+    alpha = 0.29  # 1/nm
+    mesh_size = [32, 32, 32]
+    pair_grid_size = [16, 16, 16]
+    spline_order = 4
+    tolerance = 1e-5
+    box = [box_size, box_size, box_size]
+    
+    # 初始化参数
+    pygcmc.setPMEParameters(
+        alpha=alpha,
+        meshSize=mesh_size,
+        splineOrder=spline_order,
+        tolerance=tolerance
+    )
+    
+    # 初始化PME参数 - 这是关键步骤
+    pygcmc.initializePMEParameters(cutoff, box, alpha)
+    
+    pygcmc.setPGPParameters(
+        alpha=alpha,
+        meshSize=mesh_size,
+        pair_cutoff=pair_cutoff,
+        pairGridSize=pair_grid_size,
+        splineOrder=spline_order,
+        tolerance=tolerance
+    )
+    
+    # 创建一个包含固定和移动部分的模型
+    system = create_nacl_crystal(box_size, n_cells)
+    
+    # 将一半的残基标记为固定，一半为移动
+    n_residues = len(system.residues)
+    fixed_residues = []
+    moving_residues = []
+    
+    for i in range(n_residues):
+        if i % 2 == 0:
             system.residues[i].fixed = True
-        
-        # 预计算固定部分的网格电势
-        pygcmc.precomputeGridPotential(system, fixed_only=True)
-        
-        # 测试成功执行而不崩溃
-        self.assertTrue(True)
-        print("Grid potential precomputation succeeded")
-        
-    def test_interpolate_molecule_energy(self):
-        """
-        Test interpolating molecule energy from the precomputed grid
-        """
-        # 设置PGP参数
-        alpha = 0.29  # 1/nm
-        mesh_size = [32, 32, 32]
-        pair_grid_size = [16, 16, 16]
-        spline_order = 4
-        tolerance = 1e-5
-        box = [self.box_size, self.box_size, self.box_size]
-        
-        # 初始化参数
-        pygcmc.setPMEParameters(
-            alpha=alpha,
-            meshSize=mesh_size,
-            splineOrder=spline_order,
-            tolerance=tolerance
-        )
-        
-        # 初始化PME参数 - 这是关键步骤
-        pygcmc.initializePMEParameters(self.cutoff, box, alpha)
-        
-        pygcmc.setPGPParameters(
-            alpha=alpha,
-            meshSize=mesh_size,
-            pair_cutoff=self.pair_cutoff,
-            pairGridSize=pair_grid_size,
-            splineOrder=spline_order,
-            tolerance=tolerance
-        )
-        
-        # 创建一个包含固定和移动部分的模型
-        system = create_nacl_crystal(self.box_size, self.n_cells)
-        
-        # 将一半的残基标记为固定，一半为移动
-        n_residues = len(system.residues)
-        fixed_residues = []
-        moving_residues = []
-        
-        for i in range(n_residues):
-            if i % 2 == 0:
-                system.residues[i].fixed = True
-                fixed_residues.append(i)
-            else:
-                system.residues[i].fixed = False
-                moving_residues.append(i)
-        
-        # 设置移动残基 - 使用MCMovementResidueInfo正确设置
-        movement_info = MCMovementResidueInfo()
-        movement_info.startIndex = moving_residues[0]  # 第一个移动残基的索引
-        movement_info.activeCount = len(moving_residues)  # 移动残基的数量
-        system.movementResidues.append(movement_info)
-        
-        # 预计算固定部分的网格电势
-        pygcmc.precomputeGridPotential(system, fixed_only=True)
-        
-        # 计算插值能量 - 使用新的函数名
-        energy = pygcmc.calculateMoleculeEnergy(system)
-        
-        # 同时测试两个等效函数
-        energy2 = pygcmc.interpolateMoleculeEnergy(system)
-        
-        # 验证两个函数返回相同结果
-        self.assertEqual(energy, energy2)
-        
-        # 验证结果
-        self.assertTrue(np.isfinite(energy))
-        print(f"Interpolated energy: {energy}")
+            fixed_residues.append(i)
+        else:
+            system.residues[i].fixed = False
+            moving_residues.append(i)
+    
+    # 设置移动残基 - 使用MCMovementResidueInfo正确设置
+    movement_info = MCMovementResidueInfo()
+    movement_info.startIndex = moving_residues[0]  # 第一个移动残基的索引
+    movement_info.activeCount = len(moving_residues)  # 移动残基的数量
+    system.movementResidues.append(movement_info)
+    
+    # 预计算固定部分的网格电势
+    pygcmc.precomputeGridPotential(system, fixed_only=True)
+    
+    # 计算插值能量 - 使用新的函数名
+    energy = pygcmc.calculateMoleculeEnergy(system)
+    
+    # 同时测试两个等效函数
+    energy2 = pygcmc.interpolateMoleculeEnergy(system)
+    
+    # 验证两个函数返回相同结果
+    assert energy == energy2, "calculateMoleculeEnergy and interpolateMoleculeEnergy should return the same result"
+    
+    # 验证结果
+    assert np.isfinite(energy), "Energy should be finite"
+    print(f"Interpolated energy: {energy}")
 
 # 将测试函数移到模块级别
 def test_compare_pme_pgp_energy():
