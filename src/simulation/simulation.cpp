@@ -229,5 +229,17 @@ void Simulation::setPGPParameters(float alpha, const int meshSize[3], float pair
         ", tolerance=", tolerance);
 }
 
+void Simulation::precomputeGridPotential(model::MCState& state, bool fixed_only) {
+    platform::cpu::precomputeGridPotential(state, fixed_only);
+}
+
+void Simulation::interpolateMoleculeEnergy(model::MCState& state, double& energy) {
+    platform::cpu::interpolateMoleculeEnergy(state, energy);
+}
+
+double Simulation::calculateMoleculeEnergy(model::MCState& state) {
+    return platform::cpu::calculateMoleculeEnergy(state);
+}
+
 } // namespace simulation
 } // namespace pygcmc

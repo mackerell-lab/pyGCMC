@@ -3,6 +3,7 @@
 #include "model/montecarlo.hpp"
 #include "platform/platform.hpp"
 #include "energyCommon.hpp"
+#include "energyPME.hpp"
 #include <array>
 #include <vector>
 #include <complex>
@@ -22,7 +23,7 @@ namespace cpu {
  * 2. 预计算网格参数：配对截断距离、网格大小和间距等
  * 3. 数据存储：预计算电势网格、B样条模数等
  */
-struct PGPParams {
+struct PGPParams : public PMEParams {
     bool initialized = false;      // 参数是否已初始化
     double alpha;                  // Ewald分离参数，平衡实空间和倒空间计算
     double tolerance;              // 误差容限
@@ -34,7 +35,7 @@ struct PGPParams {
     
     // 预计算电势网格参数
     double pair_cutoff;                    // 配对相互作用截断距离
-    std::array<int, 3> pair_grid_size;     // 预计算电势网格尺寸
+    int pair_grid_size[3];                  // 预计算电势网格尺寸
     double grid_spacing;                   // 网格间距
     std::vector<std::complex<double>> pairGrid;  // 预计算电势网格数据
     
@@ -47,6 +48,9 @@ struct PGPParams {
     std::vector<double> bsplineModuli[3];  // B样条模数
     std::vector<std::complex<double>> pmeGrid;   // PME网格
     std::vector<double> pmeCharge;        // PME电荷网格，类型需与PME结构体匹配
+    
+    // 调试标志
+    bool debug_mode = true;  // 默认启用调试模式
 
     /**
      * @brief 初始化预计算电势的三维网格

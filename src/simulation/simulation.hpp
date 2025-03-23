@@ -27,6 +27,7 @@ static LogLevel log_level_ = LogLevel::WARNING;  // Default to WARNING level
 // Logging functions
 inline void set_verbose(bool verbose) { verbose_ = verbose; }
 inline void set_log_level(LogLevel level) { log_level_ = level; }
+inline void set_debug_mode(bool debug_mode) { platform::set_debug_mode(debug_mode); }
 
 // Helper function to check if debug output is enabled
 inline bool is_debug_enabled() { 
@@ -186,6 +187,38 @@ public:
      */
     void setPGPParameters(double alpha, const std::array<int, 3>& meshSize, double pair_cutoff,
                           const std::array<int, 3>& pairGridSize, int splineOrder, double tolerance);
+
+    // PGP method - add the following functions
+    
+    /**
+     * 预计算系统中固定部分的网格电势
+     * 
+     * 为PGP-PME算法预先计算电势网格，这是加速MC模拟的关键步骤
+     * 
+     * @param state 系统状态
+     * @param fixed_only 是否只处理固定部分
+     */
+    static void precomputeGridPotential(model::MCState& state, bool fixed_only);
+    
+    /**
+     * 通过插值计算移动分子的能量（输出参数版本）
+     * 
+     * 从预计算的电势网格中插值计算移动分子的能量
+     * 
+     * @param state 系统状态
+     * @param energy 输出参数，存储计算得到的能量
+     */
+    static void interpolateMoleculeEnergy(model::MCState& state, double& energy);
+    
+    /**
+     * 通过插值计算移动分子的能量（返回值版本）
+     * 
+     * 从预计算的电势网格中插值计算移动分子的能量，并返回结果
+     * 
+     * @param state 系统状态
+     * @return 计算得到的能量值
+     */
+    static double calculateMoleculeEnergy(model::MCState& state);
 
 private:
     std::unique_ptr<platform::IPlatform> platform_;

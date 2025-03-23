@@ -2,7 +2,6 @@
 #include <pybind11/stl.h>
 
 #include "../simulation/simulation.hpp"
-#include "../platform/cpu/energyPGP.hpp"
 
 namespace py = pybind11;
 
@@ -10,6 +9,19 @@ namespace pygcmc {
 namespace bindings {
 
 void init_simulation_bindings(py::module& m) {
+    py::enum_<platform::LogLevel>(m, "PlatformLogLevel")
+        .value("DEBUG", platform::LogLevel::DEBUG)
+        .value("INFO", platform::LogLevel::INFO)
+        .value("WARNING", platform::LogLevel::WARNING)
+        .value("ERROR", platform::LogLevel::ERROR);
+    
+    m.def("set_platform_verbose", &platform::set_verbose, 
+         "Set verbose mode for platform logging");
+    m.def("set_platform_log_level", &platform::set_log_level,
+         "Set the minimum log level for platform");
+    m.def("set_platform_debug_mode", &simulation::set_debug_mode,
+         "Enable or disable debug mode for platform logging");
+
     m.def("computeMovementEnergy", &simulation::Simulation::computeMovementEnergy,
           "Calculate nonbonded energies for movement residues only");
           
@@ -293,7 +305,7 @@ void init_simulation_bindings(py::module& m) {
     // 新增的PGP核心函数绑定
     m.def("precomputeGridPotential",
         [](model::MCState& state, bool fixed_only) {
-            platform::cpu::precomputeGridPotential(state, fixed_only);
+            simulation::Simulation::precomputeGridPotential(state, fixed_only);
         },
         "Precompute the electrostatic grid potential for fixed parts of the system",
         py::arg("state"),
@@ -312,7 +324,7 @@ void init_simulation_bindings(py::module& m) {
     m.def("interpolateMoleculeEnergy",
         [](model::MCState& state) {
             double energy = 0.0;
-            platform::cpu::interpolateMoleculeEnergy(state, energy);
+            simulation::Simulation::interpolateMoleculeEnergy(state, energy);
             return energy;
         },
         "Calculate molecule energy by interpolating from the precomputed grid potential",
@@ -333,7 +345,7 @@ void init_simulation_bindings(py::module& m) {
     // 添加新的函数绑定：calculateMoleculeEnergy
     m.def("calculateMoleculeEnergy",
         [](model::MCState& state) {
-            return platform::cpu::calculateMoleculeEnergy(state);
+            return simulation::Simulation::calculateMoleculeEnergy(state);
         },
         "Calculate molecule energy by interpolating from the precomputed grid potential (alternative function)",
         py::arg("state"),

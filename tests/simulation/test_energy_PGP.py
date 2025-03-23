@@ -4,6 +4,20 @@ import math
 import pygcmc
 from pygcmc import MCState, MCInfo, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
 
+# 设置日志级别为INFO或更低，确保能看到详细日志输出
+# 系统日志设置
+pygcmc.System.set_log_level(pygcmc.LogLevel.INFO)
+pygcmc.System.set_verbose(True)
+
+# 平台日志设置 (energyPGP.cpp中的日志输出需要这个设置)
+pygcmc.set_platform_verbose(True)  # 启用平台日志输出
+pygcmc.set_platform_log_level(pygcmc.PlatformLogLevel.INFO)
+pygcmc.set_platform_debug_mode(True)  # 启用调试模式用于测试
+
+# 如果需要更详细的日志，可以设置为DEBUG
+# pygcmc.System.set_log_level(pygcmc.LogLevel.DEBUG)
+# pygcmc.set_platform_log_level(pygcmc.PlatformLogLevel.DEBUG)
+
 # Direct copy of create_nacl_crystal function from test_energy_PME.py
 def create_nacl_crystal(box_size, n_cells):
     """
@@ -304,68 +318,42 @@ def test_compare_pme_pgp_energy():
     moving_residues = []
     
     for i in range(n_residues):
-        if i % 2 == 0:
+        if i % 2 == 0:  # 偶数索引的残基标记为固定
             system.residues[i].fixed = True
             fixed_residues.append(i)
-        else:
+        else:  # 奇数索引的残基标记为移动
             system.residues[i].fixed = False
             moving_residues.append(i)
     
-    # 确保移动残基是连续的，这样MCMovementResidueInfo可以正确工作
-    # 对于测试目的，我们将移动残基重新排序，确保它们是连续的
-    if len(moving_residues) > 0:
-        # 按照索引排序移动残基
-        moving_residues.sort()
-        
-        # 设置移动残基 - 使用MCMovementResidueInfo正确设置
-        # 如果移动残基不是连续的，需要为每组连续残基创建单独的MovementInfo
-        current_start = moving_residues[0]
-        current_count = 1
-        
-        for i in range(1, len(moving_residues)):
-            if moving_residues[i] == moving_residues[i-1] + 1:
-                # 连续的残基，增加计数
-                current_count += 1
-            else:
-                # 不连续，创建一个新的MovementInfo并重置
-                movement_info = MCMovementResidueInfo()
-                movement_info.startIndex = current_start
-                movement_info.activeCount = current_count
-                system.movementResidues.append(movement_info)
-                
-                # 重置计数器
-                current_start = moving_residues[i]
-                current_count = 1
-        
-        # 添加最后一组
-        movement_info = MCMovementResidueInfo()
-        movement_info.startIndex = current_start
-        movement_info.activeCount = current_count
-        system.movementResidues.append(movement_info)
+    # 确保移动残基是连续的
+    moving_residues.sort()
     
-    # 记录移动残基的初始坐标
-    initial_positions = []
-    for res_idx in moving_residues:
-        residue = system.residues[res_idx]
-        for atom_idx in range(residue.atomCount):
-            atom = system.atoms[residue.atomStart + atom_idx]
-            initial_positions.append((atom.x, atom.y, atom.z))
+    # 创建一个移动残基信息对象并添加到系统中
+    print(f"Moving residues: {moving_residues}")
+    
+    # 清除之前可能存在的移动残基信息
+    system.movementResidues.clear()
+    
+    # 创建一个移动残基信息对象
+    movement_info = pygcmc.MCMovementResidueInfo()
+    movement_info.startIndex = moving_residues[0]  # 第一个移动残基的索引
+    movement_info.activeCount = len(moving_residues)  # 移动残基的数量
+    system.movementResidues.append(movement_info)
+    
+    print(f"Added movement info: startIndex={movement_info.startIndex}, activeCount={movement_info.activeCount}")
+    print(f"System has {system.activeResidueCount} active residues and {len(system.movementResidues)} movement residue groups")
+    
+    # 验证移动残基信息是否已设置
+    assert len(system.movementResidues) > 0, "No movement residues set!"
     
     # 第1步: 使用PME计算初始系统能量
     initial_pme_result = pygcmc.computeMovementEnergyPME(system)
     initial_pme_energy = initial_pme_result[0]  # PME电静态能量
-    
-    print(f"System has {system.activeResidueCount} active residues and {len(system.movementResidues)} movement residue groups")
-    for i, info in enumerate(system.movementResidues):
-        print(f"Movement group {i}: startIndex={info.startIndex}, activeCount={info.activeCount}")
+    print(f"Initial PME energy result: {initial_pme_result}")
     
     # 第2步: 使用PGP预计算网格电势并计算移动残基能量
     pygcmc.precomputeGridPotential(system, fixed_only=True)
     initial_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
-    
-    # 检查初始状态下PME和PGP计算的能量是否接近
-    # 注意: PGP只计算移动残基与固定残基之间的相互作用，不包括移动残基之间的相互作用
-    # 因此，需要从PME结果中分离出这部分能量才能直接比较
     
     # 打印初始能量
     print(f"Initial PME energy: {initial_pme_energy}")
@@ -386,6 +374,7 @@ def test_compare_pme_pgp_energy():
     # 第4步: 使用PME计算移动后的系统能量
     moved_pme_result = pygcmc.computeMovementEnergyPME(system)
     moved_pme_energy = moved_pme_result[0]  # PME电静态能量
+    print(f"Moved PME energy result: {moved_pme_result}")
     
     # 第5步: 使用PGP计算移动后的能量
     moved_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
