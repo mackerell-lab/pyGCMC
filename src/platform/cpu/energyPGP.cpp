@@ -337,7 +337,6 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
  */
 void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
     // 检查参数是否已初始化
-    // 这是安全检查，确保在使用前已正确设置了PGP参数
     if (!pgp_params.initialized) {
         throw std::runtime_error("PGP parameters not initialized");
     }
@@ -347,7 +346,6 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
     std::cout << "  移动残基组数: " << state.movementResidues.size() << std::endl;
     
     // 重置能量累加器
-    // 初始化能量为0，准备累加每个原子的贡献
     energy = 0.0;
     
     // 检查预计算的网格是否为空
@@ -423,28 +421,15 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                 // 计算网格位置和B样条插值权重
                 // 修正：使用与预计算电势相同的坐标变换方法
                 
-                // 计算倒易矢量
-                double recipBoxVectors[3][3] = {{0}};
-                recipBoxVectors[0][0] = 1.0 / pgp_params.box[0];
-                recipBoxVectors[1][1] = 1.0 / pgp_params.box[1];
-                recipBoxVectors[2][2] = 1.0 / pgp_params.box[2];
-                
                 // 获取原子位置
                 double pos[3] = {atom.x, atom.y, atom.z};
                 
-                // 计算分数坐标
+                // 计算分数坐标 - 直接使用盒子尺寸进行变换，与precomputeGridPotential一致
                 double fractional[3];
                 for (int d = 0; d < 3; d++) {
-                    // 使用倒易矢量计算分数坐标
-                    fractional[d] = 0.0;
-                    for (int j = 0; j < 3; j++) {
-                        fractional[d] += pos[j] * recipBoxVectors[j][d] / (2.0 * M_PI);
-                    }
-                    
-                    // 确保在[0,1)范围内，处理周期性边界条件
-                    fractional[d] -= floor(fractional[d]);
-                    // 将分数坐标缩放到网格
-                    fractional[d] *= pgp_params.potential_grid_size[d];
+                    fractional[d] = pos[d] / pgp_params.box[d];
+                    fractional[d] -= floor(fractional[d]);  // 确保在[0,1)范围内
+                    fractional[d] *= pgp_params.potential_grid_size[d]; // 缩放到网格
                 }
                 
                 // 计算网格索引和分数部分
@@ -487,6 +472,34 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                 computeBSplineCoefficients(gridFractions[2], order, coefficients);
                 for (int i = 0; i < order; i++) {
                     thetaZ[i] = coefficients[i];
+                }
+                
+                // 输出最近的网格点及其电势值（用于测试）
+                std::cout << "[DIRECT PLATFORM] 原子 " << atom_index << " 最近的网格点信息:" << std::endl;
+                std::cout << "  网格索引: (" << gridIndices[0] << "," << gridIndices[1] << "," << gridIndices[2] << ")" << std::endl;
+                
+                // 输出该点及其周围网格点的电势值
+                std::cout << "  最近网格点电势值:" << std::endl;
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int dy = -1; dy <= 1; dy++) {
+                        for (int dz = -1; dz <= 1; dz++) {
+                            int xi = (gridIndices[0] + dx + nx) % nx;
+                            int yi = (gridIndices[1] + dy + ny) % ny;
+                            int zi = (gridIndices[2] + dz + nz) % nz;
+                            int index = xi * ny * nz + yi * nz + zi;
+                            
+                            double pot_val = pgp_params.potentialGrid[index].real();
+                            
+                            if (dx == 0 && dy == 0 && dz == 0) {
+                                std::cout << "  → 中心点 (" << xi << "," << yi << "," << zi 
+                                          << "): " << pot_val << std::endl;
+                            } else if (std::abs(pot_val) > 1e-6) {
+                                // 只输出非零的周围点
+                                std::cout << "    点 (" << xi << "," << yi << "," << zi 
+                                          << "): " << pot_val << std::endl;
+                            }
+                        }
+                    }
                 }
                 
                 // 插值计算电势
