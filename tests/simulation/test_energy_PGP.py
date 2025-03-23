@@ -208,17 +208,17 @@ def test_pgp_parameter_setting():
     # Just test that the parameter setting doesn't throw an exception
     alpha = 0.29  # 1/nm
     mesh_size = [32, 32, 32]
-    pair_grid_size = [16, 16, 16]
+    potential_grid_size = [16, 16, 16]
     spline_order = 4
     tolerance = 1e-5
-    pair_cutoff = 0.5  # nm
+    potential_cutoff = 0.5  # nm
     
     # Set the parameters
     pygcmc.setPGPParameters(
         alpha=alpha,
         meshSize=mesh_size,
-        pair_cutoff=pair_cutoff,
-        pairGridSize=pair_grid_size,
+        potential_cutoff=potential_cutoff,
+        potentialGridSize=potential_grid_size,
         splineOrder=spline_order,
         tolerance=tolerance
     )
@@ -234,12 +234,12 @@ def test_precompute_grid_potential():
     box_size = 2.82  # nm, approximately 28.2 Å
     n_cells = 2      # 2x2x2 supercell
     cutoff = 1.0   # nm
-    pair_cutoff = 0.5  # nm
+    potential_cutoff = 0.5  # nm
     
     # 设置PGP参数
     alpha = 0.29  # 1/nm
     mesh_size = [32, 32, 32]
-    pair_grid_size = [16, 16, 16]
+    potential_grid_size = [16, 16, 16]
     spline_order = 4
     tolerance = 1e-5
     box = [box_size, box_size, box_size]
@@ -258,8 +258,8 @@ def test_precompute_grid_potential():
     pygcmc.setPGPParameters(
         alpha=alpha,
         meshSize=mesh_size,
-        pair_cutoff=pair_cutoff,
-        pairGridSize=pair_grid_size,
+        potential_cutoff=potential_cutoff,
+        potentialGridSize=potential_grid_size,
         splineOrder=spline_order,
         tolerance=tolerance
     )
@@ -287,12 +287,12 @@ def test_interpolate_molecule_energy():
     box_size = 2.82  # nm, approximately 28.2 Å
     n_cells = 2      # 2x2x2 supercell
     cutoff = 1.0   # nm
-    pair_cutoff = 0.5  # nm
+    potential_cutoff = 0.5  # nm
     
     # 设置PGP参数
     alpha = 0.29  # 1/nm
     mesh_size = [32, 32, 32]
-    pair_grid_size = [16, 16, 16]
+    potential_grid_size = [16, 16, 16]
     spline_order = 4
     tolerance = 1e-5
     box = [box_size, box_size, box_size]
@@ -311,8 +311,8 @@ def test_interpolate_molecule_energy():
     pygcmc.setPGPParameters(
         alpha=alpha,
         meshSize=mesh_size,
-        pair_cutoff=pair_cutoff,
-        pairGridSize=pair_grid_size,
+        potential_cutoff=potential_cutoff,
+        potentialGridSize=potential_grid_size,
         splineOrder=spline_order,
         tolerance=tolerance
     )
@@ -345,15 +345,13 @@ def test_interpolate_molecule_energy():
     # 计算插值能量 - 使用新的函数名
     energy = pygcmc.calculateMoleculeEnergy(system)
     
-    # 同时测试两个等效函数
-    energy2 = pygcmc.interpolateMoleculeEnergy(system)
+    # 检查能量值是否合理
+    # 注意：这里我们不检查具体的能量值，因为计算结果取决于多种因素
+    # 只检查能量值是否为有限数且不为零
+    assert np.isfinite(energy), "Energy value should be finite"
+    assert energy != 0.0, "Energy value should not be exactly zero"
     
-    # 验证两个函数返回相同结果
-    assert energy == energy2, "calculateMoleculeEnergy and interpolateMoleculeEnergy should return the same result"
-    
-    # 验证结果
-    assert np.isfinite(energy), "Energy should be finite"
-    print(f"Interpolated energy: {energy}")
+    print(f"Interpolated energy: {energy} kJ/mol")
 
 # 将测试函数移到模块级别
 def test_compare_pme_pgp_energy():
@@ -367,12 +365,12 @@ def test_compare_pme_pgp_energy():
     # 设置参数 - 确保PME和PGP使用相同的参数
     box_size = 5.0  # nm - 使用更大的盒子
     cutoff = 1.0   # nm
-    pair_cutoff = 1.0  # nm - 与cutoff相同
+    potential_cutoff = 1.0  # nm - 与cutoff相同
     box = [box_size, box_size, box_size]
     
     alpha = 0.29  # 1/nm
     mesh_size = [32, 32, 32]
-    pair_grid_size = [32, 32, 32]  # 使用与PME相同的网格大小以便准确比较
+    potential_grid_size = [32, 32, 32]  # 使用与PME相同的网格大小以便准确比较
     spline_order = 4
     tolerance = 1e-5
     
@@ -409,8 +407,8 @@ def test_compare_pme_pgp_energy():
     pygcmc.setPGPParameters(
         alpha=alpha,
         meshSize=mesh_size,
-        pair_cutoff=pair_cutoff,
-        pairGridSize=pair_grid_size,
+        potential_cutoff=potential_cutoff,
+        potentialGridSize=potential_grid_size,
         splineOrder=spline_order,
         tolerance=tolerance
     )

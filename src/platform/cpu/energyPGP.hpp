@@ -20,7 +20,7 @@ namespace cpu {
  * 
  * 主要包含以下几类参数：
  * 1. 常规PME参数：alpha、网格大小、插值阶数等
- * 2. 预计算网格参数：配对截断距离、网格大小和间距等
+ * 2. 预计算网格参数：电势截断距离、网格大小和间距等
  * 3. 数据存储：预计算电势网格、B样条模数等
  */
 struct PGPParams : public PMEParams {
@@ -34,10 +34,10 @@ struct PGPParams : public PMEParams {
     std::array<int, 3> meshSize;   // PME网格的三维尺寸
     
     // 预计算电势网格参数
-    double pair_cutoff;                    // 配对相互作用截断距离
-    int pair_grid_size[3];                  // 预计算电势网格尺寸
-    double grid_spacing;                   // 网格间距
-    std::vector<std::complex<double>> pairGrid;  // 预计算电势网格数据
+    double potential_cutoff;              // 电势计算的截断距离
+    int potential_grid_size[3];           // 预计算电势网格尺寸
+    double grid_spacing;                  // 网格间距
+    std::vector<std::complex<double>> potentialGrid;  // 预计算电势网格数据
     
     // PME算法参数(主要由setPMEParameters函数设置)
     std::vector<double> erfcTable;         // erfc函数查找表
@@ -55,7 +55,7 @@ struct PGPParams : public PMEParams {
     /**
      * @brief 初始化预计算电势的三维网格
      * 
-     * 该方法创建并初始化用于存储预计算电势的三维网格结构。网格大小由pair_grid_size参数决定，
+     * 该方法创建并初始化用于存储预计算电势的三维网格结构。网格大小由potential_grid_size参数决定，
      * 通常根据所需精度和计算资源进行设置。网格间距自动计算，以确保在所有维度上获得足够的分辨率。
      * 
      * 算法原理：
@@ -71,7 +71,7 @@ struct PGPParams : public PMEParams {
      * - 在设置PGP参数后自动调用
      * - 当系统尺寸变化时需要重新初始化
      */
-    void initializePairGrid();
+    void initializePotentialGrid();
 };
 
 // Global PGP parameters
@@ -86,14 +86,14 @@ extern PGPParams pgp_params;
  * 算法原理：
  * 1. 调用setPMEParameters设置基础PME参数
  * 2. 将PME参数复制到PGP参数结构中
- * 3. 添加PGP特有参数如配对截断和网格大小
+ * 3. 添加PGP特有参数如电势截断和网格大小
  * 4. 初始化预计算电势网格结构
  * 
  * 参数含义：
  * @param alpha Ewald分离参数，控制实空间和倒空间计算的平衡，典型值为0.2-0.3 Å^-1
  * @param meshSize PME计算的网格尺寸，数组形式[nx,ny,nz]，通常与盒子尺寸成比例
- * @param pair_cutoff 配对相互作用的截断距离，通常小于或等于PME的实空间截断
- * @param pairGridSize 预计算电势的网格尺寸，数组形式[nx,ny,nz]，决定插值精度
+ * @param potential_cutoff 电势计算的截断距离，通常小于或等于PME的实空间截断
+ * @param potentialGridSize 预计算电势的网格尺寸，数组形式[nx,ny,nz]，决定插值精度
  * @param splineOrder B样条插值的阶数，通常为4(三次B样条)，影响精度和计算速度
  * @param tolerance 计算精度的容差，用于优化参数选择
  * 
@@ -102,8 +102,8 @@ extern PGPParams pgp_params;
  * - 当模拟条件(如盒子大小、精度要求)变化时需重新配置
  * - 在每次新的蒙特卡洛模拟开始前设置
  */
-void setPGPParameters(double alpha, const int meshSize[3], double pair_cutoff, 
-                        const int pairGridSize[3], int splineOrder, double tolerance);
+void setPGPParameters(double alpha, const int meshSize[3], double potential_cutoff, 
+                        const int potentialGridSize[3], int splineOrder, double tolerance);
 
 /**
  * @brief 预计算系统中固定部分的网格电势

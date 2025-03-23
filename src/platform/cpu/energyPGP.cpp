@@ -17,7 +17,7 @@
  * 3. PME基础: 基于传统PME方法处理长程静电相互作用，但做了针对MC的优化
  * 
  * 工作流程:
- * - 初始化阶段: 设置常规PME参数和额外的pair grid参数
+ * - 初始化阶段: 设置常规PME参数和额外的电势网格参数
  * - 预计算阶段: 将固定部分电荷分配到网格，执行FFT并存储网格电势
  * - MC模拟阶段: 通过网格插值快速评估移动分子的能量变化
  * 
@@ -38,28 +38,28 @@ PGPParams pgp_params;
  * @brief 初始化预计算电势的三维网格
  * 
  * 这是PGP-PME算法的基础步骤，负责创建和初始化用于存储预计算电势的三维网格。
- * 该函数根据pair_grid_size参数分配网格内存，并计算合适的网格间距。
+ * 该函数根据potential_grid_size参数分配网格内存，并计算合适的网格间距。
  */
-void PGPParams::initializePairGrid() {
+void PGPParams::initializePotentialGrid() {
     // 计算网格总大小并分配内存
     // 这一步决定了存储预计算电势所需的内存大小
     // 网格大小影响计算精度和内存消耗，需要权衡
-    int totalSize = pair_grid_size[0] * pair_grid_size[1] * pair_grid_size[2];
-    pairGrid.resize(totalSize);
+    int totalSize = potential_grid_size[0] * potential_grid_size[1] * potential_grid_size[2];
+    potentialGrid.resize(totalSize);
     
     // 设置网格间距，取三个维度中的最小值
     // 这确保了在各个方向上的分辨率至少达到指定精度
     // 网格间距对插值精度至关重要，间距越小精度越高但内存消耗越大
     grid_spacing = std::min({
-        box[0] / pair_grid_size[0],
-        box[1] / pair_grid_size[1],
-        box[2] / pair_grid_size[2]
+        box[0] / potential_grid_size[0],
+        box[1] / potential_grid_size[1],
+        box[2] / potential_grid_size[2]
     });
     
     // 输出调试信息，帮助用户确认网格设置是否合理
     // 在大型模拟中，网格大小需要谨慎选择以平衡精度和性能
-    platform::log(LogLevel::DEBUG, "PGP pair grid initialized with size: ", 
-                 pair_grid_size[0], "x", pair_grid_size[1], "x", pair_grid_size[2],
+    platform::log(LogLevel::DEBUG, "PGP potential grid initialized with size: ", 
+                 potential_grid_size[0], "x", potential_grid_size[1], "x", potential_grid_size[2],
                  ", grid spacing: ", grid_spacing);
 }
 
@@ -67,17 +67,17 @@ void PGPParams::initializePairGrid() {
  * @brief 设置PGP-PME算法的所有参数
  * 
  * 该函数是PGP-PME算法的入口点，用于配置算法运行所需的所有参数。
- * 它首先设置标准PME参数，然后添加PGP特有的参数，最后初始化配对网格。
+ * 它首先设置标准PME参数，然后添加PGP特有的参数，最后初始化电势网格。
  * 
  * @param alpha Ewald分离参数，控制实空间和倒空间计算的平衡
  * @param meshSize 常规PME的网格尺寸
- * @param pair_cutoff 配对相互作用的截断距离
- * @param pairGridSize 预计算电势的网格尺寸
+ * @param potential_cutoff 电势计算的截断距离
+ * @param potentialGridSize 预计算电势的网格尺寸
  * @param splineOrder B-样条插值的阶数
  * @param tolerance 计算精度的容差
  */
-void setPGPParameters(double alpha, const int meshSize[3], double pair_cutoff, 
-                        const int pairGridSize[3], int splineOrder, double tolerance) {
+void setPGPParameters(double alpha, const int meshSize[3], double potential_cutoff, 
+                        const int potentialGridSize[3], int splineOrder, double tolerance) {
     // 首先设置标准PME参数
     // 这里复用了PME的参数设置函数，避免代码重复
     // 标准PME参数包括alpha、网格大小、样条阶数和误差容限
@@ -123,22 +123,22 @@ void setPGPParameters(double alpha, const int meshSize[3], double pair_cutoff,
     pgp_params.pmeCharge = pme_params.pmeCharge;
     
     // 设置PGP特有参数
-    // pair_cutoff定义了预计算电势的截断距离，通常小于PME的实空间截断
-    // pair_grid_size定义了预计算电势网格的尺寸，影响插值精度
-    pgp_params.pair_cutoff = pair_cutoff;
+    // potential_cutoff定义了预计算电势的截断距离，通常小于PME的实空间截断
+    // potential_grid_size定义了预计算电势网格的尺寸，影响插值精度
+    pgp_params.potential_cutoff = potential_cutoff;
     for (int i = 0; i < 3; i++) {
-        pgp_params.pair_grid_size[i] = pairGridSize[i];
+        pgp_params.potential_grid_size[i] = potentialGridSize[i];
     }
     
     // 初始化预计算电势的网格
     // 这一步分配网格内存并计算网格间距
-    pgp_params.initializePairGrid();
+    pgp_params.initializePotentialGrid();
     
     // 输出参数设置信息
     // 这有助于调试和确认参数设置是否符合预期
     platform::log(LogLevel::INFO, "PGP parameters set: alpha=", alpha, 
-                 ", pair_cutoff=", pair_cutoff, 
-                 ", pairGrid=[", pairGridSize[0], ",", pairGridSize[1], ",", pairGridSize[2], "]");
+                 ", potential_cutoff=", potential_cutoff, 
+                 ", potentialGrid=[", potentialGridSize[0], ",", potentialGridSize[1], ",", potentialGridSize[2], "]");
 }
 
 /**
@@ -161,41 +161,18 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     // 直接输出到标准输出以便调试
     std::cout << "\n[DIRECT PLATFORM] 预计算网格电势开始" << std::endl;
     std::cout << "  处理: " << (fixed_only ? "仅固定部分" : "所有部分") << std::endl;
-    std::cout << "  网格大小: " << pgp_params.pair_grid_size[0] << "x" 
-              << pgp_params.pair_grid_size[1] << "x" 
-              << pgp_params.pair_grid_size[2] << std::endl;
+    std::cout << "  网格大小: " << pgp_params.potential_grid_size[0] << "x" 
+              << pgp_params.potential_grid_size[1] << "x" 
+              << pgp_params.potential_grid_size[2] << std::endl;
     
-    // 重置配对网格
-    // 在重新计算前清空网格，避免旧数据的影响
-    std::fill(pgp_params.pairGrid.begin(), pgp_params.pairGrid.end(), std::complex<double>(0.0, 0.0));
+    // 备份PME网格，稍后将恢复
+    std::vector<std::complex<double>> pmeGridBackup = pme_params.pmeGrid;
     
-    // 创建临时电荷网格
-    // 这个网格用于存储电荷分布，之后会通过FFT转换为电势
-    std::vector<std::complex<double>> chargeGrid(pgp_params.pairGrid.size(), std::complex<double>(0.0, 0.0));
-    
-    // 1. 分配电荷到网格 - 使用B样条插值
-    // 这一步将原子点电荷平滑地分配到网格点上
-    // 日志输出帮助跟踪处理的是固定部分还是全部原子
-    platform::log(LogLevel::INFO, "Spreading charges onto grid from ", 
-                 fixed_only ? "fixed atoms only" : "all atoms");
-    
-    std::cout << "[DIRECT PLATFORM] 将电荷分布到网格: " 
-              << (fixed_only ? "仅固定部分" : "所有部分") << std::endl;
+    // 重置PME网格，准备新的计算
+    std::fill(pme_params.pmeGrid.begin(), pme_params.pmeGrid.end(), std::complex<double>(0.0, 0.0));
     
     // 统计信息
     int fixed_residues_count = 0;
-    int charged_atoms = 0;
-    
-    // 输出更多系统信息以便调试
-    platform::log(LogLevel::INFO, "System information:");
-    platform::log(LogLevel::INFO, "  Active residue count: ", state.activeResidueCount);
-    platform::log(LogLevel::INFO, "  Active atom count: ", state.activeAtomCount);
-    platform::log(LogLevel::INFO, "  Movement residues count: ", state.movementResidues.size());
-    
-    std::cout << "[DIRECT PLATFORM] 系统信息:" << std::endl
-              << "  活跃残基数: " << state.activeResidueCount << std::endl
-              << "  活跃原子数: " << state.activeAtomCount << std::endl
-              << "  移动残基组数: " << state.movementResidues.size() << std::endl;
     
     // 计算固定残基数量
     for (int i = 0; i < state.activeResidueCount; ++i) {
@@ -204,235 +181,80 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     }
     std::cout << "[DIRECT PLATFORM]  固定残基数: " << fixed_residues_count << std::endl;
     
-    // 如果没有固定残基但要求仅计算固定部分，发出警告并自动切换
-    if (fixed_only && fixed_residues_count == 0) {
-        std::cout << "[DIRECT PLATFORM] 警告: 没有固定残基! 无法预计算仅固定部分的网格电势。" << std::endl;
-        std::cout << "[DIRECT PLATFORM] 将使用所有残基进行计算。" << std::endl;
-        fixed_only = false;  // 自动切换到使用所有残基
-    }
-    
-    // 打印每个残基的fixed状态，帮助调试
+    // 打印所有残基的信息以便调试
     std::cout << "[DIRECT PLATFORM] 打印所有残基的fixed状态:" << std::endl;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         const auto& res = state.residues[i];
-        std::cout << "  残基 " << i << ": fixed=" << res.fixed 
-                  << ", active=" << res.active 
+        std::cout << "  残基 " << i << ": fixed=" << res.fixed << ", active=" << res.active
                   << ", atomCount=" << res.atomCount << std::endl;
     }
     
-    // 添加计数器来跟踪处理的原子和带电荷的原子
-    int processed_atoms = 0;
-    int total_charge_processed = 0.0;
-    
-    // 将电荷分配到网格
-    for (size_t i = 0; i < state.residues.size(); i++) {
-        const auto& residue = state.residues[i];
-        
-        // 检查是否处理该残基
-        if (!residue.active) continue;
-        if (fixed_only && !residue.fixed) continue;
-        
-        std::cout << "[DIRECT PLATFORM] 处理残基 " << i << ", fixed=" << residue.fixed << ", atomCount=" << residue.atomCount << std::endl;
-        
-        // 处理残基中的所有原子
-        for (int j = 0; j < residue.atomCount; j++) {
-            int atom_index = residue.atomStart + j;
-            const auto& atom = state.atoms[atom_index];
-            
-            processed_atoms++;
-            
-            // 只处理带电荷的原子
-            if (std::abs(atom.charge) < 1e-6) continue;
-            
-            charged_atoms++;
-            total_charge_processed += atom.charge;
-            
-            std::cout << "[DIRECT PLATFORM] 原子 " << atom_index << ": 位置=(" 
-                      << atom.x << "," << atom.y << "," << atom.z 
-                      << "), 电荷=" << atom.charge << std::endl;
-            
-            // 这里是原有代码，将电荷分配到网格
-            // ...
-        }
+    // 如果没有固定残基但要求仅计算固定部分，发出警告并自动切换
+    if (fixed_only && fixed_residues_count == 0) {
+        platform::log(LogLevel::WARNING, "No fixed residues found, switching to process all atoms");
+        fixed_only = false;
     }
     
-    // 检查电荷分配是否存在
-    double total_charge = 0.0;
-    int non_zero_points = 0;
-    for (const auto& val : chargeGrid) {
-        total_charge += val.real();
-        if (std::abs(val.real()) > 1e-10) {
-            non_zero_points++;
-        }
+    // 设置pme_params的网格尺寸与pgp_params的网格尺寸一致，确保计算使用相同的网格
+    for (int i = 0; i < 3; i++) {
+        pme_params.meshSize[i] = pgp_params.potential_grid_size[i];
     }
     
-    platform::log(LogLevel::INFO, "固定残基数量: ", fixed_residues_count);
-    platform::log(LogLevel::INFO, "已处理的固定原子数量: ", processed_atoms);
-    platform::log(LogLevel::INFO, "带电荷的原子数量: ", charged_atoms);
-    platform::log(LogLevel::INFO, "电荷网格非零点数: ", non_zero_points);
-    platform::log(LogLevel::INFO, "总电荷: ", total_charge);
+    // 调整pme_params的网格大小以适应新的网格尺寸
+    int totalGridSize = pgp_params.potential_grid_size[0] * pgp_params.potential_grid_size[1] * pgp_params.potential_grid_size[2];
+    pme_params.pmeGrid.resize(totalGridSize, std::complex<double>(0.0, 0.0));
     
-    // 如果没有分配电荷，直接返回
-    if (non_zero_points == 0) {
-        platform::log(LogLevel::WARNING, "No charges were distributed to the grid. Stopping computation.");
-        std::cout << "[DIRECT PLATFORM] 警告: 没有电荷被分配到网格上!" << std::endl;
-        
-        // 如果是因为没有固定残基造成的，重新计算所有残基的电势
-        if (fixed_only && fixed_residues_count == 0) {
-            std::cout << "[DIRECT PLATFORM] 警告: 没有找到固定残基! 重新计算所有残基的电势..." << std::endl;
-            platform::log(LogLevel::WARNING, "No fixed residues found. Recomputing with all residues...");
-            
-            // 递归调用自身，但使用fixed_only=false
-            precomputeGridPotential(state, false);
-            return;
-        }
-        
-        // 为了测试目的，添加一个小的非零值到网格
-        if (pgp_params.debug_mode) {
-            platform::log(LogLevel::WARNING, "Debug mode: Adding test values to grid");
-            // 添加一些测试值以便可以进行内插
-            for (int i = 0; i < 10; i++) {
-                for (int j = 0; j < 10; j++) {
-                    for (int k = 0; k < 10; k++) {
-                        size_t idx = (i * pgp_params.pair_grid_size[1] + j) * pgp_params.pair_grid_size[2] + k;
-                        if (idx < chargeGrid.size()) {
-                            chargeGrid[idx].real(0.01 * (i + j + k));
-                        }
-                    }
-                }
-            }
-            non_zero_points = 1000; // 假设现在有非零点
-        } else {
-            return;
-        }
-    }
+    // 调用PME的电荷分布函数
+    // 这将分配电荷到PME网格上，使用与PME完全相同的方法
+    platform::log(LogLevel::INFO, "调用PME的电荷分布函数 (fixed_only=", fixed_only, ")");
+    spreadChargesOntoGrid(state, fixed_only);
+
+    // 调用PME的前向FFT函数
+    // 这将执行电荷网格的傅里叶变换，使用与PME完全相同的方法
+    platform::log(LogLevel::INFO, "调用PME的前向FFT函数");
+    performFFTForward();
+
+    // 修改：不再手动计算Ewald因子，而是直接调用PME的computeEnergyFromGrid函数
+    // 该函数会正确地应用Ewald因子并执行反向FFT，完全与PME保持一致
+    platform::log(LogLevel::INFO, "调用PME的Ewald因子应用和反向FFT函数");
+    double dummy_energy = 0.0;
+    // 传递box参数以确保体积计算一致
+    double box[3] = {pgp_params.box[0], pgp_params.box[1], pgp_params.box[2]};
+    computeEnergyFromGrid(dummy_energy, box);
+
+    // 将PME网格复制到PGP的potentialGrid中
+    pgp_params.potentialGrid = pme_params.pmeGrid;
+
+    // 恢复原始PME网格
+    pme_params.pmeGrid = pmeGridBackup;
     
-    // 2. 执行FFT将实空间电荷分布转换到倒空间
-    // 使用CustomFFT进行前向FFT变换
-    platform::log(LogLevel::DEBUG, "Performing forward FFT on charge grid");
-    
-    // 使用CustomFFT执行前向FFT变换
-    // 从energyPME.cpp中使用同样的FFT实现
-    int nx = pgp_params.pair_grid_size[0];
-    int ny = pgp_params.pair_grid_size[1];
-    int nz = pgp_params.pair_grid_size[2];
-    
-    // 备份chargeGrid以便调试
-    std::vector<std::complex<double>> reciprocalGrid = chargeGrid;
-    
-    // 执行3D前向FFT变换
-    CustomFFT::fft3D_forward(reciprocalGrid.data(), nx, ny, nz);
-    
-    // 检查FFT结果
-    int non_zero_fft_points = 0;
-    for (const auto& val : reciprocalGrid) {
-        if (std::abs(val.real()) > 1e-10 || std::abs(val.imag()) > 1e-10) {
-            non_zero_fft_points++;
-        }
-    }
-    
-    platform::log(LogLevel::INFO, "After FFT, grid has ", 
-                 non_zero_fft_points, " non-zero points");
-    
-    // 3. 应用Ewald因子
-    // 在倒空间中对每个k向量应用Ewald因子
-    // 这一步计算了长程静电相互作用
-    platform::log(LogLevel::DEBUG, "Applying Ewald factor in reciprocal space");
-    
-    int factors_applied = 0;
-    
-    // 遍历所有倒空间网格点
-    // 这个三重循环应用了Ewald因子到每个k向量
-    for (int i = 0; i < nx; i++) {
-        // 计算k向量的x分量
-        // 考虑了周期性边界条件
-        int kx = (i <= nx/2) ? i : i - nx;
-        double kx2 = kx * kx;
-        
-        for (int j = 0; j < ny; j++) {
-            // 计算k向量的y分量
-            int ky = (j <= ny/2) ? j : j - ny;
-            double ky2 = ky * ky;
-            
-            for (int k = 0; k < nz; k++) {
-                // 计算k向量的z分量
-                int kz = (k <= nz/2) ? k : k - nz;
-                double kz2 = kz * kz;
-                
-                // 跳过k=0(净零电荷情况)
-                // k=0对应于系统的总电荷，通常需要特殊处理
-                if (kx == 0 && ky == 0 && kz == 0) continue;
-                
-                // 计算一维数组索引
-                int idx = (i * ny + j) * nz + k;
-                
-                // 计算k向量的平方
-                // 这决定了Ewald因子的大小
-                double k2 = kx2 + ky2 + kz2;
-                
-                // 应用Ewald因子: exp(-k²/4α²) / k²
-                // 这是PME方法中的标准Ewald因子
-                // 它控制了倒空间中不同波长的贡献
-                double factor = std::exp(-k2 / (4.0 * pgp_params.alpha * pgp_params.alpha)) / k2;
-                
-                // 检查原始值
-                std::complex<double> originalValue = reciprocalGrid[idx];
-                
-                // 将因子应用到倒空间网格点
-                reciprocalGrid[idx] *= factor;
-                
-                // 记录显著变化
-                if (std::abs(originalValue.real()) > 1e-6 || std::abs(originalValue.imag()) > 1e-6) {
-                    factors_applied++;
-                    if (factors_applied <= 10) { // 只记录前10个以避免日志过多
-                        platform::log(LogLevel::DEBUG, "Ewald factor at k=(", kx, ",", ky, ",", kz, 
-                                    "): ", factor, ", original value: ", originalValue, 
-                                    ", new value: ", reciprocalGrid[idx]);
-                    }
-                }
-            }
-        }
-    }
-    
-    platform::log(LogLevel::INFO, "Applied Ewald factors to ", 
-                 factors_applied, " significant grid points");
-    
-    // 4. 执行反FFT获得实空间的预计算电势场
-    // 反FFT将倒空间的电势转换回实空间
-    platform::log(LogLevel::DEBUG, "Performing inverse FFT to get potential grid");
-    
-    // 使用CustomFFT执行反向FFT变换
-    CustomFFT::fft3D_backward(reciprocalGrid.data(), nx, ny, nz);
-    
-    // 检查反FFT结果
-    int non_zero_potential_points = 0;
+    // 验证电势网格是否有合理的值
+    int potentials_nonzero = 0;
     double max_potential = 0.0;
     double min_potential = 0.0;
     double sum_potential = 0.0;
     
-    for (const auto& val : reciprocalGrid) {
-        double potential = val.real();
-        if (std::abs(potential) > 1e-10) {
-            non_zero_potential_points++;
-            max_potential = std::max(max_potential, potential);
-            min_potential = std::min(min_potential, potential);
-            sum_potential += potential;
+    // 检查网格点值
+    for (const auto& val : pgp_params.potentialGrid) {
+        double pot_val = val.real();
+        sum_potential += pot_val;
+        if (std::abs(pot_val) > 1e-10) {
+            potentials_nonzero++;
+            max_potential = std::max(max_potential, pot_val);
+            min_potential = std::min(min_potential, pot_val);
         }
     }
     
-    platform::log(LogLevel::INFO, "Final potential grid has ", 
-                 non_zero_potential_points, " non-zero points");
-    platform::log(LogLevel::INFO, "Potential stats - min: ", min_potential, 
-                 ", max: ", max_potential, ", avg: ", 
-                 (non_zero_potential_points > 0 ? sum_potential / non_zero_potential_points : 0.0));
+    // 输出电势网格统计信息
+    platform::log(LogLevel::INFO, "电势网格统计:");
+    platform::log(LogLevel::INFO, "  非零点数: ", potentials_nonzero);
+    platform::log(LogLevel::INFO, "  最大电势: ", max_potential);
+    platform::log(LogLevel::INFO, "  最小电势: ", min_potential);
+    platform::log(LogLevel::INFO, "  电势总和: ", sum_potential);
     
-    // 保存结果到预计算电势网格
-    pgp_params.pairGrid = reciprocalGrid;
-    
-    // 记录预计算完成信息
-    // 这有助于确认预计算过程已成功完成
-    platform::log(LogLevel::INFO, "Grid potential precomputation completed for ",
-                 fixed_only ? "fixed atoms only" : "all atoms");
+    std::cout << "[DIRECT PLATFORM] 电势预计算完成" << std::endl
+              << "  非零点数: " << potentials_nonzero << std::endl
+              << "  电势范围: [" << min_potential << ", " << max_potential << "]" << std::endl;
 }
 
 /**
@@ -462,7 +284,7 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
     
     // 检查预计算的网格是否为空
     bool gridEmpty = true;
-    for (const auto& val : pgp_params.pairGrid) {
+    for (const auto& val : pgp_params.potentialGrid) {
         if (std::abs(val.real()) > 1e-10 || std::abs(val.imag()) > 1e-10) {
             gridEmpty = false;
             break;
@@ -474,8 +296,8 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
         
         // 输出一些网格样本点，帮助调试
         std::cout << "[DIRECT PLATFORM] 网格样本点值:" << std::endl;
-        for (int i = 0; i < std::min(10, static_cast<int>(pgp_params.pairGrid.size())); i++) {
-            std::cout << "  网格点 " << i << ": " << pgp_params.pairGrid[i].real() << std::endl;
+        for (int i = 0; i < std::min(10, static_cast<int>(pgp_params.potentialGrid.size())); i++) {
+            std::cout << "  网格点 " << i << ": " << pgp_params.potentialGrid[i].real() << std::endl;
         }
     } else {
         std::cout << "[DIRECT PLATFORM] PGP网格包含非零值" << std::endl;
@@ -531,49 +353,100 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                           << "), 电荷=" << atom.charge << std::endl;
                 
                 // 计算网格位置和B样条插值权重
-                int grid_indices[3][4]; // 用于三次B样条(阶数4)
-                double weights[3][4];
+                // 修正：使用与预计算电势相同的坐标变换方法
+                
+                // 计算倒易矢量
+                double recipBoxVectors[3][3] = {{0}};
+                recipBoxVectors[0][0] = 2.0 * M_PI / pgp_params.box[0]; // 2π/a
+                recipBoxVectors[1][1] = 2.0 * M_PI / pgp_params.box[1]; // 2π/b 
+                recipBoxVectors[2][2] = 2.0 * M_PI / pgp_params.box[2]; // 2π/c
+                
+                // 获取原子位置
                 double pos[3] = {atom.x, atom.y, atom.z};
                 
-                // 计算插值的网格索引和权重
+                // 计算分数坐标
+                double fractional[3];
                 for (int d = 0; d < 3; d++) {
-                    // 将原子位置缩放到网格单位
-                    double scaled_pos = pos[d] / pgp_params.grid_spacing;
-                    int base_idx = static_cast<int>(std::floor(scaled_pos));
-                    
-                    // 计算B样条权重
-                    double t = scaled_pos - base_idx;
-                    weights[d][0] = (1 - t) * (1 - t) * (1 - t) / 6.0;
-                    weights[d][1] = (3 * t * t * t - 6 * t * t + 4) / 6.0;
-                    weights[d][2] = (-3 * t * t * t + 3 * t * t + 3 * t + 1) / 6.0;
-                    weights[d][3] = t * t * t / 6.0;
-                    
-                    // 存储网格索引并处理周期性边界
-                    for (int i = 0; i < 4; i++) {
-                        grid_indices[d][i] = (base_idx - 1 + i) % pgp_params.pair_grid_size[d];
-                        if (grid_indices[d][i] < 0) grid_indices[d][i] += pgp_params.pair_grid_size[d];
+                    // 使用倒易矢量计算分数坐标
+                    fractional[d] = 0.0;
+                    for (int j = 0; j < 3; j++) {
+                        fractional[d] += pos[j] * recipBoxVectors[j][d] / (2.0 * M_PI);
                     }
+                    
+                    // 确保在[0,1)范围内，处理周期性边界条件
+                    fractional[d] -= floor(fractional[d]);
+                    // 将分数坐标缩放到网格
+                    fractional[d] *= pgp_params.potential_grid_size[d];
+                }
+                
+                // 计算网格索引和分数部分
+                int gridIndices[3];
+                double gridFractions[3];
+                for (int d = 0; d < 3; d++) {
+                    gridFractions[d] = fractional[d] - floor(fractional[d]);
+                    gridIndices[d] = static_cast<int>(floor(fractional[d]));
+                    // 确保网格索引在正确范围内
+                    if (gridIndices[d] < 0) 
+                        gridIndices[d] += pgp_params.potential_grid_size[d];
+                }
+                
+                // 计算B样条系数
+                int nx = pgp_params.potential_grid_size[0];
+                int ny = pgp_params.potential_grid_size[1];
+                int nz = pgp_params.potential_grid_size[2];
+                int order = pgp_params.splineOrder;
+                
+                std::vector<double> thetaX(order);
+                std::vector<double> thetaY(order);
+                std::vector<double> thetaZ(order);
+                
+                // 计算每个维度的B样条系数
+                std::vector<double> coefficients(order);
+                
+                // X维度B样条
+                computeBSplineCoefficients(gridFractions[0], order, coefficients);
+                for (int i = 0; i < order; i++) {
+                    thetaX[i] = coefficients[i];
+                }
+                
+                // Y维度B样条
+                computeBSplineCoefficients(gridFractions[1], order, coefficients);
+                for (int i = 0; i < order; i++) {
+                    thetaY[i] = coefficients[i];
+                }
+                
+                // Z维度B样条
+                computeBSplineCoefficients(gridFractions[2], order, coefficients);
+                for (int i = 0; i < order; i++) {
+                    thetaZ[i] = coefficients[i];
                 }
                 
                 // 插值计算电势
                 double potential = 0.0;
-                for (int i = 0; i < 4; i++) {
-                    for (int j = 0; j < 4; j++) {
-                        for (int k = 0; k < 4; k++) {
+                
+                // 遍历所有B样条支撑点
+                for (int ix = 0; ix < order; ix++) {
+                    int xindex = (gridIndices[0] + ix) % nx;
+                    
+                    for (int iy = 0; iy < order; iy++) {
+                        int yindex = (gridIndices[1] + iy) % ny;
+                        
+                        for (int iz = 0; iz < order; iz++) {
+                            int zindex = (gridIndices[2] + iz) % nz;
+                            
                             // 计算三维网格索引
-                            int grid_idx = (grid_indices[0][i] * pgp_params.pair_grid_size[1] + grid_indices[1][j]) 
-                                         * pgp_params.pair_grid_size[2] + grid_indices[2][k];
+                            int index = xindex * ny * nz + yindex * nz + zindex;
                             
                             // 使用B样条权重累加电势
-                            double grid_value = pgp_params.pairGrid[grid_idx].real();
-                            double weight = weights[0][i] * weights[1][j] * weights[2][k];
+                            double grid_value = pgp_params.potentialGrid[index].real();
+                            double weight = thetaX[ix] * thetaY[iy] * thetaZ[iz];
                             potential += grid_value * weight;
                             
-                            if (std::abs(grid_value) > 1e-6 && i==0 && j==0 && k==0) {
+                            if (std::abs(grid_value) > 1e-6 && ix==0 && iy==0 && iz==0) {
                                 std::cout << "[DIRECT PLATFORM] 网格点 (" 
-                                          << grid_indices[0][i] << "," 
-                                          << grid_indices[1][j] << "," 
-                                          << grid_indices[2][k] 
+                                          << xindex << "," 
+                                          << yindex << "," 
+                                          << zindex 
                                           << ") 电势=" << grid_value << ", 权重=" << weight << std::endl;
                             }
                         }
@@ -593,28 +466,20 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
         // ...
     }
     
-    // 应用单位转换和缩放因子
-    // PME能量单位是kJ/mol，需要添加适当的缩放因子
-    // 这里的缩放因子应与PME中使用的相同
+    // 计算能量汇总
+    platform::log(LogLevel::DEBUG, "Summing atomic contributions for total energy");
+    
+    // 这个系数是配置参数
     double ONE_4PI_EPS0 = 138.935458; // kJ*nm/mol*e^2
-    energy = raw_energy * ONE_4PI_EPS0 / pgp_params.epsilon_r;
     
-    // 记录计算结果
-    platform::log(LogLevel::INFO, "Interpolated raw energy: ", raw_energy);
-    platform::log(LogLevel::INFO, "Scaled energy (kJ/mol): ", energy);
-    platform::log(LogLevel::INFO, "Processed ", totalAtoms, " atoms, of which ", 
-                 chargedAtoms, " had non-zero charge");
-                 
-    // PGP计算的应该是与PME倒空间部分对应的能量
-    // PME中倒空间部分能量通常为很小的正值
+    // 应用能量系数 - 修正：确保与PME计算保持一致
+    // 1. 能量计算需要乘以2（因为是相互作用能）
+    // 2. 使用ONE_4PI_EPS0常数来将单位从内部单位转换为kJ/mol
+    energy = 2.0 * raw_energy * ONE_4PI_EPS0 / pgp_params.epsilon_r;
     
-    // 对于远距离系统，PGP能量应该直接匹配PME倒空间部分
-    // 不需要额外缩放，只需确保符号正确
-    
-    // 确保能量符号与PME倒空间一致（通常是正值）
-    energy = std::abs(energy);
-    
-    std::cout << "[DIRECT PLATFORM] 最终计算的PGP能量: " << energy << " kJ/mol" << std::endl;
+    // 输出最终的能量值和调试信息
+    platform::log(LogLevel::DEBUG, "Final PGP energy: ", energy, " kJ/mol");
+    platform::log(LogLevel::INFO, "最终计算的PGP能量: ", energy, " kJ/mol");
 }
 
 /**

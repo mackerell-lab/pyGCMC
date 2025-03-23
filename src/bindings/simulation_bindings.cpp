@@ -265,26 +265,26 @@ void init_simulation_bindings(py::module& m) {
         
     // PGP bindings
     m.def("setPGPParameters",
-        [](float alpha, const std::vector<int>& meshSize, float pair_cutoff, const std::vector<int>& pairGridSize, 
+        [](float alpha, const std::vector<int>& meshSize, float potential_cutoff, const std::vector<int>& potentialGridSize, 
            int splineOrder, float tolerance) {
             if (meshSize.size() != 3) {
                 throw std::runtime_error("meshSize must have exactly three elements");
             }
-            if (pairGridSize.size() != 3) {
-                throw std::runtime_error("pairGridSize must have exactly three elements");
+            if (potentialGridSize.size() != 3) {
+                throw std::runtime_error("potentialGridSize must have exactly three elements");
             }
             
             int meshSize_array[3] = { meshSize[0], meshSize[1], meshSize[2] };
-            int pairGridSize_array[3] = { pairGridSize[0], pairGridSize[1], pairGridSize[2] };
+            int potentialGridSize_array[3] = { potentialGridSize[0], potentialGridSize[1], potentialGridSize[2] };
             
-            simulation::Simulation::setPGPParameters(alpha, meshSize_array, pair_cutoff, 
-                                                      pairGridSize_array, splineOrder, tolerance);
+            simulation::Simulation::setPGPParameters(alpha, meshSize_array, potential_cutoff, 
+                                                      potentialGridSize_array, splineOrder, tolerance);
         },
-        "Set parameters for Pair-Grid PME summation",
+        "Set parameters for Precomputed Grid-Potential PME summation",
         py::arg("alpha"),
         py::arg("meshSize"),
-        py::arg("pair_cutoff"),
-        py::arg("pairGridSize"),
+        py::arg("potential_cutoff"),
+        py::arg("potentialGridSize"),
         py::arg("splineOrder") = 4,
         py::arg("tolerance") = 1e-5f,
         R"docstring(
@@ -296,8 +296,8 @@ void init_simulation_bindings(py::module& m) {
         参数:
             alpha (float): Ewald分离参数，控制实空间和倒空间计算的平衡
             meshSize (list[int]): PME网格尺寸 [nx, ny, nz]
-            pair_cutoff (float): 配对相互作用截断距离
-            pairGridSize (list[int]): 预计算电势网格尺寸 [nx, ny, nz]
+            potential_cutoff (float): 电势计算的截断距离
+            potentialGridSize (list[int]): 预计算电势网格尺寸 [nx, ny, nz]
             splineOrder (int, optional): B样条插值阶数，默认为4
             tolerance (float, optional): 精度容限，默认为1e-5
         )docstring");
