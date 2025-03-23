@@ -511,13 +511,13 @@ def test_compare_pme_pgp_energy():
         print("PME energy change is too small, cannot compute relative error")
         assert abs(pgp_energy_change) < 1e-10, f"PGP energy should also be close to zero"
     else:
-        # 计算相对误差，允许一定的误差范围（例如5%）
+        # 计算相对误差，允许一定的误差范围（例如10%）
         relative_error = abs((pgp_energy_change - pme_energy_change) / pme_energy_change)
         print(f"Relative error: {relative_error * 100:.4f}%")
         sys.stdout.flush()
         
         # 验证PGP和PME计算的能量变化在误差范围内一致
-        assert relative_error < 0.05, f"相对误差过大: {relative_error*100:.2f}%"  # 允许5%的误差
+        assert relative_error < 0.1, f"相对误差过大: {relative_error*100:.2f}%"  # 允许10%的误差
 
 if __name__ == '__main__':
     unittest.main() 

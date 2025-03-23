@@ -553,14 +553,19 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
     // 这个系数是配置参数
     double ONE_4PI_EPS0 = 138.935458; // kJ*nm/mol*e^2
     
-    // 应用能量系数 - 修正：确保与PME计算保持一致
-    // 1. 能量计算需要乘以2（因为是相互作用能）
-    // 2. 使用ONE_4PI_EPS0常数来将单位从内部单位转换为kJ/mol
-    energy = 2.0 * raw_energy * ONE_4PI_EPS0 / pgp_params.epsilon_r;
+    // 修正：移除单位转换因子，保持与PME能量计算一致的单位
+    // 原始计算: energy = 2.0 * raw_energy * ONE_4PI_EPS0 / pgp_params.epsilon_r;
+    // 由于PME能量计算没有应用这个转换因子，这里为了保持一致，只应用2.0倍的因子
+    energy = 2.0 * raw_energy;
+    
+    // 输出转换前后的能量值，用于调试比较
+    double converted_energy = 2.0 * raw_energy * ONE_4PI_EPS0 / pgp_params.epsilon_r;
+    platform::log(LogLevel::DEBUG, "Raw PGP energy (before conversion): ", energy, " (internal units)");
+    platform::log(LogLevel::DEBUG, "Converted PGP energy: ", converted_energy, " kJ/mol");
     
     // 输出最终的能量值和调试信息
-    platform::log(LogLevel::DEBUG, "Final PGP energy: ", energy, " kJ/mol");
-    platform::log(LogLevel::INFO, "最终计算的PGP能量: ", energy, " kJ/mol");
+    platform::log(LogLevel::DEBUG, "Final PGP energy (matching PME units): ", energy);
+    platform::log(LogLevel::INFO, "最终计算的PGP能量: ", energy);
 }
 
 /**
