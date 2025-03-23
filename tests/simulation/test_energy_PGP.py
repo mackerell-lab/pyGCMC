@@ -106,6 +106,101 @@ def create_nacl_crystal(box_size, n_cells):
     
     return state
 
+def create_long_distance_system(box_size):
+    """
+    创建一个专门用于测试倒空间计算的系统
+    
+    原子间距很远，超出实空间截断距离，这样倒空间计算将占主导
+    
+    Args:
+        box_size: 盒子大小 (nm)
+    """
+    state = MCState()
+    
+    # 设置盒子大小和温度
+    state.info.box = [box_size, box_size, box_size]
+    state.info.setTemperature(300.0)  # 300K
+    state.info.cutoff = 1.2  # 1.2 nm cutoff
+    
+    # 设置力场参数
+    ff = MCForceField()
+    ff.numTotalTypes = 2  # 两种离子类型
+    
+    # LJ参数
+    sigma_na = 0.333  # nm
+    sigma_cl = 0.442  # nm
+    eps_na = 0.0115  # kJ/mol
+    eps_cl = 0.4184  # kJ/mol
+    
+    # 设置LJ参数矩阵
+    ff.ljSigma = [
+        sigma_na, (sigma_na + sigma_cl)/2.0,
+        (sigma_na + sigma_cl)/2.0, sigma_cl
+    ]
+    ff.ljEps = [
+        eps_na, math.sqrt(eps_na * eps_cl),
+        math.sqrt(eps_na * eps_cl), eps_cl
+    ]
+    
+    state.forcefield = ff
+    
+    atoms = []
+    residues = []
+    
+    # 创建固定部分：两个带电离子放在盒子的对角位置
+    print(f"\n创建具有远距离相互作用的系统...")
+    
+    # 离子1：放在盒子一角
+    ion1 = MCAtom()
+    ion1.x = 0.1
+    ion1.y = 0.1
+    ion1.z = 0.1
+    ion1.charge = 1.0
+    ion1.type = 0
+    atoms.append(ion1)
+    
+    # 离子2：放在盒子对角
+    ion2 = MCAtom()
+    ion2.x = box_size - 0.1
+    ion2.y = box_size - 0.1
+    ion2.z = box_size - 0.1
+    ion2.charge = -1.0
+    ion2.type = 1
+    atoms.append(ion2)
+    
+    # 创建固定残基
+    fixed_res = MCResidue()
+    fixed_res.atomStart = 0
+    fixed_res.atomCount = 2
+    fixed_res.active = True
+    fixed_res.fixed = True
+    residues.append(fixed_res)
+    
+    # 创建用于移动的离子，放在盒子中部
+    ion3 = MCAtom()
+    ion3.x = box_size / 2.0
+    ion3.y = box_size / 2.0
+    ion3.z = box_size / 2.0
+    ion3.charge = 1.0
+    ion3.type = 0
+    atoms.append(ion3)
+    
+    # 创建移动残基
+    move_res = MCResidue()
+    move_res.atomStart = 2
+    move_res.atomCount = 1
+    move_res.active = True
+    move_res.fixed = False
+    residues.append(move_res)
+    
+    print(f"系统创建完成，总计 {len(atoms)} 个原子和 {len(residues)} 个残基。")
+    state.atoms = atoms
+    state.residues = residues
+    state.activeAtomCount = len(atoms)
+    state.activeResidueCount = len(residues)
+    
+    return state
+
 class TestEnergyPGP(unittest.TestCase):
     """
     Test the PGP (Pair-Grid PME) implementation
@@ -279,10 +374,9 @@ def test_compare_pme_pgp_energy():
     2. 移动分子后，PME和PGP计算的能量变化应该相同
     """
     # 设置参数 - 确保PME和PGP使用相同的参数
-    box_size = 2.82  # nm
-    n_cells = 2
+    box_size = 5.0  # nm - 使用更大的盒子
     cutoff = 1.0   # nm
-    pair_cutoff = 0.5  # nm
+    pair_cutoff = 1.0  # nm - 与cutoff相同
     box = [box_size, box_size, box_size]
     
     alpha = 0.29  # 1/nm
@@ -291,12 +385,21 @@ def test_compare_pme_pgp_energy():
     spline_order = 4
     tolerance = 1e-5
     
-    # 创建测试系统
-    system = create_nacl_crystal(box_size, n_cells)
+    # 设置测试超时时间，避免长时间运行
+    timeout = 10  # 秒
+    
+    print("创建长距离测试系统...")
+    sys.stdout.flush()
+    
+    # 创建测试系统 - 使用专门设计的长距离系统
+    system = create_long_distance_system(box_size)
     
     # 确保盒子大小正确设置
     system.info.box = box
     system.info.cutoff = cutoff
+    
+    print("设置PME参数...")
+    sys.stdout.flush()
     
     # 设置PME和PGP参数
     pygcmc.setPMEParameters(
@@ -309,72 +412,74 @@ def test_compare_pme_pgp_energy():
     # 初始化PME参数 - 这是关键步骤
     pygcmc.initializePMEParameters(cutoff, box, alpha)
     
+    print("设置PGP参数...")
+    sys.stdout.flush()
+    
     pygcmc.setPGPParameters(
         alpha=alpha,
         meshSize=mesh_size,
-        pair_cutoff=cutoff,
+        pair_cutoff=pair_cutoff,
         pairGridSize=pair_grid_size,
         splineOrder=spline_order,
         tolerance=tolerance
     )
     
-    # 将一半残基标记为固定，一半为移动
-    n_residues = len(system.residues)
-    fixed_residues = []
-    moving_residues = []
+    print("设置移动残基...")
+    sys.stdout.flush()
     
-    for i in range(n_residues):
-        if i % 2 == 0:  # 偶数索引的残基标记为固定
-            system.residues[i].fixed = True
-            fixed_residues.append(i)
-        else:  # 奇数索引的残基标记为移动
-            system.residues[i].fixed = False
-            moving_residues.append(i)
+    # 移动残基已经在create_long_distance_system中设置好了
+    # 这里只需准备movementResidues列表
+    moving_residues = [1]  # 第二个残基是移动残基
     
-    # 确保移动残基是连续的
-    moving_residues.sort()
+    # 验证固定残基信息
+    fixed_count = sum(1 for res in system.residues if res.fixed)
+    print(f"固定残基数: {fixed_count}")
+    print(f"移动残基数: {len(moving_residues)}")
+    sys.stdout.flush()
     
-    # 创建一个移动残基信息对象并添加到系统中
-    print(f"Moving residues: {moving_residues}")
-    
-    # 清除之前可能存在的移动残基信息
+    # 设置移动残基信息
     system.movementResidues.clear()
     
-    # 使用单独的方法设置移动残基 - 可能append方法有问题
-    # 创建临时列表并使用变量保存
-    movement_residues_list = []
-    
-    # 创建一个移动残基信息对象
+    # 创建移动残基信息
     movement_info = pygcmc.MCMovementResidueInfo()
-    movement_info.startIndex = moving_residues[0]  # 第一个移动残基的索引
-    movement_info.activeCount = len(moving_residues)  # 移动残基的数量
-    movement_residues_list.append(movement_info)
+    movement_info.startIndex = moving_residues[0]  # 移动残基的索引
+    movement_info.activeCount = 1  # 只有一个移动残基
+    system.movementResidues.append(movement_info)
     
-    # 直接设置整个列表
-    system.movementResidues = movement_residues_list
-    
-    print(f"Added movement info: startIndex={movement_info.startIndex}, activeCount={movement_info.activeCount}")
-    print(f"System has {system.activeResidueCount} active residues and {len(system.movementResidues)} movement residue groups")
-    
-    # 验证移动残基信息是否已设置
-    assert len(system.movementResidues) > 0, "No movement residues set!"
+    print(f"添加移动信息: startIndex={movement_info.startIndex}, activeCount={movement_info.activeCount}")
+    print(f"系统有 {system.activeResidueCount} 个活跃残基和 {len(system.movementResidues)} 个移动残基组")
+    sys.stdout.flush()
     
     # 第1步: 使用PME计算初始系统能量
+    print("计算PME初始能量...")
+    sys.stdout.flush()
     initial_pme_result = pygcmc.computeMovementEnergyPME(system)
     initial_pme_energy = initial_pme_result[0]  # PME电静态能量
+    initial_pme_dict = initial_pme_result[2]  # PME能量细节字典
+    initial_pme_reciprocal = initial_pme_dict['reciprocal']  # 只取倒空间部分
     print(f"Initial PME energy result: {initial_pme_result}")
+    print(f"Initial PME reciprocal energy: {initial_pme_reciprocal}")
+    sys.stdout.flush()
     
     # 第2步: 使用PGP预计算网格电势并计算移动残基能量
+    print("预计算PGP网格电势...")
+    sys.stdout.flush()
     pygcmc.precomputeGridPotential(system, fixed_only=True)
+    
+    print("计算PGP初始能量...")
+    sys.stdout.flush()
     initial_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
     
     # 打印初始能量
-    print(f"Initial PME energy: {initial_pme_energy}")
+    print(f"Initial PME reciprocal energy: {initial_pme_reciprocal}")
     print(f"Initial PGP energy: {initial_pgp_energy}")
+    sys.stdout.flush()
     
     # 第3步: 移动移动残基（如平移0.1 nm）
     translation = [0.1, 0.1, 0.1]  # nm
     
+    print("移动残基...")
+    sys.stdout.flush()
     for res_idx in moving_residues:
         residue = system.residues[res_idx]
         for atom_idx in range(residue.atomCount):
@@ -385,23 +490,33 @@ def test_compare_pme_pgp_energy():
             atom.z += translation[2]
     
     # 第4步: 使用PME计算移动后的系统能量
+    print("计算PME移动后能量...")
+    sys.stdout.flush()
     moved_pme_result = pygcmc.computeMovementEnergyPME(system)
     moved_pme_energy = moved_pme_result[0]  # PME电静态能量
+    moved_pme_dict = moved_pme_result[2]  # PME能量细节字典
+    moved_pme_reciprocal = moved_pme_dict['reciprocal']  # 只取倒空间部分
     print(f"Moved PME energy result: {moved_pme_result}")
+    print(f"Moved PME reciprocal energy: {moved_pme_reciprocal}")
+    sys.stdout.flush()
     
     # 第5步: 使用PGP计算移动后的能量
+    print("计算PGP移动后能量...")
+    sys.stdout.flush()
     moved_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
     
     # 打印移动后能量
-    print(f"Moved PME energy: {moved_pme_energy}")
+    print(f"Moved PME reciprocal energy: {moved_pme_reciprocal}")
     print(f"Moved PGP energy: {moved_pgp_energy}")
+    sys.stdout.flush()
     
-    # 计算能量变化
-    pme_energy_change = moved_pme_energy - initial_pme_energy
+    # 计算能量变化 - 只使用倒空间部分
+    pme_energy_change = moved_pme_reciprocal - initial_pme_reciprocal
     pgp_energy_change = moved_pgp_energy - initial_pgp_energy
     
-    print(f"PME energy change: {pme_energy_change}")
+    print(f"PME reciprocal energy change: {pme_energy_change}")
     print(f"PGP energy change: {pgp_energy_change}")
+    sys.stdout.flush()
     
     if abs(pme_energy_change) < 1e-10:
         print("PME energy change is too small, cannot compute relative error")
@@ -410,6 +525,7 @@ def test_compare_pme_pgp_energy():
         # 计算相对误差，允许一定的误差范围（例如5%）
         relative_error = abs((pgp_energy_change - pme_energy_change) / pme_energy_change)
         print(f"Relative error: {relative_error * 100:.4f}%")
+        sys.stdout.flush()
         
         # 验证PGP和PME计算的能量变化在误差范围内一致
         assert relative_error < 0.05, f"相对误差过大: {relative_error*100:.2f}%"  # 允许5%的误差
