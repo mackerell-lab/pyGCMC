@@ -3,6 +3,7 @@ import numpy as np
 import math
 import pygcmc
 from pygcmc import MCState, MCInfo, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
+import sys
 
 # 设置日志级别为INFO或更低，确保能看到详细日志输出
 # 系统日志设置
@@ -17,6 +18,11 @@ pygcmc.set_platform_debug_mode(True)  # 启用调试模式用于测试
 # 如果需要更详细的日志，可以设置为DEBUG
 # pygcmc.System.set_log_level(pygcmc.LogLevel.DEBUG)
 # pygcmc.set_platform_log_level(pygcmc.PlatformLogLevel.DEBUG)
+
+# 确保输出缓冲区立即刷新
+sys.stdout.flush()
+print("日志级别设置已完成")
+sys.stdout.flush()
 
 # Direct copy of create_nacl_crystal function from test_energy_PME.py
 def create_nacl_crystal(box_size, n_cells):
@@ -334,11 +340,18 @@ def test_compare_pme_pgp_energy():
     # 清除之前可能存在的移动残基信息
     system.movementResidues.clear()
     
+    # 使用单独的方法设置移动残基 - 可能append方法有问题
+    # 创建临时列表并使用变量保存
+    movement_residues_list = []
+    
     # 创建一个移动残基信息对象
     movement_info = pygcmc.MCMovementResidueInfo()
     movement_info.startIndex = moving_residues[0]  # 第一个移动残基的索引
     movement_info.activeCount = len(moving_residues)  # 移动残基的数量
-    system.movementResidues.append(movement_info)
+    movement_residues_list.append(movement_info)
+    
+    # 直接设置整个列表
+    system.movementResidues = movement_residues_list
     
     print(f"Added movement info: startIndex={movement_info.startIndex}, activeCount={movement_info.activeCount}")
     print(f"System has {system.activeResidueCount} active residues and {len(system.movementResidues)} movement residue groups")

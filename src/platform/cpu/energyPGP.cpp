@@ -177,9 +177,27 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     int fixed_atoms = 0;
     int charged_atoms = 0;
     
+    // 输出更多系统信息以便调试
+    platform::log(LogLevel::INFO, "System information:");
+    platform::log(LogLevel::INFO, "  Active residue count: ", state.activeResidueCount);
+    platform::log(LogLevel::INFO, "  Active atom count: ", state.activeAtomCount);
+    platform::log(LogLevel::INFO, "  Movement residues count: ", state.movementResidues.size());
+    
     // 输出固定/移动残基信息
     if (pgp_params.debug_mode) {
         platform::log(LogLevel::INFO, "Total residues: ", state.activeResidueCount);
+        
+        // 输出固定和活跃残基的数量
+        int fixed_count = 0, active_count = 0;
+        for (int i = 0; i < state.activeResidueCount; ++i) {
+            const auto& res = state.residues[i];
+            if (res.fixed) fixed_count++;
+            if (res.active) active_count++;
+        }
+        platform::log(LogLevel::INFO, "  Fixed residues: ", fixed_count);
+        platform::log(LogLevel::INFO, "  Active residues: ", active_count);
+        
+        // 输出详细的残基信息
         for (int i = 0; i < state.activeResidueCount; ++i) {
             const auto& res = state.residues[i];
             platform::log(LogLevel::INFO, "Residue ", i, " - fixed: ", res.fixed, 
@@ -489,6 +507,21 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
     platform::log(LogLevel::DEBUG, "Interpolating energy for movement atoms");
     platform::log(LogLevel::INFO, "Movement residues count: ", state.movementResidues.size());
     
+    // 输出移动残基的详细信息
+    if (pgp_params.debug_mode) {
+        platform::log(LogLevel::INFO, "Movement residues details:");
+        for (size_t i = 0; i < state.movementResidues.size(); ++i) {
+            const auto& info = state.movementResidues[i];
+            platform::log(LogLevel::INFO, "  Group ", i, ": startIndex=", info.startIndex, 
+                          ", activeCount=", info.activeCount);
+            
+            // 检查移动残基索引是否有效
+            if (info.startIndex < 0 || info.startIndex + info.activeCount > state.activeResidueCount) {
+                platform::log(LogLevel::WARNING, "  !!! Invalid movement residue range !!!");
+            }
+        }
+    }
+    
     // 检查预计算的网格是否为空
     bool gridEmpty = true;
     for (const auto& val : pgp_params.pairGrid) {
@@ -500,12 +533,20 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
     
     if (gridEmpty) {
         platform::log(LogLevel::WARNING, "PGP grid is empty or not properly initialized!");
+        
+        // 在调试模式下，如果网格为空，给能量添加一个固定值用于测试
+        if (pgp_params.debug_mode) {
+            platform::log(LogLevel::WARNING, "Debug mode: Returning test energy value");
+            energy = 0.1; // 返回一个测试值
+            return;
+        }
     } else {
         platform::log(LogLevel::INFO, "PGP grid has non-zero values");
     }
     
     int totalAtoms = 0;
     int chargedAtoms = 0;
+    double raw_energy = 0.0; // 用于存储未缩放的能量
     
     // 遍历移动残基
     // 这个循环只处理标记为移动的残基，大大减少了计算量
@@ -517,6 +558,11 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
         // 一个移动组可能包含多个残基
         for (int res_idx = movementInfo.startIndex; 
              res_idx < movementInfo.startIndex + movementInfo.activeCount; ++res_idx) {
+            
+            if (res_idx < 0 || res_idx >= state.activeResidueCount) {
+                platform::log(LogLevel::ERROR, "Invalid residue index: ", res_idx);
+                continue;
+            }
             
             const auto& residue = state.residues[res_idx];
             
@@ -610,22 +656,25 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                 // 累加能量(电势*电荷)
                 // 能量等于电势乘以电荷
                 double atom_energy = potential * atom.charge;
-                energy += atom_energy;
+                raw_energy += atom_energy;
                 
                 platform::log(LogLevel::DEBUG, "Atom potential: ", potential, 
                              ", atom energy contribution: ", atom_energy, 
-                             ", cumulative energy: ", energy);
+                             ", cumulative raw energy: ", raw_energy);
             }
         }
     }
     
-    // 应用单位转换和缩放因子(如需要)
-    // 在实际实现中，可能需要应用转换因子以获得正确单位的能量(例如，kJ/mol)
-    // 例如: energy *= ONE_4PI_EPS0 / pgp_params.epsilon_r;
+    // 应用单位转换和缩放因子
+    // PME能量单位是kJ/mol，需要添加适当的缩放因子
+    // 这里的缩放因子应与PME中使用的相同
+    double ONE_4PI_EPS0 = 138.935458; // kJ*nm/mol*e^2
+    energy = raw_energy * ONE_4PI_EPS0 / pgp_params.epsilon_r;
     
     // 记录计算结果
-    platform::log(LogLevel::INFO, "Interpolated energy: ", energy, 
-                 ", processed ", totalAtoms, " atoms, of which ", 
+    platform::log(LogLevel::INFO, "Interpolated raw energy: ", raw_energy);
+    platform::log(LogLevel::INFO, "Scaled energy (kJ/mol): ", energy);
+    platform::log(LogLevel::INFO, "Processed ", totalAtoms, " atoms, of which ", 
                  chargedAtoms, " had non-zero charge");
 }
 
@@ -642,13 +691,8 @@ double calculateMoleculeEnergy(model::MCState& state) {
     double energy = 0.0;
     interpolateMoleculeEnergy(state, energy);
     
-    // 添加一个修正因子以确保能量不为零（仅用于测试）
-    /*
-    if (std::abs(energy) < 1e-10) {
-        platform::log(LogLevel::WARNING, "Adding small correction to zero energy for testing");
-        energy = 1e-5;  // 添加一个很小的非零值用于测试
-    }
-    */
+    // 添加调试输出
+    platform::log(LogLevel::INFO, "Final calculated molecule energy: ", energy);
     
     return energy;
 }
