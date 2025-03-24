@@ -319,7 +319,7 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     double constantFactor = 4.0 * M_PI / volume;
     
     // 电势物理单位转换因子
-    double ONE_4PI_EPS0 = 138.935458; // kJ*nm/mol*e^2
+    double ONE_4PI_EPS0 = 138.935456; // kJ·mol^-1·nm·e^-2，与PME定义一致
     double physicalUnitFactor = ONE_4PI_EPS0 / pgp_params.epsilon_r;
     
     // 总修正因子 = FFT归一化补偿(N) × 常数因子(4π/Ω) × 物理单位转换 × 0.5(减半)
