@@ -225,6 +225,15 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     // 修正：正确计算exp(-k²/(4α²))中的系数
     double factor = 1.0/(4.0*alpha*alpha);
     
+    // 打印关键参数用于调试
+    std::cout << "[DIRECT PLATFORM] 关键计算参数:" << std::endl;
+    std::cout << "  盒子尺寸: [" << pgp_params.box[0] << ", " << pgp_params.box[1] << ", " << pgp_params.box[2] << "] nm" << std::endl;
+    std::cout << "  盒子体积(Ω): " << volume << " nm³" << std::endl;
+    std::cout << "  网格尺寸: [" << nx << ", " << ny << ", " << nz << "]" << std::endl;
+    std::cout << "  总网格点数: " << nx * ny * nz << std::endl;
+    std::cout << "  Ewald分离参数(α): " << alpha << " nm⁻¹" << std::endl;
+    std::cout << "  exp(-k²/(4α²))系数: " << factor << std::endl;
+    
     // 获取最大k向量指数
     int maxkx = (nx+1)/2;
     int maxky = (ny+1)/2;
@@ -232,12 +241,25 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     
     // 计算倒格矢量
     double recipBoxVectors[3][3] = {{0}};
-    recipBoxVectors[0][0] = 1.0 / pgp_params.box[0]; 
-    recipBoxVectors[1][1] = 1.0 / pgp_params.box[1]; 
-    recipBoxVectors[2][2] = 1.0 / pgp_params.box[2];
+    // 修正: 倒格矢量应为2π/box，而非1/box
+    // PME理论中k矢量定义为k = 2π·n/L，缺少2π会导致m²值偏小
+    recipBoxVectors[0][0] = 2.0 * M_PI / pgp_params.box[0]; 
+    recipBoxVectors[1][1] = 2.0 * M_PI / pgp_params.box[1]; 
+    recipBoxVectors[2][2] = 2.0 * M_PI / pgp_params.box[2];
     
-    // boxfactor用于B-spline系数应用
-    double boxfactor = (M_PI * volume) / (nx * ny * nz);
+    // 打印倒格矢量
+    std::cout << "  倒格矢量: [" << recipBoxVectors[0][0] << ", " << recipBoxVectors[1][1] << ", " << recipBoxVectors[2][2] << "] nm⁻¹" << std::endl;
+    
+    // 示例计算几个k点的值
+    std::cout << "  示例k点值(nx/4, ny/4, nz/4):" << std::endl;
+    int sx = nx/4, sy = ny/4, sz = nz/4;
+    double mkx = sx * recipBoxVectors[0][0];
+    double mky = sy * recipBoxVectors[1][1];
+    double mkz = sz * recipBoxVectors[2][2];
+    double mk2 = mkx*mkx + mky*mky + mkz*mkz;
+    std::cout << "    k = [" << mkx << ", " << mky << ", " << mkz << "] nm⁻¹" << std::endl;
+    std::cout << "    |k|² = " << mk2 << " nm⁻²" << std::endl;
+    std::cout << "    exp(-k²/(4α²)) = " << exp(-mk2 * factor) << std::endl;
     
     // 应用Ewald因子
     for (int kx = 0; kx < nx; kx++) {
@@ -269,19 +291,19 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
                 double bx = pgp_params.bsplineModuli[0][kx];
                 double by = pgp_params.bsplineModuli[1][ky];
                 double bz = pgp_params.bsplineModuli[2][kz];
-                double denom = m2 * bx * by * bz * boxfactor; // 使用boxfactor
+                double denom = m2 * bx * by * bz; // 移除了boxfactor，符合PME理论
                 
                 // 避免除以零问题
                 if (denom < 1e-10) {
                     denom = 1e-10;
                 }
                 
-                // 计算Ewald因子: (4π/Ω)·exp(-k²/(4α²))/denom
-                // 其中denom包含了m2和B-spline系数
-                double ewaldFactor = (4.0 * M_PI / volume) * exp(-m2 * factor) / denom;
+                // 只应用k依赖的因子: exp(-k²/(4α²))/(k² · B)
+                // 常数因子(4π/Ω)将在反FFT后应用
+                double kDependentFactor = exp(-m2 * factor) / denom;
                 
-                // 应用因子
-                pme_params.pmeGrid[index] = structureFactor * ewaldFactor;
+                // 应用k依赖因子
+                pme_params.pmeGrid[index] = structureFactor * kDependentFactor;
             }
         }
     }
@@ -289,6 +311,56 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     // 执行反向FFT以获得实空间电势
     platform::log(LogLevel::INFO, "执行反向FFT获得实空间电势");
     performFFTBackward();
+    
+    // 补偿反FFT的1/N归一化，并应用常数因子(4π/Ω)
+    platform::log(LogLevel::INFO, "补偿反FFT的归一化因子并应用常数因子");
+    int totalFFTPoints = nx * ny * nz;
+    // 常数因子: 4π/Ω
+    double constantFactor = 4.0 * M_PI / volume;
+    
+    // 总修正因子 = FFT归一化补偿(N) × 常数因子(4π/Ω)
+    double totalFactor = totalFFTPoints * constantFactor;
+    std::cout << "[DIRECT PLATFORM] 应用修正因子:" << std::endl;
+    std::cout << "  FFT归一化补偿(N): " << totalFFTPoints << std::endl;
+    std::cout << "  常数因子(4π/Ω): " << constantFactor << " nm⁻³" << std::endl;
+    std::cout << "  总修正因子: " << totalFactor << " nm⁻³" << std::endl;
+    
+    // 统计修正前的电势范围
+    double preMin = 0.0, preMax = 0.0, preSum = 0.0;
+    bool firstValue = true;
+    for (int i = 0; i < totalGridSize; i++) {
+        double val = pme_params.pmeGrid[i].real();
+        if (firstValue) {
+            preMin = preMax = val;
+            firstValue = false;
+        } else {
+            preMin = std::min(preMin, val);
+            preMax = std::max(preMax, val);
+        }
+        preSum += val;
+    }
+    std::cout << "  修正前电势范围: [" << preMin << ", " << preMax << "], 平均值: " << (preSum/totalGridSize) << std::endl;
+    
+    // 应用总修正因子到每个网格点
+    for (int i = 0; i < totalGridSize; i++) {
+        pme_params.pmeGrid[i] *= totalFactor;
+    }
+    
+    // 统计修正后的电势范围
+    double postMin = 0.0, postMax = 0.0, postSum = 0.0;
+    firstValue = true;
+    for (int i = 0; i < totalGridSize; i++) {
+        double val = pme_params.pmeGrid[i].real();
+        if (firstValue) {
+            postMin = postMax = val;
+            firstValue = false;
+        } else {
+            postMin = std::min(postMin, val);
+            postMax = std::max(postMax, val);
+        }
+        postSum += val;
+    }
+    std::cout << "  修正后电势范围: [" << postMin << ", " << postMax << "], 平均值: " << (postSum/totalGridSize) << std::endl;
     
     // 将修改后的PME网格复制到PGP的potentialGrid中
     pgp_params.potentialGrid = pme_params.pmeGrid;
@@ -458,21 +530,43 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                 
                 // X维度B样条
                 computeBSplineCoefficients(gridFractions[0], order, coefficients);
+                std::cout << "[DIRECT PLATFORM] X轴B样条系数 (gridFraction=" << gridFractions[0] << "):" << std::endl;
+                double xMax = thetaX[0], xMin = thetaX[0], xSum = 0.0;
                 for (int i = 0; i < order; i++) {
                     thetaX[i] = coefficients[i];
+                    xMax = std::max(xMax, thetaX[i]);
+                    xMin = std::min(xMin, thetaX[i]);
+                    xSum += thetaX[i];
+                    std::cout << "  theta_x[" << i << "] = " << thetaX[i] << std::endl;
                 }
+                std::cout << "  X权重范围: [" << xMin << ", " << xMax << "], 和: " << xSum << std::endl;
                 
                 // Y维度B样条
                 computeBSplineCoefficients(gridFractions[1], order, coefficients);
+                std::cout << "[DIRECT PLATFORM] Y轴B样条系数 (gridFraction=" << gridFractions[1] << "):" << std::endl;
+                double yMax = thetaY[0], yMin = thetaY[0], ySum = 0.0;
                 for (int i = 0; i < order; i++) {
                     thetaY[i] = coefficients[i];
+                    yMax = std::max(yMax, thetaY[i]);
+                    yMin = std::min(yMin, thetaY[i]);
+                    ySum += thetaY[i];
+                    std::cout << "  theta_y[" << i << "] = " << thetaY[i] << std::endl;
                 }
+                std::cout << "  Y权重范围: [" << yMin << ", " << yMax << "], 和: " << ySum << std::endl;
                 
                 // Z维度B样条
                 computeBSplineCoefficients(gridFractions[2], order, coefficients);
+                std::cout << "[DIRECT PLATFORM] Z轴B样条系数 (gridFraction=" << gridFractions[2] << "):" << std::endl;
+                double zMax = thetaZ[0], zMin = thetaZ[0], zSum = 0.0;
                 for (int i = 0; i < order; i++) {
                     thetaZ[i] = coefficients[i];
+                    zMax = std::max(zMax, thetaZ[i]);
+                    zMin = std::min(zMin, thetaZ[i]);
+                    zSum += thetaZ[i];
+                    std::cout << "  theta_z[" << i << "] = " << thetaZ[i] << std::endl;
                 }
+                std::cout << "  Z权重范围: [" << zMin << ", " << zMax << "], 和: " << zSum << std::endl;
+                std::cout << "  三维权重乘积总和理论值: " << xSum * ySum * zSum << std::endl;
                 
                 // 输出最近的网格点及其电势值（用于测试）
                 std::cout << "[DIRECT PLATFORM] 原子 " << atom_index << " 最近的网格点信息:" << std::endl;
@@ -523,16 +617,31 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                             double weight = thetaX[ix] * thetaY[iy] * thetaZ[iz];
                             potential += grid_value * weight;
                             
-                            if (std::abs(grid_value) > 1e-6 && ix==0 && iy==0 && iz==0) {
+                            // 输出重要网格点的详细信息，帮助调试
+                            if (std::abs(grid_value) > 1e-6 && ix < 2 && iy < 2 && iz < 2) {
                                 std::cout << "[DIRECT PLATFORM] 网格点 (" 
                                           << xindex << "," 
                                           << yindex << "," 
                                           << zindex 
-                                          << ") 电势=" << grid_value << ", 权重=" << weight << std::endl;
+                                          << ") 电势=" << grid_value 
+                                          << ", 权重=" << weight
+                                          << " (各维度权重: " << thetaX[ix] << "," << thetaY[iy] << "," << thetaZ[iz] << ")"
+                                          << std::endl;
                             }
                         }
                     }
                 }
+                
+                // 输出电势插值中权重总和，用于验证归一化
+                double totalWeight = 0.0;
+                for (int ix = 0; ix < order; ix++) {
+                    for (int iy = 0; iy < order; iy++) {
+                        for (int iz = 0; iz < order; iz++) {
+                            totalWeight += thetaX[ix] * thetaY[iy] * thetaZ[iz];
+                        }
+                    }
+                }
+                std::cout << "[DIRECT PLATFORM] B样条权重总和: " << totalWeight << std::endl;
                 
                 // 累加能量(电势*电荷)
                 double atom_energy = potential * atom.charge;
@@ -553,19 +662,27 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
     // 这个系数是配置参数
     double ONE_4PI_EPS0 = 138.935458; // kJ*nm/mol*e^2
     
-    // 修正：移除单位转换因子，保持与PME能量计算一致的单位
-    // 原始计算: energy = 2.0 * raw_energy * ONE_4PI_EPS0 / pgp_params.epsilon_r;
-    // 由于PME能量计算没有应用这个转换因子，这里为了保持一致，只应用2.0倍的因子
-    energy = 2.0 * raw_energy;
+    // 使用新的转换公式: energy = raw_energy * ONE_4PI_EPS0 / pgp_params.epsilon_r
+    // 即: 2.0 * raw_energy * (2.0 * ONE_4PI_EPS0 / pgp_params.epsilon_r) / 4 * 2
+    double newFactor = (2.0 * ONE_4PI_EPS0 / pgp_params.epsilon_r) / 2.0; // 除以4再乘以2，简化为除以2
+    energy = raw_energy * newFactor;
     
-    // 输出转换前后的能量值，用于调试比较
-    double converted_energy = 2.0 * raw_energy * ONE_4PI_EPS0 / pgp_params.epsilon_r;
-    platform::log(LogLevel::DEBUG, "Raw PGP energy (before conversion): ", energy, " (internal units)");
-    platform::log(LogLevel::DEBUG, "Converted PGP energy: ", converted_energy, " kJ/mol");
+    // 保留原始PME兼容的能量计算，用于比较
+    double pme_compatible_energy = 2.0 * raw_energy;
+    
+    // 详细输出能量计算细节
+    std::cout << "[DIRECT PLATFORM] 能量计算细节:" << std::endl;
+    std::cout << "  原始能量(raw): " << raw_energy << std::endl;
+    std::cout << "  修正的乘法因子: " << newFactor << " (含额外2倍系数)" << std::endl;
+    std::cout << "  修正后最终能量: " << energy << " kJ/mol" << std::endl;
+    std::cout << "  原PME兼容能量: " << pme_compatible_energy << " (内部单位)" << std::endl;
+    
+    platform::log(LogLevel::DEBUG, "Raw PGP energy: ", raw_energy, " (internal units)");
+    platform::log(LogLevel::DEBUG, "Final PGP energy (new formula): ", energy, " kJ/mol");
+    platform::log(LogLevel::DEBUG, "Old PME compatible energy: ", pme_compatible_energy);
     
     // 输出最终的能量值和调试信息
-    platform::log(LogLevel::DEBUG, "Final PGP energy (matching PME units): ", energy);
-    platform::log(LogLevel::INFO, "最终计算的PGP能量: ", energy);
+    platform::log(LogLevel::INFO, "最终计算的PGP能量: ", energy, " kJ/mol");
 }
 
 /**
