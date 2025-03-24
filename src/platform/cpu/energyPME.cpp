@@ -800,9 +800,8 @@ void computeBSplineCoefficients(double fractional, int order, std::vector<double
  * @brief Spread charges onto the PME grid
  * 
  * @param state MC state
- * @param movement_only Whether to process only moving atoms
  */
-void spreadChargesOntoGrid(model::MCState& state, [[maybe_unused]] bool movement_only) {
+void spreadChargesOntoGrid(model::MCState& state) {
     // Log the start of processing
     platform::log(LogLevel::DEBUG, "Spreading charges onto PME grid");
     
@@ -1766,7 +1765,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
 /**
  * @brief Compute reciprocal space energy using PME
  */
-double computeReciprocalPME(model::MCState& state, bool movement_only) {
+double computeReciprocalPME(model::MCState& state) {
     platform::log(LogLevel::INFO, "Computing PME reciprocal space energy");
     
     // Simplified system information output
@@ -1801,7 +1800,7 @@ double computeReciprocalPME(model::MCState& state, bool movement_only) {
     std::fill(pme_params.pmeGrid.begin(), pme_params.pmeGrid.end(), std::complex<double>(0.0, 0.0));
     
     // Execute PME calculation steps
-    spreadChargesOntoGrid(state, movement_only);
+    spreadChargesOntoGrid(state);
     performFFTForward();
     
     // Convert box to double array
@@ -2022,7 +2021,7 @@ void computeSystemEnergyPME(model::MCState& state) {
     computeRealSpacePME(state, false, true);
     
     // 2. Then calculate reciprocal space part - computeReciprocalPME already includes COULOMB factor
-    state.ewald_energy.reciprocal = computeReciprocalPME(state, false);
+    state.ewald_energy.reciprocal = computeReciprocalPME(state);
     
     // 3. Finally calculate self energy part - computeSelfEnergyPME already includes COULOMB factor
     state.ewald_energy.self = computeSelfEnergyPME(state, false);
@@ -2051,7 +2050,7 @@ void computeMovementEnergyPME(model::MCState& state) {
     
     // Only calculate for residues that moved
     computeRealSpacePME(state, true, true);
-    state.ewald_energy.reciprocal = computeReciprocalPME(state, true);
+    state.ewald_energy.reciprocal = computeReciprocalPME(state);
     state.ewald_energy.self = computeSelfEnergyPME(state, true);
     
     // Apply Coulomb factor only to real-space component

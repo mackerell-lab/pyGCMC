@@ -145,12 +145,12 @@ void computeMovementEnergyPME(model::MCState& state);
 
 // Internal calculation function declarations
 std::pair<double, double> calcPairEnergyPME(double r2, double sigma, double eps, double q1, double q2, const model::MCInfo& info, bool is_excluded = false);
-double computeReciprocalPME(model::MCState& state, bool movement_only);
+double computeReciprocalPME(model::MCState& state);
 double computeSelfEnergyPME(model::MCState& state, bool movement_only);
 void computeRealSpacePME(model::MCState& state, bool movement_only, bool store_in_residues = true);
 
 // Helper functions for PME
-void spreadChargesOntoGrid(model::MCState& state, bool movement_only);
+void spreadChargesOntoGrid(model::MCState& state);
 void performFFTForward();
 void performFFTBackward();
 void computeEnergyFromGrid(double& energy, const double box[3]);

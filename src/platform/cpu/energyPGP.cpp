@@ -205,7 +205,7 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     
     // 调用PME的电荷分布函数
     platform::log(LogLevel::INFO, "调用PME的电荷分布函数 (fixed_only=", fixed_only, ")");
-    spreadChargesOntoGrid(state, fixed_only);
+    spreadChargesOntoGrid(state);
 
     // 调用PME的前向FFT函数
     platform::log(LogLevel::INFO, "调用PME的前向FFT函数");
