@@ -318,12 +318,18 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     // 常数因子: 4π/Ω
     double constantFactor = 4.0 * M_PI / volume;
     
-    // 总修正因子 = FFT归一化补偿(N) × 常数因子(4π/Ω)
-    double totalFactor = totalFFTPoints * constantFactor;
+    // 电势物理单位转换因子
+    double ONE_4PI_EPS0 = 138.935458; // kJ*nm/mol*e^2
+    double physicalUnitFactor = ONE_4PI_EPS0 / pgp_params.epsilon_r;
+    
+    // 总修正因子 = FFT归一化补偿(N) × 常数因子(4π/Ω) × 物理单位转换 × 0.5(减半)
+    double totalFactor = totalFFTPoints * constantFactor * physicalUnitFactor * 0.5;
     std::cout << "[DIRECT PLATFORM] 应用修正因子:" << std::endl;
     std::cout << "  FFT归一化补偿(N): " << totalFFTPoints << std::endl;
     std::cout << "  常数因子(4π/Ω): " << constantFactor << " nm⁻³" << std::endl;
-    std::cout << "  总修正因子: " << totalFactor << " nm⁻³" << std::endl;
+    std::cout << "  物理单位转换: " << physicalUnitFactor << " kJ*nm/mol*e²" << std::endl;
+    std::cout << "  电势减半因子: 0.5" << std::endl;
+    std::cout << "  总修正因子: " << totalFactor << std::endl;
     
     // 统计修正前的电势范围
     double preMin = 0.0, preMax = 0.0, preSum = 0.0;
@@ -659,27 +665,18 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
     // 计算能量汇总
     platform::log(LogLevel::DEBUG, "Summing atomic contributions for total energy");
     
-    // 这个系数是配置参数
-    double ONE_4PI_EPS0 = 138.935458; // kJ*nm/mol*e^2
-    
-    // 使用新的转换公式: energy = raw_energy * ONE_4PI_EPS0 / pgp_params.epsilon_r
-    // 即: 2.0 * raw_energy * (2.0 * ONE_4PI_EPS0 / pgp_params.epsilon_r) / 4 * 2
-    double newFactor = (2.0 * ONE_4PI_EPS0 / pgp_params.epsilon_r) / 2.0; // 除以4再乘以2，简化为除以2
-    energy = raw_energy * newFactor;
-    
-    // 保留原始PME兼容的能量计算，用于比较
-    double pme_compatible_energy = 2.0 * raw_energy;
+    // 电势已在预计算中减半，现在需要乘以2倍因子来计算能量
+    // 根据pgp.md，能量应该是 2 * Σ(q_i * φ(r_i))
+    energy = 2.0 * raw_energy;
     
     // 详细输出能量计算细节
     std::cout << "[DIRECT PLATFORM] 能量计算细节:" << std::endl;
-    std::cout << "  原始能量(raw): " << raw_energy << std::endl;
-    std::cout << "  修正的乘法因子: " << newFactor << " (含额外2倍系数)" << std::endl;
-    std::cout << "  修正后最终能量: " << energy << " kJ/mol" << std::endl;
-    std::cout << "  原PME兼容能量: " << pme_compatible_energy << " (内部单位)" << std::endl;
+    std::cout << "  原始能量(raw): " << raw_energy << " kJ/mol" << std::endl;
+    std::cout << "  应用2倍因子: × 2.0" << std::endl;
+    std::cout << "  最终能量: " << energy << " kJ/mol" << std::endl;
     
-    platform::log(LogLevel::DEBUG, "Raw PGP energy: ", raw_energy, " (internal units)");
-    platform::log(LogLevel::DEBUG, "Final PGP energy (new formula): ", energy, " kJ/mol");
-    platform::log(LogLevel::DEBUG, "Old PME compatible energy: ", pme_compatible_energy);
+    platform::log(LogLevel::DEBUG, "Raw PGP energy: ", raw_energy, " kJ/mol");
+    platform::log(LogLevel::DEBUG, "Final PGP energy (×2): ", energy, " kJ/mol");
     
     // 输出最终的能量值和调试信息
     platform::log(LogLevel::INFO, "最终计算的PGP能量: ", energy, " kJ/mol");
