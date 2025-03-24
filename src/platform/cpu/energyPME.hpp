@@ -150,7 +150,7 @@ double computeSelfEnergyPME(model::MCState& state, bool movement_only);
 void computeRealSpacePME(model::MCState& state, bool movement_only, bool store_in_residues = true);
 
 // Helper functions for PME
-void spreadChargesOntoGrid(model::MCState& state);
+void spreadChargesOntoGrid(model::MCState& state, bool fixed_only = false);
 void performFFTForward();
 void performFFTBackward();
 void computeEnergyFromGrid(double& energy, const double box[3]);

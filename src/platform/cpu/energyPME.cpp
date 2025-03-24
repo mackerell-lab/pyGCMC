@@ -800,14 +800,15 @@ void computeBSplineCoefficients(double fractional, int order, std::vector<double
  * @brief Spread charges onto the PME grid
  * 
  * @param state MC state
+ * @param fixed_only If true, only consider charges from atoms in fixed residues
  */
-void spreadChargesOntoGrid(model::MCState& state) {
+void spreadChargesOntoGrid(model::MCState& state, bool fixed_only) {
     // Log the start of processing
-    platform::log(LogLevel::DEBUG, "Spreading charges onto PME grid");
+    platform::log(LogLevel::DEBUG, "Spreading charges onto PME grid", (fixed_only ? " (fixed only)" : ""));
     
     // 只在debug_mode启用时执行以下代码
     if (platform::is_debug_mode()) {
-        platform::log(LogLevel::DEBUG, "Spreading charges onto PME grid");
+        platform::log(LogLevel::DEBUG, "Spreading charges onto PME grid", (fixed_only ? " (fixed only)" : ""));
         
         // Calculate total system charge
         double totalCharge = 0.0;
@@ -831,6 +832,7 @@ void spreadChargesOntoGrid(model::MCState& state) {
     
     // Directly access member variables instead of using getter methods
     const auto& atoms = state.atoms;
+    const auto& residues = state.residues;
     // For positions, use atoms to directly access coordinates
     const auto& info = state.info;
     // Change type from double to float to match info.box type
@@ -838,13 +840,39 @@ void spreadChargesOntoGrid(model::MCState& state) {
     
     // Calculate total system charge
     double totalCharge = 0.0;
-    for (int i = 0; i < state.activeAtomCount; ++i) {
-        totalCharge += atoms[i].charge;
-    }
+    int processedAtoms = 0;
     
-    // Output total system charge - keep this key information
-    platform::log(LogLevel::INFO, "Total system charge: ", totalCharge);
-    platform::log(LogLevel::DEBUG, "Total system charge: " + std::to_string(totalCharge));
+    // Create a list of atoms to process (either all atoms or only fixed atoms)
+    std::vector<int> atomsToProcess;
+    atomsToProcess.reserve(state.activeAtomCount); // Reserve space for efficiency
+    
+    if (fixed_only) {
+        // Only include atoms from fixed residues
+        for (int i = 0; i < state.activeResidueCount; ++i) {
+            const auto& residue = residues[i];
+            if (residue.active && residue.fixed) {
+                // Add all atoms in this fixed residue
+                for (int j = 0; j < residue.atomCount; ++j) {
+                    int atomIndex = residue.atomStart + j;
+                    atomsToProcess.push_back(atomIndex);
+                    totalCharge += atoms[atomIndex].charge;
+                }
+            }
+        }
+        
+        processedAtoms = atomsToProcess.size();
+        platform::log(LogLevel::INFO, "Processing ", processedAtoms, " atoms from fixed residues, total charge: ", totalCharge);
+    } else {
+        // Process all atoms
+        for (int i = 0; i < state.activeAtomCount; ++i) {
+            atomsToProcess.push_back(i);
+            totalCharge += atoms[i].charge;
+        }
+        
+        processedAtoms = state.activeAtomCount;
+        platform::log(LogLevel::INFO, "Total system charge: ", totalCharge);
+        platform::log(LogLevel::DEBUG, "Total system charge: " + std::to_string(totalCharge));
+    }
     
     // Check the initial values of the first 10 grid points
     if (platform::is_debug_mode()) {
@@ -854,9 +882,11 @@ void spreadChargesOntoGrid(model::MCState& state) {
         }
         
         // Print some atom charge values to verify if there are non-zero charges
-        platform::log(LogLevel::DEBUG, "Charge values of the first 10 atoms:");
-        for (int i = 0; i < 10 && i < state.activeAtomCount; i++) {
-            platform::log(LogLevel::DEBUG, "  Atom[" + std::to_string(i) + "] charge = " + std::to_string(atoms[i].charge));
+        int numToPrint = std::min(10, processedAtoms);
+        platform::log(LogLevel::DEBUG, "Charge values of the first " + std::to_string(numToPrint) + " processed atoms:");
+        for (int i = 0; i < numToPrint; i++) {
+            int atomIndex = atomsToProcess[i];
+            platform::log(LogLevel::DEBUG, "  Atom[" + std::to_string(atomIndex) + "] charge = " + std::to_string(atoms[atomIndex].charge));
         }
     }
     
@@ -911,18 +941,18 @@ void spreadChargesOntoGrid(model::MCState& state) {
     // Create arrays for B-spline coefficients
     std::vector<std::vector<double>> bsplines_theta(3);
     for (int d = 0; d < 3; d++) {
-        bsplines_theta[d].resize(order * state.activeAtomCount, 0.0);
+        bsplines_theta[d].resize(order * processedAtoms, 0.0);
     }
     
     // Create arrays for grid indices and fractional parts
-    std::vector<std::vector<int>> gridIndices(state.activeAtomCount, std::vector<int>(3, 0));
-    std::vector<std::vector<double>> gridFractions(state.activeAtomCount, std::vector<double>(3, 0.0));
+    std::vector<std::vector<int>> gridIndices(processedAtoms, std::vector<int>(3, 0));
+    std::vector<std::vector<double>> gridFractions(processedAtoms, std::vector<double>(3, 0.0));
     
     // Print grid index information for every 100 atoms - if there are enough atoms
     if (platform::is_debug_mode()) {
-        for (int i = 0; i < std::min(500, state.activeAtomCount); i += 100) {
+        for (int i = 0; i < std::min(500, processedAtoms); i += 100) {
             if (i < static_cast<int>(gridIndices.size())) {
-                platform::log(LogLevel::DEBUG, "Atom " + std::to_string(i) + " grid index: [" 
+                platform::log(LogLevel::DEBUG, "Atom " + std::to_string(atomsToProcess[i]) + " grid index: [" 
                         + std::to_string(gridIndices[i][0]) + ", " 
                         + std::to_string(gridIndices[i][1]) + ", " 
                         + std::to_string(gridIndices[i][2]) + "]");
@@ -930,8 +960,10 @@ void spreadChargesOntoGrid(model::MCState& state) {
         }
     }
     
-    // Calculate grid indices and fractional offsets for all atoms
-    for (int atomIdx = 0; atomIdx < state.activeAtomCount; atomIdx++) {
+    // Calculate grid indices and fractional offsets for all atoms to be processed
+    for (int i = 0; i < processedAtoms; i++) {
+        int atomIdx = atomsToProcess[i];
+        
         // Get position from atoms
         float pos[3] = {atoms[atomIdx].x, atoms[atomIdx].y, atoms[atomIdx].z};
         
@@ -953,40 +985,40 @@ void spreadChargesOntoGrid(model::MCState& state) {
         
         // Calculate grid indices and fractional parts - fix: remove incorrect offset
         for (int d = 0; d < 3; d++) {
-            gridFractions[atomIdx][d] = fractional[d] - floor(fractional[d]);
+            gridFractions[i][d] = fractional[d] - floor(fractional[d]);
             // Fix: remove incorrect -order/2 offset, consistent with pme.cpp
-            gridIndices[atomIdx][d] = static_cast<int>(floor(fractional[d]));
+            gridIndices[i][d] = static_cast<int>(floor(fractional[d]));
             // Ensure grid indices are within correct range
-            if (gridIndices[atomIdx][d] < 0) 
-                gridIndices[atomIdx][d] += pme_params.meshSize[d];
+            if (gridIndices[i][d] < 0) 
+                gridIndices[i][d] += pme_params.meshSize[d];
         }
     }
     
-    // Calculate B-spline coefficients for all atoms
-    for (int atomIdx = 0; atomIdx < state.activeAtomCount; atomIdx++) {
-        double* thetax = &bsplines_theta[0][atomIdx * order];
-        double* thetay = &bsplines_theta[1][atomIdx * order];
-        double* thetaz = &bsplines_theta[2][atomIdx * order];
+    // Calculate B-spline coefficients for all atoms to be processed
+    for (int i = 0; i < processedAtoms; i++) {
+        double* thetax = &bsplines_theta[0][i * order];
+        double* thetay = &bsplines_theta[1][i * order];
+        double* thetaz = &bsplines_theta[2][i * order];
         
         // Calculate B-spline coefficients for each dimension
         std::vector<double> coefficients(order);
         
         // X dimension B-spline
-        computeBSplineCoefficients(gridFractions[atomIdx][0], order, coefficients);
-        for (int i = 0; i < order; i++) {
-            thetax[i] = coefficients[i];
+        computeBSplineCoefficients(gridFractions[i][0], order, coefficients);
+        for (int j = 0; j < order; j++) {
+            thetax[j] = coefficients[j];
         }
         
         // Y dimension B-spline
-        computeBSplineCoefficients(gridFractions[atomIdx][1], order, coefficients);
-        for (int i = 0; i < order; i++) {
-            thetay[i] = coefficients[i];
+        computeBSplineCoefficients(gridFractions[i][1], order, coefficients);
+        for (int j = 0; j < order; j++) {
+            thetay[j] = coefficients[j];
         }
         
         // Z dimension B-spline
-        computeBSplineCoefficients(gridFractions[atomIdx][2], order, coefficients);
-        for (int i = 0; i < order; i++) {
-            thetaz[i] = coefficients[i];
+        computeBSplineCoefficients(gridFractions[i][2], order, coefficients);
+        for (int j = 0; j < order; j++) {
+            thetaz[j] = coefficients[j];
         }
     }
     
@@ -1002,17 +1034,18 @@ void spreadChargesOntoGrid(model::MCState& state) {
         updatedPoints = -1;
     }
     
-    for (int atomIdx = 0; atomIdx < state.activeAtomCount; atomIdx++) {
+    for (int i = 0; i < processedAtoms; i++) {
+        int atomIdx = atomsToProcess[i];
         double charge = atoms[atomIdx].charge;
         
         // Get grid indices and B-spline coefficients
-        int x0index = gridIndices[atomIdx][0];
-        int y0index = gridIndices[atomIdx][1];
-        int z0index = gridIndices[atomIdx][2];
+        int x0index = gridIndices[i][0];
+        int y0index = gridIndices[i][1];
+        int z0index = gridIndices[i][2];
         
-        double* thetax = &bsplines_theta[0][atomIdx * order];
-        double* thetay = &bsplines_theta[1][atomIdx * order];
-        double* thetaz = &bsplines_theta[2][atomIdx * order];
+        double* thetax = &bsplines_theta[0][i * order];
+        double* thetay = &bsplines_theta[1][i * order];
+        double* thetaz = &bsplines_theta[2][i * order];
         
         // Distribute charge to grid - exactly following pme_grid_spread_charge
         for (int ix = 0; ix < order; ix++) {
