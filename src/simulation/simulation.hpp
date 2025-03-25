@@ -173,17 +173,17 @@ public:
                                          int splineOrder = 4, float tolerance = 1e-5f);
 
     /**
-     * 设置PGP-PME (Precomputed Grid-Potential Particle Mesh Ewald)算法参数
+     * Set PGP-PME (Precomputed Grid-Potential Particle Mesh Ewald) algorithm parameters
      * 
-     * 配置用于加速蒙特卡洛模拟中电荷相互作用计算的PGP-PME算法参数。
-     * 该方法优化了传统PME方法，特别适用于MC模拟中移动部分与固定部分间的相互作用计算。
+     * Configure parameters for PGP-PME algorithm which accelerates electrostatic interaction calculations in Monte Carlo simulations.
+     * This method optimizes traditional PME method, specially designed for interaction calculations between moving and fixed parts in MC simulations.
      * 
-     * @param alpha Ewald分离参数
-     * @param meshSize PME网格大小
-     * @param pair_cutoff 配对相互作用截断距离
-     * @param pairGridSize 预计算电势网格大小
-     * @param splineOrder B样条插值阶数
-     * @param tolerance 误差容限
+     * @param alpha Ewald separation parameter
+     * @param meshSize PME grid size
+     * @param pair_cutoff Pair interaction cutoff distance
+     * @param pairGridSize Precomputed potential grid size
+     * @param splineOrder B-spline interpolation order
+     * @param tolerance Error tolerance
      */
     void setPGPParameters(double alpha, const std::array<int, 3>& meshSize, double pair_cutoff,
                           const std::array<int, 3>& pairGridSize, int splineOrder, double tolerance);
@@ -191,32 +191,32 @@ public:
     // PGP method - add the following functions
     
     /**
-     * 预计算系统中固定部分的网格电势
+     * Precompute grid potential for fixed parts of the system
      * 
-     * 为PGP-PME算法预先计算电势网格，这是加速MC模拟的关键步骤
+     * Precompute potential grid for PGP-PME algorithm, which is a key step for accelerating MC simulations
      * 
-     * @param state 系统状态
-     * @param fixed_only 是否只处理固定部分
+     * @param state System state
+     * @param fixed_only Whether to process only fixed parts
      */
     static void precomputeGridPotential(model::MCState& state, bool fixed_only);
     
     /**
-     * 通过插值计算移动分子的能量（输出参数版本）
+     * Calculate moving molecule energy through interpolation (output parameter version)
      * 
-     * 从预计算的电势网格中插值计算移动分子的能量
+     * Interpolate energy of moving molecule from precomputed potential grid
      * 
-     * @param state 系统状态
-     * @param energy 输出参数，存储计算得到的能量
+     * @param state System state
+     * @param energy Output parameter that stores the calculated energy
      */
     static void interpolateMoleculeEnergy(model::MCState& state, double& energy);
     
     /**
-     * 通过插值计算移动分子的能量（返回值版本）
+     * Calculate moving molecule energy through interpolation (return value version)
      * 
-     * 从预计算的电势网格中插值计算移动分子的能量，并返回结果
+     * Interpolate energy of moving molecule from precomputed potential grid and return the result
      * 
-     * @param state 系统状态
-     * @return 计算得到的能量值
+     * @param state System state
+     * @return The calculated energy value
      */
     static double calculateMoleculeEnergy(model::MCState& state);
 

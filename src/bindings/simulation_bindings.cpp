@@ -288,37 +288,37 @@ void init_simulation_bindings(py::module& m) {
         py::arg("splineOrder") = 4,
         py::arg("tolerance") = 1e-5f,
         R"docstring(
-        设置PGP-PME (Precomputed Grid-Potential Particle Mesh Ewald)算法参数
+        Set PGP-PME (Precomputed Grid-Potential Particle Mesh Ewald) algorithm parameters
 
-        PGP-PME是一种针对蒙特卡洛模拟优化的长程静电相互作用计算方法。它通过预计算
-        系统中固定部分的静电势网格，大大加速了能量评估过程。
+        PGP-PME is a long-range electrostatic interaction calculation method optimized for Monte Carlo simulations. It
+        greatly accelerates the energy evaluation process by precomputing the electrostatic potential grid of the fixed parts of the system.
 
-        参数:
-            alpha (float): Ewald分离参数，控制实空间和倒空间计算的平衡
-            meshSize (list[int]): PME网格尺寸 [nx, ny, nz]
-            potential_cutoff (float): 电势计算的截断距离
-            potentialGridSize (list[int]): 预计算电势网格尺寸 [nx, ny, nz]
-            splineOrder (int, optional): B样条插值阶数，默认为4
-            tolerance (float, optional): 精度容限，默认为1e-5
+        Parameters:
+            alpha (float): Ewald separation parameter, controls the balance between real-space and reciprocal-space calculations
+            meshSize (list[int]): PME grid size [nx, ny, nz]
+            potential_cutoff (float): Cutoff distance for potential calculation
+            potentialGridSize (list[int]): Precomputed potential grid size [nx, ny, nz]
+            splineOrder (int, optional): B-spline interpolation order, default is 4
+            tolerance (float, optional): Precision tolerance, default is 1e-5
         )docstring");
         
-    // 新增的PGP核心函数绑定
+    // Added core PGP function bindings
     m.def("precomputeGridPotential",
         [](model::MCState& state, bool fixed_only) {
             simulation::Simulation::precomputeGridPotential(state, fixed_only);
         },
-        "Precompute the electrostatic grid potential for fixed parts of the system",
+        "Precompute the electrostatic potential grid for fixed parts of the system (Precomputed Grid-Potential Particle Mesh Ewald)",
         py::arg("state"),
         py::arg("fixed_only") = true,
         R"docstring(
-        预计算系统中固定部分的电势网格 (Precomputed Grid-Potential Particle Mesh Ewald)
+        Precompute the electrostatic potential grid for fixed parts of the system (Precomputed Grid-Potential Particle Mesh Ewald)
 
-        这是PGP-PME算法的核心函数之一，负责计算并存储系统中固定部分的静电势场。
-        该预计算步骤只需在系统固定部分发生变化时执行一次，显著提高蒙特卡洛模拟效率。
+        This is one of the core functions of the PGP-PME algorithm, responsible for calculating and storing the electrostatic potential field of the fixed parts of the system.
+        This precomputation step only needs to be executed once when the fixed parts of the system change, significantly improving Monte Carlo simulation efficiency.
 
-        参数:
-            state (MCState): 系统状态，包含原子坐标、电荷和盒子信息
-            fixed_only (bool, optional): 是否只计算固定部分，默认为True
+        Parameters:
+            state (MCState): System state, containing atom coordinates, charges, and box information
+            fixed_only (bool, optional): Whether to calculate only the fixed parts, default is True
         )docstring");
         
     m.def("interpolateMoleculeEnergy",
@@ -330,19 +330,19 @@ void init_simulation_bindings(py::module& m) {
         "Calculate molecule energy by interpolating from the precomputed grid potential",
         py::arg("state"),
         R"docstring(
-        通过插值计算移动分子的能量 (Precomputed Grid-Potential Particle Mesh Ewald)
+        Calculate molecule energy by interpolating from the precomputed grid potential (Precomputed Grid-Potential Particle Mesh Ewald)
 
-        这是PGP-PME算法的另一个核心函数，通过B样条插值从预计算的电势网格中
-        快速评估移动分子的能量，避免了直接计算分子间相互作用。
+        This is another core function of the PGP-PME algorithm, using B-spline interpolation from the precomputed potential grid to
+        quickly evaluate the energy of moving molecules, avoiding direct calculation of intermolecular interactions.
 
-        参数:
-            state (MCState): 系统状态，包含移动分子信息
+        Parameters:
+            state (MCState): System state, containing information about moving molecules
         
-        返回:
-            float: 计算得到的能量值
+        Returns:
+            float: The calculated energy value
         )docstring");
         
-    // 添加新的函数绑定：calculateMoleculeEnergy
+    // Add new function binding: calculateMoleculeEnergy
     m.def("calculateMoleculeEnergy",
         [](model::MCState& state) {
             return simulation::Simulation::calculateMoleculeEnergy(state);
@@ -350,16 +350,16 @@ void init_simulation_bindings(py::module& m) {
         "Calculate molecule energy by interpolating from the precomputed grid potential (alternative function)",
         py::arg("state"),
         R"docstring(
-        通过插值计算移动分子的能量 (Precomputed Grid-Potential Particle Mesh Ewald)
+        Calculate molecule energy by interpolating from the precomputed grid potential (Precomputed Grid-Potential Particle Mesh Ewald)
 
-        这是与interpolateMoleculeEnergy等价的函数，提供更直观的命名。
-        通过B样条插值从预计算的电势网格中获取移动分子的能量值。
+        This is an equivalent function to interpolateMoleculeEnergy, providing a more intuitive naming.
+        It retrieves the energy value of moving molecules through B-spline interpolation from the precomputed potential grid.
         
-        参数:
-            state (MCState): 系统状态，包含移动分子信息
+        Parameters:
+            state (MCState): System state, containing information about moving molecules
         
-        返回:
-            float: 计算得到的能量值
+        Returns:
+            float: The calculated energy value
         )docstring");
 }
 

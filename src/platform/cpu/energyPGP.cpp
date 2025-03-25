@@ -8,23 +8,23 @@
  * @file energyPGP.cpp
  * @brief Implementation of Precomputed Grid-Potential Particle Mesh Ewald for Monte Carlo (PGP-PME-MC)
  * 
- * PGP-PME (Precomputed Grid-Potential Particle Mesh Ewald)是一种为蒙特卡洛模拟优化的粒子网格Ewald方法。
- * 它通过预计算系统中固定部分的静电势网格，大大加速了在MC模拟中计算小分子能量变化的过程。
+ * PGP-PME (Precomputed Grid-Potential Particle Mesh Ewald) is a particle mesh Ewald method optimized for Monte Carlo simulations.
+ * It greatly accelerates the calculation of energy changes for small molecules in MC simulations by precomputing the electrostatic potential grid of the fixed parts of the system.
  * 
- * 算法关键特点：
- * 1. 预计算(Precomputed): 系统中固定部分的静电势被预先计算并存储在网格中
- * 2. 网格电势(Grid-Potential): 使用三维网格表示电势分布，结合B样条插值实现高效采样
- * 3. PME基础: 基于传统PME方法处理长程静电相互作用，但做了针对MC的优化
+ * Key features of the algorithm:
+ * 1. Precomputed: The electrostatic potential of the fixed parts of the system is precomputed and stored in a grid
+ * 2. Grid-Potential: Uses a three-dimensional grid to represent potential distribution, combined with B-spline interpolation for efficient sampling
+ * 3. PME-based: Based on traditional PME method for handling long-range electrostatic interactions, but optimized for MC
  * 
- * 工作流程:
- * - 初始化阶段: 设置常规PME参数和额外的电势网格参数
- * - 预计算阶段: 将固定部分电荷分配到网格，执行FFT并存储网格电势
- * - MC模拟阶段: 通过网格插值快速评估移动分子的能量变化
+ * Workflow:
+ * - Initialization phase: Set up regular PME parameters and additional potential grid parameters
+ * - Precomputation phase: Distribute fixed part charges to the grid, perform FFT and store the grid potential
+ * - MC simulation phase: Quickly evaluate energy changes of moving molecules through grid interpolation
  * 
- * 应用场景:
- * - GCMC(大正则系综蒙特卡洛)模拟中溶剂分子的插入/删除
- * - CBMC(构型偏置蒙特卡洛)中的构型采样
- * - 生物大分子系统如蛋白质-配体相互作用模拟
+ * Application scenarios:
+ * - GCMC (Grand Canonical Monte Carlo) simulations for solvent molecule insertion/deletion
+ * - CBMC (Configurational Bias Monte Carlo) for conformational sampling
+ * - Biomolecular systems such as protein-ligand interaction simulations
  */
 
 namespace pygcmc {
@@ -35,24 +35,24 @@ namespace cpu {
 PGPParams pgp_params;
 
 /**
- * @brief 初始化预计算电势的三维网格
+ * @brief Initialize the three-dimensional grid for precomputed potential
  * 
- * 这是PGP-PME算法的基础步骤，负责创建和初始化用于存储预计算电势的三维网格。
- * 该函数根据potential_grid_size参数分配网格内存，并计算合适的网格间距。
+ * This is a fundamental step in the PGP-PME algorithm, responsible for creating and initializing the 3D grid used to store precomputed potentials.
+ * This function allocates grid memory based on potential_grid_size parameters and calculates appropriate grid spacing.
  */
 void PGPParams::initializePotentialGrid() {
-    // 计算网格总大小并分配内存
+    // Calculate total grid size and allocate memory
     int totalSize = potential_grid_size[0] * potential_grid_size[1] * potential_grid_size[2];
     potentialGrid.resize(totalSize);
     
-    // 设置网格间距，取三个维度中的最小值
+    // Set grid spacing, taking the minimum value of the three dimensions
     grid_spacing = std::min({
         box[0] / potential_grid_size[0],
         box[1] / potential_grid_size[1],
         box[2] / potential_grid_size[2]
     });
     
-    // 只在debug模式下输出调试信息
+    // Only output debug information in debug mode
     if (platform::is_debug_mode()) {
         platform::log(LogLevel::DEBUG, "PGP potential grid initialized with size: ", 
                     potential_grid_size[0], "x", potential_grid_size[1], "x", potential_grid_size[2],
@@ -61,24 +61,24 @@ void PGPParams::initializePotentialGrid() {
 }
 
 /**
- * @brief 设置PGP-PME算法的所有参数
+ * @brief Set all parameters for the PGP-PME algorithm
  * 
- * 该函数是PGP-PME算法的入口点，用于配置算法运行所需的所有参数。
- * 它首先设置标准PME参数，然后添加PGP特有的参数，最后初始化电势网格。
+ * This function is the entry point for the PGP-PME algorithm, used to configure all parameters needed for the algorithm to run.
+ * It first sets standard PME parameters, then adds PGP-specific parameters, and finally initializes the potential grid.
  * 
- * @param alpha Ewald分离参数，控制实空间和倒空间计算的平衡
- * @param meshSize 常规PME的网格尺寸
- * @param potential_cutoff 电势计算的截断距离
- * @param potentialGridSize 预计算电势的网格尺寸
- * @param splineOrder B-样条插值的阶数
- * @param tolerance 计算精度的容差
+ * @param alpha Ewald separation parameter, controls the balance between real-space and reciprocal-space calculations
+ * @param meshSize Regular PME grid size
+ * @param potential_cutoff Cutoff distance for potential calculation
+ * @param potentialGridSize Grid size for precomputed potential
+ * @param splineOrder Order of B-spline interpolation
+ * @param tolerance Tolerance for calculation precision
  */
 void setPGPParameters(double alpha, const int meshSize[3], double potential_cutoff, 
                         const int potentialGridSize[3], int splineOrder, double tolerance) {
-    // 首先设置标准PME参数
+    // First set standard PME parameters
     setPMEParameters(alpha, meshSize, splineOrder, tolerance);
     
-    // 将标准PME参数复制到PGP参数结构中
+    // Copy standard PME parameters to PGP parameter structure
     pgp_params.alpha = pme_params.alpha;
     pgp_params.tolerance = pme_params.tolerance;
     pgp_params.initialized = pme_params.initialized;
@@ -86,38 +86,38 @@ void setPGPParameters(double alpha, const int meshSize[3], double potential_cuto
     pgp_params.epsilon_r = pme_params.epsilon_r;
     pgp_params.splineOrder = pme_params.splineOrder;
     
-    // 复制盒子尺寸和网格尺寸
+    // Copy box size and grid size
     for (int i = 0; i < 3; i++) {
         pgp_params.box[i] = pme_params.box[i];
         pgp_params.meshSize[i] = pme_params.meshSize[i];
     }
     
-    // 复制PME查找表
+    // Copy PME lookup tables
     pgp_params.erfcTable = pme_params.erfcTable;
     pgp_params.ewaldScaleTable = pme_params.ewaldScaleTable;
     pgp_params.ewaldDX = pme_params.ewaldDX;
     pgp_params.ewaldDXInv = pme_params.ewaldDXInv;
     pgp_params.erfcDXInv = pme_params.erfcDXInv;
     
-    // 复制B样条模块
+    // Copy B-spline moduli
     for (int i = 0; i < 3; i++) {
         pgp_params.bsplineModuli[i] = pme_params.bsplineModuli[i];
     }
     
-    // 复制PME网格
+    // Copy PME grid
     pgp_params.pmeGrid = pme_params.pmeGrid;
     pgp_params.pmeCharge = pme_params.pmeCharge;
     
-    // 设置PGP特有参数
+    // Set PGP-specific parameters
     pgp_params.potential_cutoff = potential_cutoff;
     for (int i = 0; i < 3; i++) {
         pgp_params.potential_grid_size[i] = potentialGridSize[i];
     }
     
-    // 初始化预计算电势的网格
+    // Initialize grid for precomputed potential
     pgp_params.initializePotentialGrid();
     
-    // 只在debug模式下输出参数设置信息
+    // Only output parameter setting information in debug mode
     if (platform::is_debug_mode()) {
         platform::log(LogLevel::DEBUG, "PGP parameters set: alpha=", alpha, 
                     ", potential_cutoff=", potential_cutoff, 
@@ -126,40 +126,40 @@ void setPGPParameters(double alpha, const int meshSize[3], double potential_cuto
 }
 
 /**
- * @brief 预计算系统中固定部分的网格电势
+ * @brief Precompute grid potential for fixed parts of the system
  * 
- * 这是PGP-PME算法的核心函数之一，负责预计算系统中固定部分的静电势场。
- * 该函数将固定部分的电荷分配到网格上，通过FFT变换计算电势，并存储结果供后续使用。
- * 预计算步骤只需在系统固定部分发生变化时执行，显著提高了MC模拟的效率。
+ * This is one of the core functions of the PGP-PME algorithm, responsible for precomputing the electrostatic potential field of the fixed parts of the system.
+ * This function assigns charges from the fixed parts to the grid, computes the potential through FFT transformation, and stores the result for later use.
+ * The precomputation step needs only to be executed when the fixed part of the system changes, significantly improving the efficiency of MC simulations.
  * 
- * @param state 系统状态，包含原子坐标、电荷和盒子信息
- * @param fixed_only 是否只处理系统中的固定部分(true)，还是处理所有部分(false)
+ * @param state System state, including atom coordinates, charges, and box information
+ * @param fixed_only Whether to process only the fixed parts of the system (true) or all parts (false)
  */
 void precomputeGridPotential(model::MCState& state, bool fixed_only) {
-    // 检查参数是否已初始化
+    // Check if parameters are initialized
     if (!pgp_params.initialized) {
         throw std::runtime_error("PGP parameters not initialized");
     }
     
-    // 只在debug模式下输出调试信息
+    // Only output debug information in debug mode
     if (platform::is_debug_mode()) {
-        platform::log(LogLevel::DEBUG, "预计算网格电势开始");
-        platform::log(LogLevel::DEBUG, "处理: ", (fixed_only ? "仅固定部分" : "所有部分"));
-        platform::log(LogLevel::DEBUG, "网格大小: ", pgp_params.potential_grid_size[0], "x", 
+        platform::log(LogLevel::DEBUG, "Starting grid potential precomputation");
+        platform::log(LogLevel::DEBUG, "Processing: ", (fixed_only ? "fixed parts only" : "all parts"));
+        platform::log(LogLevel::DEBUG, "Grid size: ", pgp_params.potential_grid_size[0], "x", 
                      pgp_params.potential_grid_size[1], "x", 
                      pgp_params.potential_grid_size[2]);
     }
     
-    // 备份PME网格，稍后将恢复
+    // Backup PME grid, will restore later
     std::vector<std::complex<double>> pmeGridBackup = pme_params.pmeGrid;
     
-    // 重置PME网格，准备新的计算
+    // Reset PME grid, prepare for new calculation
     std::fill(pme_params.pmeGrid.begin(), pme_params.pmeGrid.end(), std::complex<double>(0.0, 0.0));
     
-    // 统计信息 - 只在debug模式下计算
+    // Statistics - only calculated in debug mode
     int fixed_residues_count = 0;
     
-    // 计算固定残基数量 - 只在debug模式下或需要检查fixed_only有效性时计算
+    // Calculate number of fixed residues - only computed in debug mode or when checking fixed_only validity
     if (platform::is_debug_mode() || fixed_only) {
         for (int i = 0; i < state.activeResidueCount; ++i) {
             const auto& res = state.residues[i];
@@ -167,90 +167,90 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
         }
         
         if (platform::is_debug_mode()) {
-            platform::log(LogLevel::DEBUG, "固定残基数: ", fixed_residues_count);
+            platform::log(LogLevel::DEBUG, "Number of fixed residues: ", fixed_residues_count);
             
-            // 打印所有残基的信息以便调试
-            platform::log(LogLevel::DEBUG, "打印所有残基的fixed状态:");
+            // Print information for all residues for debugging
+            platform::log(LogLevel::DEBUG, "Printing fixed status for all residues:");
             for (int i = 0; i < state.activeResidueCount; ++i) {
                 const auto& res = state.residues[i];
-                platform::log(LogLevel::DEBUG, "残基 ", i, ": fixed=", res.fixed, ", active=", res.active,
+                platform::log(LogLevel::DEBUG, "Residue ", i, ": fixed=", res.fixed, ", active=", res.active,
                             ", atomCount=", res.atomCount);
             }
         }
     }
     
-    // 如果没有固定残基但要求仅计算固定部分，发出警告并自动切换
+    // If no fixed residues but requesting fixed_only, issue warning and switch automatically
     if (fixed_only && fixed_residues_count == 0) {
         platform::log(LogLevel::WARNING, "No fixed residues found, switching to process all atoms");
         fixed_only = false;
     }
     
-    // 设置pme_params的网格尺寸与pgp_params的网格尺寸一致，确保计算使用相同的网格
+    // Set pme_params grid size to match pgp_params grid size, ensuring calculation uses the same grid
     for (int i = 0; i < 3; i++) {
         pme_params.meshSize[i] = pgp_params.potential_grid_size[i];
     }
     
-    // 调整pme_params的网格大小以适应新的网格尺寸
+    // Adjust pme_params grid size to fit new grid dimensions
     int totalGridSize = pgp_params.potential_grid_size[0] * pgp_params.potential_grid_size[1] * pgp_params.potential_grid_size[2];
     pme_params.pmeGrid.resize(totalGridSize, std::complex<double>(0.0, 0.0));
     
     if (platform::is_debug_mode()) {
-        platform::log(LogLevel::DEBUG, "调用PME的电荷分布函数 (fixed_only=", fixed_only, ")");
+        platform::log(LogLevel::DEBUG, "Calling PME charge spreading function (fixed_only=", fixed_only, ")");
     }
     
     spreadChargesOntoGrid(state, fixed_only);
 
     if (platform::is_debug_mode()) {
-        platform::log(LogLevel::DEBUG, "调用PME的前向FFT函数");
+        platform::log(LogLevel::DEBUG, "Calling PME forward FFT function");
     }
     
     performFFTForward();
 
     if (platform::is_debug_mode()) {
-        platform::log(LogLevel::DEBUG, "手动应用Ewald因子");
+        platform::log(LogLevel::DEBUG, "Manually applying Ewald factor");
     }
     
-    // 获取网格尺寸和盒子尺寸
+    // Get grid size and box size
     int nx = pgp_params.potential_grid_size[0];
     int ny = pgp_params.potential_grid_size[1];
     int nz = pgp_params.potential_grid_size[2];
     double volume = pgp_params.box[0] * pgp_params.box[1] * pgp_params.box[2];
     
-    // 计算与应用Ewald因子所需的常数
+    // Calculate constants needed for Ewald factor application
     double alpha = pgp_params.alpha;
-    // 修正：正确计算exp(-k²/(4α²))中的系数
+    // Correction: Correct coefficient in exp(-k²/(4α²))
     double factor = 1.0/(4.0*alpha*alpha);
     
-    // 只在debug模式下打印关键参数
+    // Only print key parameters in debug mode
     if (platform::is_debug_mode()) {
-        platform::log(LogLevel::DEBUG, "关键计算参数:");
-        platform::log(LogLevel::DEBUG, "盒子尺寸: [", pgp_params.box[0], ", ", pgp_params.box[1], ", ", pgp_params.box[2], "] nm");
-        platform::log(LogLevel::DEBUG, "盒子体积(Ω): ", volume, " nm³");
-        platform::log(LogLevel::DEBUG, "网格尺寸: [", nx, ", ", ny, ", ", nz, "]");
-        platform::log(LogLevel::DEBUG, "总网格点数: ", nx * ny * nz);
-        platform::log(LogLevel::DEBUG, "Ewald分离参数(α): ", alpha, " nm⁻¹");
-        platform::log(LogLevel::DEBUG, "exp(-k²/(4α²))系数: ", factor);
+        platform::log(LogLevel::DEBUG, "Key calculation parameters:");
+        platform::log(LogLevel::DEBUG, "Box size: [", pgp_params.box[0], ", ", pgp_params.box[1], ", ", pgp_params.box[2], "] nm");
+        platform::log(LogLevel::DEBUG, "Box volume(Ω): ", volume, " nm³");
+        platform::log(LogLevel::DEBUG, "Grid size: [", nx, ", ", ny, ", ", nz, "]");
+        platform::log(LogLevel::DEBUG, "Total grid points: ", nx * ny * nz);
+        platform::log(LogLevel::DEBUG, "Ewald separation parameter(α): ", alpha, " nm⁻¹");
+        platform::log(LogLevel::DEBUG, "exp(-k²/(4α²)) coefficient: ", factor);
     }
     
-    // 获取最大k向量指数
+    // Get maximum k vector index
     int maxkx = (nx+1)/2;
     int maxky = (ny+1)/2;
     int maxkz = (nz+1)/2;
     
-    // 计算倒格矢量
+    // Calculate reciprocal lattice vectors
     double recipBoxVectors[3][3] = {{0}};
-    // 修正: 倒格矢量应为2π/box，而非1/box
-    // PME理论中k矢量定义为k = 2π·n/L，缺少2π会导致m²值偏小
+    // Correction: Reciprocal lattice vectors should be 2π/box, not 1/box
+    // PME theory defines k vectors as k = 2π·n/L, missing 2π results in m² value being smaller
     recipBoxVectors[0][0] = 2.0 * M_PI / pgp_params.box[0]; 
     recipBoxVectors[1][1] = 2.0 * M_PI / pgp_params.box[1]; 
     recipBoxVectors[2][2] = 2.0 * M_PI / pgp_params.box[2];
     
-    // 只在debug模式下打印倒格矢量和示例k点值
+    // Only print reciprocal lattice vectors and example k point values in debug mode
     if (platform::is_debug_mode()) {
-        platform::log(LogLevel::DEBUG, "倒格矢量: [", recipBoxVectors[0][0], ", ", recipBoxVectors[1][1], ", ", recipBoxVectors[2][2], "] nm⁻¹");
+        platform::log(LogLevel::DEBUG, "Reciprocal lattice vectors: [", recipBoxVectors[0][0], ", ", recipBoxVectors[1][1], ", ", recipBoxVectors[2][2], "] nm⁻¹");
         
-        // 示例计算几个k点的值
-        platform::log(LogLevel::DEBUG, "示例k点值(nx/4, ny/4, nz/4):");
+        // Example calculation of values for a few k points
+        platform::log(LogLevel::DEBUG, "Example k point values (nx/4, ny/4, nz/4):");
         int sx = nx/4, sy = ny/4, sz = nz/4;
         double mkx = sx * recipBoxVectors[0][0];
         double mky = sy * recipBoxVectors[1][1];
@@ -261,7 +261,7 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
         platform::log(LogLevel::DEBUG, "exp(-k²/(4α²)) = ", exp(-mk2 * factor));
     }
     
-    // 应用Ewald因子
+    // Apply Ewald factor
     for (int kx = 0; kx < nx; kx++) {
         double mx = (kx < maxkx) ? kx : (kx-nx);
         double mhx = mx * recipBoxVectors[0][0];
@@ -271,7 +271,7 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
             double mhy = my * recipBoxVectors[1][1];
             
             for (int kz = 0; kz < nz; kz++) {
-                // 跳过零频率
+                // Skip zero frequency
                 if (kx == 0 && ky == 0 && kz == 0) {
                     continue;
                 }
@@ -279,67 +279,67 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
                 double mz = (kz < maxkz) ? kz : (kz-nz);
                 double mhz = mz * recipBoxVectors[2][2];
                 
-                // 网格索引
+                // Grid index
                 int index = kx * ny * nz + ky * nz + kz;
-                // 获取结构因子
+                // Get structure factor
                 std::complex<double> structureFactor = pme_params.pmeGrid[index];
                 
-                // 计算|k|^2
+                // Calculate |k|^2
                 double m2 = mhx * mhx + mhy * mhy + mhz * mhz;
                 
-                // 应用B-spline系数
+                // Apply B-spline coefficients
                 double bx = pgp_params.bsplineModuli[0][kx];
                 double by = pgp_params.bsplineModuli[1][ky];
                 double bz = pgp_params.bsplineModuli[2][kz];
-                double denom = m2 * bx * by * bz; // 移除了boxfactor，符合PME理论
+                double denom = m2 * bx * by * bz; // Removed boxfactor, consistent with PME theory
                 
-                // 避免除以零问题
+                // Avoid division by zero problem
                 if (denom < 1e-10) {
                     denom = 1e-10;
                 }
                 
-                // 只应用k依赖的因子: exp(-k²/(4α²))/(k² · B)
-                // 常数因子(4π/Ω)将在反FFT后应用
+                // Only apply k-dependent factor: exp(-k²/(4α²))/(k² · B)
+                // Constant factor(4π/Ω) will be applied in inverse FFT
                 double kDependentFactor = exp(-m2 * factor) / denom;
                 
-                // 应用k依赖因子
+                // Apply k-dependent factor
                 pme_params.pmeGrid[index] = structureFactor * kDependentFactor;
             }
         }
     }
     
     if (platform::is_debug_mode()) {
-        platform::log(LogLevel::DEBUG, "执行反向FFT获得实空间电势");
+        platform::log(LogLevel::DEBUG, "Executing inverse FFT to get real space potential");
     }
     
     performFFTBackward();
     
     if (platform::is_debug_mode()) {
-        platform::log(LogLevel::DEBUG, "补偿反FFT的归一化因子并应用常数因子");
+        platform::log(LogLevel::DEBUG, "Compensating inverse FFT normalization factor and applying constant factor");
     }
     
     int totalFFTPoints = nx * ny * nz;
-    // 常数因子: 4π/Ω
+    // Constant factor: 4π/Ω
     double constantFactor = 4.0 * M_PI / volume;
     
-    // 电势物理单位转换因子
-    double ONE_4PI_EPS0 = 138.935456; // kJ·mol^-1·nm·e^-2，与PME定义一致
+    // Potential physical unit conversion factor
+    double ONE_4PI_EPS0 = 138.935456; // kJ·mol^-1·nm·e^-2, consistent with PME definition
     double physicalUnitFactor = ONE_4PI_EPS0 / pgp_params.epsilon_r;
     
-    // 总修正因子 = FFT归一化补偿(N) × 常数因子(4π/Ω) × 物理单位转换 × 0.5(减半)
+    // Total correction factor = FFT normalization compensation(N) × 4π/Ω constant factor × physical unit conversion × 0.5(halving)
     double totalFactor = totalFFTPoints * constantFactor * physicalUnitFactor * 0.5;
     
-    // 只在debug模式下输出修正因子信息
+    // Only print correction factor information in debug mode
     if (platform::is_debug_mode()) {
-        platform::log(LogLevel::DEBUG, "应用修正因子:");
-        platform::log(LogLevel::DEBUG, "FFT归一化补偿(N): ", totalFFTPoints);
-        platform::log(LogLevel::DEBUG, "常数因子(4π/Ω): ", constantFactor, " nm⁻³");
-        platform::log(LogLevel::DEBUG, "物理单位转换: ", physicalUnitFactor, " kJ*nm/mol*e²");
-        platform::log(LogLevel::DEBUG, "电势减半因子: 0.5");
-        platform::log(LogLevel::DEBUG, "总修正因子: ", totalFactor);
+        platform::log(LogLevel::DEBUG, "Applying correction factor:");
+        platform::log(LogLevel::DEBUG, "FFT normalization compensation(N): ", totalFFTPoints);
+        platform::log(LogLevel::DEBUG, "4π/Ω constant factor: ", constantFactor, " nm⁻³");
+        platform::log(LogLevel::DEBUG, "Physical unit conversion: ", physicalUnitFactor, " kJ*nm/mol*e²");
+        platform::log(LogLevel::DEBUG, "Potential halving factor: 0.5");
+        platform::log(LogLevel::DEBUG, "Total correction factor: ", totalFactor);
     }
     
-    // 只在debug模式下统计修正前的电势范围
+    // Only print pre-correction potential range in debug mode
     if (platform::is_debug_mode()) {
         double preMin = 0.0, preMax = 0.0, preSum = 0.0;
         bool firstValue = true;
@@ -355,15 +355,15 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
             }
             preSum += val;
         }
-        platform::log(LogLevel::DEBUG, "修正前电势范围: [", preMin, ", ", preMax, "], 平均值: ", (preSum/totalGridSize));
+        platform::log(LogLevel::DEBUG, "Pre-correction potential range: [", preMin, ", ", preMax, "], Average: ", (preSum/totalGridSize));
     }
     
-    // 应用总修正因子到每个网格点
+    // Apply total correction factor to each grid point
     for (int i = 0; i < totalGridSize; i++) {
         pme_params.pmeGrid[i] *= totalFactor;
     }
     
-    // 只在debug模式下统计修正后的电势范围
+    // Only print post-correction potential range in debug mode
     if (platform::is_debug_mode()) {
         double postMin = 0.0, postMax = 0.0, postSum = 0.0;
         bool firstValue = true;
@@ -379,16 +379,16 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
             }
             postSum += val;
         }
-        platform::log(LogLevel::DEBUG, "修正后电势范围: [", postMin, ", ", postMax, "], 平均值: ", (postSum/totalGridSize));
+        platform::log(LogLevel::DEBUG, "Post-correction potential range: [", postMin, ", ", postMax, "], Average: ", (postSum/totalGridSize));
     }
     
-    // 将修改后的PME网格复制到PGP的potentialGrid中
+    // Copy modified PME grid to PGP's potentialGrid
     pgp_params.potentialGrid = pme_params.pmeGrid;
 
-    // 恢复原始PME网格
+    // Restore original PME grid
     pme_params.pmeGrid = pmeGridBackup;
     
-    // 验证电势网格是否有合理的值 - 只在debug模式下执行
+    // Verify potential grid has reasonable values - only executed in debug mode
     if (platform::is_debug_mode()) {
         int potentials_nonzero = 0;
         double max_potential = 0.0;
@@ -396,7 +396,7 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
         double sum_potential = 0.0;
         bool first_pot = true;
         
-        // 检查网格点值
+        // Check grid point values
         for (const auto& val : pgp_params.potentialGrid) {
             double pot_val = val.real();
             sum_potential += pot_val;
@@ -412,45 +412,45 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
             }
         }
         
-        // 输出电势网格统计信息
-        platform::log(LogLevel::DEBUG, "电势网格统计:");
-        platform::log(LogLevel::DEBUG, "  非零点数: ", potentials_nonzero);
-        platform::log(LogLevel::DEBUG, "  最大电势: ", max_potential);
-        platform::log(LogLevel::DEBUG, "  最小电势: ", min_potential);
-        platform::log(LogLevel::DEBUG, "  电势总和: ", sum_potential);
+        // Output potential grid statistics
+        platform::log(LogLevel::DEBUG, "Potential grid statistics:");
+        platform::log(LogLevel::DEBUG, "   Non-zero points: ", potentials_nonzero);
+        platform::log(LogLevel::DEBUG, "   Maximum potential: ", max_potential);
+        platform::log(LogLevel::DEBUG, "   Minimum potential: ", min_potential);
+        platform::log(LogLevel::DEBUG, "   Potential sum: ", sum_potential);
         
-        platform::log(LogLevel::DEBUG, "电势预计算完成");
-        platform::log(LogLevel::DEBUG, "  非零点数: ", potentials_nonzero);
-        platform::log(LogLevel::DEBUG, "  电势范围: [", min_potential, ", ", max_potential, "]");
+        platform::log(LogLevel::DEBUG, "Potential precomputation completed");
+        platform::log(LogLevel::DEBUG, "   Non-zero points: ", potentials_nonzero);
+        platform::log(LogLevel::DEBUG, "   Potential range: [", min_potential, ", ", max_potential, "]");
     }
 }
 
 /**
- * @brief 通过插值计算移动分子的能量
+ * @brief Calculate moving molecule energy through interpolation
  * 
- * 该函数是PGP-PME算法的另一个核心函数，用于在预计算的电势场中快速评估移动分子的能量。
- * 通过B样条插值从预计算的网格电势中获取能量，避免了直接计算分子间相互作用，
- * 大大提高了MC模拟中能量评估的效率。
+ * This function is another core function of the PGP-PME algorithm, used to quickly evaluate the energy of moving molecules in the precomputed potential field.
+ * By using B-spline interpolation from the precomputed grid potential, it avoids direct calculation of intermolecular interactions,
+ * greatly improving the efficiency of energy evaluation in MC simulations.
  * 
- * @param state 系统状态，包含移动分子的信息和预计算的电势网格
- * @param energy 输出参数，存储计算得到的能量值
+ * @param state System state, containing information about moving molecules and precomputed potential grid
+ * @param energy Output parameter that stores the calculated energy value
  */
 void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
-    // 检查参数是否已初始化
+    // Check if parameters are initialized
     if (!pgp_params.initialized) {
         throw std::runtime_error("PGP parameters not initialized");
     }
     
-    // 只在debug模式下输出日志
+    // Only output logs in debug mode
     if (platform::is_debug_mode()) {
-        platform::log(LogLevel::DEBUG, "通过插值计算移动分子能量");
-        platform::log(LogLevel::DEBUG, "移动残基组数: ", state.movementResidues.size());
+        platform::log(LogLevel::DEBUG, "Calculate moving molecule energy through interpolation");
+        platform::log(LogLevel::DEBUG, "Number of movement residue groups: ", state.movementResidues.size());
     }
     
-    // 重置能量累加器
+    // Reset energy accumulator
     energy = 0.0;
     
-    // 检查预计算的网格是否为空 - 只在debug模式下执行完整检查
+    // Check if precomputed grid is empty - only perform full check in debug mode
     bool gridEmpty = false;
     if (platform::is_debug_mode()) {
         gridEmpty = true;
@@ -462,54 +462,54 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
         }
         
         if (gridEmpty) {
-            platform::log(LogLevel::WARNING, "PGP网格为空或未正确初始化!");
+            platform::log(LogLevel::WARNING, "PGP grid is empty or not correctly initialized!");
             
-            platform::log(LogLevel::DEBUG, "网格样本点值:");
+            platform::log(LogLevel::DEBUG, "Grid sample point values:");
             for (int i = 0; i < std::min(10, static_cast<int>(pgp_params.potentialGrid.size())); i++) {
-                platform::log(LogLevel::DEBUG, "网格点 ", i, ": ", pgp_params.potentialGrid[i].real());
+                platform::log(LogLevel::DEBUG, "Grid point ", i, ": ", pgp_params.potentialGrid[i].real());
             }
         } else {
-            platform::log(LogLevel::DEBUG, "PGP网格包含非零值");
+            platform::log(LogLevel::DEBUG, "PGP grid contains non-zero values");
         }
     } else {
-        // 非debug模式下只做简单检查
+        // Non-debug mode performs simple check
         if (!pgp_params.potentialGrid.empty() && 
             std::abs(pgp_params.potentialGrid[0].real()) < 1e-10 && 
             std::abs(pgp_params.potentialGrid[0].imag()) < 1e-10) {
-            // 只检查第一个元素作为快速判断
-            platform::log(LogLevel::WARNING, "PGP网格可能为空或未正确初始化!");
+            // Only check the first element as a quick check
+            platform::log(LogLevel::WARNING, "PGP grid may be empty or not correctly initialized!");
         }
     }
     
-    // 检查移动残基设置
+    // Check movement residue settings
     if (state.movementResidues.empty()) {
-        platform::log(LogLevel::WARNING, "没有设置移动残基信息!");
+        platform::log(LogLevel::WARNING, "No movement residue information set!");
         
         if (platform::is_debug_mode()) {
-            platform::log(LogLevel::DEBUG, "将尝试使用非固定残基作为移动残基");
+            platform::log(LogLevel::DEBUG, "Attempting to use non-fixed residues as movement residues");
             
-            // 打印每个残基的情况，帮助调试
-            platform::log(LogLevel::DEBUG, "残基状态:");
+            // Print information about each residue, help with debugging
+            platform::log(LogLevel::DEBUG, "Residue status:");
             for (int i = 0; i < state.activeResidueCount; ++i) {
                 const auto& res = state.residues[i];
-                platform::log(LogLevel::DEBUG, "残基 ", i, ": fixed=", res.fixed, 
+                platform::log(LogLevel::DEBUG, "Residue ", i, ": fixed=", res.fixed, 
                             ", active=", res.active, 
                             ", atomCount=", res.atomCount);
             }
         }
     }
     
-    // 统计原子数量，仅用于debug日志
+    // Statistics - only used for debug logs
     int totalAtoms = 0;
     int chargedAtoms = 0;
     
-    double raw_energy = 0.0; // 用于存储未缩放的能量
+    double raw_energy = 0.0; // Used to store un-scaled energy
     
-    // 处理系统中的每个移动残基
+    // Process each movement residue in the system
     if (state.movementResidues.empty()) {
         if (platform::is_debug_mode()) {
-            platform::log(LogLevel::DEBUG, "没有设置移动残基信息!");
-            platform::log(LogLevel::DEBUG, "尝试查找所有非固定残基...");
+            platform::log(LogLevel::DEBUG, "No movement residue information set!");
+            platform::log(LogLevel::DEBUG, "Attempting to find all non-fixed active residues...");
         }
         
         for (size_t i = 0; i < state.residues.size(); i++) {
@@ -518,57 +518,57 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
             if (!residue.active || residue.fixed) continue;
             
             if (platform::is_debug_mode()) {
-                platform::log(LogLevel::DEBUG, "使用非固定残基 ", i);
+                platform::log(LogLevel::DEBUG, "Using non-fixed residue ", i);
             }
             
-            // 处理原子...
+            // Process atoms...
             for (int j = 0; j < residue.atomCount; j++) {
                 int atom_index = residue.atomStart + j;
                 const auto& atom = state.atoms[atom_index];
                 
-                // 原子计数仅用于debug日志
+                // Atom count only used for debug logs
                 if (platform::is_debug_mode()) {
                     totalAtoms++;
                 }
                 
-                // 只处理带电荷的原子
+                // Only process charged atoms
                 if (std::abs(atom.charge) < 1e-6) continue;
                 
-                // 带电原子计数仅用于debug日志
+                // Charged atom count only used for debug logs
                 if (platform::is_debug_mode()) {
                     chargedAtoms++;
                 }
                 
                 if (platform::is_debug_mode()) {
-                    platform::log(LogLevel::DEBUG, "处理原子 ", atom_index, ": 位置=(", 
+                    platform::log(LogLevel::DEBUG, "Processing atom ", atom_index, ": position=(", 
                                 atom.x, ",", atom.y, ",", atom.z, 
-                                "), 电荷=", atom.charge);
+                                "), charge=", atom.charge);
                 }
                 
-                // 计算网格位置和B样条插值权重
-                // 获取原子位置
+                // Calculate grid position and B-spline interpolation weights
+                // Get atom position
                 double pos[3] = {atom.x, atom.y, atom.z};
                 
-                // 计算分数坐标 - 直接使用盒子尺寸进行变换
+                // Calculate fractional coordinates - directly use box dimensions for transformation
                 double fractional[3];
                 for (int d = 0; d < 3; d++) {
                     fractional[d] = pos[d] / pgp_params.box[d];
-                    fractional[d] -= floor(fractional[d]);  // 确保在[0,1)范围内
-                    fractional[d] *= pgp_params.potential_grid_size[d]; // 缩放到网格
+                    fractional[d] -= floor(fractional[d]);  // Ensure in [0,1) range
+                    fractional[d] *= pgp_params.potential_grid_size[d]; // Scale to grid
                 }
                 
-                // 计算网格索引和分数部分
+                // Calculate grid index and fractional part
                 int gridIndices[3];
                 double gridFractions[3];
                 for (int d = 0; d < 3; d++) {
                     gridFractions[d] = fractional[d] - floor(fractional[d]);
                     gridIndices[d] = static_cast<int>(floor(fractional[d]));
-                    // 确保网格索引在正确范围内
+                    // Ensure grid index within correct range
                     if (gridIndices[d] < 0) 
                         gridIndices[d] += pgp_params.potential_grid_size[d];
                 }
                 
-                // 计算B样条系数
+                // Calculate B-spline coefficients
                 int nx = pgp_params.potential_grid_size[0];
                 int ny = pgp_params.potential_grid_size[1];
                 int nz = pgp_params.potential_grid_size[2];
@@ -578,13 +578,13 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                 std::vector<double> thetaY(order);
                 std::vector<double> thetaZ(order);
                 
-                // 计算每个维度的B样条系数
+                // Calculate B-spline coefficients for each dimension
                 std::vector<double> coefficients(order);
                 
-                // X维度B样条
+                // X dimension B-spline
                 computeBSplineCoefficients(gridFractions[0], order, coefficients);
                 
-                // 仅debug模式下输出B样条系数
+                // Only output B-spline coefficients in debug mode
                 for (int i = 0; i < order; i++) {
                     thetaX[i] = coefficients[i];
                 }
@@ -601,17 +601,17 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                         xSum += thetaX[i];
                     }
                 
-                    platform::log(LogLevel::DEBUG, "X轴B样条系数 (gridFraction=", gridFractions[0], "):");
+                    platform::log(LogLevel::DEBUG, "X axis B-spline coefficients (gridFraction=", gridFractions[0], "):");
                     for (int i = 0; i < order; i++) {
                         platform::log(LogLevel::DEBUG, "theta_x[", i, "] = ", thetaX[i]);
                     }
-                    platform::log(LogLevel::DEBUG, "X权重范围: [", xMin, ", ", xMax, "], 和: ", xSum);
+                    platform::log(LogLevel::DEBUG, "X weight range: [", xMin, ", ", xMax, "], sum: ", xSum);
                 }
                 
-                // Y维度B样条
+                // Y dimension B-spline
                 computeBSplineCoefficients(gridFractions[1], order, coefficients);
                 
-                // 仅debug模式下输出B样条系数
+                // Only output B-spline coefficients in debug mode
                 for (int i = 0; i < order; i++) {
                     thetaY[i] = coefficients[i];
                 }
@@ -628,17 +628,17 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                         ySum += thetaY[i];
                     }
                 
-                    platform::log(LogLevel::DEBUG, "Y轴B样条系数 (gridFraction=", gridFractions[1], "):");
+                    platform::log(LogLevel::DEBUG, "Y axis B-spline coefficients (gridFraction=", gridFractions[1], "):");
                     for (int i = 0; i < order; i++) {
                         platform::log(LogLevel::DEBUG, "theta_y[", i, "] = ", thetaY[i]);
                     }
-                    platform::log(LogLevel::DEBUG, "Y权重范围: [", yMin, ", ", yMax, "], 和: ", ySum);
+                    platform::log(LogLevel::DEBUG, "Y weight range: [", yMin, ", ", yMax, "], sum: ", ySum);
                 }
                 
-                // Z维度B样条
+                // Z dimension B-spline
                 computeBSplineCoefficients(gridFractions[2], order, coefficients);
                 
-                // 仅debug模式下输出B样条系数
+                // Only output B-spline coefficients in debug mode
                 for (int i = 0; i < order; i++) {
                     thetaZ[i] = coefficients[i];
                 }
@@ -655,21 +655,21 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                         zSum += thetaZ[i];
                     }
                 
-                    platform::log(LogLevel::DEBUG, "Z轴B样条系数 (gridFraction=", gridFractions[2], "):");
+                    platform::log(LogLevel::DEBUG, "Z axis B-spline coefficients (gridFraction=", gridFractions[2], "):");
                     for (int i = 0; i < order; i++) {
                         platform::log(LogLevel::DEBUG, "theta_z[", i, "] = ", thetaZ[i]);
                     }
-                    platform::log(LogLevel::DEBUG, "Z权重范围: [", zMin, ", ", zMax, "], 和: ", zSum);
+                    platform::log(LogLevel::DEBUG, "Z weight range: [", zMin, ", ", zMax, "], sum: ", zSum);
                     
-                    // 之前的xSum和ySum已经超出作用域，改为不使用这些变量
-                    platform::log(LogLevel::DEBUG, "三维权重乘积总和理论值: 约等于1.0");
+                    // xSum and ySum are out of scope, so use these variables
+                    platform::log(LogLevel::DEBUG, "Three-dimensional weight product sum theoretical value: approximately 1.0");
                     
-                    // 输出最近的网格点及其电势值（用于测试）
-                    platform::log(LogLevel::DEBUG, "原子 ", atom_index, " 最近的网格点信息:");
-                    platform::log(LogLevel::DEBUG, "网格索引: (", gridIndices[0], ",", gridIndices[1], ",", gridIndices[2], ")");
+                    // Output nearest grid point and potential value (for testing)
+                    platform::log(LogLevel::DEBUG, "Atom ", atom_index, " nearest grid point information:");
+                    platform::log(LogLevel::DEBUG, "Grid index: (", gridIndices[0], ",", gridIndices[1], ",", gridIndices[2], ")");
                     
-                    // 输出该点及其周围网格点的电势值
-                    platform::log(LogLevel::DEBUG, "最近网格点电势值:");
+                    // Output potential value of the point and its surrounding grid points
+                    platform::log(LogLevel::DEBUG, "Nearest grid point potential values:");
                     for (int dx = -1; dx <= 1; dx++) {
                         for (int dy = -1; dy <= 1; dy++) {
                             for (int dz = -1; dz <= 1; dz++) {
@@ -681,20 +681,20 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                                 double pot_val = pgp_params.potentialGrid[index].real();
                                 
                                 if (dx == 0 && dy == 0 && dz == 0) {
-                                    platform::log(LogLevel::DEBUG, "→ 中心点 (", xi, ",", yi, ",", zi, "): ", pot_val);
+                                    platform::log(LogLevel::DEBUG, "→ Center point (", xi, ",", yi, ",", zi, "): ", pot_val);
                                 } else if (std::abs(pot_val) > 1e-6) {
-                                    // 只输出非零的周围点
-                                    platform::log(LogLevel::DEBUG, "点 (", xi, ",", yi, ",", zi, "): ", pot_val);
+                                    // Only output non-zero surrounding points
+                                    platform::log(LogLevel::DEBUG, "Point (", xi, ",", yi, ",", zi, "): ", pot_val);
                                 }
                             }
                         }
                     }
                 }
                 
-                // 插值计算电势
+                // Interpolate potential
                 double potential = 0.0;
                 
-                // 遍历所有B样条支撑点
+                // Loop through all B-spline support points
                 for (int ix = 0; ix < order; ix++) {
                     int xindex = (gridIndices[0] + ix) % nx;
                     
@@ -704,24 +704,24 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                         for (int iz = 0; iz < order; iz++) {
                             int zindex = (gridIndices[2] + iz) % nz;
                             
-                            // 计算三维网格索引
+                            // Calculate three-dimensional grid index
                             int index = xindex * ny * nz + yindex * nz + zindex;
                             
-                            // 使用B样条权重累加电势
+                            // Use B-spline weights to accumulate potential
                             double grid_value = pgp_params.potentialGrid[index].real();
                             double weight = thetaX[ix] * thetaY[iy] * thetaZ[iz];
                             potential += grid_value * weight;
                             
-                            // 只在debug模式下输出重要网格点的详细信息
+                            // Only output detailed information about important grid points in debug mode
                             if (platform::is_debug_mode() && std::abs(grid_value) > 1e-6 && ix < 2 && iy < 2 && iz < 2) {
-                                platform::log(LogLevel::DEBUG, "网格点 (", xindex, ",", yindex, ",", zindex, ") 电势=", grid_value, 
-                                            ", 权重=", weight, " (各维度权重: ", thetaX[ix], ",", thetaY[iy], ",", thetaZ[iz], ")");
+                                platform::log(LogLevel::DEBUG, "Grid point (", xindex, ",", yindex, ",", zindex, ") potential=", grid_value, 
+                                            ", weight=", weight, " (Each dimension weights: ", thetaX[ix], ",", thetaY[iy], ",", thetaZ[iz], ")");
                             }
                         }
                     }
                 }
                 
-                // 只在debug模式下输出电势插值中权重总和
+                // Only output weight sum in weight interpolation in debug mode
                 if (platform::is_debug_mode()) {
                     double totalWeight = 0.0;
                     for (int ix = 0; ix < order; ix++) {
@@ -731,71 +731,71 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                             }
                         }
                     }
-                    platform::log(LogLevel::DEBUG, "B样条权重总和: ", totalWeight);
+                    platform::log(LogLevel::DEBUG, "B-spline weight sum: ", totalWeight);
                 }
                 
-                // 累加能量(电势*电荷)
+                // Accumulate energy (potential * charge)
                 double atom_energy = potential * atom.charge;
                 raw_energy += atom_energy;
                 
                 if (platform::is_debug_mode()) {
-                    platform::log(LogLevel::DEBUG, "原子电势: ", potential, ", 原子能量贡献: ", atom_energy);
+                    platform::log(LogLevel::DEBUG, "Atom potential: ", potential, ", Atom energy contribution: ", atom_energy);
                 }
             }
         }
     } else {
-        // 正常处理移动残基
+        // Normal processing for movement residues
         // ...
     }
     
-    // 计算能量汇总
+    // Calculate energy summary
     if (platform::is_debug_mode()) {
         platform::log(LogLevel::DEBUG, "Summing atomic contributions for total energy");
     }
     
-    // 电势已在预计算中减半，现在需要乘以2倍因子来计算能量
-    // 根据pgp.md，能量应该是 2 * Σ(q_i * φ(r_i))
+    // Potential has been halved in precomputation, now multiply by 2x factor to calculate energy
+    // According to pgp.md, energy should be 2 * Σ(q_i * φ(r_i))
     energy = 2.0 * raw_energy;
     
-    // 只在debug模式下输出能量计算细节
+    // Only output energy calculation details in debug mode
     if (platform::is_debug_mode()) {
-        platform::log(LogLevel::DEBUG, "能量计算细节:");
-        platform::log(LogLevel::DEBUG, "原始能量(raw): ", raw_energy, " kJ/mol");
-        platform::log(LogLevel::DEBUG, "应用2倍因子: × 2.0");
-        platform::log(LogLevel::DEBUG, "最终能量: ", energy, " kJ/mol");
+        platform::log(LogLevel::DEBUG, "Energy calculation details:");
+        platform::log(LogLevel::DEBUG, "Raw energy (raw): ", raw_energy, " kJ/mol");
+        platform::log(LogLevel::DEBUG, "Applying 2x factor: × 2.0");
+        platform::log(LogLevel::DEBUG, "Final energy: ", energy, " kJ/mol");
         
         platform::log(LogLevel::DEBUG, "Raw PGP energy: ", raw_energy, " kJ/mol");
         platform::log(LogLevel::DEBUG, "Final PGP energy (×2): ", energy, " kJ/mol");
         
-        // 输出最终的能量值和调试信息
-        platform::log(LogLevel::DEBUG, "最终计算的PGP能量: ", energy, " kJ/mol");
+        // Output final energy value and debugging information
+        platform::log(LogLevel::DEBUG, "Final calculated PGP energy: ", energy, " kJ/mol");
     }
 }
 
 /**
- * @brief 通过插值计算移动分子的能量，并返回计算结果
+ * @brief Calculate moving molecule energy through interpolation and return calculation result
  * 
- * 这是interpolateMoleculeEnergy的包装函数，直接返回计算得到的能量值
- * 方便Python调用和测试。
+ * This is a wrapper function for interpolateMoleculeEnergy, directly returning the calculated energy value
+ * Convenient for Python calls and testing.
  * 
- * @param state 系统状态，包含移动分子的信息及预计算的电势网格
- * @return 计算得到的能量值
+ * @param state System state, containing information about moving molecules and precomputed potential grid
+ * @return Calculated energy value
  */
 double calculateMoleculeEnergy(model::MCState& state) {
     double energy = 0.0;
     interpolateMoleculeEnergy(state, energy);
     
-    // 只在debug模式下添加调试输出
+    // Only output debugging output in debug mode
     if (platform::is_debug_mode()) {
         platform::log(LogLevel::DEBUG, "Final calculated molecule energy: ", energy);
     }
     
-    // 如果没有固定残基，可能需要重新预计算网格电势
+    // If no fixed residues, potential grid may need to be recomputed
     if (std::abs(energy) < 1e-10) {
-        // 检查是否是因为没有固定残基导致的计算问题
+        // Check if it's because no fixed residues are causing the calculation problem
         int fixed_count = 0;
         if (platform::is_debug_mode() || std::abs(energy) < 1e-10) {
-            // 只有在需要检查原因时才计算固定残基数量
+            // Only calculate fixed residue count when checking reasons
             for (int i = 0; i < state.activeResidueCount; ++i) {
                 if (state.residues[i].fixed && state.residues[i].active) {
                     fixed_count++;
@@ -804,97 +804,97 @@ double calculateMoleculeEnergy(model::MCState& state) {
         }
         
         if (fixed_count == 0) {
-            platform::log(LogLevel::WARNING, "没有发现固定残基，能量接近零!");
+            platform::log(LogLevel::WARNING, "No fixed residues found, energy near zero!");
             
             if (platform::is_debug_mode()) {
-                // 预计算全部残基的网格电势
-                platform::log(LogLevel::DEBUG, "尝试用所有残基预计算网格电势...");
+                // Precompute potential grid for all residues
+                platform::log(LogLevel::DEBUG, "Attempting to precompute potential grid for all residues...");
             }
             
             precomputeGridPotential(state, false);
             
-            // 重新计算能量
+            // Recalculate energy
             interpolateMoleculeEnergy(state, energy);
         }
     }
     
-    // 确保返回正确的符号和量级的能量值
+    // Ensure return correct sign and magnitude of energy value
     return energy;
 }
 
 double computeMoleculeEnergyGlobal(model::MCState& state, const std::vector<int>& movementResidues, const std::vector<int>& nearbyResidues, int threadIndex) {
-    // 如果参数未初始化，则返回0
+    // If parameters are not initialized, return 0
     if (!pgp_params.initialized) {
         platform::log(LogLevel::WARNING, "PGP parameters not initialized, returning 0 energy");
         return 0.0;
     }
     
-    // 初始化总能量为0
+    // Initialize total energy to 0
     double totalEnergy = 0.0;
     
-    // 只在debug模式下记录日志
+    // Only output logs in debug mode
     if (platform::is_debug_mode()) {
-        // 记录所使用的线程索引，可用于多线程计算时的日志跟踪
-        platform::log(LogLevel::DEBUG, "使用线程索引: ", threadIndex, " 计算PGP能量");
+        // Record thread index used, can be used for log tracking in multi-threaded calculations
+        platform::log(LogLevel::DEBUG, "Using thread index: ", threadIndex, " calculating PGP energy");
         
-        // 记录附近残基数量，在某些算法变体中可用于短程能量修正
-        platform::log(LogLevel::DEBUG, "考虑附近残基数量: ", nearbyResidues.size());
+        // Record nearby residue count, can be used in some algorithm variants for short-range energy correction
+        platform::log(LogLevel::DEBUG, "Considering nearby residue count: ", nearbyResidues.size());
     }
     
-    // 对于直接空间(短程)能量修正，可以考虑附近的残基
+    // For direct space (short-range) energy correction, nearby residues can be considered
     double directSpaceCorrection = 0.0;
     if (!nearbyResidues.empty()) {
-        // 只在debug模式下记录日志
+        // Only output logs in debug mode
         if (platform::is_debug_mode()) {
-            platform::log(LogLevel::DEBUG, "计算附近残基的直接空间修正");
+            platform::log(LogLevel::DEBUG, "Calculating direct space correction for nearby residues");
         }
         
-        // 这里可以实现直接空间修正计算
-        // 但当前PGP实现主要关注预计算网格电势部分
-        // 如果需要完整的直接空间修正，应单独实现
+        // Here direct space correction calculation can be implemented
+        // But current PGP implementation mainly focuses on precomputed grid potential part
+        // If full direct space correction is needed, it should be implemented separately
     }
     
-    // 处理不同情况的残基能量计算
+    // Process different residue energy calculations
     if (movementResidues.empty()) {
-        // 只在debug模式下记录日志
+        // Only output logs in debug mode
         if (platform::is_debug_mode()) {
-            platform::log(LogLevel::DEBUG, "计算所有残基的能量");
+            platform::log(LogLevel::DEBUG, "Calculating energy for all residues");
         }
         
-        // 找出所有非固定的活动残基
+        // Find all non-fixed active residues
         for (int i = 0; i < state.activeResidueCount; ++i) {
             if (state.residues[i].active && !state.residues[i].fixed) {
-                // 直接调用calculateMoleculeEnergy，它内部会调用interpolateMoleculeEnergy
+                // Directly call calculateMoleculeEnergy, it will call interpolateMoleculeEnergy internally
                 totalEnergy = calculateMoleculeEnergy(state);
                 break;
             }
         }
     } else {
-        // 如果指定了移动残基，我们需要修改state的movementResidues
-        // 先备份原始的movementResidues
+        // If specified movement residues, we need to modify state's movementResidues
+        // First backup original movementResidues
         auto originalMovementResidues = state.movementResidues;
         
-        // 清空并设置新的movementResidues
+        // Clear and set new movementResidues
         state.movementResidues.clear();
         model::MCMovementResidueInfo info;
         info.startIndex = movementResidues[0];
         info.activeCount = movementResidues.size();
         state.movementResidues.push_back(info);
         
-        // 计算能量
+        // Calculate energy
         totalEnergy = calculateMoleculeEnergy(state);
         
-        // 恢复原始的movementResidues
+        // Restore original movementResidues
         state.movementResidues = originalMovementResidues;
     }
     
-    // 添加直接空间修正（如果有）
+    // Add direct space correction (if any)
     totalEnergy += directSpaceCorrection;
     
-    // 只在debug模式下记录能量计算结果
+    // Only output energy calculation result in debug mode
     if (platform::is_debug_mode()) {
-        platform::log(LogLevel::DEBUG, "PGP能量计算结果: ", totalEnergy, 
-                    " (线程: ", threadIndex, ", 考虑附近残基: ", !nearbyResidues.empty(), ")");
+        platform::log(LogLevel::DEBUG, "PGP energy calculation result: ", totalEnergy, 
+                    " (Thread: ", threadIndex, ", Considering nearby residues: ", !nearbyResidues.empty(), ")");
     }
     
     return totalEnergy;
