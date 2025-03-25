@@ -3,7 +3,6 @@
 #include <cmath>
 #include <algorithm>
 #include <iostream>
-#include <iomanip>
 
 /**
  * @file energyPGP.cpp
@@ -171,10 +170,6 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     // 重置PME网格，准备新的计算
     std::fill(pme_params.pmeGrid.begin(), pme_params.pmeGrid.end(), std::complex<double>(0.0, 0.0));
     
-    // 初始化pmeCharge向量
-    int totalGridSize = pgp_params.potential_grid_size[0] * pgp_params.potential_grid_size[1] * pgp_params.potential_grid_size[2];
-    pme_params.pmeCharge.resize(totalGridSize, 0.0);
-    
     // 统计信息
     int fixed_residues_count = 0;
     
@@ -205,89 +200,12 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     }
     
     // 调整pme_params的网格大小以适应新的网格尺寸
+    int totalGridSize = pgp_params.potential_grid_size[0] * pgp_params.potential_grid_size[1] * pgp_params.potential_grid_size[2];
     pme_params.pmeGrid.resize(totalGridSize, std::complex<double>(0.0, 0.0));
     
     // 调用PME的电荷分布函数
     platform::log(LogLevel::INFO, "调用PME的电荷分布函数 (fixed_only=", fixed_only, ")");
     spreadChargesOntoGrid(state, fixed_only);
-
-    // 输出z=4.0 nm平面上的电荷分布
-    std::cout << "\n[DIRECT PLATFORM] 输出z=4.0 nm平面上的电荷分布:" << std::endl;
-    
-    // 计算z=4.0 nm对应的网格索引
-    int z_index = static_cast<int>(4.0 / pgp_params.box[2] * pgp_params.potential_grid_size[2]);
-    std::cout << "  z=4.0 nm对应的网格索引: " << z_index << std::endl;
-    
-    // 检查网格索引是否有效
-    if (z_index < 0 || z_index >= pgp_params.potential_grid_size[2]) {
-        std::cout << "[DIRECT PLATFORM] 警告: z索引超出范围!" << std::endl;
-        return;
-    }
-    
-    // 检查pmeGrid大小是否足够
-    size_t required_size = pgp_params.potential_grid_size[0] * 
-                         pgp_params.potential_grid_size[1] * 
-                         pgp_params.potential_grid_size[2];
-    if (pme_params.pmeGrid.size() < required_size) {
-        std::cout << "[DIRECT PLATFORM] 警告: pmeGrid大小不足! 需要: " << required_size 
-                  << ", 实际: " << pme_params.pmeGrid.size() << std::endl;
-        return;
-    }
-    
-    // 输出8x8网格上的电荷分布
-    std::cout << "  电荷分布矩阵 (8x8):" << std::endl;
-    for (int i = 0; i < 8; i++) {
-        std::cout << "  ";
-        for (int j = 0; j < 8; j++) {
-            size_t index = static_cast<size_t>(i * pgp_params.potential_grid_size[1] * pgp_params.potential_grid_size[2] + 
-                                           j * pgp_params.potential_grid_size[2] + z_index);
-            if (index >= pme_params.pmeGrid.size()) {
-                std::cout << "X ";  // 标记越界访问
-                continue;
-            }
-            // 使用实部表示电荷分布
-            double charge = pme_params.pmeGrid[index].real();
-            std::cout << std::fixed << std::setprecision(3) << charge << " ";
-        }
-        std::cout << std::endl;
-    }
-    
-    // 输出每个电荷点的具体坐标，避免重复坐标
-    std::cout << "\n  电荷点详细信息 (所有点):" << std::endl;
-    for (int i = 0; i < pgp_params.potential_grid_size[0]; i++) {
-        for (int j = 0; j < pgp_params.potential_grid_size[1]; j++) {
-            // 计算3D网格索引
-            size_t index = static_cast<size_t>(i * pgp_params.potential_grid_size[1] * pgp_params.potential_grid_size[2] + 
-                                           j * pgp_params.potential_grid_size[2] + z_index);
-            if (index >= pme_params.pmeGrid.size()) {
-                continue;
-            }
-            
-            // 使用实部表示电荷分布
-            double charge = pme_params.pmeGrid[index].real();
-            
-            // 计算网格间距
-            double grid_spacing_x = pgp_params.box[0] / pgp_params.potential_grid_size[0];
-            double grid_spacing_y = pgp_params.box[1] / pgp_params.potential_grid_size[1];
-            double grid_spacing_z = pgp_params.box[2] / pgp_params.potential_grid_size[2];
-            
-            // 直接从网格索引计算物理坐标，并添加1/3网格间距的偏移
-            double x = (i + 1.0/3.0) * grid_spacing_x;
-            double y = (j + 1.0/3.0) * grid_spacing_y;
-            double z = (z_index) * grid_spacing_z;
-            
-            // 确保坐标在周期盒子内
-            while (x >= pgp_params.box[0]) x -= pgp_params.box[0];
-            while (y >= pgp_params.box[1]) y -= pgp_params.box[1];
-            while (z >= pgp_params.box[2]) z -= pgp_params.box[2];
-            while (x < 0) x += pgp_params.box[0];
-            while (y < 0) y += pgp_params.box[1];
-            while (z < 0) z += pgp_params.box[2];
-            
-            std::cout << "  位置: (" << x << ", " << y << ", " << z << ") nm, 索引: (" 
-                      << i << "," << j << "," << z_index << "), 电荷: " << charge << std::endl;
-        }
-    }
 
     // 调用PME的前向FFT函数
     platform::log(LogLevel::INFO, "调用PME的前向FFT函数");
@@ -452,74 +370,6 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     
     // 将修改后的PME网格复制到PGP的potentialGrid中
     pgp_params.potentialGrid = pme_params.pmeGrid;
-
-    // 输出z=4.0 nm平面上的电势分布
-    std::cout << "\n[DIRECT PLATFORM] 输出z=4.0 nm平面上的电势分布:" << std::endl;
-    
-    // 计算z=4.0 nm对应的网格索引
-    int z_potential_index = static_cast<int>(4.0 / pgp_params.box[2] * pgp_params.potential_grid_size[2]);
-    std::cout << "  z=4.0 nm对应的网格索引: " << z_potential_index << std::endl;
-    
-    // 检查网格索引是否有效
-    if (z_potential_index < 0 || z_potential_index >= pgp_params.potential_grid_size[2]) {
-        std::cout << "[DIRECT PLATFORM] 警告: z索引超出范围!" << std::endl;
-    } else {
-        // 输出8x8网格上的电势分布
-        std::cout << "  电势分布矩阵 (8x8):" << std::endl;
-        for (int i = 0; i < 8; i++) {
-            std::cout << "  ";
-            for (int j = 0; j < 8; j++) {
-                size_t index = static_cast<size_t>(i * pgp_params.potential_grid_size[1] * pgp_params.potential_grid_size[2] + 
-                                               j * pgp_params.potential_grid_size[2] + z_potential_index);
-                if (index >= pgp_params.potentialGrid.size()) {
-                    std::cout << "X ";  // 标记越界访问
-                    continue;
-                }
-                // 使用实部表示电势分布
-                double potential = pgp_params.potentialGrid[index].real();
-                std::cout << std::fixed << std::setprecision(3) << potential << " ";
-            }
-            std::cout << std::endl;
-        }
-        
-        // 输出每个电势点的具体坐标，避免重复坐标
-        std::cout << "\n  电势点详细信息 (所有点):" << std::endl;
-        for (int i = 0; i < pgp_params.potential_grid_size[0]; i++) {
-            for (int j = 0; j < pgp_params.potential_grid_size[1]; j++) {
-                // 计算3D网格索引
-                size_t index = static_cast<size_t>(i * pgp_params.potential_grid_size[1] * pgp_params.potential_grid_size[2] + 
-                                               j * pgp_params.potential_grid_size[2] + z_potential_index);
-                if (index >= pgp_params.potentialGrid.size()) {
-                    continue;
-                }
-                
-                // 使用实部表示电势
-                double potential = pgp_params.potentialGrid[index].real();
-                
-                // 计算网格间距
-                double grid_spacing_x = pgp_params.box[0] / pgp_params.potential_grid_size[0];
-                double grid_spacing_y = pgp_params.box[1] / pgp_params.potential_grid_size[1];
-                double grid_spacing_z = pgp_params.box[2] / pgp_params.potential_grid_size[2];
-                
-                // 直接从网格索引计算物理坐标，并添加1/3网格间距的偏移
-                double x = (i + 1.0/3.0) * grid_spacing_x;
-                double y = (j + 1.0/3.0) * grid_spacing_y;
-                double z = (z_potential_index) * grid_spacing_z;
-                
-                // 确保坐标在周期盒子内
-                while (x >= pgp_params.box[0]) x -= pgp_params.box[0];
-                while (y >= pgp_params.box[1]) y -= pgp_params.box[1];
-                while (z >= pgp_params.box[2]) z -= pgp_params.box[2];
-                while (x < 0) x += pgp_params.box[0];
-                while (y < 0) y += pgp_params.box[1];
-                while (z < 0) z += pgp_params.box[2];
-                
-                std::cout << "  位置: (" << x << ", " << y << ", " << z << ") nm, 索引: (" 
-                          << i << "," << j << "," << z_potential_index << "), 电势: " 
-                          << potential << " kJ/mol·e" << std::endl;
-            }
-        }
-    }
 
     // 恢复原始PME网格
     pme_params.pmeGrid = pmeGridBackup;
