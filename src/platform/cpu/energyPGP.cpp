@@ -136,7 +136,7 @@ void setPGPParameters(double alpha, const int meshSize[3], double potential_cuto
     
     // 输出参数设置信息
     // 这有助于调试和确认参数设置是否符合预期
-    platform::log(LogLevel::INFO, "PGP parameters set: alpha=", alpha, 
+    platform::log(LogLevel::DEBUG, "PGP parameters set: alpha=", alpha, 
                  ", potential_cutoff=", potential_cutoff, 
                  ", potentialGrid=[", potentialGridSize[0], ",", potentialGridSize[1], ",", potentialGridSize[2], "]");
 }
@@ -158,9 +158,9 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     }
     
     // 替换直接输出为日志输出
-    platform::log(LogLevel::INFO, "预计算网格电势开始");
-    platform::log(LogLevel::INFO, "处理: ", (fixed_only ? "仅固定部分" : "所有部分"));
-    platform::log(LogLevel::INFO, "网格大小: ", pgp_params.potential_grid_size[0], "x", 
+    platform::log(LogLevel::DEBUG, "预计算网格电势开始");
+    platform::log(LogLevel::DEBUG, "处理: ", (fixed_only ? "仅固定部分" : "所有部分"));
+    platform::log(LogLevel::DEBUG, "网格大小: ", pgp_params.potential_grid_size[0], "x", 
                  pgp_params.potential_grid_size[1], "x", 
                  pgp_params.potential_grid_size[2]);
     
@@ -178,7 +178,7 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
         const auto& res = state.residues[i];
         if (res.fixed && res.active) fixed_residues_count++;
     }
-    platform::log(LogLevel::INFO, "固定残基数: ", fixed_residues_count);
+    platform::log(LogLevel::DEBUG, "固定残基数: ", fixed_residues_count);
     
     // 打印所有残基的信息以便调试
     platform::log(LogLevel::DEBUG, "打印所有残基的fixed状态:");
@@ -204,15 +204,15 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     pme_params.pmeGrid.resize(totalGridSize, std::complex<double>(0.0, 0.0));
     
     // 调用PME的电荷分布函数
-    platform::log(LogLevel::INFO, "调用PME的电荷分布函数 (fixed_only=", fixed_only, ")");
+    platform::log(LogLevel::DEBUG, "调用PME的电荷分布函数 (fixed_only=", fixed_only, ")");
     spreadChargesOntoGrid(state, fixed_only);
 
     // 调用PME的前向FFT函数
-    platform::log(LogLevel::INFO, "调用PME的前向FFT函数");
+    platform::log(LogLevel::DEBUG, "调用PME的前向FFT函数");
     performFFTForward();
 
     // 修正: 应用Ewald因子但不执行反向FFT
-    platform::log(LogLevel::INFO, "手动应用Ewald因子");
+    platform::log(LogLevel::DEBUG, "手动应用Ewald因子");
     
     // 获取网格尺寸和盒子尺寸
     int nx = pgp_params.potential_grid_size[0];
@@ -309,11 +309,11 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     }
     
     // 执行反向FFT以获得实空间电势
-    platform::log(LogLevel::INFO, "执行反向FFT获得实空间电势");
+    platform::log(LogLevel::DEBUG, "执行反向FFT获得实空间电势");
     performFFTBackward();
     
     // 补偿反FFT的1/N归一化，并应用常数因子(4π/Ω)
-    platform::log(LogLevel::INFO, "补偿反FFT的归一化因子并应用常数因子");
+    platform::log(LogLevel::DEBUG, "补偿反FFT的归一化因子并应用常数因子");
     int totalFFTPoints = nx * ny * nz;
     // 常数因子: 4π/Ω
     double constantFactor = 4.0 * M_PI / volume;
@@ -392,15 +392,15 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     }
     
     // 输出电势网格统计信息
-    platform::log(LogLevel::INFO, "电势网格统计:");
-    platform::log(LogLevel::INFO, "  非零点数: ", potentials_nonzero);
-    platform::log(LogLevel::INFO, "  最大电势: ", max_potential);
-    platform::log(LogLevel::INFO, "  最小电势: ", min_potential);
-    platform::log(LogLevel::INFO, "  电势总和: ", sum_potential);
+    platform::log(LogLevel::DEBUG, "电势网格统计:");
+    platform::log(LogLevel::DEBUG, "  非零点数: ", potentials_nonzero);
+    platform::log(LogLevel::DEBUG, "  最大电势: ", max_potential);
+    platform::log(LogLevel::DEBUG, "  最小电势: ", min_potential);
+    platform::log(LogLevel::DEBUG, "  电势总和: ", sum_potential);
     
-    platform::log(LogLevel::INFO, "电势预计算完成");
-    platform::log(LogLevel::INFO, "  非零点数: ", potentials_nonzero);
-    platform::log(LogLevel::INFO, "  电势范围: [", min_potential, ", ", max_potential, "]");
+    platform::log(LogLevel::DEBUG, "电势预计算完成");
+    platform::log(LogLevel::DEBUG, "  非零点数: ", potentials_nonzero);
+    platform::log(LogLevel::DEBUG, "  电势范围: [", min_potential, ", ", max_potential, "]");
 }
 
 /**
@@ -420,8 +420,8 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
     }
     
     // 输出到日志
-    platform::log(LogLevel::INFO, "通过插值计算移动分子能量");
-    platform::log(LogLevel::INFO, "移动残基组数: ", state.movementResidues.size());
+    platform::log(LogLevel::DEBUG, "通过插值计算移动分子能量");
+    platform::log(LogLevel::DEBUG, "移动残基组数: ", state.movementResidues.size());
     
     // 重置能量累加器
     energy = 0.0;
@@ -450,7 +450,7 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
     // 检查移动残基设置
     if (state.movementResidues.empty()) {
         platform::log(LogLevel::WARNING, "没有设置移动残基信息!");
-        platform::log(LogLevel::INFO, "将尝试使用非固定残基作为移动残基");
+        platform::log(LogLevel::DEBUG, "将尝试使用非固定残基作为移动残基");
         
         // 打印每个残基的情况，帮助调试
         platform::log(LogLevel::DEBUG, "残基状态:");
@@ -468,10 +468,10 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
     
     // 处理系统中的每个移动残基
     if (state.movementResidues.empty()) {
-        platform::log(LogLevel::WARNING, "没有设置移动残基信息!");
+        platform::log(LogLevel::DEBUG, "没有设置移动残基信息!");
         
         // 如果没有设置移动残基，尝试处理所有非固定残基
-        platform::log(LogLevel::INFO, "尝试查找所有非固定残基...");
+        platform::log(LogLevel::DEBUG, "尝试查找所有非固定残基...");
         
         for (size_t i = 0; i < state.residues.size(); i++) {
             const auto& residue = state.residues[i];
@@ -670,7 +670,7 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
     platform::log(LogLevel::DEBUG, "Final PGP energy (×2): ", energy, " kJ/mol");
     
     // 输出最终的能量值和调试信息
-    platform::log(LogLevel::INFO, "最终计算的PGP能量: ", energy, " kJ/mol");
+    platform::log(LogLevel::DEBUG, "最终计算的PGP能量: ", energy, " kJ/mol");
 }
 
 /**
@@ -687,7 +687,7 @@ double calculateMoleculeEnergy(model::MCState& state) {
     interpolateMoleculeEnergy(state, energy);
     
     // 添加调试输出
-    platform::log(LogLevel::INFO, "Final calculated molecule energy: ", energy);
+    platform::log(LogLevel::DEBUG, "Final calculated molecule energy: ", energy);
     
     // 如果没有固定残基，可能需要重新预计算网格电势
     if (std::abs(energy) < 1e-10) {
@@ -703,7 +703,7 @@ double calculateMoleculeEnergy(model::MCState& state) {
             platform::log(LogLevel::WARNING, "没有发现固定残基，能量接近零!");
             
             // 预计算全部残基的网格电势
-            platform::log(LogLevel::INFO, "尝试用所有残基预计算网格电势...");
+            platform::log(LogLevel::DEBUG, "尝试用所有残基预计算网格电势...");
             precomputeGridPotential(state, false);
             
             // 重新计算能量
