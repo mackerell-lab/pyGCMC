@@ -926,7 +926,7 @@ def test_compare_ewald_pme_pgp_asymmetric():
     1. 固定部分包含不对称分布的多个带电粒子
     2. 移动残基为一个水分子，远离固定部分
     3. 执行多次随机移动，确保移动后与固定部分距离始终大于cutoff
-    4. 通过比较PME和PGP计算的能量验证准确性
+    4. 通过比较Ewald、PME和PGP计算的能量验证准确性
     """
     # 设置系统参数
     box_size = 8.0  # nm - 使用较大的盒子
@@ -936,6 +936,7 @@ def test_compare_ewald_pme_pgp_asymmetric():
     
     # Ewald和PME参数
     alpha = 0.29    # 1/nm
+    kmax = [8, 8, 8]  # Ewald计算的k空间向量数
     mesh_size = [32, 32, 32]
     potential_grid_size = [32, 32, 32]
     spline_order = 4
@@ -1147,14 +1148,21 @@ def test_compare_ewald_pme_pgp_asymmetric():
     print(f"固定原子: {len(fixed_particles)}, 移动原子: 3 (水分子)")
     sys.stdout.flush()
     
-    # 初始化PME和PGP
+    # 初始化Ewald、PME和PGP
     print("设置计算参数...")
     
-    # PME参数
+    # Ewald参数初始化
+    print("初始化Ewald参数...")
+    pygcmc.setEwaldParameters(alpha, kmax)
+    pygcmc.initializeEwaldParameters(cutoff, box, alpha)
+    
+    # PME参数初始化
+    print("初始化PME参数...")
     pygcmc.setPMEParameters(alpha, mesh_size, spline_order, tolerance)
     pygcmc.initializePMEParameters(cutoff, box, alpha)
     
-    # PGP参数
+    # PGP参数初始化
+    print("初始化PGP参数...")
     pygcmc.setPGPParameters(alpha, mesh_size, potential_cutoff, 
                          potential_grid_size, spline_order, tolerance)
     
@@ -1166,8 +1174,10 @@ def test_compare_ewald_pme_pgp_asymmetric():
     num_moves = 5  # 减少测试次数以加快测试
     print(f"将执行 {num_moves} 次随机移动测试")
     
-    # 存储PGP和PME之间的相对误差
+    # 存储各方法之间的相对误差
     pgp_pme_errors = []
+    ewald_pme_errors = []
+    pgp_ewald_errors = []
     
     # 验证初始位置是否安全
     current_positions = []
@@ -1192,15 +1202,22 @@ def test_compare_ewald_pme_pgp_asymmetric():
         # 步骤1: 计算初始能量
         print("计算初始能量...")
         
-        # PME能量
+        # Ewald能量计算
+        initial_ewald_result = pygcmc.computeSystemEnergyEwald(system)
+        initial_ewald_elec = initial_ewald_result[0]
+        initial_ewald_dict = initial_ewald_result[2]
+        initial_ewald_reciprocal = initial_ewald_dict['reciprocal']
+        
+        # PME能量计算
         initial_pme_result = pygcmc.computeMovementEnergyPME(system)
         initial_pme_energy = initial_pme_result[0]
         initial_pme_dict = initial_pme_result[2]
         initial_pme_reciprocal = initial_pme_dict['reciprocal']
         
-        # PGP能量
+        # PGP能量计算
         initial_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
         
+        print(f"初始Ewald倒空间能量: {initial_ewald_reciprocal}")
         print(f"初始PME倒空间能量: {initial_pme_reciprocal}")
         print(f"初始PGP能量: {initial_pgp_energy}")
         
@@ -1241,7 +1258,13 @@ def test_compare_ewald_pme_pgp_asymmetric():
         # 步骤3: 计算移动后能量
         print("计算移动后能量...")
         
-        # PME能量
+        # Ewald能量计算
+        moved_ewald_result = pygcmc.computeSystemEnergyEwald(system)
+        moved_ewald_elec = moved_ewald_result[0]
+        moved_ewald_dict = moved_ewald_result[2]
+        moved_ewald_reciprocal = moved_ewald_dict['reciprocal']
+        
+        # PME能量计算
         moved_pme_result = pygcmc.computeMovementEnergyPME(system)
         moved_pme_energy = moved_pme_result[0]
         moved_pme_dict = moved_pme_result[2]
@@ -1253,34 +1276,71 @@ def test_compare_ewald_pme_pgp_asymmetric():
             print(f"警告: PME直接空间能量不为零: {moved_pme_direct}")
             print("这意味着存在小于cutoff的粒子对!")
         
-        # PGP能量
+        # PGP能量计算
         moved_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
         
+        print(f"移动后Ewald倒空间能量: {moved_ewald_reciprocal}")
         print(f"移动后PME倒空间能量: {moved_pme_reciprocal}")
         print(f"移动后PGP能量: {moved_pgp_energy}")
         
         # 计算能量变化
+        ewald_energy_change = moved_ewald_reciprocal - initial_ewald_reciprocal
         pme_energy_change = moved_pme_reciprocal - initial_pme_reciprocal
         pgp_energy_change = moved_pgp_energy - initial_pgp_energy
         
+        print(f"Ewald倒空间能量变化: {ewald_energy_change}")
         print(f"PME倒空间能量变化: {pme_energy_change}")
         print(f"PGP能量变化: {pgp_energy_change}")
         
         # 计算相对误差
         if abs(pme_energy_change) > 1e-6:
+            # PGP相对于PME的误差
             pgp_pme_error = abs((pgp_energy_change - pme_energy_change) / pme_energy_change)
             print(f"PGP与PME相对误差: {pgp_pme_error*100:.4f}%")
             pgp_pme_errors.append(pgp_pme_error)
+            
+            # Ewald相对于PME的误差
+            ewald_pme_error = abs((ewald_energy_change - pme_energy_change) / pme_energy_change)
+            print(f"Ewald与PME相对误差: {ewald_pme_error*100:.4f}%")
+            ewald_pme_errors.append(ewald_pme_error)
+            
+            # PGP相对于Ewald的误差
+            if abs(ewald_energy_change) > 1e-6:
+                pgp_ewald_error = abs((pgp_energy_change - ewald_energy_change) / ewald_energy_change)
+                print(f"PGP与Ewald相对误差: {pgp_ewald_error*100:.4f}%")
+                pgp_ewald_errors.append(pgp_ewald_error)
         else:
             print("PME能量变化接近零，跳过相对误差计算")
     
     # 计算平均误差
+    print("\n统计误差分析:")
+    
     if pgp_pme_errors:
-        avg_error = sum(pgp_pme_errors) / len(pgp_pme_errors)
-        print(f"\n{num_moves}次移动的平均相对误差: {avg_error*100:.4f}%")
+        avg_pgp_pme_error = sum(pgp_pme_errors) / len(pgp_pme_errors)
+        print(f"PGP与PME平均相对误差: {avg_pgp_pme_error*100:.4f}%")
         
         # 使用更宽松的错误容限，因为PGP是一种近似方法
         acceptable_error = 0.5  # 允许50%的误差
-        assert avg_error < acceptable_error, f"PGP与PME平均相对误差过大: {avg_error*100:.2f}%"
+        assert avg_pgp_pme_error < acceptable_error, f"PGP与PME平均相对误差过大: {avg_pgp_pme_error*100:.2f}%"
     else:
-        print("\n没有有效的误差数据用于统计")
+        print("PGP与PME: 没有有效的误差数据用于统计")
+    
+    if ewald_pme_errors:
+        avg_ewald_pme_error = sum(ewald_pme_errors) / len(ewald_pme_errors)
+        print(f"Ewald与PME平均相对误差: {avg_ewald_pme_error*100:.4f}%")
+        
+        # Ewald和PME在理论上应该有很高的一致性
+        acceptable_error = 0.2  # 允许20%的误差
+        assert avg_ewald_pme_error < acceptable_error, f"Ewald与PME平均相对误差过大: {avg_ewald_pme_error*100:.2f}%"
+    else:
+        print("Ewald与PME: 没有有效的误差数据用于统计")
+    
+    if pgp_ewald_errors:
+        avg_pgp_ewald_error = sum(pgp_ewald_errors) / len(pgp_ewald_errors)
+        print(f"PGP与Ewald平均相对误差: {avg_pgp_ewald_error*100:.4f}%")
+        
+        # 使用更宽松的错误容限，因为PGP是一种近似方法
+        acceptable_error = 0.5  # 允许50%的误差
+        assert avg_pgp_ewald_error < acceptable_error, f"PGP与Ewald平均相对误差过大: {avg_pgp_ewald_error*100:.2f}%"
+    else:
+        print("PGP与Ewald: 没有有效的误差数据用于统计")

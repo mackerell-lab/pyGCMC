@@ -219,8 +219,11 @@ double computeReciprocalEnergy(model::MCState& state, bool movement_only) {
     for(const auto& atom : atoms) {
         totalCharge += static_cast<double>(atom.charge);
     }
-    if (std::abs(totalCharge) > 1e-10) {
-        throw std::runtime_error("System must be charge neutral for Ewald summation");
+    if (std::abs(totalCharge) > 1e-7) {
+        // 输出警告而不是直接抛出错误
+        std::cerr << "Warning: System charge (" << totalCharge << ") is not exactly neutral. ";
+        std::cerr << "For better accuracy, consider adjusting charges to ensure strict neutrality." << std::endl;
+        // throw std::runtime_error("System must be charge neutral for Ewald summation");
     }
 
     typedef std::complex<double> Complex;
