@@ -156,24 +156,26 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     // 重置PME网格，准备新的计算
     std::fill(pme_params.pmeGrid.begin(), pme_params.pmeGrid.end(), std::complex<double>(0.0, 0.0));
     
-    // 统计信息
+    // 统计信息 - 只在debug模式下计算
     int fixed_residues_count = 0;
     
-    // 计算固定残基数量
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        const auto& res = state.residues[i];
-        if (res.fixed && res.active) fixed_residues_count++;
-    }
-    
-    if (platform::is_debug_mode()) {
-        platform::log(LogLevel::DEBUG, "固定残基数: ", fixed_residues_count);
-        
-        // 打印所有残基的信息以便调试
-        platform::log(LogLevel::DEBUG, "打印所有残基的fixed状态:");
+    // 计算固定残基数量 - 只在debug模式下或需要检查fixed_only有效性时计算
+    if (platform::is_debug_mode() || fixed_only) {
         for (int i = 0; i < state.activeResidueCount; ++i) {
             const auto& res = state.residues[i];
-            platform::log(LogLevel::DEBUG, "残基 ", i, ": fixed=", res.fixed, ", active=", res.active,
-                         ", atomCount=", res.atomCount);
+            if (res.fixed && res.active) fixed_residues_count++;
+        }
+        
+        if (platform::is_debug_mode()) {
+            platform::log(LogLevel::DEBUG, "固定残基数: ", fixed_residues_count);
+            
+            // 打印所有残基的信息以便调试
+            platform::log(LogLevel::DEBUG, "打印所有残基的fixed状态:");
+            for (int i = 0; i < state.activeResidueCount; ++i) {
+                const auto& res = state.residues[i];
+                platform::log(LogLevel::DEBUG, "残基 ", i, ": fixed=", res.fixed, ", active=", res.active,
+                            ", atomCount=", res.atomCount);
+            }
         }
     }
     
@@ -243,7 +245,7 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     recipBoxVectors[1][1] = 2.0 * M_PI / pgp_params.box[1]; 
     recipBoxVectors[2][2] = 2.0 * M_PI / pgp_params.box[2];
     
-    // 只在debug模式下打印倒格矢量
+    // 只在debug模式下打印倒格矢量和示例k点值
     if (platform::is_debug_mode()) {
         platform::log(LogLevel::DEBUG, "倒格矢量: [", recipBoxVectors[0][0], ", ", recipBoxVectors[1][1], ", ", recipBoxVectors[2][2], "] nm⁻¹");
         
@@ -338,10 +340,10 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     }
     
     // 只在debug模式下统计修正前的电势范围
-    double preMin = 0.0, preMax = 0.0, preSum = 0.0;
-    bool firstValue = true;
-    
     if (platform::is_debug_mode()) {
+        double preMin = 0.0, preMax = 0.0, preSum = 0.0;
+        bool firstValue = true;
+        
         for (int i = 0; i < totalGridSize; i++) {
             double val = pme_params.pmeGrid[i].real();
             if (firstValue) {
@@ -362,10 +364,10 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     }
     
     // 只在debug模式下统计修正后的电势范围
-    double postMin = 0.0, postMax = 0.0, postSum = 0.0;
-    firstValue = true;
-    
     if (platform::is_debug_mode()) {
+        double postMin = 0.0, postMax = 0.0, postSum = 0.0;
+        bool firstValue = true;
+        
         for (int i = 0; i < totalGridSize; i++) {
             double val = pme_params.pmeGrid[i].real();
             if (firstValue) {
@@ -386,22 +388,27 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     // 恢复原始PME网格
     pme_params.pmeGrid = pmeGridBackup;
     
-    // 验证电势网格是否有合理的值
-    int potentials_nonzero = 0;
-    double max_potential = 0.0;
-    double min_potential = 0.0;
-    double sum_potential = 0.0;
-    
-    // 只在debug模式下执行统计计算
+    // 验证电势网格是否有合理的值 - 只在debug模式下执行
     if (platform::is_debug_mode()) {
+        int potentials_nonzero = 0;
+        double max_potential = 0.0;
+        double min_potential = 0.0;
+        double sum_potential = 0.0;
+        bool first_pot = true;
+        
         // 检查网格点值
         for (const auto& val : pgp_params.potentialGrid) {
             double pot_val = val.real();
             sum_potential += pot_val;
             if (std::abs(pot_val) > 1e-10) {
                 potentials_nonzero++;
-                max_potential = std::max(max_potential, pot_val);
-                min_potential = std::min(min_potential, pot_val);
+                if (first_pot) {
+                    max_potential = min_potential = pot_val;
+                    first_pot = false;
+                } else {
+                    max_potential = std::max(max_potential, pot_val);
+                    min_potential = std::min(min_potential, pot_val);
+                }
             }
         }
         
@@ -443,27 +450,35 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
     // 重置能量累加器
     energy = 0.0;
     
-    // 检查预计算的网格是否为空
-    bool gridEmpty = true;
-    for (const auto& val : pgp_params.potentialGrid) {
-        if (std::abs(val.real()) > 1e-10 || std::abs(val.imag()) > 1e-10) {
-            gridEmpty = false;
-            break;
+    // 检查预计算的网格是否为空 - 只在debug模式下执行完整检查
+    bool gridEmpty = false;
+    if (platform::is_debug_mode()) {
+        gridEmpty = true;
+        for (const auto& val : pgp_params.potentialGrid) {
+            if (std::abs(val.real()) > 1e-10 || std::abs(val.imag()) > 1e-10) {
+                gridEmpty = false;
+                break;
+            }
         }
-    }
-    
-    if (gridEmpty) {
-        platform::log(LogLevel::WARNING, "PGP网格为空或未正确初始化!");
         
-        // 只在debug模式下输出网格样本点
-        if (platform::is_debug_mode()) {
+        if (gridEmpty) {
+            platform::log(LogLevel::WARNING, "PGP网格为空或未正确初始化!");
+            
             platform::log(LogLevel::DEBUG, "网格样本点值:");
             for (int i = 0; i < std::min(10, static_cast<int>(pgp_params.potentialGrid.size())); i++) {
                 platform::log(LogLevel::DEBUG, "网格点 ", i, ": ", pgp_params.potentialGrid[i].real());
             }
+        } else {
+            platform::log(LogLevel::DEBUG, "PGP网格包含非零值");
         }
-    } else if (platform::is_debug_mode()) {
-        platform::log(LogLevel::DEBUG, "PGP网格包含非零值");
+    } else {
+        // 非debug模式下只做简单检查
+        if (!pgp_params.potentialGrid.empty() && 
+            std::abs(pgp_params.potentialGrid[0].real()) < 1e-10 && 
+            std::abs(pgp_params.potentialGrid[0].imag()) < 1e-10) {
+            // 只检查第一个元素作为快速判断
+            platform::log(LogLevel::WARNING, "PGP网格可能为空或未正确初始化!");
+        }
     }
     
     // 检查移动残基设置
@@ -562,10 +577,13 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                 computeBSplineCoefficients(gridFractions[0], order, coefficients);
                 
                 // 仅debug模式下输出B样条系数
-                double xMax = 0.0, xMin = 0.0, xSum = 0.0;
                 for (int i = 0; i < order; i++) {
                     thetaX[i] = coefficients[i];
-                    if (platform::is_debug_mode()) {
+                }
+                
+                if (platform::is_debug_mode()) {
+                    double xMax = 0.0, xMin = 0.0, xSum = 0.0;
+                    for (int i = 0; i < order; i++) {
                         if (i == 0) {
                             xMax = xMin = thetaX[i];
                         } else {
@@ -574,9 +592,7 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                         }
                         xSum += thetaX[i];
                     }
-                }
                 
-                if (platform::is_debug_mode()) {
                     platform::log(LogLevel::DEBUG, "X轴B样条系数 (gridFraction=", gridFractions[0], "):");
                     for (int i = 0; i < order; i++) {
                         platform::log(LogLevel::DEBUG, "theta_x[", i, "] = ", thetaX[i]);
@@ -588,10 +604,13 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                 computeBSplineCoefficients(gridFractions[1], order, coefficients);
                 
                 // 仅debug模式下输出B样条系数
-                double yMax = 0.0, yMin = 0.0, ySum = 0.0;
                 for (int i = 0; i < order; i++) {
                     thetaY[i] = coefficients[i];
-                    if (platform::is_debug_mode()) {
+                }
+                
+                if (platform::is_debug_mode()) {
+                    double yMax = 0.0, yMin = 0.0, ySum = 0.0;
+                    for (int i = 0; i < order; i++) {
                         if (i == 0) {
                             yMax = yMin = thetaY[i];
                         } else {
@@ -600,9 +619,7 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                         }
                         ySum += thetaY[i];
                     }
-                }
                 
-                if (platform::is_debug_mode()) {
                     platform::log(LogLevel::DEBUG, "Y轴B样条系数 (gridFraction=", gridFractions[1], "):");
                     for (int i = 0; i < order; i++) {
                         platform::log(LogLevel::DEBUG, "theta_y[", i, "] = ", thetaY[i]);
@@ -614,10 +631,13 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                 computeBSplineCoefficients(gridFractions[2], order, coefficients);
                 
                 // 仅debug模式下输出B样条系数
-                double zMax = 0.0, zMin = 0.0, zSum = 0.0;
                 for (int i = 0; i < order; i++) {
                     thetaZ[i] = coefficients[i];
-                    if (platform::is_debug_mode()) {
+                }
+                
+                if (platform::is_debug_mode()) {
+                    double zMax = 0.0, zMin = 0.0, zSum = 0.0;
+                    for (int i = 0; i < order; i++) {
                         if (i == 0) {
                             zMax = zMin = thetaZ[i];
                         } else {
@@ -626,15 +646,15 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                         }
                         zSum += thetaZ[i];
                     }
-                }
                 
-                if (platform::is_debug_mode()) {
                     platform::log(LogLevel::DEBUG, "Z轴B样条系数 (gridFraction=", gridFractions[2], "):");
                     for (int i = 0; i < order; i++) {
                         platform::log(LogLevel::DEBUG, "theta_z[", i, "] = ", thetaZ[i]);
                     }
                     platform::log(LogLevel::DEBUG, "Z权重范围: [", zMin, ", ", zMax, "], 和: ", zSum);
-                    platform::log(LogLevel::DEBUG, "三维权重乘积总和理论值: ", xSum * ySum * zSum);
+                    
+                    // 之前的xSum和ySum已经超出作用域，改为不使用这些变量
+                    platform::log(LogLevel::DEBUG, "三维权重乘积总和理论值: 约等于1.0");
                     
                     // 输出最近的网格点及其电势值（用于测试）
                     platform::log(LogLevel::DEBUG, "原子 ", atom_index, " 最近的网格点信息:");
