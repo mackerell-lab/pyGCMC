@@ -715,3 +715,202 @@ def test_compare_ewald_pme_pgp_complex():
     #     ewald_relative_error = abs((ewald_energy_change - pme_energy_change) / pme_energy_change)
     #     print(f"Ewald与PME相对误差: {ewald_relative_error*100:.4f}%")
     #     assert ewald_relative_error < 0.1, f"Ewald相对误差过大: {ewald_relative_error*100:.2f}%"
+
+def test_compare_ewald_pme_pgp_planar():
+    """
+    使用平面系统比较Ewald、PME和PGP算法
+    
+    特点：
+    1. 所有原子都在z=4.0 nm的平面上
+    2. 移动分子与固定部分距离超过cutoff
+    3. 平面与网格平面平行
+    4. 原子位置故意偏离网格点
+    """
+    # 设置系统参数
+    box_size = 8.0  # nm
+    cutoff = 1.0    # nm
+    potential_cutoff = 1.0  # nm
+    box = [box_size, box_size, box_size]
+    
+    # 计算参数
+    alpha = 0.29    # 1/nm
+    mesh_size = [32, 32, 32]
+    potential_grid_size = [32, 32, 32]
+    spline_order = 4
+    tolerance = 1e-5
+    
+    # 计算网格间距
+    grid_spacing = box_size / mesh_size[0]
+    print(f"网格间距: {grid_spacing:.3f} nm")
+    
+    # 选择平面z坐标（确保与网格平面平行）
+    z_plane = 4.0  # nm
+    
+    print("创建平面测试系统...")
+    sys.stdout.flush()
+    
+    # 创建测试系统
+    system = MCState()
+    system.info.box = box
+    system.info.setTemperature(300.0)
+    system.info.cutoff = cutoff
+    
+    # 设置力场
+    ff = MCForceField()
+    ff.numTotalTypes = 2 
+    ff.ljSigma = [0.333, 0.3875, 0.3875, 0.442]
+    ff.ljEps = [0.0115, 0.0693, 0.0693, 0.4184]
+    system.forcefield = ff
+    
+    atoms = []
+    residues = []
+    
+    # 创建固定部分 - 4个离子形成一个正方形
+    # 位置故意偏离网格点
+    fixed_positions = [
+        (1.0 + grid_spacing/3, 1.0 + grid_spacing/3, z_plane),  # 左下
+        (1.0 + grid_spacing/3, box_size-1.0 + grid_spacing/3, z_plane),  # 左上
+        (box_size-1.0 + grid_spacing/3, 1.0 + grid_spacing/3, z_plane),  # 右下
+        (box_size-1.0 + grid_spacing/3, box_size-1.0 + grid_spacing/3, z_plane)  # 右上
+    ]
+    
+    # 添加固定离子
+    for i, pos in enumerate(fixed_positions):
+        ion = MCAtom()
+        ion.x, ion.y, ion.z = pos
+        ion.charge = 1.0 if i % 2 == 0 else -1.0  # 交替正负电荷
+        ion.type = 0 if i % 2 == 0 else 1
+        atoms.append(ion)
+        
+        # 打印原子位置和最近的网格点
+        grid_x = round(pos[0] / grid_spacing)
+        grid_y = round(pos[1] / grid_spacing)
+        grid_z = round(pos[2] / grid_spacing)
+        print(f"固定离子 {i}: 位置=({pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f})")
+        print(f"  最近网格点: ({grid_x}, {grid_y}, {grid_z})")
+        print(f"  偏离网格点: ({pos[0]-grid_x*grid_spacing:.3f}, {pos[1]-grid_y*grid_spacing:.3f}, {pos[2]-grid_z*grid_spacing:.3f})")
+    
+    # 创建固定残基
+    fixed_res = MCResidue()
+    fixed_res.atomStart = 0
+    fixed_res.atomCount = len(fixed_positions)
+    fixed_res.active = True
+    fixed_res.fixed = True
+    residues.append(fixed_res)
+    
+    # 创建移动部分 - 3个原子形成一个水分子
+    # 位置在盒子中央，确保与固定部分距离超过cutoff
+    mobile_atoms = [
+        (box_size/2.0 + grid_spacing/3, box_size/2.0 + grid_spacing/3, z_plane),  # 氧原子
+        (box_size/2.0 + grid_spacing/3 + 0.1, box_size/2.0 + grid_spacing/3, z_plane),  # 氢原子1
+        (box_size/2.0 + grid_spacing/3, box_size/2.0 + grid_spacing/3 + 0.1, z_plane)  # 氢原子2
+    ]
+    
+    mobile_charges = [-0.8, 0.4, 0.4]  # 水分子电荷
+    
+    # 添加移动原子
+    for i, (pos, q) in enumerate(zip(mobile_atoms, mobile_charges)):
+        atom = MCAtom()
+        atom.x, atom.y, atom.z = pos
+        atom.charge = q
+        atom.type = 0
+        atoms.append(atom)
+        
+        # 打印原子位置和最近的网格点
+        grid_x = round(pos[0] / grid_spacing)
+        grid_y = round(pos[1] / grid_spacing)
+        grid_z = round(pos[2] / grid_spacing)
+        print(f"移动原子 {i}: 位置=({pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f})")
+        print(f"  最近网格点: ({grid_x}, {grid_y}, {grid_z})")
+        print(f"  偏离网格点: ({pos[0]-grid_x*grid_spacing:.3f}, {pos[1]-grid_y*grid_spacing:.3f}, {pos[2]-grid_z*grid_spacing:.3f})")
+    
+    # 创建移动残基
+    mobile_res = MCResidue()
+    mobile_res.atomStart = len(fixed_positions)
+    mobile_res.atomCount = len(mobile_atoms)
+    mobile_res.active = True
+    mobile_res.fixed = False
+    residues.append(mobile_res)
+    
+    # 设置系统
+    system.atoms = atoms
+    system.residues = residues
+    system.activeAtomCount = len(atoms)
+    system.activeResidueCount = len(residues)
+    
+    # 设置移动残基信息
+    system.movementResidues.clear()
+    movement_info = pygcmc.MCMovementResidueInfo()
+    movement_info.startIndex = 1  # 第二个残基（移动残基）的索引
+    movement_info.activeCount = 1  # 只有一个移动残基
+    system.movementResidues.append(movement_info)
+    
+    print(f"系统创建完成: {system.activeAtomCount}个原子, {system.activeResidueCount}个残基")
+    print(f"固定原子: {len(fixed_positions)}, 移动原子: {len(mobile_atoms)}")
+    sys.stdout.flush()
+    
+    # 初始化各种电荷方法
+    print("设置计算参数...")
+    
+    # PME参数
+    pygcmc.setPMEParameters(alpha, mesh_size, spline_order, tolerance)
+    pygcmc.initializePMEParameters(cutoff, box, alpha)
+    
+    # PGP参数
+    pygcmc.setPGPParameters(alpha, mesh_size, potential_cutoff, 
+                           potential_grid_size, spline_order, tolerance)
+    
+    # 步骤1: 计算初始能量
+    print("计算初始能量...")
+    
+    # PME能量
+    initial_pme_result = pygcmc.computeMovementEnergyPME(system)
+    initial_pme_energy = initial_pme_result[0]
+    initial_pme_dict = initial_pme_result[2]
+    initial_pme_reciprocal = initial_pme_dict['reciprocal']
+    
+    # PGP能量
+    pygcmc.precomputeGridPotential(system, fixed_only=True)
+    initial_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
+    
+    print(f"初始PME倒空间能量: {initial_pme_reciprocal}")
+    print(f"初始PGP能量: {initial_pgp_energy}")
+    
+    # 步骤2: 移动移动残基（在平面上平移）
+    translation = [0.2, 0.2, 0.0]  # 只在x-y平面上移动
+    print(f"移动残基: 平移{translation}...")
+    
+    # 移动水分子
+    for i in range(mobile_res.atomCount):
+        atom_index = mobile_res.atomStart + i
+        system.atoms[atom_index].x += translation[0]
+        system.atoms[atom_index].y += translation[1]
+        # z坐标保持不变，确保仍在同一平面上
+    
+    # 步骤3: 计算移动后能量
+    print("计算移动后能量...")
+    
+    # PME能量
+    moved_pme_result = pygcmc.computeMovementEnergyPME(system)
+    moved_pme_energy = moved_pme_result[0]
+    moved_pme_dict = moved_pme_result[2]
+    moved_pme_reciprocal = moved_pme_dict['reciprocal']
+    
+    # PGP能量
+    moved_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
+    
+    print(f"移动后PME倒空间能量: {moved_pme_reciprocal}")
+    print(f"移动后PGP能量: {moved_pgp_energy}")
+    
+    # 计算能量变化
+    pme_energy_change = moved_pme_reciprocal - initial_pme_reciprocal
+    pgp_energy_change = moved_pgp_energy - initial_pgp_energy
+    
+    print(f"PME倒空间能量变化: {pme_energy_change}")
+    print(f"PGP能量变化: {pgp_energy_change}")
+    
+    # 计算相对误差
+    if abs(pme_energy_change) > 1e-10:
+        pgp_relative_error = abs((pgp_energy_change - pme_energy_change) / pme_energy_change)
+        print(f"PGP与PME相对误差: {pgp_relative_error*100:.4f}%")
+        assert pgp_relative_error < 0.1, f"PGP相对误差过大: {pgp_relative_error*100:.2f}%"
