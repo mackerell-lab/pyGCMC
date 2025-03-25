@@ -917,3 +917,199 @@ def test_compare_ewald_pme_pgp_planar():
         pgp_relative_error = abs((pgp_energy_change - pme_energy_change) / pme_energy_change)
         print(f"PGP与PME相对误差: {pgp_relative_error*100:.4f}%")
         assert pgp_relative_error < 0.1, f"PGP相对误差过大: {pgp_relative_error*100:.2f}%"
+
+def test_compare_ewald_pme_pgp_asymmetric():
+    """
+    测试具有不对称电荷分布的系统中PGP计算的准确性
+    
+    特点:
+    1. 固定部分包含不对称分布的多个带电粒子
+    2. 正负电荷数量不平衡
+    3. 移动残基包含一个带电粒子，远离固定部分
+    4. 通过比较PME和PGP计算的能量验证准确性
+    """
+    # 设置系统参数
+    box_size = 8.0  # nm - 使用较大的盒子
+    cutoff = 1.0    # nm
+    potential_cutoff = 1.0  # nm
+    box = [box_size, box_size, box_size]
+    
+    # Ewald和PME参数
+    alpha = 0.29    # 1/nm
+    mesh_size = [32, 32, 32]
+    potential_grid_size = [32, 32, 32]
+    spline_order = 4
+    tolerance = 1e-5
+    
+    print("创建不对称电荷分布测试系统...")
+    sys.stdout.flush()
+    
+    # 创建测试系统
+    system = MCState()
+    system.info.box = box
+    system.info.setTemperature(300.0)
+    system.info.cutoff = cutoff
+    
+    # 设置力场
+    ff = MCForceField()
+    ff.numTotalTypes = 2 
+    ff.ljSigma = [0.333, 0.3875, 0.3875, 0.442]
+    ff.ljEps = [0.0115, 0.0693, 0.0693, 0.4184]
+    system.forcefield = ff
+    
+    atoms = []
+    residues = []
+    
+    # 创建固定部分 - 不对称的带电粒子分布
+    # 定义不对称的位置和电荷
+    fixed_particles = [
+        # 位置 (x, y, z)                电荷
+        ((1.0, 1.0, 1.0),               1.0),  # 正电荷
+        ((1.5, 1.0, 1.2),              -0.8),  # 负电荷
+        ((1.3, 1.7, 1.5),               0.6),  # 正电荷
+        ((0.8, 1.6, 0.9),              -0.7),  # 负电荷
+        ((box_size-1.0, 1.0, 1.0),      1.0),  # 正电荷
+        ((box_size-1.5, 1.2, 1.3),     -0.5),  # 负电荷
+        ((1.0, box_size-1.0, 1.0),      0.8),  # 正电荷
+        ((1.2, box_size-1.5, 0.9),     -0.6),  # 负电荷
+        ((1.0, 1.0, box_size-1.0),      0.9),  # 正电荷
+        ((1.4, 1.3, box_size-1.4),     -0.7),  # 负电荷
+        # 添加更多的粒子增加系统复杂性
+        ((box_size-2.0, box_size-2.0, 2.0),  0.7),  # 正电荷
+        ((box_size-2.5, box_size-2.3, 2.2), -0.4),  # 负电荷
+        ((2.0, box_size-2.0, box_size-2.0),  0.5),  # 正电荷
+        ((2.2, box_size-2.2, box_size-2.4), -0.3),  # 负电荷
+        ((box_size-2.0, 2.0, box_size-2.0),  0.6),  # 正电荷
+        # 总电荷稍微为正，不完全中性
+    ]
+    
+    # 确认粒子数
+    print(f"固定粒子数: {len(fixed_particles)}")
+    
+    # 验证固定部分总电荷
+    total_fixed_charge = sum(charge for _, charge in fixed_particles)
+    print(f"固定部分总电荷: {total_fixed_charge}")
+    
+    # 添加固定粒子
+    for i, (pos, charge) in enumerate(fixed_particles):
+        atom = MCAtom()
+        atom.x, atom.y, atom.z = pos
+        atom.charge = charge
+        atom.type = 0 if charge > 0 else 1  # 正电荷用type 0，负电荷用type 1
+        atoms.append(atom)
+    
+    # 创建固定残基
+    fixed_res = MCResidue()
+    fixed_res.atomStart = 0
+    fixed_res.atomCount = len(fixed_particles)
+    fixed_res.active = True
+    fixed_res.fixed = True
+    residues.append(fixed_res)
+    
+    # 计算盒子中心位置，确保移动残基远离固定粒子
+    center_x = box_size / 2.0
+    center_y = box_size / 2.0
+    center_z = box_size / 2.0
+    
+    # 创建移动部分 - 单个带电粒子放在盒子中央
+    # 位置足够远，确保与所有固定粒子的距离都大于cutoff
+    mobile_atom_pos = (center_x, center_y, center_z)
+    mobile_charge = -total_fixed_charge  # 使系统总电荷为0
+    
+    # 添加移动粒子
+    mobile_atom = MCAtom()
+    mobile_atom.x, mobile_atom.y, mobile_atom.z = mobile_atom_pos
+    mobile_atom.charge = mobile_charge
+    mobile_atom.type = 1 if mobile_charge < 0 else 0
+    atoms.append(mobile_atom)
+    
+    print(f"移动粒子: 位置=({mobile_atom_pos[0]}, {mobile_atom_pos[1]}, {mobile_atom_pos[2]}), 电荷={mobile_charge}")
+    
+    # 创建移动残基
+    mobile_res = MCResidue()
+    mobile_res.atomStart = len(fixed_particles)
+    mobile_res.atomCount = 1
+    mobile_res.active = True
+    mobile_res.fixed = False
+    residues.append(mobile_res)
+    
+    # 设置系统
+    system.atoms = atoms
+    system.residues = residues
+    system.activeAtomCount = len(atoms)
+    system.activeResidueCount = len(residues)
+    
+    # 设置移动残基信息
+    system.movementResidues.clear()
+    movement_info = pygcmc.MCMovementResidueInfo()
+    movement_info.startIndex = 1  # 第二个残基（移动残基）的索引
+    movement_info.activeCount = 1  # 只有一个移动残基
+    system.movementResidues.append(movement_info)
+    
+    print(f"系统创建完成: {system.activeAtomCount}个原子, {system.activeResidueCount}个残基")
+    print(f"固定原子: {len(fixed_particles)}, 移动原子: 1")
+    sys.stdout.flush()
+    
+    # 初始化PME和PGP
+    print("设置计算参数...")
+    
+    # PME参数
+    pygcmc.setPMEParameters(alpha, mesh_size, spline_order, tolerance)
+    pygcmc.initializePMEParameters(cutoff, box, alpha)
+    
+    # PGP参数
+    pygcmc.setPGPParameters(alpha, mesh_size, potential_cutoff, 
+                           potential_grid_size, spline_order, tolerance)
+    
+    # 步骤1: 计算初始能量
+    print("计算初始能量...")
+    
+    # PME能量
+    initial_pme_result = pygcmc.computeMovementEnergyPME(system)
+    initial_pme_energy = initial_pme_result[0]
+    initial_pme_dict = initial_pme_result[2]
+    initial_pme_reciprocal = initial_pme_dict['reciprocal']
+    
+    # PGP能量
+    pygcmc.precomputeGridPotential(system, fixed_only=True)
+    initial_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
+    
+    print(f"初始PME倒空间能量: {initial_pme_reciprocal}")
+    print(f"初始PGP能量: {initial_pgp_energy}")
+    
+    # 步骤2: 移动移动残基（对角线方向平移0.3 nm）
+    translation = [0.3, 0.3, 0.3]
+    print(f"移动残基: 平移{translation}...")
+    
+    # 移动粒子
+    system.atoms[mobile_res.atomStart].x += translation[0]
+    system.atoms[mobile_res.atomStart].y += translation[1]
+    system.atoms[mobile_res.atomStart].z += translation[2]
+    
+    # 步骤3: 计算移动后能量
+    print("计算移动后能量...")
+    
+    # PME能量
+    moved_pme_result = pygcmc.computeMovementEnergyPME(system)
+    moved_pme_energy = moved_pme_result[0]
+    moved_pme_dict = moved_pme_result[2]
+    moved_pme_reciprocal = moved_pme_dict['reciprocal']
+    
+    # PGP能量
+    moved_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
+    
+    print(f"移动后PME倒空间能量: {moved_pme_reciprocal}")
+    print(f"移动后PGP能量: {moved_pgp_energy}")
+    
+    # 计算能量变化
+    pme_energy_change = moved_pme_reciprocal - initial_pme_reciprocal
+    pgp_energy_change = moved_pgp_energy - initial_pgp_energy
+    
+    print(f"PME倒空间能量变化: {pme_energy_change}")
+    print(f"PGP能量变化: {pgp_energy_change}")
+    
+    # 计算相对误差
+    if abs(pme_energy_change) > 1e-10:
+        pgp_relative_error = abs((pgp_energy_change - pme_energy_change) / pme_energy_change)
+        print(f"PGP与PME相对误差: {pgp_relative_error*100:.4f}%")
+        assert pgp_relative_error < 0.1, f"PGP相对误差过大: {pgp_relative_error*100:.2f}%"
