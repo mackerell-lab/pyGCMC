@@ -725,6 +725,7 @@ def test_compare_ewald_pme_pgp_planar():
     2. 移动分子与固定部分距离超过cutoff
     3. 平面与网格平面平行
     4. 原子位置故意偏离网格点
+    5. 使用8x8x8的粗网格便于观察
     """
     # 设置系统参数
     box_size = 8.0  # nm
@@ -734,8 +735,8 @@ def test_compare_ewald_pme_pgp_planar():
     
     # 计算参数
     alpha = 0.29    # 1/nm
-    mesh_size = [32, 32, 32]
-    potential_grid_size = [32, 32, 32]
+    mesh_size = [8, 8, 8]  # 改为8x8x8的粗网格
+    potential_grid_size = [8, 8, 8]  # 同样改为8x8x8
     spline_order = 4
     tolerance = 1e-5
     
@@ -847,6 +848,8 @@ def test_compare_ewald_pme_pgp_planar():
     
     print(f"系统创建完成: {system.activeAtomCount}个原子, {system.activeResidueCount}个残基")
     print(f"固定原子: {len(fixed_positions)}, 移动原子: {len(mobile_atoms)}")
+    print(f"网格大小: {mesh_size[0]}x{mesh_size[1]}x{mesh_size[2]}")
+    print(f"网格间距: {grid_spacing:.3f} nm")
     sys.stdout.flush()
     
     # 初始化各种电荷方法
