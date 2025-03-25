@@ -499,8 +499,10 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
         }
     }
     
+    // 统计原子数量，仅用于debug日志
     int totalAtoms = 0;
     int chargedAtoms = 0;
+    
     double raw_energy = 0.0; // 用于存储未缩放的能量
     
     // 处理系统中的每个移动残基
@@ -524,12 +526,18 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                 int atom_index = residue.atomStart + j;
                 const auto& atom = state.atoms[atom_index];
                 
-                totalAtoms++;
+                // 原子计数仅用于debug日志
+                if (platform::is_debug_mode()) {
+                    totalAtoms++;
+                }
                 
                 // 只处理带电荷的原子
                 if (std::abs(atom.charge) < 1e-6) continue;
                 
-                chargedAtoms++;
+                // 带电原子计数仅用于debug日志
+                if (platform::is_debug_mode()) {
+                    chargedAtoms++;
+                }
                 
                 if (platform::is_debug_mode()) {
                     platform::log(LogLevel::DEBUG, "处理原子 ", atom_index, ": 位置=(", 
@@ -786,9 +794,12 @@ double calculateMoleculeEnergy(model::MCState& state) {
     if (std::abs(energy) < 1e-10) {
         // 检查是否是因为没有固定残基导致的计算问题
         int fixed_count = 0;
-        for (int i = 0; i < state.activeResidueCount; ++i) {
-            if (state.residues[i].fixed && state.residues[i].active) {
-                fixed_count++;
+        if (platform::is_debug_mode() || std::abs(energy) < 1e-10) {
+            // 只有在需要检查原因时才计算固定残基数量
+            for (int i = 0; i < state.activeResidueCount; ++i) {
+                if (state.residues[i].fixed && state.residues[i].active) {
+                    fixed_count++;
+                }
             }
         }
         
