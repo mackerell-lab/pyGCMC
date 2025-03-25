@@ -157,12 +157,12 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
         throw std::runtime_error("PGP parameters not initialized");
     }
     
-    // 直接输出到标准输出以便调试
-    std::cout << "\n[DIRECT PLATFORM] 预计算网格电势开始" << std::endl;
-    std::cout << "  处理: " << (fixed_only ? "仅固定部分" : "所有部分") << std::endl;
-    std::cout << "  网格大小: " << pgp_params.potential_grid_size[0] << "x" 
-              << pgp_params.potential_grid_size[1] << "x" 
-              << pgp_params.potential_grid_size[2] << std::endl;
+    // 替换直接输出为日志输出
+    platform::log(LogLevel::INFO, "预计算网格电势开始");
+    platform::log(LogLevel::INFO, "处理: ", (fixed_only ? "仅固定部分" : "所有部分"));
+    platform::log(LogLevel::INFO, "网格大小: ", pgp_params.potential_grid_size[0], "x", 
+                 pgp_params.potential_grid_size[1], "x", 
+                 pgp_params.potential_grid_size[2]);
     
     // 备份PME网格，稍后将恢复
     std::vector<std::complex<double>> pmeGridBackup = pme_params.pmeGrid;
@@ -178,14 +178,14 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
         const auto& res = state.residues[i];
         if (res.fixed && res.active) fixed_residues_count++;
     }
-    std::cout << "[DIRECT PLATFORM]  固定残基数: " << fixed_residues_count << std::endl;
+    platform::log(LogLevel::INFO, "固定残基数: ", fixed_residues_count);
     
     // 打印所有残基的信息以便调试
-    std::cout << "[DIRECT PLATFORM] 打印所有残基的fixed状态:" << std::endl;
+    platform::log(LogLevel::DEBUG, "打印所有残基的fixed状态:");
     for (int i = 0; i < state.activeResidueCount; ++i) {
         const auto& res = state.residues[i];
-        std::cout << "  残基 " << i << ": fixed=" << res.fixed << ", active=" << res.active
-                  << ", atomCount=" << res.atomCount << std::endl;
+        platform::log(LogLevel::DEBUG, "残基 ", i, ": fixed=", res.fixed, ", active=", res.active,
+                     ", atomCount=", res.atomCount);
     }
     
     // 如果没有固定残基但要求仅计算固定部分，发出警告并自动切换
@@ -226,13 +226,13 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     double factor = 1.0/(4.0*alpha*alpha);
     
     // 打印关键参数用于调试
-    std::cout << "[DIRECT PLATFORM] 关键计算参数:" << std::endl;
-    std::cout << "  盒子尺寸: [" << pgp_params.box[0] << ", " << pgp_params.box[1] << ", " << pgp_params.box[2] << "] nm" << std::endl;
-    std::cout << "  盒子体积(Ω): " << volume << " nm³" << std::endl;
-    std::cout << "  网格尺寸: [" << nx << ", " << ny << ", " << nz << "]" << std::endl;
-    std::cout << "  总网格点数: " << nx * ny * nz << std::endl;
-    std::cout << "  Ewald分离参数(α): " << alpha << " nm⁻¹" << std::endl;
-    std::cout << "  exp(-k²/(4α²))系数: " << factor << std::endl;
+    platform::log(LogLevel::DEBUG, "关键计算参数:");
+    platform::log(LogLevel::DEBUG, "盒子尺寸: [", pgp_params.box[0], ", ", pgp_params.box[1], ", ", pgp_params.box[2], "] nm");
+    platform::log(LogLevel::DEBUG, "盒子体积(Ω): ", volume, " nm³");
+    platform::log(LogLevel::DEBUG, "网格尺寸: [", nx, ", ", ny, ", ", nz, "]");
+    platform::log(LogLevel::DEBUG, "总网格点数: ", nx * ny * nz);
+    platform::log(LogLevel::DEBUG, "Ewald分离参数(α): ", alpha, " nm⁻¹");
+    platform::log(LogLevel::DEBUG, "exp(-k²/(4α²))系数: ", factor);
     
     // 获取最大k向量指数
     int maxkx = (nx+1)/2;
@@ -248,18 +248,18 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     recipBoxVectors[2][2] = 2.0 * M_PI / pgp_params.box[2];
     
     // 打印倒格矢量
-    std::cout << "  倒格矢量: [" << recipBoxVectors[0][0] << ", " << recipBoxVectors[1][1] << ", " << recipBoxVectors[2][2] << "] nm⁻¹" << std::endl;
+    platform::log(LogLevel::DEBUG, "倒格矢量: [", recipBoxVectors[0][0], ", ", recipBoxVectors[1][1], ", ", recipBoxVectors[2][2], "] nm⁻¹");
     
     // 示例计算几个k点的值
-    std::cout << "  示例k点值(nx/4, ny/4, nz/4):" << std::endl;
+    platform::log(LogLevel::DEBUG, "示例k点值(nx/4, ny/4, nz/4):");
     int sx = nx/4, sy = ny/4, sz = nz/4;
     double mkx = sx * recipBoxVectors[0][0];
     double mky = sy * recipBoxVectors[1][1];
     double mkz = sz * recipBoxVectors[2][2];
     double mk2 = mkx*mkx + mky*mky + mkz*mkz;
-    std::cout << "    k = [" << mkx << ", " << mky << ", " << mkz << "] nm⁻¹" << std::endl;
-    std::cout << "    |k|² = " << mk2 << " nm⁻²" << std::endl;
-    std::cout << "    exp(-k²/(4α²)) = " << exp(-mk2 * factor) << std::endl;
+    platform::log(LogLevel::DEBUG, "k = [", mkx, ", ", mky, ", ", mkz, "] nm⁻¹");
+    platform::log(LogLevel::DEBUG, "|k|² = ", mk2, " nm⁻²");
+    platform::log(LogLevel::DEBUG, "exp(-k²/(4α²)) = ", exp(-mk2 * factor));
     
     // 应用Ewald因子
     for (int kx = 0; kx < nx; kx++) {
@@ -324,12 +324,12 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     
     // 总修正因子 = FFT归一化补偿(N) × 常数因子(4π/Ω) × 物理单位转换 × 0.5(减半)
     double totalFactor = totalFFTPoints * constantFactor * physicalUnitFactor * 0.5;
-    std::cout << "[DIRECT PLATFORM] 应用修正因子:" << std::endl;
-    std::cout << "  FFT归一化补偿(N): " << totalFFTPoints << std::endl;
-    std::cout << "  常数因子(4π/Ω): " << constantFactor << " nm⁻³" << std::endl;
-    std::cout << "  物理单位转换: " << physicalUnitFactor << " kJ*nm/mol*e²" << std::endl;
-    std::cout << "  电势减半因子: 0.5" << std::endl;
-    std::cout << "  总修正因子: " << totalFactor << std::endl;
+    platform::log(LogLevel::DEBUG, "应用修正因子:");
+    platform::log(LogLevel::DEBUG, "FFT归一化补偿(N): ", totalFFTPoints);
+    platform::log(LogLevel::DEBUG, "常数因子(4π/Ω): ", constantFactor, " nm⁻³");
+    platform::log(LogLevel::DEBUG, "物理单位转换: ", physicalUnitFactor, " kJ*nm/mol*e²");
+    platform::log(LogLevel::DEBUG, "电势减半因子: 0.5");
+    platform::log(LogLevel::DEBUG, "总修正因子: ", totalFactor);
     
     // 统计修正前的电势范围
     double preMin = 0.0, preMax = 0.0, preSum = 0.0;
@@ -345,7 +345,7 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
         }
         preSum += val;
     }
-    std::cout << "  修正前电势范围: [" << preMin << ", " << preMax << "], 平均值: " << (preSum/totalGridSize) << std::endl;
+    platform::log(LogLevel::DEBUG, "修正前电势范围: [", preMin, ", ", preMax, "], 平均值: ", (preSum/totalGridSize));
     
     // 应用总修正因子到每个网格点
     for (int i = 0; i < totalGridSize; i++) {
@@ -366,7 +366,7 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
         }
         postSum += val;
     }
-    std::cout << "  修正后电势范围: [" << postMin << ", " << postMax << "], 平均值: " << (postSum/totalGridSize) << std::endl;
+    platform::log(LogLevel::DEBUG, "修正后电势范围: [", postMin, ", ", postMax, "], 平均值: ", (postSum/totalGridSize));
     
     // 将修改后的PME网格复制到PGP的potentialGrid中
     pgp_params.potentialGrid = pme_params.pmeGrid;
@@ -398,9 +398,9 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only) {
     platform::log(LogLevel::INFO, "  最小电势: ", min_potential);
     platform::log(LogLevel::INFO, "  电势总和: ", sum_potential);
     
-    std::cout << "[DIRECT PLATFORM] 电势预计算完成" << std::endl
-              << "  非零点数: " << potentials_nonzero << std::endl
-              << "  电势范围: [" << min_potential << ", " << max_potential << "]" << std::endl;
+    platform::log(LogLevel::INFO, "电势预计算完成");
+    platform::log(LogLevel::INFO, "  非零点数: ", potentials_nonzero);
+    platform::log(LogLevel::INFO, "  电势范围: [", min_potential, ", ", max_potential, "]");
 }
 
 /**
@@ -419,9 +419,9 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
         throw std::runtime_error("PGP parameters not initialized");
     }
     
-    // 直接输出到标准输出以便调试
-    std::cout << "\n[DIRECT PLATFORM] 通过插值计算移动分子能量" << std::endl;
-    std::cout << "  移动残基组数: " << state.movementResidues.size() << std::endl;
+    // 输出到日志
+    platform::log(LogLevel::INFO, "通过插值计算移动分子能量");
+    platform::log(LogLevel::INFO, "移动残基组数: ", state.movementResidues.size());
     
     // 重置能量累加器
     energy = 0.0;
@@ -436,29 +436,29 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
     }
     
     if (gridEmpty) {
-        std::cout << "[DIRECT PLATFORM] 警告: PGP网格为空或未正确初始化!" << std::endl;
+        platform::log(LogLevel::WARNING, "PGP网格为空或未正确初始化!");
         
         // 输出一些网格样本点，帮助调试
-        std::cout << "[DIRECT PLATFORM] 网格样本点值:" << std::endl;
+        platform::log(LogLevel::DEBUG, "网格样本点值:");
         for (int i = 0; i < std::min(10, static_cast<int>(pgp_params.potentialGrid.size())); i++) {
-            std::cout << "  网格点 " << i << ": " << pgp_params.potentialGrid[i].real() << std::endl;
+            platform::log(LogLevel::DEBUG, "网格点 ", i, ": ", pgp_params.potentialGrid[i].real());
         }
     } else {
-        std::cout << "[DIRECT PLATFORM] PGP网格包含非零值" << std::endl;
+        platform::log(LogLevel::DEBUG, "PGP网格包含非零值");
     }
     
     // 检查移动残基设置
     if (state.movementResidues.empty()) {
-        std::cout << "[DIRECT PLATFORM] 警告: 没有设置移动残基信息!" << std::endl;
-        std::cout << "[DIRECT PLATFORM] 将尝试使用非固定残基作为移动残基" << std::endl;
+        platform::log(LogLevel::WARNING, "没有设置移动残基信息!");
+        platform::log(LogLevel::INFO, "将尝试使用非固定残基作为移动残基");
         
         // 打印每个残基的情况，帮助调试
-        std::cout << "[DIRECT PLATFORM] 残基状态:" << std::endl;
+        platform::log(LogLevel::DEBUG, "残基状态:");
         for (int i = 0; i < state.activeResidueCount; ++i) {
             const auto& res = state.residues[i];
-            std::cout << "  残基 " << i << ": fixed=" << res.fixed 
-                     << ", active=" << res.active 
-                     << ", atomCount=" << res.atomCount << std::endl;
+            platform::log(LogLevel::DEBUG, "残基 ", i, ": fixed=", res.fixed, 
+                         ", active=", res.active, 
+                         ", atomCount=", res.atomCount);
         }
     }
     
@@ -468,17 +468,17 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
     
     // 处理系统中的每个移动残基
     if (state.movementResidues.empty()) {
-        std::cout << "[DIRECT PLATFORM] 警告: 没有设置移动残基信息!" << std::endl;
+        platform::log(LogLevel::WARNING, "没有设置移动残基信息!");
         
         // 如果没有设置移动残基，尝试处理所有非固定残基
-        std::cout << "[DIRECT PLATFORM] 尝试查找所有非固定残基..." << std::endl;
+        platform::log(LogLevel::INFO, "尝试查找所有非固定残基...");
         
         for (size_t i = 0; i < state.residues.size(); i++) {
             const auto& residue = state.residues[i];
             
             if (!residue.active || residue.fixed) continue;
             
-            std::cout << "[DIRECT PLATFORM] 使用非固定残基 " << i << std::endl;
+            platform::log(LogLevel::DEBUG, "使用非固定残基 ", i);
             
             // 处理原子...
             for (int j = 0; j < residue.atomCount; j++) {
@@ -492,9 +492,9 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                 
                 chargedAtoms++;
                 
-                std::cout << "[DIRECT PLATFORM] 处理原子 " << atom_index << ": 位置=(" 
-                          << atom.x << "," << atom.y << "," << atom.z 
-                          << "), 电荷=" << atom.charge << std::endl;
+                platform::log(LogLevel::DEBUG, "处理原子 ", atom_index, ": 位置=(", 
+                             atom.x, ",", atom.y, ",", atom.z, 
+                             "), 电荷=", atom.charge);
                 
                 // 计算网格位置和B样条插值权重
                 // 修正：使用与预计算电势相同的坐标变换方法
@@ -536,50 +536,50 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                 
                 // X维度B样条
                 computeBSplineCoefficients(gridFractions[0], order, coefficients);
-                std::cout << "[DIRECT PLATFORM] X轴B样条系数 (gridFraction=" << gridFractions[0] << "):" << std::endl;
+                platform::log(LogLevel::DEBUG, "X轴B样条系数 (gridFraction=", gridFractions[0], "):");
                 double xMax = thetaX[0], xMin = thetaX[0], xSum = 0.0;
                 for (int i = 0; i < order; i++) {
                     thetaX[i] = coefficients[i];
                     xMax = std::max(xMax, thetaX[i]);
                     xMin = std::min(xMin, thetaX[i]);
                     xSum += thetaX[i];
-                    std::cout << "  theta_x[" << i << "] = " << thetaX[i] << std::endl;
+                    platform::log(LogLevel::DEBUG, "theta_x[", i, "] = ", thetaX[i]);
                 }
-                std::cout << "  X权重范围: [" << xMin << ", " << xMax << "], 和: " << xSum << std::endl;
+                platform::log(LogLevel::DEBUG, "X权重范围: [", xMin, ", ", xMax, "], 和: ", xSum);
                 
                 // Y维度B样条
                 computeBSplineCoefficients(gridFractions[1], order, coefficients);
-                std::cout << "[DIRECT PLATFORM] Y轴B样条系数 (gridFraction=" << gridFractions[1] << "):" << std::endl;
+                platform::log(LogLevel::DEBUG, "Y轴B样条系数 (gridFraction=", gridFractions[1], "):");
                 double yMax = thetaY[0], yMin = thetaY[0], ySum = 0.0;
                 for (int i = 0; i < order; i++) {
                     thetaY[i] = coefficients[i];
                     yMax = std::max(yMax, thetaY[i]);
                     yMin = std::min(yMin, thetaY[i]);
                     ySum += thetaY[i];
-                    std::cout << "  theta_y[" << i << "] = " << thetaY[i] << std::endl;
+                    platform::log(LogLevel::DEBUG, "theta_y[", i, "] = ", thetaY[i]);
                 }
-                std::cout << "  Y权重范围: [" << yMin << ", " << yMax << "], 和: " << ySum << std::endl;
+                platform::log(LogLevel::DEBUG, "Y权重范围: [", yMin, ", ", yMax, "], 和: ", ySum);
                 
                 // Z维度B样条
                 computeBSplineCoefficients(gridFractions[2], order, coefficients);
-                std::cout << "[DIRECT PLATFORM] Z轴B样条系数 (gridFraction=" << gridFractions[2] << "):" << std::endl;
+                platform::log(LogLevel::DEBUG, "Z轴B样条系数 (gridFraction=", gridFractions[2], "):");
                 double zMax = thetaZ[0], zMin = thetaZ[0], zSum = 0.0;
                 for (int i = 0; i < order; i++) {
                     thetaZ[i] = coefficients[i];
                     zMax = std::max(zMax, thetaZ[i]);
                     zMin = std::min(zMin, thetaZ[i]);
                     zSum += thetaZ[i];
-                    std::cout << "  theta_z[" << i << "] = " << thetaZ[i] << std::endl;
+                    platform::log(LogLevel::DEBUG, "theta_z[", i, "] = ", thetaZ[i]);
                 }
-                std::cout << "  Z权重范围: [" << zMin << ", " << zMax << "], 和: " << zSum << std::endl;
-                std::cout << "  三维权重乘积总和理论值: " << xSum * ySum * zSum << std::endl;
+                platform::log(LogLevel::DEBUG, "Z权重范围: [", zMin, ", ", zMax, "], 和: ", zSum);
+                platform::log(LogLevel::DEBUG, "三维权重乘积总和理论值: ", xSum * ySum * zSum);
                 
                 // 输出最近的网格点及其电势值（用于测试）
-                std::cout << "[DIRECT PLATFORM] 原子 " << atom_index << " 最近的网格点信息:" << std::endl;
-                std::cout << "  网格索引: (" << gridIndices[0] << "," << gridIndices[1] << "," << gridIndices[2] << ")" << std::endl;
+                platform::log(LogLevel::DEBUG, "原子 ", atom_index, " 最近的网格点信息:");
+                platform::log(LogLevel::DEBUG, "网格索引: (", gridIndices[0], ",", gridIndices[1], ",", gridIndices[2], ")");
                 
                 // 输出该点及其周围网格点的电势值
-                std::cout << "  最近网格点电势值:" << std::endl;
+                platform::log(LogLevel::DEBUG, "最近网格点电势值:");
                 for (int dx = -1; dx <= 1; dx++) {
                     for (int dy = -1; dy <= 1; dy++) {
                         for (int dz = -1; dz <= 1; dz++) {
@@ -591,12 +591,10 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                             double pot_val = pgp_params.potentialGrid[index].real();
                             
                             if (dx == 0 && dy == 0 && dz == 0) {
-                                std::cout << "  → 中心点 (" << xi << "," << yi << "," << zi 
-                                          << "): " << pot_val << std::endl;
+                                platform::log(LogLevel::DEBUG, "→ 中心点 (", xi, ",", yi, ",", zi, "): ", pot_val);
                             } else if (std::abs(pot_val) > 1e-6) {
                                 // 只输出非零的周围点
-                                std::cout << "    点 (" << xi << "," << yi << "," << zi 
-                                          << "): " << pot_val << std::endl;
+                                platform::log(LogLevel::DEBUG, "点 (", xi, ",", yi, ",", zi, "): ", pot_val);
                             }
                         }
                     }
@@ -625,14 +623,8 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                             
                             // 输出重要网格点的详细信息，帮助调试
                             if (std::abs(grid_value) > 1e-6 && ix < 2 && iy < 2 && iz < 2) {
-                                std::cout << "[DIRECT PLATFORM] 网格点 (" 
-                                          << xindex << "," 
-                                          << yindex << "," 
-                                          << zindex 
-                                          << ") 电势=" << grid_value 
-                                          << ", 权重=" << weight
-                                          << " (各维度权重: " << thetaX[ix] << "," << thetaY[iy] << "," << thetaZ[iz] << ")"
-                                          << std::endl;
+                                platform::log(LogLevel::DEBUG, "网格点 (", xindex, ",", yindex, ",", zindex, ") 电势=", grid_value, 
+                                             ", 权重=", weight, " (各维度权重: ", thetaX[ix], ",", thetaY[iy], ",", thetaZ[iz], ")");
                             }
                         }
                     }
@@ -647,14 +639,13 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
                         }
                     }
                 }
-                std::cout << "[DIRECT PLATFORM] B样条权重总和: " << totalWeight << std::endl;
+                platform::log(LogLevel::DEBUG, "B样条权重总和: ", totalWeight);
                 
                 // 累加能量(电势*电荷)
                 double atom_energy = potential * atom.charge;
                 raw_energy += atom_energy;
                 
-                std::cout << "[DIRECT PLATFORM] 原子电势: " << potential
-                          << ", 原子能量贡献: " << atom_energy << std::endl;
+                platform::log(LogLevel::DEBUG, "原子电势: ", potential, ", 原子能量贡献: ", atom_energy);
             }
         }
     } else {
@@ -670,10 +661,10 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy) {
     energy = 2.0 * raw_energy;
     
     // 详细输出能量计算细节
-    std::cout << "[DIRECT PLATFORM] 能量计算细节:" << std::endl;
-    std::cout << "  原始能量(raw): " << raw_energy << " kJ/mol" << std::endl;
-    std::cout << "  应用2倍因子: × 2.0" << std::endl;
-    std::cout << "  最终能量: " << energy << " kJ/mol" << std::endl;
+    platform::log(LogLevel::DEBUG, "能量计算细节:");
+    platform::log(LogLevel::DEBUG, "原始能量(raw): ", raw_energy, " kJ/mol");
+    platform::log(LogLevel::DEBUG, "应用2倍因子: × 2.0");
+    platform::log(LogLevel::DEBUG, "最终能量: ", energy, " kJ/mol");
     
     platform::log(LogLevel::DEBUG, "Raw PGP energy: ", raw_energy, " kJ/mol");
     platform::log(LogLevel::DEBUG, "Final PGP energy (×2): ", energy, " kJ/mol");
@@ -709,10 +700,10 @@ double calculateMoleculeEnergy(model::MCState& state) {
         }
         
         if (fixed_count == 0) {
-            std::cout << "[DIRECT PLATFORM] 警告: 没有发现固定残基，能量接近零!" << std::endl;
+            platform::log(LogLevel::WARNING, "没有发现固定残基，能量接近零!");
             
             // 预计算全部残基的网格电势
-            std::cout << "[DIRECT PLATFORM] 尝试用所有残基预计算网格电势..." << std::endl;
+            platform::log(LogLevel::INFO, "尝试用所有残基预计算网格电势...");
             precomputeGridPotential(state, false);
             
             // 重新计算能量
