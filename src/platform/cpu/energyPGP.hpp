@@ -13,63 +13,64 @@ namespace platform {
 namespace cpu {
 
 /**
- * @brief PGP-PME算法参数结构体 (Precomputed Grid-Potential Particle Mesh Ewald)
+ * @brief PGP-PME algorithm parameter structure (Precomputed Grid-Potential Particle Mesh Ewald)
  * 
- * 该结构体包含了Precomputed Grid-Potential Particle Mesh Ewald算法所需的所有参数和数据结构。
- * PGP-PME是一种优化的PME方法，通过预计算电势网格加速蒙特卡洛模拟中的能量评估。
+ * This structure contains all parameters and data structures required by the Precomputed Grid-Potential Particle Mesh Ewald algorithm.
+ * PGP-PME is an optimized PME method that accelerates energy evaluation in Monte Carlo simulations by precomputing potential grids.
  * 
- * 主要包含以下几类参数：
- * 1. 常规PME参数：alpha、网格大小、插值阶数等
- * 2. 预计算网格参数：电势截断距离、网格大小和间距等
- * 3. 数据存储：预计算电势网格、B样条模数等
+ * Main parameter categories include:
+ * 1. Standard PME parameters: alpha, grid size, interpolation order, etc.
+ * 2. Precomputed grid parameters: potential cutoff distance, grid size and spacing, etc.
+ * 3. Data storage: precomputed potential grid, B-spline moduli, etc.
  */
 struct PGPParams : public PMEParams {
-    bool initialized = false;      // 参数是否已初始化
-    double alpha;                  // Ewald分离参数，平衡实空间和倒空间计算
-    double tolerance;              // 误差容限
-    double cutoff;                 // 实空间截断距离
-    double epsilon_r;              // 相对介电常数
-    int splineOrder;               // B样条插值阶数(通常为4，即三次B样条)
-    std::array<double, 3> box;     // 模拟盒子的三维尺寸
-    std::array<int, 3> meshSize;   // PME网格的三维尺寸
+    bool initialized = false;      // Whether parameters have been initialized
+    double alpha;                  // Ewald separation parameter, balances real space and reciprocal space calculations
+    double tolerance;              // Error tolerance
+    double cutoff;                 // Real space cutoff distance
+    double epsilon_r;              // Relative dielectric constant
+    int splineOrder;               // B-spline interpolation order (typically 4, cubic B-spline)
+    std::array<double, 3> box;     // Simulation box dimensions
+    std::array<int, 3> meshSize;   // PME grid dimensions
     
-    // 预计算电势网格参数
-    double potential_cutoff;              // 电势计算的截断距离
-    int potential_grid_size[3];           // 预计算电势网格尺寸
-    double grid_spacing;                  // 网格间距
-    std::vector<std::complex<double>> potentialGrid;  // 预计算电势网格数据
+    // Precomputed potential grid parameters
+    double potential_cutoff;              // Cutoff distance for potential calculation
+    int potential_grid_size[3];           // Precomputed potential grid dimensions
+    double grid_spacing;                  // Grid spacing
+    std::vector<std::complex<double>> potentialGrid;  // Precomputed potential grid data
     
-    // PME算法参数(主要由setPMEParameters函数设置)
-    std::vector<double> erfcTable;         // erfc函数查找表
-    std::vector<double> ewaldScaleTable;   // Ewald缩放因子查找表
-    double ewaldDX;                        // Ewald表步长
-    double ewaldDXInv;                     // Ewald表步长倒数
-    double erfcDXInv;                      // erfc表步长倒数
-    std::vector<double> bsplineModuli[3];  // B样条模数
-    std::vector<std::complex<double>> pmeGrid;   // PME网格
-    std::vector<double> pmeCharge;        // PME电荷网格，类型需与PME结构体匹配
+    // PME algorithm parameters (mainly set by setPMEParameters function)
+    std::vector<double> erfcTable;         // erfc function lookup table
+    std::vector<double> ewaldScaleTable;   // Ewald scaling factor lookup table
+    double ewaldDX;                        // Ewald table step size
+    double ewaldDXInv;                     // Inverse of Ewald table step size
+    double erfcDXInv;                      // Inverse of erfc table step size
+    std::vector<double> bsplineModuli[3];  // B-spline moduli
+    std::vector<std::complex<double>> pmeGrid;   // PME grid
+    std::vector<double> pmeCharge;        // PME charge grid, type must match PME struct
     
-    // 调试标志
-    bool debug_mode = true;  // 默认启用调试模式
+    // Debug flags
+    bool debug_mode = true;  // Debug mode enabled by default
 
     /**
-     * @brief 初始化预计算电势的三维网格
+     * @brief Initialize the 3D grid for precomputed potential
      * 
-     * 该方法创建并初始化用于存储预计算电势的三维网格结构。网格大小由potential_grid_size参数决定，
-     * 通常根据所需精度和计算资源进行设置。网格间距自动计算，以确保在所有维度上获得足够的分辨率。
+     * This method creates and initializes a 3D grid structure for storing precomputed potentials. The grid size is determined by the 
+     * potential_grid_size parameter, typically set based on required accuracy and computational resources. Grid spacing is automatically 
+     * calculated to ensure sufficient resolution in all dimensions.
      * 
-     * 算法原理：
-     * 1. 根据指定的网格维度计算总网格点数
-     * 2. 分配内存空间用于存储预计算的电势值
-     * 3. 计算网格间距，确保在所有维度上至少达到所需分辨率
+     * Algorithm principles:
+     * 1. Calculate total grid points based on specified grid dimensions
+     * 2. Allocate memory space for storing precomputed potential values
+     * 3. Calculate grid spacing, ensuring at least the required resolution in all dimensions
      * 
-     * 计算复杂度：
-     * - 空间复杂度: O(nx*ny*nz)，其中nx/ny/nz为网格在各维度的大小
-     * - 时间复杂度: O(1)
+     * Computational complexity:
+     * - Space complexity: O(nx*ny*nz), where nx/ny/nz are the grid sizes in each dimension
+     * - Time complexity: O(1)
      * 
-     * 使用场景：
-     * - 在设置PGP参数后自动调用
-     * - 当系统尺寸变化时需要重新初始化
+     * Usage scenarios:
+     * - Automatically called after setting PGP parameters
+     * - Need to reinitialize when system size changes
      */
     void initializePotentialGrid();
 };
@@ -78,98 +79,101 @@ struct PGPParams : public PMEParams {
 extern PGPParams pgp_params;
 
 /**
- * @brief 设置PGP-PME (Precomputed Grid-Potential Particle Mesh Ewald)算法的所有参数
+ * @brief Set all parameters for the PGP-PME (Precomputed Grid-Potential Particle Mesh Ewald) algorithm
  * 
- * 该函数是PGP-PME算法配置的入口点，设置所有运行PGP-PME所需的参数。
- * 它首先配置标准PME参数，然后添加PGP特有的网格和截断参数，最后初始化预计算网格。
+ * This function is the entry point for PGP-PME algorithm configuration, setting all parameters required to run PGP-PME.
+ * It first configures standard PME parameters, then adds PGP-specific grid and cutoff parameters, and finally initializes the precomputed grid.
  * 
- * 算法原理：
- * 1. 调用setPMEParameters设置基础PME参数
- * 2. 将PME参数复制到PGP参数结构中
- * 3. 添加PGP特有参数如电势截断和网格大小
- * 4. 初始化预计算电势网格结构
+ * Algorithm principles:
+ * 1. Call setPMEParameters to set basic PME parameters
+ * 2. Copy PME parameters to the PGP parameter structure
+ * 3. Add PGP-specific parameters such as potential cutoff and grid size
+ * 4. Initialize the precomputed potential grid structure
  * 
- * 参数含义：
- * @param alpha Ewald分离参数，控制实空间和倒空间计算的平衡，典型值为0.2-0.3 Å^-1
- * @param meshSize PME计算的网格尺寸，数组形式[nx,ny,nz]，通常与盒子尺寸成比例
- * @param potential_cutoff 电势计算的截断距离，通常小于或等于PME的实空间截断
- * @param potentialGridSize 预计算电势的网格尺寸，数组形式[nx,ny,nz]，决定插值精度
- * @param splineOrder B样条插值的阶数，通常为4(三次B样条)，影响精度和计算速度
- * @param tolerance 计算精度的容差，用于优化参数选择
+ * Parameters:
+ * @param alpha Ewald separation parameter, controls the balance between real space and reciprocal space calculations, typical value 0.2-0.3 Å^-1
+ * @param meshSize PME calculation grid size, array form [nx,ny,nz], usually proportional to box size
+ * @param potential_cutoff Cutoff distance for potential calculation, typically less than or equal to PME's real space cutoff
+ * @param potentialGridSize Precomputed potential grid size, array form [nx,ny,nz], determines interpolation accuracy
+ * @param splineOrder B-spline interpolation order, typically 4 (cubic B-spline), affects accuracy and calculation speed
+ * @param tolerance Calculation accuracy tolerance, used for parameter selection optimization
  * 
- * 使用场景：
- * - 在开始模拟前调用此函数进行初始设置
- * - 当模拟条件(如盒子大小、精度要求)变化时需重新配置
- * - 在每次新的蒙特卡洛模拟开始前设置
+ * Usage scenarios:
+ * - Call this function for initial setup before starting simulation
+ * - Reconfigure when simulation conditions (e.g., box size, accuracy requirements) change
+ * - Set before starting a new Monte Carlo simulation
  */
 void setPGPParameters(double alpha, const int meshSize[3], double potential_cutoff, 
                         const int potentialGridSize[3], int splineOrder, double tolerance);
 
 /**
- * @brief 预计算系统中固定部分的网格电势
+ * @brief Precompute the grid potential for the fixed part of the system
  * 
- * 这是Precomputed Grid-Potential Particle Mesh Ewald算法的核心函数之一，
- * 负责预计算系统中固定部分的静电势场。它将固定部分的电荷分布到网格上，
- * 通过FFT变换计算电势，并存储结果供后续能量计算使用。
- * 预计算步骤只需在系统固定部分发生变化时执行一次，大大提高了蒙特卡洛模拟的效率。
+ * This is one of the core functions of the Precomputed Grid-Potential Particle Mesh Ewald algorithm,
+ * responsible for precomputing the electrostatic potential field of the fixed part of the system. It distributes the
+ * charges of the fixed part onto a grid, calculates the potential through FFT transformation, and stores the results
+ * for subsequent energy calculations.
+ * The precomputation step only needs to be performed once when the fixed part of the system changes, greatly
+ * improving the efficiency of Monte Carlo simulations.
  * 
- * 算法原理：
- * 1. 将固定部分的点电荷通过B样条插值分布到网格上
- * 2. 对电荷网格执行正向FFT变换到倒空间
- * 3. 在倒空间应用Ewald因子进行长程修正
- * 4. 执行反向FFT获得实空间中的电势分布
- * 5. 将结果存储在预计算的电势网格中
+ * Algorithm principles:
+ * 1. Distribute fixed part point charges onto a grid using B-spline interpolation
+ * 2. Perform forward FFT transformation of the charge grid into reciprocal space
+ * 3. Apply Ewald factors in reciprocal space for long-range corrections
+ * 4. Perform reverse FFT to obtain potential distribution in real space
+ * 5. Store the results in the precomputed potential grid
  * 
- * 计算复杂度：
- * - 电荷分配: O(N*p^3)，其中N为原子数，p为B样条阶数
- * - FFT: O(M*log(M))，其中M为网格点总数(nx*ny*nz)
- * - 应用Ewald因子: O(M)
+ * Computational complexity:
+ * - Charge assignment: O(N*p^3), where N is the number of atoms, p is the B-spline order
+ * - FFT: O(M*log(M)), where M is the total number of grid points (nx*ny*nz)
+ * - Applying Ewald factors: O(M)
  * 
- * @param state 系统状态，包含原子坐标、电荷和盒子信息
- * @param fixed_only 是否只处理系统中的固定部分(true)，还是处理所有部分(false)
+ * @param state System state, containing atom coordinates, charges, and box information
+ * @param fixed_only Whether to process only the fixed part of the system (true), or all parts (false)
  * 
- * 使用场景：
- * - 系统初始化时预计算固定部分电势
- * - 在GCMC模拟中，固定部分(如蛋白质)的电势场可预先计算
- * - 当固定部分构型变化时，需要重新调用此函数更新电势场
+ * Usage scenarios:
+ * - System initialization for precomputing fixed part potential
+ * - In GCMC simulation, potential field of fixed part (e.g., protein) can be precomputed
+ * - Need to re-call this function to update potential field when fixed part configuration changes
  */
 void precomputeGridPotential(model::MCState& state, bool fixed_only = true);
 
 /**
- * @brief 通过插值计算移动分子的能量
+ * @brief Calculate the energy of moving molecules by interpolation
  * 
- * 该函数是Precomputed Grid-Potential Particle Mesh Ewald算法的另一个核心函数，
- * 用于在预计算的电势场中快速评估移动分子的能量。利用预计算的电势网格，
- * 通过B样条插值方法高效计算移动分子在该电势场中的能量，避免了直接计算分子间相互作用，
- * 大大加速了蒙特卡洛模拟中的能量评估。
+ * This function is another core function of the Precomputed Grid-Potential Particle Mesh Ewald algorithm,
+ * used to rapidly evaluate the energy of moving molecules in the precomputed potential field. Using the precomputed
+ * potential grid, it efficiently calculates the energy of moving molecules in this potential field through B-spline
+ * interpolation methods, avoiding direct calculation of intermolecular interactions, greatly accelerating energy
+ * evaluation in Monte Carlo simulations.
  * 
- * 算法原理：
- * 1. 遍历所有标记为移动的残基和原子
- * 2. 对每个带电原子，通过B样条插值从预计算的电势网格获取其位置的电势值
- * 3. 将电势值乘以原子电荷并累加得到总能量
+ * Algorithm principles:
+ * 1. Iterate through all residues and atoms marked as moving
+ * 2. For each charged atom, obtain the potential value at its position through B-spline interpolation from the precomputed potential grid
+ * 3. Multiply the potential value by the atom charge and accumulate to get the total energy
  * 
- * 计算复杂度：
- * - O(M*p^3)，其中M为移动原子数，p为B样条阶数
- * - 相比传统方法O(M*N)大幅降低，N为固定原子数(通常N >> M)
+ * Computational complexity:
+ * - O(M*p^3), where M is the number of moving atoms, p is the B-spline order
+ * - Significantly reduced compared to traditional method O(M*N), where N is the number of fixed atoms (typically N >> M)
  * 
- * @param state 系统状态，包含移动分子的信息及预计算的电势网格
- * @param energy 输出参数，存储计算得到的能量值
+ * @param state System state, containing information about moving molecules and the precomputed potential grid
+ * @param energy Output parameter, stores calculated energy value
  * 
- * 使用场景：
- * - GCMC模拟中分子插入/删除的能量评估
- * - CBMC模拟中不同构型的能量比较
- * - MC移动试探中评估新构型的能量变化
+ * Usage scenarios:
+ * - GCMC simulation for energy evaluation of molecule insertion/deletion
+ * - CBMC simulation for energy comparison of different configurations
+ * - MC move trial for energy change evaluation of new configuration
  */
 void interpolateMoleculeEnergy(model::MCState& state, double& energy);
 
 /**
- * @brief 通过插值计算移动分子的能量，并返回计算结果
+ * @brief Calculate the energy of moving molecules by interpolation and return the result
  * 
- * 这是interpolateMoleculeEnergy的包装函数，直接返回计算得到的能量值，
- * 方便Python调用和测试。该函数内部创建能量变量并调用原始的interpolateMoleculeEnergy函数。
+ * This is a wrapper function for interpolateMoleculeEnergy that directly returns the calculated energy value,
+ * facilitating Python calling and testing. This function internally creates an energy variable and calls the original interpolateMoleculeEnergy function.
  * 
- * @param state 系统状态，包含移动分子的信息及预计算的电势网格
- * @return 计算得到的能量值
+ * @param state System state, containing information about moving molecules and the precomputed potential grid
+ * @return Calculated energy value
  */
 double calculateMoleculeEnergy(model::MCState& state);
 

@@ -33,7 +33,7 @@ const double PI2 = 6.28318530717958647692;
 
 // In C++, we use std::complex<double> instead of C's complex type
 using cmplx = std::complex<double>;
-}  // 结束匿名命名空间
+}  // End of anonymous namespace
 
 namespace pygcmc {
 namespace platform {
@@ -45,8 +45,8 @@ PMEParams pme_params;
 // Add FFT related member variables
 std::vector<std::complex<double>> fft_weights;
 
-// FFT网格数据备份，用于调试模式下比较前后FFT结果差异
-// 注意：只在调试模式下使用，通过platform::is_debug_mode()函数控制
+// FFT grid data backup, used for comparing FFT result differences in debug mode
+// Note: Only used in debug mode, controlled by the platform::is_debug_mode() function
 std::vector<std::complex<double>> fftGridBackup;
 
 namespace CustomFFT {
@@ -806,7 +806,7 @@ void spreadChargesOntoGrid(model::MCState& state, bool fixed_only) {
     // Log the start of processing
     platform::log(LogLevel::DEBUG, "Spreading charges onto PME grid", (fixed_only ? " (fixed only)" : ""));
     
-    // 只在debug_mode启用时执行以下代码
+    // Only execute the following code in debug_mode
     if (platform::is_debug_mode()) {
         platform::log(LogLevel::DEBUG, "Spreading charges onto PME grid", (fixed_only ? " (fixed only)" : ""));
         
@@ -1025,12 +1025,12 @@ void spreadChargesOntoGrid(model::MCState& state, bool fixed_only) {
     // Distribute charges to grid
     double totalGridCharge = 0.0;
     
-    // 统计变量，仅在debug模式下使用
+    // Statistics variables, only used in debug mode
     int nonZeroPoints = 0;
     int updatedPoints = 0;
     
     if (!platform::is_debug_mode()) {
-        nonZeroPoints = -1;  // 标记为非调试模式
+        nonZeroPoints = -1;  // Marked as non-debug mode
         updatedPoints = -1;
     }
     
@@ -1074,7 +1074,7 @@ void spreadChargesOntoGrid(model::MCState& state, bool fixed_only) {
                         // This only affects the real part, as chargeContribution is real
                         pme_params.pmeGrid[index] += chargeContribution;
                         
-                        // Update statistics - 仅在debug模式下执行
+                        // Update statistics - only execute in debug mode
                         if (platform::is_debug_mode()) {
                             totalGridCharge += chargeContribution;
                             if (std::abs(chargeContribution) > 1e-10) {
@@ -1089,7 +1089,7 @@ void spreadChargesOntoGrid(model::MCState& state, bool fixed_only) {
                                 }
                             }
                         } else {
-                            totalGridCharge += chargeContribution; // 总电荷仍需计算
+                            totalGridCharge += chargeContribution; // Total charge still needs to be calculated
                         }
                     }
                 }
@@ -1113,7 +1113,7 @@ void spreadChargesOntoGrid(model::MCState& state, bool fixed_only) {
                     + " atoms processed, total grid charge = " + std::to_string(totalGridCharge)
                     + ", non-zero grid points = " + std::to_string(nonZeroPoints));
     } else {
-        // 非调试模式下仅输出基本信息
+        // In non-debug mode, only output basic information
         platform::log(LogLevel::INFO, "Charge spreading complete: ", state.activeAtomCount, 
                     " atoms processed, total grid charge = ", totalGridCharge);
     }
@@ -1339,9 +1339,9 @@ void performFFTForward() {
     // Console output - same as pme.cpp
     platform::log(LogLevel::DEBUG, "Performing forward FFT on PME grid");
     
-    // 为了调试备份数据，仅在debug模式下执行
+    // For debugging backup data, only execute in debug mode
     if (platform::is_debug_mode()) {
-        // 在debug模式下备份网格数据用于比较
+        // In debug mode, backup grid data for comparison
         fftGridBackup.resize(pme_params.pmeGrid.size());
         std::copy(pme_params.pmeGrid.begin(), pme_params.pmeGrid.end(), fftGridBackup.begin());
     }
@@ -1364,7 +1364,7 @@ void performFFTForward() {
     // Use custom FFT implementation
     CustomFFT::fft3D_forward(pme_params.pmeGrid.data(), nx, ny, nz);
     
-    // 非零点计数 - 仅在debug模式下进行详细计数
+    // Non-zero point counting - only perform detailed counting in debug mode
     if (platform::is_debug_mode()) {
         // Calculate non-zero points after FFT
         int nonZeroAfterFFT = 0;
@@ -1511,7 +1511,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
         recipBoxVectors[2][2] = (periodicBoxVectors[0][0] * periodicBoxVectors[1][1] - periodicBoxVectors[0][1] * periodicBoxVectors[1][0]) / det;
     }
     
-    // 声明计数变量
+    // Declare counting variables
     int nonZeroGridBefore = 0;
     
     // Output reciprocal lattice vectors
@@ -1533,7 +1533,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
         platform::log(LogLevel::DEBUG, "Grid before energy calculation: non-zero points = " + std::to_string(nonZeroGridBefore));
     }
     
-    // 只在debug_mode启用时执行以下代码
+    // Only execute the following code in debug_mode
     if (platform::is_debug_mode()) {
         platform::log(LogLevel::DEBUG, "Computing energy from grid with box = [" + std::to_string(box[0]) + "," +
                     std::to_string(box[1]) + "," + std::to_string(box[2]) + "]");
@@ -1547,12 +1547,12 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
     // Initialize energy and point counters
     energy = 0.0;
     
-    // 统计计数器，仅在debug模式下使用
+    // Statistics counters, only used in debug mode
     int pointsProcessed = 0;
     int significantPoints = 0;
     
     if (!platform::is_debug_mode()) {
-        pointsProcessed = -1; // 标记为非调试模式，避免无效计数
+        pointsProcessed = -1; // Marked as non-debug mode, avoid invalid counting
         significantPoints = -1;
     }
     
@@ -1560,7 +1560,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
     int maxky = (ny+1)/2;
     int maxkz = (nz+1)/2;
     
-    // 定义监控点数据结构
+    // Define monitoring point data structure
     struct GridPointData {
         int kx, ky, kz;
         double mx, my, mz;
@@ -1576,12 +1576,12 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
         bool isSignificant;
     };
     
-    // 监控点数据和收集变量，仅在debug模式下使用
+    // Monitoring point data and collection variables, only used in debug mode
     std::vector<GridPointData> monitoredPoints;
     std::vector<GridPointData> significantEnergyPoints;
     std::set<std::tuple<int,int,int>> monitorIndices;
     
-    // 仅在debug模式下初始化监控点数据
+    // Only initialize monitoring point data in debug mode
     if (platform::is_debug_mode()) {
         // Monitor specific points
         monitorIndices = {
@@ -1641,7 +1641,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                 double struct2 = d1*d1 + d2*d2;
                 double energyContrib = eterm * struct2;
                 
-                // Build monitoring point data - 仅在debug模式下执行
+                // Build monitoring point data - only execute in debug mode
                 if (platform::is_debug_mode()) {
                     GridPointData pointData;
                     pointData.kx = kx;
@@ -1664,18 +1664,18 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                     pointData.energyContrib = energyContrib;
                     pointData.isSignificant = (energyContrib > 1e-4);
                     
-                    // 检查是否为监控点
+                    // Check if this is a monitored point
                     bool isMonitorPoint = (monitorIndices.find(std::make_tuple(kx, ky, kz)) != monitorIndices.end());
                     if (isMonitorPoint) {
                         monitoredPoints.push_back(pointData);
                     }
                     
-                    // 收集能量贡献显著的点
+                    // Collect points with significant energy contributions
                     if (pointData.isSignificant) {
                         significantEnergyPoints.push_back(pointData);
                     }
                     
-                    // 特殊输出点[5,5,5] - 保持与pme.cpp一致的格式
+                    // Special output for point [5,5,5] - maintain format consistent with pme.cpp
                     if (kx == 5 && ky == 5 && kz == 5) {
                         platform::log(LogLevel::DEBUG, "Grid point[" + std::to_string(kx) + "," + std::to_string(ky) + "," + std::to_string(kz) + "] before processing:");
                         platform::log(LogLevel::DEBUG, "  Grid index = " + std::to_string(index));
@@ -1698,7 +1698,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                 std::complex<double> updatedValue(d1 * eterm, d2 * eterm);
                 pme_params.pmeGrid[index] = updatedValue;
                 
-                // 更新的网格值输出 - 仅在debug模式下执行
+                // Output updated grid values - only execute in debug mode
                 if (platform::is_debug_mode() && kx == 5 && ky == 5 && kz == 5) {
                     platform::log(LogLevel::DEBUG, "  Updated grid value = " + std::to_string(updatedValue.real()) + " + " + std::to_string(updatedValue.imag()) + "i");
                     platform::log(LogLevel::DEBUG, "  struct2 = " + std::to_string(struct2));
@@ -1708,7 +1708,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                     platform::log(LogLevel::DEBUG, "");
                 }
                 
-                // 保存更新的值到监控点数据 - 仅在debug模式下执行
+                // Save updated values to monitoring point data - only execute in debug mode
                 if (platform::is_debug_mode() && (monitorIndices.find(std::make_tuple(kx, ky, kz)) != monitorIndices.end())) {
                     for (auto& point : monitoredPoints) {
                         if (point.kx == kx && point.ky == ky && point.kz == kz) {
@@ -1721,7 +1721,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                 // Accumulate energy
                 energy += energyContrib;
                 
-                // 仅在debug模式下进行计数统计
+                // Only perform count statistics in debug mode
                 if (platform::is_debug_mode()) {
                     pointsProcessed++;
                     
@@ -1772,7 +1772,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
         }
     }
     
-    // 只在debug_mode模式下输出详细统计信息
+    // Only output detailed statistics in debug_mode
     if (platform::is_debug_mode()) {
         // Add reciprocal space energy results title and format consistent with pme.cpp
         platform::log(LogLevel::DEBUG, "\n===== [energyPME.cpp] Reciprocal Space Energy Calculation Results =====");
@@ -2121,7 +2121,7 @@ void performFFTBackward() {
         }
         platform::log(LogLevel::DEBUG, "Grid before backward FFT: non-zero points = " + std::to_string(nonZeroBeforeFFT));
         
-        // 使用备份数据进行比较
+        // Use backup data for comparison
         if (!fftGridBackup.empty() && fftGridBackup.size() == pme_params.pmeGrid.size()) {
             platform::log(LogLevel::DEBUG, "Comparing current grid with backup grid from forward FFT");
             double maxDiff = 0.0;
