@@ -1,4 +1,5 @@
 // src/platform/cpu/energyDirect.cpp
+
 #include "energyDirect.hpp"
 #include <cmath>
 #include <stdexcept>

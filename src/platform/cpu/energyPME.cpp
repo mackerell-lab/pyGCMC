@@ -1,3 +1,5 @@
+// src/platform/cpu/energyPME.cpp
+
 #include "energyPME.hpp"
 #include "platform/platform.hpp"
 #include "model/residue.hpp"

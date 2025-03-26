@@ -1,3 +1,5 @@
+// src/platform/cpu/energyPGP.cpp
+
 #include "energyPGP.hpp"
 #include "energyPME.hpp"
 #include <cmath>
