@@ -30,7 +30,7 @@ float calculateSwitchingFunction(float r, const model::MCInfo& info);
  */
 template <typename T>
 T calculateBasicLJEnergy(T r2, T sigma, T eps) {
-    // Calculate LJ energy: V_LJ = 4ε[(σ/r)¹² - (σ/r)⁶]
+    // 使用与energyCommon.hpp中相同的实现方式
     T sigma_r2 = (sigma * sigma) / r2;  // (σ/r)²
     T sigma_r6 = sigma_r2 * sigma_r2 * sigma_r2;  // (σ/r)⁶
     T sigma_r12 = sigma_r6 * sigma_r6;  // (σ/r)¹²

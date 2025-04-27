@@ -54,14 +54,6 @@ inline void applyPBC(float& dx, float& dy, float& dz, const float box[3]) {
     else if(dz < -box[2]/2) dz += box[2];
 }
 
-// Calculate VDW energy (shared by both methods)
-inline double calculateVdwEnergy(double r2, double sigma, double eps) {
-    double sigma_r2 = (sigma * sigma) / r2;
-    double sigma_r6 = sigma_r2 * sigma_r2 * sigma_r2;
-    double sigma_r12 = sigma_r6 * sigma_r6;
-    return 4.0 * eps * (sigma_r12 - sigma_r6);
-}
-
 // Calculate CHARMM switching function S(r)
 inline float calculateSwitchingFunction(float r, const model::MCInfo& info) {
     if (!info.use_switching || r <= info.r_on) {
@@ -81,22 +73,6 @@ inline float calculateSwitchingFunction(float r, const model::MCInfo& info) {
     float denominator = (roff2 - ron2) * (roff2 - ron2) * (roff2 - ron2);
     
     return numerator / denominator;
-}
-
-// Calculate VDW energy with CHARMM switching function applied
-inline double calculateSwitchedVdwEnergy(double r2, double sigma, double eps, const model::MCInfo& info) {
-    float r = std::sqrt(r2);
-    
-    // Get the basic LJ energy
-    double energy = calculateVdwEnergy(r2, sigma, eps);
-    
-    // Apply switching function if enabled and necessary
-    if (info.use_switching) {
-        float switch_val = calculateSwitchingFunction(r, info);
-        energy *= switch_val;
-    }
-    
-    return energy;
 }
 
 // Configure CHARMM-style switching function
