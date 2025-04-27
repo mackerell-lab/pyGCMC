@@ -1,6 +1,7 @@
 // src/platform/cpu/energyPME.cpp
 
 #include "energyPME.hpp"
+#include "energyLJ.hpp"  // 添加对LJ计算模块的引用
 #include "platform/platform.hpp"
 #include "model/residue.hpp"
 #include <algorithm>
@@ -10,6 +11,9 @@
 #include <chrono>
 #include <set>
 #include <tuple>
+#include <vector>
+#include <iostream>
+#include <iomanip>
 
 // Optional: Include library for FFT if needed
 // #include <fftw3.h>
@@ -721,20 +725,19 @@ std::pair<double, double> calcPairEnergyPME(
     double lj_energy = 0.0;
     double elec_energy = 0.0;
     
-    // LJ energy calculation - same as Ewald
-    if (r2 < info.cutoff * info.cutoff) {
-        double inv_r2 = 1.0 / r2;
-        double inv_r6 = inv_r2 * inv_r2 * inv_r2;
-        double inv_r12 = inv_r6 * inv_r6;
-        double sigma6 = sigma * sigma * sigma * sigma * sigma * sigma;
-        double sigma12 = sigma6 * sigma6;
-        lj_energy = 4.0 * eps * (sigma12 * inv_r12 - sigma6 * inv_r6);
-    }
+    // LJ energy calculation - 使用统一的calculateLJEnergy接口
+    lj_energy = calculateLJEnergy(r2, sigma, eps, info);
     
     // Electrostatic energy - use PME approximation
     if (!is_excluded && r < pme_params.cutoff) {
-        // Real-space contribution for PME
-        elec_energy = q1 * q2 * pme_params.ewaldScaleApprox(r);
+        // Normal pairs get erfc(αr)/r
+        double erfc_term = pme_params.erfcApprox(r) / r;
+        elec_energy = q1 * q2 * erfc_term;
+    } else if (is_excluded) {
+        // For excluded pairs, we need to subtract erf(αr)/r to compensate for reciprocal space
+        double erfc_term = pme_params.erfcApprox(r);
+        double erf_term = 1.0 - erfc_term;  // erf(x) = 1 - erfc(x)
+        elec_energy = -COULOMB * q1 * q2 * erf_term / r;  // Note the negative sign
     }
     
     return {lj_energy, elec_energy};
