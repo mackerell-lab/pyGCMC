@@ -1,6 +1,7 @@
 // src/platform/cpu/energyDirect.cpp
 
 #include "energyDirect.hpp"
+#include "energyLJ.hpp"  // 添加对新文件的引用
 #include <cmath>
 #include <stdexcept>
 #include <sstream>
@@ -33,55 +34,13 @@ inline std::pair<float, float> calcPairEnergy(
         platform::log(LogLevel::DEBUG, ss.str());
     }
 
-    // Apply minimum safe distance for numerical stability
-    if (r2 < MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE) {
-        if (getEnergyDebugOutput()) {
-            platform::log(LogLevel::DEBUG, "Distance below MIN_SAFE_DISTANCE, using r2 = ", 
-                         MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE);
-        }
-        r2 = MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE;
-    }
+    // 使用新的LJ能量计算函数替换原来的代码
+    float vdw_energy = calculateLJEnergy(r2, sigma, eps, info, MIN_SAFE_DISTANCE, MAX_SAFE_ENERGY);
     
     float r = std::sqrt(r2);
     
     if (getEnergyDebugOutput()) {
         platform::log(LogLevel::DEBUG, "Distance r = ", r, " nm");
-    }
-    
-    // Calculate LJ energy: V_LJ = 4ε[(σ/r)¹² - (σ/r)⁶]
-    float sigma_r2 = (sigma * sigma) / r2;  // (σ/r)²
-    float sigma_r6 = sigma_r2 * sigma_r2 * sigma_r2;  // (σ/r)⁶
-    float sigma_r12 = sigma_r6 * sigma_r6;  // (σ/r)¹²
-    float vdw_energy = 4.0f * eps * (sigma_r12 - sigma_r6);  // kJ/mol
-    
-    // Apply CHARMM switching function to LJ energy if enabled
-    if (info.use_switching) {
-        // Apply switching if distance is between r_on and r_off
-        if (r > info.r_on && r < info.r_off) {
-            float switch_val = calculateSwitchingFunction(r, info);
-            vdw_energy *= switch_val;
-            
-            if (getEnergyDebugOutput()) {
-                std::stringstream ss;
-                ss << std::fixed << std::setprecision(6);
-                ss << "\nCHARMM switching function applied:";
-                ss << "\n  r = " << r << " nm (between r_on=" << info.r_on 
-                   << " and r_off=" << info.r_off << ")";
-                ss << "\n  switching function value = " << switch_val;
-                ss << "\n  original VDW energy = " << (4.0f * eps * (sigma_r12 - sigma_r6)) << " kJ/mol";
-                ss << "\n  scaled VDW energy = " << vdw_energy << " kJ/mol";
-                platform::log(LogLevel::DEBUG, ss.str());
-            }
-        } else if (r >= info.r_off) {
-            // Beyond outer cutoff radius, set to zero
-            vdw_energy = 0.0f;
-            
-            if (getEnergyDebugOutput()) {
-                platform::log(LogLevel::DEBUG, "Distance r = ", r, 
-                             " nm is beyond r_off = ", info.r_off, 
-                             " nm, setting VDW energy to zero");
-            }
-        }
     }
     
     // Calculate Coulomb energy only if requested
@@ -94,11 +53,6 @@ inline std::pair<float, float> calcPairEnergy(
         std::stringstream ss;
         ss << std::fixed << std::setprecision(6);
         ss << "\nEnergy calculation details:";
-        ss << "\n  (sigma/r)² = " << sigma_r2;
-        ss << "\n  (sigma/r)⁶ = " << sigma_r6;
-        ss << "\n  (sigma/r)¹² = " << sigma_r12;
-        ss << "\n  4*epsilon = " << (4.0f * eps);
-        ss << "\n  VDW term = " << (sigma_r12 - sigma_r6);
         ss << "\n  COULOMB constant = " << COULOMB;
         ss << "\n  q1*q2 = " << (q1 * q2);
         ss << "\nInitial energies:";
@@ -116,8 +70,7 @@ inline std::pair<float, float> calcPairEnergy(
         platform::log(LogLevel::DEBUG, ss.str());
     }
     
-    vdw_energy = std::min(vdw_energy, MAX_SAFE_ENERGY);
-    vdw_energy = std::max(vdw_energy, -MAX_SAFE_ENERGY);
+    // LJ能量已经在calculateLJEnergy中处理过限制，这里只需要处理elec_energy
     elec_energy = std::min(elec_energy, MAX_SAFE_ENERGY);
     elec_energy = std::max(elec_energy, -MAX_SAFE_ENERGY);
     

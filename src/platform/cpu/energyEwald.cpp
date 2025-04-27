@@ -1,6 +1,7 @@
 // src/platform/cpu/energyEwald.cpp
 
 #include "energyEwald.hpp"
+#include "energyLJ.hpp"  // 添加对新文件的引用
 #include <cmath>
 #include <stdexcept>
 #include <sstream>
@@ -139,45 +140,15 @@ inline std::pair<double, double> calcPairEnergyEwald(
     const model::MCInfo& info,
     bool is_excluded)
 {    
+    // 使用新的LJ能量计算函数
+    double vdw_energy = calculateLJEnergy(r2, sigma, eps, info, MIN_SAFE_DISTANCE, MAX_SAFE_ENERGY);
+    
     // Apply minimum safe distance
     if (r2 < MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE) {
         r2 = MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE;
     }
     
     double r = std::sqrt(r2);
-    
-    // VDW energy calculation remains unchanged
-    double sigma_r2 = (sigma * sigma) / r2;
-    double sigma_r6 = sigma_r2 * sigma_r2 * sigma_r2;
-    double sigma_r12 = sigma_r6 * sigma_r6;
-    double vdw_energy = 4.0 * eps * (sigma_r12 - sigma_r6);
-    
-    // Apply CHARMM switching function to VDW energy if enabled
-    if (info.use_switching) {
-        double r_float = static_cast<float>(r); // Convert to float for switching function
-        
-        // Apply switching if distance is between r_on and r_off
-        if (r_float > info.r_on && r_float < info.r_off) {
-            float switch_val = calculateSwitchingFunction(r_float, info);
-            vdw_energy *= switch_val;
-            
-            if (energy_debug_output) {
-                platform::log(LogLevel::DEBUG, 
-                    "Ewald VDW switching applied: r=", r_float, 
-                    " nm, switch=", switch_val, 
-                    ", scaled energy=", vdw_energy);
-            }
-        } else if (r_float >= info.r_off) {
-            // Beyond outer cutoff radius, set to zero
-            vdw_energy = 0.0;
-            
-            if (energy_debug_output) {
-                platform::log(LogLevel::DEBUG, 
-                    "Ewald VDW zero: r=", r_float, 
-                    " nm beyond r_off=", info.r_off);
-            }
-        }
-    }
     
     // For excluded pairs, we need to subtract erf(αr)/r to compensate for reciprocal space
     // For normal pairs, we compute erfc(αr)/r as usual
@@ -196,7 +167,6 @@ inline std::pair<double, double> calcPairEnergyEwald(
     
     // Apply energy limits
     const double max_safe_energy = static_cast<double>(MAX_SAFE_ENERGY);
-    vdw_energy = std::min(std::max(vdw_energy, -max_safe_energy), max_safe_energy);
     elec_energy = std::min(std::max(elec_energy, -max_safe_energy), max_safe_energy);
     
     return {vdw_energy, elec_energy};
