@@ -45,6 +45,12 @@ void computeMovementEnergyDirect(model::MCState& state, bool use_cutoff, bool us
  */
 void computeSystemVdwEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc);
 
+// 修改函数声明，将float改为double
+std::pair<double, double> calcPairEnergy(
+    double r2, double sigma, double eps, double q1, double q2, 
+    const model::MCInfo& info,
+    bool calc_coulomb = true);
+
 // Functions retained for compatibility with old interfaces
 void computeMovementEnergy(model::MCState& state);
 void computeMovementEnergyCutoff(model::MCState& state);

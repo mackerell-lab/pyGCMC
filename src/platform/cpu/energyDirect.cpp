@@ -17,10 +17,10 @@ namespace cpu {
 /**
  * @brief Calculate LJ and Coulomb energy with safety checks
  */
-inline std::pair<float, float> calcPairEnergy(
-    float r2, float sigma, float eps, float q1, float q2, 
+std::pair<double, double> calcPairEnergy(
+    double r2, double sigma, double eps, double q1, double q2, 
     const model::MCInfo& info,
-    bool calc_coulomb = true) {
+    bool calc_coulomb) {
     if (getEnergyDebugOutput()) {
         std::stringstream ss;
         ss << std::fixed << std::setprecision(6);
@@ -35,16 +35,16 @@ inline std::pair<float, float> calcPairEnergy(
     }
 
     // 使用新的LJ能量计算函数替换原来的代码
-    float vdw_energy = calculateLJEnergy(r2, sigma, eps, info, MIN_SAFE_DISTANCE, MAX_SAFE_ENERGY);
+    double vdw_energy = calculateLJEnergy(r2, sigma, eps, info, MIN_SAFE_DISTANCE, MAX_SAFE_ENERGY);
     
-    float r = std::sqrt(r2);
+    double r = std::sqrt(r2);
     
     if (getEnergyDebugOutput()) {
         platform::log(LogLevel::DEBUG, "Distance r = ", r, " nm");
     }
     
     // Calculate Coulomb energy only if requested
-    float elec_energy = 0.0f;
+    double elec_energy = 0.0;
     if (calc_coulomb) {
         elec_energy = COULOMB * q1 * q2 / r;  // kJ/mol
     }
@@ -71,8 +71,8 @@ inline std::pair<float, float> calcPairEnergy(
     }
     
     // LJ能量已经在calculateLJEnergy中处理过限制，这里只需要处理elec_energy
-    elec_energy = std::min(elec_energy, MAX_SAFE_ENERGY);
-    elec_energy = std::max(elec_energy, -MAX_SAFE_ENERGY);
+    elec_energy = std::min(elec_energy, static_cast<double>(MAX_SAFE_ENERGY));
+    elec_energy = std::max(elec_energy, -static_cast<double>(MAX_SAFE_ENERGY));
     
     if (getEnergyDebugOutput() && (std::abs(vdw_energy) > MAX_SAFE_ENERGY || std::abs(elec_energy) > MAX_SAFE_ENERGY)) {
         std::stringstream ss;
@@ -83,10 +83,11 @@ inline std::pair<float, float> calcPairEnergy(
     }
     
     // Cap total energy
-    float total_energy = vdw_energy + elec_energy;
-    float original_total = total_energy;
-    if (total_energy > MAX_SAFE_ENERGY) {
-        float scale = MAX_SAFE_ENERGY / total_energy;
+    double total_energy = vdw_energy + elec_energy;
+    double original_total = total_energy;
+    double max_safe = static_cast<double>(MAX_SAFE_ENERGY);
+    if (total_energy > max_safe) {
+        double scale = max_safe / total_energy;
         vdw_energy *= scale;
         elec_energy *= scale;
         if (getEnergyDebugOutput()) {
@@ -99,8 +100,8 @@ inline std::pair<float, float> calcPairEnergy(
             ss << "\n  Final total = " << (vdw_energy + elec_energy) << " kJ/mol";
             platform::log(LogLevel::DEBUG, ss.str());
         }
-    } else if (total_energy < -MAX_SAFE_ENERGY) {
-        float scale = -MAX_SAFE_ENERGY / total_energy;
+    } else if (total_energy < -max_safe) {
+        double scale = -max_safe / total_energy;
         vdw_energy *= scale;
         elec_energy *= scale;
         if (getEnergyDebugOutput()) {
@@ -143,7 +144,7 @@ inline void computeResidueNonbondedEnergy(
     const auto& box = state.info.box;  // Box dimensions for PBC
     
     // Calculate squared cutoff distance if using cutoff
-    const float cutoff2 = use_cutoff ? state.info.cutoff * state.info.cutoff : std::numeric_limits<float>::max();
+    const double cutoff2 = use_cutoff ? state.info.cutoff * state.info.cutoff : std::numeric_limits<double>::max();
     
     // Return if residue is not active
     if (!residues[residue_idx].active) {
@@ -189,9 +190,9 @@ inline void computeResidueNonbondedEnergy(
                 }
                 
                 // Calculate interatomic distance with PBC if enabled
-                float dx = atoms[atom_j].x - atoms[atom_i].x;
-                float dy = atoms[atom_j].y - atoms[atom_i].y;
-                float dz = atoms[atom_j].z - atoms[atom_i].z;
+                double dx = atoms[atom_j].x - atoms[atom_i].x;
+                double dy = atoms[atom_j].y - atoms[atom_i].y;
+                double dz = atoms[atom_j].z - atoms[atom_i].z;
                 
                 // Apply minimum image convention if PBC is enabled
                 if (use_pbc) {
@@ -217,24 +218,24 @@ inline void computeResidueNonbondedEnergy(
                     }
                 }
                 
-                float r2 = dx*dx + dy*dy + dz*dz;
+                double r2 = dx*dx + dy*dy + dz*dz;
                 
                 // Skip if beyond cutoff distance
                 if (r2 > cutoff2) continue;
                 
                 // Get force field parameters
                 int param_index = type_i * forcefield.numTotalTypes + type_j;
-                float eps = forcefield.ljEps[param_index];
-                float sigma = forcefield.ljSigma[param_index];
-                float q1 = atoms[atom_i].charge;
-                float q2 = atoms[atom_j].charge;
+                double eps = forcefield.ljEps[param_index];
+                double sigma = forcefield.ljSigma[param_index];
+                double q1 = atoms[atom_i].charge;
+                double q2 = atoms[atom_j].charge;
                 
                 // Calculate pair energy
                 auto [vdw, elec] = calcPairEnergy(r2, sigma, eps, q1, q2, state.info, true);
                 
                 // Add energy components to current residue
-                residues[residue_idx].energy_vdw += vdw;
-                residues[residue_idx].energy_elec += elec;
+                residues[residue_idx].energy_vdw += static_cast<float>(vdw);
+                residues[residue_idx].energy_elec += static_cast<float>(elec);
             }
         }
     }
