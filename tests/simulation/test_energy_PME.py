@@ -1944,6 +1944,94 @@ def test_ewald_vs_pme_comparison():
     
     print("test_ewald_vs_pme_comparison completed successfully")
 
+def test_pme_lj_energy():
+    """
+    Test that LJ/VDW energy is correctly computed in PME method
+    
+    This test verifies that when using the PME method, the LJ/VDW energy
+    is correctly calculated, and matches results from direct calculation.
+    """
+    # Create a basic system with known LJ parameters
+    box_size = 4.0
+    n_cells = 2
+    state = create_nacl_crystal(box_size, n_cells)
+    
+    # Use specific LJ parameters to make the test more sensitive
+    # Modify force field to ensure LJ contribution is significant
+    ff = state.forcefield
+    
+    # Set stronger LJ parameters
+    sigma_na = 0.4  # nm
+    sigma_cl = 0.5  # nm
+    eps_na = 0.5    # kJ/mol - increased to make LJ energy more significant
+    eps_cl = 0.8    # kJ/mol - increased to make LJ energy more significant
+    
+    # Update force field parameters
+    ff.ljSigma = [
+        sigma_na, (sigma_na + sigma_cl)/2.0,
+        (sigma_na + sigma_cl)/2.0, sigma_cl
+    ]
+    ff.ljEps = [
+        eps_na, math.sqrt(eps_na * eps_cl),
+        math.sqrt(eps_na * eps_cl), eps_cl
+    ]
+    
+    state.forcefield = ff
+    
+    box = [box_size, box_size, box_size]
+    cutoff = box_size / 2.0
+    alpha = 0.3
+    mesh_size = [32, 32, 32]
+    spline_order = 4
+    
+    print("\nTesting PME LJ energy calculation")
+    
+    # First, calculate using direct method (reference)
+    # Reset energies
+    for res in state.residues:
+        res.energy_vdw = 0.0
+        res.energy_elec = 0.0
+    
+    # 使用computeSystemEnergyPBCCutoff计算参考VDW能量
+    # 这个函数会同时计算静电能和VDW能，但我们只关注VDW部分
+    pygcmc.computeSystemEnergyPBCCutoff(state)
+    direct_vdw = sum(res.energy_vdw for res in state.residues if res.active)
+    
+    print(f"Direct VDW energy: {direct_vdw:.6f} kJ/mol")
+    
+    # Reset energies
+    for res in state.residues:
+        res.energy_vdw = 0.0
+        res.energy_elec = 0.0
+    
+    # Calculate using PME method
+    pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
+    pygcmc.initializePMEParameters(cutoff, box, alpha, mesh_size, spline_order)
+    
+    pme_elec, pme_vdw, pme_dict = pygcmc.computeSystemEnergyPME(state)
+    
+    # Extract VDW energy
+    pme_vdw_from_residues = sum(res.energy_vdw for res in state.residues if res.active)
+    
+    print(f"PME VDW energy: {pme_vdw:.6f} kJ/mol")
+    print(f"PME VDW from residues: {pme_vdw_from_residues:.6f} kJ/mol")
+    
+    # Compare VDW energies - these should be very close since both use the
+    # same computational approach for LJ interactions
+    rel_diff = abs(direct_vdw - pme_vdw_from_residues) / (abs(direct_vdw) + 1e-10)
+    print(f"Relative difference in VDW energy: {rel_diff:.6f}")
+    
+    # The energies should be nearly identical
+    # 使用宽松的标准，因为PME和直接计算可能有微小差异
+    assert rel_diff < 0.01, "VDW energies from direct and PME methods differ significantly"
+    
+    # Additional test: ensure VDW energy is a significant component
+    vdw_fraction = abs(pme_vdw) / (abs(pme_elec) + abs(pme_vdw) + 1e-10)
+    print(f"VDW energy fraction: {vdw_fraction:.2%}")
+    
+    # With our stronger LJ parameters, VDW should be significant
+    assert vdw_fraction > 0.05, "VDW energy is too small a fraction of total energy"
+
 if __name__ == "__main__":
     test_pme_initialization()
     test_pme_vs_ewald()
@@ -1959,3 +2047,4 @@ if __name__ == "__main__":
     test_pme_parameters()
     test_cutoff_dependence()  # Add new test
     test_ewald_vs_pme_comparison()  # Add new test
+    test_pme_lj_energy()  # Add new test
