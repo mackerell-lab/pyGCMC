@@ -115,8 +115,8 @@ T calculateLJEnergy(
     T sigma, 
     T eps, 
     const model::MCInfo& info,
-    T min_safe_distance,
-    T max_safe_energy
+    T min_safe_distance = T(LJ_MIN_SAFE_DISTANCE),
+    T max_safe_energy = T(LJ_MAX_SAFE_ENERGY)
 ) {
     // 快速路径：如果不使用switching function，直接调用简化版本
     if (!info.use_switching) {
@@ -145,37 +145,6 @@ T calculateLJEnergy(
     vdw_energy = capLJEnergy(vdw_energy, max_safe_energy);
     
     return vdw_energy;
-}
-
-// 特化的函数重载，用于处理混合类型参数的情况 - 声明
-double calculateLJEnergy(
-    double r2, 
-    double sigma, 
-    double eps, 
-    const model::MCInfo& info,
-    float min_safe_distance,
-    float max_safe_energy
-);
-
-// 特化的函数重载，用于处理混合类型参数的情况 - 声明
-float calculateLJEnergy(
-    float r2, 
-    float sigma, 
-    float eps, 
-    const model::MCInfo& info,
-    double min_safe_distance,
-    double max_safe_energy
-);
-
-// 带默认参数的模板函数
-template <typename T>
-T calculateLJEnergy(
-    T r2, 
-    T sigma, 
-    T eps, 
-    const model::MCInfo& info
-) {
-    return calculateLJEnergy(r2, sigma, eps, info, T(LJ_MIN_SAFE_DISTANCE), T(LJ_MAX_SAFE_ENERGY));
 }
 
 } // namespace cpu

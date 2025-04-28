@@ -34,8 +34,8 @@ std::pair<double, double> calcPairEnergy(
         platform::log(LogLevel::DEBUG, ss.str());
     }
 
-    // 使用新的LJ能量计算函数替换原来的代码
-    double vdw_energy = calculateLJEnergy(r2, sigma, eps, info, MIN_SAFE_DISTANCE, MAX_SAFE_ENERGY);
+    // 使用模板函数，显式指定类型
+    double vdw_energy = calculateLJEnergy<double>(r2, sigma, eps, info, double(MIN_SAFE_DISTANCE), double(MAX_SAFE_ENERGY));
     
     double r = std::sqrt(r2);
     
@@ -85,8 +85,10 @@ std::pair<double, double> calcPairEnergy(
     // Cap total energy
     double total_energy = vdw_energy + elec_energy;
     double original_total = total_energy;
-    double max_safe = static_cast<double>(MAX_SAFE_ENERGY);
+    float max_safe = MAX_SAFE_ENERGY;  // 使用float而不转换为double
+    
     if (total_energy > max_safe) {
+        // 使用浮点版本的safe值，减少转换
         double scale = max_safe / total_energy;
         vdw_energy *= scale;
         elec_energy *= scale;
@@ -101,6 +103,7 @@ std::pair<double, double> calcPairEnergy(
             platform::log(LogLevel::DEBUG, ss.str());
         }
     } else if (total_energy < -max_safe) {
+        // 使用浮点版本的safe值，减少转换
         double scale = -max_safe / total_energy;
         vdw_energy *= scale;
         elec_energy *= scale;

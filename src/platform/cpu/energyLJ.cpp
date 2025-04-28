@@ -26,34 +26,6 @@ float calculateSwitchingFunction(float r, const model::MCInfo& info) {
     return numerator / denominator;
 }
 
-// 特化的函数重载，用于处理混合类型参数的情况 - 实现
-double calculateLJEnergy(
-    double r2, 
-    double sigma, 
-    double eps, 
-    const model::MCInfo& info,
-    float min_safe_distance,
-    float max_safe_energy
-) {
-    return calculateLJEnergy(r2, sigma, eps, info, 
-                           static_cast<double>(min_safe_distance), 
-                           static_cast<double>(max_safe_energy));
-}
-
-// 特化的函数重载，用于处理混合类型参数的情况 - 实现
-float calculateLJEnergy(
-    float r2, 
-    float sigma, 
-    float eps, 
-    const model::MCInfo& info,
-    double min_safe_distance,
-    double max_safe_energy
-) {
-    return calculateLJEnergy(r2, sigma, eps, info, 
-                           static_cast<float>(min_safe_distance), 
-                           static_cast<float>(max_safe_energy));
-}
-
 } // namespace cpu
 } // namespace platform
 } // namespace pygcmc 
