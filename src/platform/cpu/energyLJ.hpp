@@ -11,6 +11,10 @@ namespace pygcmc {
 namespace platform {
 namespace cpu {
 
+// LJ能量计算相关常量
+static const float LJ_MIN_SAFE_DISTANCE = 0.01f;  // 最小安全距离 (nm)
+static const float LJ_MAX_SAFE_ENERGY = 1e6f;     // 最大能量值 (kJ/mol)
+
 /**
  * @brief Calculate CHARMM switching function value
  * 
@@ -19,6 +23,31 @@ namespace cpu {
  * @return Switching function value (between 0 and 1)
  */
 float calculateSwitchingFunction(float r, const model::MCInfo& info);
+
+/**
+ * @brief 检查距离平方，确保不小于最小安全距离的平方
+ *
+ * @param r2 距离平方 (nm²)
+ * @param min_safe_distance 最小安全距离 (nm)
+ * @return 安全的距离平方 (nm²)
+ */
+template <typename T>
+T checkLJDistance(T r2, T min_safe_distance = LJ_MIN_SAFE_DISTANCE) {
+    const T min_r2 = min_safe_distance * min_safe_distance;
+    return (r2 < min_r2) ? min_r2 : r2;
+}
+
+/**
+ * @brief 限制LJ能量在安全范围内
+ * 
+ * @param energy LJ能量 (kJ/mol)
+ * @param max_safe_energy 最大安全能量 (kJ/mol)
+ * @return 限制后的LJ能量 (kJ/mol)
+ */
+template <typename T>
+T capLJEnergy(T energy, T max_safe_energy = LJ_MAX_SAFE_ENERGY) {
+    return std::min(std::max(energy, -max_safe_energy), max_safe_energy);
+}
 
 /**
  * @brief Calculate basic Lennard-Jones energy
@@ -54,20 +83,17 @@ T calculateLJEnergyNoSwitch(
     T r2, 
     T sigma, 
     T eps, 
-    T min_safe_distance = 0.01,
-    T max_safe_energy = 1e6
+    T min_safe_distance = LJ_MIN_SAFE_DISTANCE,
+    T max_safe_energy = LJ_MAX_SAFE_ENERGY
 ) {
     // Apply minimum safe distance for numerical stability
-    if (r2 < min_safe_distance * min_safe_distance) {
-        r2 = min_safe_distance * min_safe_distance;
-    }
+    r2 = checkLJDistance(r2, min_safe_distance);
     
     // Calculate basic LJ energy
     T vdw_energy = calculateBasicLJEnergy(r2, sigma, eps);
     
     // Apply energy capping for numerical stability
-    vdw_energy = std::min(vdw_energy, max_safe_energy);
-    vdw_energy = std::max(vdw_energy, -max_safe_energy);
+    vdw_energy = capLJEnergy(vdw_energy, max_safe_energy);
     
     return vdw_energy;
 }
@@ -98,9 +124,7 @@ T calculateLJEnergy(
     }
     
     // Apply minimum safe distance for numerical stability
-    if (r2 < min_safe_distance * min_safe_distance) {
-        r2 = min_safe_distance * min_safe_distance;
-    }
+    r2 = checkLJDistance(r2, min_safe_distance);
     
     T r = std::sqrt(r2);
     
@@ -118,39 +142,30 @@ T calculateLJEnergy(
     }
     
     // Apply energy capping for numerical stability
-    vdw_energy = std::min(vdw_energy, max_safe_energy);
-    vdw_energy = std::max(vdw_energy, -max_safe_energy);
+    vdw_energy = capLJEnergy(vdw_energy, max_safe_energy);
     
     return vdw_energy;
 }
 
-// 特化的函数重载，用于处理混合类型参数的情况
-inline double calculateLJEnergy(
+// 特化的函数重载，用于处理混合类型参数的情况 - 声明
+double calculateLJEnergy(
     double r2, 
     double sigma, 
     double eps, 
     const model::MCInfo& info,
     float min_safe_distance,
     float max_safe_energy
-) {
-    return calculateLJEnergy(r2, sigma, eps, info, 
-                           static_cast<double>(min_safe_distance), 
-                           static_cast<double>(max_safe_energy));
-}
+);
 
-// 特化的函数重载，用于处理混合类型参数的情况
-inline float calculateLJEnergy(
+// 特化的函数重载，用于处理混合类型参数的情况 - 声明
+float calculateLJEnergy(
     float r2, 
     float sigma, 
     float eps, 
     const model::MCInfo& info,
     double min_safe_distance,
     double max_safe_energy
-) {
-    return calculateLJEnergy(r2, sigma, eps, info, 
-                           static_cast<float>(min_safe_distance), 
-                           static_cast<float>(max_safe_energy));
-}
+);
 
 // 带默认参数的模板函数
 template <typename T>
@@ -160,7 +175,7 @@ T calculateLJEnergy(
     T eps, 
     const model::MCInfo& info
 ) {
-    return calculateLJEnergy(r2, sigma, eps, info, T(0.01), T(1e6));
+    return calculateLJEnergy(r2, sigma, eps, info, T(LJ_MIN_SAFE_DISTANCE), T(LJ_MAX_SAFE_ENERGY));
 }
 
 } // namespace cpu

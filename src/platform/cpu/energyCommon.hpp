@@ -54,26 +54,8 @@ inline void applyPBC(float& dx, float& dy, float& dz, const float box[3]) {
     else if(dz < -box[2]/2) dz += box[2];
 }
 
-// Calculate CHARMM switching function S(r)
-inline float calculateSwitchingFunction(float r, const model::MCInfo& info) {
-    if (!info.use_switching || r <= info.r_on) {
-        return 1.0f;  // No switching below r_on
-    }
-    if (r >= info.r_off) {
-        return 0.0f;  // Zero potential beyond r_off
-    }
-    
-    // Calculate CHARMM-style switching function
-    // S(r) = [(r_off^2 - r^2)^2 * (r_off^2 + 2r^2 - 3r_on^2)] / (r_off^2 - r_on^2)^3
-    float r2 = r * r;
-    float ron2 = info.r_on * info.r_on;
-    float roff2 = info.r_off * info.r_off;
-    
-    float numerator = (roff2 - r2) * (roff2 - r2) * (roff2 + 2.0f*r2 - 3.0f*ron2);
-    float denominator = (roff2 - ron2) * (roff2 - ron2) * (roff2 - ron2);
-    
-    return numerator / denominator;
-}
+// NOTE: calculateSwitchingFunction 函数已移至 energyLJ.hpp 和 energyLJ.cpp 中
+// 请使用 platform::cpu::calculateSwitchingFunction 函数
 
 // Configure CHARMM-style switching function
 void setSwitchingFunction(model::MCState& state, bool use_switching, float r_on, float r_off);
