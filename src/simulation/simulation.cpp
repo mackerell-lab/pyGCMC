@@ -211,25 +211,26 @@ void Simulation::computeMovementEnergyPME(model::MCState& state) {
 }
 
 // Implementation of PGP-related methods
-void Simulation::setPGPParameters(float alpha, const int meshSize[3], float pair_cutoff, 
-                                  const int pairGridSize[3], int splineOrder, float tolerance) {
+void Simulation::setPGPParameters(float alpha, const int meshSize[3], float potential_cutoff, 
+                               const int potentialGridSize[3], int splineOrder, float tolerance) {
     // Convert float parameters to double
     double alpha_d = static_cast<double>(alpha);
-    double pair_cutoff_d = static_cast<double>(pair_cutoff);
+    double potential_cutoff_d = static_cast<double>(potential_cutoff);
     double tolerance_d = static_cast<double>(tolerance);
     
-    // Call the platform implementation
-    platform::cpu::setPGPParameters(alpha_d, meshSize, pair_cutoff_d, pairGridSize, splineOrder, tolerance_d);
+    // Convert int arrays
+    int meshSize_d[3] = {meshSize[0], meshSize[1], meshSize[2]};
+    int potentialGridSize_d[3] = {potentialGridSize[0], potentialGridSize[1], potentialGridSize[2]};
     
-    log(LogLevel::INFO, "PGP parameters set: alpha=", alpha, 
-        ", meshSize=[", meshSize[0], ",", meshSize[1], ",", meshSize[2], "]",
-        ", pair_cutoff=", pair_cutoff,
-        ", pairGridSize=[", pairGridSize[0], ",", pairGridSize[1], ",", pairGridSize[2], "]",
-        ", splineOrder=", splineOrder,
-        ", tolerance=", tolerance);
+    // Call the CPU platform implementation
+    platform::cpu::setPGPParameters(alpha_d, meshSize_d, potential_cutoff_d, 
+                                 potentialGridSize_d, splineOrder, tolerance_d);
 }
 
 void Simulation::precomputeGridPotential(model::MCState& state, bool fixed_only) {
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Precomputing grid potential for PGP-PME: fixed_only=", fixed_only);
+    }
     platform::cpu::precomputeGridPotential(state, fixed_only);
 }
 
@@ -238,7 +239,24 @@ void Simulation::interpolateMoleculeEnergy(model::MCState& state, double& energy
 }
 
 double Simulation::calculateMoleculeEnergy(model::MCState& state) {
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Calculating molecule energy using PGP interpolation");
+    }
     return platform::cpu::calculateMoleculeEnergy(state);
+}
+
+void Simulation::computeSystemEnergyPGP(model::MCState& state) {
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing PGP energy for all active residues");
+    }
+    platform::cpu::computeSystemEnergyPGP(state);
+}
+
+void Simulation::computeMovementEnergyPGP(model::MCState& state) {
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing PGP energy for movement residues");
+    }
+    platform::cpu::computeMovementEnergyPGP(state);
 }
 
 } // namespace simulation

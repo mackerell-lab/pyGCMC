@@ -220,6 +220,24 @@ public:
      */
     static double calculateMoleculeEnergy(model::MCState& state);
 
+    /**
+     * @brief Use PGP method to calculate system energy
+     * 
+     * This function calculates energy for the entire system using the PGP-PME method.
+     * 
+     * @param state MC state
+     */
+    static void computeSystemEnergyPGP(model::MCState& state);
+
+    /**
+     * @brief Use PGP method to calculate energy of moving residues
+     * 
+     * This function calculates energy for just the moving residues using the PGP-PME method.
+     * 
+     * @param state MC state
+     */
+    static void computeMovementEnergyPGP(model::MCState& state);
+
 private:
     std::unique_ptr<platform::IPlatform> platform_;
 };

@@ -1,4 +1,3 @@
-
 // src/platform/cpu/energyPGP.hpp
 
 #pragma once
@@ -179,6 +178,52 @@ void interpolateMoleculeEnergy(model::MCState& state, double& energy);
  * @return Calculated energy value
  */
 double calculateMoleculeEnergy(model::MCState& state);
+
+/**
+ * @brief Calculate real-space part of the PGP method for short-range electrostatics
+ * 
+ * This function calculates the short-range electrostatic interactions between atom pairs
+ * using the erfc(αr)/r term, similar to the PME method's real-space component. It handles
+ * the part of electrostatic interactions not covered by the precomputed grid potential.
+ * 
+ * @param state System state
+ * @param movement_only Whether to calculate only for moving residues
+ * @param store_in_residues Whether to store energy in residues
+ */
+void computeRealSpacePGP(model::MCState& state, bool movement_only, bool store_in_residues = true);
+
+/**
+ * @brief Calculate self energy correction for PGP method
+ * 
+ * This function calculates the self energy correction term in the PGP-PME method,
+ * which compensates for the self-interaction that occurs in reciprocal space calculations.
+ * 
+ * @param state System state
+ * @param movement_only Whether to calculate only for moving residues
+ * @return Self energy correction value
+ */
+double computeSelfEnergyPGP(model::MCState& state, bool movement_only);
+
+/**
+ * @brief Use PGP method to calculate system energy
+ * 
+ * This function provides a complete energy calculation for the entire system using the
+ * PGP-PME method, including grid potential interpolation, real-space electrostatics,
+ * self energy correction, and Lennard-Jones interactions.
+ * 
+ * @param state MC state
+ */
+void computeSystemEnergyPGP(model::MCState& state);
+
+/**
+ * @brief Use PGP method to calculate energy of moving residues
+ * 
+ * This function calculates the energy for just the moving residues using the PGP-PME method,
+ * which is useful for Monte Carlo move acceptance/rejection decisions.
+ * 
+ * @param state MC state
+ */
+void computeMovementEnergyPGP(model::MCState& state);
 
 } // namespace cpu
 } // namespace platform

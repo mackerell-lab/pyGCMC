@@ -361,6 +361,75 @@ void init_simulation_bindings(py::module& m) {
         Returns:
             float: The calculated energy value
         )docstring");
+
+    m.def("computeSystemEnergyPGP", 
+        [](model::MCState& state) {
+            // Call C++ function to calculate energy
+            simulation::Simulation::computeSystemEnergyPGP(state);
+            
+            // Convert from C++ struct to Python dictionary
+            py::dict pgp_dict;
+            pgp_dict["grid_energy"] = state.ewald_energy.reciprocal;  // grid energy is stored in reciprocal field
+            pgp_dict["real_space"] = state.ewald_energy.real_space;
+            pgp_dict["self"] = state.ewald_energy.self;
+            
+            // Calculate total electrostatic energy
+            double electrostatic_total = state.ewald_energy.reciprocal + 
+                                        state.ewald_energy.real_space + 
+                                        state.ewald_energy.self;
+            
+            // Accumulate VDW energy from residues
+            double vdw = 0.0;
+            for(const auto& res : state.residues) {
+                if(res.active) {
+                    vdw += res.energy_vdw;
+                }
+            }
+            
+            // Correctly calculate and save total energy
+            double total = electrostatic_total + vdw;
+            pgp_dict["total"] = total;
+            
+            // Return tuple: (electrostatic_total, vdw_energy, pgp_dict)
+            return py::make_tuple(electrostatic_total, vdw, pgp_dict);
+        },
+        "Calculate system energy using PGP-PME method");
+          
+    m.def("computeMovementEnergyPGP", 
+        [](model::MCState& state) {
+            // Call C++ function to calculate energy
+            simulation::Simulation::computeMovementEnergyPGP(state);
+            
+            // Convert from C++ struct to Python dictionary
+            py::dict pgp_dict;
+            pgp_dict["grid_energy"] = state.ewald_energy.reciprocal;  // grid energy is stored in reciprocal field
+            pgp_dict["real_space"] = state.ewald_energy.real_space;
+            pgp_dict["self"] = state.ewald_energy.self;
+            
+            // Calculate total electrostatic energy
+            double electrostatic_total = state.ewald_energy.reciprocal + 
+                                        state.ewald_energy.real_space + 
+                                        state.ewald_energy.self;
+            
+            // Only accumulate VDW energy from movement residues
+            double vdw = 0.0;
+            for(const auto& movementInfo : state.movementResidues) {
+                for(int i = movementInfo.startIndex;
+                    i < movementInfo.startIndex + movementInfo.activeCount; i++) {
+                    if(state.residues[i].active) {
+                        vdw += state.residues[i].energy_vdw;
+                    }
+                }
+            }
+            
+            // Correctly calculate and save total energy
+            double total = electrostatic_total + vdw;
+            pgp_dict["total"] = total;
+            
+            // Return tuple: (electrostatic_total, vdw_energy, pgp_dict)
+            return py::make_tuple(electrostatic_total, vdw, pgp_dict);
+        },
+        "Calculate movement residue energy using PGP-PME method");
 }
 
 } // namespace bindings
