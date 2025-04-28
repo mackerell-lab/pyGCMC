@@ -30,6 +30,8 @@ float calculateSwitchingFunction(float r, const model::MCInfo& info);
  * @param r2 距离平方 (nm²)
  * @param min_safe_distance 最小安全距离 (nm)
  * @return 安全的距离平方 (nm²)
+ * 
+ * @note 此函数是模板函数，必须在头文件中定义，以便编译器能够在各种调用点生成对应的特化版本
  */
 template <typename T>
 T checkLJDistance(T r2, T min_safe_distance = LJ_MIN_SAFE_DISTANCE) {
@@ -43,6 +45,8 @@ T checkLJDistance(T r2, T min_safe_distance = LJ_MIN_SAFE_DISTANCE) {
  * @param energy LJ能量 (kJ/mol)
  * @param max_safe_energy 最大安全能量 (kJ/mol)
  * @return 限制后的LJ能量 (kJ/mol)
+ * 
+ * @note 此函数是模板函数，必须在头文件中定义，以便编译器能够在各种调用点生成对应的特化版本
  */
 template <typename T>
 T capLJEnergy(T energy, T max_safe_energy = LJ_MAX_SAFE_ENERGY) {
@@ -56,6 +60,8 @@ T capLJEnergy(T energy, T max_safe_energy = LJ_MAX_SAFE_ENERGY) {
  * @param sigma LJ sigma parameter in nm
  * @param eps LJ epsilon parameter in kJ/mol
  * @return LJ energy in kJ/mol
+ * 
+ * @note 此函数是模板函数，必须在头文件中定义，以便编译器能够在各种调用点生成对应的特化版本
  */
 template <typename T>
 T calculateBasicLJEnergy(T r2, T sigma, T eps) {
@@ -77,6 +83,8 @@ T calculateBasicLJEnergy(T r2, T sigma, T eps) {
  * @param min_safe_distance Minimum safe distance to prevent numerical instability
  * @param max_safe_energy Maximum allowed energy value
  * @return LJ energy in kJ/mol
+ * 
+ * @note 此函数是模板函数，必须在头文件中定义，以便编译器能够在各种调用点生成对应的特化版本
  */
 template <typename T>
 T calculateLJEnergyNoSwitch(
@@ -108,6 +116,8 @@ T calculateLJEnergyNoSwitch(
  * @param min_safe_distance Minimum safe distance to prevent numerical instability
  * @param max_safe_energy Maximum allowed energy value
  * @return LJ energy in kJ/mol
+ * 
+ * @note 此函数是模板函数，必须在头文件中定义，以便编译器能够在各种调用点生成对应的特化版本
  */
 template <typename T>
 T calculateLJEnergy(
@@ -146,6 +156,22 @@ T calculateLJEnergy(
     
     return vdw_energy;
 }
+
+/**
+ * @brief 简便的double版本调用，使用常量作为安全参数
+ * 
+ * @param r2 距离平方 (nm²)
+ * @param sigma LJ sigma参数 (nm)
+ * @param eps LJ epsilon参数 (kJ/mol)
+ * @param info MC信息，包含切换函数参数
+ * @return LJ能量 (kJ/mol)
+ */
+double calcLJEnergy(
+    double r2,
+    double sigma,
+    double eps,
+    const model::MCInfo& info
+);
 
 } // namespace cpu
 } // namespace platform

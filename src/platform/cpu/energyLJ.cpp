@@ -26,6 +26,24 @@ float calculateSwitchingFunction(float r, const model::MCInfo& info) {
     return numerator / denominator;
 }
 
+/**
+ * @brief 简便的double版本调用，使用常量作为安全参数
+ * 
+ * 这是在energyLJ.hpp中声明的非模板函数的实现
+ */
+double calcLJEnergy(
+    double r2,
+    double sigma,
+    double eps,
+    const model::MCInfo& info
+) {
+    return calculateLJEnergy<double>(
+        r2, sigma, eps, info, 
+        double(MIN_SAFE_DISTANCE), 
+        double(MAX_SAFE_ENERGY)
+    );
+}
+
 } // namespace cpu
 } // namespace platform
 } // namespace pygcmc 

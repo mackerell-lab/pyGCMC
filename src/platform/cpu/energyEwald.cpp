@@ -140,8 +140,8 @@ inline std::pair<double, double> calcPairEnergyEwald(
     const model::MCInfo& info,
     bool is_excluded)
 {    
-    // 使用模板函数，显式指定类型
-    double vdw_energy = calculateLJEnergy<double>(r2, sigma, eps, info, double(MIN_SAFE_DISTANCE), double(MAX_SAFE_ENERGY));
+    // 使用简化版本的调用
+    double vdw_energy = calcLJEnergy(r2, sigma, eps, info);
     
     // Apply minimum safe distance
     if (r2 < MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE) {
