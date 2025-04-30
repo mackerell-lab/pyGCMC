@@ -392,9 +392,7 @@ def test_compare_pgp_pme_delta_energies():
     sys.stdout.flush()
 
     # --- Move Molecule ---
-    translation = [0.1, -0.05, 0.15] # Example translation vector (nm)
-    
-    # Access the moving residue directly
+    translation = [0.15, 0.15, 0.15]  # 增加移动距离，使LJ能量变化明显
     moving_residue = system.residues[moving_residue_index]
 
     print(f"\nMoving residue {moving_residue_index} by {translation} nm...")
@@ -705,7 +703,7 @@ def test_pgp_direct_and_lj_energies():
     print("\nNote: Individual component verification skipped - focusing on energy changes after movement")
     
     # --- Move Molecule ---
-    translation = [0.01, 0.01, 0.01]  # Very small translation to ensure we stay in interaction range
+    translation = [0.15, 0.15, 0.15]  # 增加移动距离，使LJ能量变化明显
     moving_residue = system.residues[moving_residue_index]
 
     print(f"\nMoving residue {moving_residue_index} by {translation} nm...")
