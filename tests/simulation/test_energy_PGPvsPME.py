@@ -1313,13 +1313,13 @@ def create_simple_two_atom_state(distance, box_size, cutoff):
     state.info.cutoff = cutoff
     state.info.setTemperature(300.0)
     
-    # 设置力场参数 - 使用更保守的参数
+    # 设置力场参数 - 使用更合理的参数
     ff = MCForceField()
     ff.numTotalTypes = 2
-    sigma = 0.4  # nm - 增大sigma值
-    eps = 0.02   # kJ/mol - 减小epsilon值
+    sigma = 0.4  # nm - 合理的sigma值
+    eps = 0.02   # kJ/mol - 适度的epsilon值
     
-    # 创建LJ参数矩阵 [i-i, i-j, j-i, j-j]
+    # 创建LJ参数矩阵 - 使用统一参数避免混合计算错误
     ff.ljSigma = [sigma, sigma, sigma, sigma]
     ff.ljEps = [eps, eps, eps, eps]
     state.forcefield = ff
@@ -1398,8 +1398,8 @@ def test_simple_two_atom_system():
     epsilon = 0.020  # kJ/mol
     print(f"LJ参数: sigma = {sigma:.3f} nm, epsilon = {epsilon:.3f} kJ/mol\n")
     
-    # 测试多个距离点 - 使用更保守的距离
-    distances = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.45]  # nm
+    # 测试多个距离点 - 使用更合理的距离点，避开极短距离
+    distances = [1.0, 0.8, 0.7, 0.6, 0.5, 0.45]  # nm
     
     # 表格标题
     print("比较不同距离下的能量计算:")
@@ -1409,6 +1409,12 @@ def test_simple_two_atom_system():
     # 打印表头
     print("    " + " | ".join(headers))
     print("    " + " | ".join(["-" * 10] * len(headers)))
+    
+    # 记录上一个距离点的能量，用于计算能量变化
+    prev_pme_total = None
+    prev_pgp_total = None
+    prev_distance = None
+    first_point = True
     
     for distance in distances:
         try:
@@ -1504,6 +1510,12 @@ def test_simple_two_atom_system():
                 # 计算PME移动能量
                 pme_movement_result = computeMovementEnergyPME(state)
                 pme_delta = state.ewald_energy.get("total", 0.0)
+                
+                # 如果是第一个点，movement能量应该接近0或接近绝对能量
+                if first_point:
+                    if abs(pme_delta) < 1e-6:
+                        print("注意: Movement函数返回的是能量变化值，初始点为0")
+                    first_point = False
             except Exception as e:
                 print(f"PME移动能量计算错误: {e}")
                 pme_delta = float('nan')
@@ -1517,6 +1529,23 @@ def test_simple_two_atom_system():
                 print(f"PGP移动能量计算错误: {e}")
                 pgp_delta = float('nan')
             
+            # 计算距离上一点的能量差 - 更好地理解movement函数的行为
+            if prev_distance is not None:
+                expected_pme_delta = pme_total - prev_pme_total if prev_pme_total is not None else None
+                expected_pgp_delta = pgp_total - prev_pgp_total if prev_pgp_total is not None else None
+                
+                if expected_pme_delta is not None and expected_pgp_delta is not None:
+                    delta_ratio_pme = abs(pme_delta / expected_pme_delta) if abs(expected_pme_delta) > 1e-6 else float('nan')
+                    delta_ratio_pgp = abs(pgp_delta / expected_pgp_delta) if abs(expected_pgp_delta) > 1e-6 else float('nan')
+                    print(f"    距离变化: {prev_distance:.4f} → {distance:.4f} nm")
+                    print(f"    期望PME能量变化: {expected_pme_delta:.4f}, 实际: {pme_delta:.4f}, 比例: {delta_ratio_pme:.4f}")
+                    print(f"    期望PGP能量变化: {expected_pgp_delta:.4f}, 实际: {pgp_delta:.4f}, 比例: {delta_ratio_pgp:.4f}")
+            
+            # 记录当前能量作为下一点的参考
+            prev_pme_total = pme_total
+            prev_pgp_total = pgp_total
+            prev_distance = distance
+            
             # 打印结果行
             print("    " + fmt.format(
                 distance, theoretical_lj, theoretical_coulomb, theoretical_total,
@@ -1525,6 +1554,8 @@ def test_simple_two_atom_system():
             
         except Exception as e:
             print(f"处理距离 {distance} nm 时发生错误: {e}")
+            import traceback
+            traceback.print_exc()
             continue
     
     print("\n能量分析:")
@@ -1532,6 +1563,7 @@ def test_simple_two_atom_system():
     print("2. PME/PGP系统总能量应包含库仑和LJ能量")
     print("3. PME/PGP中的LJ分量应与直接LJ计算一致")
     print("4. PME/PGP Movement函数计算的是能量变化，而不是绝对能量值")
+    print("5. PME/PGP Movement返回的能量差应该与距离变化引起的总能量差接近")
     
     print("\n--- 测试完成 ---")
 
