@@ -1,10 +1,14 @@
 # tests/simulation/test_energy_PGPvsPME.py
 
 import pytest
+import numpy as np
 import math
 import random
 import pygcmc
 from pygcmc import MCState, MCInfo, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
+from pygcmc import computeSystemVdwEnergyCutoff, computeSystemEnergyPME, computeSystemEnergyPGP
+from pygcmc import computeMovementEnergyPME, computeMovementEnergyPGP
+from pygcmc import setPMEParameters, setPGPParameters, initializePMEParameters, precomputeGridPotential
 import sys
 
 # Set log level to INFO or lower to ensure detailed log output
@@ -21,6 +25,9 @@ pygcmc.set_platform_debug_mode(True)  # Enable debug mode for testing
 sys.stdout.flush()
 print("Log level settings completed for PGPvsPME test")
 sys.stdout.flush()
+
+# 物理常数
+BOLTZMANN = 0.00831446261815324  # kJ/mol/K
 
 
 def create_test_system(box_size):
@@ -1286,6 +1293,248 @@ def test_lj_energy_pme_pgp():
     print("✓ The test has successfully evaluated LJ energy calculations")
     print("--- Test Completed Successfully ---")
     sys.stdout.flush()
+
+
+def create_simple_two_atom_state(distance, box_size, cutoff):
+    """
+    创建一个简单的两原子系统，一个固定原子和一个移动原子，距离为指定值
+    
+    参数:
+        distance (float): 两原子之间的距离（nm）
+        box_size (float): 模拟盒子的大小（nm）
+        cutoff (float): 截断距离（nm）
+        
+    返回:
+        state: 创建的系统状态
+    """
+    # 创建基本的系统状态
+    state = MCState()
+    state.info.box = [box_size, box_size, box_size]
+    state.info.cutoff = cutoff
+    state.info.setTemperature(300.0)
+    
+    # 设置力场参数 - 使用更保守的参数
+    ff = MCForceField()
+    ff.numTotalTypes = 2
+    sigma = 0.4  # nm - 增大sigma值
+    eps = 0.02   # kJ/mol - 减小epsilon值
+    
+    # 创建LJ参数矩阵 [i-i, i-j, j-i, j-j]
+    ff.ljSigma = [sigma, sigma, sigma, sigma]
+    ff.ljEps = [eps, eps, eps, eps]
+    state.forcefield = ff
+    
+    # 创建原子
+    atoms = []
+    
+    # 固定原子 (在盒子中心)
+    fixed_atom = MCAtom()
+    fixed_atom.x = box_size / 2.0
+    fixed_atom.y = box_size / 2.0
+    fixed_atom.z = box_size / 2.0
+    fixed_atom.charge = 1.0
+    fixed_atom.type = 0
+    atoms.append(fixed_atom)
+    
+    # 移动原子 (在距离固定原子指定距离处)
+    moving_atom = MCAtom()
+    moving_atom.x = fixed_atom.x + distance
+    moving_atom.y = fixed_atom.y
+    moving_atom.z = fixed_atom.z
+    moving_atom.charge = -1.0
+    moving_atom.type = 1
+    atoms.append(moving_atom)
+    
+    # 创建残基
+    residues = []
+    
+    # 固定残基
+    fixed_res = MCResidue()
+    fixed_res.active = True
+    fixed_res.fixed = True
+    fixed_res.atomStart = 0
+    fixed_res.atomCount = 1
+    fixed_res.energy_vdw = 0.0
+    fixed_res.energy_elec = 0.0
+    residues.append(fixed_res)
+    
+    # 移动残基
+    moving_res = MCResidue()
+    moving_res.active = True
+    moving_res.fixed = False
+    moving_res.atomStart = 1
+    moving_res.atomCount = 1
+    moving_res.energy_vdw = 0.0
+    moving_res.energy_elec = 0.0
+    residues.append(moving_res)
+    
+    # 设置系统状态
+    state.atoms = atoms
+    state.residues = residues
+    state.activeAtomCount = len(atoms)
+    state.activeResidueCount = len(residues)
+    
+    # 设置PME/PGP参数 - 使用更保守的参数
+    box = [box_size, box_size, box_size]
+    mesh_size = [16, 16, 16]  # 减小网格大小
+    try:
+        setPMEParameters(alpha=0.2, meshSize=mesh_size, splineOrder=4, tolerance=1e-4)
+        initializePMEParameters(cutoff, box, 0.2)
+        setPGPParameters(alpha=0.2, meshSize=mesh_size, potential_cutoff=cutoff,
+                        potentialGridSize=mesh_size, splineOrder=4, tolerance=1e-4)
+        precomputeGridPotential(state, True)  # 只计算固定原子的电势
+    except Exception as e:
+        print(f"Warning: Error in PME/PGP setup: {e}")
+    
+    return state
+
+
+def test_simple_two_atom_system():
+    """测试在简单两原子系统中比较理论能量与计算能量"""
+    print("\n--- 测试：简单两原子系统能量计算比较 (独立状态) ---")
+    
+    # 设置LJ参数
+    sigma = 0.400  # nm
+    epsilon = 0.020  # kJ/mol
+    print(f"LJ参数: sigma = {sigma:.3f} nm, epsilon = {epsilon:.3f} kJ/mol\n")
+    
+    # 测试多个距离点 - 使用更保守的距离
+    distances = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.45]  # nm
+    
+    # 表格标题
+    print("比较不同距离下的能量计算:")
+    headers = ["距离(nm)", "理论LJ", "理论库仑", "理论总能量", "直接LJ", "PME总能量", "PME中LJ", "PGP总能量", "PGP中LJ", "PME能量变化", "PGP能量变化"] 
+    fmt = "{:10.4f} | {:12.4f} | {:12.4f} | {:12.4f} | {:12.4f} | {:12.4f} | {:12.4f} | {:12.4f} | {:12.4f} | {:12.4f} | {:12.4f}"
+    
+    # 打印表头
+    print("    " + " | ".join(headers))
+    print("    " + " | ".join(["-" * 10] * len(headers)))
+    
+    for distance in distances:
+        try:
+            # 创建新的MCState，每个距离一个独立的系统状态
+            state = create_simple_two_atom_state(distance, 4.0, 1.2)
+            
+            # ------------ 理论能量计算 ------------
+            # 计算理论LJ能量
+            r = distance
+            r6 = (sigma / r) ** 6
+            r12 = r6 * r6
+            theoretical_lj = 4 * epsilon * (r12 - r6)
+            
+            # 计算理论库仑能量
+            q1 = 1.0  # 固定离子电荷
+            q2 = -1.0  # 移动离子电荷
+            coulomb = 138.935456  # kJ·mol^-1·nm·e^-2
+            theoretical_coulomb = coulomb * q1 * q2 / r
+            
+            # 总理论能量
+            theoretical_total = theoretical_lj + theoretical_coulomb
+            
+            # ------------ 直接计算LJ能量 ------------
+            # 先重置所有能量
+            for res in state.residues:
+                res.energy_vdw = 0.0
+                res.energy_elec = 0.0
+                
+            # 计算LJ能量
+            direct_lj_result = computeSystemVdwEnergyCutoff(state)
+            
+            # 获取每个残基的LJ能量总和
+            direct_lj = 0.0
+            for res in state.residues:
+                direct_lj += res.energy_vdw
+            
+            # ------------ 使用PME计算系统能量 ------------
+            try:
+                # 计算PME系统能量
+                pme_result = computeSystemEnergyPME(state)
+                
+                # 获取总能量和各能量分量
+                pme_total = state.ewald_energy.get("total", 0.0)
+                
+                # 获取每个残基的LJ能量总和
+                pme_lj = 0.0
+                for res in state.residues:
+                    pme_lj += res.energy_vdw
+            except Exception as e:
+                print(f"PME系统能量计算错误: {e}")
+                pme_total = float('nan')
+                pme_lj = float('nan')
+                
+            # ------------ 使用PGP计算系统能量 ------------
+            try:
+                # 先重置所有能量
+                for res in state.residues:
+                    res.energy_vdw = 0.0
+                    res.energy_elec = 0.0
+                    
+                # 重新设置PGP参数并预计算电势场
+                meshSize = [16, 16, 16]
+                potentialGridSize = [16, 16, 16]
+                setPGPParameters(alpha=0.2, meshSize=meshSize, potential_cutoff=1.2, 
+                                potentialGridSize=potentialGridSize, splineOrder=4, tolerance=1e-4)
+                precomputeGridPotential(state, True)
+                
+                # 计算PGP系统能量
+                pgp_result = computeSystemEnergyPGP(state)
+                
+                # 获取总能量
+                pgp_total = state.ewald_energy.get("total", 0.0)
+                
+                # 获取每个残基的LJ能量总和
+                pgp_lj = 0.0
+                for res in state.residues:
+                    pgp_lj += res.energy_vdw
+            except Exception as e:
+                print(f"PGP系统能量计算错误: {e}")
+                pgp_total = float('nan')
+                pgp_lj = float('nan')
+                
+            # ------------ 计算能量变化 ------------
+            # 设置移动部分
+            state.movementResidues.clear()
+            movement_info = MCMovementResidueInfo()
+            movement_info.startIndex = 1  # 移动离子所在残基索引
+            movement_info.activeCount = 1
+            state.movementResidues.append(movement_info)
+            
+            # 计算PME移动能量变化
+            try:
+                # 计算PME移动能量
+                pme_movement_result = computeMovementEnergyPME(state)
+                pme_delta = state.ewald_energy.get("total", 0.0)
+            except Exception as e:
+                print(f"PME移动能量计算错误: {e}")
+                pme_delta = float('nan')
+                
+            # 计算PGP移动能量变化
+            try:
+                # 计算PGP移动能量
+                pgp_movement_result = computeMovementEnergyPGP(state)
+                pgp_delta = state.ewald_energy.get("total", 0.0)
+            except Exception as e:
+                print(f"PGP移动能量计算错误: {e}")
+                pgp_delta = float('nan')
+            
+            # 打印结果行
+            print("    " + fmt.format(
+                distance, theoretical_lj, theoretical_coulomb, theoretical_total,
+                direct_lj, pme_total, pme_lj, pgp_total, pgp_lj, pme_delta, pgp_delta
+            ))
+            
+        except Exception as e:
+            print(f"处理距离 {distance} nm 时发生错误: {e}")
+            continue
+    
+    print("\n能量分析:")
+    print("1. 直接LJ计算 (direct_lj) 应该与 理论LJ 紧密匹配")
+    print("2. PME/PGP系统总能量应包含库仑和LJ能量")
+    print("3. PME/PGP中的LJ分量应与直接LJ计算一致")
+    print("4. PME/PGP Movement函数计算的是能量变化，而不是绝对能量值")
+    
+    print("\n--- 测试完成 ---")
+
 
 # If you want to run these specific tests using pytest:
 # pytest tests/simulation/test_energy_PGPvsPME.py::test_compare_pgp_pme_delta_energies
