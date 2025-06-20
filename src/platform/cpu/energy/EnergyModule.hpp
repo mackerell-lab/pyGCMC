@@ -5,7 +5,7 @@
 // Include all energy calculation modules
 #include "common/EnergyInterface.hpp"
 #include "common/EnergyDirectCore.hpp"
-#include "lj/LJSwitching.hpp"
+#include "lj/LJMain.hpp"
 #include "coulomb/CoulombPairCore.hpp"
 #include "ewald/EwaldComposite.hpp"
 #include "pme/PMEComposite.hpp"

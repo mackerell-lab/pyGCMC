@@ -1,7 +1,7 @@
 #include "PMERealSpace.hpp"
 #include "PMECore.hpp"
 #include "platform/platform.hpp"
-#include "../lj/LJSwitching.hpp"
+#include "../lj/LJMain.hpp"
 #include <cmath>
 #include <algorithm>
 

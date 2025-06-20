@@ -4,7 +4,7 @@
 #include "PGPSelfEnergy.hpp"
 #include "PGPInterpolation.hpp"
 #include "PGPPrecompute.hpp"
-#include "../lj/LJSwitching.hpp"
+#include "../lj/LJMain.hpp"
 #include "../common/EnergyDirectCore.hpp"
 #include "platform/platform.hpp"
 

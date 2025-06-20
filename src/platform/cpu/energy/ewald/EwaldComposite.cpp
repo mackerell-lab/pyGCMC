@@ -1,5 +1,5 @@
 #include "EwaldComposite.hpp"
-#include "../lj/LJSwitching.hpp"
+#include "../lj/LJMain.hpp"
 #include "../common/EnergyDirectCore.hpp"
 #include "platform/platform.hpp"
 #include <cmath>

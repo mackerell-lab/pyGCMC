@@ -1,4 +1,4 @@
-#include "LJSwitching.hpp"
+#include "LJSwitch.hpp"
 #include <cmath>
 
 namespace pygcmc {

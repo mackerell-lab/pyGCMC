@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../lj/LJSwitching.hpp"
+#include "../lj/LJMain.hpp"
 #include "CoulombPotential.hpp"
 #include "model/montecarlo.hpp"
 #include <utility>

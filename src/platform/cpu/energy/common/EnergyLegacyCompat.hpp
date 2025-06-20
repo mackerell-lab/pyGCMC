@@ -3,7 +3,7 @@
 // Legacy compatibility layer for the energy refactoring
 // This file provides backward compatibility for code that still uses the old interface
 
-#include "../lj/LJSwitching.hpp"
+#include "../lj/LJMain.hpp"
 #include "../coulomb/CoulombPairCore.hpp"
 
 namespace pygcmc {

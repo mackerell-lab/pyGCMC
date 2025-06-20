@@ -1,5 +1,5 @@
 #include "EwaldRealSpace.hpp"
-#include "../lj/LJSwitching.hpp"
+#include "../lj/LJMain.hpp"
 #include "platform/platform.hpp"
 #include <cmath>
 #include <algorithm>
