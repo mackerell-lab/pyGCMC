@@ -6,7 +6,7 @@
 #include "common/EnergyInterface.hpp"
 #include "common/EnergyDirectCore.hpp"
 #include "lj/LJSwitching.hpp"
-#include "coulomb/PairEnergyCalculation.hpp"
+#include "coulomb/CoulombPairCore.hpp"
 #include "ewald/EwaldComposite.hpp"
 #include "pme/PMEComposite.hpp"
 

@@ -1,4 +1,4 @@
-#include "PairEnergyCalculation.hpp"
+#include "CoulombPairCore.hpp"
 #include "../common/EnergyUtils.hpp"
 #include "platform/platform.hpp"
 #include <cmath>

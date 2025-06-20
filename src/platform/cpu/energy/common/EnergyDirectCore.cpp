@@ -1,5 +1,5 @@
 #include "EnergyDirectCore.hpp"
-#include "../coulomb/PairEnergyCalculation.hpp"
+#include "../coulomb/CoulombPairCore.hpp"
 #include "EnergyUtils.hpp"
 #include "platform/platform.hpp"
 #include <stdexcept>

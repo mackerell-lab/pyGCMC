@@ -4,7 +4,7 @@
 // This file provides backward compatibility for code that still uses the old interface
 
 #include "../lj/LJSwitching.hpp"
-#include "../coulomb/PairEnergyCalculation.hpp"
+#include "../coulomb/CoulombPairCore.hpp"
 
 namespace pygcmc {
 namespace platform {
