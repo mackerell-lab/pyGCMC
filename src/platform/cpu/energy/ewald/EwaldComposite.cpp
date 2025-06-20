@@ -1,6 +1,6 @@
 #include "EwaldComposite.hpp"
 #include "../lj/LJSwitching.hpp"
-#include "../common/DirectSummation.hpp"
+#include "../common/EnergyDirectCore.hpp"
 #include "platform/platform.hpp"
 #include <cmath>
 

@@ -1,5 +1,5 @@
-#include "EnergySystemInterface.hpp"
-#include "DirectSummation.hpp"
+#include "EnergyInterface.hpp"
+#include "EnergyDirectCore.hpp"
 #include "../ewald/EwaldComposite.hpp"  // Include inline function definitions
 #include "../pme/PMEComposite.hpp"      // Include inline function definitions
 #include "EnergyUtils.hpp"

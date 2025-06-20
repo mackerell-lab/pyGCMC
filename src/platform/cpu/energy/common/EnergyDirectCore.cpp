@@ -1,4 +1,4 @@
-#include "DirectSummation.hpp"
+#include "EnergyDirectCore.hpp"
 #include "../coulomb/PairEnergyCalculation.hpp"
 #include "EnergyUtils.hpp"
 #include "platform/platform.hpp"

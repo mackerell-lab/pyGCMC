@@ -3,7 +3,7 @@
 #include "PMEReciprocal.hpp"
 #include "PMERealSpace.hpp"
 #include "PMESelf.hpp"
-#include "../common/DirectSummation.hpp"
+#include "../common/EnergyDirectCore.hpp"
 #include "platform/platform.hpp"
 
 namespace pygcmc {
