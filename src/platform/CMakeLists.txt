@@ -13,7 +13,6 @@ add_library(pygcmc_platform STATIC
     cpu/energyPME.hpp
     cpu/energyPME.cpp
     cpu/energyPGP.hpp
-    cpu/energyPGP.cpp
     cpu/energyLJ.hpp
     cpu/energyLJ.cpp
     # PGP submodules

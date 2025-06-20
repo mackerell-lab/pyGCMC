@@ -6,6 +6,9 @@ namespace pygcmc {
 namespace platform {
 namespace cpu {
 
+// Global PGP parameters definition
+PGPParams pgp_params;
+
 /**
  * @brief Initialize the three-dimensional grid for precomputed potential
  * 
