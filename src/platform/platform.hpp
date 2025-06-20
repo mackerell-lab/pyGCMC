@@ -6,19 +6,6 @@
 #include <iostream>
 #include <vector>
 
-// Forward declarations for energy calculation methods
-namespace pygcmc {
-namespace platform {
-namespace cpu {
-class PMEParams;
-void setPMEParameters(double alpha, const int meshSize[3], int splineOrder, double tolerance);
-void initializePMEParameters(double cutoff, const double box[3], double alpha, const int* meshSize, int splineOrder, double tolerance);
-void computeSystemEnergyPME(model::MCState& state);
-void computeMovementEnergyPME(model::MCState& state);
-}
-}
-}
-
 namespace pygcmc {
 namespace platform {
 

@@ -1,5 +1,6 @@
 #include "PGPCore.hpp"
 #include "platform/cpu/energy/pme/PMEComposite.hpp"
+#include "platform/cpu/energy/pme/PMESetup.hpp"
 #include "platform/platform.hpp"
 
 namespace pygcmc {
