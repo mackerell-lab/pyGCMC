@@ -8,10 +8,11 @@
  * 
  * - PGPCore: Core parameters and initialization
  * - PGPGrid: Grid operations and potential grids
+ * - PGPInterpolation: Grid interpolation and energy calculation functions
  * - PGPPrecompute: Precomputation algorithms for optimization
  * - PGPRealSpace: Real space energy calculations
  * - PGPSelfEnergy: Self energy corrections
- * - PGPSystemEnergy: Complete system energy evaluation and grid interpolation
+ * - PGPSystemEnergy: Complete system energy evaluation
  * - PGPComposite: High-level unified interface
  * 
  * For most users, including PGPComposite.hpp is sufficient, as it provides
@@ -32,6 +33,7 @@
 
 // Individual modules
 #include "PGPGrid.hpp"
+#include "PGPInterpolation.hpp"
 #include "PGPPrecompute.hpp"
 #include "PGPRealSpace.hpp"
 #include "PGPSelfEnergy.hpp"
