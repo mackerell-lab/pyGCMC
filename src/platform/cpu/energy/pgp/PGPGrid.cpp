@@ -6,8 +6,7 @@ namespace pygcmc {
 namespace platform {
 namespace cpu {
 
-// Global PGP parameters definition
-PGPParams pgp_params;
+// Note: pgp_params is defined in PGPCore.cpp
 
 /**
  * @brief Initialize the three-dimensional grid for precomputed potential
