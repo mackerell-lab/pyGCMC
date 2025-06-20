@@ -11,6 +11,16 @@ namespace pygcmc {
 namespace platform {
 namespace cpu {
 
+// Forward declarations for functions used in PMEParams member redirects
+void initializePMETables(double cutoff);
+void setPMEBox(const double newBox[3]);
+void initializePMEBsplines();
+double erfcApproximate(double r);
+double ewaldScaleApproximate(double r);
+double estimatePMERealSpaceError();
+double estimatePMEReciprocalSpaceError(const double box[3]);
+double estimatePMETotalError(const double box[3]);
+
 // Constants for PME calculation
 static const int DEFAULT_SPLINE_ORDER = 4;  // B-spline order for PME
 
@@ -45,17 +55,46 @@ struct PMEParams {
     std::vector<std::complex<double>> pmeGrid;   // Main PME grid for FFT operations
     std::vector<double> pmeCharge;              // Charge grid (if needed)
     
-    // Core parameter management methods
-    void initializeTables(double cutoff);
-    void initializeBsplines();
-    void setBox(const double newBox[3]);
-    double erfcApprox(double r) const;
-    double ewaldScaleApprox(double r) const;
+    // Legacy member functions - kept for compatibility with existing code
+    void initializeTables(double cutoff) {
+        // Redirect to standalone function
+        initializePMETables(cutoff);
+    }
     
-    // Error estimation methods
-    double estimateRealSpaceError() const;
-    double estimateReciprocalSpaceError(const double box[3]) const;
-    double estimateTotalError(const double box[3]) const;
+    void setBox(const double newBox[3]) {
+        // Redirect to standalone function
+        setPMEBox(newBox);
+    }
+    
+    void initializeBsplines() {
+        // Redirect to standalone function
+        initializePMEBsplines();
+    }
+    
+    double erfcApprox(double r) const {
+        // Redirect to standalone function
+        return erfcApproximate(r);
+    }
+    
+    double ewaldScaleApprox(double r) const {
+        // Redirect to standalone function
+        return ewaldScaleApproximate(r);
+    }
+    
+    double estimateRealSpaceError() const {
+        // Redirect to standalone function
+        return estimatePMERealSpaceError();
+    }
+    
+    double estimateReciprocalSpaceError(const double box[3]) const {
+        // Redirect to standalone function
+        return estimatePMEReciprocalSpaceError(box);
+    }
+    
+    double estimateTotalError(const double box[3]) const {
+        // Redirect to standalone function
+        return estimatePMETotalError(box);
+    }
 };
 
 // Global PME parameters instance
