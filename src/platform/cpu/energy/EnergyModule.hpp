@@ -3,8 +3,7 @@
 #include <string>
 
 // Include all energy calculation modules
-#include "common/EnergyInterface.hpp"
-#include "common/EnergyDirectCore.hpp"
+#include "common/EnergyMain.hpp"
 #include "lj/LJMain.hpp"
 #include "coulomb/CoulombPairCore.hpp"
 #include "ewald/EwaldMain.hpp"
