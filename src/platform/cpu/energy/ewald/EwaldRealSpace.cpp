@@ -1,5 +1,5 @@
 #include "EwaldRealSpace.hpp"
-#include "platform/cpu/energyLJ.hpp"
+#include "../common/EnergyLJCalculation.hpp"
 #include "platform/platform.hpp"
 #include <cmath>
 #include <algorithm>

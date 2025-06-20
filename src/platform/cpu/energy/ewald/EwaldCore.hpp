@@ -2,7 +2,8 @@
 
 #include "model/montecarlo.hpp"
 #include "platform/platform.hpp"
-#include "platform/cpu/energyCommon.hpp"
+#include "../common/EnergyConstants.hpp"
+#include "../common/EnergyUtils.hpp"
 #include <vector>
 #include <complex>
 

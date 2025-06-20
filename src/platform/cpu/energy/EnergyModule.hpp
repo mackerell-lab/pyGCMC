@@ -1,18 +1,17 @@
-// src/platform/cpu/energy.hpp
-
 #pragma once
 
-// First include common interfaces
-#include "energyCommon.hpp"
+#include <string>
 
-// Then include implementations
-#include "energyDirect.hpp"
-#include "energy/ewald/EwaldComposite.hpp"
-#include "energy/pme/PMEComposite.hpp"
+// Include all energy calculation modules
+#include "common/EnergySystemInterface.hpp"
+#include "direct/DirectComposite.hpp"
+#include "ewald/EwaldComposite.hpp"
+#include "pme/PMEComposite.hpp"
 
 namespace pygcmc {
 namespace platform {
 namespace cpu {
+namespace energy {
 
 /**
  * @brief CPU Platform Energy Calculation Module
@@ -22,18 +21,17 @@ namespace cpu {
  * 2. Ewald summation method: Optimized calculation for long-range electrostatic interactions in periodic systems
  * 3. Particle Mesh Ewald (PME) method: Fast approximation of Ewald summation using FFT for larger systems
  * 
- * Basic usage examples:
+ * Modern usage examples:
  * 
- * // Direct calculation (no cutoff, no PBC):
- * computeSystemEnergy(state, EnergyMethod::DIRECT, false, false);
+ * // Direct calculation using the new modular interface:
+ * direct::DirectComposite::calculateSystemEnergy(state, false, false);
  * 
- * // Direct calculation (with cutoff, with PBC):
+ * // Direct calculation with cutoff and PBC:
+ * direct::DirectComposite::calculateSystemEnergy(state, true, true);
+ * 
+ * // Using the unified interface:
  * computeSystemEnergy(state, EnergyMethod::DIRECT, true, true);
- * 
- * // Ewald summation (automatically uses PBC and cutoff):
  * computeSystemEnergy(state, EnergyMethod::EWALD);
- * 
- * // Particle Mesh Ewald (automatically uses PBC and cutoff):
  * computeSystemEnergy(state, EnergyMethod::PME);
  * 
  * Note: When using the Ewald method, Ewald parameters must be initialized first:
@@ -69,16 +67,11 @@ inline double getTotalEnergy(const model::MCState& state, EnergyMethod method) {
     if (method == EnergyMethod::EWALD || method == EnergyMethod::PME) {
         return getEwaldTotalEnergy(state);
     } else {
-        double total = 0.0;
-        for (const auto& residue : state.residues) {
-            if (residue.active) {
-                total += residue.energy_vdw + residue.energy_elec;
-            }
-        }
-        return total;
+        return pygcmc::platform::cpu::getTotalEnergy(state);
     }
 }
 
+} // namespace energy
 } // namespace cpu
 } // namespace platform
 } // namespace pygcmc 

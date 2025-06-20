@@ -2,7 +2,6 @@
 #define PMEPARAMS_HPP
 
 #include "PMECore.hpp"
-#include "platform/cpu/energyCommon.hpp"
 
 namespace pygcmc {
 namespace platform {

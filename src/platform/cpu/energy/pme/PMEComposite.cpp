@@ -3,7 +3,8 @@
 #include "PMEReciprocal.hpp"
 #include "PMERealSpace.hpp"
 #include "PMESelf.hpp"
-#include "platform/cpu/energyLJ.hpp"
+#include "../common/EnergyLJCalculation.hpp"
+#include "../direct/DirectSystemEnergy.hpp"
 #include "platform/platform.hpp"
 
 namespace pygcmc {
@@ -68,7 +69,7 @@ void PMEComposite::computeSystemEnergy(model::MCState& state) {
     
     // 4. Calculate VDW energy - 使用computeSystemVdwEnergyCutoff而不是computeSystemVdwEnergyDirect
     // PME总是使用cutoff和PBC
-    computeSystemVdwEnergyCutoff(state);
+    direct::computeSystemVdwEnergyCutoff(state);
     
     // Only multiply real space energy by COULOMB coefficient
     state.ewald_energy.real_space *= COULOMB;
@@ -106,7 +107,7 @@ void PMEComposite::computeMovementEnergy(model::MCState& state) {
     
     // Add VDW energy calculation for movement residues
     // 使用computeSystemVdwEnergyCutoff而不是computeSystemVdwEnergyDirect
-    computeSystemVdwEnergyCutoff(state);
+    direct::computeSystemVdwEnergyCutoff(state);
     
     // Apply Coulomb factor only to real-space component
     // Note: computeReciprocalPME and computeSelfEnergyPME already include COULOMB factor

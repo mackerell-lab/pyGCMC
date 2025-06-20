@@ -1,22 +1,15 @@
-// src/platform/cpu/energyCommon.cpp
-
-#include "energyCommon.hpp"
-#include "energyDirect.hpp"
-#include "energy/ewald/EwaldComposite.hpp"
-#include "energy/pme/PMEComposite.hpp"
+#include "EnergySystemInterface.hpp"
+#include "../direct/DirectComposite.hpp"
+#include "../direct/DirectPBCCalculation.hpp"
+#include "../direct/DirectSystemEnergy.hpp"
+#include "../ewald/EwaldComposite.hpp"  // Include inline function definitions
+#include "../pme/PMEComposite.hpp"      // Include inline function definitions
+#include "EnergyUtils.hpp"
 #include <stdexcept>
 
 namespace pygcmc {
 namespace platform {
 namespace cpu {
-
-// Constants for energy calculations
-const float COULOMB = 138.935456f;
-const float MIN_SAFE_DISTANCE = 0.01f;  // nm (1% of typical sigma)
-const float MAX_SAFE_ENERGY = 1e6f;     // kJ/mol
-
-// Debug flag
-bool energy_debug_output = false;
 
 /**
  * @brief Unified system energy calculation interface
@@ -38,8 +31,8 @@ void computeSystemEnergy(model::MCState& state,
     // Choose different implementations based on calculation method
     switch (method) {
         case EnergyMethod::DIRECT:
-            // Use direct calculation method
-            computeSystemEnergyDirect(state, use_cutoff, use_pbc);
+            // Use direct calculation method via DirectComposite
+            direct::DirectComposite::calculateSystemEnergy(state, use_cutoff, use_pbc);
             break;
             
         case EnergyMethod::EWALD:
@@ -80,8 +73,8 @@ void computeMovementEnergy(model::MCState& state,
     // Choose different implementations based on calculation method
     switch (method) {
         case EnergyMethod::DIRECT:
-            // Use direct calculation method
-            computeMovementEnergyDirect(state, use_cutoff, use_pbc);
+            // Use direct calculation method via DirectComposite
+            direct::DirectComposite::calculateMovementEnergy(state, use_cutoff, use_pbc);
             break;
             
         case EnergyMethod::EWALD:
@@ -101,6 +94,51 @@ void computeMovementEnergy(model::MCState& state,
             break;
     }
 }
+
+/**
+ * @brief Forward to direct::computeSystemEnergyPBC
+ */
+void computeSystemEnergyPBC(model::MCState& state) {
+    direct::computeSystemEnergyPBC(state);
+}
+
+/**
+ * @brief Forward to direct::computeSystemEnergyPBCCutoff
+ */
+void computeSystemEnergyPBCCutoff(model::MCState& state) {
+    direct::computeSystemEnergyPBCCutoff(state);
+}
+
+/**
+ * @brief Forward to direct::computeSystemVdwEnergyCutoff
+ */
+void computeSystemVdwEnergyCutoff(model::MCState& state) {
+    direct::computeSystemVdwEnergyCutoff(state);
+}
+
+/**
+ * @brief Forward to direct::computeSystemVdwEnergyDirect
+ */
+void computeSystemVdwEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc) {
+    direct::computeSystemVdwEnergyDirect(state, use_cutoff, use_pbc);
+}
+
+/**
+ * @brief Legacy function - use unified interface instead
+ */
+void computeMovementEnergyCutoff(model::MCState& state) {
+    computeMovementEnergy(state, EnergyMethod::DIRECT, true, false);
+}
+
+/**
+ * @brief Legacy function - use unified interface instead
+ */
+void computeSystemEnergyCutoff(model::MCState& state) {
+    computeSystemEnergy(state, EnergyMethod::DIRECT, true, false);
+}
+
+// Note: Other energy functions are already defined in their respective modules
+// This file only implements the unified interface and missing direct calculation functions
 
 } // namespace cpu
 } // namespace platform

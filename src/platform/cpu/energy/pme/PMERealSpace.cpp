@@ -1,7 +1,7 @@
 #include "PMERealSpace.hpp"
 #include "PMECore.hpp"
 #include "platform/platform.hpp"
-#include "platform/cpu/energyLJ.hpp"
+#include "../common/EnergyLJCalculation.hpp"
 #include <cmath>
 #include <algorithm>
 

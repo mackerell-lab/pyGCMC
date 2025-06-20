@@ -4,7 +4,8 @@
 #include "PGPSelfEnergy.hpp"
 #include "PGPInterpolation.hpp"
 #include "PGPPrecompute.hpp"
-#include "platform/cpu/energyLJ.hpp"
+#include "../common/EnergyLJCalculation.hpp"
+#include "../direct/DirectSystemEnergy.hpp"
 #include "platform/platform.hpp"
 
 namespace pygcmc {
@@ -34,7 +35,7 @@ void computeSystemEnergyPGPImpl(model::MCState& state) {
     state.ewald_energy.self = computeSelfEnergyPGPImpl(state, false);
     
     // 4. Calculate LJ interactions using direct cutoff method
-    computeSystemVdwEnergyCutoff(state);
+    direct::computeSystemVdwEnergyCutoff(state);
     
     // Multiply real space energy by COULOMB constant
     state.ewald_energy.real_space *= COULOMB;
@@ -85,7 +86,7 @@ void computeMovementEnergyPGPImpl(model::MCState& state) {
     state.ewald_energy.self = computeSelfEnergyPGPImpl(state, true);
     
     // 4. Calculate LJ interactions using direct cutoff method
-    computeSystemVdwEnergyCutoff(state);
+    direct::computeSystemVdwEnergyCutoff(state);
     
     // Multiply real space energy by COULOMB constant
     state.ewald_energy.real_space *= COULOMB;

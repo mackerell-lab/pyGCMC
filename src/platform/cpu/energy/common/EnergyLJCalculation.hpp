@@ -1,19 +1,14 @@
-// src/platform/cpu/energyLJ.hpp
-
 #pragma once
 
+#include "EnergyConstants.hpp"
+#include "EnergyUtils.hpp"
 #include "model/montecarlo.hpp"
 #include "platform/platform.hpp"
-#include "energyCommon.hpp"
 #include <cmath>
 
 namespace pygcmc {
 namespace platform {
 namespace cpu {
-
-// LJ能量计算相关常量
-static const float LJ_MIN_SAFE_DISTANCE = 0.01f;  // 最小安全距离 (nm)
-static const float LJ_MAX_SAFE_ENERGY = 1e6f;     // 最大能量值 (kJ/mol)
 
 /**
  * @brief Calculate CHARMM switching function value
@@ -172,6 +167,9 @@ double calcLJEnergy(
     double eps,
     const model::MCInfo& info
 );
+
+// Configure CHARMM-style switching function
+void setSwitchingFunction(model::MCState& state, bool use_switching, float r_on, float r_off);
 
 } // namespace cpu
 } // namespace platform
