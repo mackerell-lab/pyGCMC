@@ -7,8 +7,8 @@
 #include "common/EnergyDirectCore.hpp"
 #include "lj/LJMain.hpp"
 #include "coulomb/CoulombPairCore.hpp"
-#include "ewald/EwaldComposite.hpp"
-#include "pme/PMEComposite.hpp"
+#include "ewald/EwaldMain.hpp"
+#include "pme/PMEMain.hpp"
 
 namespace pygcmc {
 namespace platform {

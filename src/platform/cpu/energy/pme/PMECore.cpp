@@ -1,5 +1,5 @@
 #include "PMECore.hpp"
-#include "PMEParams.hpp"
+#include "PMEConfig.hpp"
 #include "PMEBSpline.hpp"
 
 namespace pygcmc {

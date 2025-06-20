@@ -1,8 +1,8 @@
-#include "PMEEnergyCalc.hpp"
+#include "PMESystemCore.hpp"
 #include "PMECore.hpp"
 #include "PMEFFT.hpp"
 #include "PMEGridCharge.hpp"
-#include "PMEReciprocal.hpp"
+#include "PMERecip.hpp"
 #include "platform/platform.hpp"
 #include <cmath>
 #include <algorithm>

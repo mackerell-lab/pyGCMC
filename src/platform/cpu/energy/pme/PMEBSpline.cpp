@@ -1,6 +1,6 @@
 #include "PMEBSpline.hpp"
 #include "PMECore.hpp"
-#include "PMEParams.hpp"
+#include "PMEConfig.hpp"
 #include "platform/platform.hpp"
 #include <algorithm>
 #include <cmath>

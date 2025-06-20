@@ -1,4 +1,4 @@
-#include "PMEParams.hpp"
+#include "PMEConfig.hpp"
 #include "platform/platform.hpp"
 #include <cmath>
 

@@ -1,4 +1,4 @@
-#include "PGPRealSpace.hpp"
+#include "PGPReal.hpp"
 #include "PGPCore.hpp"
 #include "platform/platform.hpp"
 #include <cmath>

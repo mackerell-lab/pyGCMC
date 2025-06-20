@@ -1,7 +1,7 @@
-#include "PMEReciprocal.hpp"
+#include "PMERecip.hpp"
 #include "PMECore.hpp"
 #include "PMEFFT.hpp"
-#include "PMEEnergyCalc.hpp"
+#include "PMESystemCore.hpp"
 #include "PMEGridCharge.hpp"
 #include "platform/platform.hpp"
 #include <cmath>

@@ -7,8 +7,8 @@
 #include "PMEFFT.hpp"
 #include "PMESpline.hpp"
 #include "PMEGrid.hpp"
-#include "PMEReciprocal.hpp"
-#include "PMERealSpace.hpp"
+#include "PMERecip.hpp"
+#include "PMEReal.hpp"
 #include "PMESelf.hpp"
 
 namespace pygcmc {

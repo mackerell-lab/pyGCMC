@@ -1,4 +1,4 @@
-#include "PGPSelfEnergy.hpp"
+#include "PGPSelf.hpp"
 #include "PGPCore.hpp"
 #include "platform/platform.hpp"
 #include <cmath>

@@ -1,4 +1,4 @@
-#include "EwaldReciprocal.hpp"
+#include "EwaldRecip.hpp"
 #include "platform/platform.hpp"
 #include <cmath>
 #include <iostream>

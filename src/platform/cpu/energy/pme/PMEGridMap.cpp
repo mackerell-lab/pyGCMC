@@ -1,4 +1,4 @@
-#include "PMEGridMapping.hpp"
+#include "PMEGridMap.hpp"
 #include "PMESpline.hpp"
 #include "PMECore.hpp"
 #include "platform/platform.hpp"

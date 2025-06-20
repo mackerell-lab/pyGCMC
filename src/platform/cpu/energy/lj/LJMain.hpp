@@ -24,7 +24,4 @@
 #include "LJPotential.hpp"
 #include "LJSwitch.hpp"
 
-// 提供便捷的命名空间别名（可选）
-namespace pygcmc::platform::cpu {
-    namespace lj_api = lj;  // 简短别名：lj_api::calcLJEnergyBasic(...)
-} 
+ 

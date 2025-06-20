@@ -1,6 +1,6 @@
 #include "PMEGridCharge.hpp"
-#include "PMEGridPrepare.hpp"
-#include "PMEGridMapping.hpp"
+#include "PMEGridPrep.hpp"
+#include "PMEGridMap.hpp"
 #include "PMECore.hpp"
 #include "platform/platform.hpp"
 #include <algorithm>

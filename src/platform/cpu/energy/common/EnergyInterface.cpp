@@ -1,7 +1,7 @@
 #include "EnergyInterface.hpp"
 #include "EnergyDirectCore.hpp"
-#include "../ewald/EwaldComposite.hpp"  // Include inline function definitions
-#include "../pme/PMEComposite.hpp"      // Include inline function definitions
+#include "../ewald/EwaldMain.hpp"  // Include inline function definitions
+#include "../pme/PMEMain.hpp"      // Include inline function definitions
 #include "EnergyUtils.hpp"
 #include <stdexcept>
 

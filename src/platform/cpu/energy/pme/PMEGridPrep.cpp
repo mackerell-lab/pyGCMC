@@ -1,4 +1,4 @@
-#include "PMEGridPrepare.hpp"
+#include "PMEGridPrep.hpp"
 #include "PMECore.hpp"
 #include "platform/platform.hpp"
 #include <cmath>

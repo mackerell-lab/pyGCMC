@@ -1,4 +1,4 @@
-#include "PMERealSpace.hpp"
+#include "PMEReal.hpp"
 #include "PMECore.hpp"
 #include "platform/platform.hpp"
 #include "../lj/LJMain.hpp"

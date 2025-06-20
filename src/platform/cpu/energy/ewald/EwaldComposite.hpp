@@ -2,8 +2,8 @@
 
 #include "model/montecarlo.hpp"
 #include "EwaldCore.hpp"
-#include "EwaldRealSpace.hpp"
-#include "EwaldReciprocal.hpp"
+#include "EwaldReal.hpp"
+#include "EwaldRecip.hpp"
 #include "EwaldSelf.hpp"
 
 namespace pygcmc {

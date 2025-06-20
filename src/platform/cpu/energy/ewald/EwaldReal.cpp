@@ -1,4 +1,4 @@
-#include "EwaldRealSpace.hpp"
+#include "EwaldReal.hpp"
 #include "../lj/LJMain.hpp"
 #include "platform/platform.hpp"
 #include <cmath>
