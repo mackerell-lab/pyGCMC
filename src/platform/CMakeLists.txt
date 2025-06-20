@@ -1,26 +1,23 @@
 # src/platform/CMakeLists.txt
 
+# Automatically discover all source files
+file(GLOB_RECURSE PLATFORM_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cxx"
+)
+
+# Automatically discover all header files (for IDE display)
+file(GLOB_RECURSE PLATFORM_HEADERS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.hxx"
+)
+
 # Create platform library
 add_library(pygcmc_platform STATIC
-    platform.hpp
-    cpu/energy.hpp
-    cpu/energyCommon.hpp
-    cpu/energyCommon.cpp
-    cpu/energyDirect.hpp
-    cpu/energyEwald.hpp
-    cpu/energyEwald.cpp
-    cpu/energyDirect.cpp
-    cpu/energyPME.hpp
-    cpu/energyPME.cpp
-    cpu/energyPGP.hpp
-    cpu/energyLJ.hpp
-    cpu/energyLJ.cpp
-    # PGP submodules
-    cpu/energy/pgp/PGPGrid.cpp
-    cpu/energy/pgp/PGPPrecompute.cpp
-    cpu/energy/pgp/PGPInterpolation.cpp
-    cpu/energy/pgp/PGPEvaluator.cpp
-    # Future source files like cpuPlatform.cpp, cudaPlatform.cu, etc. can be added here
+    ${PLATFORM_SOURCES}
+    ${PLATFORM_HEADERS}
 )
 
 # Set position independent code
