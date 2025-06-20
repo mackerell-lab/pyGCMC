@@ -3,7 +3,7 @@
 #include "energyCommon.hpp"
 #include "energyDirect.hpp"
 #include "energyEwald.hpp"
-#include "energyPME.hpp"
+#include "energy/pme/PMEComposite.hpp"
 #include <stdexcept>
 
 namespace pygcmc {

@@ -1,7 +1,7 @@
 // src/simulation/simulation.cpp
 #include "simulation.hpp"
 #include "../platform/cpu/energy.hpp"
-#include "../platform/cpu/energyPME.hpp"
+#include "../platform/cpu/energy/pme/PMEComposite.hpp"
 #include "../platform/cpu/energy/pgp/PGPCore.hpp"
 #include <cmath>
 

@@ -3,7 +3,7 @@
 #include "model/montecarlo.hpp"
 #include "platform/platform.hpp"
 #include "platform/cpu/energyCommon.hpp"
-#include "platform/cpu/energyPME.hpp"
+#include "platform/cpu/energy/pme/PMEComposite.hpp"
 #include <array>
 #include <vector>
 #include <complex>
