@@ -2,7 +2,7 @@
 #include "simulation.hpp"
 #include "../platform/cpu/energy.hpp"
 #include "../platform/cpu/energyPME.hpp"
-#include "../platform/cpu/energyPGP.hpp"
+#include "../platform/cpu/energy/pgp/PGPCore.hpp"
 #include <cmath>
 
 namespace pygcmc {
