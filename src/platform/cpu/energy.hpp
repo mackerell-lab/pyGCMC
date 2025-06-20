@@ -7,7 +7,7 @@
 
 // Then include implementations
 #include "energyDirect.hpp"
-#include "energyEwald.hpp"
+#include "energy/ewald/EwaldComposite.hpp"
 #include "energy/pme/PMEComposite.hpp"
 
 namespace pygcmc {

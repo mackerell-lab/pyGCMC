@@ -2,7 +2,7 @@
 
 #include "energyCommon.hpp"
 #include "energyDirect.hpp"
-#include "energyEwald.hpp"
+#include "energy/ewald/EwaldComposite.hpp"
 #include "energy/pme/PMEComposite.hpp"
 #include <stdexcept>
 
