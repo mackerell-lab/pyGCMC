@@ -187,6 +187,10 @@ double calculateMoleculeEnergyImpl(model::MCState& state) {
 
 double computeMoleculeEnergyGlobalImpl(model::MCState& state, const std::vector<int>& movementResidues, 
                                        const std::vector<int>& nearbyResidues, int threadIndex) {
+    // Suppress unused parameter warnings
+    (void)nearbyResidues;
+    (void)threadIndex;
+    
     // If parameters are not initialized, return 0
     if (!pgp_params.initialized) {
         platform::log(LogLevel::WARNING, "PGP parameters not initialized, returning 0 energy");
