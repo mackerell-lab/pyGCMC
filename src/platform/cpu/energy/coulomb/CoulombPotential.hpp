@@ -17,7 +17,7 @@ namespace coulomb {
  * @param q2 Charge of second atom in e
  * @return Coulomb energy in kJ/mol
  * 
- * @note 此函数是模板函数，必须在头文件中定义，以便编译器能够在各种调用点生成对应的特化版本
+ * @note This function is a template function that must be defined in the header file so the compiler can generate specialized versions at various call points
  */
 template <typename T>
 T calculateBasicCoulombEnergy(T r, T q1, T q2) {
@@ -33,7 +33,7 @@ T calculateBasicCoulombEnergy(T r, T q1, T q2) {
  * @param max_safe_energy Maximum allowed energy value
  * @return Coulomb energy in kJ/mol
  * 
- * @note 此函数是模板函数，必须在头文件中定义，以便编译器能够在各种调用点生成对应的特化版本
+ * @note This function is a template function that must be defined in the header file so the compiler can generate specialized versions at various call points
  */
 template <typename T>
 T calculateCoulombEnergy(T r, T q1, T q2, T max_safe_energy = T(MAX_SAFE_ENERGY)) {
@@ -47,12 +47,12 @@ T calculateCoulombEnergy(T r, T q1, T q2, T max_safe_energy = T(MAX_SAFE_ENERGY)
 }
 
 /**
- * @brief 简便的double版本调用，使用常量作为安全参数
+ * @brief Convenient double version call, using constants as safety parameters
  * 
- * @param r 距离 (nm)
- * @param q1 第一个原子的电荷 (e)
- * @param q2 第二个原子的电荷 (e)
- * @return 库伦能量 (kJ/mol)
+ * @param r Distance (nm)
+ * @param q1 Charge of first atom (e)
+ * @param q2 Charge of second atom (e)
+ * @return Coulomb energy (kJ/mol)
  */
 double calcCoulombEnergy(double r, double q1, double q2);
 

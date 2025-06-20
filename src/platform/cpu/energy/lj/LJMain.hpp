@@ -1,26 +1,26 @@
 #pragma once
 
 /**
- * @brief LJ模块统一入口 - Lennard-Jones Potential Module
+ * @brief LJ Module Unified Entry Point - Lennard-Jones Potential Module
  * 
- * 本文件聚合LJ模块的所有功能，外部只需包含此文件。
+ * This file aggregates all functionality of the LJ module, external code only needs to include this file.
  * 
- * 功能包含：
- * 1. 基础LJ势能计算 (LJPotential)
- * 2. 开关函数支持 (LJSwitch)
- * 3. 安全检查和数值稳定性处理
+ * Features include:
+ * 1. Basic LJ potential calculation (LJPotential)
+ * 2. Switching function support (LJSwitch)
+ * 3. Safety checks and numerical stability handling
  * 
- * 典型用法：
+ * Typical usage:
  *   #include "lj/LJMain.hpp"
  *   
  *   using namespace pygcmc::platform::cpu::lj;
  *   double energy = calcLJEnergyBasic(r2, sigma, eps);
  *   double energy_switch = calcLJEnergyWithSwitching(r2, sigma, eps, info);
  * 
- * @note 这是LJ模块的唯一对外接口，外部模块不应直接包含子模块头文件
+ * @note This is the only external interface of the LJ module, external modules should not directly include sub-module header files
  */
 
-// 聚合LJ模块的所有子功能
+// Aggregate all sub-functions of the LJ module
 #include "LJPotential.hpp"
 #include "LJSwitch.hpp"
 

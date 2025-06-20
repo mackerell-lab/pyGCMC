@@ -23,7 +23,7 @@ std::pair<double, double> calcPairEnergyPME(
     double lj_energy = 0.0;
     double elec_energy = 0.0;
     
-    // LJ energy calculation - 使用统一的calculateLJEnergy接口
+    // LJ energy calculation - use unified calculateLJEnergy interface
     lj_energy = lj::calculateLJEnergyWithSwitching(r2, sigma, eps, info);
     
     // Electrostatic energy - use PME approximation

@@ -10,13 +10,13 @@ namespace cpu {
 namespace lj {
 
 /**
- * @brief 检查距离平方，确保不小于最小安全距离的平方
+ * @brief Check squared distance, ensure it's not smaller than the square of minimum safe distance
  *
- * @param r2 距离平方 (nm²)
- * @param min_safe_distance 最小安全距离 (nm)
- * @return 安全的距离平方 (nm²)
+ * @param r2 Squared distance (nm²)
+ * @param min_safe_distance Minimum safe distance (nm)
+ * @return Safe squared distance (nm²)
  * 
- * @note 此函数是模板函数，必须在头文件中定义，以便编译器能够在各种调用点生成对应的特化版本
+ * @note This function is a template function that must be defined in the header file so the compiler can generate specialized versions at various call points
  */
 template <typename T>
 T checkLJDistance(T r2, T min_safe_distance = LJ_MIN_SAFE_DISTANCE) {
@@ -25,13 +25,13 @@ T checkLJDistance(T r2, T min_safe_distance = LJ_MIN_SAFE_DISTANCE) {
 }
 
 /**
- * @brief 限制LJ能量在安全范围内
+ * @brief Limit LJ energy within safe range
  * 
- * @param energy LJ能量 (kJ/mol)
- * @param max_safe_energy 最大安全能量 (kJ/mol)
- * @return 限制后的LJ能量 (kJ/mol)
+ * @param energy LJ energy (kJ/mol)
+ * @param max_safe_energy Maximum safe energy (kJ/mol)
+ * @return Limited LJ energy (kJ/mol)
  * 
- * @note 此函数是模板函数，必须在头文件中定义，以便编译器能够在各种调用点生成对应的特化版本
+ * @note This function is a template function that must be defined in the header file so the compiler can generate specialized versions at various call points
  */
 template <typename T>
 T capLJEnergy(T energy, T max_safe_energy = LJ_MAX_SAFE_ENERGY) {
@@ -46,11 +46,11 @@ T capLJEnergy(T energy, T max_safe_energy = LJ_MAX_SAFE_ENERGY) {
  * @param eps LJ epsilon parameter in kJ/mol
  * @return LJ energy in kJ/mol
  * 
- * @note 此函数是模板函数，必须在头文件中定义，以便编译器能够在各种调用点生成对应的特化版本
+ * @note This function is a template function that must be defined in the header file so the compiler can generate specialized versions at various call points
  */
 template <typename T>
 T calculateBasicLJEnergy(T r2, T sigma, T eps) {
-    // 使用与energyCommon.hpp中相同的实现方式
+    // Use the same implementation as in energyCommon.hpp
     T sigma_r2 = (sigma * sigma) / r2;  // (σ/r)²
     T sigma_r6 = sigma_r2 * sigma_r2 * sigma_r2;  // (σ/r)⁶
     T sigma_r12 = sigma_r6 * sigma_r6;  // (σ/r)¹²
@@ -69,7 +69,7 @@ T calculateBasicLJEnergy(T r2, T sigma, T eps) {
  * @param max_safe_energy Maximum allowed energy value
  * @return LJ energy in kJ/mol
  * 
- * @note 此函数是模板函数，必须在头文件中定义，以便编译器能够在各种调用点生成对应的特化版本
+ * @note This function is a template function that must be defined in the header file so the compiler can generate specialized versions at various call points
  */
 template <typename T>
 T calculateLJEnergyNoSwitch(
@@ -92,12 +92,12 @@ T calculateLJEnergyNoSwitch(
 }
 
 /**
- * @brief 简便的double版本调用，使用常量作为安全参数
+ * @brief Convenient double version call, using constants as safety parameters
  * 
- * @param r2 距离平方 (nm²)
- * @param sigma LJ sigma参数 (nm)
- * @param eps LJ epsilon参数 (kJ/mol)
- * @return LJ能量 (kJ/mol)
+ * @param r2 Squared distance (nm²)
+ * @param sigma LJ sigma parameter (nm)
+ * @param eps LJ epsilon parameter (kJ/mol)
+ * @return LJ energy (kJ/mol)
  */
 double calcLJEnergyBasic(double r2, double sigma, double eps);
 

@@ -1,34 +1,34 @@
 #pragma once
 
 /**
- * @brief Ewald模块统一入口 - Ewald Summation Module
+ * @brief Ewald Module Unified Entry Point - Ewald Summation Module
  * 
- * 本文件聚合Ewald模块的所有功能，外部只需包含此文件。
+ * This file aggregates all functionality of the Ewald module, external code only needs to include this file.
  * 
- * 功能组件：
- * - EwaldCore: 核心参数和初始化
- * - EwaldReal: 实空间能量计算
- * - EwaldRecip: 倒空间能量计算  
- * - EwaldSelf: 自能修正
- * - EwaldComposite: 高级统一接口
+ * Functional components:
+ * - EwaldCore: Core parameters and initialization
+ * - EwaldReal: Real-space energy calculation
+ * - EwaldRecip: Reciprocal-space energy calculation
+ * - EwaldSelf: Self-energy correction
+ * - EwaldComposite: Advanced unified interface
  * 
- * 典型用法：
+ * Typical usage:
  *   #include "ewald/EwaldMain.hpp"
  *   
  *   using namespace pygcmc::platform::cpu;
  *   computeSystemEnergyEwald(state);
  *   computeMovementEnergyEwald(state);
  * 
- * @note AI Agents功能定位指南:
- * - 能量计算: EwaldComposite.hpp -> computeSystemEnergyEwald, computeMovementEnergyEwald
- * - 实空间: EwaldReal.hpp -> computeRealSpaceEwald, calcPairEnergyEwaldRealSpace
- * - 倒空间: EwaldRecip.hpp -> computeReciprocalEnergy
- * - 自能: EwaldSelf.hpp -> computeSelfEnergy
- * - 初始化: EwaldInterface.hpp -> initializeEwald, isEwaldInitialized
- * - 参数设置: EwaldCore.hpp -> setEwaldParameters, autoAdjustParameters
+ * @note AI Agents functionality guide:
+ * - Energy calculation: EwaldComposite.hpp -> computeSystemEnergyEwald, computeMovementEnergyEwald
+ * - Real space: EwaldReal.hpp -> computeRealSpaceEwald, calcPairEnergyEwaldRealSpace
+ * - Reciprocal space: EwaldRecip.hpp -> computeReciprocalEnergy
+ * - Self energy: EwaldSelf.hpp -> computeSelfEnergy
+ * - Initialization: EwaldInterface.hpp -> initializeEwald, isEwaldInitialized
+ * - Parameter setting: EwaldCore.hpp -> setEwaldParameters, autoAdjustParameters
  */
 
-// 聚合Ewald模块的所有子功能
+// Aggregate all sub-functions of the Ewald module
 #include "EwaldCore.hpp"
 #include "EwaldReal.hpp" 
 #include "EwaldRecip.hpp"

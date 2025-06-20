@@ -66,20 +66,20 @@ void PMEComposite::computeSystemEnergy(model::MCState& state) {
     // 3. Finally calculate self energy part - computeSelfEnergyPME already includes COULOMB factor
     state.ewald_energy.self = computeSelfEnergyPME(state, false);
     
-    // 4. Calculate VDW energy - 与Ewald保持一致，使用Direct方式
+    // 4. Calculate VDW energy - consistent with Ewald, use Direct method
     computeSystemVdwEnergyDirect(state, true, true);
     
     // Only multiply real space energy by COULOMB coefficient
     state.ewald_energy.real_space *= COULOMB;
     
-    // Apply COULOMB constant to energies in residues - 与Ewald一致
+    // Apply COULOMB constant to energies in residues - consistent with Ewald
     for(auto& residue : state.residues) {
         if(residue.active) {
             residue.energy_elec *= COULOMB;
         }
     }
     
-    // Calculate total energy - 与Ewald一致，从residue获取总能量（包含VDW和实空间静电）
+    // Calculate total energy - consistent with Ewald, get total energy from residues (including VDW and real-space electrostatics)
     double residue_total = 0.0;
     for (const auto& residue : state.residues) {
         if (residue.active) {
@@ -87,7 +87,7 @@ void PMEComposite::computeSystemEnergy(model::MCState& state) {
         }
     }
     
-    // 总能量 = residue总能量(包含VDW和实空间静电) + Reciprocal + Self
+    // Total energy = residue total energy (including VDW and real-space electrostatics) + Reciprocal + Self
     state.ewald_energy.total = residue_total + 
                              state.ewald_energy.reciprocal + 
                              state.ewald_energy.self;
@@ -109,14 +109,14 @@ void PMEComposite::computeMovementEnergy(model::MCState& state) {
     state.ewald_energy.reciprocal = computeReciprocalPME(state);
     state.ewald_energy.self = computeSelfEnergyPME(state, true);
     
-    // Add VDW energy calculation for movement residues - 与Ewald保持一致
+    // Add VDW energy calculation for movement residues - consistent with Ewald
     computeSystemVdwEnergyDirect(state, true, true);
     
     // Apply Coulomb factor only to real-space component
     // Note: computeReciprocalPME and computeSelfEnergyPME already include COULOMB factor
     state.ewald_energy.real_space *= COULOMB;
     
-    // Apply COULOMB constant to energies in movement residues - 与Ewald一致
+    // Apply COULOMB constant to energies in movement residues - consistent with Ewald
     for(const auto& movementInfo : state.movementResidues) {
         for(int i = movementInfo.startIndex;
             i < movementInfo.startIndex + movementInfo.activeCount; i++) {
@@ -126,7 +126,7 @@ void PMEComposite::computeMovementEnergy(model::MCState& state) {
         }
     }
     
-    // Calculate total energy for movement residues - 与Ewald一致
+    // Calculate total energy for movement residues - consistent with Ewald
     double residue_total = 0.0;
     for(const auto& movementInfo : state.movementResidues) {
         for(int i = movementInfo.startIndex;
@@ -137,7 +137,7 @@ void PMEComposite::computeMovementEnergy(model::MCState& state) {
         }
     }
     
-    // 总能量 = residue总能量(包含VDW和实空间静电) + Reciprocal + Self
+    // Total energy = residue total energy (including VDW and real-space electrostatics) + Reciprocal + Self
     state.ewald_energy.total = residue_total + 
                              state.ewald_energy.reciprocal + 
                              state.ewald_energy.self;

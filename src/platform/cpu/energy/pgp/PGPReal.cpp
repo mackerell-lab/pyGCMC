@@ -48,7 +48,7 @@ void computeRealSpacePGPImpl(model::MCState& state, bool movement_only, bool sto
         for(int r2 = r1 + 1; r2 < state.activeResidueCount; r2++) {
             if(!residues[r2].active) continue;
             
-            // 如果两个残基都是固定的，那么它们之间的相互作用已经包含在预计算的网格势能中
+            // If both residues are fixed, their interaction is already included in the precomputed grid potential
             if(residues[r1].fixed && residues[r2].fixed) continue;
             
             // Loop over atoms in each residue

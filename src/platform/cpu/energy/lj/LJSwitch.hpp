@@ -28,7 +28,7 @@ float calculateSwitchingFunction(float r, const model::MCInfo& info);
  * @param max_safe_energy Maximum allowed energy value
  * @return LJ energy in kJ/mol
  * 
- * @note 此函数是模板函数，必须在头文件中定义，以便编译器能够在各种调用点生成对应的特化版本
+ * @note This function is a template function that must be defined in the header file so the compiler can generate specialized versions at various call points
  */
 template <typename T>
 T calculateLJEnergyWithSwitching(
@@ -39,7 +39,7 @@ T calculateLJEnergyWithSwitching(
     T min_safe_distance = T(LJ_MIN_SAFE_DISTANCE),
     T max_safe_energy = T(LJ_MAX_SAFE_ENERGY)
 ) {
-    // 快速路径：如果不使用switching function，直接调用简化版本
+    // Fast path: if not using switching function, directly call simplified version
     if (!info.use_switching) {
         return calculateLJEnergyNoSwitch(r2, sigma, eps, min_safe_distance, max_safe_energy);
     }
@@ -69,13 +69,13 @@ T calculateLJEnergyWithSwitching(
 }
 
 /**
- * @brief 简便的double版本调用，使用常量作为安全参数
+ * @brief Convenient double version call, using constants as safety parameters
  * 
- * @param r2 距离平方 (nm²)
- * @param sigma LJ sigma参数 (nm)
- * @param eps LJ epsilon参数 (kJ/mol)
- * @param info MC信息，包含切换函数参数
- * @return LJ能量 (kJ/mol)
+ * @param r2 Squared distance (nm²)
+ * @param sigma LJ sigma parameter (nm)
+ * @param eps LJ epsilon parameter (kJ/mol)
+ * @param info MC information containing switching function parameters
+ * @return LJ energy (kJ/mol)
  */
 double calcLJEnergyWithSwitching(double r2, double sigma, double eps, const model::MCInfo& info);
 

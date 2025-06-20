@@ -1,38 +1,38 @@
 #pragma once
 
 /**
- * @brief PGP模块统一入口 - Precomputed Grid-Potential Module
+ * @brief PGP Module Unified Entry Point - Precomputed Grid-Potential Module
  * 
- * 本文件聚合PGP模块的所有功能，外部只需包含此文件。
+ * This file aggregates all functionality of the PGP module, external code only needs to include this file.
  * 
- * 功能组件：
- * - PGPCore: 核心参数和初始化
- * - PGPGrid: 网格操作和势能网格
- * - PGPInterpolation: 网格插值和能量计算
- * - PGPPrecompute: 预计算算法优化
- * - PGPReal: 实空间能量计算
- * - PGPSelf: 自能修正
- * - PGPSystem: 完整系统能量评估
- * - PGPComposite: 高级统一接口
+ * Functional components:
+ * - PGPCore: Core parameters and initialization
+ * - PGPGrid: Grid operations and potential grids
+ * - PGPInterpolation: Grid interpolation and energy calculation
+ * - PGPPrecompute: Precomputation algorithm optimization
+ * - PGPReal: Real-space energy calculation
+ * - PGPSelf: Self-energy correction
+ * - PGPSystem: Complete system energy evaluation
+ * - PGPComposite: Advanced unified interface
  * 
- * 典型用法：
+ * Typical usage:
  *   #include "pgp/PGPMain.hpp"
  *   
  *   using namespace pygcmc::platform::cpu;
  *   computeSystemEnergyPGP(state);
  *   computeMovementEnergyPGP(state);
  * 
- * @note AI Agents功能定位指南:
- * - 能量计算: PGPSystem.hpp -> computeSystemEnergyPGP, computeMovementEnergyPGP
- * - 网格插值: PGPSystem.hpp -> interpolateMoleculeEnergy, calculateMoleculeEnergy
- * - 网格预计算: PGPPrecompute.hpp -> precomputeGridPotential, setPGPParameters
- * - 实空间: PGPReal.hpp -> computeRealSpacePGP
- * - 自能: PGPSelf.hpp -> computeSelfEnergyPGP
- * - 网格操作: PGPGrid.hpp -> initializePotentialGrid
- * - 参数设置: PGPCore.hpp -> setPGPParameters, PGPParams结构
+ * @note AI Agents functionality guide:
+ * - Energy calculation: PGPSystem.hpp -> computeSystemEnergyPGP, computeMovementEnergyPGP
+ * - Grid interpolation: PGPSystem.hpp -> interpolateMoleculeEnergy, calculateMoleculeEnergy
+ * - Grid precomputation: PGPPrecompute.hpp -> precomputeGridPotential, setPGPParameters
+ * - Real space: PGPReal.hpp -> computeRealSpacePGP
+ * - Self energy: PGPSelf.hpp -> computeSelfEnergyPGP
+ * - Grid operations: PGPGrid.hpp -> initializePotentialGrid
+ * - Parameter setting: PGPCore.hpp -> setPGPParameters, PGPParams structure
  */
 
-// 聚合PGP模块的所有子功能
+// Aggregate all sub-functions of the PGP module
 #include "PGPCore.hpp"
 #include "PGPGrid.hpp"
 #include "PGPInterpolation.hpp"

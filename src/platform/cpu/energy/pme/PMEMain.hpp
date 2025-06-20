@@ -1,43 +1,43 @@
 #pragma once
 
 /**
- * @brief PME模块统一入口 - Particle Mesh Ewald Module
+ * @brief PME Module Unified Entry Point - Particle Mesh Ewald Module
  * 
- * 本文件聚合PME模块的所有功能，外部只需包含此文件。
+ * This file aggregates all functionality of the PME module, external code only needs to include this file.
  * 
- * 功能组件：
- * - PMECore: 核心参数结构和基础函数
- * - PMEConfig: 参数设置和配置管理
- * - PMESetup: 初始化函数
- * - PMEInterface: 高级能量计算接口
- * - PMEFFT: 自定义FFT实现
- * - PMESpline: B样条插值函数
- * - PMEGrid: 网格操作和电荷分布
- * - PMEReal: 实空间能量计算  
- * - PMERecip: 倒空间能量计算
- * - PMESelf: 自能修正
- * - PMEComposite: 统一接口和便捷函数
+ * Functional components:
+ * - PMECore: Core parameter structures and basic functions
+ * - PMEConfig: Parameter setting and configuration management
+ * - PMESetup: Initialization functions
+ * - PMEInterface: Advanced energy calculation interface
+ * - PMEFFT: Custom FFT implementation
+ * - PMESpline: B-spline interpolation functions
+ * - PMEGrid: Grid operations and charge distribution
+ * - PMEReal: Real-space energy calculation
+ * - PMERecip: Reciprocal-space energy calculation
+ * - PMESelf: Self-energy correction
+ * - PMEComposite: Unified interface and convenience functions
  * 
- * 典型用法：
+ * Typical usage:
  *   #include "pme/PMEMain.hpp"
  *   
  *   using namespace pygcmc::platform::cpu;
  *   computeSystemEnergyPME(state);
  *   computeMovementEnergyPME(state);
  * 
- * @note AI Agents功能定位指南:
- * - 能量计算: PMEInterface.hpp -> computeSystemEnergyPME, computeMovementEnergyPME
- * - 组件计算: PMEInterface.hpp -> computeReciprocalPME, computeSelfEnergyPME, computeRealSpacePME
- * - 参数设置: PMESetup.hpp -> setPMEParameters, autoAdjustPMEParameters
- * - 初始化: PMESetup.hpp -> initializePMEParameters, initializePMETables, initializePMEBsplines
- * - 实空间: PMEReal.hpp -> computeRealSpaceEnergy, calcPairEnergyPME
- * - 自能: PMESelf.hpp -> computeSelfEnergyPME, calculateParticleSelfEnergy
- * - 倒空间: PMERecip.hpp -> 倒空间计算
- * - 网格操作: PMEGrid.hpp, PMEGridMap.hpp -> 网格管理和电荷分布
- * - 参数结构: PMECore.hpp -> PMEParams结构和基础函数
+ * @note AI Agents functionality guide:
+ * - Energy calculation: PMEInterface.hpp -> computeSystemEnergyPME, computeMovementEnergyPME
+ * - Component calculation: PMEInterface.hpp -> computeReciprocalPME, computeSelfEnergyPME, computeRealSpacePME
+ * - Parameter setting: PMESetup.hpp -> setPMEParameters, autoAdjustPMEParameters
+ * - Initialization: PMESetup.hpp -> initializePMEParameters, initializePMETables, initializePMEBsplines
+ * - Real space: PMEReal.hpp -> computeRealSpaceEnergy, calcPairEnergyPME
+ * - Self energy: PMESelf.hpp -> computeSelfEnergyPME, calculateParticleSelfEnergy
+ * - Reciprocal space: PMERecip.hpp -> reciprocal space calculation
+ * - Grid operations: PMEGrid.hpp, PMEGridMap.hpp -> grid management and charge distribution
+ * - Parameter structures: PMECore.hpp -> PMEParams structure and basic functions
  */
 
-// 聚合PME模块的所有子功能
+// Aggregate all sub-functions of the PME module
 #include "PMECore.hpp"
 #include "PMEConfig.hpp"
 #include "PMESetup.hpp"
