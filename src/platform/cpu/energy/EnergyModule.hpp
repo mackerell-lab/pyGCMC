@@ -5,7 +5,7 @@
 // Include all energy calculation modules
 #include "common/EnergyMain.hpp"
 #include "lj/LJMain.hpp"
-#include "coulomb/CoulombPairCore.hpp"
+#include "coulomb/CoulombMain.hpp"
 #include "ewald/EwaldMain.hpp"
 #include "pme/PMEMain.hpp"
 
