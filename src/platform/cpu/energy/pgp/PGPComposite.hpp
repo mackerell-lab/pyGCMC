@@ -5,7 +5,9 @@
 #include "PGPGrid.hpp"
 #include "PGPInterpolation.hpp"
 #include "PGPPrecompute.hpp"
-#include "PGPEvaluator.hpp"
+#include "PGPRealSpace.hpp"
+#include "PGPSelfEnergy.hpp"
+#include "PGPSystemEnergy.hpp"
 
 namespace pygcmc {
 namespace platform {

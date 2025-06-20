@@ -10,7 +10,9 @@
  * - PGPGrid: Grid operations and potential grids
  * - PGPInterpolation: Interpolation functions for grid-based calculations
  * - PGPPrecompute: Precomputation algorithms for optimization
- * - PGPEvaluator: Energy evaluation functions
+ * - PGPRealSpace: Real space energy calculations
+ * - PGPSelfEnergy: Self energy corrections
+ * - PGPSystemEnergy: Complete system energy evaluation
  * - PGPComposite: High-level unified interface
  * 
  * For most users, including PGPComposite.hpp is sufficient, as it provides
@@ -24,7 +26,9 @@
 #include "PGPGrid.hpp"
 #include "PGPInterpolation.hpp"
 #include "PGPPrecompute.hpp"
-#include "PGPEvaluator.hpp"
+#include "PGPRealSpace.hpp"
+#include "PGPSelfEnergy.hpp"
+#include "PGPSystemEnergy.hpp"
 
 // Unified interface
 #include "PGPComposite.hpp"
@@ -41,7 +45,7 @@ namespace cpu {
 namespace PGPInfo {
     constexpr const char* VERSION = "1.0.0";
     constexpr const char* DESCRIPTION = "Modular Precomputed Grid-Potential Implementation";
-    constexpr int NUM_MODULES = 5;
+    constexpr int NUM_MODULES = 7;
     
     // Module names for debugging and introspection
     constexpr const char* MODULE_NAMES[] = {
@@ -49,7 +53,9 @@ namespace PGPInfo {
         "PGPGrid",
         "PGPInterpolation", 
         "PGPPrecompute",
-        "PGPEvaluator"
+        "PGPRealSpace",
+        "PGPSelfEnergy",
+        "PGPSystemEnergy"
     };
 }
 

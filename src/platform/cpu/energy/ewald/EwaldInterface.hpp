@@ -1,5 +1,5 @@
-#ifndef EWALDMOVEMENTENERGY_HPP
-#define EWALDMOVEMENTENERGY_HPP
+#ifndef EWALDINTERFACE_HPP
+#define EWALDINTERFACE_HPP
 
 #include "model/montecarlo.hpp"
 
@@ -58,4 +58,4 @@ void checkEwaldParameterConsistency();
 } // namespace platform
 } // namespace pygcmc
 
-#endif // EWALDMOVEMENTENERGY_HPP 
+#endif // EWALDINTERFACE_HPP 
