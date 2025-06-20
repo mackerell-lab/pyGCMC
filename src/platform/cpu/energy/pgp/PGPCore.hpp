@@ -1,0 +1,84 @@
+#pragma once
+
+#include "model/montecarlo.hpp"
+#include "platform/platform.hpp"
+#include "platform/cpu/energyCommon.hpp"
+#include "platform/cpu/energyPME.hpp"
+#include <array>
+#include <vector>
+#include <complex>
+
+namespace pygcmc {
+namespace platform {
+namespace cpu {
+
+/**
+ * @brief PGP-PME algorithm parameter structure (Precomputed Grid-Potential Particle Mesh Ewald)
+ * 
+ * This structure contains all parameters and data structures required by the Precomputed Grid-Potential Particle Mesh Ewald algorithm.
+ * PGP-PME is an optimized PME method that accelerates energy evaluation in Monte Carlo simulations by precomputing potential grids.
+ */
+struct PGPParams : public PMEParams {
+    bool initialized = false;      // Whether parameters have been initialized
+    double alpha;                  // Ewald separation parameter, balances real space and reciprocal space calculations
+    double tolerance;              // Error tolerance
+    double cutoff;                 // Real space cutoff distance
+    double epsilon_r;              // Relative dielectric constant
+    int splineOrder;               // B-spline interpolation order (typically 4, cubic B-spline)
+    std::array<double, 3> box;     // Simulation box dimensions
+    std::array<int, 3> meshSize;   // PME grid dimensions
+    
+    // Precomputed potential grid parameters
+    double potential_cutoff;              // Cutoff distance for potential calculation
+    int potential_grid_size[3];           // Precomputed potential grid dimensions
+    double grid_spacing;                  // Grid spacing
+    std::vector<std::complex<double>> potentialGrid;  // Precomputed potential grid data
+    
+    // PME algorithm parameters (mainly set by setPMEParameters function)
+    std::vector<double> erfcTable;         // erfc function lookup table
+    std::vector<double> ewaldScaleTable;   // Ewald scaling factor lookup table
+    double ewaldDX;                        // Ewald table step size
+    double ewaldDXInv;                     // Inverse of Ewald table step size
+    double erfcDXInv;                      // Inverse of erfc table step size
+    std::vector<double> bsplineModuli[3];  // B-spline moduli
+    std::vector<std::complex<double>> pmeGrid;   // PME grid
+    std::vector<double> pmeCharge;        // PME charge grid, type must match PME struct
+    
+    // Debug flags
+    bool debug_mode = true;  // Debug mode enabled by default
+
+    /**
+     * @brief Initialize the 3D grid for precomputed potential
+     */
+    void initializePotentialGrid();
+};
+
+// Global PGP parameters
+extern PGPParams pgp_params;
+
+// Core function declarations
+void setPGPParameters(double alpha, const int meshSize[3], double potential_cutoff, 
+                        const int potentialGridSize[3], int splineOrder, double tolerance);
+
+void precomputeGridPotential(model::MCState& state, bool fixed_only = true);
+
+void interpolateMoleculeEnergy(model::MCState& state, double& energy);
+
+double calculateMoleculeEnergy(model::MCState& state);
+
+double computeMoleculeEnergyGlobal(model::MCState& state, const std::vector<int>& movementResidues, 
+                                   const std::vector<int>& nearbyResidues, int threadIndex);
+
+void computeRealSpacePGP(model::MCState& state, bool movement_only, bool store_in_residues = true);
+
+double computeSelfEnergyPGP(model::MCState& state, bool movement_only);
+
+void computeSystemEnergyPGP(model::MCState& state);
+
+void computeMovementEnergyPGP(model::MCState& state);
+
+// <agent-hook:pgp_core>
+
+} // namespace cpu
+} // namespace platform
+} // namespace pygcmc 
