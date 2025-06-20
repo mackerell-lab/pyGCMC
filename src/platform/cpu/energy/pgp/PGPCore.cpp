@@ -16,24 +16,22 @@ const double SQRT_PI = sqrt(M_PI);
 
 void setPGPParameters(double alpha, const int meshSize[3], double potential_cutoff, 
                         const int potentialGridSize[3], int splineOrder, double tolerance) {
-    // First set standard PME parameters
+    // First set standard PME parameters (this will set all inherited fields)
     setPMEParameters(alpha, meshSize, splineOrder, tolerance);
     
-    // Copy standard PME parameters to PGP parameter structure
+    // Copy PME parameters to PGP instance (since they are separate global instances)
     pgp_params.alpha = pme_params.alpha;
     pgp_params.tolerance = pme_params.tolerance;
-    pgp_params.initialized = pme_params.initialized;
-    pgp_params.cutoff = pme_params.cutoff;
     pgp_params.epsilon_r = pme_params.epsilon_r;
     pgp_params.splineOrder = pme_params.splineOrder;
     
-    // Copy box size and grid size
+    // Copy arrays
     for (int i = 0; i < 3; i++) {
         pgp_params.box[i] = pme_params.box[i];
         pgp_params.meshSize[i] = pme_params.meshSize[i];
     }
     
-    // Copy PME lookup tables
+    // Copy lookup tables and grid data
     pgp_params.erfcTable = pme_params.erfcTable;
     pgp_params.ewaldScaleTable = pme_params.ewaldScaleTable;
     pgp_params.ewaldDX = pme_params.ewaldDX;
@@ -45,7 +43,7 @@ void setPGPParameters(double alpha, const int meshSize[3], double potential_cuto
         pgp_params.bsplineModuli[i] = pme_params.bsplineModuli[i];
     }
     
-    // Copy PME grid
+    // Copy PME grids
     pgp_params.pmeGrid = pme_params.pmeGrid;
     pgp_params.pmeCharge = pme_params.pmeCharge;
     
@@ -58,7 +56,7 @@ void setPGPParameters(double alpha, const int meshSize[3], double potential_cuto
     // Initialize grid for precomputed potential
     pgp_params.initializePotentialGrid();
     
-    // Mark as initialized
+    // Mark PGP as initialized
     pgp_params.initialized = true;
     
     // Output parameter setting information
@@ -76,17 +74,12 @@ void initializePGPParameters(double cutoff, const double box[3],
                            const int potentialGridSize[3],
                            int splineOrder,
                            double tolerance) {
-    // Set box dimensions
-    pgp_params.box[0] = box[0];
-    pgp_params.box[1] = box[1];
-    pgp_params.box[2] = box[2];
-    pgp_params.cutoff = cutoff;
-    
-    // Set PGP parameters
+    // Set PGP parameters (this will also set PME parameters via setPMEParameters)
     setPGPParameters(alpha, meshSize, potentialCutoff, potentialGridSize, splineOrder, tolerance);
     
     // Initialize PME parameters (PGP inherits from PME)
     pgp_params.setBox(box);
+    pgp_params.cutoff = cutoff;
     pgp_params.initializeTables(cutoff);
     pgp_params.initializeBsplines();
     

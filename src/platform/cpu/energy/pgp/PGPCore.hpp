@@ -19,30 +19,11 @@ namespace cpu {
  * PGP-PME is an optimized PME method that accelerates energy evaluation in Monte Carlo simulations by precomputing potential grids.
  */
 struct PGPParams : public PMEParams {
-    bool initialized = false;      // Whether parameters have been initialized
-    double alpha;                  // Ewald separation parameter, balances real space and reciprocal space calculations
-    double tolerance;              // Error tolerance
-    double cutoff;                 // Real space cutoff distance
-    double epsilon_r;              // Relative dielectric constant
-    int splineOrder;               // B-spline interpolation order (typically 4, cubic B-spline)
-    std::array<double, 3> box;     // Simulation box dimensions
-    std::array<int, 3> meshSize;   // PME grid dimensions
-    
-    // Precomputed potential grid parameters
+    // PGP-specific parameters (not inherited from PMEParams)
     double potential_cutoff;              // Cutoff distance for potential calculation
     int potential_grid_size[3];           // Precomputed potential grid dimensions
     double grid_spacing;                  // Grid spacing
     std::vector<std::complex<double>> potentialGrid;  // Precomputed potential grid data
-    
-    // PME algorithm parameters (mainly set by setPMEParameters function)
-    std::vector<double> erfcTable;         // erfc function lookup table
-    std::vector<double> ewaldScaleTable;   // Ewald scaling factor lookup table
-    double ewaldDX;                        // Ewald table step size
-    double ewaldDXInv;                     // Inverse of Ewald table step size
-    double erfcDXInv;                      // Inverse of erfc table step size
-    std::vector<double> bsplineModuli[3];  // B-spline moduli
-    std::vector<std::complex<double>> pmeGrid;   // PME grid
-    std::vector<double> pmeCharge;        // PME charge grid, type must match PME struct
     
     // Debug flags
     bool debug_mode = true;  // Debug mode enabled by default

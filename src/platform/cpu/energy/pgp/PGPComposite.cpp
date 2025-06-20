@@ -17,25 +17,19 @@ void PGPComposite::initialize(double cutoff,
     // Log initialization start
     platform::log(LogLevel::INFO, "Initializing PGP parameters...");
     
-    // Set PGP parameters
+    // Set PGP parameters (this also sets PME parameters via inheritance)
     setPGPParameters(alpha, meshSize, potentialCutoff, potentialGridSize, splineOrder, tolerance);
-    
-    // Set box dimensions
-    pgp_params.box[0] = box[0];
-    pgp_params.box[1] = box[1];
-    pgp_params.box[2] = box[2];
-    pgp_params.cutoff = cutoff;
     
     // Initialize PME parameters (PGP inherits from PME)
     pgp_params.setBox(box);
+    pgp_params.cutoff = cutoff;
     pgp_params.initializeTables(cutoff);
     pgp_params.initializeBsplines();
     
-    // Initialize PGP-specific grids
-    pgp_params.initializePotentialGrid();
-    
-    // Mark as initialized
-    pgp_params.initialized = true;
+    // Initialize PGP-specific grids (if not already done by setPGPParameters)
+    if (pgp_params.potentialGrid.empty()) {
+        pgp_params.initializePotentialGrid();
+    }
     
     // Log final parameters
     platform::log(LogLevel::INFO, "PGP parameters initialized: alpha = ", pgp_params.alpha,
@@ -75,7 +69,7 @@ bool PGPComposite::validateSetup(const model::MCState& state) {
     validateSystemProperties(state);
     
     // Check grid compatibility
-    checkGridCompatibility(pgp_params.box.data());
+    checkGridCompatibility(pgp_params.box);
     
     return true;
 }
