@@ -1,14 +1,14 @@
 #pragma once
 
-#include "EnergyConstants.hpp"
-#include "EnergyUtils.hpp"
-#include "EnergyLJCalculation.hpp"
+#include "../lj/LJSwitching.hpp"
+#include "CoulombPotential.hpp"
 #include "model/montecarlo.hpp"
 #include <utility>
 
 namespace pygcmc {
 namespace platform {
 namespace cpu {
+namespace coulomb {
 
 /**
  * @brief Calculate LJ and Coulomb energy with safety checks
@@ -27,6 +27,7 @@ std::pair<double, double> calcPairEnergy(
     const model::MCInfo& info,
     bool calc_coulomb = true);
 
+} // namespace coulomb
 } // namespace cpu
 } // namespace platform
 } // namespace pygcmc 

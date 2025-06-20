@@ -3,8 +3,7 @@
 #include "PMEReciprocal.hpp"
 #include "PMERealSpace.hpp"
 #include "PMESelf.hpp"
-#include "../common/EnergyLJCalculation.hpp"
-#include "../direct/DirectSystemEnergy.hpp"
+#include "../common/DirectSummation.hpp"
 #include "platform/platform.hpp"
 
 namespace pygcmc {
@@ -67,31 +66,36 @@ void PMEComposite::computeSystemEnergy(model::MCState& state) {
     // 3. Finally calculate self energy part - computeSelfEnergyPME already includes COULOMB factor
     state.ewald_energy.self = computeSelfEnergyPME(state, false);
     
-    // 4. Calculate VDW energy - 使用computeSystemVdwEnergyCutoff而不是computeSystemVdwEnergyDirect
-    // PME总是使用cutoff和PBC
-    direct::computeSystemVdwEnergyCutoff(state);
+    // 4. Calculate VDW energy - 与Ewald保持一致，使用Direct方式
+    computeSystemVdwEnergyDirect(state, true, true);
     
     // Only multiply real space energy by COULOMB coefficient
     state.ewald_energy.real_space *= COULOMB;
     
-    // Calculate total energy - 包括静电能和VDW能
-    double vdw_total = 0.0;
-    for (const auto& residue : state.residues) {
-        if (residue.active) {
-            vdw_total += residue.energy_vdw;
+    // Apply COULOMB constant to energies in residues - 与Ewald一致
+    for(auto& residue : state.residues) {
+        if(residue.active) {
+            residue.energy_elec *= COULOMB;
         }
     }
     
-    // 总能量 = 静电能(Real + Reciprocal + Self) + VDW能
-    state.ewald_energy.total = state.ewald_energy.real_space + 
+    // Calculate total energy - 与Ewald一致，从residue获取总能量（包含VDW和实空间静电）
+    double residue_total = 0.0;
+    for (const auto& residue : state.residues) {
+        if (residue.active) {
+            residue_total += residue.energy_vdw + residue.energy_elec;
+        }
+    }
+    
+    // 总能量 = residue总能量(包含VDW和实空间静电) + Reciprocal + Self
+    state.ewald_energy.total = residue_total + 
                              state.ewald_energy.reciprocal + 
-                             state.ewald_energy.self +
-                             vdw_total;
+                             state.ewald_energy.self;
     
     platform::log(LogLevel::INFO, "PME system energy components: real_space=", state.ewald_energy.real_space,
                  " reciprocal=", state.ewald_energy.reciprocal,
                  " self=", state.ewald_energy.self,
-                 " vdw=", vdw_total,
+                 " residue_total=", residue_total,
                  " total=", state.ewald_energy.total);
 }
 
@@ -105,32 +109,43 @@ void PMEComposite::computeMovementEnergy(model::MCState& state) {
     state.ewald_energy.reciprocal = computeReciprocalPME(state);
     state.ewald_energy.self = computeSelfEnergyPME(state, true);
     
-    // Add VDW energy calculation for movement residues
-    // 使用computeSystemVdwEnergyCutoff而不是computeSystemVdwEnergyDirect
-    direct::computeSystemVdwEnergyCutoff(state);
+    // Add VDW energy calculation for movement residues - 与Ewald保持一致
+    computeSystemVdwEnergyDirect(state, true, true);
     
     // Apply Coulomb factor only to real-space component
     // Note: computeReciprocalPME and computeSelfEnergyPME already include COULOMB factor
     state.ewald_energy.real_space *= COULOMB;
     
-    // Calculate total energy - 包括静电能和VDW能
-    double vdw_total = 0.0;
-    for (const auto& residue : state.residues) {
-        if (residue.active) {
-            vdw_total += residue.energy_vdw;
+    // Apply COULOMB constant to energies in movement residues - 与Ewald一致
+    for(const auto& movementInfo : state.movementResidues) {
+        for(int i = movementInfo.startIndex;
+            i < movementInfo.startIndex + movementInfo.activeCount; i++) {
+            if(state.residues[i].active) {
+                state.residues[i].energy_elec *= COULOMB;
+            }
         }
     }
     
-    // 总能量 = 静电能(Real + Reciprocal + Self) + VDW能
-    state.ewald_energy.total = state.ewald_energy.real_space + 
+    // Calculate total energy for movement residues - 与Ewald一致
+    double residue_total = 0.0;
+    for(const auto& movementInfo : state.movementResidues) {
+        for(int i = movementInfo.startIndex;
+            i < movementInfo.startIndex + movementInfo.activeCount; i++) {
+            if(state.residues[i].active) {
+                residue_total += state.residues[i].energy_vdw + state.residues[i].energy_elec;
+            }
+        }
+    }
+    
+    // 总能量 = residue总能量(包含VDW和实空间静电) + Reciprocal + Self
+    state.ewald_energy.total = residue_total + 
                              state.ewald_energy.reciprocal + 
-                             state.ewald_energy.self + 
-                             vdw_total;
+                             state.ewald_energy.self;
     
     platform::log(LogLevel::INFO, "PME movement energy components: real_space=", state.ewald_energy.real_space,
                  " reciprocal=", state.ewald_energy.reciprocal,
                  " self=", state.ewald_energy.self,
-                 " vdw=", vdw_total,
+                 " residue_total=", residue_total,
                  " total=", state.ewald_energy.total);
 }
 

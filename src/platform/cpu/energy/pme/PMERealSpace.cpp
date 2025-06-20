@@ -1,7 +1,7 @@
 #include "PMERealSpace.hpp"
 #include "PMECore.hpp"
 #include "platform/platform.hpp"
-#include "../common/EnergyLJCalculation.hpp"
+#include "../lj/LJSwitching.hpp"
 #include <cmath>
 #include <algorithm>
 
@@ -24,7 +24,7 @@ std::pair<double, double> calcPairEnergyPME(
     double elec_energy = 0.0;
     
     // LJ energy calculation - 使用统一的calculateLJEnergy接口
-    lj_energy = calculateLJEnergy(r2, sigma, eps, info);
+    lj_energy = lj::calculateLJEnergyWithSwitching(r2, sigma, eps, info);
     
     // Electrostatic energy - use PME approximation
     if (!is_excluded && r < pme_params.cutoff) {

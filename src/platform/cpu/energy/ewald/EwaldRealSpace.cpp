@@ -1,5 +1,5 @@
 #include "EwaldRealSpace.hpp"
-#include "../common/EnergyLJCalculation.hpp"
+#include "../lj/LJSwitching.hpp"
 #include "platform/platform.hpp"
 #include <cmath>
 #include <algorithm>
@@ -17,7 +17,7 @@ std::pair<double, double> calcPairEnergyEwaldRealSpace(
     bool is_excluded)
 {    
     // Calculate VdW energy using simplified interface
-    double vdw_energy = calcLJEnergy(r2, sigma, eps, info);
+    double vdw_energy = lj::calcLJEnergyWithSwitching(r2, sigma, eps, info);
     
     // Apply minimum safe distance
     if (r2 < MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE) {

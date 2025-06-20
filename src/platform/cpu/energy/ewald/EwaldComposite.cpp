@@ -1,6 +1,6 @@
 #include "EwaldComposite.hpp"
-#include "../common/EnergyLJCalculation.hpp"
-#include "../direct/DirectSystemEnergy.hpp"
+#include "../lj/LJSwitching.hpp"
+#include "../common/DirectSummation.hpp"
 #include "platform/platform.hpp"
 #include <cmath>
 
@@ -68,7 +68,7 @@ void EwaldComposite::computeSystemEnergy(model::MCState& state) {
     }
     
     // VDW energy calculation
-    direct::computeSystemVdwEnergyDirect(state, true, true);
+    computeSystemVdwEnergyDirect(state, true, true);
     
     // Reciprocal space part
     double recip_energy = computeReciprocalEnergy(state, false);
@@ -139,7 +139,7 @@ void EwaldComposite::computeMovementEnergy(model::MCState& state) {
     }
     
     // VDW energy calculation
-    direct::computeSystemVdwEnergyDirect(state, true, true);
+    computeSystemVdwEnergyDirect(state, true, true);
     
     // Reciprocal space part for moving residues
     double recip_energy = computeReciprocalEnergy(state, true);

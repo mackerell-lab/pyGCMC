@@ -1,11 +1,11 @@
-#include "EnergyLJCalculation.hpp"
+#include "LJSwitching.hpp"
 #include <cmath>
 
 namespace pygcmc {
 namespace platform {
 namespace cpu {
+namespace lj {
 
-// 从energyCommon.hpp中移植过来的实现
 float calculateSwitchingFunction(float r, const model::MCInfo& info) {
     if (!info.use_switching || r <= info.r_on) {
         return 1.0f;  // No switching below r_on
@@ -26,31 +26,21 @@ float calculateSwitchingFunction(float r, const model::MCInfo& info) {
     return numerator / denominator;
 }
 
-/**
- * @brief 简便的double版本调用，使用常量作为安全参数
- * 
- * 这是在EnergyLJCalculation.hpp中声明的非模板函数的实现
- */
-double calcLJEnergy(
-    double r2,
-    double sigma,
-    double eps,
-    const model::MCInfo& info
-) {
-    return calculateLJEnergy<double>(
+double calcLJEnergyWithSwitching(double r2, double sigma, double eps, const model::MCInfo& info) {
+    return calculateLJEnergyWithSwitching<double>(
         r2, sigma, eps, info, 
         double(LJ_MIN_SAFE_DISTANCE), 
         double(LJ_MAX_SAFE_ENERGY)
     );
 }
 
-// Configure CHARMM-style switching function
 void setSwitchingFunction(model::MCState& state, bool use_switching, float r_on, float r_off) {
     state.info.use_switching = use_switching;
     state.info.r_on = r_on;
     state.info.r_off = r_off;
 }
 
+} // namespace lj
 } // namespace cpu
 } // namespace platform
 } // namespace pygcmc 

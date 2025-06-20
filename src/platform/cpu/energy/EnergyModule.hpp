@@ -4,7 +4,9 @@
 
 // Include all energy calculation modules
 #include "common/EnergySystemInterface.hpp"
-#include "direct/DirectComposite.hpp"
+#include "common/DirectSummation.hpp"
+#include "lj/LJSwitching.hpp"
+#include "coulomb/PairEnergyCalculation.hpp"
 #include "ewald/EwaldComposite.hpp"
 #include "pme/PMEComposite.hpp"
 
@@ -24,10 +26,10 @@ namespace energy {
  * Modern usage examples:
  * 
  * // Direct calculation using the new modular interface:
- * direct::DirectComposite::calculateSystemEnergy(state, false, false);
+ * computeSystemEnergyDirect(state, false, false);
  * 
  * // Direct calculation with cutoff and PBC:
- * direct::DirectComposite::calculateSystemEnergy(state, true, true);
+ * computeSystemEnergyDirect(state, true, true);
  * 
  * // Using the unified interface:
  * computeSystemEnergy(state, EnergyMethod::DIRECT, true, true);

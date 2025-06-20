@@ -1,4 +1,5 @@
-#include "EnergyPairCalculation.hpp"
+#include "PairEnergyCalculation.hpp"
+#include "../common/EnergyUtils.hpp"
 #include "platform/platform.hpp"
 #include <cmath>
 #include <stdexcept>
@@ -8,14 +9,13 @@
 namespace pygcmc {
 namespace platform {
 namespace cpu {
+namespace coulomb {
 
-/**
- * @brief Calculate LJ and Coulomb energy with safety checks
- */
 std::pair<double, double> calcPairEnergy(
     double r2, double sigma, double eps, double q1, double q2, 
     const model::MCInfo& info,
     bool calc_coulomb) {
+    
     if (getEnergyDebugOutput()) {
         std::stringstream ss;
         ss << std::fixed << std::setprecision(6);
@@ -29,8 +29,8 @@ std::pair<double, double> calcPairEnergy(
         platform::log(LogLevel::DEBUG, ss.str());
     }
 
-    // 使用简化版本的调用
-    double vdw_energy = calcLJEnergy(r2, sigma, eps, info);
+    // Calculate LJ energy using the new LJ module
+    double vdw_energy = lj::calcLJEnergyWithSwitching(r2, sigma, eps, info);
     
     double r = std::sqrt(r2);
     
@@ -41,7 +41,7 @@ std::pair<double, double> calcPairEnergy(
     // Calculate Coulomb energy only if requested
     double elec_energy = 0.0;
     if (calc_coulomb) {
-        elec_energy = COULOMB * q1 * q2 / r;  // kJ/mol
+        elec_energy = calcCoulombEnergy(r, q1, q2);
     }
 
     if (getEnergyDebugOutput()) {
@@ -65,7 +65,7 @@ std::pair<double, double> calcPairEnergy(
         platform::log(LogLevel::DEBUG, ss.str());
     }
     
-    // LJ能量已经在calculateLJEnergy中处理过限制，这里只需要处理elec_energy
+    // LJ energy is already capped in the LJ module, only cap elec_energy here
     elec_energy = std::min(elec_energy, static_cast<double>(MAX_SAFE_ENERGY));
     elec_energy = std::max(elec_energy, -static_cast<double>(MAX_SAFE_ENERGY));
     
@@ -80,10 +80,9 @@ std::pair<double, double> calcPairEnergy(
     // Cap total energy
     double total_energy = vdw_energy + elec_energy;
     double original_total = total_energy;
-    float max_safe = MAX_SAFE_ENERGY;  // 使用float而不转换为double
+    float max_safe = MAX_SAFE_ENERGY;  // Use float version of safe value
     
     if (total_energy > max_safe) {
-        // 使用浮点版本的safe值，减少转换
         double scale = max_safe / total_energy;
         vdw_energy *= scale;
         elec_energy *= scale;
@@ -98,7 +97,6 @@ std::pair<double, double> calcPairEnergy(
             platform::log(LogLevel::DEBUG, ss.str());
         }
     } else if (total_energy < -max_safe) {
-        // 使用浮点版本的safe值，减少转换
         double scale = -max_safe / total_energy;
         vdw_energy *= scale;
         elec_energy *= scale;
@@ -127,6 +125,7 @@ std::pair<double, double> calcPairEnergy(
     return {vdw_energy, elec_energy};
 }
 
+} // namespace coulomb
 } // namespace cpu
 } // namespace platform
 } // namespace pygcmc 

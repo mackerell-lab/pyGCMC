@@ -1,7 +1,5 @@
 #include "EnergySystemInterface.hpp"
-#include "../direct/DirectComposite.hpp"
-#include "../direct/DirectPBCCalculation.hpp"
-#include "../direct/DirectSystemEnergy.hpp"
+#include "DirectSummation.hpp"
 #include "../ewald/EwaldComposite.hpp"  // Include inline function definitions
 #include "../pme/PMEComposite.hpp"      // Include inline function definitions
 #include "EnergyUtils.hpp"
@@ -31,8 +29,8 @@ void computeSystemEnergy(model::MCState& state,
     // Choose different implementations based on calculation method
     switch (method) {
         case EnergyMethod::DIRECT:
-            // Use direct calculation method via DirectComposite
-            direct::DirectComposite::calculateSystemEnergy(state, use_cutoff, use_pbc);
+            // Use direct calculation method
+            computeSystemEnergyDirect(state, use_cutoff, use_pbc);
             break;
             
         case EnergyMethod::EWALD:
@@ -73,8 +71,8 @@ void computeMovementEnergy(model::MCState& state,
     // Choose different implementations based on calculation method
     switch (method) {
         case EnergyMethod::DIRECT:
-            // Use direct calculation method via DirectComposite
-            direct::DirectComposite::calculateMovementEnergy(state, use_cutoff, use_pbc);
+            // Use direct calculation method
+            computeMovementEnergyDirect(state, use_cutoff, use_pbc);
             break;
             
         case EnergyMethod::EWALD:
@@ -95,50 +93,11 @@ void computeMovementEnergy(model::MCState& state,
     }
 }
 
-/**
- * @brief Forward to direct::computeSystemEnergyPBC
- */
-void computeSystemEnergyPBC(model::MCState& state) {
-    direct::computeSystemEnergyPBC(state);
-}
+// Note: Direct summation functions are now directly available from DirectSummation.hpp
+// No forwarding needed as they are in the same namespace
 
-/**
- * @brief Forward to direct::computeSystemEnergyPBCCutoff
- */
-void computeSystemEnergyPBCCutoff(model::MCState& state) {
-    direct::computeSystemEnergyPBCCutoff(state);
-}
-
-/**
- * @brief Forward to direct::computeSystemVdwEnergyCutoff
- */
-void computeSystemVdwEnergyCutoff(model::MCState& state) {
-    direct::computeSystemVdwEnergyCutoff(state);
-}
-
-/**
- * @brief Forward to direct::computeSystemVdwEnergyDirect
- */
-void computeSystemVdwEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc) {
-    direct::computeSystemVdwEnergyDirect(state, use_cutoff, use_pbc);
-}
-
-/**
- * @brief Legacy function - use unified interface instead
- */
-void computeMovementEnergyCutoff(model::MCState& state) {
-    computeMovementEnergy(state, EnergyMethod::DIRECT, true, false);
-}
-
-/**
- * @brief Legacy function - use unified interface instead
- */
-void computeSystemEnergyCutoff(model::MCState& state) {
-    computeSystemEnergy(state, EnergyMethod::DIRECT, true, false);
-}
-
-// Note: Other energy functions are already defined in their respective modules
-// This file only implements the unified interface and missing direct calculation functions
+// Note: Legacy functions like computeMovementEnergyCutoff and computeSystemEnergyCutoff
+// are now implemented in DirectSummation.cpp to avoid duplication
 
 } // namespace cpu
 } // namespace platform
