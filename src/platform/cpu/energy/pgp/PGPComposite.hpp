@@ -3,7 +3,6 @@
 #include "model/montecarlo.hpp"
 #include "PGPCore.hpp"
 #include "PGPGrid.hpp"
-#include "PGPInterpolation.hpp"
 #include "PGPPrecompute.hpp"
 #include "PGPRealSpace.hpp"
 #include "PGPSelfEnergy.hpp"

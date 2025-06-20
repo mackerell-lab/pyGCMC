@@ -3,6 +3,7 @@
 #include "model/montecarlo.hpp"
 #include "platform/platform.hpp"
 #include "platform/cpu/energyCommon.hpp"
+#include "PMESetup.hpp"
 #include <array>
 #include <vector>
 #include <complex>
@@ -11,18 +12,15 @@ namespace pygcmc {
 namespace platform {
 namespace cpu {
 
-// Forward declarations for functions used in PMEParams member redirects
-void initializePMETables(double cutoff);
-void setPMEBox(const double newBox[3]);
-void initializePMEBsplines();
-double erfcApproximate(double r);
-double ewaldScaleApproximate(double r);
-double estimatePMERealSpaceError();
-double estimatePMEReciprocalSpaceError(const double box[3]);
-double estimatePMETotalError(const double box[3]);
-
-// Constants for PME calculation
-static const int DEFAULT_SPLINE_ORDER = 4;  // B-spline order for PME
+/**
+ * @brief Function Location Guide for AI Agents:
+ * - Parameter structure: PMEParams struct
+ * - Setup and initialization: PMESetup.hpp
+ * - High-level interfaces: PMEInterface.hpp
+ * - Real space: PMERealSpace.hpp  
+ * - Self energy: PMESelf.hpp
+ * - Reciprocal space: PMEReciprocal.hpp
+ */
 
 /**
  * @brief PME (Particle Mesh Ewald) algorithm parameter structure
@@ -99,41 +97,6 @@ struct PMEParams {
 
 // Global PME parameters instance
 extern PMEParams pme_params;
-
-// Core initialization and parameter setting functions
-void setPMEParameters(double alpha, const int meshSize[3], int splineOrder = DEFAULT_SPLINE_ORDER, double tolerance = 1e-5);
-void autoAdjustPMEParameters(double error_tolerance, double cutoff_distance, const double box[3]);
-
-/**
- * @brief Initialize PME parameters with automatic optimization
- * 
- * @param cutoff Real space cutoff distance
- * @param box Simulation box dimensions
- * @param alpha Ewald separation parameter (auto-calculated if <= 0)
- * @param meshSize Grid dimensions (auto-calculated if null)
- * @param splineOrder B-spline order (typically 4-6)
- * @param tolerance Error tolerance
- */
-void initializePMEParameters(double cutoff, const double box[3], 
-                           double alpha, 
-                           const int* meshSize,
-                           int splineOrder,
-                           double tolerance);
-
-// High-level energy calculation interfaces
-void computeSystemEnergyPME(model::MCState& state);
-void computeMovementEnergyPME(model::MCState& state);
-
-// Component energy calculation functions
-double computeReciprocalPME(model::MCState& state);
-double computeSelfEnergyPME(model::MCState& state, bool movement_only);
-void computeRealSpacePME(model::MCState& state, bool movement_only, bool store_in_residues = true);
-
-// Pair energy calculation for PME
-std::pair<double, double> calcPairEnergyPME(double r2, double sigma, double eps, 
-                                          double q1, double q2, 
-                                          const model::MCInfo& info, 
-                                          bool is_excluded = false);
 
 // <agent-hook:pme_core>
 

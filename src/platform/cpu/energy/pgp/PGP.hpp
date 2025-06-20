@@ -8,15 +8,23 @@
  * 
  * - PGPCore: Core parameters and initialization
  * - PGPGrid: Grid operations and potential grids
- * - PGPInterpolation: Interpolation functions for grid-based calculations
  * - PGPPrecompute: Precomputation algorithms for optimization
  * - PGPRealSpace: Real space energy calculations
  * - PGPSelfEnergy: Self energy corrections
- * - PGPSystemEnergy: Complete system energy evaluation
+ * - PGPSystemEnergy: Complete system energy evaluation and grid interpolation
  * - PGPComposite: High-level unified interface
  * 
  * For most users, including PGPComposite.hpp is sufficient, as it provides
  * backward-compatible interfaces and orchestrates all other modules.
+ * 
+ * @brief Function Location Guide for AI Agents:
+ * - Energy calculation: PGPSystemEnergy.hpp -> computeSystemEnergyPGP, computeMovementEnergyPGP
+ * - Grid interpolation: PGPSystemEnergy.hpp -> interpolateMoleculeEnergy, calculateMoleculeEnergy
+ * - Grid precomputation: PGPPrecompute.hpp -> precomputeGridPotential, setPGPParameters
+ * - Real space: PGPRealSpace.hpp -> computeRealSpacePGP
+ * - Self energy: PGPSelfEnergy.hpp -> computeSelfEnergyPGP
+ * - Grid operations: PGPGrid.hpp -> initializePotentialGrid
+ * - Parameter setup: PGPCore.hpp -> setPGPParameters, PGPParams structure
  */
 
 // Core functionality
@@ -24,7 +32,6 @@
 
 // Individual modules
 #include "PGPGrid.hpp"
-#include "PGPInterpolation.hpp"
 #include "PGPPrecompute.hpp"
 #include "PGPRealSpace.hpp"
 #include "PGPSelfEnergy.hpp"

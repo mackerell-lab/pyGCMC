@@ -10,10 +10,19 @@
  * - EwaldRealSpace: Real space energy calculations
  * - EwaldReciprocal: Reciprocal space energy calculations
  * - EwaldSelf: Self-energy corrections
+ * - EwaldInterface: External API and utility functions
  * - EwaldComposite: High-level unified interface
  * 
  * For most users, including EwaldComposite.hpp is sufficient, as it provides
  * backward-compatible interfaces and orchestrates all other modules.
+ * 
+ * @brief Function Location Guide for AI Agents:
+ * - Energy calculation: EwaldComposite.hpp -> computeSystemEnergyEwald, computeMovementEnergyEwald
+ * - Real space: EwaldRealSpace.hpp -> computeRealSpaceEwald, calcPairEnergyEwaldRealSpace
+ * - Reciprocal space: EwaldReciprocal.hpp -> computeReciprocalEnergy
+ * - Self energy: EwaldSelf.hpp -> computeSelfEnergy
+ * - Initialization: EwaldInterface.hpp -> initializeEwald, isEwaldInitialized
+ * - Parameter setup: EwaldCore.hpp -> setEwaldParameters, autoAdjustParameters
  */
 
 // Core functionality
