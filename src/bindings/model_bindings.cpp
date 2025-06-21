@@ -172,9 +172,16 @@ void init_model(py::module& m) {
         .def("add_ssbond", &model::Structure::add_ssbond)
         .def("set_box_dimensions", &model::Structure::set_box_dimensions)
         .def("clear", &model::Structure::clear);
-    
-    // Bind Atom class
-    py::class_<model::Atom, std::shared_ptr<model::Atom>>(model, "PDBAtom")
+
+    // ----------------------------------------------------------
+    // Internal base class bindings (no Python exposure)        
+    // Needed so that derived classes can list them as bases    
+    // ----------------------------------------------------------
+    py::class_<model::atom::AtomCore, std::shared_ptr<model::atom::AtomCore>>(m, "_AtomCore");
+    py::class_<model::residue::ResidueComposite, std::shared_ptr<model::residue::ResidueComposite>>(m, "_ResidueComposite");
+
+    // Bind Atom class with base AtomCore to enable inherited method bindings
+    py::class_<model::Atom, model::atom::AtomCore, std::shared_ptr<model::Atom>>(model, "Atom")
         .def(py::init<>())
         .def("get_bynu", &model::Atom::get_bynu)
         .def("get_type", &model::Atom::get_type)
@@ -214,8 +221,8 @@ void init_model(py::module& m) {
         .def("has_lj_params", &model::Atom::has_lj_params)
         .def("is_valid", &model::Atom::is_valid);
 
-    // Bind PDB Residue class
-    py::class_<model::Residue, std::shared_ptr<model::Residue>>(model, "PDBResidue")
+    // Bind Residue class with base ResidueComposite for inherited methods
+    py::class_<model::Residue, model::residue::ResidueComposite, std::shared_ptr<model::Residue>>(model, "Residue")
         .def(py::init<>())
         .def("get_resname", &model::Residue::get_resname)
         .def("set_resname", &model::Residue::set_resname)

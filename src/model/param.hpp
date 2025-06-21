@@ -13,7 +13,6 @@ namespace model {
 // Backward compatibility type aliases - as standalone types
 using BasicInfo = param::BasicInfo;
 using SpaceInfo = param::SpaceInfo;
-using MCInfo = param::MCParams;  // Fixed: MCParams renamed to MCInfo for compatibility
 using EnergyInfo = param::EnergyInfo;
 using FragmentInfo = param::FragmentInfo;
 using BiasInfo = param::BiasInfo;
@@ -25,7 +24,7 @@ public:
     // Re-export types as nested types for Python binding compatibility
     using BasicInfo = param::BasicInfo;
     using SpaceInfo = param::SpaceInfo;
-    using MCInfo = param::MCParams;  // MCParams from param module
+    using MCInfo = param::MCParams;  // Nested alias for backward compatibility
     using EnergyInfo = param::EnergyInfo;
     using FragmentInfo = param::FragmentInfo;
     using BiasInfo = param::BiasInfo;
