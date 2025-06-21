@@ -1,4 +1,7 @@
 #include "MCComposite.hpp"
+#include "MCMovementTypeCollector.hpp"
+#include "MCMovementReindexer.hpp"
+#include "MCMovementBuilder.hpp"
 
 namespace pygcmc {
 namespace system {
@@ -36,10 +39,47 @@ void MCComposite::addInitialResidues(const model::MCResidue* resVec, int resCoun
 }
 
 void MCComposite::addMovementMolecules(const std::vector<MovementMolecularInfo>& molecules) {
-    // TODO: Implement complex addMovementMolecules logic
-    // This is a placeholder - the actual implementation would be split into multiple modules
-    // as per the refactoring plan
-    (void)molecules; // Suppress unused warning for now
+    // Step 1: Collect types from new molecules
+    MCMovementTypeCollector typeCollector;
+    model::TypeMaps preResidueTypes = state_.residueTypes;
+    model::TypeMaps preAtomTypes = state_.atomTypes;
+    
+    std::vector<int> newMovementAtomTypes = typeCollector.collectMovementTypes(
+        molecules, preResidueTypes, preAtomTypes);
+
+    // Step 2: Create a new MCState using the new type maps
+    model::MCState newState;
+    newState.info = state_.info;
+    newState.forcefield = state_.forcefield;
+    newState.residueTypes = preResidueTypes;
+    newState.atomTypes = preAtomTypes;
+    
+    // Preserve previous movement residues information
+    newState.movementResidues = state_.movementResidues;
+    newState.movementAtomTypes = state_.movementAtomTypes;
+    newState.numMovementAtomTypes = state_.numMovementAtomTypes;
+
+    // Add new movement atom types
+    for (int typeIdx : newMovementAtomTypes) {
+        if (std::find(newState.movementAtomTypes.begin(), newState.movementAtomTypes.end(), typeIdx) 
+            == newState.movementAtomTypes.end()) {
+            newState.movementAtomTypes.push_back(typeIdx);
+        }
+    }
+    newState.numMovementAtomTypes = newState.movementAtomTypes.size();
+
+    // Step 3: Reindex existing residues and atoms
+    MCMovementReindexer reindexer;
+    auto [reindexedResidues, reindexedAtoms] = reindexer.reindexExistingResidues(
+        state_, newState.residueTypes, newState.atomTypes);
+
+    // Step 4: Build final state
+    MCMovementBuilder builder;
+    builder.buildFinalState(newState, molecules, typeCollector.getProcessedResidueNames(),
+                           reindexedResidues, reindexedAtoms);
+
+    // Update the class member state with the new state
+    state_ = std::move(newState);
 }
 
 int MCComposite::insertResidue(const model::MCResidue& res, const model::MCAtom* atoms) {
