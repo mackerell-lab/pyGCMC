@@ -17,20 +17,20 @@
  * 
  * **Module Organization:**
  * 
- * **common/** - Core System Infrastructure
+ * **common/ directory** - Core System Infrastructure
  * - SystemMain.hpp: Original System class for parameter management and initialization
  * - SystemFactory.hpp: Factory functions and version information
  * - SystemInterface.hpp: Abstract interfaces and enums (LogLevel, SystemKind)
  * - SystemConstants.hpp: Physical constants and unit conversions
  * - SystemUtils.hpp: Utility functions (PBC, string manipulation, geometric calculations)
  * 
- * **log/** - Logging System
+ * **log/ directory** - Logging System
  * - LogMain.hpp: Comprehensive logging with configurable levels (DEBUG, INFO, WARNING, ERROR)
  * - Static interface: LogMain::set_verbose(), LogMain::set_log_level()
  * - Template logging: LogMain::log(), LogMain::debug(), LogMain::info()
  * - Convenience functions: initializeLogging(), setVerbose(), setLogLevel()
  * 
- * **molecular/** - Molecular System Management
+ * **molecular/ directory** - Molecular System Management
  * - MolecularMain.hpp: Main interface (backward compatible MolecularSystem)
  * - MolecularComposite.hpp: High-level composition and coordination
  * - MolecularCombiner.hpp: Combine PDB Structure with Topology files
@@ -38,7 +38,7 @@
  * - MolecularMerger.hpp: Merge multiple topology files into molecular system
  * - MolecularValidator.hpp: Validate atom types and topology consistency
  * 
- * **montecarlo/** - Monte Carlo GCMC Simulation Engine
+ * **montecarlo/ directory** - Monte Carlo GCMC Simulation Engine
  * - MCMain.hpp: Main interface (backward compatible MonteCarloSystem)
  * - MCComposite.hpp: High-level GCMC operations coordination
  * - MCCore.hpp: Core GCMC operations (insert, remove, translate residues)
