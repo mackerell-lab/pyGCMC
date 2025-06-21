@@ -1,23 +1,17 @@
 #pragma once
 
-#include <memory>
-#include <string>
-#include <stdexcept>
-
-// Common components
+// Include all system sub-modules
 #include "common/SystemInterface.hpp"
 #include "common/SystemConstants.hpp"
 #include "common/SystemUtils.hpp"
 #include "common/SystemMain.hpp"
+#include "common/SystemFactory.hpp"
 
-// Logging system
 #include "log/LogMain.hpp"
 
-// Molecular system
 #include "molecular/MolecularComposite.hpp"
 #include "molecular/MolecularMain.hpp"
 
-// Monte Carlo system
 #include "montecarlo/MCComposite.hpp"
 #include "montecarlo/MCMain.hpp"
 
@@ -73,7 +67,7 @@
 namespace pygcmc {
 namespace system {
 
-// Re-export all major classes for easy access
+// Re-export major classes for easy access
 // Note: System class is already defined in this namespace in common/SystemMain.hpp
 using MolecularSystem = molecular::MolecularMain;
 using MonteCarloSystem = montecarlo::MCMain;
@@ -85,64 +79,42 @@ using MovementMolecularInfo = montecarlo::MovementMolecularInfo;
 
 /**
  * @brief Factory function for creating system instances
- * 
- * @param kind Type of system to create
- * @return Unique pointer to the created system
- * @throws std::runtime_error if system type is not supported
+ * Delegates to common::createSystem()
  */
 inline std::unique_ptr<common::ISystem> createSystem(SystemKind kind) {
-    switch (kind) {
-        case SystemKind::MOLECULAR:
-            // For now, return nullptr as molecular system doesn't implement ISystem yet
-            // This can be extended when needed
-            throw std::runtime_error("Molecular system factory not yet implemented");
-            
-        case SystemKind::MONTE_CARLO:
-            // For now, return nullptr as Monte Carlo system doesn't implement ISystem yet  
-            // This can be extended when needed
-            throw std::runtime_error("Monte Carlo system factory not yet implemented");
-            
-        default:
-            throw std::runtime_error("Unknown system kind");
-    }
+    return common::createSystem(kind);
 }
 
 /**
  * @brief Initialize logging system with specified settings
- * 
- * @param verbose Enable verbose logging output
- * @param level Minimum logging level to display
+ * Delegates to log::initializeLogging()
  */
 inline void initializeLogging(bool verbose = false, LogLevel level = LogLevel::INFO) {
-    log::LogMain::set_verbose(verbose);
-    log::LogMain::set_log_level(level);
+    return log::initializeLogging(verbose, level);
 }
 
 /**
  * @brief Get version information for the system module
- * 
- * @return Version string indicating refactored modular design
+ * Delegates to common::getSystemModuleVersion()
  */
 inline std::string getSystemModuleVersion() {
-    return "1.0.0-refactored";
+    return common::getSystemModuleVersion();
 }
 
 /**
- * @brief Quick access to logging functionality
- * 
- * @param verbose Enable verbose mode
+ * @brief Quick access to set verbose logging
+ * Delegates to log::setVerbose()
  */
 inline void setVerbose(bool verbose) {
-    log::LogMain::set_verbose(verbose);
+    return log::setVerbose(verbose);
 }
 
 /**
- * @brief Quick access to log level setting
- * 
- * @param level Log level to set
+ * @brief Quick access to set log level
+ * Delegates to log::setLogLevel()
  */
 inline void setLogLevel(LogLevel level) {
-    log::LogMain::set_log_level(level);
+    return log::setLogLevel(level);
 }
 
 } // namespace system

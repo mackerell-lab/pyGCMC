@@ -83,6 +83,35 @@ private:
     common::LogLevel instance_log_level_;
 };
 
+/**
+ * @brief Initialize logging system with specified settings
+ * 
+ * @param verbose Enable verbose logging output
+ * @param level Minimum logging level to display
+ */
+inline void initializeLogging(bool verbose = false, common::LogLevel level = common::LogLevel::INFO) {
+    LogMain::set_verbose(verbose);
+    LogMain::set_log_level(level);
+}
+
+/**
+ * @brief Quick access to set verbose mode
+ * 
+ * @param verbose Enable verbose mode
+ */
+inline void setVerbose(bool verbose) {
+    LogMain::set_verbose(verbose);
+}
+
+/**
+ * @brief Quick access to set log level
+ * 
+ * @param level Log level to set
+ */
+inline void setLogLevel(common::LogLevel level) {
+    LogMain::set_log_level(level);
+}
+
 } // namespace log
 } // namespace system
 } // namespace pygcmc
