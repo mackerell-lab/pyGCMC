@@ -24,7 +24,7 @@ class MolecularComposite;
 class MolecularMain {
 public:
     MolecularMain();
-    ~MolecularMain() = default;
+    ~MolecularMain(); // Must be defined in .cpp file due to incomplete type
 
     /**
      * @brief Combine Structure and Topology data into a Molecular object
