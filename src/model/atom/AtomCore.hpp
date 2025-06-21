@@ -3,223 +3,205 @@
 #ifndef PYGCMC_MODEL_ATOM_CORE_HPP
 #define PYGCMC_MODEL_ATOM_CORE_HPP
 
+#include "../common/ModelInterface.hpp"
+#include "../common/ModelConstants.hpp"
 #include <string>
 #include <array>
 #include <cmath>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 #include <algorithm>
-#include "../common/ModelInterface.hpp"
-#include "../common/ModelConstants.hpp"
-#include "../common/ModelUtils.hpp"
 
 namespace pygcmc {
 namespace model {
+namespace atom {
 
 /**
- * @brief Core Atom class with essential data and operations
- * @details Lightweight atom representation with CHARMM naming conventions
+ * @brief Core Atom class following CHARMM naming conventions and PDB format
+ * This is the minimal, core implementation with essential functionality
  */
-class AtomCore : public IValidatable, public IIdentifiable {
+class AtomCore : public common::IValidatable, public common::IIdentifiable {
 public:
-    // Default constructor
+    // Core constructors
     AtomCore() : 
-        bynu_(0), ires_(0), iseg_(0), igro_(0),
-        altloc_(' '), chain_(' '), inscode_(' '),
-        coor_{0.0, 0.0, 0.0},
-        occupancy_(1.0), tempfactor_(0.0),
-        wmain_(1.0), wcomp_(1.0), mass_(0.0), charge_(0.0),
-        radius_(0.0), alpha_(0.0),
-        eps_(constants::INVALID_VALUE), rmin_(constants::INVALID_VALUE),
-        fbeta_(0.0), move_(1), ignore_(0), constrain_(0),
-        hetatm_(false), initial_(false) {}
+        bynu(0), ires(0), iseg(0), igro(0),
+        altloc(common::constants::DEFAULT_ALTLOC),
+        chain(common::constants::DEFAULT_CHAIN),
+        inscode(common::constants::DEFAULT_INSCODE),
+        coor{0.0, 0.0, 0.0},
+        occupancy(common::constants::DEFAULT_OCCUPANCY),
+        tempfactor(common::constants::DEFAULT_TEMPFACTOR),
+        wmain(common::constants::DEFAULT_WMAIN),
+        wcomp(common::constants::DEFAULT_WCOMP),
+        mass(0.0), charge(0.0), radius(0.0), alpha(0.0),
+        eps(common::constants::INVALID_DOUBLE),
+        rmin(common::constants::INVALID_DOUBLE),
+        fbeta(0.0),
+        move(common::constants::DEFAULT_MOVE),
+        ignore(common::constants::DEFAULT_IGNORE),
+        constrain(common::constants::DEFAULT_CONSTRAIN),
+        hetatm(false), initial(false)
+    {}
 
-    // Parameterized constructor
     AtomCore(int bynu, const std::string& type, const std::string& resname,
              int ires, const std::string& segid = "", int iseg = 0,
              double x = 0.0, double y = 0.0, double z = 0.0,
-             double wmain = 1.0, double mass = 0.0, double charge = 0.0,
+             double wmain = common::constants::DEFAULT_WMAIN, 
+             double mass = 0.0, double charge = 0.0,
              const std::string& chem = "", bool hetatm = false) :
-        bynu_(bynu), type_(type), resname_(resname), ires_(ires),
-        segid_(segid), iseg_(iseg), igro_(0),
-        altloc_(' '), chain_(' '), inscode_(' '),
-        coor_{x, y, z}, wmain_(wmain), mass_(mass), charge_(charge),
-        chem_(chem), eps_(constants::INVALID_VALUE), rmin_(constants::INVALID_VALUE),
-        hetatm_(hetatm) {}
+        bynu(bynu), type(type), resname(resname), ires(ires),
+        segid(segid), iseg(iseg), igro(0),
+        altloc(common::constants::DEFAULT_ALTLOC),
+        chain(common::constants::DEFAULT_CHAIN),
+        inscode(common::constants::DEFAULT_INSCODE),
+        coor{x, y, z},
+        occupancy(common::constants::DEFAULT_OCCUPANCY),
+        tempfactor(common::constants::DEFAULT_TEMPFACTOR),
+        wmain(wmain), wcomp(common::constants::DEFAULT_WCOMP),
+        mass(mass), charge(charge), chem(chem),
+        eps(common::constants::INVALID_DOUBLE),
+        rmin(common::constants::INVALID_DOUBLE),
+        hetatm(hetatm), initial(false) {}
 
-    // CHARMM standard getters
-    int get_bynu() const noexcept { return bynu_; }
-    const std::string& get_type() const noexcept { return type_; }
-    const std::string& get_resname() const noexcept { return resname_; }
-    int get_ires() const noexcept { return ires_; }
-    const std::string& get_segid() const noexcept { return segid_; }
-    int get_iseg() const noexcept { return iseg_; }
-    int get_igro() const noexcept { return igro_; }
-    const std::string& get_chem() const noexcept { return chem_; }
-    double get_wmain() const noexcept { return wmain_; }
-    double get_mass() const noexcept { return mass_; }
-    double get_charge() const noexcept { return charge_; }
+    virtual ~AtomCore() = default;
+
+    // IIdentifiable interface
+    int get_id() const override { return bynu; }
+    void set_id(int id) override { 
+        if (id <= 0) throw std::invalid_argument("Invalid atom number");
+        bynu = id; 
+    }
+
+    // IValidatable interface
+    bool is_valid() const override {
+        return bynu > 0 && !type.empty() && !resname.empty() &&
+               ires > 0 && std::isfinite(mass) && std::isfinite(charge) &&
+               std::all_of(coor.begin(), coor.end(), 
+                          [](double x) { return std::isfinite(x); }) &&
+               std::isfinite(occupancy) && std::isfinite(tempfactor);
+    }
+
+    // Core getters
+    int get_bynu() const noexcept { return bynu; }
+    const std::string& get_type() const noexcept { return type; }
+    const std::string& get_resname() const noexcept { return resname; }
+    int get_ires() const noexcept { return ires; }
+    const std::string& get_segid() const noexcept { return segid; }
+    int get_iseg() const noexcept { return iseg; }
+    int get_igro() const noexcept { return igro; }
+    const std::string& get_chem() const noexcept { return chem; }
+    double get_wmain() const noexcept { return wmain; }
+    double get_mass() const noexcept { return mass; }
+    double get_charge() const noexcept { return charge; }
     
     // Coordinate access
-    const std::array<double, 3>& get_coor() const noexcept { return coor_; }
-    double get_x() const noexcept { return coor_[0]; }
-    double get_y() const noexcept { return coor_[1]; }
-    double get_z() const noexcept { return coor_[2]; }
+    const std::array<double, 3>& get_coor() const noexcept { return coor; }
+    double get_x() const noexcept { return coor[0]; }
+    double get_y() const noexcept { return coor[1]; }
+    double get_z() const noexcept { return coor[2]; }
 
     // Force field parameters
-    double get_eps() const noexcept { return eps_; }
-    double get_rmin() const noexcept { return rmin_; }
+    double get_eps() const noexcept { return eps; }
+    double get_rmin() const noexcept { return rmin; }
 
     // PDB specific getters
-    char get_altloc() const noexcept { return altloc_; }
-    char get_inscode() const noexcept { return inscode_; }
-    char get_chain() const noexcept { return chain_; }
-    bool is_hetatm() const noexcept { return hetatm_; }
-    double get_occupancy() const noexcept { return occupancy_; }
-    double get_tempfactor() const noexcept { return tempfactor_; }
-    const std::string& get_element() const noexcept { return element_; }
-    const std::string& get_charge_string() const noexcept { return chargestr_; }
+    char get_altloc() const noexcept { return altloc; }
+    char get_inscode() const noexcept { return inscode; }
+    char get_chain() const noexcept { return chain; }
+    bool is_hetatm() const noexcept { return hetatm; }
+    double get_occupancy() const noexcept { return occupancy; }
+    double get_tempfactor() const noexcept { return tempfactor; }
 
     // Core setters with validation
     void set_coor(double x, double y, double z) {
-        if (!utils::validate::is_valid_coordinate(x) || 
-            !utils::validate::is_valid_coordinate(y) || 
-            !utils::validate::is_valid_coordinate(z)) {
+        if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
             throw std::invalid_argument("Invalid coordinates");
         }
-        coor_ = {x, y, z};
+        coor = {x, y, z};
     }
 
     void set_mass_charge(double m, double q) {
-        if (!utils::validate::is_valid_mass(m) || !utils::validate::is_valid_charge(q)) {
+        if (!std::isfinite(m) || m < 0.0 || !std::isfinite(q)) {
             throw std::invalid_argument("Invalid mass or charge");
         }
-        mass_ = m;
-        charge_ = q;
+        mass = m;
+        charge = q;
     }
 
     void set_lj_params(double epsilon, double r) {
         if (!std::isfinite(epsilon) || !std::isfinite(r) || r < 0.0) {
             throw std::invalid_argument("Invalid LJ parameters");
         }
-        eps_ = epsilon;
-        rmin_ = r;
+        eps = epsilon;
+        rmin = r;
     }
 
     // Basic setters
-    void set_bynu(int bn) { 
-        if (bn <= 0) throw std::invalid_argument("Invalid atom number");
-        bynu_ = bn; 
-    }
-    
     void set_type(const std::string& t) { 
-        if (!utils::validate::is_valid_name(t, constants::MAX_ATOM_NAME_LENGTH)) {
-            throw std::invalid_argument("Invalid atom type");
-        }
-        type_ = t; 
+        if (t.empty()) throw std::invalid_argument("Empty atom type");
+        type = t; 
     }
     
     void set_resname(const std::string& rn) { 
-        if (!utils::validate::is_valid_name(rn, constants::MAX_RESIDUE_NAME_LENGTH)) {
-            throw std::invalid_argument("Invalid residue name");
-        }
-        resname_ = rn; 
+        if (rn.empty()) throw std::invalid_argument("Empty residue name");
+        resname = rn; 
     }
     
     void set_ires(int ir) { 
         if (ir <= 0) throw std::invalid_argument("Invalid residue number");
-        ires_ = ir; 
+        ires = ir; 
     }
     
-    void set_segid(const std::string& sid) { 
-        if (sid.length() > constants::MAX_SEGMENT_NAME_LENGTH) {
-            throw std::invalid_argument("Segment ID too long");
-        }
-        segid_ = sid; 
-    }
-
-    // PDB setters
-    void set_chain(char ch) { chain_ = ch; }
-    void set_hetatm(bool het) { hetatm_ = het; }
-    void set_altloc(char alt) { altloc_ = alt; }
-    void set_inscode(char ins) { inscode_ = ins; }
-    void set_element(const std::string& elem) { element_ = elem; }
+    void set_segid(const std::string& sid) { segid = sid; }
+    void set_chain(char ch) { chain = ch; }
+    void set_hetatm(bool het) { hetatm = het; }
 
     // Utility methods
     bool has_lj_params() const {
-        return std::isfinite(eps_) && std::isfinite(rmin_);
-    }
-
-    // IValidatable interface
-    bool is_valid() const override {
-        return bynu_ > 0 && 
-               utils::validate::is_valid_name(type_) && 
-               utils::validate::is_valid_name(resname_) &&
-               ires_ > 0 && 
-               utils::validate::is_valid_mass(mass_) && 
-               utils::validate::is_valid_charge(charge_) &&
-               std::all_of(coor_.begin(), coor_.end(), utils::validate::is_valid_coordinate) &&
-               occupancy_ >= 0.0 && occupancy_ <= 1.0 &&
-               std::isfinite(tempfactor_);
-    }
-
-    // IIdentifiable interface
-    std::string get_id() const override {
-        return utils::id::generate_atom_id(type_, ires_, segid_);
-    }
-
-    void set_id(const std::string& id) override {
-        // Parse ID format: segid:resnum:type
-        size_t pos1 = id.find(':');
-        size_t pos2 = id.find(':', pos1 + 1);
-        if (pos1 != std::string::npos && pos2 != std::string::npos) {
-            segid_ = id.substr(0, pos1);
-            ires_ = std::stoi(id.substr(pos1 + 1, pos2 - pos1 - 1));
-            type_ = id.substr(pos2 + 1);
-        }
+        return std::isfinite(eps) && std::isfinite(rmin);
     }
 
 protected:
     // CHARMM standard fields
-    int bynu_;                          ///< Atom number (BYNU)
-    std::string type_;                  ///< Atom type (TYPE)
-    std::string resname_;               ///< Residue name (RESNAME)
-    int ires_;                          ///< Residue number (IRES)
-    std::string segid_;                 ///< Segment ID (SEGID)
-    int iseg_;                          ///< Segment number (ISEG)
-    int igro_;                          ///< Group number (IGRO)
-    char altloc_;                       ///< Alternate location (PDB)
-    char chain_;                        ///< Chain identifier (PDB)
-    char inscode_;                      ///< Insertion code (PDB)
-    std::array<double, 3> coor_;        ///< Coordinates (X, Y, Z)
-    std::array<double, 3> xcom_;        ///< Component coordinates
-    std::array<double, 3> xref_;        ///< Reference coordinates
-    double occupancy_;                  ///< PDB occupancy
-    double tempfactor_;                 ///< PDB temperature factor
-    double wmain_;                      ///< Main weight (WMAIN)
-    double wcomp_;                      ///< Component weight (WCOMP)
-    double mass_;                       ///< Mass (MASS)
-    double charge_;                     ///< Charge (CHARGE)
-    std::string chem_;                  ///< Chemical type (CHEM)
-    double radius_;                     ///< VDW radius (RADIUS)
-    double alpha_;                      ///< Polarizability (ALPHA)
-    double eps_;                        ///< LJ well depth (epsilon)
-    double rmin_;                       ///< LJ Rmin/2 (rmin)
-    double fbeta_;                      ///< Force beta (FBETA)
-    int move_;                          ///< Movement flag (MOVE)
-    int ignore_;                        ///< Ignore flag (IGNORE)
-    int constrain_;                     ///< Constraint flag (CONSTRAIN)
-    bool hetatm_;                       ///< HETATM flag
-    bool initial_;                      ///< Has initial coordinates
+    int bynu;                    ///< Atom number (BYNU)
+    std::string type;            ///< Atom type (TYPE)
+    std::string resname;         ///< Residue name (RESNAME)
+    int ires;                    ///< Residue number (IRES)
+    std::string segid;           ///< Segment ID (SEGID)
+    int iseg;                    ///< Segment number (ISEG)  
+    int igro;                    ///< Group number (IGRO)
+    char altloc;                 ///< Alternate location (PDB)
+    char chain;                  ///< Chain identifier (PDB)
+    char inscode;                ///< Insertion code (PDB)
+    std::array<double, 3> coor;  ///< Coordinates (X, Y, Z)
+    double occupancy;            ///< PDB occupancy
+    double tempfactor;           ///< PDB temperature factor
+    double wmain;                ///< Main weight (WMAIN)
+    double wcomp;                ///< Component weight (WCOMP)
+    double mass;                 ///< Mass (MASS)
+    double charge;               ///< Charge (CHARGE)
+    std::string chem;            ///< Chemical type (CHEM)
+    double radius;               ///< VDW radius (RADIUS)
+    double alpha;                ///< Polarizability (ALPHA)
+    double eps;                  ///< LJ well depth (epsilon)
+    double rmin;                 ///< LJ Rmin/2 (rmin)
+    double fbeta;                ///< Force beta (FBETA)
+    int move;                    ///< Movement flag (MOVE)
+    int ignore;                  ///< Ignore flag (IGNORE)
+    int constrain;               ///< Constraint flag (CONSTRAIN)
+    bool hetatm;                 ///< HETATM flag
+    bool initial;                ///< Has initial coordinates
 
-    // Scalar properties (SCA1-9)
-    std::array<double, 9> scalar_;      ///< User-defined scalar properties
-
-    // Additional PDB fields
-    std::string element_;               ///< Element symbol
-    std::string chargestr_;             ///< Charge as string from PDB
+    // Additional arrays
+    std::array<double, 3> xcom;  ///< Component coordinates
+    std::array<double, 3> xref;  ///< Reference coordinates
+    std::array<double, 9> scalar; ///< User-defined scalar properties
+    std::string element;         ///< Element symbol
+    std::string chargestr;       ///< Charge as string from PDB
 };
 
+} // namespace atom
 } // namespace model
 } // namespace pygcmc
 

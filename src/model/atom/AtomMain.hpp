@@ -4,223 +4,267 @@
 #define PYGCMC_MODEL_ATOM_MAIN_HPP
 
 #include "AtomCore.hpp"
+#include "../common/ModelUtils.hpp"
+#include <string>
 #include <sstream>
 #include <iomanip>
 
 namespace pygcmc {
 namespace model {
+namespace atom {
 
 /**
- * @brief Extended Atom class with PDB formatting and utility functions
- * @details Extends AtomCore with additional functionality while maintaining compatibility
+ * @brief Extended Atom class with backward compatibility and utility functions
+ * This class extends AtomCore with additional functionality and maintains compatibility
  */
-class Atom : public AtomCore, public ICloneable<Atom>, public ISerializable {
+class Atom : public AtomCore {
 public:
     // Inherit constructors
     using AtomCore::AtomCore;
 
-    // Default constructor
-    Atom() = default;
-
-    // Copy constructor and assignment
-    Atom(const Atom&) = default;
-    Atom& operator=(const Atom&) = default;
-    Atom(Atom&&) = default;
-    Atom& operator=(Atom&&) = default;
-
-    // Constructor from AtomCore
-    explicit Atom(const AtomCore& core) : AtomCore(core) {}
+    // Additional getters for backward compatibility
+    const std::string& get_element() const noexcept { return element; }
+    const std::string& get_charge_string() const noexcept { return chargestr; }
 
     // Additional setters for PDB compatibility
     void set_occupancy(double occ) {
         if (occ < 0.0 || occ > 1.0) {
             throw std::invalid_argument("Occupancy must be between 0 and 1");
         }
-        occupancy_ = occ;
+        occupancy = occ;
     }
 
     void set_tempfactor(double temp) {
         if (!std::isfinite(temp)) {
             throw std::invalid_argument("Invalid temperature factor");
         }
-        tempfactor_ = temp;
+        tempfactor = temp;
+    }
+
+    void set_element(const std::string& elem) {
+        element = elem;
     }
 
     void set_charge_string(const std::string& chg) {
-        chargestr_ = chg;
+        chargestr = chg;
     }
+
+    void set_altloc(char alt) { altloc = alt; }
+    void set_inscode(char ins) { inscode = ins; }
 
     // PDB format utilities
     static std::string format_pdb_atom_name(const std::string& name) {
-        return utils::format::format_pdb_atom_name(name);
+        // Left align atom name according to PDB format
+        // Element symbols are right-justified in columns 13-14
+        if (name.length() >= 4) return name;
+        
+        // Check if first character is a digit (indicating branch)
+        if (!name.empty() && std::isdigit(name[0])) {
+            return name;  // Left justify if starts with digit
+        }
+        
+        // Right justify element symbol
+        std::string result(4, ' ');
+        if (name.length() == 1) {
+            result[1] = name[0];  // Single character element
+        } else if (name.length() > 1) {
+            result[0] = name[0];  // Two character element
+            result[1] = name[1];
+        }
+        
+        // Add remaining characters
+        for (size_t i = 2; i < name.length() && i < 4; ++i) {
+            result[i] = name[i];
+        }
+        
+        return result;
     }
 
     std::string get_formatted_atom_name() const {
-        return format_pdb_atom_name(type_);
+        return format_pdb_atom_name(type);
     }
 
     std::string get_residue_id() const {
-        if (inscode_ == ' ') {
-            return std::to_string(ires_);
+        // Combine residue number and insertion code (e.g., "153A")
+        if (inscode == ' ') {
+            return std::to_string(ires);
         }
-        return std::to_string(ires_) + inscode_;
+        return std::to_string(ires) + inscode;
     }
 
     void set_residue_id(const std::string& resid) {
+        // Parse residue ID (e.g., "153A" -> ires=153, inscode='A')
         size_t numLen = 0;
         try {
-            ires_ = std::stoi(resid, &numLen);
+            ires = std::stoi(resid, &numLen);
         } catch (const std::exception&) {
             throw std::invalid_argument("Invalid residue ID format");
         }
         
         if (numLen < resid.length()) {
-            inscode_ = resid[numLen];
+            inscode = resid[numLen];
         } else {
-            inscode_ = ' ';
+            inscode = ' ';
         }
     }
 
-    // Distance calculations
+    // Advanced utility methods
+    std::string get_atom_identifier() const {
+        // Generate unique atom identifier: segid:resname:ires:type
+        std::stringstream ss;
+        ss << segid << ":" << resname << ":" << ires << ":" << type;
+        return ss.str();
+    }
+
+    std::string get_pdb_record() const {
+        // Generate PDB ATOM/HETATM record
+        std::stringstream ss;
+        
+        // Record type
+        ss << (hetatm ? "HETATM" : "ATOM  ");
+        
+        // Atom serial number (5 chars, right-aligned)
+        ss << std::setw(5) << std::right << bynu;
+        
+        // Space
+        ss << " ";
+        
+        // Atom name (4 chars, formatted)
+        ss << get_formatted_atom_name();
+        
+        // Alternate location (1 char)
+        ss << altloc;
+        
+        // Residue name (3 chars, left-aligned)
+        ss << std::setw(3) << std::left << resname;
+        
+        // Space + Chain ID
+        ss << " " << chain;
+        
+        // Residue sequence number (4 chars, right-aligned)
+        ss << std::setw(4) << std::right << ires;
+        
+        // Insertion code
+        ss << inscode;
+        
+        // Spaces (3 chars)
+        ss << "   ";
+        
+        // Coordinates (8.3 format each)
+        ss << std::fixed << std::setprecision(3);
+        ss << std::setw(8) << std::right << coor[0];
+        ss << std::setw(8) << std::right << coor[1];
+        ss << std::setw(8) << std::right << coor[2];
+        
+        // Occupancy and temperature factor
+        ss << std::setw(6) << std::setprecision(2) << occupancy;
+        ss << std::setw(6) << std::setprecision(2) << tempfactor;
+        
+        // Spaces (10 chars)
+        ss << "          ";
+        
+        // Element symbol (2 chars, right-aligned)
+        if (!element.empty()) {
+            ss << std::setw(2) << std::right << element;
+        } else {
+            ss << "  ";
+        }
+        
+        // Charge (2 chars)
+        if (!chargestr.empty()) {
+            ss << std::setw(2) << std::right << chargestr;
+        }
+        
+        return ss.str();
+    }
+
+    // Distance calculation utilities
     double distance_to(const Atom& other) const {
-        return utils::math::distance(coor_, other.get_coor());
+        double dx = coor[0] - other.coor[0];
+        double dy = coor[1] - other.coor[1];
+        double dz = coor[2] - other.coor[2];
+        return std::sqrt(dx*dx + dy*dy + dz*dz);
     }
 
     double distance_squared_to(const Atom& other) const {
-        return utils::math::distance_squared(coor_, other.get_coor());
+        double dx = coor[0] - other.coor[0];
+        double dy = coor[1] - other.coor[1];
+        double dz = coor[2] - other.coor[2];
+        return dx*dx + dy*dy + dz*dz;
     }
 
-    // Comparison operators
+    // Comparison operators for sorting/searching
+    bool operator<(const Atom& other) const {
+        if (segid != other.segid) return segid < other.segid;
+        if (ires != other.ires) return ires < other.ires;
+        return bynu < other.bynu;
+    }
+
     bool operator==(const Atom& other) const {
-        return bynu_ == other.bynu_ && 
-               type_ == other.type_ && 
-               resname_ == other.resname_ &&
-               ires_ == other.ires_ && 
-               segid_ == other.segid_ &&
-               utils::compare::coordinates_equal(coor_, other.coor_);
+        return bynu == other.bynu && 
+               type == other.type && 
+               resname == other.resname &&
+               ires == other.ires && 
+               segid == other.segid &&
+               common::utils::double_equals(coor[0], other.coor[0]) &&
+               common::utils::double_equals(coor[1], other.coor[1]) &&
+               common::utils::double_equals(coor[2], other.coor[2]);
     }
 
     bool operator!=(const Atom& other) const {
         return !(*this == other);
     }
 
-    // Hash support
-    std::size_t hash() const {
-        return utils::hash::combine_hash(
-            bynu_, utils::hash::string_hash(type_), 
-            utils::hash::string_hash(resname_), ires_,
-            utils::hash::string_hash(segid_),
-            utils::hash::coordinate_hash(coor_)
-        );
-    }
-
-    // ICloneable interface
-    std::unique_ptr<Atom> clone() const override {
-        return std::make_unique<Atom>(*this);
-    }
-
-    // ISerializable interface
-    std::string serialize() const override {
-        std::ostringstream oss;
-        oss << std::fixed << std::setprecision(3);
-        oss << "ATOM:" << bynu_ << ":" << type_ << ":" << resname_ 
-            << ":" << ires_ << ":" << segid_ << ":" << chain_
-            << ":" << coor_[0] << ":" << coor_[1] << ":" << coor_[2]
-            << ":" << mass_ << ":" << charge_;
-        return oss.str();
-    }
-
-    bool deserialize(const std::string& data) override {
-        std::istringstream iss(data);
-        std::string token;
-        
-        if (!std::getline(iss, token, ':') || token != "ATOM") return false;
-        if (!std::getline(iss, token, ':')) return false;
-        bynu_ = std::stoi(token);
-        if (!std::getline(iss, token, ':')) return false;
-        type_ = token;
-        if (!std::getline(iss, resname_, ':')) return false;
-        if (!std::getline(iss, token, ':')) return false;
-        ires_ = std::stoi(token);
-        if (!std::getline(iss, segid_, ':')) return false;
-        if (!std::getline(iss, token, ':')) return false;
-        chain_ = token.empty() ? ' ' : token[0];
-        if (!std::getline(iss, token, ':')) return false;
-        coor_[0] = std::stod(token);
-        if (!std::getline(iss, token, ':')) return false;
-        coor_[1] = std::stod(token);
-        if (!std::getline(iss, token, ':')) return false;
-        coor_[2] = std::stod(token);
-        if (!std::getline(iss, token, ':')) return false;
-        mass_ = std::stod(token);
-        if (!std::getline(iss, token)) return false;
-        charge_ = std::stod(token);
-        
-        return true;
-    }
-
-    std::string get_type_name() const override {
-        return "Atom";
-    }
-
-    // PDB format output
-    std::string to_pdb_string() const {
-        std::ostringstream oss;
-        oss << std::left;
-        oss << std::setw(6) << (hetatm_ ? "HETATM" : "ATOM");
-        oss << std::right << std::setw(5) << bynu_;
-        oss << " ";
-        oss << std::left << std::setw(4) << get_formatted_atom_name();
-        oss << std::setw(1) << altloc_;
-        oss << std::setw(3) << resname_;
-        oss << " ";
-        oss << std::setw(1) << chain_;
-        oss << std::right << std::setw(4) << ires_;
-        oss << std::setw(1) << inscode_;
-        oss << "   ";
-        oss << std::fixed << std::setprecision(3);
-        oss << std::right << std::setw(8) << coor_[0];
-        oss << std::setw(8) << coor_[1];
-        oss << std::setw(8) << coor_[2];
-        oss << std::setprecision(2);
-        oss << std::setw(6) << occupancy_;
-        oss << std::setw(6) << tempfactor_;
-        oss << "          ";
-        oss << std::left << std::setw(2) << element_;
-        oss << std::setw(2) << chargestr_;
-        
-        return oss.str();
-    }
-
-    // Enhanced validation with detailed error messages
-    std::string get_validation_error() const override {
-        if (bynu_ <= 0) return "Invalid atom number";
-        if (!utils::validate::is_valid_name(type_)) return "Invalid atom type";
-        if (!utils::validate::is_valid_name(resname_)) return "Invalid residue name";
-        if (ires_ <= 0) return "Invalid residue number";
-        if (!utils::validate::is_valid_mass(mass_)) return "Invalid mass";
-        if (!utils::validate::is_valid_charge(charge_)) return "Invalid charge";
-        if (!std::all_of(coor_.begin(), coor_.end(), utils::validate::is_valid_coordinate)) {
-            return "Invalid coordinates";
+    // Hash function for use in unordered containers
+    struct Hash {
+        std::size_t operator()(const Atom& atom) const {
+            std::size_t seed = 0;
+            common::utils::hash_combine(seed, atom.bynu);
+            common::utils::hash_combine(seed, atom.type);
+            common::utils::hash_combine(seed, atom.resname);
+            common::utils::hash_combine(seed, atom.ires);
+            common::utils::hash_combine(seed, atom.segid);
+            return seed;
         }
-        if (occupancy_ < 0.0 || occupancy_ > 1.0) return "Invalid occupancy";
-        if (!std::isfinite(tempfactor_)) return "Invalid temperature factor";
-        
-        return "";
+    };
+
+    // Clone method for copying
+    std::unique_ptr<Atom> clone() const {
+        return std::make_unique<Atom>(*this);
     }
 };
 
+// Utility functions for atom collections
+namespace utils {
+
+/**
+ * @brief Find atoms by type in a collection
+ */
+template<typename Container>
+auto find_atoms_by_type(const Container& atoms, const std::string& type) {
+    std::vector<typename Container::value_type> result;
+    std::copy_if(atoms.begin(), atoms.end(), std::back_inserter(result),
+                [&type](const auto& atom) { return atom.get_type() == type; });
+    return result;
+}
+
+/**
+ * @brief Find atoms by residue in a collection
+ */
+template<typename Container>
+auto find_atoms_by_residue(const Container& atoms, const std::string& resname, int ires) {
+    std::vector<typename Container::value_type> result;
+    std::copy_if(atoms.begin(), atoms.end(), std::back_inserter(result),
+                [&resname, ires](const auto& atom) { 
+                    return atom.get_resname() == resname && atom.get_ires() == ires; 
+                });
+    return result;
+}
+
+} // namespace utils
+
+} // namespace atom
 } // namespace model
 } // namespace pygcmc
-
-// Hash specialization for std::unordered_map support
-namespace std {
-    template<>
-    struct hash<pygcmc::model::Atom> {
-        std::size_t operator()(const pygcmc::model::Atom& atom) const {
-            return atom.hash();
-        }
-    };
-}
 
 #endif // PYGCMC_MODEL_ATOM_MAIN_HPP 

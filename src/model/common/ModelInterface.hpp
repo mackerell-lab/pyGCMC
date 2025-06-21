@@ -1,16 +1,17 @@
 #pragma once
 
-#ifndef PYGCMC_MODEL_INTERFACE_HPP
-#define PYGCMC_MODEL_INTERFACE_HPP
+#ifndef PYGCMC_MODEL_COMMON_INTERFACE_HPP
+#define PYGCMC_MODEL_COMMON_INTERFACE_HPP
 
 #include <memory>
 #include <string>
 
 namespace pygcmc {
 namespace model {
+namespace common {
 
 /**
- * @brief Base interface for cloneable objects
+ * @brief Interface for objects that can be cloned
  */
 template<typename T>
 class ICloneable {
@@ -20,67 +21,37 @@ public:
 };
 
 /**
- * @brief Base interface for serializable objects  
+ * @brief Interface for objects that can be serialized
  */
 class ISerializable {
 public:
     virtual ~ISerializable() = default;
-    
-    /**
-     * @brief Serialize object to string
-     */
     virtual std::string serialize() const = 0;
-    
-    /**
-     * @brief Deserialize object from string
-     * @param data Serialized data
-     * @return true if successful
-     */
-    virtual bool deserialize(const std::string& data) = 0;
-    
-    /**
-     * @brief Get object type name for serialization
-     */
-    virtual std::string get_type_name() const = 0;
+    virtual void deserialize(const std::string& data) = 0;
 };
 
 /**
- * @brief Base interface for validatable objects
+ * @brief Interface for objects that can be validated
  */
 class IValidatable {
 public:
     virtual ~IValidatable() = default;
-    
-    /**
-     * @brief Check if object is in valid state
-     */
     virtual bool is_valid() const = 0;
-    
-    /**
-     * @brief Get validation error message
-     */
     virtual std::string get_validation_error() const { return ""; }
 };
 
 /**
- * @brief Base interface for objects with unique identifiers
+ * @brief Interface for objects with numeric identifiers
  */
 class IIdentifiable {
 public:
     virtual ~IIdentifiable() = default;
-    
-    /**
-     * @brief Get unique identifier
-     */
-    virtual std::string get_id() const = 0;
-    
-    /**
-     * @brief Set unique identifier
-     */
-    virtual void set_id(const std::string& id) = 0;
+    virtual int get_id() const = 0;
+    virtual void set_id(int id) = 0;
 };
 
+} // namespace common
 } // namespace model
 } // namespace pygcmc
 
-#endif // PYGCMC_MODEL_INTERFACE_HPP 
+#endif // PYGCMC_MODEL_COMMON_INTERFACE_HPP 

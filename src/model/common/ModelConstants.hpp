@@ -1,75 +1,62 @@
 #pragma once
 
-#ifndef PYGCMC_MODEL_CONSTANTS_HPP
-#define PYGCMC_MODEL_CONSTANTS_HPP
+#ifndef PYGCMC_MODEL_COMMON_CONSTANTS_HPP
+#define PYGCMC_MODEL_COMMON_CONSTANTS_HPP
 
-#include <cmath>
 #include <limits>
 
 namespace pygcmc {
 namespace model {
+namespace common {
 
 /**
- * @brief Physical and chemical constants for GCMC simulations
+ * @brief Physical and chemical constants for molecular modeling
  */
 namespace constants {
 
-    // Physical constants
-    constexpr double BOLTZMANN = 0.001987;  ///< Boltzmann constant (kcal/mol/K)
-    constexpr double KCAL_TO_KJ = 4.184;    ///< Energy unit conversion (kcal/mol -> kJ/mol)
-    constexpr double KJ_TO_KCAL = 1.0 / KCAL_TO_KJ;  ///< Energy unit conversion (kJ/mol -> kcal/mol)
-    
-    // Conversion factors
-    constexpr double ANGSTROM_TO_NM = 0.1;   ///< Length conversion (Å -> nm)
-    constexpr double NM_TO_ANGSTROM = 10.0;  ///< Length conversion (nm -> Å)
-    constexpr double DEGREE_TO_RADIAN = M_PI / 180.0;  ///< Angle conversion
-    constexpr double RADIAN_TO_DEGREE = 180.0 / M_PI;  ///< Angle conversion
-    
-    // Default values
-    constexpr double DEFAULT_TEMPERATURE = 300.0;      ///< Default temperature (K)
-    constexpr double DEFAULT_WATER_DENSITY = 55.0;     ///< Water density (M)
-    constexpr double DEFAULT_CUTOFF = 12.0;             ///< Default cutoff distance (Å)
-    constexpr double DEFAULT_GRID_SPACING = 1.0;       ///< Default grid spacing (Å)
-    constexpr double DEFAULT_SIGMA = 2.4;               ///< Default cavity sigma (Å)
-    
-    // Numerical limits
-    constexpr double EPSILON = 1e-8;                    ///< Small value for comparisons
-    constexpr double LARGE_NUMBER = 1e30;               ///< Large number
-    constexpr double INVALID_VALUE = std::numeric_limits<double>::quiet_NaN();
-    
-    // CHARMM specific constants
-    constexpr int MAX_ATOM_NAME_LENGTH = 4;             ///< Maximum atom name length
-    constexpr int MAX_RESIDUE_NAME_LENGTH = 4;          ///< Maximum residue name length
-    constexpr int MAX_SEGMENT_NAME_LENGTH = 4;          ///< Maximum segment name length
-    
-    // MC simulation defaults
-    constexpr double DEFAULT_INSERTION_DELETION_FRAC = 0.5;  ///< Default insertion/deletion fraction
-    constexpr double DEFAULT_MAX_TRANSLATION = 1.0;          ///< Default max translation (Å)
-    constexpr double DEFAULT_MAX_ROTATION = 30.0;            ///< Default max rotation (degrees)
-    constexpr unsigned int DEFAULT_CONF_BIAS_TRIALS = 10;    ///< Default configuration bias trials
-    
-    // Energy calculation defaults
-    constexpr double DEFAULT_FRAGMENT_CUTOFF = 10.0;    ///< Default fragment cutoff (Å)
-    constexpr double DEFAULT_PROTEIN_CUTOFF = 10.0;     ///< Default protein cutoff (Å)
-    constexpr unsigned int DEFAULT_PAIRLIST_FREQ = 1000; ///< Default pairlist update frequency
-    
-    // File format constants
-    constexpr int PDB_ATOM_NAME_WIDTH = 4;               ///< PDB atom name field width
-    constexpr int PDB_RESIDUE_NAME_WIDTH = 3;            ///< PDB residue name field width
-    constexpr int PDB_CHAIN_WIDTH = 1;                   ///< PDB chain field width
-    constexpr int PDB_RESIDUE_NUMBER_WIDTH = 4;          ///< PDB residue number field width
-    
-    // Validation thresholds
-    constexpr double MIN_VALID_MASS = 0.1;               ///< Minimum valid atomic mass
-    constexpr double MAX_VALID_MASS = 1000.0;            ///< Maximum valid atomic mass  
-    constexpr double MIN_VALID_CHARGE = -10.0;           ///< Minimum valid charge
-    constexpr double MAX_VALID_CHARGE = 10.0;            ///< Maximum valid charge
-    constexpr double MIN_VALID_COORDINATE = -1e6;        ///< Minimum valid coordinate
-    constexpr double MAX_VALID_COORDINATE = 1e6;         ///< Maximum valid coordinate
-    
-} // namespace constants
+// Physical constants
+constexpr double AVOGADRO = 6.02214076e23;           // Avogadro's number (mol^-1)
+constexpr double BOLTZMANN = 1.380649e-23;           // Boltzmann constant (J/K)
+constexpr double GAS_CONSTANT = 8.314462618;         // Gas constant (J/mol/K)
+constexpr double PLANCK = 6.62607015e-34;            // Planck constant (J·s)
+constexpr double ELECTRON_CHARGE = 1.602176634e-19;  // Elementary charge (C)
 
+// Unit conversions
+constexpr double KCAL_TO_JOULE = 4184.0;             // kcal/mol to J/mol
+constexpr double JOULE_TO_KCAL = 1.0 / KCAL_TO_JOULE;
+constexpr double ANGSTROM_TO_METER = 1.0e-10;         // Å to m
+constexpr double METER_TO_ANGSTROM = 1.0e10;          // m to Å
+
+// Energy unit conversions
+constexpr double HARTREE_TO_KCAL = 627.5094740631;    // Hartree to kcal/mol
+constexpr double KCAL_TO_HARTREE = 1.0 / HARTREE_TO_KCAL;
+
+// Default values and tolerances
+constexpr double DEFAULT_TOLERANCE = 1.0e-6;          // Default numerical tolerance
+constexpr double COORDINATE_TOLERANCE = 1.0e-8;       // Coordinate comparison tolerance
+constexpr double ENERGY_TOLERANCE = 1.0e-9;           // Energy comparison tolerance
+
+// Invalid/unset values
+constexpr double INVALID_DOUBLE = std::numeric_limits<double>::quiet_NaN();
+constexpr int INVALID_INT = -1;
+
+// PDB format constants
+constexpr double DEFAULT_OCCUPANCY = 1.0;
+constexpr double DEFAULT_TEMPFACTOR = 0.0;
+constexpr char DEFAULT_ALTLOC = ' ';
+constexpr char DEFAULT_CHAIN = ' ';
+constexpr char DEFAULT_INSCODE = ' ';
+
+// CHARMM force field constants
+constexpr double DEFAULT_WMAIN = 1.0;
+constexpr double DEFAULT_WCOMP = 1.0;
+constexpr int DEFAULT_MOVE = 1;
+constexpr int DEFAULT_IGNORE = 0;
+constexpr int DEFAULT_CONSTRAIN = 0;
+
+} // namespace constants
+} // namespace common
 } // namespace model
 } // namespace pygcmc
 
-#endif // PYGCMC_MODEL_CONSTANTS_HPP 
+#endif // PYGCMC_MODEL_COMMON_CONSTANTS_HPP 
