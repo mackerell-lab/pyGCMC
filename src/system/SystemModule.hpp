@@ -55,7 +55,7 @@ std::unique_ptr<common::ISystem> createSystem(common::SystemKind kind);
  * @param verbose Enable verbose logging
  * @param level Logging level to use
  */
-void initializeLogging(bool verbose = false, LogLevel level = LogLevel::INFO);
+void initializeLogging(bool verbose = false, common::LogLevel level = common::LogLevel::INFO);
 
 /**
  * @brief Get version information for the system module

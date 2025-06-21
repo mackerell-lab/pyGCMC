@@ -2,6 +2,7 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include "system/SystemModule.hpp"
 #include "system/system.hpp"
 #include "system/molecularSystem.hpp"
 #include "system/MonteCarloSystem.hpp"
@@ -13,11 +14,11 @@ namespace bindings {
 
 void init_system(py::module& m) {
     // Add LogLevel enum
-    py::enum_<system::LogLevel>(m, "LogLevel")
-        .value("DEBUG", system::LogLevel::DEBUG)
-        .value("INFO", system::LogLevel::INFO)
-        .value("WARNING", system::LogLevel::WARNING)
-        .value("ERROR", system::LogLevel::ERROR);
+    py::enum_<system::common::LogLevel>(m, "LogLevel")
+        .value("DEBUG", system::common::LogLevel::DEBUG)
+        .value("INFO", system::common::LogLevel::INFO)
+        .value("WARNING", system::common::LogLevel::WARNING)
+        .value("ERROR", system::common::LogLevel::ERROR);
 
     py::class_<system::System>(m, "System")
         .def(py::init<>())
@@ -192,9 +193,9 @@ void init_system(py::module& m) {
             throw py::type_error("Argument must be either MolecularSystem or Molecular");
         })
         .def("add_movement_molecules", [](pygcmc::system::MonteCarloSystem& self, py::list molecules) {
-            std::vector<pygcmc::system::MonteCarloSystem::MovementMolecularInfo> mol_vec;
+            std::vector<pygcmc::system::montecarlo::MovementMolecularInfo> mol_vec;
             for (const auto& mol : molecules) {
-                mol_vec.push_back(mol.cast<pygcmc::system::MonteCarloSystem::MovementMolecularInfo>());
+                mol_vec.push_back(mol.cast<pygcmc::system::montecarlo::MovementMolecularInfo>());
             }
             self.addMovementMolecules(mol_vec);
         }, py::arg("molecules"), "Add movement molecules for GCMC simulation")
@@ -223,12 +224,12 @@ void init_system(py::module& m) {
              py::arg("state"), "Apply the current switching function settings to an external state object");
 
     // Bind MovementMolecularInfo
-    py::class_<pygcmc::system::MonteCarloSystem::MovementMolecularInfo>(m, "MovementMolecularInfo")
+    py::class_<pygcmc::system::montecarlo::MovementMolecularInfo>(m, "MovementMolecularInfo")
         .def(py::init<std::shared_ptr<pygcmc::model::Molecular>, int>(),
              py::arg("molecular"),
              py::arg("maxCopies"))
-        .def_readwrite("molecular", &pygcmc::system::MonteCarloSystem::MovementMolecularInfo::molecular)
-        .def_readwrite("maxCopies", &pygcmc::system::MonteCarloSystem::MovementMolecularInfo::maxCopies);
+        .def_readwrite("molecular", &pygcmc::system::montecarlo::MovementMolecularInfo::molecular)
+        .def_readwrite("maxCopies", &pygcmc::system::montecarlo::MovementMolecularInfo::maxCopies);
 }
 
 } // namespace bindings

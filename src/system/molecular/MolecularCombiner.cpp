@@ -44,16 +44,9 @@ std::shared_ptr<model::Molecular> MolecularCombiner::combineMultiple(
     const std::shared_ptr<model::Structure>& structure,
     const std::vector<std::shared_ptr<model::Topology>>& topologies) {
     
-    // Calculate totals
-    size_t total_atoms = 0;
-    size_t total_residues = 0;
-    for (const auto& topology : topologies) {
-        total_atoms += topology->get_num_atoms();
-        total_residues += topology->get_num_residues();
+    if (!structure || topologies.empty()) {
+        throw std::invalid_argument("Structure and Topologies cannot be null/empty");
     }
-
-    // Validate input parameters
-    validator_->validateMultipleCombination(structure, topologies, total_atoms, total_residues);
 
     // Create new Molecular object
     auto molecular = std::make_shared<model::Molecular>();
@@ -61,8 +54,19 @@ std::shared_ptr<model::Molecular> MolecularCombiner::combineMultiple(
     // Copy data from Structure
     copyStructureData(molecular, structure);
 
-    // Match residues with topologies
+    // Match residues with topologies - this is the key step that determines which topologies are actually used
     auto matched_topologies = matchResidues(structure, topologies);
+    
+    // Calculate totals AFTER matching
+    size_t total_atoms = 0;
+    size_t total_residues = 0;
+    for (const auto& topology : matched_topologies) {
+        total_atoms += topology->get_num_atoms();
+        total_residues += topology->get_num_residues();
+    }
+
+    // Validate MATCHED topologies against structure
+    validator_->validateMultipleCombination(structure, matched_topologies, total_atoms, total_residues);
     
     // Merge all matched topologies
     merger_->mergeTopologies(molecular, matched_topologies);

@@ -7,6 +7,7 @@
 
 namespace pygcmc {
 namespace system {
+namespace montecarlo {
 
 /**
  * @brief Main class for Monte Carlo simulation management (Compatibility Layer)
@@ -15,21 +16,21 @@ namespace system {
  * while internally using the new modular architecture. All original functionality
  * is preserved while gaining the benefits of the refactored design.
  */
-class MonteCarloSystem {
+class MCMain {
 public:
     // ------------------------------------------------------------
     // Constructor / Destructor
     // ------------------------------------------------------------
-    MonteCarloSystem() = default;
-    ~MonteCarloSystem() = default;
+    MCMain() = default;
+    ~MCMain() = default;
 
     // Disable copy operations to prevent accidental copies
-    MonteCarloSystem(const MonteCarloSystem&) = delete;
-    MonteCarloSystem& operator=(const MonteCarloSystem&) = delete;
+    MCMain(const MCMain&) = delete;
+    MCMain& operator=(const MCMain&) = delete;
 
     // Enable move operations for efficient container usage
-    MonteCarloSystem(MonteCarloSystem&&) = default;
-    MonteCarloSystem& operator=(MonteCarloSystem&&) = default;
+    MCMain(MCMain&&) = default;
+    MCMain& operator=(MCMain&&) = default;
 
     // ------------------------------------------------------------
     // System initialization and setup
@@ -83,30 +84,12 @@ public:
     }
 
     /**
-     * @brief Information for movement molecule initialization
-     */
-    struct MovementMolecularInfo {
-        std::shared_ptr<model::Molecular> molecular;  ///< Molecular structure
-        int maxCopies;  ///< Number of copies to pre-allocate
-
-        MovementMolecularInfo(std::shared_ptr<model::Molecular> mol, int max)
-            : molecular(mol), maxCopies(max) {}
-    };
-
-    /**
      * @brief Add movement molecules to the system
      * @param molecules List of movement molecules and their copy counts
      */
     void addMovementMolecules(const std::vector<MovementMolecularInfo>& molecules) {
-        // Convert to internal type
-        std::vector<montecarlo::MovementMolecularInfo> internalMolecules;
-        internalMolecules.reserve(molecules.size());
-        
-        for (const auto& mol : molecules) {
-            internalMolecules.emplace_back(mol.molecular, mol.maxCopies);
-        }
-        
-        impl_.addMovementMolecules(internalMolecules);
+        // Since we're in the same namespace, MovementMolecularInfo is the same type
+        impl_.addMovementMolecules(molecules);
     }
 
     /**
@@ -270,8 +253,9 @@ public:
     }
 
 private:
-    montecarlo::MCComposite impl_;  ///< Internal implementation using new modular architecture
+    MCComposite impl_;  ///< Internal implementation using new modular architecture
 };
 
+} // namespace montecarlo
 } // namespace system
 } // namespace pygcmc 

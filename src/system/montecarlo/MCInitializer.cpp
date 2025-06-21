@@ -2,6 +2,7 @@
 #include "MCCore.hpp"
 #include <stdexcept>
 #include <set>
+#include <cmath>
 
 namespace pygcmc {
 namespace system {
@@ -34,14 +35,65 @@ void MCInitializer::initializeFromMolecular(model::MCState& state, const std::sh
 }
 
 void MCInitializer::initializeForceField(model::MCState& state, const model::ForceField& ff) {
-    // TODO: Implement force field initialization
-    // This would involve:
-    // 1. Unit conversions (Å -> nm, kcal/mol -> kJ/mol)
-    // 2. Transform Rmin/2 to sigma
-    // 3. Apply combining rules or NBFIX
-    // 4. Organize parameters for efficient access
-    (void)state; // Suppress unused warning for now
-    (void)ff;    // Suppress unused warning for now
+    // Get total number of atom types in the system
+    int numTypes = state.atomTypes.atomTypes.size();
+    
+    state.forcefield.numTotalTypes = numTypes;
+    state.forcefield.numMovementTypes = state.numMovementAtomTypes;
+    
+    // Resize force field arrays
+    state.forcefield.ljSigma.resize(numTypes * numTypes, 0.0f);
+    state.forcefield.ljEps.resize(numTypes * numTypes, 0.0f);
+    
+    // Convert CHARMM parameters to GROMACS format
+    for (int i = 0; i < numTypes; ++i) {
+        for (int j = 0; j < numTypes; ++j) {
+            int idx = i * numTypes + j;
+            
+            // Get atom type names
+            std::string type1 = state.atomTypes.getTypeName(i);
+            std::string type2 = state.atomTypes.getTypeName(j);
+            
+            // First try to get NBFIX parameters
+            auto [nbfix_params, has_nbfix] = ff.get_nbfix(type1, type2);
+            
+            try {
+                if (has_nbfix) {
+                    // Use NBFIX parameters directly
+                    // Convert Rmin from Å to nm, then to sigma: sigma = Rmin / 2^(1/6)
+                    const float sigma = static_cast<float>(nbfix_params.rmin / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
+                    
+                    // Store parameters (eps in kJ/mol, sigma in nm)
+                    state.forcefield.ljSigma[idx] = sigma;
+                    state.forcefield.ljEps[idx] = static_cast<float>(nbfix_params.epsilon) * KCAL_TO_KJ;
+                } else {
+                    // Get LJ parameters for both types
+                    auto lj1 = ff.get_lj_params(type1);
+                    auto lj2 = ff.get_lj_params(type2);
+                    
+                    // Apply Lorentz-Berthelot combining rules
+                    // sigma = (sigma1 + sigma2) / 2
+                    // epsilon = sqrt(epsilon1 * epsilon2)
+                    
+                    // Convert CHARMM Rmin/2 to sigma: sigma = Rmin / 2^(1/6)
+                    // Rmin = 2 * Rmin/2, so sigma = 2 * Rmin/2 / 2^(1/6)
+                    float sigma1 = static_cast<float>(2.0 * lj1.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
+                    float sigma2 = static_cast<float>(2.0 * lj2.rmin_half / std::pow(2.0, 1.0/6.0)) * ANGSTROM_TO_NM;
+                    state.forcefield.ljSigma[idx] = (sigma1 + sigma2) * 0.5f;
+                    
+                    // Convert CHARMM epsilon to kJ/mol
+                    float eps1 = std::abs(lj1.epsilon) * KCAL_TO_KJ; // kcal/mol to kJ/mol
+                    float eps2 = std::abs(lj2.epsilon) * KCAL_TO_KJ; // kcal/mol to kJ/mol
+                    state.forcefield.ljEps[idx] = std::sqrt(eps1 * eps2);
+                }
+                
+            } catch (const std::exception&) {
+                // If parameters not found, set to zero
+                state.forcefield.ljSigma[idx] = 0.0f;
+                state.forcefield.ljEps[idx] = 0.0f;
+            }
+        }
+    }
 }
 
 void MCInitializer::validateParameters(const model::ForceField& ff, const std::shared_ptr<model::Molecular>& molecular) {

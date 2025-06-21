@@ -155,17 +155,122 @@ void MCMovementBuilder::addMovementMoleculeGroups(
     int& newAtomStart,
     int& newResIdx) {
 
-    // Implementation split into smaller parts for maintainability
-    // This is a placeholder for the complex movement molecule group addition logic
-    // TODO: Implement the full logic from the original addMovementMolecules
-    
-    (void)newState;
-    (void)molecules;
-    (void)processedResidueNames;
-    (void)matchingResidues;
-    (void)matchingAtoms;
-    (void)newAtomStart;
-    (void)newResIdx;
+    // Add each movement molecule group
+    for (size_t m = 0; m < molecules.size(); m++) {
+        const auto& molInfo = molecules[m];
+        const auto& matches = matchingResidues[m];
+        const auto& matchAtoms = matchingAtoms[m];
+        const std::string& resName = processedResidueNames[m];
+
+        // Record the starting position for this molecule type
+        int startIndexForThisGroup = newResIdx;
+        int activeCountForThisGroup = static_cast<int>(matches.size());
+
+        // Add active residues matched from the "old system"
+        for (size_t r = 0; r < matches.size(); r++) {
+            model::MCResidue newRes = matches[r];
+            newRes.atomStart = newAtomStart;
+            newRes.active = true;
+            newRes.fixed = false;
+            const auto& atoms = matchAtoms[r];
+            for (const auto& atom : atoms) {
+                newState.atoms.push_back(atom);
+            }
+            newAtomStart += static_cast<int>(atoms.size());
+            newState.residues.push_back(newRes);
+            newResIdx++;
+        }
+
+        // Check if this type already exists in movement residues
+        bool typeExists = false;
+        int existingIndex = -1;
+        for (size_t i = 0; i < newState.movementResidues.size(); i++) {
+            if (newState.movementResidues[i].resName == resName) {
+                typeExists = true;
+                existingIndex = i;
+                break;
+            }
+        }
+
+        if (typeExists) {
+            // If the type already exists, update the count
+            auto& existingInfo = newState.movementResidues[existingIndex];
+            startIndexForThisGroup = existingInfo.startIndex;
+            activeCountForThisGroup += existingInfo.activeCount;
+            existingInfo.activeCount = activeCountForThisGroup;
+            existingInfo.totalCount = activeCountForThisGroup + molInfo.maxCopies;
+        } else {
+            // Add inactive copies
+            const auto& molRes = molInfo.molecular->residues[0];
+            const auto& molAtoms = molRes->get_atoms();
+            const auto& topRes = molInfo.molecular->topology_residues[0];
+            int atomsPerResidue = static_cast<int>(molAtoms.size());
+            
+            for (int c = 0; c < molInfo.maxCopies; c++) {
+                model::MCResidue newRes;
+                newRes.atomStart = newAtomStart;
+                newRes.atomCount = atomsPerResidue;
+                newRes.active = false;
+                newRes.fixed = false;
+                newRes.type = newState.residueTypes.getOrAddType(resName);
+
+                // Initialize energy components and GCMC parameters
+                newRes.energy_vdw = 0.0f;
+                newRes.energy_elec = 0.0f;
+                newRes.chemPot = 0.0f;
+                newRes.concentration = 0.0f;
+                newRes.radius = 0.0f;
+
+                // Add atoms for this inactive copy
+                for (size_t i = 0; i < molAtoms.size(); i++) {
+                    const auto& molAtom = molAtoms[i];
+                    const auto& topAtom = molInfo.molecular->topology_atoms[topRes.atoms[i]];
+                    
+                    model::MCAtom mcAtom;
+                    // Convert coordinates from Å to nm  
+                    mcAtom.x = molAtom->get_x() * 0.1f;  // ANGSTROM_TO_NM
+                    mcAtom.y = molAtom->get_y() * 0.1f;  
+                    mcAtom.z = molAtom->get_z() * 0.1f;  
+                    mcAtom.charge = topAtom.charge;
+                    mcAtom.type = newState.atomTypes.getOrAddType(topAtom.type);
+                    newState.atoms.push_back(mcAtom);
+                }
+
+                // Calculate center of mass (in nm)
+                newRes.center[0] = newRes.center[1] = newRes.center[2] = 0.0f;
+                for (const auto& atom : molAtoms) {
+                    newRes.center[0] += atom->get_x() * 0.1f;  // Convert Å to nm
+                    newRes.center[1] += atom->get_y() * 0.1f;
+                    newRes.center[2] += atom->get_z() * 0.1f;
+                }
+                
+                if (atomsPerResidue > 0) {
+                    float invCount = 1.0f / atomsPerResidue;
+                    newRes.center[0] *= invCount;
+                    newRes.center[1] *= invCount;
+                    newRes.center[2] *= invCount;
+                }
+
+                newAtomStart += atomsPerResidue;
+                newState.residues.push_back(newRes);
+                newResIdx++;
+            }
+
+            // Add new movement residue info
+            model::MCMovementResidueInfo moveInfo;
+            moveInfo.startIndex = startIndexForThisGroup;
+            moveInfo.activeCount = activeCountForThisGroup;
+            moveInfo.totalCount = activeCountForThisGroup + molInfo.maxCopies;
+            moveInfo.resName = resName;
+            newState.movementResidues.push_back(moveInfo);
+
+            system::log::LogMain::log(system::common::LogLevel::DEBUG, 
+                             "Added movement residue info: ", resName,
+                             " start=", moveInfo.startIndex,
+                             " active=", moveInfo.activeCount,
+                             " total=", moveInfo.totalCount);
+        }
+    }
 }
 
 std::string MCMovementBuilder::trim(const std::string& s) const {
