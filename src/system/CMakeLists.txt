@@ -1,29 +1,44 @@
 # src/system/CMakeLists.txt
 
-# Create system library
-add_library(pygcmc_system
-    system.cpp
-    molecularSystem.cpp
-    MonteCarloSystem.cpp
+# Automatically discover all source files
+file(GLOB_RECURSE SYSTEM_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cxx"
 )
 
-# Set position independent code property
+# Automatically discover all header files (for IDE display)
+file(GLOB_RECURSE SYSTEM_HEADERS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.hxx"
+)
+
+# Create system library
+add_library(pygcmc_system STATIC
+    ${SYSTEM_SOURCES}
+    ${SYSTEM_HEADERS}
+)
+
+# Set position independent code
 set_property(TARGET pygcmc_system PROPERTY POSITION_INDEPENDENT_CODE ON)
 
-# Link dependencies - system depends on model
-target_link_libraries(pygcmc_system
-    PUBLIC 
-        pygcmc_model      # system's interface exposes model types
-)
-
-# Set include directories for this target
+# Add include directories
 target_include_directories(pygcmc_system
     PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
         ${CMAKE_SOURCE_DIR}/src
+)
+
+# Link dependencies (system depends on the model library)
+target_link_libraries(pygcmc_system
+    PUBLIC
+        pygcmc_model
 )
 
 # Set properties
 set_target_properties(pygcmc_system PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
+    LINKER_LANGUAGE CXX
 ) 
