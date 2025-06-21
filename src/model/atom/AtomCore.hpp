@@ -156,6 +156,11 @@ public:
     void set_segid(const std::string& sid) { segid = sid; }
     void set_chain(char ch) { chain = ch; }
     void set_hetatm(bool het) { hetatm = het; }
+    
+    void set_bynu(int num) {
+        if (num <= 0) throw std::invalid_argument("Invalid atom number");
+        bynu = num;
+    }
 
     // Utility methods
     bool has_lj_params() const {

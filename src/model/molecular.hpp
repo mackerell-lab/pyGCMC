@@ -2,158 +2,35 @@
 #ifndef PYGCMC_MODEL_MOLECULAR_HPP
 #define PYGCMC_MODEL_MOLECULAR_HPP
 
-#include <vector>
-#include <memory>
-#include <map>
-#include <string>
-#include <unordered_map>
-#include <array>
-#include "model/atom.hpp"
-#include "model/residue.hpp"
-#include "model/structure.hpp"
-#include "model/topology.hpp"
+// Include the new refactored molecular module
+#include "molecule/MolecularMain.hpp"
+// Include necessary dependencies for type aliases
+#include "atom.hpp"
+#include "residue.hpp"
+#include "topology.hpp"
 
 namespace pygcmc {
 namespace model {
 
-/**
- * @brief Standardized CMAP structure, used for unified processing of PSF and TOP formats
- */
-struct StandardCmap {
-    std::array<int, 5> atoms;     ///< Standardized 5 atom indices
-    std::array<int, 8> raw_atoms; ///< Original format atom indices (8 for PSF, 5+3 of -1 for TOP)
-    bool is_psf_format;           ///< Whether it is PSF format
-    int function_type = 1;        ///< CMAP function type
-};
+// Backward compatibility type aliases
+using Molecular = molecule::Molecular;
 
-/**
- * @brief Molecular class, merges Structure and Topology data for subsequent calculations
- */
-class Molecular {
-public:
-    Molecular() = default;
-    ~Molecular() = default;
+// Re-export commonly used types for system compatibility
+using Atom = atom::Atom;
+using Residue = residue::Residue;
+using Topology = topology::Topology;
 
-    // Structure (PDB) related data
-    std::vector<std::shared_ptr<Atom>> atoms;  // Atom list
-    std::vector<std::shared_ptr<Residue>> residues;  // Residue list
-    std::vector<Structure::TerminalInfo> terminals;  // Chain termination information
-    std::map<std::string, std::vector<Structure::SecondaryStructure>> helices;  // Helical structures
-    std::map<std::string, std::vector<std::string>> sheets;  // β-sheet structures
-    std::vector<std::string> ssbonds;  // Disulfide bonds
-    std::vector<double> boxDimensions;  // Box dimensions
-
-    // Topology (PSF/TOP) related data
-    std::vector<TopologyAtom> topology_atoms;  // Atom information in topology (includes charge, mass, etc.)
-    std::vector<TopologyResidue> topology_residues;  // Residue information in topology
-    std::vector<TopologySegment> segments;  // Fragment information
-    std::vector<TopologyBond> bonds;  // Bond
-    std::vector<TopologyAngle> angles;  // Bond angle
-    std::vector<TopologyDihedral> dihedrals;  // Dihedral angle (including improper)
-    std::vector<TopologyDonor> donors;  // Hydrogen bond donor
-    std::vector<TopologyAcceptor> acceptors;  // Hydrogen bond acceptor
-    std::map<int, std::set<int>> exclusions;  // Non-bond exclusion
-    std::vector<TopologyGroup> groups;  // Atom group
-    std::vector<TopologyCmap> cmaps;  // Original CMAP item
-    std::vector<StandardCmap> standard_cmaps;  // Standardized CMAP item
-    std::vector<std::string> titles;  // PSF file title information
-
-    // Lookup mapping
-    std::unordered_map<std::string, int> segment_map;  // segment_name -> index
-    std::map<std::pair<std::string, int>, int> residue_map;  // (residue_name, number) -> index
-    std::map<std::tuple<std::string, int, std::string>, int> atom_map;  // (residue_name, number, atom_name) -> index
-
-    // Get atom count
-    size_t get_num_atoms() const { return atoms.size(); }
-    
-    // Get residue count
-    size_t get_num_residues() const { return residues.size(); }
-    
-    // Get fragment count
-    size_t get_num_segments() const { return segments.size(); }
-    
-    // Get bond count
-    size_t get_num_bonds() const { return bonds.size(); }
-    
-    // Get bond angle count
-    size_t get_num_angles() const { return angles.size(); }
-    
-    // Get dihedral angle count (excluding improper)
-    size_t get_num_dihedrals() const {
-        size_t count = 0;
-        for (const auto& dihedral : dihedrals) {
-            if (!dihedral.improper) count++;
-        }
-        return count;
-    }
-    
-    // Get improper count
-    size_t get_num_impropers() const {
-        size_t count = 0;
-        for (const auto& dihedral : dihedrals) {
-            if (dihedral.improper) count++;
-        }
-        return count;
-    }
-
-    // Standardized CMAP related methods
-    void add_standard_cmap(const TopologyCmap& cmap) {
-        StandardCmap std_cmap;
-        std_cmap.raw_atoms = cmap.atoms;
-        std_cmap.is_psf_format = (cmap.atoms[5] != -1);  // Determine if it is PSF format
-        
-        // Set standardized 5 atoms
-        if (std_cmap.is_psf_format) {
-            // PSF format: Use the first 4 atoms and the 8th atom
-            for (int i = 0; i < 4; ++i) {
-                std_cmap.atoms[i] = cmap.atoms[i];
-            }
-            std_cmap.atoms[4] = cmap.atoms[7];  // Use the 8th atom as the 5th atom
-        } else {
-            // TOP format: Directly use the first 5 atoms
-            for (int i = 0; i < 5; ++i) {
-                std_cmap.atoms[i] = cmap.atoms[i];
-            }
-        }
-        std_cmap.function_type = cmap.function_type;
-        standard_cmaps.push_back(std_cmap);
-    }
-
-    // Get standardized CMAP count
-    size_t get_num_standard_cmaps() const { return standard_cmaps.size(); }
-
-    // Clear all data
-    void clear() {
-        // Structure data
-        atoms.clear();
-        residues.clear();
-        terminals.clear();
-        helices.clear();
-        sheets.clear();
-        ssbonds.clear();
-        boxDimensions.clear();
-
-        // Topology data
-        topology_atoms.clear();
-        topology_residues.clear();
-        segments.clear();
-        bonds.clear();
-        angles.clear();
-        dihedrals.clear();
-        donors.clear();
-        acceptors.clear();
-        exclusions.clear();
-        groups.clear();
-        cmaps.clear();
-        standard_cmaps.clear();
-        titles.clear();
-
-        // Lookup mapping
-        segment_map.clear();
-        residue_map.clear();
-        atom_map.clear();
-    }
-};
+// Re-export topology types that might be used by system files
+using TopologyAtom = topology::TopologyAtom;
+using TopologyResidue = topology::TopologyResidue;
+using TopologyBond = topology::TopologyBond;
+using TopologyAngle = topology::TopologyAngle;
+using TopologyDihedral = topology::TopologyDihedral;
+using TopologyCmap = topology::TopologyCmap;
+using TopologyDonor = topology::TopologyDonor;
+using TopologyAcceptor = topology::TopologyAcceptor;
+using TopologyGroup = topology::TopologyGroup;
+using TopologySegment = topology::TopologySegment;
 
 } // namespace model
 } // namespace pygcmc

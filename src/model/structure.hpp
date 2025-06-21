@@ -8,8 +8,8 @@
 #include <memory>
 #include <map>
 #include <string>
-#include "model/atom.hpp"
-#include "model/residue.hpp"
+#include "atom/AtomMain.hpp"
+#include "residue/ResidueMain.hpp"
 
 namespace pygcmc {
 namespace model {
@@ -44,8 +44,8 @@ public:
     Structure() = default;
 
     // Getters
-    const std::vector<std::shared_ptr<Atom>>& get_atoms() const { return atoms_; }
-    const std::vector<std::shared_ptr<Residue>>& get_residues() const { return residues_; }
+    const std::vector<std::shared_ptr<atom::Atom>>& get_atoms() const { return atoms_; }
+    const std::vector<std::shared_ptr<residue::Residue>>& get_residues() const { return residues_; }
     const std::vector<TerminalInfo>& get_terminals() const { return terminals_; }
     const std::map<std::string, std::vector<SecondaryStructure>>& get_helices() const { return helices_; }
     const std::map<std::string, std::vector<std::string>>& get_sheets() const { return sheets_; }
@@ -53,8 +53,8 @@ public:
     const std::vector<double>& get_box_dimensions() const { return boxDimensions_; }
 
     // Setters
-    void add_atom(const std::shared_ptr<Atom>& atom) { atoms_.push_back(atom); }
-    void add_residue(const std::shared_ptr<Residue>& residue) { residues_.push_back(residue); }
+    void add_atom(const std::shared_ptr<atom::Atom>& atom) { atoms_.push_back(atom); }
+    void add_residue(const std::shared_ptr<residue::Residue>& residue) { residues_.push_back(residue); }
     void add_terminal(const TerminalInfo& terminal) { terminals_.push_back(terminal); }
     void add_helix(const std::string& chainId, const SecondaryStructure& helix) { 
         helices_[chainId].push_back(helix); 
@@ -77,8 +77,8 @@ public:
     }
 
 private:
-    std::vector<std::shared_ptr<Atom>> atoms_;
-    std::vector<std::shared_ptr<Residue>> residues_;
+    std::vector<std::shared_ptr<atom::Atom>> atoms_;
+    std::vector<std::shared_ptr<residue::Residue>> residues_;
     std::vector<TerminalInfo> terminals_;
     std::map<std::string, std::vector<SecondaryStructure>> helices_;
     std::map<std::string, std::vector<std::string>> sheets_;

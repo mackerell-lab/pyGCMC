@@ -235,7 +235,7 @@ bool PDBParser::parseAtomRecord(const std::string& line, RecordType type,
             }
         }
 
-        // Create atom with stripped values
+        // Create atom with stripped values (using backward-compatible alias)
         auto atom = std::make_shared<model::Atom>();
         atom->set_bynu(serialNum);
         atom->set_type(atomName);

@@ -1,8 +1,13 @@
 #pragma once
 
-#ifndef PYGCMC_MODEL_MOLECULAR_COMPOSITE_HPP
-#define PYGCMC_MODEL_MOLECULAR_COMPOSITE_HPP
+#ifndef PYGCMC_MODEL_MOLECULE_COMPOSITE_HPP
+#define PYGCMC_MODEL_MOLECULE_COMPOSITE_HPP
 
+#include "../common/ModelInterface.hpp"
+#include "../atom/AtomMain.hpp"
+#include "../residue/ResidueMain.hpp"
+#include "../topology/TopologyMain.hpp"
+#include "../structure.hpp"
 #include <vector>
 #include <memory>
 #include <map>
@@ -11,14 +16,10 @@
 #include <array>
 #include <set>
 #include <tuple>
-#include <algorithm>
-#include "../atom/AtomMain.hpp"
-#include "../residue/ResidueMain.hpp"
-#include "../common/ModelInterface.hpp"
-#include "../common/ModelUtils.hpp"
 
 namespace pygcmc {
 namespace model {
+namespace molecule {
 
 /**
  * @brief Standardized CMAP structure for unified PSF and TOP format processing
@@ -28,371 +29,269 @@ struct StandardCmap {
     std::array<int, 8> raw_atoms; ///< Original format atom indices (8 for PSF, 5+3 of -1 for TOP)
     bool is_psf_format;           ///< Whether it is PSF format
     int function_type = 1;        ///< CMAP function type
+    std::string description;      ///< Description information
+};
+
+/**
+ * @brief Structure information aggregator
+ */
+struct StructureInfo {
+    // Use original Structure types directly for full compatibility
+    using TerminalInfo = pygcmc::model::Structure::TerminalInfo;
+    using SecondaryStructure = pygcmc::model::Structure::SecondaryStructure;
     
-    StandardCmap() : is_psf_format(false) {
-        atoms.fill(-1);
-        raw_atoms.fill(-1);
-    }
+    std::vector<TerminalInfo> terminals;
+    std::map<std::string, std::vector<SecondaryStructure>> helices;
+    std::map<std::string, std::vector<std::string>> sheets;
+    std::vector<std::string> ssbonds;
+    std::vector<double> box_dimensions;
 };
 
 /**
- * @brief Terminal information structure
+ * @brief Topology information from PSF/TOP files - using original topology types
  */
-struct TerminalInfo {
-    std::string chain_id;
-    int start_residue = 0;
-    int end_residue = 0;
-    std::string terminal_type;  // "N-terminal", "C-terminal", etc.
+struct TopologyInfo {
+    // Use original topology types for compatibility
+    std::vector<topology::TopologyAtom> atoms;
+    std::vector<topology::TopologyResidue> residues;
+    std::vector<topology::TopologySegment> segments;
+    std::vector<topology::TopologyBond> bonds;
+    std::vector<topology::TopologyAngle> angles;
+    std::vector<topology::TopologyDihedral> dihedrals;
+    std::vector<topology::TopologyDonor> donors;
+    std::vector<topology::TopologyAcceptor> acceptors;
+    std::map<int, std::set<int>> exclusions;
+    std::vector<topology::TopologyGroup> groups;
+    std::vector<topology::TopologyCmap> cmaps;
+    std::vector<std::string> titles;
 };
 
 /**
- * @brief Secondary structure information
+ * @brief Core molecular composite class that manages atoms and residues
+ * This class handles the composition of molecular systems from structure and topology data
  */
-struct SecondaryStructure {
-    std::string type;           // "HELIX", "SHEET", etc.
-    std::string identifier;
-    int start_residue = 0;
-    int end_residue = 0;
-    std::string chain_id;
-    std::string comment;
-};
-
-/**
- * @brief Core molecular functionality for residue composition and topology management
- */
-class MolecularComposite : public IValidatable, public IIdentifiable {
+class MolecularComposite : public common::IValidatable {
 public:
-    // Constructors
     MolecularComposite() = default;
-    
-    explicit MolecularComposite(const std::string& name) : name_(name) {}
-
-    // Basic properties
-    const std::string& get_name() const noexcept { return name_; }
-    void set_name(const std::string& name) { name_ = name; }
-
-    // Atom management
-    void add_atom(std::shared_ptr<Atom> atom) {
-        if (!atom) {
-            throw std::invalid_argument("Cannot add null atom");
-        }
-        atoms_.push_back(atom);
-        update_atom_map();
-    }
-
-    void remove_atom(size_t index) {
-        if (index < atoms_.size()) {
-            atoms_.erase(atoms_.begin() + index);
-            update_atom_map();
-        }
-    }
-
-    const std::vector<std::shared_ptr<Atom>>& get_atoms() const noexcept {
-        return atoms_;
-    }
-
-    std::shared_ptr<Atom> get_atom(size_t index) const {
-        return (index < atoms_.size()) ? atoms_[index] : nullptr;
-    }
-
-    size_t get_num_atoms() const noexcept { return atoms_.size(); }
-
-    // Residue management
-    void add_residue(std::shared_ptr<Residue> residue) {
-        if (!residue) {
-            throw std::invalid_argument("Cannot add null residue");
-        }
-        residues_.push_back(residue);
-        update_residue_map();
-    }
-
-    void remove_residue(size_t index) {
-        if (index < residues_.size()) {
-            residues_.erase(residues_.begin() + index);
-            update_residue_map();
-        }
-    }
-
-    const std::vector<std::shared_ptr<Residue>>& get_residues() const noexcept {
-        return residues_;
-    }
-
-    std::shared_ptr<Residue> get_residue(size_t index) const {
-        return (index < residues_.size()) ? residues_[index] : nullptr;
-    }
-
-    size_t get_num_residues() const noexcept { return residues_.size(); }
-
-    // Atom lookup methods
-    std::shared_ptr<Atom> find_atom_by_id(int atom_id) const {
-        auto it = std::find_if(atoms_.begin(), atoms_.end(),
-            [atom_id](const std::shared_ptr<Atom>& atom) {
-                return atom && atom->get_bynu() == atom_id;
-            });
-        return (it != atoms_.end()) ? *it : nullptr;
-    }
-
-    std::shared_ptr<Atom> find_atom_by_name(const std::string& residue_name, 
-                                           int residue_number, 
-                                           const std::string& atom_name) const {
-        auto key = std::make_tuple(residue_name, residue_number, atom_name);
-        auto it = atom_map_.find(key);
-        return (it != atom_map_.end() && it->second < atoms_.size()) 
-                ? atoms_[it->second] : nullptr;
-    }
-
-    // Residue lookup methods
-    std::shared_ptr<Residue> find_residue_by_id(const std::string& residue_name, 
-                                               int residue_number) const {
-        auto key = std::make_pair(residue_name, residue_number);
-        auto it = residue_map_.find(key);
-        return (it != residue_map_.end() && it->second < residues_.size()) 
-                ? residues_[it->second] : nullptr;
-    }
-
-    std::vector<std::shared_ptr<Residue>> find_residues_by_name(const std::string& name) const {
-        std::vector<std::shared_ptr<Residue>> result;
-        for (const auto& residue : residues_) {
-            if (residue && residue->get_resname() == name) {
-                result.push_back(residue);
-            }
-        }
-        return result;
-    }
-
-    // Chain management
-    void add_chain(const std::string& chain_id) {
-        if (std::find(chain_ids_.begin(), chain_ids_.end(), chain_id) == chain_ids_.end()) {
-            chain_ids_.push_back(chain_id);
-        }
-    }
-
-    const std::vector<std::string>& get_chain_ids() const noexcept {
-        return chain_ids_;
-    }
-
-    std::vector<std::shared_ptr<Residue>> get_residues_by_chain(char chain_id) const {
-        std::vector<std::shared_ptr<Residue>> result;
-        for (const auto& residue : residues_) {
-            if (residue && residue->get_chain() == chain_id) {
-                result.push_back(residue);
-            }
-        }
-        return result;
-    }
-
-    // Box dimensions
-    void set_box_dimensions(const std::vector<double>& dimensions) {
-        box_dimensions_ = dimensions;
-    }
-
-    const std::vector<double>& get_box_dimensions() const noexcept {
-        return box_dimensions_;
-    }
-
-    // Terminal information
-    void add_terminal(const TerminalInfo& terminal) {
-        terminals_.push_back(terminal);
-    }
-
-    const std::vector<TerminalInfo>& get_terminals() const noexcept {
-        return terminals_;
-    }
-
-    // Secondary structure
-    void add_secondary_structure(const std::string& type, const SecondaryStructure& ss) {
-        secondary_structures_[type].push_back(ss);
-    }
-
-    const std::map<std::string, std::vector<SecondaryStructure>>& 
-    get_secondary_structures() const noexcept {
-        return secondary_structures_;
-    }
-
-    // CMAP management
-    void add_cmap(const StandardCmap& cmap) {
-        cmaps_.push_back(cmap);
-    }
-
-    const std::vector<StandardCmap>& get_cmaps() const noexcept {
-        return cmaps_;
-    }
-
-    size_t get_num_cmaps() const noexcept { return cmaps_.size(); }
-
-    // Title information
-    void add_title(const std::string& title) {
-        titles_.push_back(title);
-    }
-
-    const std::vector<std::string>& get_titles() const noexcept {
-        return titles_;
-    }
-
-    // Disulfide bonds
-    void add_disulfide_bond(const std::string& bond) {
-        disulfide_bonds_.push_back(bond);
-    }
-
-    const std::vector<std::string>& get_disulfide_bonds() const noexcept {
-        return disulfide_bonds_;
-    }
-
-    // Calculate molecular properties
-    double get_total_mass() const {
-        double total = 0.0;
-        for (const auto& atom : atoms_) {
-            if (atom) total += atom->get_mass();
-        }
-        return total;
-    }
-
-    double get_total_charge() const {
-        double total = 0.0;
-        for (const auto& atom : atoms_) {
-            if (atom) total += atom->get_charge();
-        }
-        return total;
-    }
-
-    std::array<double, 3> get_center_of_mass() const {
-        std::array<double, 3> com = {0.0, 0.0, 0.0};
-        double total_mass = 0.0;
-
-        for (const auto& atom : atoms_) {
-            if (!atom) continue;
-            double mass = atom->get_mass();
-            const auto& coor = atom->get_coor();
-            for (int i = 0; i < 3; ++i) {
-                com[i] += mass * coor[i];
-            }
-            total_mass += mass;
-        }
-
-        if (total_mass > 0.0) {
-            for (double& x : com) x /= total_mass;
-        }
-
-        return com;
-    }
-
-    // Clear all data
-    void clear() {
-        atoms_.clear();
-        residues_.clear();
-        chain_ids_.clear();
-        terminals_.clear();
-        secondary_structures_.clear();
-        disulfide_bonds_.clear();
-        cmaps_.clear();
-        titles_.clear();
-        box_dimensions_.clear();
-        
-        atom_map_.clear();
-        residue_map_.clear();
-    }
+    virtual ~MolecularComposite() = default;
 
     // IValidatable interface
     bool is_valid() const override {
+        // Check basic consistency
+        if (atoms.empty()) return false;
+        
         // Check all atoms are valid
-        for (const auto& atom : atoms_) {
-            if (!atom || !atom->is_valid()) {
-                return false;
-            }
+        for (const auto& atom : atoms) {
+            if (!atom || !atom->is_valid()) return false;
         }
         
         // Check all residues are valid
-        for (const auto& residue : residues_) {
-            if (!residue || !residue->is_valid()) {
-                return false;
-            }
+        for (const auto& residue : residues) {
+            if (!residue || !residue->is_valid()) return false;
         }
         
         return true;
     }
 
-    std::string get_validation_error() const override {
-        for (size_t i = 0; i < atoms_.size(); ++i) {
-            if (!atoms_[i]) {
-                return "Null atom at index " + std::to_string(i);
-            }
-            if (!atoms_[i]->is_valid()) {
-                return "Invalid atom at index " + std::to_string(i) + ": " + 
-                       atoms_[i]->get_validation_error();
-            }
+    // Core data access
+    const std::vector<std::shared_ptr<atom::Atom>>& get_atoms() const { return atoms; }
+    const std::vector<std::shared_ptr<residue::Residue>>& get_residues() const { return residues; }
+    const StructureInfo& get_structure_info() const { return structure_info; }
+    const TopologyInfo& get_topology_info() const { return topology_info; }
+
+    std::vector<std::shared_ptr<atom::Atom>>& get_atoms() { return atoms; }
+    std::vector<std::shared_ptr<residue::Residue>>& get_residues() { return residues; }
+    StructureInfo& get_structure_info() { return structure_info; }
+    TopologyInfo& get_topology_info() { return topology_info; }
+
+    // Size getters
+    size_t get_num_atoms() const { return atoms.size(); }
+    size_t get_num_residues() const { return residues.size(); }
+    size_t get_num_segments() const { return topology_info.segments.size(); }
+    size_t get_num_bonds() const { return topology_info.bonds.size(); }
+    size_t get_num_angles() const { return topology_info.angles.size(); }
+
+    size_t get_num_dihedrals() const {
+        size_t count = 0;
+        for (const auto& dihedral : topology_info.dihedrals) {
+            if (!dihedral.improper) count++;
         }
-        
-        for (size_t i = 0; i < residues_.size(); ++i) {
-            if (!residues_[i]) {
-                return "Null residue at index " + std::to_string(i);
-            }
-            if (!residues_[i]->is_valid()) {
-                return "Invalid residue at index " + std::to_string(i) + ": " + 
-                       residues_[i]->get_validation_error();
-            }
-        }
-        
-        return "";
+        return count;
     }
 
-    // IIdentifiable interface
-    std::string get_id() const override {
-        return name_.empty() ? "molecular_" + std::to_string(atoms_.size()) : name_;
+    size_t get_num_impropers() const {
+        size_t count = 0;
+        for (const auto& dihedral : topology_info.dihedrals) {
+            if (dihedral.improper) count++;
+        }
+        return count;
     }
 
-    void set_id(const std::string& id) override {
-        name_ = id;
+    size_t get_num_standard_cmaps() const { return standard_cmaps.size(); }
+
+    // Atom management
+    void add_atom(std::shared_ptr<atom::Atom> atom) {
+        if (!atom) throw std::invalid_argument("Null atom pointer");
+        atoms.push_back(atom);
+        refresh_atom_map();
     }
+
+    void add_atoms(const std::vector<std::shared_ptr<atom::Atom>>& new_atoms) {
+        for (const auto& atom : new_atoms) {
+            if (atom) atoms.push_back(atom);
+        }
+        refresh_atom_map();
+    }
+
+    void remove_atom(size_t index) {
+        if (index < atoms.size()) {
+            atoms.erase(atoms.begin() + index);
+            refresh_atom_map();
+        }
+    }
+
+    std::shared_ptr<atom::Atom> find_atom(const std::string& segment_id, 
+                                          [[maybe_unused]] const std::string& residue_name, 
+                                          int residue_number,
+                                          const std::string& atom_name) const {
+        auto key = std::make_tuple(segment_id, residue_number, atom_name);
+        auto it = atom_map.find(key);
+        return (it != atom_map.end() && it->second < static_cast<int>(atoms.size())) ? 
+               atoms[it->second] : nullptr;
+    }
+
+    // Residue management
+    void add_residue(std::shared_ptr<residue::Residue> residue) {
+        if (!residue) throw std::invalid_argument("Null residue pointer");
+        residues.push_back(residue);
+        update_residue_map();
+    }
+
+    void add_residues(const std::vector<std::shared_ptr<residue::Residue>>& new_residues) {
+        for (const auto& residue : new_residues) {
+            if (residue) residues.push_back(residue);
+        }
+        update_residue_map();
+    }
+
+    void remove_residue(size_t index) {
+        if (index < residues.size()) {
+            residues.erase(residues.begin() + index);
+            update_residue_map();
+        }
+    }
+
+    std::shared_ptr<residue::Residue> find_residue(const std::string& residue_name, 
+                                                   int residue_number) const {
+        auto key = std::make_pair(residue_name, residue_number);
+        auto it = residue_map.find(key);
+        return (it != residue_map.end() && it->second < static_cast<int>(residues.size())) ? 
+               residues[it->second] : nullptr;
+    }
+
+    // CMAP management  
+    void add_cmap(const topology::TopologyCmap& cmap) {
+        topology_info.cmaps.push_back(cmap);
+        add_standard_cmap(cmap);
+    }
+
+    void add_standard_cmap(const topology::TopologyCmap& cmap) {
+        StandardCmap std_cmap;
+        std_cmap.raw_atoms = cmap.atoms;
+        std_cmap.is_psf_format = (cmap.atoms[5] != -1);
+        
+        // Set standardized 5 atoms
+        if (std_cmap.is_psf_format) {
+            // PSF format: Use the first 4 atoms and the 8th atom
+            for (int i = 0; i < 4; ++i) {
+                std_cmap.atoms[i] = cmap.atoms[i];
+            }
+            std_cmap.atoms[4] = cmap.atoms[7];
+        } else {
+            // TOP format: Directly use the first 5 atoms
+            for (int i = 0; i < 5; ++i) {
+                std_cmap.atoms[i] = cmap.atoms[i];
+            }
+        }
+        std_cmap.function_type = cmap.function_type;
+        standard_cmaps.push_back(std_cmap);
+    }
+
+    const std::vector<StandardCmap>& get_standard_cmaps() const { return standard_cmaps; }
+
+    // Clear all data
+    void clear() {
+        // Structure data
+        atoms.clear();
+        residues.clear();
+        structure_info = StructureInfo{};
+        
+        // Topology data
+        topology_info = TopologyInfo{};
+        standard_cmaps.clear();
+
+        // Lookup mappings
+        segment_map.clear();
+        residue_map.clear();
+        atom_map.clear();
+    }
+
+    // Mapping utilities
+    const std::unordered_map<std::string, int>& get_segment_map() const { return segment_map; }
+    const std::map<std::pair<std::string, int>, int>& get_residue_map() const { return residue_map; }
+    const std::map<std::tuple<std::string, int, std::string>, int>& get_atom_map() const { return atom_map; }
 
 protected:
-    void update_atom_map() {
-        atom_map_.clear();
-        for (size_t i = 0; i < atoms_.size(); ++i) {
-            const auto& atom = atoms_[i];
+    void refresh_atom_map() {
+        atom_map.clear();
+        for (size_t i = 0; i < atoms.size(); ++i) {
+            const auto& atom = atoms[i];
             if (atom) {
-                auto key = std::make_tuple(atom->get_resname(), 
-                                         atom->get_ires(), 
-                                         atom->get_type());
-                atom_map_[key] = i;
+                auto key = std::make_tuple(atom->get_segid(), atom->get_ires(), atom->get_type());
+                atom_map[key] = static_cast<int>(i);
             }
         }
     }
 
     void update_residue_map() {
-        residue_map_.clear();
-        for (size_t i = 0; i < residues_.size(); ++i) {
-            const auto& residue = residues_[i];
+        residue_map.clear();
+        for (size_t i = 0; i < residues.size(); ++i) {
+            const auto& residue = residues[i];
             if (residue) {
                 auto key = std::make_pair(residue->get_resname(), residue->get_ires());
-                residue_map_[key] = i;
+                residue_map[key] = static_cast<int>(i);
             }
         }
     }
 
+    void update_segment_map() {
+        segment_map.clear();
+        for (size_t i = 0; i < topology_info.segments.size(); ++i) {
+            const auto& segment = topology_info.segments[i];
+            segment_map[segment.name] = static_cast<int>(i);
+        }
+    }
+
 private:
-    std::string name_;                                      ///< Molecular name/identifier
-
-    // Structure data
-    std::vector<std::shared_ptr<Atom>> atoms_;              ///< Atom list
-    std::vector<std::shared_ptr<Residue>> residues_;        ///< Residue list
-    std::vector<std::string> chain_ids_;                    ///< Chain identifiers
-    std::vector<TerminalInfo> terminals_;                   ///< Terminal information
-    std::map<std::string, std::vector<SecondaryStructure>> secondary_structures_;  ///< Secondary structures
-    std::vector<std::string> disulfide_bonds_;              ///< Disulfide bonds
-    std::vector<double> box_dimensions_;                    ///< Box dimensions
-
-    // CMAP data
-    std::vector<StandardCmap> cmaps_;                       ///< CMAP information
+    // Core molecular data
+    std::vector<std::shared_ptr<atom::Atom>> atoms;
+    std::vector<std::shared_ptr<residue::Residue>> residues;
     
-    // Title information
-    std::vector<std::string> titles_;                       ///< Title information
+    // Structure and topology information
+    StructureInfo structure_info;
+    TopologyInfo topology_info;
+    
+    // Standardized CMAP data
+    std::vector<StandardCmap> standard_cmaps;
 
-    // Lookup maps
-    std::map<std::tuple<std::string, int, std::string>, size_t> atom_map_;     ///< (resname, resnum, atomname) -> index
-    std::map<std::pair<std::string, int>, size_t> residue_map_;               ///< (resname, resnum) -> index
+    // Lookup mappings for fast access
+    std::unordered_map<std::string, int> segment_map;  // segment_name -> index
+    std::map<std::pair<std::string, int>, int> residue_map;  // (residue_name, number) -> index
+    std::map<std::tuple<std::string, int, std::string>, int> atom_map;  // (segid, resnum, atom_name) -> index
 };
 
+} // namespace molecule
 } // namespace model
 } // namespace pygcmc
 
-#endif // PYGCMC_MODEL_MOLECULAR_COMPOSITE_HPP 
+#endif // PYGCMC_MODEL_MOLECULE_COMPOSITE_HPP 

@@ -5,283 +5,341 @@
 
 #include "ResidueComposite.hpp"
 #include "ResidueValidator.hpp"
+#include "../common/ModelUtils.hpp"
+#include <string>
 #include <sstream>
 #include <iomanip>
 
 namespace pygcmc {
 namespace model {
+namespace residue {
 
 /**
- * @brief Extended Residue class with validation and PDB compatibility
- * @details Provides complete residue functionality while maintaining backward compatibility
+ * @brief Complete Residue class with full functionality and backward compatibility
+ * This class extends ResidueComposite with additional utilities and maintains API compatibility
  */
-class Residue : public ResidueComposite, public ICloneable<Residue>, public ISerializable {
+class Residue : public ResidueComposite {
 public:
-    // Sheet strand information structure
-    struct SheetStrand {
-        int strandNumber = 0;           // Strand number in current sheet
-        std::string sheetId;            // Sheet identifier
-        int numStrands = 0;             // Number of strands in current sheet
-        int sense = 0;                  // 0: first, 1: parallel, -1: antiparallel
-        // Hydrogen bond information
-        std::string atom1;              // First atom name
-        std::string atom2;              // Second atom name
-        int resnum1 = 0;                // First residue number
-        int resnum2 = 0;                // Second residue number
-    };
-
-    // Disulfide bond information structure
-    struct SSBond {
-        int serialNumber = 0;           // Bond serial number
-        std::string partner;            // Partner residue identifier
-        char partnerChain = ' ';        // Partner chain identifier
-        int partnerResnum = 0;          // Partner residue number
-        char partnerInscode = ' ';      // Partner insertion code
-        double bondLength = 0.0;        // Length of the disulfide bond
-    };
-
     // Inherit constructors
     using ResidueComposite::ResidueComposite;
 
-    // Default constructor
-    Residue() = default;
-
-    // Copy constructor and assignment
-    Residue(const Residue&) = default;
-    Residue& operator=(const Residue&) = default;
-    Residue(Residue&&) = default;
-    Residue& operator=(Residue&&) = default;
-
-    // Constructor from ResidueComposite
-    explicit Residue(const ResidueComposite& composite) : ResidueComposite(composite) {}
-
-    // Extended getters
-    const SheetStrand& get_sheet_info() const noexcept { return sheet_info_; }
-    const SSBond& get_ssbond() const noexcept { return ssbond_; }
-
-    // Extended setters
-    void set_sheet_info(const SheetStrand& si) { sheet_info_ = si; }
-    void set_ssbond(const SSBond& sb) { ssbond_ = sb; }
-
     // PDB format utilities
     std::string get_residue_id() const {
-        if (get_inscode() == ' ') {
-            return std::to_string(get_ires());
+        // Combine residue number and insertion code (e.g., "153A")
+        if (inscode == ' ') {
+            return std::to_string(ires);
         }
-        return std::to_string(get_ires()) + get_inscode();
+        return std::to_string(ires) + inscode;
     }
 
     void set_residue_id(const std::string& resid) {
+        // Parse residue ID (e.g., "153A" -> ires=153, inscode='A')
         size_t numLen = 0;
         try {
-            int ires = std::stoi(resid, &numLen);
-            set_ires(ires);
+            ires = std::stoi(resid, &numLen);
         } catch (const std::exception&) {
             throw std::invalid_argument("Invalid residue ID format");
         }
         
         if (numLen < resid.length()) {
-            set_inscode(resid[numLen]);
+            inscode = resid[numLen];
         } else {
-            set_inscode(' ');
+            inscode = ' ';
         }
     }
 
     // Enhanced atom lookup methods
-    std::shared_ptr<Atom> find_atom_by_pdb_name(const std::string& pdb_name) const {
-        auto atoms = get_atoms();
+    std::shared_ptr<atom::Atom> find_atom_by_pdb_name(const std::string& pdbName) const {
         auto it = std::find_if(atoms.begin(), atoms.end(),
-            [&pdb_name](const std::shared_ptr<Atom>& atom) {
-                return atom && atom->get_formatted_atom_name() == pdb_name;
+            [&pdbName](const std::shared_ptr<atom::Atom>& atom) {
+                return atom && atom->get_formatted_atom_name() == pdbName;
             });
         return (it != atoms.end()) ? *it : nullptr;
     }
 
-    // CHARMM-style atom range
-    std::pair<size_t, size_t> get_atom_range() const {
-        return {0, atom_count()};  // Equivalent to IBASE(IRES) to IBASE(IRES+1)
+    // Public method to update atom map (non-virtual)
+    void refresh_atom_map() {
+        update_atom_map();  // Call the private override method
     }
 
-    // Validation with detailed reporting
-    ResidueValidator::ValidationResult validate_with_details() const {
-        ResidueValidator validator;
-        return validator.validate_residue(*this);
+    // Advanced selection methods
+    std::vector<std::shared_ptr<atom::Atom>> select_atoms_by_type(
+        const std::vector<std::string>& types) const {
+        std::vector<std::shared_ptr<atom::Atom>> selected;
+        for (const std::string& type : types) {
+            auto atom = find_atom(type);
+            if (atom) selected.push_back(atom);
+        }
+        return selected;
     }
 
-    bool is_complete() const {
-        ResidueValidator validator;
-        auto result = validator.check_completeness(*this);
-        return result.is_valid;
+    std::vector<std::shared_ptr<atom::Atom>> select_backbone_atoms() const {
+        static const std::vector<std::string> backbone_types = {"N", "CA", "C", "O"};
+        return select_atoms_by_type(backbone_types);
     }
 
-    std::vector<std::string> get_missing_atoms() const {
-        ResidueValidator validator;
-        return validator.get_missing_atoms(*this);
+    std::vector<std::shared_ptr<atom::Atom>> select_sidechain_atoms() const {
+        std::vector<std::shared_ptr<atom::Atom>> sidechain;
+        static const std::set<std::string> backbone_set = {"N", "CA", "C", "O", "H", "HA"};
+        
+        for (const auto& atom : atoms) {
+            if (atom && backbone_set.find(atom->get_type()) == backbone_set.end()) {
+                sidechain.push_back(atom);
+            }
+        }
+        return sidechain;
     }
 
-    std::vector<std::string> get_unexpected_atoms() const {
-        ResidueValidator validator;
-        return validator.get_unexpected_atoms(*this);
+    std::vector<std::shared_ptr<atom::Atom>> select_heavy_atoms() const {
+        return select_atoms([](const atom::Atom& atom) {
+            const std::string& type = atom.get_type();
+            return !type.empty() && type[0] != 'H';
+        });
+    }
+
+    std::vector<std::shared_ptr<atom::Atom>> select_hydrogen_atoms() const {
+        return select_atoms([](const atom::Atom& atom) {
+            const std::string& type = atom.get_type();
+            return !type.empty() && type[0] == 'H';
+        });
+    }
+
+    // Enhanced properties calculation
+    double get_total_mass() const {
+        return ResidueValidator::calculate_total_mass(*this);
+    }
+
+    double get_total_charge() const {
+        return ResidueValidator::calculate_total_charge(*this);
+    }
+
+    bool has_reasonable_geometry() const {
+        return ResidueValidator::has_reasonable_geometry(*this);
+    }
+
+    bool has_reasonable_charge(double tolerance = 0.01) const {
+        return ResidueValidator::is_charge_reasonable(*this, tolerance);
+    }
+
+    bool has_reasonable_mass() const {
+        return ResidueValidator::is_mass_reasonable(*this);
+    }
+
+    // Residue type checking
+    bool is_protein_residue() const {
+        return ResidueValidator::is_protein_residue(resname);
+    }
+
+    bool is_nucleic_acid_residue() const {
+        return ResidueValidator::is_nucleic_acid_residue(resname);
+    }
+
+    bool has_complete_backbone() const {
+        if (is_protein_residue()) {
+            return ResidueValidator::has_backbone_atoms(*this);
+        } else if (is_nucleic_acid_residue()) {
+            return ResidueValidator::has_nucleic_backbone_atoms(*this);
+        }
+        return true; // Unknown residue types are assumed complete
+    }
+
+    // Comprehensive validation
+    bool is_valid() const override {
+        return ResidueValidator::is_valid(*this);
+    }
+
+    std::string get_validation_report() const {
+        return ResidueValidator::get_validation_report(*this);
+    }
+
+    // Enhanced atom access with bounds checking
+    std::shared_ptr<atom::Atom> get_atom_by_index(size_t index) const {
+        return (index < atoms.size()) ? atoms[index] : nullptr;
     }
 
     // Distance calculations
     double distance_to(const Residue& other) const {
+        // Distance between centers of mass
         const auto& com1 = get_center_of_mass();
         const auto& com2 = other.get_center_of_mass();
-        return utils::math::distance(com1, com2);
+        
+        double dx = com1[0] - com2[0];
+        double dy = com1[1] - com2[1];
+        double dz = com1[2] - com2[2];
+        
+        return std::sqrt(dx*dx + dy*dy + dz*dz);
     }
 
-    double min_atom_distance_to(const Residue& other) const {
+    double min_distance_to(const Residue& other) const {
+        // Minimum distance between any atoms
         double min_dist = std::numeric_limits<double>::max();
         
-        for (const auto& atom1 : get_atoms()) {
+        for (const auto& atom1 : atoms) {
             if (!atom1) continue;
-            for (const auto& atom2 : other.get_atoms()) {
+            for (const auto& atom2 : other.atoms) {
                 if (!atom2) continue;
                 double dist = atom1->distance_to(*atom2);
                 min_dist = std::min(min_dist, dist);
             }
         }
         
-        return min_dist;
+        return (min_dist == std::numeric_limits<double>::max()) ? 0.0 : min_dist;
     }
 
-    // Comparison operators
+    // Comparison operators for sorting/searching
+    bool operator<(const Residue& other) const {
+        if (segid != other.segid) return segid < other.segid;
+        if (chain != other.chain) return chain < other.chain;
+        return ires < other.ires;
+    }
+
     bool operator==(const Residue& other) const {
-        return get_resname() == other.get_resname() &&
-               get_ires() == other.get_ires() &&
-               get_segid() == other.get_segid() &&
-               get_chain() == other.get_chain() &&
-               atom_count() == other.atom_count();
+        return resname == other.resname && 
+               ires == other.ires && 
+               segid == other.segid &&
+               chain == other.chain &&
+               inscode == other.inscode;
     }
 
     bool operator!=(const Residue& other) const {
         return !(*this == other);
     }
 
-    // Hash support
-    std::size_t hash() const {
-        return utils::hash::combine_hash(
-            utils::hash::string_hash(get_resname()),
-            get_ires(),
-            utils::hash::string_hash(get_segid()),
-            static_cast<std::size_t>(get_chain()),
-            atom_count()
-        );
-    }
+    // Hash function for use in unordered containers
+    struct Hash {
+        std::size_t operator()(const Residue& residue) const {
+            std::size_t seed = 0;
+            common::utils::hash_combine(seed, residue.resname);
+            common::utils::hash_combine(seed, residue.ires);
+            common::utils::hash_combine(seed, residue.segid);
+            common::utils::hash_combine(seed, residue.chain);
+            common::utils::hash_combine(seed, residue.inscode);
+            return seed;
+        }
+    };
 
-    // ICloneable interface
-    std::unique_ptr<Residue> clone() const override {
+    // Clone method
+    std::unique_ptr<Residue> clone() const {
         return std::make_unique<Residue>(*this);
     }
 
-    // ISerializable interface
-    std::string serialize() const override {
-        std::ostringstream oss;
-        oss << "RESIDUE:" << get_resname() << ":" << get_ires() 
-            << ":" << get_segid() << ":" << get_chain() << ":" << atom_count();
-        
-        // Serialize atoms
-        for (const auto& atom : get_atoms()) {
-            if (atom) {
-                oss << "|" << atom->serialize();
-            }
-        }
-        
-        return oss.str();
+    // String representation
+    std::string to_string() const {
+        std::stringstream ss;
+        ss << resname << " " << ires;
+        if (inscode != ' ') ss << inscode;
+        if (chain != ' ') ss << " (chain " << chain << ")";
+        ss << " [" << segid << "]";
+        ss << " (" << atoms.size() << " atoms)";
+        return ss.str();
     }
 
-    bool deserialize(const std::string& data) override {
-        std::istringstream iss(data);
-        std::string header;
-        
-        if (!std::getline(iss, header, '|')) return false;
-        
-        // Parse header: RESIDUE:resname:ires:segid:chain:atom_count
-        std::istringstream header_stream(header);
-        std::string token;
-        
-        if (!std::getline(header_stream, token, ':') || token != "RESIDUE") return false;
-        
-        std::string resname;
-        if (!std::getline(header_stream, resname, ':')) return false;
-        set_resname(resname);
-        
-        if (!std::getline(header_stream, token, ':')) return false;
-        set_ires(std::stoi(token));
-        
-        std::string segid;
-        if (!std::getline(header_stream, segid, ':')) return false;
-        set_segid(segid);
-        
-        if (!std::getline(header_stream, token, ':')) return false;
-        set_chain(token.empty() ? ' ' : token[0]);
-        
-        if (!std::getline(header_stream, token)) return false;
-        size_t expected_atoms = std::stoull(token);
-        
-        // Deserialize atoms
-        clear_atoms();
-        std::string atom_data;
-        for (size_t i = 0; i < expected_atoms && std::getline(iss, atom_data, '|'); ++i) {
-            auto atom = std::make_shared<Atom>();
-            if (atom->deserialize(atom_data)) {
-                add_atom(atom);
-            }
-        }
-        
-        return atom_count() == expected_atoms;
-    }
-
-    std::string get_type_name() const override {
-        return "Residue";
-    }
-
-    // PDB format output
+    // PDB format output for all atoms
     std::string to_pdb_string() const {
-        std::ostringstream oss;
-        
-        for (const auto& atom : get_atoms()) {
+        std::stringstream ss;
+        for (const auto& atom : atoms) {
             if (atom) {
-                oss << atom->to_pdb_string() << "\n";
+                ss << atom->get_pdb_record() << "\n";
             }
         }
-        
-        return oss.str();
+        return ss.str();
     }
 
-    // Enhanced validation with detailed error messages
-    std::string get_validation_error() const override {
-        auto result = validate_with_details();
-        if (result.is_valid) {
-            return "";
-        }
-        
-        std::ostringstream oss;
-        for (const auto& error : result.errors) {
-            if (!oss.str().empty()) oss << "; ";
-            oss << error;
-        }
-        
-        return oss.str();
+    // Summary statistics
+    struct Statistics {
+        size_t total_atoms;
+        size_t heavy_atoms;
+        size_t hydrogen_atoms;
+        double total_mass;
+        double total_charge;
+        std::array<double, 3> center_of_mass;
+        bool is_complete;
+        bool is_valid;
+    };
+
+    Statistics get_statistics() const {
+        Statistics stats;
+        stats.total_atoms = atoms.size();
+        stats.heavy_atoms = select_heavy_atoms().size();
+        stats.hydrogen_atoms = select_hydrogen_atoms().size();
+        stats.total_mass = get_total_mass();
+        stats.total_charge = get_total_charge();
+        stats.center_of_mass = get_center_of_mass();
+        stats.is_complete = has_complete_backbone();
+        stats.is_valid = is_valid();
+        return stats;
+    }
+
+    // Utility methods for CHARMM compatibility
+    std::string get_unique_identifier() const {
+        std::stringstream ss;
+        ss << segid << ":" << resname << ":" << ires;
+        if (inscode != ' ') ss << inscode;
+        if (chain != ' ') ss << ":" << chain;
+        return ss.str();
     }
 
 private:
-    SheetStrand sheet_info_;    ///< Sheet strand information
-    SSBond ssbond_;             ///< Disulfide bond information
+    // Override update_atom_map to include PDB formatting
+    void update_atom_map() {
+        atomMap.clear();
+        for (const auto& atom : atoms) {
+            if (atom) {
+                // Store both raw and PDB-formatted names
+                atomMap[atom->get_type()] = atom;
+                atomMap[atom->get_formatted_atom_name()] = atom;
+            }
+        }
+    }
 };
 
+// Utility functions for residue collections
+namespace utils {
+
+/**
+ * @brief Find residues by name in a collection
+ */
+template<typename Container>
+auto find_residues_by_name(const Container& residues, const std::string& resname) {
+    std::vector<typename Container::value_type> result;
+    std::copy_if(residues.begin(), residues.end(), std::back_inserter(result),
+                [&resname](const auto& residue) { 
+                    return residue.get_resname() == resname; 
+                });
+    return result;
+}
+
+/**
+ * @brief Find residues by chain in a collection
+ */
+template<typename Container>
+auto find_residues_by_chain(const Container& residues, char chain) {
+    std::vector<typename Container::value_type> result;
+    std::copy_if(residues.begin(), residues.end(), std::back_inserter(result),
+                [chain](const auto& residue) { 
+                    return residue.get_chain() == chain; 
+                });
+    return result;
+}
+
+/**
+ * @brief Find residues in range
+ */
+template<typename Container>
+auto find_residues_in_range(const Container& residues, int start, int end) {
+    std::vector<typename Container::value_type> result;
+    std::copy_if(residues.begin(), residues.end(), std::back_inserter(result),
+                [start, end](const auto& residue) { 
+                    int ires = residue.get_ires();
+                    return ires >= start && ires <= end; 
+                });
+    return result;
+}
+
+} // namespace utils
+
+} // namespace residue
 } // namespace model
 } // namespace pygcmc
-
-// Hash specialization for std::unordered_map support
-namespace std {
-    template<>
-    struct hash<pygcmc::model::Residue> {
-        std::size_t operator()(const pygcmc::model::Residue& residue) const {
-            return residue.hash();
-        }
-    };
-}
 
 #endif // PYGCMC_MODEL_RESIDUE_MAIN_HPP 

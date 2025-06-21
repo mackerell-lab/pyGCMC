@@ -1,339 +1,288 @@
 #pragma once
 
-#ifndef PYGCMC_MODEL_MOLECULAR_MAIN_HPP
-#define PYGCMC_MODEL_MOLECULAR_MAIN_HPP
+#ifndef PYGCMC_MODEL_MOLECULE_MAIN_HPP
+#define PYGCMC_MODEL_MOLECULE_MAIN_HPP
 
 #include "MolecularComposite.hpp"
 #include "MolecularUtils.hpp"
-#include <sstream>
-#include <iomanip>
+#include "../common/ModelUtils.hpp"
+#include <string>
 
 namespace pygcmc {
 namespace model {
-
-// Forward declarations for compatibility with original topology structures
-struct TopologyAtom;
-struct TopologyResidue;
-struct TopologySegment;
-struct TopologyBond;
-struct TopologyAngle;
-struct TopologyDihedral;
-struct TopologyDonor;
-struct TopologyAcceptor;
-struct TopologyGroup;
-struct TopologyCmap;
+namespace molecule {
 
 /**
- * @brief Extended Molecular class with topology integration and full compatibility
- * @details Provides complete molecular functionality while maintaining backward compatibility
- * with the original Molecular class interface
+ * @brief Complete Molecular class with full functionality and backward compatibility
+ * This class maintains the same API as the original molecular.hpp while using the refactored structure
  */
-class MolecularSystem : public MolecularComposite, public ICloneable<MolecularSystem>, public ISerializable {
+class Molecular : public MolecularComposite {
 public:
-    // Inherit constructors
-    using MolecularComposite::MolecularComposite;
+    Molecular() = default;
+    ~Molecular() = default;
 
-    // Default constructor
-    MolecularSystem() = default;
+    // Backward compatibility with original API
+    std::vector<std::shared_ptr<atom::Atom>>& atoms = MolecularComposite::get_atoms();
+    std::vector<std::shared_ptr<residue::Residue>>& residues = MolecularComposite::get_residues();
+    
+    // Provide access to structure info components for backward compatibility
+    std::vector<StructureInfo::TerminalInfo>& terminals = get_structure_info().terminals;
+    std::map<std::string, std::vector<StructureInfo::SecondaryStructure>>& helices = get_structure_info().helices;
+    std::map<std::string, std::vector<std::string>>& sheets = get_structure_info().sheets;
+    std::vector<std::string>& ssbonds = get_structure_info().ssbonds;
+    std::vector<double>& box_dimensions = get_structure_info().box_dimensions;
 
-    // Copy constructor and assignment
-    MolecularSystem(const MolecularSystem&) = default;
-    MolecularSystem& operator=(const MolecularSystem&) = default;
-    MolecularSystem(MolecularSystem&&) = default;
-    MolecularSystem& operator=(MolecularSystem&&) = default;
+    // Provide access to topology info components for backward compatibility
+    std::vector<topology::TopologyAtom>& topology_atoms = get_topology_info().atoms;
+    std::vector<topology::TopologyResidue>& topology_residues = get_topology_info().residues;
+    std::vector<topology::TopologySegment>& segments = get_topology_info().segments;
+    std::vector<topology::TopologyBond>& bonds = get_topology_info().bonds;
+    std::vector<topology::TopologyAngle>& angles = get_topology_info().angles;
+    std::vector<topology::TopologyDihedral>& dihedrals = get_topology_info().dihedrals;
+    std::vector<topology::TopologyDonor>& donors = get_topology_info().donors;
+    std::vector<topology::TopologyAcceptor>& acceptors = get_topology_info().acceptors;
+    std::map<int, std::set<int>>& exclusions = get_topology_info().exclusions;
+    std::vector<topology::TopologyGroup>& groups = get_topology_info().groups;
+    std::vector<topology::TopologyCmap>& cmaps = get_topology_info().cmaps;
+    std::vector<std::string>& titles = get_topology_info().titles;
 
-    // Constructor from MolecularComposite
-    explicit MolecularSystem(const MolecularComposite& composite) : 
-        MolecularComposite(composite) {}
+    // Lookup mapping - provide references for backward compatibility
+    std::unordered_map<std::string, int>& segment_map = const_cast<std::unordered_map<std::string, int>&>(get_segment_map());
+    std::map<std::pair<std::string, int>, int>& residue_map = const_cast<std::map<std::pair<std::string, int>, int>&>(get_residue_map());
+    std::map<std::tuple<std::string, int, std::string>, int>& atom_map = const_cast<std::map<std::tuple<std::string, int, std::string>, int>&>(get_atom_map());
 
-    // === Topology data structures (for backward compatibility) ===
-    
-    // Topology atoms (includes charge, mass, etc.)
-    std::vector<TopologyAtom> topology_atoms;
-    
-    // Topology residues
-    std::vector<TopologyResidue> topology_residues;
-    
-    // Segments/fragments
-    std::vector<TopologySegment> segments;
-    
-    // Bonds
-    std::vector<TopologyBond> bonds;
-    
-    // Angles
-    std::vector<TopologyAngle> angles;
-    
-    // Dihedrals (including impropers)
-    std::vector<TopologyDihedral> dihedrals;
-    
-    // Hydrogen bond donors
-    std::vector<TopologyDonor> donors;
-    
-    // Hydrogen bond acceptors
-    std::vector<TopologyAcceptor> acceptors;
-    
-    // Non-bond exclusions
-    std::map<int, std::set<int>> exclusions;
-    
-    // Atom groups
-    std::vector<TopologyGroup> groups;
-    
-    // Original CMAP items
-    std::vector<TopologyCmap> cmaps;
-
-    // Lookup mappings (for backward compatibility)
-    std::unordered_map<std::string, int> segment_map;  // segment_name -> index
-    std::map<std::pair<std::string, int>, int> residue_map;  // (residue_name, number) -> index
-    std::map<std::tuple<std::string, int, std::string>, int> atom_map;  // (residue_name, number, atom_name) -> index
-
-    // === Legacy interface methods (for backward compatibility) ===
-    
-    // Alias for atoms() to maintain compatibility
-    std::vector<std::shared_ptr<Atom>>& atoms = get_atoms_mutable();
-    const std::vector<std::shared_ptr<Atom>>& atoms_const() const { return get_atoms(); }
-    
-    // Alias for residues() to maintain compatibility  
-    std::vector<std::shared_ptr<Residue>>& residues = get_residues_mutable();
-    const std::vector<std::shared_ptr<Residue>>& residues_const() const { return get_residues(); }
-    
-    // Legacy terminal access
-    std::vector<TerminalInfo>& terminals = get_terminals_mutable();
-    const std::vector<TerminalInfo>& terminals_const() const { return get_terminals(); }
-    
-    // Legacy secondary structure access (using different format for compatibility)
-    std::map<std::string, std::vector<SecondaryStructure>>& helices = get_secondary_structures_mutable();
-    std::map<std::string, std::vector<std::string>> sheets;  // Different format for sheets
-    
-    // Legacy disulfide bonds
-    std::vector<std::string>& ssbonds = get_disulfide_bonds_mutable();
-    
-    // Legacy box dimensions
-    std::vector<double>& boxDimensions = get_box_dimensions_mutable();
-
-    // Legacy standardized CMAP access
-    std::vector<StandardCmap>& standard_cmaps = get_cmaps_mutable();
-
-    // === Extended functionality ===
-
-    // Topology bond counting methods
-    size_t get_num_bonds() const { return bonds.size(); }
-    size_t get_num_angles() const { return angles.size(); }
-    
-    size_t get_num_dihedrals() const {
-        size_t count = 0;
-        for (const auto& dihedral : dihedrals) {
-            if (!is_dihedral_improper(dihedral)) count++;
-        }
-        return count;
-    }
-    
-    size_t get_num_impropers() const {
-        size_t count = 0;
-        for (const auto& dihedral : dihedrals) {
-            if (is_dihedral_improper(dihedral)) count++;
-        }
-        return count;
+    // Enhanced selection and analysis methods
+    template<typename Predicate>
+    std::vector<std::shared_ptr<atom::Atom>> select_atoms(Predicate&& predicate) const {
+        return utils::selection::find_atoms_if(*this, std::forward<Predicate>(predicate));
     }
 
-    size_t get_num_segments() const { return segments.size(); }
-    size_t get_num_standard_cmaps() const { return get_num_cmaps(); }
+    template<typename Predicate>
+    std::vector<std::shared_ptr<residue::Residue>> select_residues(Predicate&& predicate) const {
+        return utils::selection::find_residues_if(*this, std::forward<Predicate>(predicate));
+    }
 
-    // CMAP standardization
-    void add_standard_cmap(const TopologyCmap& cmap) {
-        StandardCmap std_cmap;
-        std_cmap.raw_atoms = get_cmap_atoms(cmap);
-        std_cmap.is_psf_format = is_psf_cmap_format(cmap);
+    // Convenient selection methods
+    std::vector<std::shared_ptr<atom::Atom>> get_atoms_by_segment(const std::string& segment_id) const {
+        return utils::selection::find_atoms_by_segment(*this, segment_id);
+    }
+
+    std::vector<std::shared_ptr<atom::Atom>> get_atoms_by_resname(const std::string& resname) const {
+        return utils::selection::find_atoms_by_resname(*this, resname);
+    }
+
+    std::vector<std::shared_ptr<atom::Atom>> get_atoms_by_type(const std::string& atom_type) const {
+        return utils::selection::find_atoms_by_type(*this, atom_type);
+    }
+
+    std::vector<std::shared_ptr<residue::Residue>> get_residues_by_segment(const std::string& segment_id) const {
+        return utils::selection::find_residues_by_segment(*this, segment_id);
+    }
+
+    std::vector<std::shared_ptr<residue::Residue>> get_residues_by_chain(char chain_id) const {
+        return utils::selection::find_residues_by_chain(*this, chain_id);
+    }
+
+    std::vector<std::shared_ptr<residue::Residue>> get_residues_by_name(const std::string& resname) const {
+        return utils::selection::find_residues_by_name(*this, resname);
+    }
+
+    std::vector<std::shared_ptr<residue::Residue>> get_protein_residues() const {
+        return utils::selection::find_protein_residues(*this);
+    }
+
+    std::vector<std::shared_ptr<residue::Residue>> get_nucleic_residues() const {
+        return utils::selection::find_nucleic_residues(*this);
+    }
+
+    std::vector<std::shared_ptr<atom::Atom>> get_heavy_atoms() const {
+        return utils::selection::find_heavy_atoms(*this);
+    }
+
+    std::vector<std::shared_ptr<atom::Atom>> get_hydrogen_atoms() const {
+        return utils::selection::find_hydrogen_atoms(*this);
+    }
+
+    // Analysis methods
+    double get_total_mass() const {
+        return utils::analysis::calculate_total_mass(*this);
+    }
+
+    double get_total_charge() const {
+        return utils::analysis::calculate_total_charge(*this);
+    }
+
+    std::array<double, 3> get_center_of_mass() const {
+        return utils::analysis::calculate_center_of_mass(*this);
+    }
+
+    std::array<double, 3> get_geometric_center() const {
+        return utils::analysis::calculate_geometric_center(*this);
+    }
+
+    std::pair<std::array<double, 3>, std::array<double, 3>> get_bounding_box() const {
+        return utils::analysis::calculate_bounding_box(*this);
+    }
+
+    std::set<char> get_chain_ids() const {
+        return utils::analysis::get_chain_ids(*this);
+    }
+
+    std::set<std::string> get_segment_ids() const {
+        return utils::analysis::get_segment_ids(*this);
+    }
+
+    utils::analysis::SystemStatistics get_system_statistics() const {
+        return utils::analysis::calculate_system_statistics(*this);
+    }
+
+    // Distance utilities
+    std::vector<std::shared_ptr<atom::Atom>> find_atoms_within_distance(
+        const std::array<double, 3>& point, double max_distance) const {
+        return utils::distance::find_atoms_within_distance(*this, point, max_distance);
+    }
+
+    std::vector<std::shared_ptr<atom::Atom>> find_atoms_within_distance(
+        const atom::Atom& reference_atom, double max_distance) const {
+        return utils::distance::find_atoms_within_distance(*this, reference_atom, max_distance);
+    }
+
+    // Grouping utilities
+    std::map<std::string, std::vector<std::shared_ptr<atom::Atom>>> group_atoms_by_segment() const {
+        return utils::grouping::group_atoms_by_segment(*this);
+    }
+
+    std::map<std::string, std::vector<std::shared_ptr<atom::Atom>>> group_atoms_by_resname() const {
+        return utils::grouping::group_atoms_by_resname(*this);
+    }
+
+    std::map<std::string, std::vector<std::shared_ptr<atom::Atom>>> group_atoms_by_type() const {
+        return utils::grouping::group_atoms_by_type(*this);
+    }
+
+    std::map<std::string, std::vector<std::shared_ptr<residue::Residue>>> group_residues_by_segment() const {
+        return utils::grouping::group_residues_by_segment(*this);
+    }
+
+    std::map<char, std::vector<std::shared_ptr<residue::Residue>>> group_residues_by_chain() const {
+        return utils::grouping::group_residues_by_chain(*this);
+    }
+
+    std::map<std::string, std::vector<std::shared_ptr<residue::Residue>>> group_residues_by_name() const {
+        return utils::grouping::group_residues_by_name(*this);
+    }
+
+    // String representation
+    std::string to_string() const {
+        std::stringstream ss;
+        ss << "Molecular System: " << get_num_atoms() << " atoms, " 
+           << get_num_residues() << " residues";
         
-        // Set standardized 5 atoms
-        if (std_cmap.is_psf_format) {
-            // PSF format: Use the first 4 atoms and the 8th atom
-            for (int i = 0; i < 4; ++i) {
-                std_cmap.atoms[i] = std_cmap.raw_atoms[i];
+        auto segments = get_segment_ids();
+        if (!segments.empty()) {
+            ss << ", segments: ";
+            bool first = true;
+            for (const auto& seg : segments) {
+                if (!first) ss << ", ";
+                ss << seg;
+                first = false;
             }
-            std_cmap.atoms[4] = std_cmap.raw_atoms[7];  // Use the 8th atom as the 5th atom
-        } else {
-            // TOP format: Directly use the first 5 atoms
-            for (int i = 0; i < 5; ++i) {
-                std_cmap.atoms[i] = std_cmap.raw_atoms[i];
+        }
+        
+        auto chains = get_chain_ids();
+        if (chains.size() > 1) {
+            ss << ", chains: ";
+            bool first = true;
+            for (char chain : chains) {
+                if (chain != ' ') {
+                    if (!first) ss << ", ";
+                    ss << chain;
+                    first = false;
+                }
             }
         }
-        std_cmap.function_type = get_cmap_function_type(cmap);
-        add_cmap(std_cmap);
+        
+        return ss.str();
     }
 
-    // Selection methods using utilities
-    std::vector<std::shared_ptr<Atom>> select_atoms(
-        const std::function<bool(const Atom&)>& predicate) const {
-        return MolecularUtils::select_atoms(*this, predicate);
-    }
-
-    std::vector<std::shared_ptr<Residue>> select_residues(
-        const std::function<bool(const Residue&)>& predicate) const {
-        return MolecularUtils::select_residues(*this, predicate);
-    }
-
-    // Statistical analysis
-    MolecularUtils::MolecularStatistics get_statistics() const {
-        return MolecularUtils::calculate_statistics(*this);
-    }
-
-    // Validation
-    std::vector<std::string> check_consistency() const {
-        return MolecularUtils::check_molecular_consistency(*this);
-    }
-
-    // Clear all data (extended to include topology)
-    void clear() override {
-        MolecularComposite::clear();
-        
-        // Clear topology data
-        topology_atoms.clear();
-        topology_residues.clear();
-        segments.clear();
-        bonds.clear();
-        angles.clear();
-        dihedrals.clear();
-        donors.clear();
-        acceptors.clear();
-        exclusions.clear();
-        groups.clear();
-        cmaps.clear();
-        
-        // Clear sheets (different format)
-        sheets.clear();
-        
-        // Clear lookup mappings
-        segment_map.clear();
-        residue_map.clear();
-        atom_map.clear();
-    }
-
-    // ICloneable interface
-    std::unique_ptr<MolecularSystem> clone() const override {
-        return std::make_unique<MolecularSystem>(*this);
-    }
-
-    // ISerializable interface
-    std::string serialize() const override {
-        std::ostringstream oss;
-        oss << "MOLECULAR_SYSTEM:" << get_name() << ":" << get_num_atoms() 
-            << ":" << get_num_residues() << ":" << bonds.size() << ":" << angles.size();
-        
-        // Serialize basic molecular data using parent method
-        oss << "|" << MolecularComposite::serialize();
-        
-        return oss.str();
-    }
-
-    bool deserialize(const std::string& data) override {
-        std::istringstream iss(data);
-        std::string header;
-        
-        if (!std::getline(iss, header, '|')) return false;
-        
-        // Parse header
-        std::istringstream header_stream(header);
-        std::string token;
-        
-        if (!std::getline(header_stream, token, ':') || token != "MOLECULAR_SYSTEM") return false;
-        
-        std::string name;
-        if (!std::getline(header_stream, name, ':')) return false;
-        set_name(name);
-        
-        // Skip other header fields for now
-        std::string remaining_data;
-        std::getline(iss, remaining_data);
-        
-        // Deserialize using parent method (simplified)
-        return !remaining_data.empty();
-    }
-
-    std::string get_type_name() const override {
-        return "MolecularSystem";
-    }
-
-    // Export methods
+    // PDB format output
     std::string to_pdb_string() const {
-        return MolecularUtils::to_pdb_format(*this);
+        std::stringstream ss;
+        
+        // Write HEADER
+        ss << "HEADER    MOLECULAR SYSTEM                        " 
+           << std::setfill('0') << std::setw(2) << 1  // day
+           << "-" << std::setw(3) << "JAN"             // month  
+           << "-" << std::setw(2) << 24                // year
+           << "   PYGE\n";  // PDB ID
+        
+        // Write TITLE
+        if (!titles.empty()) {
+            for (size_t i = 0; i < titles.size(); ++i) {
+                ss << "TITLE    ";
+                if (i > 0) ss << std::setw(2) << (i + 1) << " ";
+                ss << titles[i] << "\n";
+            }
+        }
+        
+        // Write atoms
+        for (const auto& atom : atoms) {
+            if (atom) {
+                ss << atom->get_pdb_record() << "\n";
+            }
+        }
+        
+        ss << "END\n";
+        return ss.str();
     }
 
-    std::string to_xyz_string() const {
-        return MolecularUtils::to_xyz_format(*this);
+    // Comparison operators
+    bool operator==(const Molecular& other) const {
+        return get_num_atoms() == other.get_num_atoms() &&
+               get_num_residues() == other.get_num_residues() &&
+               common::utils::double_equals(get_total_mass(), other.get_total_mass()) &&
+               common::utils::double_equals(get_total_charge(), other.get_total_charge());
     }
 
-private:
-    // Helper methods for accessing mutable references (for legacy compatibility)
-    std::vector<std::shared_ptr<Atom>>& get_atoms_mutable() {
-        return const_cast<std::vector<std::shared_ptr<Atom>>&>(get_atoms());
-    }
-    
-    std::vector<std::shared_ptr<Residue>>& get_residues_mutable() {
-        return const_cast<std::vector<std::shared_ptr<Residue>>&>(get_residues());
-    }
-    
-    std::vector<TerminalInfo>& get_terminals_mutable() {
-        return const_cast<std::vector<TerminalInfo>&>(get_terminals());
-    }
-    
-    std::map<std::string, std::vector<SecondaryStructure>>& get_secondary_structures_mutable() {
-        return const_cast<std::map<std::string, std::vector<SecondaryStructure>>&>(get_secondary_structures());
-    }
-    
-    std::vector<std::string>& get_disulfide_bonds_mutable() {
-        return const_cast<std::vector<std::string>&>(get_disulfide_bonds());
-    }
-    
-    std::vector<double>& get_box_dimensions_mutable() {
-        return const_cast<std::vector<double>&>(get_box_dimensions());
-    }
-    
-    std::vector<StandardCmap>& get_cmaps_mutable() {
-        return const_cast<std::vector<StandardCmap>&>(get_cmaps());
+    bool operator!=(const Molecular& other) const {
+        return !(*this == other);
     }
 
-    // Helper methods for topology compatibility (to be implemented based on actual topology structures)
-    bool is_dihedral_improper(const TopologyDihedral& dihedral) const {
-        // Placeholder - implement based on actual TopologyDihedral structure
-        return false;
-    }
-    
-    std::array<int, 8> get_cmap_atoms(const TopologyCmap& cmap) const {
-        // Placeholder - implement based on actual TopologyCmap structure
-        std::array<int, 8> atoms;
-        atoms.fill(-1);
-        return atoms;
-    }
-    
-    bool is_psf_cmap_format(const TopologyCmap& cmap) const {
-        // Placeholder - implement based on actual TopologyCmap structure
-        return false;
-    }
-    
-    int get_cmap_function_type(const TopologyCmap& cmap) const {
-        // Placeholder - implement based on actual TopologyCmap structure
-        return 1;
+    // Clone method
+    std::unique_ptr<Molecular> clone() const {
+        auto cloned = std::make_unique<Molecular>();
+        
+        // Copy atoms
+        for (const auto& atom : atoms) {
+            if (atom) {
+                cloned->add_atom(atom->clone());
+            }
+        }
+        
+        // Copy residues
+        for (const auto& residue : residues) {
+            if (residue) {
+                cloned->add_residue(residue->clone());
+            }
+        }
+        
+        // Copy structure and topology info
+        cloned->get_structure_info() = get_structure_info();
+        cloned->get_topology_info() = get_topology_info();
+        
+        return cloned;
     }
 };
 
-// Type alias for backward compatibility
-using Molecular = MolecularSystem;
+} // namespace molecule
+
+// Backward compatibility: provide the Molecular class in the model namespace
+using Molecular = molecule::Molecular;
+
+// Backward compatibility: provide the StandardCmap struct in the model namespace
+using StandardCmap = molecule::StandardCmap;
 
 } // namespace model
 } // namespace pygcmc
 
-// Hash specialization for std::unordered_map support
-namespace std {
-    template<>
-    struct hash<pygcmc::model::MolecularSystem> {
-        std::size_t operator()(const pygcmc::model::MolecularSystem& mol) const {
-            return pygcmc::model::utils::hash::combine_hash(
-                pygcmc::model::utils::hash::string_hash(mol.get_name()),
-                mol.get_num_atoms(),
-                mol.get_num_residues()
-            );
-        }
-    };
-}
-
-#endif // PYGCMC_MODEL_MOLECULAR_MAIN_HPP 
+#endif // PYGCMC_MODEL_MOLECULE_MAIN_HPP 

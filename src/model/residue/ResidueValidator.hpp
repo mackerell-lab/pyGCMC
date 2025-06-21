@@ -3,213 +3,317 @@
 #ifndef PYGCMC_MODEL_RESIDUE_VALIDATOR_HPP
 #define PYGCMC_MODEL_RESIDUE_VALIDATOR_HPP
 
-#include <vector>
-#include <string>
-#include <unordered_set>
-#include <unordered_map>
-#include <memory>
-#include "../atom/AtomMain.hpp"
+#include "ResidueComposite.hpp"
 #include "../common/ModelUtils.hpp"
+#include <string>
+#include <vector>
+#include <set>
+#include <algorithm>
 
 namespace pygcmc {
 namespace model {
-
-// Forward declaration
-class ResidueComposite;
+namespace residue {
 
 /**
- * @brief Residue validation and completeness checking utilities
+ * @brief Validator class for residue integrity checking
+ * Provides comprehensive validation of residue structure and atom composition
  */
 class ResidueValidator {
 public:
-    // Validation result structure
-    struct ValidationResult {
-        bool is_valid = true;
-        std::vector<std::string> errors;
-        std::vector<std::string> warnings;
-        
-        void add_error(const std::string& error) {
-            errors.push_back(error);
-            is_valid = false;
+    /**
+     * @brief Validation error codes
+     */
+    enum class ValidationError {
+        NONE,
+        EMPTY_RESIDUE_NAME,
+        INVALID_RESIDUE_NUMBER,
+        EMPTY_SEGMENT_ID,
+        NO_ATOMS,
+        INVALID_ATOM,
+        DUPLICATE_ATOM_TYPES,
+        INCONSISTENT_RESIDUE_INFO,
+        MISSING_BACKBONE_ATOMS,
+        INVALID_GEOMETRY,
+        CHARGE_IMBALANCE,
+        MASS_IMBALANCE
+    };
+
+    /**
+     * @brief Check if a residue is valid
+     */
+    static bool is_valid(const ResidueComposite& residue) {
+        return get_validation_errors(residue).empty();
+    }
+
+    /**
+     * @brief Get detailed validation errors
+     */
+    static std::vector<ValidationError> get_validation_errors(const ResidueComposite& residue) {
+        std::vector<ValidationError> errors;
+
+        // Basic field validation
+        if (residue.get_resname().empty()) {
+            errors.push_back(ValidationError::EMPTY_RESIDUE_NAME);
         }
-        
-        void add_warning(const std::string& warning) {
-            warnings.push_back(warning);
+
+        if (residue.get_ires() <= 0) {
+            errors.push_back(ValidationError::INVALID_RESIDUE_NUMBER);
         }
+
+        if (residue.get_segid().empty()) {
+            errors.push_back(ValidationError::EMPTY_SEGMENT_ID);
+        }
+
+        // Atom validation
+        const auto& atoms = residue.get_atoms();
+        if (atoms.empty()) {
+            errors.push_back(ValidationError::NO_ATOMS);
+            return errors; // No need to check further if no atoms
+        }
+
+        // Check each atom
+        for (const auto& atom : atoms) {
+            if (!atom || !atom->is_valid()) {
+                errors.push_back(ValidationError::INVALID_ATOM);
+                break; // One invalid atom is enough
+            }
+        }
+
+        // Check for duplicate atom types
+        if (has_duplicate_atom_types(residue)) {
+            errors.push_back(ValidationError::DUPLICATE_ATOM_TYPES);
+        }
+
+        // Check consistency between residue and atom info
+        if (!has_consistent_atom_info(residue)) {
+            errors.push_back(ValidationError::INCONSISTENT_RESIDUE_INFO);
+        }
+
+        // Check backbone atoms for protein residues
+        if (is_protein_residue(residue.get_resname()) && !has_backbone_atoms(residue)) {
+            errors.push_back(ValidationError::MISSING_BACKBONE_ATOMS);
+        }
+
+        return errors;
+    }
+
+    /**
+     * @brief Get validation error message
+     */
+    static std::string get_error_message(ValidationError error) {
+        switch (error) {
+            case ValidationError::NONE:
+                return "No errors";
+            case ValidationError::EMPTY_RESIDUE_NAME:
+                return "Empty residue name";
+            case ValidationError::INVALID_RESIDUE_NUMBER:
+                return "Invalid residue number";
+            case ValidationError::EMPTY_SEGMENT_ID:
+                return "Empty segment ID";
+            case ValidationError::NO_ATOMS:
+                return "No atoms in residue";
+            case ValidationError::INVALID_ATOM:
+                return "Contains invalid atom";
+            case ValidationError::DUPLICATE_ATOM_TYPES:
+                return "Duplicate atom types";
+            case ValidationError::INCONSISTENT_RESIDUE_INFO:
+                return "Inconsistent residue information";
+            case ValidationError::MISSING_BACKBONE_ATOMS:
+                return "Missing backbone atoms";
+            case ValidationError::INVALID_GEOMETRY:
+                return "Invalid geometry";
+            case ValidationError::CHARGE_IMBALANCE:
+                return "Charge imbalance";
+            case ValidationError::MASS_IMBALANCE:
+                return "Mass imbalance";
+            default:
+                return "Unknown error";
+        }
+    }
+
+    /**
+     * @brief Get comprehensive validation report
+     */
+    static std::string get_validation_report(const ResidueComposite& residue) {
+        auto errors = get_validation_errors(residue);
+        if (errors.empty()) {
+            return "Residue is valid";
+        }
+
+        std::string report = "Validation errors:\n";
+        for (const auto& error : errors) {
+            report += "- " + get_error_message(error) + "\n";
+        }
+        return report;
+    }
+
+    /**
+     * @brief Check if residue has duplicate atom types
+     */
+    static bool has_duplicate_atom_types(const ResidueComposite& residue) {
+        const auto& atoms = residue.get_atoms();
+        std::set<std::string> atom_types;
         
-        std::string get_summary() const {
-            std::string result = "Validation " + (is_valid ? "PASSED" : "FAILED");
-            if (!errors.empty()) {
-                result += "\nErrors:";
-                for (const auto& error : errors) {
-                    result += "\n  - " + error;
+        for (const auto& atom : atoms) {
+            if (!atom) continue;
+            const std::string& type = atom->get_type();
+            if (atom_types.find(type) != atom_types.end()) {
+                return true; // Duplicate found
+            }
+            atom_types.insert(type);
+        }
+        return false;
+    }
+
+    /**
+     * @brief Check if all atoms have consistent residue information
+     */
+    static bool has_consistent_atom_info(const ResidueComposite& residue) {
+        const auto& atoms = residue.get_atoms();
+        const std::string& resname = residue.get_resname();
+        int ires = residue.get_ires();
+        const std::string& segid = residue.get_segid();
+        int iseg = residue.get_iseg();
+
+        return std::all_of(atoms.begin(), atoms.end(),
+            [&](const std::shared_ptr<atom::Atom>& atom) {
+                if (!atom) return false;
+                return atom->get_resname() == resname &&
+                       atom->get_ires() == ires &&
+                       atom->get_segid() == segid &&
+                       atom->get_iseg() == iseg;
+            });
+    }
+
+    /**
+     * @brief Check if residue is a protein residue
+     */
+    static bool is_protein_residue(const std::string& resname) {
+        static const std::set<std::string> protein_residues = {
+            "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", 
+            "HIS", "HSD", "HSE", "HSP", "ILE", "LEU", "LYS", "MET", 
+            "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL"
+        };
+        return protein_residues.find(resname) != protein_residues.end();
+    }
+
+    /**
+     * @brief Check if residue is a nucleic acid residue
+     */
+    static bool is_nucleic_acid_residue(const std::string& resname) {
+        static const std::set<std::string> nucleic_residues = {
+            "ADE", "GUA", "CYT", "THY", "URA",  // DNA/RNA bases
+            "A", "G", "C", "T", "U"             // Single letter codes
+        };
+        return nucleic_residues.find(resname) != nucleic_residues.end();
+    }
+
+    /**
+     * @brief Check if protein residue has backbone atoms
+     */
+    static bool has_backbone_atoms(const ResidueComposite& residue) {
+        static const std::vector<std::string> backbone_atoms = {"N", "CA", "C", "O"};
+        
+        for (const std::string& atom_type : backbone_atoms) {
+            if (!residue.has_atom_type(atom_type)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * @brief Check if nucleic acid residue has backbone atoms
+     */
+    static bool has_nucleic_backbone_atoms(const ResidueComposite& residue) {
+        static const std::vector<std::string> nucleic_backbone = {"P", "O5'", "C5'", "C4'", "C3'", "O3'"};
+        
+        for (const std::string& atom_type : nucleic_backbone) {
+            if (!residue.has_atom_type(atom_type)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * @brief Calculate total charge of residue
+     */
+    static double calculate_total_charge(const ResidueComposite& residue) {
+        double total_charge = 0.0;
+        const auto& atoms = residue.get_atoms();
+        
+        for (const auto& atom : atoms) {
+            if (atom) {
+                total_charge += atom->get_charge();
+            }
+        }
+        return total_charge;
+    }
+
+    /**
+     * @brief Calculate total mass of residue
+     */
+    static double calculate_total_mass(const ResidueComposite& residue) {
+        double total_mass = 0.0;
+        const auto& atoms = residue.get_atoms();
+        
+        for (const auto& atom : atoms) {
+            if (atom) {
+                total_mass += atom->get_mass();
+            }
+        }
+        return total_mass;
+    }
+
+    /**
+     * @brief Check if residue charge is within expected range
+     */
+    static bool is_charge_reasonable(const ResidueComposite& residue, double tolerance = 0.01) {
+        double charge = calculate_total_charge(residue);
+        
+        // For most residues, charge should be close to integer
+        double rounded_charge = std::round(charge);
+        return std::abs(charge - rounded_charge) < tolerance;
+    }
+
+    /**
+     * @brief Check if residue mass is within expected range
+     */
+    static bool is_mass_reasonable(const ResidueComposite& residue) {
+        double mass = calculate_total_mass(residue);
+        
+        // Basic sanity check: mass should be positive and reasonable
+        return mass > 10.0 && mass < 1000.0; // Reasonable range for typical residues
+    }
+
+    /**
+     * @brief Check bond lengths for geometric consistency
+     */
+    static bool has_reasonable_geometry(const ResidueComposite& residue, double max_bond_length = 5.0) {
+        const auto& atoms = residue.get_atoms();
+        
+        // Check distances between all pairs of atoms
+        for (size_t i = 0; i < atoms.size(); ++i) {
+            for (size_t j = i + 1; j < atoms.size(); ++j) {
+                if (!atoms[i] || !atoms[j]) continue;
+                
+                double distance = atoms[i]->distance_to(*atoms[j]);
+                if (distance > max_bond_length) {
+                    // Atoms are too far apart, might indicate problems
+                    continue;
+                }
+                if (distance < 0.5) {
+                    // Atoms are too close, indicates overlap
+                    return false;
                 }
             }
-            if (!warnings.empty()) {
-                result += "\nWarnings:";
-                for (const auto& warning : warnings) {
-                    result += "\n  - " + warning;
-                }
-            }
-            return result;
         }
-    };
-
-    // Standard amino acid definitions
-    struct AminoAcidTemplate {
-        std::string name;
-        std::unordered_set<std::string> required_atoms;
-        std::unordered_set<std::string> optional_atoms;
-        std::unordered_map<std::string, std::string> atom_elements;
-        double expected_mass;
-    };
-
-    // Standard nucleotide definitions
-    struct NucleotideTemplate {
-        std::string name;
-        std::unordered_set<std::string> required_atoms;
-        std::unordered_set<std::string> optional_atoms;
-        double expected_mass;
-    };
-
-    ResidueValidator() {
-        initialize_templates();
+        return true;
     }
-
-    /**
-     * @brief Validate a complete residue
-     */
-    ValidationResult validate_residue(const ResidueComposite& residue) const;
-
-    /**
-     * @brief Check if residue has all required atoms
-     */
-    ValidationResult check_completeness(const ResidueComposite& residue) const;
-
-    /**
-     * @brief Validate atom consistency within residue
-     */
-    ValidationResult check_atom_consistency(const ResidueComposite& residue) const;
-
-    /**
-     * @brief Check for duplicate atoms
-     */
-    ValidationResult check_duplicates(const ResidueComposite& residue) const;
-
-    /**
-     * @brief Validate chemical consistency
-     */
-    ValidationResult check_chemistry(const ResidueComposite& residue) const;
-
-    /**
-     * @brief Check coordinate validity
-     */
-    ValidationResult check_coordinates(const ResidueComposite& residue) const;
-
-    /**
-     * @brief Check mass and charge consistency
-     */
-    ValidationResult check_mass_charge(const ResidueComposite& residue) const;
-
-    /**
-     * @brief Validate residue naming conventions
-     */
-    ValidationResult check_naming_conventions(const ResidueComposite& residue) const;
-
-    /**
-     * @brief Check backbone connectivity (for proteins)
-     */
-    ValidationResult check_backbone_connectivity(const ResidueComposite& residue) const;
-
-    /**
-     * @brief Add custom residue template
-     */
-    void add_amino_acid_template(const AminoAcidTemplate& template_def) {
-        amino_acid_templates_[template_def.name] = template_def;
-    }
-
-    void add_nucleotide_template(const NucleotideTemplate& template_def) {
-        nucleotide_templates_[template_def.name] = template_def;
-    }
-
-    /**
-     * @brief Check if residue type is known
-     */
-    bool is_known_amino_acid(const std::string& resname) const {
-        return amino_acid_templates_.find(resname) != amino_acid_templates_.end();
-    }
-
-    bool is_known_nucleotide(const std::string& resname) const {
-        return nucleotide_templates_.find(resname) != nucleotide_templates_.end();
-    }
-
-    /**
-     * @brief Get missing atoms for a residue
-     */
-    std::vector<std::string> get_missing_atoms(const ResidueComposite& residue) const;
-
-    /**
-     * @brief Get unexpected atoms for a residue
-     */
-    std::vector<std::string> get_unexpected_atoms(const ResidueComposite& residue) const;
-
-private:
-    std::unordered_map<std::string, AminoAcidTemplate> amino_acid_templates_;
-    std::unordered_map<std::string, NucleotideTemplate> nucleotide_templates_;
-
-    void initialize_templates();
-    void initialize_amino_acid_templates();
-    void initialize_nucleotide_templates();
-
-    ValidationResult validate_against_amino_acid_template(
-        const ResidueComposite& residue, 
-        const AminoAcidTemplate& template_def) const;
-
-    ValidationResult validate_against_nucleotide_template(
-        const ResidueComposite& residue,
-        const NucleotideTemplate& template_def) const;
-
-    bool check_bond_distance(const Atom& atom1, const Atom& atom2, 
-                           double min_dist, double max_dist) const;
 };
 
-// Implementation of validation methods
-inline void ResidueValidator::initialize_templates() {
-    initialize_amino_acid_templates();
-    initialize_nucleotide_templates();
-}
-
-inline void ResidueValidator::initialize_amino_acid_templates() {
-    // Standard amino acids with required atoms
-    amino_acid_templates_["ALA"] = {
-        "ALA", {"N", "CA", "C", "O", "CB"}, {"H", "HA", "HB1", "HB2", "HB3"},
-        {{"N", "N"}, {"CA", "C"}, {"C", "C"}, {"O", "O"}, {"CB", "C"}}, 89.09
-    };
-    
-    amino_acid_templates_["GLY"] = {
-        "GLY", {"N", "CA", "C", "O"}, {"H", "HA2", "HA3"},
-        {{"N", "N"}, {"CA", "C"}, {"C", "C"}, {"O", "O"}}, 75.07
-    };
-    
-    amino_acid_templates_["VAL"] = {
-        "VAL", {"N", "CA", "C", "O", "CB", "CG1", "CG2"}, 
-        {"H", "HA", "HB", "HG11", "HG12", "HG13", "HG21", "HG22", "HG23"},
-        {{"N", "N"}, {"CA", "C"}, {"C", "C"}, {"O", "O"}, {"CB", "C"}, {"CG1", "C"}, {"CG2", "C"}}, 117.15
-    };
-    
-    // Add more amino acids as needed...
-}
-
-inline void ResidueValidator::initialize_nucleotide_templates() {
-    // Standard nucleotides
-    nucleotide_templates_["DA"] = {
-        "DA", {"P", "O1P", "O2P", "O5'", "C5'", "C4'", "O4'", "C3'", "O3'", "C2'", "C1'", "N9", "C8", "N7", "C5", "C6", "N6", "N1", "C2", "N3", "C4"},
-        {"H5'", "H5''", "H4'", "H3'", "H2'", "H2''", "H1'", "H8", "H61", "H62", "H2"}, 331.22
-    };
-    
-    // Add more nucleotides as needed...
-}
-
+} // namespace residue
 } // namespace model
 } // namespace pygcmc
 
