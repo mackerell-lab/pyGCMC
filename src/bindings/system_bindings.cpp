@@ -3,9 +3,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include "system/SystemModule.hpp"
-#include "system/system.hpp"
-#include "system/molecularSystem.hpp"
-#include "system/MonteCarloSystem.hpp"
 
 namespace py = pybind11;
 
