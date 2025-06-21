@@ -511,6 +511,13 @@ public:
             [donor_atom](const TopologyDonor& d) { return d.donor_atom == donor_atom; });
     }
     
+    inline bool has_donor(int donor_atom, int hydrogen_atom) const {
+        return std::any_of(donors_.begin(), donors_.end(),
+            [donor_atom, hydrogen_atom](const TopologyDonor& d) { 
+                return d.donor_atom == donor_atom && d.hydrogen_atom == hydrogen_atom; 
+            });
+    }
+    
     inline bool has_acceptor(int acceptor_atom) const {
         return std::any_of(acceptors_.begin(), acceptors_.end(),
             [acceptor_atom](const TopologyAcceptor& a) { return a.acceptor_atom == acceptor_atom; });
@@ -518,6 +525,18 @@ public:
     
     inline bool has_cmap() const {
         return !cmaps_.empty();
+    }
+    
+    inline bool has_cmap(const std::vector<int>& atoms) const {
+        if (atoms.size() != 8) return false;
+        
+        return std::any_of(cmaps_.begin(), cmaps_.end(),
+            [&atoms](const TopologyCmap& cmap) {
+                for (size_t i = 0; i < 8; ++i) {
+                    if (cmap.atoms[i] != atoms[i]) return false;
+                }
+                return true;
+            });
     }
     
     inline bool has_group(int group_id) const {
