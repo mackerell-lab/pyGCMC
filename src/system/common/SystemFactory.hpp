@@ -42,6 +42,19 @@ inline std::string getSystemModuleVersion() {
     return "1.0.0-refactored";
 }
 
+/**
+ * @brief Get system module version (short name)
+ * 
+ * @return Version string
+ */
+inline std::string getSystemVersion() {
+    return getSystemModuleVersion();
+}
+
 } // namespace common
+
+// Export to parent namespace for convenience
+using common::getSystemVersion;
+
 } // namespace system
 } // namespace pygcmc 

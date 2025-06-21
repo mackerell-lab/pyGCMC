@@ -257,5 +257,10 @@ private:
 };
 
 } // namespace montecarlo
+
+// Export to parent namespace for backward compatibility
+using MonteCarloSystem = montecarlo::MCMain;
+using MovementMolecularInfo = montecarlo::MovementMolecularInfo;
+
 } // namespace system
 } // namespace pygcmc 

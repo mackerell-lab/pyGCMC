@@ -57,6 +57,10 @@ private:
 };
 
 } // namespace molecular
+
+// Export to parent namespace for backward compatibility
+using MolecularSystem = molecular::MolecularMain;
+
 } // namespace system
 } // namespace pygcmc
 

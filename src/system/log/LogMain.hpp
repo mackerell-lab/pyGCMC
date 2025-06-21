@@ -113,6 +113,13 @@ inline void setLogLevel(common::LogLevel level) {
 }
 
 } // namespace log
+
+// Export to parent namespace for backward compatibility
+using LogLevel = common::LogLevel;
+using log::initializeLogging;
+using log::setVerbose;
+using log::setLogLevel;
+
 } // namespace system
 } // namespace pygcmc
 
