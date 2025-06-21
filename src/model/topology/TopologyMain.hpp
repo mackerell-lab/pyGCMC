@@ -505,6 +505,33 @@ public:
     inline size_t get_num_cmaps() const { return cmaps_.size(); }
     inline size_t get_num_groups() const { return groups_.size(); }
 
+    // Check methods for different topology elements
+    inline bool has_donor(int donor_atom) const {
+        return std::any_of(donors_.begin(), donors_.end(),
+            [donor_atom](const TopologyDonor& d) { return d.donor_atom == donor_atom; });
+    }
+    
+    inline bool has_acceptor(int acceptor_atom) const {
+        return std::any_of(acceptors_.begin(), acceptors_.end(),
+            [acceptor_atom](const TopologyAcceptor& a) { return a.acceptor_atom == acceptor_atom; });
+    }
+    
+    inline bool has_cmap() const {
+        return !cmaps_.empty();
+    }
+    
+    inline bool has_group(int group_id) const {
+        return std::any_of(groups_.begin(), groups_.end(),
+            [group_id](const TopologyGroup& g) { return g.id == group_id; });
+    }
+    
+    inline const TopologyGroup& get_group(int index) const {
+        if (index < 0 || index >= static_cast<int>(groups_.size())) {
+            throw std::out_of_range("Invalid group index");
+        }
+        return groups_[index];
+    }
+
     // Existence check methods
     inline bool has_bond(int atom1, int atom2) const {
         for (const auto& bond : bonds_) {

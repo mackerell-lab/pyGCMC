@@ -218,6 +218,7 @@ public:
     }
 
     const std::vector<StandardCmap>& get_standard_cmaps() const { return standard_cmaps; }
+    std::vector<StandardCmap>& get_standard_cmaps() { return standard_cmaps; }
 
     // Clear all data
     void clear() {

@@ -57,9 +57,28 @@ public:
         return (it != atoms.end()) ? *it : nullptr;
     }
 
-    // Public method to update atom map (non-virtual)
+    /**
+     * @brief Update internal atom mapping for efficient lookups
+     */
     void refresh_atom_map() {
-        update_atom_map();  // Call the private override method
+        atomMap.clear();
+        for (const auto& atom : atoms) {
+            if (atom) {
+                atomMap[atom->get_type()] = atom;
+            }
+        }
+    }
+
+    /**
+     * @brief Update internal atom mapping (for compatibility)
+     */
+    void update_atom_map() {
+        atomMap.clear();
+        for (const auto& atom : atoms) {
+            if (atom) {
+                atomMap[atom->get_type()] = atom;
+            }
+        }
     }
 
     // Advanced selection methods
@@ -280,17 +299,6 @@ public:
     }
 
 private:
-    // Override update_atom_map to include PDB formatting
-    void update_atom_map() {
-        atomMap.clear();
-        for (const auto& atom : atoms) {
-            if (atom) {
-                // Store both raw and PDB-formatted names
-                atomMap[atom->get_type()] = atom;
-                atomMap[atom->get_formatted_atom_name()] = atom;
-            }
-        }
-    }
 };
 
 // Utility functions for residue collections

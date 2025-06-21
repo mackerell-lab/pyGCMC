@@ -21,35 +21,61 @@ public:
     Molecular() = default;
     ~Molecular() = default;
 
-    // Backward compatibility with original API
-    std::vector<std::shared_ptr<atom::Atom>>& atoms = MolecularComposite::get_atoms();
-    std::vector<std::shared_ptr<residue::Residue>>& residues = MolecularComposite::get_residues();
+    // Backward compatibility accessors - use functions instead of references for Python binding compatibility
+    std::vector<std::shared_ptr<atom::Atom>>& get_atoms_ref() { return MolecularComposite::get_atoms(); }
+    std::vector<std::shared_ptr<residue::Residue>>& get_residues_ref() { return MolecularComposite::get_residues(); }
     
-    // Provide access to structure info components for backward compatibility
-    std::vector<StructureInfo::TerminalInfo>& terminals = get_structure_info().terminals;
-    std::map<std::string, std::vector<StructureInfo::SecondaryStructure>>& helices = get_structure_info().helices;
-    std::map<std::string, std::vector<std::string>>& sheets = get_structure_info().sheets;
-    std::vector<std::string>& ssbonds = get_structure_info().ssbonds;
-    std::vector<double>& box_dimensions = get_structure_info().box_dimensions;
+    // Structure info accessors
+    std::vector<StructureInfo::TerminalInfo>& get_terminals_ref() { return get_structure_info().terminals; }
+    std::map<std::string, std::vector<StructureInfo::SecondaryStructure>>& get_helices_ref() { return get_structure_info().helices; }
+    std::map<std::string, std::vector<std::string>>& get_sheets_ref() { return get_structure_info().sheets; }
+    std::vector<std::string>& get_ssbonds_ref() { return get_structure_info().ssbonds; }
+    std::vector<double>& get_box_dimensions_ref() { return get_structure_info().box_dimensions; }
 
-    // Provide access to topology info components for backward compatibility
-    std::vector<topology::TopologyAtom>& topology_atoms = get_topology_info().atoms;
-    std::vector<topology::TopologyResidue>& topology_residues = get_topology_info().residues;
-    std::vector<topology::TopologySegment>& segments = get_topology_info().segments;
-    std::vector<topology::TopologyBond>& bonds = get_topology_info().bonds;
-    std::vector<topology::TopologyAngle>& angles = get_topology_info().angles;
-    std::vector<topology::TopologyDihedral>& dihedrals = get_topology_info().dihedrals;
-    std::vector<topology::TopologyDonor>& donors = get_topology_info().donors;
-    std::vector<topology::TopologyAcceptor>& acceptors = get_topology_info().acceptors;
-    std::map<int, std::set<int>>& exclusions = get_topology_info().exclusions;
-    std::vector<topology::TopologyGroup>& groups = get_topology_info().groups;
-    std::vector<topology::TopologyCmap>& cmaps = get_topology_info().cmaps;
-    std::vector<std::string>& titles = get_topology_info().titles;
+    // Topology info accessors
+    std::vector<topology::TopologyAtom>& get_topology_atoms_ref() { return get_topology_info().atoms; }
+    std::vector<topology::TopologyResidue>& get_topology_residues_ref() { return get_topology_info().residues; }
+    std::vector<topology::TopologySegment>& get_segments_ref() { return get_topology_info().segments; }
+    std::vector<topology::TopologyBond>& get_bonds_ref() { return get_topology_info().bonds; }
+    std::vector<topology::TopologyAngle>& get_angles_ref() { return get_topology_info().angles; }
+    std::vector<topology::TopologyDihedral>& get_dihedrals_ref() { return get_topology_info().dihedrals; }
+    std::vector<topology::TopologyDonor>& get_donors_ref() { return get_topology_info().donors; }
+    std::vector<topology::TopologyAcceptor>& get_acceptors_ref() { return get_topology_info().acceptors; }
+    std::map<int, std::set<int>>& get_exclusions_ref() { return get_topology_info().exclusions; }
+    std::vector<topology::TopologyGroup>& get_groups_ref() { return get_topology_info().groups; }
+    std::vector<topology::TopologyCmap>& get_cmaps_ref() { return get_topology_info().cmaps; }
+    std::vector<std::string>& get_titles_ref() { return get_topology_info().titles; }
+    std::vector<StandardCmap>& get_standard_cmaps_ref() { return get_standard_cmaps(); }
 
-    // Lookup mapping - provide references for backward compatibility
-    std::unordered_map<std::string, int>& segment_map = const_cast<std::unordered_map<std::string, int>&>(get_segment_map());
-    std::map<std::pair<std::string, int>, int>& residue_map = const_cast<std::map<std::pair<std::string, int>, int>&>(get_residue_map());
-    std::map<std::tuple<std::string, int, std::string>, int>& atom_map = const_cast<std::map<std::tuple<std::string, int, std::string>, int>&>(get_atom_map());
+    // Lookup mapping accessors 
+    std::unordered_map<std::string, int>& get_segment_map_ref() { return const_cast<std::unordered_map<std::string, int>&>(get_segment_map()); }
+    std::map<std::pair<std::string, int>, int>& get_residue_map_ref() { return const_cast<std::map<std::pair<std::string, int>, int>&>(get_residue_map()); }
+    std::map<std::tuple<std::string, int, std::string>, int>& get_atom_map_ref() { return const_cast<std::map<std::tuple<std::string, int, std::string>, int>&>(get_atom_map()); }
+
+    // Backward compatibility properties - kept as member variables for legacy code compatibility
+    std::vector<std::shared_ptr<atom::Atom>>& atoms = get_atoms_ref();
+    std::vector<std::shared_ptr<residue::Residue>>& residues = get_residues_ref();
+    std::vector<StructureInfo::TerminalInfo>& terminals = get_terminals_ref();
+    std::map<std::string, std::vector<StructureInfo::SecondaryStructure>>& helices = get_helices_ref();
+    std::map<std::string, std::vector<std::string>>& sheets = get_sheets_ref();
+    std::vector<std::string>& ssbonds = get_ssbonds_ref();
+    std::vector<double>& box_dimensions = get_box_dimensions_ref();
+    std::vector<topology::TopologyAtom>& topology_atoms = get_topology_atoms_ref();
+    std::vector<topology::TopologyResidue>& topology_residues = get_topology_residues_ref();
+    std::vector<topology::TopologySegment>& segments = get_segments_ref();
+    std::vector<topology::TopologyBond>& bonds = get_bonds_ref();
+    std::vector<topology::TopologyAngle>& angles = get_angles_ref();
+    std::vector<topology::TopologyDihedral>& dihedrals = get_dihedrals_ref();
+    std::vector<topology::TopologyDonor>& donors = get_donors_ref();
+    std::vector<topology::TopologyAcceptor>& acceptors = get_acceptors_ref();
+    std::map<int, std::set<int>>& exclusions = get_exclusions_ref();
+    std::vector<topology::TopologyGroup>& groups = get_groups_ref();
+    std::vector<topology::TopologyCmap>& cmaps = get_cmaps_ref();
+    std::vector<std::string>& titles = get_titles_ref();
+    std::vector<StandardCmap>& standard_cmaps = get_standard_cmaps_ref();
+    std::unordered_map<std::string, int>& segment_map = get_segment_map_ref();
+    std::map<std::pair<std::string, int>, int>& residue_map = get_residue_map_ref();
+    std::map<std::tuple<std::string, int, std::string>, int>& atom_map = get_atom_map_ref();
 
     // Enhanced selection and analysis methods
     template<typename Predicate>

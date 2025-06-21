@@ -10,15 +10,30 @@
 namespace pygcmc {
 namespace model {
 
-// Backward compatibility type aliases
-using Param = param::Param;
+// Backward compatibility type aliases - as standalone types
 using BasicInfo = param::BasicInfo;
 using SpaceInfo = param::SpaceInfo;
-using MCInfo = param::MCInfo;
+using MCInfo = param::MCParams;  // Fixed: MCParams renamed to MCInfo for compatibility
 using EnergyInfo = param::EnergyInfo;
 using FragmentInfo = param::FragmentInfo;
 using BiasInfo = param::BiasInfo;
 using FileInfo = param::FileInfo;
+
+// Main Param class with nested type compatibility
+class Param : public param::Param {
+public:
+    // Re-export types as nested types for Python binding compatibility
+    using BasicInfo = param::BasicInfo;
+    using SpaceInfo = param::SpaceInfo;
+    using MCInfo = param::MCParams;  // MCParams from param module
+    using EnergyInfo = param::EnergyInfo;
+    using FragmentInfo = param::FragmentInfo;
+    using BiasInfo = param::BiasInfo;
+    using FileInfo = param::FileInfo;
+    
+    // Inherit all constructors and methods
+    using param::Param::Param;
+};
 
 } // namespace model
 } // namespace pygcmc

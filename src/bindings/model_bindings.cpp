@@ -14,6 +14,13 @@
 namespace py = pybind11;
 // using namespace pygcmc;
 
+// Forward declarations for proper type handling
+using namespace pygcmc::model;
+using namespace pygcmc::model::atom;
+using namespace pygcmc::model::residue;
+using namespace pygcmc::model::topology;
+using namespace pygcmc::model::molecule;
+
 namespace pygcmc {
 namespace bindings {
 
@@ -573,29 +580,75 @@ void init_model(py::module& m) {
     // Bind Molecular class
     py::class_<model::Molecular, std::shared_ptr<model::Molecular>>(model, "Molecular")
         .def(py::init<>())
-        .def_readwrite("atoms", &model::Molecular::atoms)
-        .def_readwrite("residues", &model::Molecular::residues)
-        .def_readwrite("terminals", &model::Molecular::terminals)
-        .def_readwrite("helices", &model::Molecular::helices)
-        .def_readwrite("sheets", &model::Molecular::sheets)
-        .def_readwrite("ssbonds", &model::Molecular::ssbonds)
-        .def_readwrite("boxDimensions", &model::Molecular::boxDimensions)
-        .def_readwrite("topology_atoms", &model::Molecular::topology_atoms)
-        .def_readwrite("topology_residues", &model::Molecular::topology_residues)
-        .def_readwrite("segments", &model::Molecular::segments)
-        .def_readwrite("bonds", &model::Molecular::bonds)
-        .def_readwrite("angles", &model::Molecular::angles)
-        .def_readwrite("dihedrals", &model::Molecular::dihedrals)
-        .def_readwrite("donors", &model::Molecular::donors)
-        .def_readwrite("acceptors", &model::Molecular::acceptors)
-        .def_readwrite("exclusions", &model::Molecular::exclusions)
-        .def_readwrite("groups", &model::Molecular::groups)
-        .def_readwrite("cmaps", &model::Molecular::cmaps)
-        .def_readwrite("standard_cmaps", &model::Molecular::standard_cmaps)
-        .def_readwrite("titles", &model::Molecular::titles)
-        .def_readwrite("segment_map", &model::Molecular::segment_map)
-        .def_readwrite("residue_map", &model::Molecular::residue_map)
-        .def_readwrite("atom_map", &model::Molecular::atom_map)
+        .def_property("atoms", 
+            [](model::Molecular& m) -> std::vector<std::shared_ptr<Atom>>& { return m.get_atoms_ref(); },
+            [](model::Molecular& m, const std::vector<std::shared_ptr<Atom>>& v) { m.get_atoms_ref() = v; })
+        .def_property("residues",
+            [](model::Molecular& m) -> std::vector<std::shared_ptr<Residue>>& { return m.get_residues_ref(); },
+            [](model::Molecular& m, const std::vector<std::shared_ptr<Residue>>& v) { m.get_residues_ref() = v; })
+        .def_property("terminals",
+            [](model::Molecular& m) -> std::vector<StructureInfo::TerminalInfo>& { return m.get_terminals_ref(); },
+            [](model::Molecular& m, const std::vector<StructureInfo::TerminalInfo>& v) { m.get_terminals_ref() = v; })
+        .def_property("helices",
+            [](model::Molecular& m) -> std::map<std::string, std::vector<StructureInfo::SecondaryStructure>>& { return m.get_helices_ref(); },
+            [](model::Molecular& m, const std::map<std::string, std::vector<StructureInfo::SecondaryStructure>>& v) { m.get_helices_ref() = v; })
+        .def_property("sheets",
+            [](model::Molecular& m) -> std::map<std::string, std::vector<std::string>>& { return m.get_sheets_ref(); },
+            [](model::Molecular& m, const std::map<std::string, std::vector<std::string>>& v) { m.get_sheets_ref() = v; })
+        .def_property("ssbonds",
+            [](model::Molecular& m) -> std::vector<std::string>& { return m.get_ssbonds_ref(); },
+            [](model::Molecular& m, const std::vector<std::string>& v) { m.get_ssbonds_ref() = v; })
+        .def_property("boxDimensions",
+            [](model::Molecular& m) -> std::vector<double>& { return m.get_box_dimensions_ref(); },
+            [](model::Molecular& m, const std::vector<double>& v) { m.get_box_dimensions_ref() = v; })
+        .def_property("topology_atoms",
+            [](model::Molecular& m) -> std::vector<TopologyAtom>& { return m.get_topology_atoms_ref(); },
+            [](model::Molecular& m, const std::vector<TopologyAtom>& v) { m.get_topology_atoms_ref() = v; })
+        .def_property("topology_residues",
+            [](model::Molecular& m) -> std::vector<TopologyResidue>& { return m.get_topology_residues_ref(); },
+            [](model::Molecular& m, const std::vector<TopologyResidue>& v) { m.get_topology_residues_ref() = v; })
+        .def_property("segments",
+            [](model::Molecular& m) -> std::vector<TopologySegment>& { return m.get_segments_ref(); },
+            [](model::Molecular& m, const std::vector<TopologySegment>& v) { m.get_segments_ref() = v; })
+        .def_property("bonds",
+            [](model::Molecular& m) -> std::vector<TopologyBond>& { return m.get_bonds_ref(); },
+            [](model::Molecular& m, const std::vector<TopologyBond>& v) { m.get_bonds_ref() = v; })
+        .def_property("angles",
+            [](model::Molecular& m) -> std::vector<TopologyAngle>& { return m.get_angles_ref(); },
+            [](model::Molecular& m, const std::vector<TopologyAngle>& v) { m.get_angles_ref() = v; })
+        .def_property("dihedrals",
+            [](model::Molecular& m) -> std::vector<TopologyDihedral>& { return m.get_dihedrals_ref(); },
+            [](model::Molecular& m, const std::vector<TopologyDihedral>& v) { m.get_dihedrals_ref() = v; })
+        .def_property("donors",
+            [](model::Molecular& m) -> std::vector<TopologyDonor>& { return m.get_donors_ref(); },
+            [](model::Molecular& m, const std::vector<TopologyDonor>& v) { m.get_donors_ref() = v; })
+        .def_property("acceptors",
+            [](model::Molecular& m) -> std::vector<TopologyAcceptor>& { return m.get_acceptors_ref(); },
+            [](model::Molecular& m, const std::vector<TopologyAcceptor>& v) { m.get_acceptors_ref() = v; })
+        .def_property("exclusions",
+            [](model::Molecular& m) -> std::map<int, std::set<int>>& { return m.get_exclusions_ref(); },
+            [](model::Molecular& m, const std::map<int, std::set<int>>& v) { m.get_exclusions_ref() = v; })
+        .def_property("groups",
+            [](model::Molecular& m) -> std::vector<TopologyGroup>& { return m.get_groups_ref(); },
+            [](model::Molecular& m, const std::vector<TopologyGroup>& v) { m.get_groups_ref() = v; })
+        .def_property("cmaps",
+            [](model::Molecular& m) -> std::vector<TopologyCmap>& { return m.get_cmaps_ref(); },
+            [](model::Molecular& m, const std::vector<TopologyCmap>& v) { m.get_cmaps_ref() = v; })
+        .def_property("standard_cmaps",
+            [](model::Molecular& m) -> std::vector<StandardCmap>& { return m.get_standard_cmaps_ref(); },
+            [](model::Molecular& m, const std::vector<StandardCmap>& v) { m.get_standard_cmaps_ref() = v; })
+        .def_property("titles",
+            [](model::Molecular& m) -> std::vector<std::string>& { return m.get_titles_ref(); },
+            [](model::Molecular& m, const std::vector<std::string>& v) { m.get_titles_ref() = v; })
+        .def_property("segment_map",
+            [](model::Molecular& m) -> std::unordered_map<std::string, int>& { return m.get_segment_map_ref(); },
+            [](model::Molecular& m, const std::unordered_map<std::string, int>& v) { m.get_segment_map_ref() = v; })
+        .def_property("residue_map",
+            [](model::Molecular& m) -> std::map<std::pair<std::string, int>, int>& { return m.get_residue_map_ref(); },
+            [](model::Molecular& m, const std::map<std::pair<std::string, int>, int>& v) { m.get_residue_map_ref() = v; })
+        .def_property("atom_map",
+            [](model::Molecular& m) -> std::map<std::tuple<std::string, int, std::string>, int>& { return m.get_atom_map_ref(); },
+            [](model::Molecular& m, const std::map<std::tuple<std::string, int, std::string>, int>& v) { m.get_atom_map_ref() = v; })
         .def("get_num_atoms", &model::Molecular::get_num_atoms)
         .def("get_num_residues", &model::Molecular::get_num_residues)
         .def("get_num_segments", &model::Molecular::get_num_segments)
