@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "model/topology.hpp"
+#include "model/ModelModule.hpp"
 #include <string>
 #include <vector>
 

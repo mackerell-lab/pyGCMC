@@ -1,6 +1,6 @@
 #pragma once
 
-#include "model/montecarlo.hpp"
+#include "model/ModelModule.hpp"
 
 namespace pygcmc {
 namespace platform {

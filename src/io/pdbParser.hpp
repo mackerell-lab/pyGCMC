@@ -10,9 +10,7 @@
 #include <memory>
 #include <map>
 #include <optional>
-#include "model/atom.hpp"
-#include "model/residue.hpp"
-#include "model/structure.hpp"
+#include "model/ModelModule.hpp"
 
 namespace pygcmc {
 namespace io {

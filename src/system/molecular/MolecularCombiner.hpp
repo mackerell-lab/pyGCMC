@@ -4,9 +4,7 @@
 
 #include <memory>
 #include <vector>
-#include "model/molecular.hpp"
-#include "model/structure.hpp"
-#include "model/topology.hpp"
+#include "model/ModelModule.hpp"
 #include "MolecularValidator.hpp"
 #include "MolecularMatcher.hpp"
 #include "MolecularMerger.hpp"

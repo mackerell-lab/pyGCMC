@@ -1,7 +1,7 @@
 #ifndef EWALDSYSTEMENERGY_HPP
 #define EWALDSYSTEMENERGY_HPP
 
-#include "model/montecarlo.hpp"
+#include "model/ModelModule.hpp"
 
 namespace pygcmc {
 namespace platform {

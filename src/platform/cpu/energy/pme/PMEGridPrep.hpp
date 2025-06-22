@@ -1,7 +1,7 @@
 #ifndef PMEGRIDPREPARE_HPP
 #define PMEGRIDPREPARE_HPP
 
-#include "model/montecarlo.hpp"
+#include "model/ModelModule.hpp"
 #include <vector>
 
 namespace pygcmc {

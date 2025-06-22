@@ -1,7 +1,7 @@
 #ifndef PGPSELFENERGY_HPP
 #define PGPSELFENERGY_HPP
 
-#include "model/montecarlo.hpp"
+#include "model/ModelModule.hpp"
 
 namespace pygcmc {
 namespace platform {

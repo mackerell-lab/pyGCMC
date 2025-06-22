@@ -1,8 +1,7 @@
 // src/io/pdbParser.cpp
 
 #include "pdbParser.hpp"
-#include "model/atom.hpp"
-#include "model/residue.hpp"
+#include "model/ModelModule.hpp"
 #include <fstream>
 #include <sstream>
 #include <stdexcept>

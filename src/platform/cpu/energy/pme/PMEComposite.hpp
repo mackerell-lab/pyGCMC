@@ -1,6 +1,6 @@
 #pragma once
 
-#include "model/montecarlo.hpp"
+#include "model/ModelModule.hpp"
 #include "PMECore.hpp"
 #include "PMESetup.hpp"
 #include "PMEInterface.hpp"

@@ -51,8 +51,8 @@
 // === Parameters ===
 #include "param/ParamMain.hpp"
 
-// === Legacy Structure Support ===
-#include "structure.hpp"
+// === Structure ===
+#include "structure/StructureMain.hpp"
 
 namespace pygcmc {
 namespace model {
@@ -176,21 +176,22 @@ namespace utils {
 /**
  * @brief Create a water molecule
  */
-inline std::shared_ptr<Residue> create_water_molecule(int residue_id, const std::string& segment = "SOLV") {
-    auto water = std::make_shared<Residue>("SOL", residue_id, segment);
+inline std::shared_ptr<residue::Residue> create_water_molecule(int residue_id, const std::string& segment = "SOLV") {
+    auto water = std::make_shared<residue::Residue>("SOL", residue_id, segment);
     
-    // Add atoms: O, H1, H2
-    auto oxygen = std::make_shared<Atom>("O", "OT", -0.834, 15.999, 
-                                         0.0, 0.0, 0.0, "SOL", residue_id, segment);
-    auto h1 = std::make_shared<Atom>("H1", "HT", 0.417, 1.008,
-                                     0.757, 0.586, 0.0, "SOL", residue_id, segment);
-    auto h2 = std::make_shared<Atom>("H2", "HT", 0.417, 1.008,
-                                     -0.757, 0.586, 0.0, "SOL", residue_id, segment);
+    // Add atoms: O, H1, H2 with correct constructor parameters
+    // AtomCore(int bynu, type, resname, ires, segid, iseg, x, y, z, wmain, mass, charge, chem, hetatm)
+    auto oxygen = std::make_shared<atom::Atom>(1, "OT", "SOL", residue_id, segment, 0,
+                                               0.0, 0.0, 0.0, 1.0, 15.999, -0.834, "O", false);
+    auto h1 = std::make_shared<atom::Atom>(2, "HT", "SOL", residue_id, segment, 0,
+                                           0.757, 0.586, 0.0, 1.0, 1.008, 0.417, "H", false);
+    auto h2 = std::make_shared<atom::Atom>(3, "HT", "SOL", residue_id, segment, 0,
+                                           -0.757, 0.586, 0.0, 1.0, 1.008, 0.417, "H", false);
     
+    // Add atoms to residue
     water->add_atom(oxygen);
     water->add_atom(h1);
     water->add_atom(h2);
-    water->calculate_center_of_mass();
     
     return water;
 }
@@ -198,27 +199,27 @@ inline std::shared_ptr<Residue> create_water_molecule(int residue_id, const std:
 /**
  * @brief Create a simple protein residue (Alanine)
  */
-inline std::shared_ptr<Residue> create_alanine_residue(int residue_id, const std::string& segment = "PROT") {
-    auto ala = std::make_shared<Residue>("ALA", residue_id, segment);
+inline std::shared_ptr<residue::Residue> create_alanine_residue(int residue_id, const std::string& segment = "PROT") {
+    auto ala = std::make_shared<residue::Residue>("ALA", residue_id, segment);
     
-    // Add backbone atoms
-    auto n = std::make_shared<Atom>("N", "NH1", -0.47, 14.007,
-                                    0.0, 0.0, 0.0, "ALA", residue_id, segment);
-    auto ca = std::make_shared<Atom>("CA", "CT1", 0.07, 12.01,
-                                     1.458, 0.0, 0.0, "ALA", residue_id, segment);
-    auto c = std::make_shared<Atom>("C", "C", 0.51, 12.01,
-                                    2.009, 1.421, 0.0, "ALA", residue_id, segment);
-    auto o = std::make_shared<Atom>("O", "O", -0.51, 15.999,
-                                    1.239, 2.364, 0.0, "ALA", residue_id, segment);
-    auto cb = std::make_shared<Atom>("CB", "CT3", -0.27, 12.01,
-                                     2.196, -0.889, -1.07, "ALA", residue_id, segment);
+    // Add backbone atoms with correct constructor parameters
+    auto n = std::make_shared<atom::Atom>(1, "NH1", "ALA", residue_id, segment, 0,
+                                          0.0, 0.0, 0.0, 1.0, 14.007, -0.47, "N", false);
+    auto ca = std::make_shared<atom::Atom>(2, "CT1", "ALA", residue_id, segment, 0,
+                                           1.458, 0.0, 0.0, 1.0, 12.01, 0.07, "C", false);
+    auto c = std::make_shared<atom::Atom>(3, "C", "ALA", residue_id, segment, 0,
+                                          2.009, 1.421, 0.0, 1.0, 12.01, 0.51, "C", false);
+    auto o = std::make_shared<atom::Atom>(4, "O", "ALA", residue_id, segment, 0,
+                                          1.239, 2.364, 0.0, 1.0, 15.999, -0.51, "O", false);
+    auto cb = std::make_shared<atom::Atom>(5, "CT3", "ALA", residue_id, segment, 0,
+                                           2.196, -0.889, -1.07, 1.0, 12.01, -0.27, "C", false);
     
+    // Add atoms to residue
     ala->add_atom(n);
     ala->add_atom(ca);
     ala->add_atom(c);
     ala->add_atom(o);
     ala->add_atom(cb);
-    ala->calculate_center_of_mass();
     
     return ala;
 }
@@ -226,7 +227,7 @@ inline std::shared_ptr<Residue> create_alanine_residue(int residue_id, const std
 /**
  * @brief Validate a complete molecular system
  */
-inline bool validate_molecular_system(const Molecular& system) {
+inline bool validate_molecular_system(const molecule::Molecular& system) {
     // Check basic validity
     if (!system.is_valid()) return false;
     
@@ -246,7 +247,7 @@ inline bool validate_molecular_system(const Molecular& system) {
 /**
  * @brief Get system statistics
  */
-inline std::string get_system_summary(const Molecular& system) {
+inline std::string get_system_summary(const molecule::Molecular& system) {
     auto stats = system.get_system_statistics();
     std::stringstream ss;
     ss << "System Summary:\n";
@@ -275,7 +276,8 @@ namespace test {
 inline bool run_basic_tests() {
     try {
         // Test atom creation
-        auto atom = std::make_shared<Atom>("CA", "CT1", 0.07, 12.01, 0.0, 0.0, 0.0, "ALA", 1, "PROT");
+        auto atom = std::make_shared<atom::Atom>(1, "CT1", "ALA", 1, "PROT", 0, 
+                                                  0.0, 0.0, 0.0, 1.0, 12.01, 0.07, "C", false);
         if (!atom->is_valid()) return false;
         
         // Test residue creation
@@ -283,28 +285,28 @@ inline bool run_basic_tests() {
         if (!residue->is_valid()) return false;
         
         // Test molecular system
-        auto molecular = std::make_shared<Molecular>();
+        auto molecular = std::make_shared<molecule::Molecular>();
         molecular->add_residue(residue);
         if (!molecular->is_valid()) return false;
         
         // Test topology
-        auto topology = std::make_shared<Topology>();
+        auto topology = std::make_shared<topology::Topology>();
         topology->add_atom("CA", "CT1", 0.07, 12.01, "ALA", 1, "PROT");
         if (!topology->is_valid()) return false;
         
         // Test force field
-        auto ff = std::make_shared<ForceField>();
+        auto ff = std::make_shared<topology::ForceField>();
         ff->add_atom_mass("CT1", 12.01);
         ff->add_lj_params("CT1", 0.02, 2.275);
         if (!ff->is_valid()) return false;
         
         // Test MC state
-        auto mc = std::make_shared<MCState>();
+        auto mc = std::make_shared<montecarlo::MCState>();
         mc->setTemperature(300.0);
         if (!mc->is_valid()) return false;
         
         // Test parameters
-        auto params = std::make_shared<Param>();
+        auto params = std::make_shared<param::Param>();
         params->set_temperature(300.0);
         if (!params->is_valid()) return false;
         
@@ -315,6 +317,77 @@ inline bool run_basic_tests() {
 }
 
 } // namespace test
+
+/**
+ * @brief Backward Compatibility Type Aliases
+ * 
+ * These aliases maintain compatibility with code that was using the individual
+ * header files (atom.hpp, residue.hpp, etc.) before the refactoring.
+ */
+
+// === Atom Module Aliases ===
+using Atom = atom::Atom;
+
+// === Residue Module Aliases ===
+using Residue = residue::Residue;
+
+// === Molecular Module Aliases ===
+using Molecular = molecule::Molecular;
+
+// === Structure Module Aliases ===
+using Structure = structure::Structure;
+
+// === Topology Module Aliases ===
+using Topology = topology::Topology;
+using TopologyAtom = topology::TopologyAtom;
+using TopologyResidue = topology::TopologyResidue;
+using TopologySegment = topology::TopologySegment;
+using TopologyBond = topology::TopologyBond;
+using TopologyAngle = topology::TopologyAngle;
+using TopologyDihedral = topology::TopologyDihedral;
+using TopologyDonor = topology::TopologyDonor;
+using TopologyAcceptor = topology::TopologyAcceptor;
+using TopologyGroup = topology::TopologyGroup;
+using TopologyCmap = topology::TopologyCmap;
+
+// === ForceField Module Aliases ===
+using ForceField = topology::ForceField;
+using NonbondedParams = topology::NonbondedParams;
+using LJParams = topology::LJParams;
+using BondParams = topology::BondParams;
+using AngleParams = topology::AngleParams;
+using DihedralParams = topology::DihedralParams;
+using ImproperParams = topology::ImproperParams;
+using NBFIXParams = topology::NBFIXParams;
+
+// === Monte Carlo Module Aliases ===
+using MCState = montecarlo::MCState;
+using MCResidue = montecarlo::MCResidue;
+using MCAtom = montecarlo::MCAtom;
+
+// === Parameter Module Aliases ===
+using BasicInfo = param::BasicInfo;
+using SpaceInfo = param::SpaceInfo;
+using EnergyInfo = param::EnergyInfo;
+using FragmentInfo = param::FragmentInfo;
+using BiasInfo = param::BiasInfo;
+using FileInfo = param::FileInfo;
+
+// Main Param class with nested type compatibility
+class Param : public param::Param {
+public:
+    // Re-export types as nested types for Python binding compatibility
+    using BasicInfo = param::BasicInfo;
+    using SpaceInfo = param::SpaceInfo;
+    using MCInfo = param::MCParams;  // Nested alias for backward compatibility
+    using EnergyInfo = param::EnergyInfo;
+    using FragmentInfo = param::FragmentInfo;
+    using BiasInfo = param::BiasInfo;
+    using FileInfo = param::FileInfo;
+    
+    // Inherit all constructors and methods
+    using param::Param::Param;
+};
 
 } // namespace model
 } // namespace pygcmc

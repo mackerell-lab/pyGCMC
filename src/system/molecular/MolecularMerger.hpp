@@ -4,8 +4,7 @@
 
 #include <memory>
 #include <vector>
-#include "model/molecular.hpp"
-#include "model/topology.hpp"
+#include "model/ModelModule.hpp"
 
 namespace pygcmc {
 namespace system {

@@ -7,7 +7,7 @@
 #include <sstream>
 #include <vector>
 #include <stdexcept>
-#include "model/forcefield.hpp"
+#include "model/ModelModule.hpp"
 
 namespace pygcmc {
 namespace io {

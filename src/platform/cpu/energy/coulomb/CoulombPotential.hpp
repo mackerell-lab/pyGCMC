@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../common/EnergyConstants.hpp"
-#include "model/montecarlo.hpp"
+#include "model/ModelModule.hpp"
 #include <cmath>
 
 namespace pygcmc {

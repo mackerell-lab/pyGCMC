@@ -1,6 +1,6 @@
 #pragma once
 
-#include "model/montecarlo.hpp"
+#include "model/ModelModule.hpp"
 #include "EwaldCore.hpp"
 #include "EwaldReal.hpp"
 #include "EwaldRecip.hpp"

@@ -1,13 +1,12 @@
 #pragma once
+#include <memory>
+#include <vector>
+#include <set>
+#include "model/ModelModule.hpp"
 #include "MCCore.hpp"
 #include "MCGeometry.hpp"
 #include "MCSwitching.hpp"
 #include "MCInitializer.hpp"
-#include "model/montecarlo.hpp"
-#include "model/molecular.hpp"
-#include "model/forcefield.hpp"
-#include <memory>
-#include <vector>
 
 namespace pygcmc {
 namespace system {

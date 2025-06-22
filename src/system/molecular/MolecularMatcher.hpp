@@ -7,9 +7,7 @@
 #include <string>
 #include <set>
 #include <map>
-#include "model/molecular.hpp"
-#include "model/structure.hpp"
-#include "model/topology.hpp"
+#include "model/ModelModule.hpp"
 
 namespace pygcmc {
 namespace system {

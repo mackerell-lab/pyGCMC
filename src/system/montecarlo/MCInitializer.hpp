@@ -1,7 +1,6 @@
 #pragma once
-#include "model/montecarlo.hpp"
-#include "model/molecular.hpp"
-#include "model/forcefield.hpp"
+#include "model/ModelModule.hpp"
+#include <vector>
 #include <memory>
 
 namespace pygcmc {

@@ -4,7 +4,7 @@
 
 #include "SystemInterface.hpp"
 #include "../log/LogMain.hpp"
-#include "model/param.hpp"
+#include "model/ModelModule.hpp"
 
 namespace pygcmc {
 namespace system {

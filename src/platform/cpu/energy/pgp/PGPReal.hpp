@@ -1,7 +1,7 @@
 #ifndef PGPREALSPACE_HPP
 #define PGPREALSPACE_HPP
 
-#include "model/montecarlo.hpp"
+#include "model/ModelModule.hpp"
 
 namespace pygcmc {
 namespace platform {

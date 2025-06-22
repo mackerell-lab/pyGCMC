@@ -2,7 +2,7 @@
 
 #include "../lj/LJMain.hpp"
 #include "CoulombPotential.hpp"
-#include "model/montecarlo.hpp"
+#include "model/ModelModule.hpp"
 #include <utility>
 
 namespace pygcmc {

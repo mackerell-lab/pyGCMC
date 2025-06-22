@@ -2,14 +2,7 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include "model/atom.hpp"
-#include "model/residue.hpp"
-#include "model/topology.hpp"
-#include "model/structure.hpp"
-#include "model/forcefield.hpp"
-#include "model/param.hpp"
-#include "model/molecular.hpp"
-#include "model/montecarlo.hpp"
+#include "model/ModelModule.hpp"
 
 namespace py = pybind11;
 // using namespace pygcmc;

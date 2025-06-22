@@ -1,7 +1,7 @@
 #ifndef PMEGRIDCHARGE_HPP
 #define PMEGRIDCHARGE_HPP
 
-#include "model/montecarlo.hpp"
+#include "model/ModelModule.hpp"
 
 namespace pygcmc {
 namespace platform {

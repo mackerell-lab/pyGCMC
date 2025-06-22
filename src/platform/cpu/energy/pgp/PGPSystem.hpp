@@ -1,7 +1,7 @@
 #ifndef PGPSYSTEMENERGY_HPP
 #define PGPSYSTEMENERGY_HPP
 
-#include "model/montecarlo.hpp"
+#include "model/ModelModule.hpp"
 #include <vector>
 
 namespace pygcmc {

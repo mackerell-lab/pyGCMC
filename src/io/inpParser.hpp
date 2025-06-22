@@ -3,7 +3,7 @@
 #define PYGCMC_IO_INPPARSER_HPP
 
 #include <string>
-#include "model/param.hpp"
+#include "model/ModelModule.hpp"
 
 namespace pygcmc {
 namespace io {

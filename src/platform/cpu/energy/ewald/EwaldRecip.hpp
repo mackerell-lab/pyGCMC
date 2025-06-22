@@ -1,7 +1,7 @@
 #pragma once
 
 #include "EwaldCore.hpp"
-#include "model/montecarlo.hpp"
+#include "model/ModelModule.hpp"
 #include <vector>
 #include <complex>
 
