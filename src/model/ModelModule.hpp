@@ -17,8 +17,6 @@
  * - ModelInterface.hpp: Abstract interfaces (ICloneable, ISerializable, IValidatable)
  * - ModelConstants.hpp: Physical constants, unit conversions, and molecular data
  * - ModelUtils.hpp: Mathematical utilities, hashing, and validation helpers
- * - ModuleInfo.hpp: Module version information and build details
- * - ModelAliases.hpp: Backward compatibility type aliases
  * 
  * **atom/ directory** - Atomic-Level Data Structures
  * - AtomMain.hpp: Complete Atom class with PDB format support and utilities
@@ -39,7 +37,7 @@
  * 
  * **topology/ directory** - Force Field and Topology
  * - TopologyMain.hpp: Topology data structures (bonds, angles, dihedrals)
- * - ForceFieldMain.hpp: Force field parameters (LJ, bonded, NBFIX)
+ * - TopologyForceField.hpp: Force field parameters (LJ, bonded, NBFIX)
  * - Features: CHARMM force field support, parameter validation, topology building
  * 
  * **montecarlo/ directory** - Monte Carlo Simulation States
@@ -56,8 +54,7 @@
  * - Features: Multi-chain structures, structural validation, format conversion
  * 
  * **utils/ directory** - Factory Functions and Testing
- * - ModelFactory.hpp: Factory functions for creating standard molecular structures
- * - ModuleUtils.hpp: Module-level utilities and validation functions
+ * - UtilsFactory.hpp: Factory functions, version info, type aliases, and utilities
  * - Features: Water molecule creation, protein residue templates, system validation
  * 
  * **Usage Examples:**
@@ -86,8 +83,9 @@
  * std::cout << "Total atoms: " << stats.num_atoms << std::endl;
  * std::cout << "Total mass: " << stats.total_mass << " amu" << std::endl;
  * 
- * // 5. Module information and validation
+ * // 5. Module information and validation (following system pattern)
  * std::cout << get_module_info() << std::endl;
+ * std::cout << "Version: " << getModelVersion() << std::endl;
  * if (utils::validate_module()) {
  *     std::cout << "Module validation passed!" << std::endl;
  * }
@@ -103,14 +101,13 @@
  * - Each component is independently testable and maintainable
  * - AI-friendly: focused responsibilities with comprehensive documentation
  * - Performance-oriented: efficient data structures with minimal overhead
+ * - Follows system module naming patterns for consistency
  */
 
 // === Core Interfaces and Utilities ===
 #include "common/ModelInterface.hpp"
 #include "common/ModelConstants.hpp"
 #include "common/ModelUtils.hpp"
-#include "common/ModuleInfo.hpp"
-#include "common/ModelAliases.hpp"
 
 // === Data Structure Layers ===
 #include "atom/AtomMain.hpp"
@@ -120,7 +117,7 @@
 
 // === Topology and Force Fields ===
 #include "topology/TopologyMain.hpp"
-#include "topology/ForceFieldMain.hpp"
+#include "topology/TopologyForceField.hpp"
 
 // === Monte Carlo Simulation ===
 #include "montecarlo/MCMain.hpp"
@@ -128,18 +125,18 @@
 // === Parameters and Configuration ===
 #include "param/ParamMain.hpp"
 
-// === Utilities and Factory Functions ===
-#include "utils/ModelFactory.hpp"
-#include "utils/ModuleUtils.hpp"
+// === Factory, Utilities, Version Info, and Type Aliases ===
+#include "utils/UtilsFactory.hpp"
 
 namespace pygcmc {
 namespace model {
 
-// All functionality is now provided through the included headers:
-// - Module information: info namespace (from common/ModuleInfo.hpp)
-// - Type aliases: Direct using declarations (from common/ModelAliases.hpp)
-// - Validation: utils::validate_module() (from utils/ModuleUtils.hpp)
-// - Version info: get_module_info() (from common/ModuleInfo.hpp)
+// All functionality is now provided through UtilsFactory.hpp (following system pattern):
+// - Module information: info namespace and get_module_info()
+// - Version info: getModelVersion() (exported to parent namespace)
+// - Type aliases: Direct using declarations (Atom, Residue, Molecular, etc.)
+// - Validation: utils::validate_module() and related functions
+// - Factory functions: factory::create_water_molecule(), etc.
 
 } // namespace model
 } // namespace pygcmc

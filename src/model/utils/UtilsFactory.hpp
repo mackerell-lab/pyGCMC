@@ -172,7 +172,133 @@ inline bool run_all_tests() {
 }
 
 } // namespace factory
-} // namespace model  
+
+/**
+ * @brief Module Information and Version (following system pattern)
+ */
+namespace info {
+    constexpr const char* VERSION = "2.0.0";
+    constexpr const char* BUILD_DATE = __DATE__;
+    constexpr const char* DESCRIPTION = "Molecular modeling data structures for GCMC simulation";
+    
+    constexpr int TOTAL_COMPONENTS = 8;
+    constexpr const char* COMPONENTS[] = {
+        "common", "atom", "residue", "molecule", 
+        "topology", "montecarlo", "param", "structure"
+    };
+}
+
+/**
+ * @brief Get model module version (following system pattern)
+ */
+inline std::string getModelVersion() {
+    return info::VERSION;
+}
+
+/**
+ * @brief Get module version and build information
+ */
+inline std::string get_module_info() {
+    std::stringstream ss;
+    ss << "Model Module v" << info::VERSION << "\n";
+    ss << "Build Date: " << info::BUILD_DATE << "\n";
+    ss << "Components: " << info::TOTAL_COMPONENTS << "\n";
+    ss << "Description: " << info::DESCRIPTION << "\n";
+    return ss.str();
+}
+
+/**
+ * @brief Module validation and testing utilities
+ */
+namespace utils {
+
+/**
+ * @brief Run comprehensive module validation tests
+ */
+inline bool validate_module() {
+    return factory::run_all_tests();
+}
+
+/**
+ * @brief Run all factory function tests
+ */
+inline bool test_all_factories() {
+    return factory::test_factory_functions();
+}
+
+/**
+ * @brief Run basic component tests
+ */
+inline bool test_basic_components() {
+    return factory::run_basic_tests();
+}
+
+/**
+ * @brief Check if all module components are available
+ */
+inline bool check_module_integrity() {
+    try {
+        // Test that all major components can be instantiated
+        bool factory_ok = factory::run_basic_tests();
+        bool compatibility_ok = factory::test_factory_functions();
+        
+        return factory_ok && compatibility_ok;
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
+} // namespace utils
+
+/**
+ * @brief Backward Compatibility Type Aliases (following system pattern)
+ * 
+ * These aliases maintain 100% compatibility with existing code that was using
+ * individual header files before the modular refactoring.
+ */
+
+// === Primary Data Structure Aliases ===
+using Atom = atom::Atom;
+using Residue = residue::Residue;
+using Molecular = molecule::Molecular;
+using Structure = structure::Structure;
+
+// === Topology System Aliases ===
+using Topology = topology::Topology;
+using ForceField = topology::ForceField;
+
+// === Monte Carlo System Aliases ===
+using MCState = montecarlo::MCState;
+
+// === Main Parameter Class with Nested Compatibility ===
+class Param : public param::Param {
+public:
+    // Nested type aliases for Python binding compatibility
+    using BasicInfo = param::BasicInfo;
+    using SpaceInfo = param::SpaceInfo;
+    using MCInfo = param::MCParams;
+    using EnergyInfo = param::EnergyInfo;
+    using FragmentInfo = param::FragmentInfo;
+    using BiasInfo = param::BiasInfo;
+    using FileInfo = param::FileInfo;
+    
+    // Inherit all constructors and functionality
+    using param::Param::Param;
+};
+
+} // namespace model
+
+// Export to parent namespace for convenience (following system pattern)
+using model::getModelVersion;
+
 } // namespace pygcmc
+
+/**
+ * @brief Module Version Macros
+ */
+#define PYGCMC_MODEL_VERSION_MAJOR 2
+#define PYGCMC_MODEL_VERSION_MINOR 0
+#define PYGCMC_MODEL_VERSION_PATCH 0
+#define PYGCMC_MODEL_VERSION_STRING "2.0.0"
 
 #endif // PYGCMC_MODEL_UTILS_FACTORY_HPP 

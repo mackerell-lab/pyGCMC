@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef PYGCMC_MODEL_TOPOLOGY_FORCEFIELD_MAIN_HPP
-#define PYGCMC_MODEL_TOPOLOGY_FORCEFIELD_MAIN_HPP
+#ifndef PYGCMC_MODEL_TOPOLOGY_FORCEFIELD_HPP
+#define PYGCMC_MODEL_TOPOLOGY_FORCEFIELD_HPP
 
 #include "../common/ModelInterface.hpp"
 #include "../common/ModelConstants.hpp"
@@ -456,4 +456,4 @@ using NBFIXParams = topology::NBFIXParams;
 } // namespace model
 } // namespace pygcmc
 
-#endif // PYGCMC_MODEL_TOPOLOGY_FORCEFIELD_MAIN_HPP 
+#endif // PYGCMC_MODEL_TOPOLOGY_FORCEFIELD_HPP 
