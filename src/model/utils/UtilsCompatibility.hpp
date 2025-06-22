@@ -12,6 +12,7 @@
 #include "../molecule/MolecularMain.hpp"
 #include "../structure/StructureMain.hpp"
 #include "../topology/TopologyMain.hpp"
+#include "../forcefield/ForceFieldModule.hpp"
 #include "../montecarlo/MCMain.hpp"
 #include "../param/ParamMain.hpp"
 
@@ -33,7 +34,18 @@ using Structure = structure::Structure;
 
 // === Topology System Aliases ===
 using Topology = topology::Topology;
-using ForceField = topology::ForceField;
+
+// === Force Field System Aliases ===
+using ForceField = forcefield::ForceField;
+using NonbondedParams = forcefield::NonbondedParams;
+using LJParams = forcefield::LJParams;
+using BondParams = forcefield::BondParams;
+using AngleParams = forcefield::AngleParams;
+using DihedralParams = forcefield::DihedralParams;
+using ImproperParams = forcefield::ImproperParams;
+using NBFIXParams = forcefield::NBFIXParams;
+using ForceFieldStats = forcefield::ForceFieldStats;
+using CompletenessResult = forcefield::CompletenessResult;
 
 // === Monte Carlo System Aliases ===
 using MCState = montecarlo::MCState;

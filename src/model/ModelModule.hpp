@@ -117,7 +117,7 @@
 
 // === Topology and Force Fields ===
 #include "topology/TopologyMain.hpp"
-#include "topology/TopologyForceField.hpp"
+#include "forcefield/ForceFieldModule.hpp"
 
 // === Monte Carlo Simulation ===
 #include "montecarlo/MCMain.hpp"
