@@ -7,7 +7,7 @@
 #include "../atom/AtomMain.hpp"
 #include "../residue/ResidueMain.hpp"
 #include "../topology/TopologyMain.hpp"
-#include "../structure.hpp"
+#include "../structure/StructureMain.hpp"
 #include <vector>
 #include <memory>
 #include <map>
@@ -37,8 +37,8 @@ struct StandardCmap {
  */
 struct StructureInfo {
     // Use original Structure types directly for full compatibility
-    using TerminalInfo = pygcmc::model::Structure::TerminalInfo;
-    using SecondaryStructure = pygcmc::model::Structure::SecondaryStructure;
+    using TerminalInfo = pygcmc::model::structure::Structure::TerminalInfo;
+    using SecondaryStructure = pygcmc::model::structure::Structure::SecondaryStructure;
     
     std::vector<TerminalInfo> terminals;
     std::map<std::string, std::vector<SecondaryStructure>> helices;

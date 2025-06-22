@@ -14,10 +14,15 @@
 #include <optional>
 #include <memory>
 #include <set>
+#include <cmath>
+#include <sstream>
 
 namespace pygcmc {
 namespace model {
 namespace topology {
+
+// Forward declarations
+class ForceField;
 
 /**
  * @brief Parameters for non-bonded interactions
@@ -38,7 +43,48 @@ struct NonbondedParams {
 };
 
 /**
+ * @brief Detailed explanation of nonbonded parameters in CHARMM force field
+ * 
+ * The nonbonded energy function in CHARMM consists of Lennard-Jones (LJ) and electrostatic terms:
+ * 
+ * V(Lennard-Jones) = Eps,i,j[(Rmin,i,j/ri,j)**12 - 2(Rmin,i,j/ri,j)**6]
+ * where:
+ * - epsilon (Eps,i,j) = sqrt(eps,i * eps,j) [kcal/mole]
+ * - Rmin,i,j = Rmin/2,i + Rmin/2,j [Angstroms]
+ * - ri,j is the distance between atoms i and j
+ * 
+ * Parameters:
+ * @param nbxmod   Nonbonded exclusion model (5 = use switching functions)
+ * @param cdiel    Use constant dielectric (true/false)
+ * @param fshift   Use force shifting (true/false)
+ * @param vatom    Use atom-based potential (true/false)
+ * @param vdistance Use distance-based potential (true/false)
+ * @param vfswitch Use force switching (true/false)
+ * @param cutnb    Nonbonded cutoff distance [Angstroms]
+ * @param ctofnb   Distance at which switching function takes effect for nonbonded [Angstroms]
+ * @param ctonnb   Distance at which switching function takes effect for 1-4 interactions [Angstroms]
+ * @param eps      Dielectric constant
+ * @param e14fac   Scaling factor for 1-4 interactions
+ * @param wmin     Minimum weighting in switching function
+ * 
+ * Units:
+ * - Distances in Angstroms
+ * - Energies in kcal/mole
+ * - Dielectric constant is dimensionless
+ */
+
+/**
  * @brief Parameters for Lennard-Jones interactions
+ * 
+ * The Lennard-Jones potential is defined as:
+ * V(Lennard-Jones) = Eps,i,j[(Rmin,i,j/ri,j)**12 - 2(Rmin,i,j/ri,j)**6]
+ * where:
+ * - Eps,i,j = sqrt(eps,i * eps,j)
+ * - Rmin,i,j = Rmin/2,i + Rmin/2,j
+ * 
+ * Units:
+ * - epsilon: kcal/mole
+ * - rmin_half: Angstroms (Rmin/2: HALF of the distance at minimum energy)
  */
 struct LJParams {
     double epsilon = 0.0;     ///< Well depth (kcal/mole)
@@ -82,6 +128,13 @@ struct ImproperParams {
 
 /**
  * @brief Parameters for NBFIX (specific nonbonded interaction parameters)
+ * 
+ * In CHARMM, NBFIX allows specification of specific Lennard-Jones parameters
+ * for particular pairs of atom types, overriding the standard combining rules.
+ * 
+ * Units:
+ * - epsilon: kcal/mole
+ * - rmin: Angstroms (full Rmin, not Rmin/2)
  */
 struct NBFIXParams {
     double epsilon = 0.0;     ///< Well depth (kcal/mole)
@@ -101,10 +154,10 @@ public:
     bool is_valid() const override {
         // Basic sanity checks
         for (const auto& pair : atom_masses_) {
-            if (pair.second <= 0.0) return false;
+            if (pair.second <= 0.0 || !std::isfinite(pair.second)) return false;
         }
         for (const auto& pair : lj_params_) {
-            if (pair.second.epsilon < 0.0 || pair.second.rmin_half < 0.0) return false;
+            if (!std::isfinite(pair.second.epsilon) || !std::isfinite(pair.second.rmin_half)) return false;
         }
         return true;
     }
@@ -121,8 +174,8 @@ public:
      * @brief Add Lennard-Jones parameters for an atom type
      */
     void add_lj_params(const std::string& type, double epsilon, double rmin_half) {
-        if (epsilon < 0.0 || rmin_half < 0.0) {
-            throw std::invalid_argument("LJ parameters must be non-negative");
+        if (!std::isfinite(epsilon) || !std::isfinite(rmin_half)) {
+            throw std::invalid_argument("LJ parameters must be finite");
         }
         LJParams params{epsilon, rmin_half};
         lj_params_[type] = params;
@@ -133,8 +186,8 @@ public:
      */
     void add_nbfix(const std::string& type1, const std::string& type2, 
                   double epsilon, double rmin) {
-        if (epsilon < 0.0 || rmin < 0.0) {
-            throw std::invalid_argument("NBFIX parameters must be non-negative");
+        if (!std::isfinite(epsilon) || !std::isfinite(rmin)) {
+            throw std::invalid_argument("NBFIX parameters must be finite");
         }
         auto key = makeTypePair(type1, type2);
         NBFIXParams params{epsilon, rmin};
@@ -142,8 +195,8 @@ public:
     }
 
     void add_bond_params(const std::string& type1, const std::string& type2, double kb, double b0) {
-        if (kb < 0.0 || b0 < 0.0) {
-            throw std::invalid_argument("Bond parameters must be non-negative");
+        if (!std::isfinite(kb) || !std::isfinite(b0)) {
+            throw std::invalid_argument("Bond parameters must be finite");
         }
         auto key = makeTypePair(type1, type2);
         BondParams params{kb, b0};
@@ -152,8 +205,8 @@ public:
 
     void add_angle_params(const std::string& type1, const std::string& type2, const std::string& type3,
                          double ktheta, double theta0, double kub = 0.0, double s0 = 0.0) {
-        if (ktheta < 0.0 || theta0 < 0.0 || kub < 0.0 || s0 < 0.0) {
-            throw std::invalid_argument("Angle parameters must be non-negative");
+        if (!std::isfinite(ktheta) || !std::isfinite(theta0) || !std::isfinite(kub) || !std::isfinite(s0)) {
+            throw std::invalid_argument("Angle parameters must be finite");
         }
         auto key = makeTypeTriple(type1, type2, type3);
         AngleParams params{ktheta, theta0, kub, s0};
@@ -163,8 +216,8 @@ public:
     void add_dihedral_params(const std::string& type1, const std::string& type2,
                             const std::string& type3, const std::string& type4,
                             double kchi, int n, double delta) {
-        if (kchi < 0.0) {
-            throw std::invalid_argument("Dihedral force constant must be non-negative");
+        if (!std::isfinite(kchi) || !std::isfinite(delta)) {
+            throw std::invalid_argument("Dihedral parameters must be finite");
         }
         auto key = makeTypeQuad(type1, type2, type3, type4);
         DihedralParams params{kchi, n, delta};
@@ -174,8 +227,8 @@ public:
     void add_improper_params(const std::string& type1, const std::string& type2,
                             const std::string& type3, const std::string& type4,
                             double kpsi, double psi0) {
-        if (kpsi < 0.0) {
-            throw std::invalid_argument("Improper force constant must be non-negative");
+        if (!std::isfinite(kpsi) || !std::isfinite(psi0)) {
+            throw std::invalid_argument("Improper parameters must be finite");
         }
         auto key = makeTypeQuad(type1, type2, type3, type4);
         ImproperParams params{kpsi, psi0};
