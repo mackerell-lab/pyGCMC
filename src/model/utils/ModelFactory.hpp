@@ -10,21 +10,28 @@
 #include <string>
 #include <sstream>
 
-namespace utils {
+namespace pygcmc {
+namespace model {
+namespace factory {
+
+// Using declarations for cleaner code
+using AtomPtr = std::shared_ptr<atom::Atom>;
+using ResiduePtr = std::shared_ptr<residue::Residue>;
+using MolecularPtr = std::shared_ptr<molecule::Molecular>;
 
 /**
  * @brief Create a water molecule
  */
-inline std::shared_ptr<pygcmc::model::residue::Residue> create_water_molecule(int residue_id, const std::string& segment = "SOLV") {
-    auto water = std::make_shared<pygcmc::model::residue::Residue>("SOL", residue_id, segment);
+inline ResiduePtr create_water_molecule(int residue_id, const std::string& segment = "SOLV") {
+    auto water = std::make_shared<residue::Residue>("SOL", residue_id, segment);
     
     // Add atoms: O, H1, H2 with correct constructor parameters
     // AtomCore(int bynu, type, resname, ires, segid, iseg, x, y, z, wmain, mass, charge, chem, hetatm)
-    auto oxygen = std::make_shared<pygcmc::model::atom::Atom>(1, "OT", "SOL", residue_id, segment, 0,
+    auto oxygen = std::make_shared<atom::Atom>(1, "OT", "SOL", residue_id, segment, 0,
                                                0.0, 0.0, 0.0, 1.0, 15.999, -0.834, "O", false);
-    auto h1 = std::make_shared<pygcmc::model::atom::Atom>(2, "HT", "SOL", residue_id, segment, 0,
+    auto h1 = std::make_shared<atom::Atom>(2, "HT", "SOL", residue_id, segment, 0,
                                            0.757, 0.586, 0.0, 1.0, 1.008, 0.417, "H", false);
-    auto h2 = std::make_shared<pygcmc::model::atom::Atom>(3, "HT", "SOL", residue_id, segment, 0,
+    auto h2 = std::make_shared<atom::Atom>(3, "HT", "SOL", residue_id, segment, 0,
                                            -0.757, 0.586, 0.0, 1.0, 1.008, 0.417, "H", false);
     
     // Add atoms to residue
@@ -38,19 +45,19 @@ inline std::shared_ptr<pygcmc::model::residue::Residue> create_water_molecule(in
 /**
  * @brief Create a simple protein residue (Alanine)
  */
-inline std::shared_ptr<pygcmc::model::residue::Residue> create_alanine_residue(int residue_id, const std::string& segment = "PROT") {
-    auto ala = std::make_shared<pygcmc::model::residue::Residue>("ALA", residue_id, segment);
+inline ResiduePtr create_alanine_residue(int residue_id, const std::string& segment = "PROT") {
+    auto ala = std::make_shared<residue::Residue>("ALA", residue_id, segment);
     
     // Add backbone atoms with correct constructor parameters
-    auto n = std::make_shared<pygcmc::model::atom::Atom>(1, "NH1", "ALA", residue_id, segment, 0,
+    auto n = std::make_shared<atom::Atom>(1, "NH1", "ALA", residue_id, segment, 0,
                                           0.0, 0.0, 0.0, 1.0, 14.007, -0.47, "N", false);
-    auto ca = std::make_shared<pygcmc::model::atom::Atom>(2, "CT1", "ALA", residue_id, segment, 0,
+    auto ca = std::make_shared<atom::Atom>(2, "CT1", "ALA", residue_id, segment, 0,
                                            1.458, 0.0, 0.0, 1.0, 12.01, 0.07, "C", false);
-    auto c = std::make_shared<pygcmc::model::atom::Atom>(3, "C", "ALA", residue_id, segment, 0,
+    auto c = std::make_shared<atom::Atom>(3, "C", "ALA", residue_id, segment, 0,
                                           2.009, 1.421, 0.0, 1.0, 12.01, 0.51, "C", false);
-    auto o = std::make_shared<pygcmc::model::atom::Atom>(4, "O", "ALA", residue_id, segment, 0,
+    auto o = std::make_shared<atom::Atom>(4, "O", "ALA", residue_id, segment, 0,
                                           1.239, 2.364, 0.0, 1.0, 15.999, -0.51, "O", false);
-    auto cb = std::make_shared<pygcmc::model::atom::Atom>(5, "CT3", "ALA", residue_id, segment, 0,
+    auto cb = std::make_shared<atom::Atom>(5, "CT3", "ALA", residue_id, segment, 0,
                                            2.196, -0.889, -1.07, 1.0, 12.01, -0.27, "C", false);
     
     // Add atoms to residue
@@ -66,7 +73,7 @@ inline std::shared_ptr<pygcmc::model::residue::Residue> create_alanine_residue(i
 /**
  * @brief Validate a complete molecular system
  */
-inline bool validate_molecular_system(const pygcmc::model::molecule::Molecular& system) {
+inline bool validate_molecular_system(const molecule::Molecular& system) {
     // Check basic validity
     if (!system.is_valid()) return false;
     
@@ -86,7 +93,7 @@ inline bool validate_molecular_system(const pygcmc::model::molecule::Molecular& 
 /**
  * @brief Get system statistics
  */
-inline std::string get_system_summary(const pygcmc::model::molecule::Molecular& system) {
+inline std::string get_system_summary(const molecule::Molecular& system) {
     auto stats = system.get_system_statistics();
     std::stringstream ss;
     ss << "System Summary:\n";
@@ -108,7 +115,7 @@ inline std::string get_system_summary(const pygcmc::model::molecule::Molecular& 
 inline bool run_basic_tests() {
     try {
         // Test atom creation
-        auto atom = std::make_shared<pygcmc::model::atom::Atom>(1, "CT1", "ALA", 1, "PROT", 0, 
+        auto atom = std::make_shared<atom::Atom>(1, "CT1", "ALA", 1, "PROT", 0, 
                                                   0.0, 0.0, 0.0, 1.0, 12.01, 0.07, "C", false);
         if (!atom->is_valid()) return false;
         
@@ -117,7 +124,7 @@ inline bool run_basic_tests() {
         if (!residue->is_valid()) return false;
         
         // Test molecular system
-        auto molecular = std::make_shared<pygcmc::model::molecule::Molecular>();
+        auto molecular = std::make_shared<molecule::Molecular>();
         molecular->add_residue(residue);
         if (!molecular->is_valid()) return false;
         
@@ -141,7 +148,7 @@ inline bool test_factory_functions() {
         if (!ala || !ala->is_valid()) return false;
         
         // Test molecular system validation
-        auto molecular = std::make_shared<pygcmc::model::molecule::Molecular>();
+        auto molecular = std::make_shared<molecule::Molecular>();
         molecular->add_residue(water);
         molecular->add_residue(ala);
         
@@ -164,6 +171,8 @@ inline bool run_all_tests() {
     return run_basic_tests() && test_factory_functions();
 }
 
-} // namespace utils
+} // namespace factory
+} // namespace model  
+} // namespace pygcmc
 
 #endif // PYGCMC_MODEL_UTILS_FACTORY_HPP 
