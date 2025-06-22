@@ -126,17 +126,21 @@
 #include "param/ParamMain.hpp"
 
 // === Factory, Utilities, Version Info, and Type Aliases ===
-#include "utils/UtilsFactory.hpp"
+#include "utils/UtilsMain.hpp"
 
 namespace pygcmc {
 namespace model {
 
-// All functionality is now provided through UtilsFactory.hpp (following system pattern):
+// All functionality is now provided through UtilsMain.hpp (following system pattern):
 // - Module information: info namespace and get_module_info()
 // - Version info: getModelVersion() (exported to parent namespace)
 // - Type aliases: Direct using declarations (Atom, Residue, Molecular, etc.)
 // - Validation: utils::validate_module() and related functions
 // - Factory functions: factory::create_water_molecule(), etc.
+
+// === Import all utilities and compatibility aliases ===
+// The type aliases (Atom, Residue, Molecular, Structure, etc.) are defined in UtilsCompatibility.hpp
+// and automatically available in the model namespace through UtilsMain.hpp inclusion
 
 } // namespace model
 } // namespace pygcmc
