@@ -17,6 +17,8 @@
  * - ModelInterface.hpp: Abstract interfaces (ICloneable, ISerializable, IValidatable)
  * - ModelConstants.hpp: Physical constants, unit conversions, and molecular data
  * - ModelUtils.hpp: Mathematical utilities, hashing, and validation helpers
+ * - ModuleInfo.hpp: Module version information and build details
+ * - ModelAliases.hpp: Backward compatibility type aliases
  * 
  * **atom/ directory** - Atomic-Level Data Structures
  * - AtomMain.hpp: Complete Atom class with PDB format support and utilities
@@ -55,6 +57,7 @@
  * 
  * **utils/ directory** - Factory Functions and Testing
  * - ModelFactory.hpp: Factory functions for creating standard molecular structures
+ * - ModuleUtils.hpp: Module-level utilities and validation functions
  * - Features: Water molecule creation, protein residue templates, system validation
  * 
  * **Usage Examples:**
@@ -82,6 +85,12 @@
  * auto stats = molecular->get_system_statistics();
  * std::cout << "Total atoms: " << stats.num_atoms << std::endl;
  * std::cout << "Total mass: " << stats.total_mass << " amu" << std::endl;
+ * 
+ * // 5. Module information and validation
+ * std::cout << get_module_info() << std::endl;
+ * if (utils::validate_module()) {
+ *     std::cout << "Module validation passed!" << std::endl;
+ * }
  * ```
  * 
  * **Backward Compatibility:**
@@ -100,7 +109,8 @@
 #include "common/ModelInterface.hpp"
 #include "common/ModelConstants.hpp"
 #include "common/ModelUtils.hpp"
-#include <sstream>
+#include "common/ModuleInfo.hpp"
+#include "common/ModelAliases.hpp"
 
 // === Data Structure Layers ===
 #include "atom/AtomMain.hpp"
@@ -120,89 +130,18 @@
 
 // === Utilities and Factory Functions ===
 #include "utils/ModelFactory.hpp"
+#include "utils/ModuleUtils.hpp"
 
 namespace pygcmc {
 namespace model {
 
-/**
- * @brief Module Information and Version
- */
-namespace info {
-    constexpr const char* VERSION = "2.0.0";
-    constexpr const char* BUILD_DATE = __DATE__;
-    constexpr const char* DESCRIPTION = "Molecular modeling data structures for GCMC simulation";
-    
-    constexpr int TOTAL_COMPONENTS = 8;
-    constexpr const char* COMPONENTS[] = {
-        "common", "atom", "residue", "molecule", 
-        "topology", "montecarlo", "param", "structure"
-    };
-}
-
-/**
- * @brief Backward Compatibility Type Aliases
- * 
- * These aliases maintain 100% compatibility with existing code that was using
- * individual header files before the modular refactoring.
- */
-
-// === Primary Data Structure Aliases ===
-using Atom = atom::Atom;
-using Residue = residue::Residue;
-using Molecular = molecule::Molecular;
-using Structure = structure::Structure;
-
-// === Topology System Aliases ===
-using Topology = topology::Topology;
-using ForceField = topology::ForceField;
-
-// === Monte Carlo System Aliases ===
-using MCState = montecarlo::MCState;
-
-// === Main Parameter Class with Nested Compatibility ===
-class Param : public param::Param {
-public:
-    // Nested type aliases for Python binding compatibility
-    using BasicInfo = param::BasicInfo;
-    using SpaceInfo = param::SpaceInfo;
-    using MCInfo = param::MCParams;
-    using EnergyInfo = param::EnergyInfo;
-    using FragmentInfo = param::FragmentInfo;
-    using BiasInfo = param::BiasInfo;
-    using FileInfo = param::FileInfo;
-    
-    // Inherit all constructors and functionality
-    using param::Param::Param;
-};
-
-/**
- * @brief Run comprehensive module validation tests
- */
-inline bool validate_module() {
-    return factory::run_all_tests();
-}
-
-/**
- * @brief Get module version and build information
- */
-inline std::string get_module_info() {
-    std::stringstream ss;
-    ss << "Model Module v" << info::VERSION << "\n";
-    ss << "Build Date: " << info::BUILD_DATE << "\n";
-    ss << "Components: " << info::TOTAL_COMPONENTS << "\n";
-    ss << "Description: " << info::DESCRIPTION << "\n";
-    return ss.str();
-}
+// All functionality is now provided through the included headers:
+// - Module information: info namespace (from common/ModuleInfo.hpp)
+// - Type aliases: Direct using declarations (from common/ModelAliases.hpp)
+// - Validation: utils::validate_module() (from utils/ModuleUtils.hpp)
+// - Version info: get_module_info() (from common/ModuleInfo.hpp)
 
 } // namespace model
 } // namespace pygcmc
-
-/**
- * @brief Module Version Macros
- */
-#define PYGCMC_MODEL_VERSION_MAJOR 2
-#define PYGCMC_MODEL_VERSION_MINOR 0
-#define PYGCMC_MODEL_VERSION_PATCH 0
-#define PYGCMC_MODEL_VERSION_STRING "2.0.0"
 
 #endif // PYGCMC_MODEL_MODULE_HPP 
