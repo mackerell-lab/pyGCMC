@@ -12,7 +12,7 @@
 #include "../molecule/MolecularMain.hpp"
 #include "../structure/StructureMain.hpp"
 #include "../topology/TopologyMain.hpp"
-#include "../forcefield/ForceFieldModule.hpp"
+#include "../forcefield/ForceField.hpp"
 #include "../montecarlo/MCMain.hpp"
 #include "../param/ParamMain.hpp"
 

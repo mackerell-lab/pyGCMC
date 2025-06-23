@@ -1,14 +1,13 @@
 #pragma once
 
-#ifndef PYGCMC_MODEL_FORCEFIELD_PARAMS_HPP
-#define PYGCMC_MODEL_FORCEFIELD_PARAMS_HPP
+#ifndef PYGCMC_MODEL_FORCEFIELD_TYPES_HPP
+#define PYGCMC_MODEL_FORCEFIELD_TYPES_HPP
 
 #include <string>
 #include <map>
 #include <vector>
 #include <tuple>
 #include <set>
-#include "../common/ModelInterface.hpp"
 
 namespace pygcmc {
 namespace model {
@@ -78,7 +77,6 @@ struct LJParams {
     double epsilon = 0.0;     ///< Well depth (kcal/mole)
     double rmin_half = 0.0;   ///< Rmin/2: HALF of the distance at minimum energy (Angstroms)
     
-    // Constructors
     LJParams() = default;
     LJParams(double eps, double rmin_h) : epsilon(eps), rmin_half(rmin_h) {}
 };
@@ -90,7 +88,6 @@ struct BondParams {
     double kb = 0.0;    ///< Force constant
     double b0 = 0.0;    ///< Equilibrium length
     
-    // Constructors
     BondParams() = default;
     BondParams(double kb_val, double b0_val) : kb(kb_val), b0(b0_val) {}
 };
@@ -104,7 +101,6 @@ struct AngleParams {
     double kub = 0.0;     ///< Urey-Bradley force constant
     double s0 = 0.0;      ///< Urey-Bradley equilibrium distance
     
-    // Constructors
     AngleParams() = default;
     AngleParams(double ktheta_val, double theta0_val, double kub_val = 0.0, double s0_val = 0.0) 
         : ktheta(ktheta_val), theta0(theta0_val), kub(kub_val), s0(s0_val) {}
@@ -118,7 +114,6 @@ struct DihedralParams {
     int n = 1;           ///< Multiplicity
     double delta = 0.0;  ///< Phase shift
     
-    // Constructors
     DihedralParams() = default;
     DihedralParams(double kchi_val, int n_val, double delta_val) 
         : kchi(kchi_val), n(n_val), delta(delta_val) {}
@@ -131,7 +126,6 @@ struct ImproperParams {
     double kpsi = 0.0;   ///< Force constant
     double psi0 = 0.0;   ///< Equilibrium angle
     
-    // Constructors
     ImproperParams() = default;
     ImproperParams(double kpsi_val, double psi0_val) : kpsi(kpsi_val), psi0(psi0_val) {}
 };
@@ -150,7 +144,6 @@ struct NBFIXParams {
     double epsilon = 0.0;     ///< Well depth (kcal/mole)
     double rmin = 0.0;        ///< Distance at minimum energy (Angstroms)
     
-    // Constructors
     NBFIXParams() = default;
     NBFIXParams(double eps, double rmin_val) : epsilon(eps), rmin(rmin_val) {}
 };
@@ -179,57 +172,6 @@ struct CompletenessResult {
 };
 
 /**
- * @brief Force field storage container
- * 
- * This class holds all force field parameters in organized containers.
- * It provides the core data storage for the force field system.
- */
-class ForceFieldStorage {
-public:
-    ForceFieldStorage() = default;
-    ~ForceFieldStorage() = default;
-
-    // Parameter storage containers
-    std::map<std::string, double> atom_masses;
-    std::map<std::string, LJParams> lj_params;
-    std::map<std::pair<std::string, std::string>, NBFIXParams> nbfix;
-    std::map<std::pair<std::string, std::string>, BondParams> bond_params;
-    std::map<std::tuple<std::string, std::string, std::string>, AngleParams> angle_params;
-    std::map<std::tuple<std::string, std::string, std::string, std::string>, std::vector<DihedralParams>> dihedral_params;
-    std::map<std::tuple<std::string, std::string, std::string, std::string>, ImproperParams> improper_params;
-    NonbondedParams nonbonded_params;
-
-    /**
-     * @brief Clear all stored parameters
-     */
-    void clear() {
-        atom_masses.clear();
-        lj_params.clear();
-        nbfix.clear();
-        bond_params.clear();
-        angle_params.clear();
-        dihedral_params.clear();
-        improper_params.clear();
-        nonbonded_params = NonbondedParams{};
-    }
-
-    /**
-     * @brief Get statistics about stored parameters
-     */
-    ForceFieldStats get_statistics() const {
-        ForceFieldStats stats;
-        stats.num_atom_types = atom_masses.size();
-        stats.num_lj_params = lj_params.size();
-        stats.num_nbfix = nbfix.size();
-        stats.num_bond_types = bond_params.size();
-        stats.num_angle_types = angle_params.size();
-        stats.num_dihedral_types = dihedral_params.size();
-        stats.num_improper_types = improper_params.size();
-        return stats;
-    }
-};
-
-/**
  * @brief Utility class for creating parameter keys
  */
 class ParamKeyUtils {
@@ -238,8 +180,8 @@ public:
      * @brief Create a parameter key for pair interactions
      * Orders the types alphabetically for consistent lookup
      */
-    static std::pair<std::string, std::string> make_pair(const std::string& type1,
-                                                         const std::string& type2) {
+    static std::pair<std::string, std::string> makeTypePair(const std::string& type1,
+                                                           const std::string& type2) {
         return type1 < type2 ? std::make_pair(type1, type2) : std::make_pair(type2, type1);
     }
 
@@ -249,7 +191,7 @@ public:
      * 1. The middle atom (type2) must stay in the middle
      * 2. Store parameters in the order they appear in the parameter file
      */
-    static std::tuple<std::string, std::string, std::string> make_triple(
+    static std::tuple<std::string, std::string, std::string> makeTypeTriple(
         const std::string& type1, const std::string& type2, const std::string& type3) {
         return std::make_tuple(type1, type2, type3);
     }
@@ -257,7 +199,7 @@ public:
     /**
      * @brief Create a parameter key for dihedral/improper interactions
      */
-    static std::tuple<std::string, std::string, std::string, std::string> make_quad(
+    static std::tuple<std::string, std::string, std::string, std::string> makeTypeQuad(
         const std::string& type1, const std::string& type2,
         const std::string& type3, const std::string& type4) {
         return std::make_tuple(type1, type2, type3, type4);
@@ -268,4 +210,4 @@ public:
 } // namespace model
 } // namespace pygcmc
 
-#endif // PYGCMC_MODEL_FORCEFIELD_PARAMS_HPP 
+#endif // PYGCMC_MODEL_FORCEFIELD_TYPES_HPP 
