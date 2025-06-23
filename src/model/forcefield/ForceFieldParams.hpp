@@ -77,6 +77,10 @@ struct NonbondedParams {
 struct LJParams {
     double epsilon = 0.0;     ///< Well depth (kcal/mole)
     double rmin_half = 0.0;   ///< Rmin/2: HALF of the distance at minimum energy (Angstroms)
+    
+    // Constructors
+    LJParams() = default;
+    LJParams(double eps, double rmin_h) : epsilon(eps), rmin_half(rmin_h) {}
 };
 
 /**
@@ -85,6 +89,10 @@ struct LJParams {
 struct BondParams {
     double kb = 0.0;    ///< Force constant
     double b0 = 0.0;    ///< Equilibrium length
+    
+    // Constructors
+    BondParams() = default;
+    BondParams(double kb_val, double b0_val) : kb(kb_val), b0(b0_val) {}
 };
 
 /**
@@ -95,6 +103,11 @@ struct AngleParams {
     double theta0 = 0.0;  ///< Equilibrium angle
     double kub = 0.0;     ///< Urey-Bradley force constant
     double s0 = 0.0;      ///< Urey-Bradley equilibrium distance
+    
+    // Constructors
+    AngleParams() = default;
+    AngleParams(double ktheta_val, double theta0_val, double kub_val = 0.0, double s0_val = 0.0) 
+        : ktheta(ktheta_val), theta0(theta0_val), kub(kub_val), s0(s0_val) {}
 };
 
 /**
@@ -104,6 +117,11 @@ struct DihedralParams {
     double kchi = 0.0;   ///< Force constant
     int n = 1;           ///< Multiplicity
     double delta = 0.0;  ///< Phase shift
+    
+    // Constructors
+    DihedralParams() = default;
+    DihedralParams(double kchi_val, int n_val, double delta_val) 
+        : kchi(kchi_val), n(n_val), delta(delta_val) {}
 };
 
 /**
@@ -112,6 +130,10 @@ struct DihedralParams {
 struct ImproperParams {
     double kpsi = 0.0;   ///< Force constant
     double psi0 = 0.0;   ///< Equilibrium angle
+    
+    // Constructors
+    ImproperParams() = default;
+    ImproperParams(double kpsi_val, double psi0_val) : kpsi(kpsi_val), psi0(psi0_val) {}
 };
 
 /**
@@ -127,6 +149,10 @@ struct ImproperParams {
 struct NBFIXParams {
     double epsilon = 0.0;     ///< Well depth (kcal/mole)
     double rmin = 0.0;        ///< Distance at minimum energy (Angstroms)
+    
+    // Constructors
+    NBFIXParams() = default;
+    NBFIXParams(double eps, double rmin_val) : epsilon(eps), rmin(rmin_val) {}
 };
 
 /**

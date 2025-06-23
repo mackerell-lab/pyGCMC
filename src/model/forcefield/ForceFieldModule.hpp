@@ -123,6 +123,9 @@
 // === Core Components ===
 #include "ForceFieldParams.hpp"
 #include "ForceFieldInterface.hpp"
+#include "ForceFieldParameterAdder.hpp"
+#include "ForceFieldParameterRetriever.hpp"
+#include "ForceFieldStorageOptimized.hpp"
 #include "ForceFieldManager.hpp"
 #include "ForceFieldOperations.hpp"
 #include "ForceFieldAnalysis.hpp"
