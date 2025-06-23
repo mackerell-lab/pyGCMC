@@ -4,6 +4,7 @@
 #define PYGCMC_MODEL_TOPOLOGY_BONDS_HPP
 
 #include "TopologyCore.hpp"
+#include "TopologyValidationMixin.hpp"
 #include <stdexcept>
 #include <algorithm>
 
@@ -14,14 +15,18 @@ namespace topology {
 /**
  * @brief Bond, angle, and dihedral management operations
  */
-class TopologyBondManager {
+class TopologyBondManager : public ValidationMixin {
 public:
-    TopologyBondManager(TopologyStorage& storage) : storage_(storage) {}
+    TopologyBondManager(TopologyStorage& storage) : ValidationMixin(storage), storage_(storage) {}
 
     /**
      * @brief Add a bond between two atoms
      */
     void add_bond(int atom1, int atom2, double length = 0.0, double force_constant = 0.0, int function_type = 1) {
+        if (!are_valid_bond_atoms(atom1, atom2)) {
+            throw std::invalid_argument("Invalid atom indices for bond");
+        }
+        
         TopologyBond bond;
         bond.atom1 = atom1;
         bond.atom2 = atom2;
@@ -35,6 +40,10 @@ public:
      * @brief Add an angle between three atoms
      */
     void add_angle(int atom1, int atom2, int atom3, double angle = 0.0, double force_constant = 0.0, int function_type = 1) {
+        if (!are_valid_angle_atoms(atom1, atom2, atom3)) {
+            throw std::invalid_argument("Invalid atom indices for angle");
+        }
+        
         TopologyAngle ang;
         ang.atom1 = atom1;
         ang.atom2 = atom2;
@@ -52,6 +61,10 @@ public:
      */
     void add_angle_with_ub(int atom1, int atom2, int atom3, double angle = 0.0, double force_constant = 0.0, 
                           double ub_length = 0.0, double ub_constant = 0.0, int function_type = 1) {
+        if (!are_valid_angle_atoms(atom1, atom2, atom3)) {
+            throw std::invalid_argument("Invalid atom indices for angle");
+        }
+        
         TopologyAngle ang;
         ang.atom1 = atom1;
         ang.atom2 = atom2;
@@ -70,6 +83,10 @@ public:
      */
     void add_dihedral(int atom1, int atom2, int atom3, int atom4, int multiplicity = 1,
                      double angle = 0.0, double force_constant = 0.0, bool improper = false, int function_type = 1) {
+        if (!are_valid_dihedral_atoms(atom1, atom2, atom3, atom4)) {
+            throw std::invalid_argument("Invalid atom indices for dihedral");
+        }
+        
         TopologyDihedral dihedral;
         dihedral.atom1 = atom1;
         dihedral.atom2 = atom2;
@@ -95,6 +112,10 @@ public:
      * @brief Add a hydrogen bond donor
      */
     void add_donor(int donor, int hydrogen) {
+        if (!are_valid_bond_atoms(donor, hydrogen)) {
+            throw std::invalid_argument("Invalid atom indices for donor");
+        }
+        
         TopologyDonor d;
         d.donor_atom = donor;
         d.hydrogen_atom = hydrogen;
@@ -105,6 +126,10 @@ public:
      * @brief Add a hydrogen bond acceptor
      */
     void add_acceptor(int acceptor) {
+        if (!is_valid_atom(acceptor)) {
+            throw std::invalid_argument("Invalid atom index for acceptor");
+        }
+        
         TopologyAcceptor a;
         a.acceptor_atom = acceptor;
         storage_.acceptors.push_back(a);
@@ -114,6 +139,10 @@ public:
      * @brief Add a nonbonded exclusion between two atoms
      */
     void add_nonbonded_exclusion(int atom1, int atom2) {
+        if (!are_valid_bond_atoms(atom1, atom2)) {
+            throw std::invalid_argument("Invalid atom indices for exclusion");
+        }
+        
         storage_.exclusions[atom1].insert(atom2);
         storage_.exclusions[atom2].insert(atom1);
     }
@@ -122,6 +151,13 @@ public:
      * @brief Add a group of atoms
      */
     void add_group(int id, const std::vector<int>& atoms, const std::string& type = "") {
+        // Validate all atoms in the group
+        for (int atom : atoms) {
+            if (!is_valid_atom(atom)) {
+                throw std::invalid_argument("Invalid atom index in group");
+            }
+        }
+        
         TopologyGroup group;
         group.id = id;
         group.atoms = atoms;
@@ -133,6 +169,13 @@ public:
      * @brief Add a CMAP term (8-atom CHARMM format)
      */
     void add_cmap(const std::array<int, 8>& atoms) {
+        // Validate atoms (only first 5 are required to be valid for CHARMM format)
+        for (int i = 0; i < 5; ++i) {
+            if (!is_valid_atom(atoms[i])) {
+                throw std::invalid_argument("Invalid atom index in CMAP");
+            }
+        }
+        
         TopologyCmap cmap;
         cmap.atoms = atoms;
         cmap.function_type = 1;
@@ -143,6 +186,13 @@ public:
      * @brief Add a CMAP term (5-atom GROMACS format)
      */
     void add_cmap(const std::array<int, 5>& atoms, int function_type = 1) {
+        // Validate all atoms
+        for (int atom : atoms) {
+            if (!is_valid_atom(atom)) {
+                throw std::invalid_argument("Invalid atom index in CMAP");
+            }
+        }
+        
         // Convert 5-atom GROMACS format to 8-atom CHARMM format
         std::array<int, 8> charmm_atoms;
         for (int i = 0; i < 5; ++i) {
@@ -271,10 +321,6 @@ public:
 
 private:
     TopologyStorage& storage_;
-
-    bool has_atom(int index) const {
-        return index >= 0 && index < static_cast<int>(storage_.atoms.size());
-    }
 };
 
 } // namespace topology

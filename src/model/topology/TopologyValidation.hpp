@@ -4,6 +4,7 @@
 #define PYGCMC_MODEL_TOPOLOGY_VALIDATION_HPP
 
 #include "TopologyCore.hpp"
+#include "TopologyValidationMixin.hpp"
 
 namespace pygcmc {
 namespace model {
@@ -12,9 +13,9 @@ namespace topology {
 /**
  * @brief Topology validation utilities
  */
-class TopologyValidator {
+class TopologyValidator : public ValidationMixin {
 public:
-    TopologyValidator(const TopologyStorage& storage) : storage_(storage) {}
+    TopologyValidator(const TopologyStorage& storage) : ValidationMixin(storage) {}
 
     /**
      * @brief Validate topology consistency
@@ -28,9 +29,8 @@ public:
      * @brief Validate atom references
      */
     bool validate_atoms() const {
-        for (const auto& atom : storage_.atoms) {
-            if (atom.residue_id < 0 || atom.residue_id >= static_cast<int>(storage_.residues.size()) ||
-                atom.segment_id < 0 || atom.segment_id >= static_cast<int>(storage_.segments.size())) {
+        for (const auto& atom : get_storage().atoms) {
+            if (!is_valid_residue(atom.residue_id) || !is_valid_segment(atom.segment_id)) {
                 return false;
             }
         }
@@ -41,10 +41,8 @@ public:
      * @brief Validate bond references
      */
     bool validate_bonds() const {
-        const int num_atoms = static_cast<int>(storage_.atoms.size());
-        for (const auto& bond : storage_.bonds) {
-            if (bond.atom1 < 0 || bond.atom1 >= num_atoms ||
-                bond.atom2 < 0 || bond.atom2 >= num_atoms) {
+        for (const auto& bond : get_storage().bonds) {
+            if (!are_valid_bond_atoms(bond.atom1, bond.atom2)) {
                 return false;
             }
         }
@@ -55,11 +53,8 @@ public:
      * @brief Validate angle references
      */
     bool validate_angles() const {
-        const int num_atoms = static_cast<int>(storage_.atoms.size());
-        for (const auto& angle : storage_.angles) {
-            if (angle.atom1 < 0 || angle.atom1 >= num_atoms ||
-                angle.atom2 < 0 || angle.atom2 >= num_atoms ||
-                angle.atom3 < 0 || angle.atom3 >= num_atoms) {
+        for (const auto& angle : get_storage().angles) {
+            if (!are_valid_angle_atoms(angle.atom1, angle.atom2, angle.atom3)) {
                 return false;
             }
         }
@@ -70,35 +65,19 @@ public:
      * @brief Validate dihedral references
      */
     bool validate_dihedrals() const {
-        const int num_atoms = static_cast<int>(storage_.atoms.size());
-        for (const auto& dihedral : storage_.dihedrals) {
-            if (dihedral.atom1 < 0 || dihedral.atom1 >= num_atoms ||
-                dihedral.atom2 < 0 || dihedral.atom2 >= num_atoms ||
-                dihedral.atom3 < 0 || dihedral.atom3 >= num_atoms ||
-                dihedral.atom4 < 0 || dihedral.atom4 >= num_atoms) {
+        for (const auto& dihedral : get_storage().dihedrals) {
+            if (!are_valid_dihedral_atoms(dihedral.atom1, dihedral.atom2, 
+                                         dihedral.atom3, dihedral.atom4)) {
                 return false;
             }
         }
         return true;
     }
 
-    /**
-     * @brief Check if topology element exists
-     */
-    bool has_atom(int index) const {
-        return index >= 0 && index < static_cast<int>(storage_.atoms.size());
-    }
-
-    bool has_residue(int index) const {
-        return index >= 0 && index < static_cast<int>(storage_.residues.size());
-    }
-
-    bool has_segment(int index) const {
-        return index >= 0 && index < static_cast<int>(storage_.segments.size());
-    }
-
-private:
-    const TopologyStorage& storage_;
+    // Public validation interface - these are the ONLY validation methods that should be used externally
+    bool has_atom(int index) const { return is_valid_atom(index); }
+    bool has_residue(int index) const { return is_valid_residue(index); }
+    bool has_segment(int index) const { return is_valid_segment(index); }
 };
 
 } // namespace topology

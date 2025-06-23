@@ -4,6 +4,7 @@
 #define PYGCMC_MODEL_TOPOLOGY_ATOMS_HPP
 
 #include "TopologyCore.hpp"
+#include "TopologyValidationMixin.hpp"
 #include <stdexcept>
 #include <iostream>
 
@@ -14,9 +15,9 @@ namespace topology {
 /**
  * @brief Atom, residue, and segment management operations
  */
-class TopologyAtomManager {
+class TopologyAtomManager : public ValidationMixin {
 public:
-    TopologyAtomManager(TopologyStorage& storage) : storage_(storage) {}
+    TopologyAtomManager(TopologyStorage& storage) : ValidationMixin(storage), storage_(storage) {}
 
     /**
      * @brief Add an atom to the topology
@@ -54,7 +55,7 @@ public:
             storage_.atom_map[std::make_tuple(residue_name, residue_number, segment_name, name)] = atom_id;
 
             // Add atom to its residue
-            if (residue_id >= 0 && residue_id < static_cast<int>(storage_.residues.size())) {
+            if (is_valid_residue(residue_id)) {
                 storage_.residues[residue_id].atoms.push_back(atom_id);
             } else {
                 throw std::runtime_error("Invalid residue ID");
@@ -91,7 +92,7 @@ public:
         storage_.residue_map[std::make_tuple(name, number, segment)] = residue_id;
 
         // Add residue to its segment
-        if (segment_id >= 0 && segment_id < static_cast<int>(storage_.segments.size())) {
+        if (is_valid_segment(segment_id)) {
             storage_.segments[segment_id].residues.push_back(residue_id);
         }
 
@@ -120,7 +121,7 @@ public:
      * @brief Get atom by index
      */
     const TopologyAtom& get_atom(int index) const {
-        if (!has_atom(index)) {
+        if (!is_valid_atom(index)) {
             throw std::out_of_range("Invalid atom index");
         }
         return storage_.atoms[index];
@@ -130,7 +131,7 @@ public:
      * @brief Get residue by index
      */
     const TopologyResidue& get_residue(int index) const {
-        if (!has_residue(index)) {
+        if (!is_valid_residue(index)) {
             throw std::out_of_range("Invalid residue index");
         }
         return storage_.residues[index];
@@ -140,31 +141,10 @@ public:
      * @brief Get segment by index
      */
     const TopologySegment& get_segment(int index) const {
-        if (!has_segment(index)) {
+        if (!is_valid_segment(index)) {
             throw std::out_of_range("Invalid segment index");
         }
         return storage_.segments[index];
-    }
-
-    /**
-     * @brief Check if atom exists
-     */
-    bool has_atom(int index) const {
-        return index >= 0 && index < static_cast<int>(storage_.atoms.size());
-    }
-
-    /**
-     * @brief Check if residue exists
-     */
-    bool has_residue(int index) const {
-        return index >= 0 && index < static_cast<int>(storage_.residues.size());
-    }
-
-    /**
-     * @brief Check if segment exists
-     */
-    bool has_segment(int index) const {
-        return index >= 0 && index < static_cast<int>(storage_.segments.size());
     }
 
     /**
@@ -268,7 +248,7 @@ private:
             storage_.residue_map[residue_key] = residue_id;
             
             // Add residue to its segment
-            if (segment_id >= 0 && segment_id < static_cast<int>(storage_.segments.size())) {
+            if (is_valid_segment(segment_id)) {
                 storage_.segments[segment_id].residues.push_back(residue_id);
             } else {
                 throw std::runtime_error("Invalid segment ID");
