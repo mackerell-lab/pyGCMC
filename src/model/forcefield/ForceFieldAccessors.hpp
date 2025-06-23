@@ -42,7 +42,7 @@ inline void ForceField::add_dihedral_params(const std::string& type1, const std:
                                            const std::string& type3, const std::string& type4,
                                            double kchi, int n, double delta) {
     auto key = ParamKeyUtils::makeTypeQuad(type1, type2, type3, type4);
-    dihedral_params_[key].emplace_back(kchi, n, delta);
+    dihedral_params_[key].emplace_back(DihedralParams{kchi, n, delta});
 }
 
 inline void ForceField::add_improper_params(const std::string& type1, const std::string& type2,
