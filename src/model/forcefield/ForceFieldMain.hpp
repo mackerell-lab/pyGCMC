@@ -94,20 +94,6 @@ public:
     const std::map<std::tuple<std::string, std::string, std::string, std::string>, std::vector<DihedralParams>>& get_dihedral_params_map() const { return dihedral_params_; }
     const std::map<std::tuple<std::string, std::string, std::string, std::string>, ImproperParams>& get_improper_params_map() const { return improper_params_; }
 
-    // === Backward compatibility static methods ===
-    static std::pair<std::string, std::string> makeTypePair(const std::string& type1, const std::string& type2) {
-        return ParamKeyUtils::makeTypePair(type1, type2);
-    }
-    static std::tuple<std::string, std::string, std::string> makeTypeTriple(
-        const std::string& type1, const std::string& type2, const std::string& type3) {
-        return ParamKeyUtils::makeTypeTriple(type1, type2, type3);
-    }
-    static std::tuple<std::string, std::string, std::string, std::string> makeTypeQuad(
-        const std::string& type1, const std::string& type2,
-        const std::string& type3, const std::string& type4) {
-        return ParamKeyUtils::makeTypeQuad(type1, type2, type3, type4);
-    }
-
     // === Friend class for analysis ===
     friend class ForceFieldAnalysis;
 
