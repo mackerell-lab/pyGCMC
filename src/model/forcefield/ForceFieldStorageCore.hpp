@@ -4,6 +4,8 @@
 #define PYGCMC_MODEL_FORCEFIELD_STORAGE_CORE_HPP
 
 #include "ForceFieldParams.hpp"
+#include "ForceFieldStorageTypes.hpp"
+#include "ForceFieldStorageCopyOps.hpp"
 #include <unordered_map>
 #include <vector>
 #include <memory>
@@ -30,67 +32,17 @@ public:
         lj_params_.reserve(256);
     }
 
-    // Copy constructor (deep copy)
-    ForceFieldStorageOptimized(const ForceFieldStorageOptimized& other) 
-        : atom_types_(other.atom_types_)
-        , atom_type_to_index_(other.atom_type_to_index_)
-        , atom_masses_(other.atom_masses_)
-        , lj_params_(other.lj_params_)
-        , nonbonded_params_(other.nonbonded_params_) {
-        
-        // Deep copy unique_ptr members
-        if (other.nbfix_params_) {
-            nbfix_params_ = std::make_unique<std::unordered_map<PairKey, NBFIXParams, PairKeyHash>>(*other.nbfix_params_);
-        }
-        if (other.bond_params_) {
-            bond_params_ = std::make_unique<std::unordered_map<PairKey, BondParams, PairKeyHash>>(*other.bond_params_);
-        }
-        if (other.angle_params_) {
-            angle_params_ = std::make_unique<std::unordered_map<uint64_t, AngleParams>>(*other.angle_params_);
-        }
-        if (other.dihedral_params_) {
-            dihedral_params_ = std::make_unique<std::unordered_map<uint64_t, std::vector<DihedralParams>>>(*other.dihedral_params_);
-        }
-        if (other.improper_params_) {
-            improper_params_ = std::make_unique<std::unordered_map<uint64_t, ImproperParams>>(*other.improper_params_);
-        }
+    // Copy constructor using template helper
+    ForceFieldStorageOptimized(const ForceFieldStorageOptimized& other) {
+        complete_copy(*this, other);
     }
 
     // Move constructor
     ForceFieldStorageOptimized(ForceFieldStorageOptimized&& other) noexcept = default;
 
-    // Copy assignment
+    // Copy assignment using template helper
     ForceFieldStorageOptimized& operator=(const ForceFieldStorageOptimized& other) {
-        if (this != &other) {
-            atom_types_ = other.atom_types_;
-            atom_type_to_index_ = other.atom_type_to_index_;
-            atom_masses_ = other.atom_masses_;
-            lj_params_ = other.lj_params_;
-            nonbonded_params_ = other.nonbonded_params_;
-            
-            // Deep copy unique_ptr members
-            nbfix_params_.reset();
-            bond_params_.reset();
-            angle_params_.reset();
-            dihedral_params_.reset();
-            improper_params_.reset();
-            
-            if (other.nbfix_params_) {
-                nbfix_params_ = std::make_unique<std::unordered_map<PairKey, NBFIXParams, PairKeyHash>>(*other.nbfix_params_);
-            }
-            if (other.bond_params_) {
-                bond_params_ = std::make_unique<std::unordered_map<PairKey, BondParams, PairKeyHash>>(*other.bond_params_);
-            }
-            if (other.angle_params_) {
-                angle_params_ = std::make_unique<std::unordered_map<uint64_t, AngleParams>>(*other.angle_params_);
-            }
-            if (other.dihedral_params_) {
-                dihedral_params_ = std::make_unique<std::unordered_map<uint64_t, std::vector<DihedralParams>>>(*other.dihedral_params_);
-            }
-            if (other.improper_params_) {
-                improper_params_ = std::make_unique<std::unordered_map<uint64_t, ImproperParams>>(*other.improper_params_);
-            }
-        }
+        complete_assignment(*this, other);
         return *this;
     }
 
@@ -175,32 +127,13 @@ public:
     // === Pair Parameter Storage ===
 
     /**
-     * @brief Optimized key for pair parameters using type indices
-     */
-    struct PairKey {
-        uint32_t type1_idx;
-        uint32_t type2_idx;
-        
-        bool operator==(const PairKey& other) const {
-            return type1_idx == other.type1_idx && type2_idx == other.type2_idx;
-        }
-    };
-
-    struct PairKeyHash {
-        std::size_t operator()(const PairKey& key) const {
-            return std::hash<uint64_t>{}((uint64_t(key.type1_idx) << 32) | key.type2_idx);
-        }
-    };
-
-    /**
      * @brief Set NBFIX parameters
      */
     void set_nbfix(const std::string& type1, const std::string& type2, const NBFIXParams& params) {
-        auto idx1 = get_or_create_atom_type_index(type1);
-        auto idx2 = get_or_create_atom_type_index(type2);
+        auto idx1 = static_cast<uint32_t>(get_or_create_atom_type_index(type1));
+        auto idx2 = static_cast<uint32_t>(get_or_create_atom_type_index(type2));
         
-        PairKey key{static_cast<uint32_t>(std::min(idx1, idx2)), 
-                   static_cast<uint32_t>(std::max(idx1, idx2))};
+        auto key = StorageKeyUtils::make_ordered_pair(idx1, idx2);
         
         if (!nbfix_params_) {
             nbfix_params_ = std::make_unique<std::unordered_map<PairKey, NBFIXParams, PairKeyHash>>();
@@ -223,8 +156,8 @@ public:
             return {NBFIXParams{}, false};
         }
         
-        PairKey key{static_cast<uint32_t>(std::min(idx1, idx2)), 
-                   static_cast<uint32_t>(std::max(idx1, idx2))};
+        auto key = StorageKeyUtils::make_ordered_pair(static_cast<uint32_t>(idx1), 
+                                                     static_cast<uint32_t>(idx2));
         
         auto it = nbfix_params_->find(key);
         if (it != nbfix_params_->end()) {
@@ -243,11 +176,7 @@ public:
         atom_masses_.clear();
         lj_params_.clear();
         
-        nbfix_params_.reset();
-        bond_params_.reset();
-        angle_params_.reset();
-        dihedral_params_.reset();
-        improper_params_.reset();
+        reset_all_hash_maps(*this);
         
         nonbonded_params_ = NonbondedParams{};
     }
@@ -292,25 +221,22 @@ public:
     MemoryInfo get_memory_info() const;
     ForceFieldStorage to_original_format() const;
 
-private:
-    // === Core Type Management ===
+    // === Public Data Members (for template function access) ===
+    
     std::vector<std::string> atom_types_;                                    ///< Ordered list of atom types
     std::unordered_map<std::string, size_t> atom_type_to_index_;            ///< Type to index mapping
-
-    // === Structure-of-Arrays Storage ===
     std::vector<double> atom_masses_;                                        ///< Masses indexed by type
     std::vector<LJParams> lj_params_;                                       ///< LJ params indexed by type
+    NonbondedParams nonbonded_params_;                                       ///< Global nonbonded parameters
 
     // === Lazy-Initialized Hash Maps ===
     std::unique_ptr<std::unordered_map<PairKey, NBFIXParams, PairKeyHash>> nbfix_params_;
     std::unique_ptr<std::unordered_map<PairKey, BondParams, PairKeyHash>> bond_params_;
-    std::unique_ptr<std::unordered_map<uint64_t, AngleParams>> angle_params_;              // Triple hash
+    std::unique_ptr<std::unordered_map<uint64_t, AngleParams>> angle_params_;
     std::unique_ptr<std::unordered_map<uint64_t, std::vector<DihedralParams>>> dihedral_params_;
     std::unique_ptr<std::unordered_map<uint64_t, ImproperParams>> improper_params_;
 
-    // === Global Parameters ===
-    NonbondedParams nonbonded_params_;
-
+private:
     // === Helper Methods ===
 
     size_t count_non_zero_lj_params() const {

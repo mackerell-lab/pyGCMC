@@ -130,11 +130,14 @@
 #include "ForceFieldManager.hpp"
 
 // === Optimized Storage (Refactored) ===
+#include "ForceFieldStorageTypes.hpp"
+#include "ForceFieldStorageCopyOps.hpp"
 #include "ForceFieldStorageCore.hpp"
 #include "ForceFieldStorageUtils.hpp"
 #include "ForceFieldStorageOptimized.hpp"
 
 // === Operations and Analysis ===
+#include "ForceFieldOperationUtils.hpp"
 #include "ForceFieldOperations.hpp"
 #include "ForceFieldAnalysis.hpp"
 
