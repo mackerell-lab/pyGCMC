@@ -215,6 +215,11 @@ public:
         storage_.atoms.reserve(n);
     }
 
+    // Public validation interface methods
+    bool has_atom(int index) const { return is_valid_atom(index); }
+    bool has_residue(int index) const { return is_valid_residue(index); }
+    bool has_segment(int index) const { return is_valid_segment(index); }
+
 private:
     TopologyStorage& storage_;
 

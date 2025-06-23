@@ -13,7 +13,7 @@ namespace model {
 namespace topology {
 
 /**
- * @brief Bond, angle, and dihedral management operations
+ * @brief Core bond, angle, and dihedral management operations
  */
 class TopologyBondManager : public ValidationMixin {
 public:
@@ -108,117 +108,12 @@ public:
         add_dihedral(atom1, atom2, atom3, atom4, 0, angle, force_constant, true);
     }
 
-    /**
-     * @brief Add a hydrogen bond donor
-     */
-    void add_donor(int donor, int hydrogen) {
-        if (!are_valid_bond_atoms(donor, hydrogen)) {
-            throw std::invalid_argument("Invalid atom indices for donor");
-        }
-        
-        TopologyDonor d;
-        d.donor_atom = donor;
-        d.hydrogen_atom = hydrogen;
-        storage_.donors.push_back(d);
-    }
-
-    /**
-     * @brief Add a hydrogen bond acceptor
-     */
-    void add_acceptor(int acceptor) {
-        if (!is_valid_atom(acceptor)) {
-            throw std::invalid_argument("Invalid atom index for acceptor");
-        }
-        
-        TopologyAcceptor a;
-        a.acceptor_atom = acceptor;
-        storage_.acceptors.push_back(a);
-    }
-
-    /**
-     * @brief Add a nonbonded exclusion between two atoms
-     */
-    void add_nonbonded_exclusion(int atom1, int atom2) {
-        if (!are_valid_bond_atoms(atom1, atom2)) {
-            throw std::invalid_argument("Invalid atom indices for exclusion");
-        }
-        
-        storage_.exclusions[atom1].insert(atom2);
-        storage_.exclusions[atom2].insert(atom1);
-    }
-
-    /**
-     * @brief Add a group of atoms
-     */
-    void add_group(int id, const std::vector<int>& atoms, const std::string& type = "") {
-        // Validate all atoms in the group
-        for (int atom : atoms) {
-            if (!is_valid_atom(atom)) {
-                throw std::invalid_argument("Invalid atom index in group");
-            }
-        }
-        
-        TopologyGroup group;
-        group.id = id;
-        group.atoms = atoms;
-        group.type = type;
-        storage_.groups.push_back(group);
-    }
-
-    /**
-     * @brief Add a CMAP term (8-atom CHARMM format)
-     */
-    void add_cmap(const std::array<int, 8>& atoms) {
-        // Validate atoms (only first 5 are required to be valid for CHARMM format)
-        for (int i = 0; i < 5; ++i) {
-            if (!is_valid_atom(atoms[i])) {
-                throw std::invalid_argument("Invalid atom index in CMAP");
-            }
-        }
-        
-        TopologyCmap cmap;
-        cmap.atoms = atoms;
-        cmap.function_type = 1;
-        storage_.cmaps.push_back(cmap);
-    }
-
-    /**
-     * @brief Add a CMAP term (5-atom GROMACS format)
-     */
-    void add_cmap(const std::array<int, 5>& atoms, int function_type = 1) {
-        // Validate all atoms
-        for (int atom : atoms) {
-            if (!is_valid_atom(atom)) {
-                throw std::invalid_argument("Invalid atom index in CMAP");
-            }
-        }
-        
-        // Convert 5-atom GROMACS format to 8-atom CHARMM format
-        std::array<int, 8> charmm_atoms;
-        for (int i = 0; i < 5; ++i) {
-            charmm_atoms[i] = atoms[i];
-        }
-        for (int i = 5; i < 8; ++i) {
-            charmm_atoms[i] = -1;
-        }
-        
-        TopologyCmap cmap;
-        cmap.atoms = charmm_atoms;
-        cmap.function_type = function_type;
-        storage_.cmaps.push_back(cmap);
-    }
-
-    // Getters
+    // Getters for core bond structures
     const std::vector<TopologyBond>& get_bonds() const { return storage_.bonds; }
     const std::vector<TopologyAngle>& get_angles() const { return storage_.angles; }
     const std::vector<TopologyDihedral>& get_dihedrals() const { return storage_.dihedrals; }
-    const std::vector<TopologyDonor>& get_donors() const { return storage_.donors; }
-    const std::vector<TopologyAcceptor>& get_acceptors() const { return storage_.acceptors; }
-    const std::vector<TopologyGroup>& get_groups() const { return storage_.groups; }
-    const std::vector<TopologyCmap>& get_cmaps() const { return storage_.cmaps; }
-    const std::map<int, std::set<int>>& get_exclusions() const { return storage_.exclusions; }
 
-    // Count methods
+    // Count methods for core structures
     size_t get_num_bonds() const { return storage_.bonds.size(); }
     size_t get_num_angles() const { return storage_.angles.size(); }
     size_t get_num_dihedrals() const { 
@@ -235,34 +130,8 @@ public:
         }
         return count;
     }
-    size_t get_num_donors() const { return storage_.donors.size(); }
-    size_t get_num_acceptors() const { return storage_.acceptors.size(); }
-    size_t get_num_cmaps() const { return storage_.cmaps.size(); }
-    size_t get_num_groups() const { return storage_.groups.size(); }
 
-    // Advanced check methods for topology elements
-    bool has_donor(int donor_atom) const {
-        return std::any_of(storage_.donors.begin(), storage_.donors.end(),
-            [donor_atom](const TopologyDonor& donor) {
-                return donor.donor_atom == donor_atom;
-            });
-    }
-
-    bool has_donor(int donor_atom, int hydrogen_atom) const {
-        return std::any_of(storage_.donors.begin(), storage_.donors.end(),
-            [donor_atom, hydrogen_atom](const TopologyDonor& donor) {
-                return donor.donor_atom == donor_atom && donor.hydrogen_atom == hydrogen_atom;
-            });
-    }
-
-    bool has_acceptor(int acceptor_atom) const {
-        return std::any_of(storage_.acceptors.begin(), storage_.acceptors.end(),
-            [acceptor_atom](const TopologyAcceptor& acceptor) {
-                return acceptor.acceptor_atom == acceptor_atom;
-            });
-    }
-
-    // Check methods
+    // Check methods for core structures
     bool has_bond(int atom1, int atom2) const {
         return std::any_of(storage_.bonds.begin(), storage_.bonds.end(),
             [atom1, atom2](const TopologyBond& bond) {
@@ -299,24 +168,6 @@ public:
                         (dihedral.atom1 == atom4 && dihedral.atom2 == atom3 && 
                          dihedral.atom3 == atom2 && dihedral.atom4 == atom1));
             });
-    }
-
-    bool has_cmap() const {
-        return !storage_.cmaps.empty();
-    }
-
-    bool has_group(int group_id) const {
-        return std::any_of(storage_.groups.begin(), storage_.groups.end(),
-            [group_id](const TopologyGroup& group) {
-                return group.id == group_id;
-            });
-    }
-
-    const TopologyGroup& get_group(int index) const {
-        if (index < 0 || index >= static_cast<int>(storage_.groups.size())) {
-            throw std::out_of_range("Invalid group index");
-        }
-        return storage_.groups[index];
     }
 
 private:
