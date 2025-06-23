@@ -123,13 +123,31 @@
 // === Core Components ===
 #include "ForceFieldParams.hpp"
 #include "ForceFieldInterface.hpp"
+
+// === Parameter Management (Refactored) ===
 #include "ForceFieldParameterAdder.hpp"
 #include "ForceFieldParameterRetriever.hpp"
-#include "ForceFieldStorageOptimized.hpp"
 #include "ForceFieldManager.hpp"
+
+// === Optimized Storage (Refactored) ===
+#include "ForceFieldStorageCore.hpp"
+#include "ForceFieldStorageUtils.hpp"
+#include "ForceFieldStorageOptimized.hpp"
+
+// === Operations and Analysis ===
 #include "ForceFieldOperations.hpp"
 #include "ForceFieldAnalysis.hpp"
+
+// === Validation (Refactored) ===
+#include "ForceFieldValidationCore.hpp"
+#include "ForceFieldValidationUtils.hpp"
 #include "ForceFieldValidation.hpp"
+
+// === Main Force Field Class (Refactored) ===
+#include "ForceFieldCore.hpp"
+#include "ForceFieldParameterOps.hpp"
+#include "ForceFieldCheckerOps.hpp"
+#include "ForceFieldAnalysisOps.hpp"
 #include "ForceFieldMain.hpp"
 
 namespace pygcmc {
