@@ -132,14 +132,14 @@ public:
 
     // Direct access to specialized components
     const TopologyStatsGenerator& get_stats_generator() const { return stats_generator_; }
-    const TopologyValidator& get_validator() const { return validator_; }
+    const ValidationMixin& get_validator() const { return validator_; }
     const TopologySearcher& get_searcher() const { return searcher_; }
     const TopologyAnalyzer& get_analyzer() const { return analyzer_; }
 
 private:
     const TopologyStorage& storage_;
     TopologyStatsGenerator stats_generator_;
-    TopologyValidator validator_;
+    ValidationMixin validator_;
     TopologySearcher searcher_;
     TopologyAnalyzer analyzer_;
 };

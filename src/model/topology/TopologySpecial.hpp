@@ -4,7 +4,7 @@
 #define PYGCMC_MODEL_TOPOLOGY_SPECIAL_HPP
 
 #include "TopologyCore.hpp"
-#include "TopologyValidationMixin.hpp"
+#include "TopologyValidation.hpp"
 #include <stdexcept>
 #include <algorithm>
 

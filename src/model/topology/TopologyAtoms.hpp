@@ -4,7 +4,7 @@
 #define PYGCMC_MODEL_TOPOLOGY_ATOMS_HPP
 
 #include "TopologyCore.hpp"
-#include "TopologyValidationMixin.hpp"
+#include "TopologyValidation.hpp"
 #include <stdexcept>
 #include <iostream>
 
