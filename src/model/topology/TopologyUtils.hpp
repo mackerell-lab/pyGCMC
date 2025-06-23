@@ -8,6 +8,9 @@
 #include "TopologyValidation.hpp"
 #include "TopologySearch.hpp"
 #include "TopologyAnalysis.hpp"
+#include "TopologyBonds.hpp"
+#include "TopologyHBonds.hpp"
+#include "TopologySpecial.hpp"
 #include <algorithm>
 
 namespace pygcmc {
@@ -24,7 +27,10 @@ public:
           stats_generator_(storage),
           validator_(storage),
           searcher_(storage),
-          analyzer_(storage) {}
+          analyzer_(storage),
+          bond_manager_(storage),
+          hbond_manager_(storage),
+          special_manager_(storage) {}
 
     // Delegate to specialized components
     TopologyStats get_statistics() const { return stats_generator_.get_statistics(); }
@@ -52,82 +58,32 @@ public:
     std::vector<std::vector<int>> get_connected_components() const { return analyzer_.get_connected_components(); }
 
     /**
-     * @brief Check existence of bonds, angles, dihedrals
+     * @brief Delegate bonds/angles/dihedrals existence checks to BondManager
      */
-    bool has_bond(int atom1, int atom2) const {
-        return std::any_of(storage_.bonds.begin(), storage_.bonds.end(),
-            [atom1, atom2](const TopologyBond& bond) {
-                return (bond.atom1 == atom1 && bond.atom2 == atom2) ||
-                       (bond.atom1 == atom2 && bond.atom2 == atom1);
-            });
-    }
-
-    bool has_angle(int atom1, int atom2, int atom3) const {
-        return std::any_of(storage_.angles.begin(), storage_.angles.end(),
-            [atom1, atom2, atom3](const TopologyAngle& angle) {
-                return (angle.atom1 == atom1 && angle.atom2 == atom2 && angle.atom3 == atom3) ||
-                       (angle.atom1 == atom3 && angle.atom2 == atom2 && angle.atom3 == atom1);
-            });
-    }
-
-    bool has_dihedral(int atom1, int atom2, int atom3, int atom4) const {
-        return std::any_of(storage_.dihedrals.begin(), storage_.dihedrals.end(),
-            [atom1, atom2, atom3, atom4](const TopologyDihedral& dihedral) {
-                return !dihedral.improper &&
-                       ((dihedral.atom1 == atom1 && dihedral.atom2 == atom2 && 
-                         dihedral.atom3 == atom3 && dihedral.atom4 == atom4) ||
-                        (dihedral.atom1 == atom4 && dihedral.atom2 == atom3 && 
-                         dihedral.atom3 == atom2 && dihedral.atom4 == atom1));
-            });
-    }
-
-    bool has_improper(int atom1, int atom2, int atom3, int atom4) const {
-        return std::any_of(storage_.dihedrals.begin(), storage_.dihedrals.end(),
-            [atom1, atom2, atom3, atom4](const TopologyDihedral& dihedral) {
-                return dihedral.improper &&
-                       dihedral.atom1 == atom1 && dihedral.atom2 == atom2 && 
-                       dihedral.atom3 == atom3 && dihedral.atom4 == atom4;
-            });
-    }
+    bool has_bond(int atom1, int atom2) const { return bond_manager_.has_bond(atom1, atom2); }
+    bool has_angle(int atom1, int atom2, int atom3) const { return bond_manager_.has_angle(atom1, atom2, atom3); }
+    bool has_dihedral(int atom1, int atom2, int atom3, int atom4) const { return bond_manager_.has_dihedral(atom1, atom2, atom3, atom4); }
+    bool has_improper(int atom1, int atom2, int atom3, int atom4) const { return bond_manager_.has_improper(atom1, atom2, atom3, atom4); }
 
     /**
-     * @brief Check for CMAP with specific atoms
+     * @brief Delegate advanced topology features to specialized managers
+     */
+    bool has_donor(int donor_atom) const { return hbond_manager_.has_donor(donor_atom); }
+    bool has_donor(int donor_atom, int hydrogen_atom) const { return hbond_manager_.has_donor(donor_atom, hydrogen_atom); }
+    bool has_acceptor(int acceptor_atom) const { return hbond_manager_.has_acceptor(acceptor_atom); }
+    bool has_group(int group_id) const { return special_manager_.has_group(group_id); }
+    bool has_cmap() const { return special_manager_.has_cmap(); }
+    
+    /**
+     * @brief Check for CMAP with specific atoms - delegate to special manager
      */
     bool has_cmap(const std::vector<int>& atoms) const {
         if (atoms.size() < 5) return false;
-        
-        return std::any_of(storage_.cmaps.begin(), storage_.cmaps.end(),
-            [&atoms](const TopologyCmap& cmap) {
-                for (size_t i = 0; i < 5 && i < atoms.size(); ++i) {
-                    if (cmap.atoms[i] != atoms[i]) return false;
-                }
-                return true;
-            });
-    }
-
-    /**
-     * @brief Check advanced topology features
-     */
-    bool has_donor(int donor_atom) const {
-        return std::any_of(storage_.donors.begin(), storage_.donors.end(),
-            [donor_atom](const TopologyDonor& d) { return d.donor_atom == donor_atom; });
-    }
-    
-    bool has_donor(int donor_atom, int hydrogen_atom) const {
-        return std::any_of(storage_.donors.begin(), storage_.donors.end(),
-            [donor_atom, hydrogen_atom](const TopologyDonor& d) { 
-                return d.donor_atom == donor_atom && d.hydrogen_atom == hydrogen_atom; 
-            });
-    }
-    
-    bool has_acceptor(int acceptor_atom) const {
-        return std::any_of(storage_.acceptors.begin(), storage_.acceptors.end(),
-            [acceptor_atom](const TopologyAcceptor& a) { return a.acceptor_atom == acceptor_atom; });
-    }
-    
-    bool has_group(int group_id) const {
-        return std::any_of(storage_.groups.begin(), storage_.groups.end(),
-            [group_id](const TopologyGroup& g) { return g.id == group_id; });
+        std::array<int, 5> atom_array;
+        for (size_t i = 0; i < 5; ++i) {
+            atom_array[i] = atoms[i];
+        }
+        return special_manager_.has_cmap(atom_array);
     }
 
     // Direct access to specialized components
@@ -135,6 +91,9 @@ public:
     const ValidationMixin& get_validator() const { return validator_; }
     const TopologySearcher& get_searcher() const { return searcher_; }
     const TopologyAnalyzer& get_analyzer() const { return analyzer_; }
+    const TopologyBondManager& get_bond_manager() const { return bond_manager_; }
+    const TopologyHBondManager& get_hbond_manager() const { return hbond_manager_; }
+    const TopologySpecialManager& get_special_manager() const { return special_manager_; }
 
 private:
     const TopologyStorage& storage_;
@@ -142,6 +101,9 @@ private:
     ValidationMixin validator_;
     TopologySearcher searcher_;
     TopologyAnalyzer analyzer_;
+    TopologyBondManager bond_manager_;
+    TopologyHBondManager hbond_manager_;
+    TopologySpecialManager special_manager_;
 };
 
 } // namespace topology

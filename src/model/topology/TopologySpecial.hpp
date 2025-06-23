@@ -113,6 +113,17 @@ public:
             });
     }
 
+    bool has_cmap(const std::array<int, 5>& atoms) const {
+        return std::any_of(storage_.cmaps.begin(), storage_.cmaps.end(),
+            [&atoms](const TopologyCmap& cmap) {
+                // Check first 5 atoms match
+                for (int i = 0; i < 5; ++i) {
+                    if (cmap.atoms[i] != atoms[i]) return false;
+                }
+                return true;
+            });
+    }
+
     const TopologyGroup& get_group(int index) const {
         if (index < 0 || index >= static_cast<int>(storage_.groups.size())) {
             throw std::out_of_range("Invalid group index");
