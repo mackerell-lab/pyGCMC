@@ -13,57 +13,19 @@ namespace pygcmc {
 namespace model {
 namespace forcefield {
 
-// Forward declaration
-class ForceField;
+class ForceField; // Forward declaration
 
 /**
- * @brief Analysis and validation utilities for ForceField
- * 
- * This class provides analysis, validation, and statistical methods
- * for ForceField objects. It's separated from the main ForceField
- * class to keep the core functionality focused and maintainable.
+ * @brief Analysis utilities for ForceField
  */
 class ForceFieldAnalysis {
 public:
-    /**
-     * @brief Get statistics about the force field parameters
-     */
     static ForceFieldStats get_statistics(const ForceField& ff);
-
-    /**
-     * @brief Get a human-readable summary of the force field
-     */
     static std::string get_summary(const ForceField& ff);
-
-    /**
-     * @brief Find atom types that have masses but no LJ parameters
-     */
     static std::set<std::string> find_missing_lj_params(const ForceField& ff);
-
-    /**
-     * @brief Find atom types that have LJ parameters but no masses
-     */
     static std::set<std::string> find_missing_masses(const ForceField& ff);
-
-    /**
-     * @brief Validate that the force field is consistent
-     * @return true if all atom types have both masses and LJ parameters
-     */
     static bool validate_force_field(const ForceField& ff);
-
-    /**
-     * @brief Check completeness for a specific set of atom types
-     * @param ff The force field to check
-     * @param atom_types Set of atom types to validate
-     * @return CompletenessResult with detailed information
-     */
-    static CompletenessResult check_completeness(const ForceField& ff, 
-                                                const std::set<std::string>& atom_types);
-
-    /**
-     * @brief Validate consistency and return detailed error messages
-     * @return Vector of error messages (empty if no errors)
-     */
+    static CompletenessResult check_completeness(const ForceField& ff, const std::set<std::string>& atom_types);
     static std::vector<std::string> validate_consistency(const ForceField& ff);
 };
 
@@ -71,7 +33,7 @@ public:
 } // namespace model
 } // namespace pygcmc
 
-// Include implementation after ForceField is defined
+// Implementation after ForceField is defined
 #include "ForceField.hpp"
 
 namespace pygcmc {
@@ -93,14 +55,13 @@ inline ForceFieldStats ForceFieldAnalysis::get_statistics(const ForceField& ff) 
 inline std::string ForceFieldAnalysis::get_summary(const ForceField& ff) {
     auto stats = get_statistics(ff);
     std::ostringstream oss;
-    oss << "Force Field Summary:\n";
-    oss << "  Atom types: " << stats.num_atom_types << "\n";
-    oss << "  LJ parameters: " << stats.num_lj_params << "\n";
-    oss << "  NBFIX entries: " << stats.num_nbfix << "\n";
-    oss << "  Bond types: " << stats.num_bond_types << "\n";
-    oss << "  Angle types: " << stats.num_angle_types << "\n";
-    oss << "  Dihedral types: " << stats.num_dihedral_types << "\n";
-    oss << "  Improper types: " << stats.num_improper_types;
+    oss << "Force Field Summary:\n  Atom types: " << stats.num_atom_types 
+        << "\n  LJ parameters: " << stats.num_lj_params 
+        << "\n  NBFIX entries: " << stats.num_nbfix
+        << "\n  Bond types: " << stats.num_bond_types 
+        << "\n  Angle types: " << stats.num_angle_types
+        << "\n  Dihedral types: " << stats.num_dihedral_types 
+        << "\n  Improper types: " << stats.num_improper_types;
     return oss.str();
 }
 
@@ -125,52 +86,36 @@ inline std::set<std::string> ForceFieldAnalysis::find_missing_masses(const Force
 }
 
 inline bool ForceFieldAnalysis::validate_force_field(const ForceField& ff) {
-    auto missing_lj = find_missing_lj_params(ff);
-    auto missing_masses = find_missing_masses(ff);
-    return missing_lj.empty() && missing_masses.empty();
+    return find_missing_lj_params(ff).empty() && find_missing_masses(ff).empty();
 }
 
-inline CompletenessResult ForceFieldAnalysis::check_completeness(const ForceField& ff, 
-                                                                const std::set<std::string>& atom_types) {
+inline CompletenessResult ForceFieldAnalysis::check_completeness(const ForceField& ff, const std::set<std::string>& atom_types) {
     CompletenessResult result;
-    
     for (const auto& type : atom_types) {
-        if (!ff.has_atom_mass(type)) {
-            result.missing_atom_masses.insert(type);
-        }
-        if (!ff.has_lj_params(type)) {
-            result.missing_lj_params.insert(type);
-        }
+        if (!ff.has_atom_mass(type)) result.missing_atom_masses.insert(type);
+        if (!ff.has_lj_params(type)) result.missing_lj_params.insert(type);
     }
-    
     result.is_complete = result.missing_atom_masses.empty() && result.missing_lj_params.empty();
     
     std::ostringstream oss;
     if (result.is_complete) {
         oss << "Force field is complete for all " << atom_types.size() << " atom types.";
     } else {
-        oss << "Force field is incomplete. Missing masses: " << result.missing_atom_masses.size()
+        oss << "Force field incomplete. Missing masses: " << result.missing_atom_masses.size()
             << ", missing LJ params: " << result.missing_lj_params.size();
     }
     result.summary = oss.str();
-    
     return result;
 }
 
 inline std::vector<std::string> ForceFieldAnalysis::validate_consistency(const ForceField& ff) {
     std::vector<std::string> errors;
-    
-    auto missing_lj = find_missing_lj_params(ff);
-    auto missing_masses = find_missing_masses(ff);
-    
-    for (const auto& type : missing_lj) {
+    for (const auto& type : find_missing_lj_params(ff)) {
         errors.push_back("Missing LJ parameters for atom type: " + type);
     }
-    
-    for (const auto& type : missing_masses) {
+    for (const auto& type : find_missing_masses(ff)) {
         errors.push_back("Missing mass for atom type: " + type);
     }
-    
     return errors;
 }
 
