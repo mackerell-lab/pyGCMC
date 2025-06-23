@@ -8,19 +8,20 @@
 #include <algorithm>
 #include <optional>
 #include <memory>
-#include <sstream>
-#include <iomanip>
 
 namespace pygcmc {
 namespace model {
 namespace forcefield {
 
+// Forward declaration for analysis functionality
+class ForceFieldAnalysis;
+
 /**
  * @brief Main force field class that holds all force field parameters
  * 
  * This class provides a simple, efficient interface for managing force field
- * parameters. It combines the simplicity of the original single-file design
- * with some useful analysis and validation features.
+ * parameters. Analysis and validation functionality is provided by the
+ * ForceFieldAnalysis class.
  */
 class ForceField {
 public:
@@ -240,110 +241,23 @@ public:
         return types;
     }
 
-    // === Analysis Methods (from new version) ===
-
-    ForceFieldStats get_statistics() const {
-        ForceFieldStats stats;
-        stats.num_atom_types = atom_masses_.size();
-        stats.num_lj_params = lj_params_.size();
-        stats.num_nbfix = nbfix_.size();
-        stats.num_bond_types = bond_params_.size();
-        stats.num_angle_types = angle_params_.size();
-        stats.num_dihedral_types = dihedral_params_.size();
-        stats.num_improper_types = improper_params_.size();
-        return stats;
-    }
-
-    std::string get_summary() const {
-        auto stats = get_statistics();
-        std::ostringstream oss;
-        oss << "Force Field Summary:\n";
-        oss << "  Atom types: " << stats.num_atom_types << "\n";
-        oss << "  LJ parameters: " << stats.num_lj_params << "\n";
-        oss << "  NBFIX entries: " << stats.num_nbfix << "\n";
-        oss << "  Bond types: " << stats.num_bond_types << "\n";
-        oss << "  Angle types: " << stats.num_angle_types << "\n";
-        oss << "  Dihedral types: " << stats.num_dihedral_types << "\n";
-        oss << "  Improper types: " << stats.num_improper_types;
-        return oss.str();
-    }
-
-    std::set<std::string> find_missing_lj_params() const {
-        std::set<std::string> missing;
-        for (const auto& pair : atom_masses_) {
-            if (lj_params_.find(pair.first) == lj_params_.end()) {
-                missing.insert(pair.first);
-            }
-        }
-        return missing;
-    }
-
-    std::set<std::string> find_missing_masses() const {
-        std::set<std::string> missing;
-        for (const auto& pair : lj_params_) {
-            if (atom_masses_.find(pair.first) == atom_masses_.end()) {
-                missing.insert(pair.first);
-            }
-        }
-        return missing;
-    }
-
-    bool validate_force_field() const {
-        auto missing_lj = find_missing_lj_params();
-        auto missing_masses = find_missing_masses();
-        return missing_lj.empty() && missing_masses.empty();
-    }
-
-    CompletenessResult check_completeness(const std::set<std::string>& atom_types) const {
-        CompletenessResult result;
-        
-        for (const auto& type : atom_types) {
-            if (!has_atom_mass(type)) {
-                result.missing_atom_masses.insert(type);
-            }
-            if (!has_lj_params(type)) {
-                result.missing_lj_params.insert(type);
-            }
-        }
-        
-        result.is_complete = result.missing_atom_masses.empty() && result.missing_lj_params.empty();
-        
-        std::ostringstream oss;
-        if (result.is_complete) {
-            oss << "Force field is complete for all " << atom_types.size() << " atom types.";
-        } else {
-            oss << "Force field is incomplete. Missing masses: " << result.missing_atom_masses.size()
-                << ", missing LJ params: " << result.missing_lj_params.size();
-        }
-        result.summary = oss.str();
-        
-        return result;
-    }
-
-    std::vector<std::string> validate_consistency() const {
-        std::vector<std::string> errors;
-        
-        auto missing_lj = find_missing_lj_params();
-        auto missing_masses = find_missing_masses();
-        
-        for (const auto& type : missing_lj) {
-            errors.push_back("Missing LJ parameters for atom type: " + type);
-        }
-        
-        for (const auto& type : missing_masses) {
-            errors.push_back("Missing mass for atom type: " + type);
-        }
-        
-        return errors;
-    }
-
-    // === Access to nonbonded parameters ===
+    // === Nonbonded Parameters ===
 
     const NonbondedParams& get_nonbonded_params() const { return nonbonded_params_; }
     NonbondedParams& get_nonbonded_params() { return nonbonded_params_; }
 
-    // === Backward compatibility helper methods ===
+    // === Direct access to parameter maps (for Python bindings) ===
 
+    const std::map<std::string, double>& get_atom_masses() const { return atom_masses_; }
+    const std::map<std::string, LJParams>& get_lj_params_map() const { return lj_params_; }
+    const std::map<std::pair<std::string, std::string>, NBFIXParams>& get_nbfix_map() const { return nbfix_; }
+    const std::map<std::pair<std::string, std::string>, BondParams>& get_bond_params_map() const { return bond_params_; }
+    const std::map<std::tuple<std::string, std::string, std::string>, AngleParams>& get_angle_params_map() const { return angle_params_; }
+    const std::map<std::tuple<std::string, std::string, std::string, std::string>, std::vector<DihedralParams>>& get_dihedral_params_map() const { return dihedral_params_; }
+    const std::map<std::tuple<std::string, std::string, std::string, std::string>, ImproperParams>& get_improper_params_map() const { return improper_params_; }
+
+    // === Backward compatibility static methods ===
+    
     static std::pair<std::string, std::string> makeTypePair(const std::string& type1,
                                                            const std::string& type2) {
         return ParamKeyUtils::makeTypePair(type1, type2);
@@ -360,25 +274,8 @@ public:
         return ParamKeyUtils::makeTypeQuad(type1, type2, type3, type4);
     }
 
-    // === Direct access to parameter maps (for Python bindings) ===
-
-    const std::map<std::string, double>& get_atom_masses() const { return atom_masses_; }
-    
-    // Python binding compatible methods
-    const std::map<std::string, LJParams>& get_lj_params_map() const { return lj_params_; }
-    const std::map<std::pair<std::string, std::string>, NBFIXParams>& get_nbfix_map() const { return nbfix_; }
-    const std::map<std::pair<std::string, std::string>, BondParams>& get_bond_params_map() const { return bond_params_; }
-    const std::map<std::tuple<std::string, std::string, std::string>, AngleParams>& get_angle_params_map() const { return angle_params_; }
-    const std::map<std::tuple<std::string, std::string, std::string, std::string>, std::vector<DihedralParams>>& get_dihedral_params_map() const { return dihedral_params_; }
-    const std::map<std::tuple<std::string, std::string, std::string, std::string>, ImproperParams>& get_improper_params_map() const { return improper_params_; }
-    
-    // Backward compatibility methods (without _map suffix)
-    const std::map<std::string, LJParams>& get_lj_params() const { return lj_params_; }
-    const std::map<std::pair<std::string, std::string>, NBFIXParams>& get_nbfix() const { return nbfix_; }
-    const std::map<std::pair<std::string, std::string>, BondParams>& get_bond_params() const { return bond_params_; }
-    const std::map<std::tuple<std::string, std::string, std::string>, AngleParams>& get_angle_params() const { return angle_params_; }
-    const std::map<std::tuple<std::string, std::string, std::string, std::string>, std::vector<DihedralParams>>& get_dihedral_params() const { return dihedral_params_; }
-    const std::map<std::tuple<std::string, std::string, std::string, std::string>, ImproperParams>& get_improper_params() const { return improper_params_; }
+    // === Friend class for analysis ===
+    friend class ForceFieldAnalysis;
 
 private:
     // Parameter storage
@@ -395,5 +292,8 @@ private:
 } // namespace forcefield
 } // namespace model
 } // namespace pygcmc
+
+// Include analysis functionality
+#include "ForceFieldAnalysis.hpp"
 
 #endif // PYGCMC_MODEL_FORCEFIELD_HPP 
