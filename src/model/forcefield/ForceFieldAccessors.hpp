@@ -3,7 +3,7 @@
 #ifndef PYGCMC_MODEL_FORCEFIELD_ACCESSORS_HPP
 #define PYGCMC_MODEL_FORCEFIELD_ACCESSORS_HPP
 
-#include "ForceField.hpp"
+#include "ForceFieldMain.hpp"
 
 namespace pygcmc {
 namespace model {

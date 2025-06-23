@@ -34,7 +34,7 @@ public:
 } // namespace pygcmc
 
 // Implementation after ForceField is defined
-#include "ForceField.hpp"
+#include "ForceFieldMain.hpp"
 
 namespace pygcmc {
 namespace model {

@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef PYGCMC_MODEL_FORCEFIELD_HPP
-#define PYGCMC_MODEL_FORCEFIELD_HPP
+#ifndef PYGCMC_MODEL_FORCEFIELD_MAIN_HPP
+#define PYGCMC_MODEL_FORCEFIELD_MAIN_HPP
 
 #include "ForceFieldTypes.hpp"
 #include <stdexcept>
@@ -130,4 +130,4 @@ private:
 #include "ForceFieldAnalysis.hpp"
 #include "ForceFieldAccessors.hpp"
 
-#endif // PYGCMC_MODEL_FORCEFIELD_HPP 
+#endif // PYGCMC_MODEL_FORCEFIELD_MAIN_HPP 
