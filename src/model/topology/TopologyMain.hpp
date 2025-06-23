@@ -184,7 +184,16 @@ public:
     void reserve_atoms(size_t n) { atom_manager_.reserve_atoms(n); }
 
     // CMAP check with atoms vector
-    bool has_cmap(const std::vector<int>& atoms) const;
+    bool has_cmap(const std::vector<int>& atoms) const {
+        if (atoms.size() < 5) return false;
+        return std::any_of(special_manager_.get_cmaps().begin(), special_manager_.get_cmaps().end(),
+            [&atoms](const TopologyCmap& cmap) {
+                for (size_t i = 0; i < 5 && i < atoms.size(); ++i) {
+                    if (cmap.atoms[i] != atoms[i]) return false;
+                }
+                return true;
+            });
+    }
 
     // Access to specialized managers for advanced usage
     const TopologyAtomManager& get_atom_manager() const { return atom_manager_; }
@@ -217,8 +226,5 @@ using TopologyCmap = topology::TopologyCmap;
 
 } // namespace model
 } // namespace pygcmc
-
-// Include implementation
-#include "TopologyMainImpl.hpp"
 
 #endif // PYGCMC_MODEL_TOPOLOGY_MAIN_HPP 
