@@ -15,35 +15,6 @@ namespace forcefield {
 
 /**
  * @brief Parameters for non-bonded interactions
- * 
- * Detailed explanation of nonbonded parameters in CHARMM force field:
- * 
- * The nonbonded energy function in CHARMM consists of Lennard-Jones (LJ) and electrostatic terms:
- * 
- * V(Lennard-Jones) = Eps,i,j[(Rmin,i,j/ri,j)**12 - 2(Rmin,i,j/ri,j)**6]
- * where:
- * - epsilon (Eps,i,j) = sqrt(eps,i * eps,j) [kcal/mole]
- * - Rmin,i,j = Rmin/2,i + Rmin/2,j [Angstroms]
- * - ri,j is the distance between atoms i and j
- * 
- * Parameters:
- * @param nbxmod   Nonbonded exclusion model (5 = use switching functions)
- * @param cdiel    Use constant dielectric (true/false)
- * @param fshift   Use force shifting (true/false)
- * @param vatom    Use atom-based potential (true/false)
- * @param vdistance Use distance-based potential (true/false)
- * @param vfswitch Use force switching (true/false)
- * @param cutnb    Nonbonded cutoff distance [Angstroms]
- * @param ctofnb   Distance at which switching function takes effect for nonbonded [Angstroms]
- * @param ctonnb   Distance at which switching function takes effect for 1-4 interactions [Angstroms]
- * @param eps      Dielectric constant
- * @param e14fac   Scaling factor for 1-4 interactions
- * @param wmin     Minimum weighting in switching function
- * 
- * Units:
- * - Distances in Angstroms
- * - Energies in kcal/mole
- * - Dielectric constant is dimensionless
  */
 struct NonbondedParams {
     int nbxmod = 5;
@@ -62,16 +33,6 @@ struct NonbondedParams {
 
 /**
  * @brief Parameters for Lennard-Jones interactions
- * 
- * The Lennard-Jones potential is defined as:
- * V(Lennard-Jones) = Eps,i,j[(Rmin,i,j/ri,j)**12 - 2(Rmin,i,j/ri,j)**6]
- * where:
- * - Eps,i,j = sqrt(eps,i * eps,j)
- * - Rmin,i,j = Rmin/2,i + Rmin/2,j
- * 
- * Units:
- * - epsilon: kcal/mole
- * - rmin_half: Angstroms (Rmin/2: HALF of the distance at minimum energy)
  */
 struct LJParams {
     double epsilon = 0.0;     ///< Well depth (kcal/mole)
@@ -132,13 +93,6 @@ struct ImproperParams {
 
 /**
  * @brief Parameters for NBFIX (specific nonbonded interaction parameters)
- * 
- * In CHARMM, NBFIX allows specification of specific Lennard-Jones parameters
- * for particular pairs of atom types, overriding the standard combining rules.
- * 
- * Units:
- * - epsilon: kcal/mole
- * - rmin: Angstroms (full Rmin, not Rmin/2)
  */
 struct NBFIXParams {
     double epsilon = 0.0;     ///< Well depth (kcal/mole)
@@ -176,29 +130,15 @@ struct CompletenessResult {
  */
 class ParamKeyUtils {
 public:
-    /**
-     * @brief Create a parameter key for pair interactions
-     * Orders the types alphabetically for consistent lookup
-     */
-    static std::pair<std::string, std::string> makeTypePair(const std::string& type1,
-                                                           const std::string& type2) {
+    static std::pair<std::string, std::string> makeTypePair(const std::string& type1, const std::string& type2) {
         return type1 < type2 ? std::make_pair(type1, type2) : std::make_pair(type2, type1);
     }
 
-    /**
-     * @brief Create a parameter key for angle interactions
-     * For angle parameters in CHARMM force field:
-     * 1. The middle atom (type2) must stay in the middle
-     * 2. Store parameters in the order they appear in the parameter file
-     */
     static std::tuple<std::string, std::string, std::string> makeTypeTriple(
         const std::string& type1, const std::string& type2, const std::string& type3) {
         return std::make_tuple(type1, type2, type3);
     }
 
-    /**
-     * @brief Create a parameter key for dihedral/improper interactions
-     */
     static std::tuple<std::string, std::string, std::string, std::string> makeTypeQuad(
         const std::string& type1, const std::string& type2,
         const std::string& type3, const std::string& type4) {
