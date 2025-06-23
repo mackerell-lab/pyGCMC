@@ -1,9 +1,10 @@
 #pragma once
 
-#ifndef PYGCMC_MODEL_FORCEFIELD_UTILS_HPP
-#define PYGCMC_MODEL_FORCEFIELD_UTILS_HPP
+#ifndef PYGCMC_MODEL_FORCEFIELD_ANALYSIS_HPP
+#define PYGCMC_MODEL_FORCEFIELD_ANALYSIS_HPP
 
 #include "ForceFieldParams.hpp"
+#include "ForceFieldInterface.hpp"
 #include <sstream>
 #include <iomanip>
 
@@ -12,79 +13,26 @@ namespace model {
 namespace forcefield {
 
 /**
- * @brief Force field utility class providing analysis and validation tools
+ * @brief Force field analysis and statistics class
  * 
- * This class provides utility functions for force field analysis, validation,
- * and statistics generation. It operates on a ForceFieldStorage instance
- * to perform various analytical operations.
+ * This class provides analysis and statistics functionality for force fields.
+ * It generates summaries, detailed statistics, and performs various analytical
+ * operations on force field data.
  */
-class ForceFieldUtils {
+class ForceFieldAnalyzer {
 public:
     /**
      * @brief Constructor
      * @param storage Reference to the force field storage container
      */
-    explicit ForceFieldUtils(const ForceFieldStorage& storage) : storage_(storage) {}
-    ~ForceFieldUtils() = default;
-
-    // === Validation Methods ===
-
-    /**
-     * @brief Validate the force field completeness
-     * @return true if force field has basic required parameters
-     */
-    bool validate_force_field() const {
-        // Basic validation: check if we have any atom masses and LJ parameters
-        return !storage_.atom_masses.empty() && !storage_.lj_params.empty();
-    }
-
-    /**
-     * @brief Check completeness for a given set of atom types
-     * @param atom_types Set of atom types to check
-     * @return CompletenessResult with detailed analysis
-     */
-    CompletenessResult check_completeness(const std::set<std::string>& atom_types) const {
-        CompletenessResult result;
-        result.is_complete = true;
-
-        // Check atom masses
-        for (const auto& type : atom_types) {
-            if (storage_.atom_masses.find(type) == storage_.atom_masses.end()) {
-                result.missing_atom_masses.insert(type);
-                result.is_complete = false;
-            }
-        }
-
-        // Check LJ parameters
-        for (const auto& type : atom_types) {
-            if (storage_.lj_params.find(type) == storage_.lj_params.end()) {
-                result.missing_lj_params.insert(type);
-                result.is_complete = false;
-            }
-        }
-
-        // Generate summary
-        std::ostringstream oss;
-        if (result.is_complete) {
-            oss << "Force field is complete for all " << atom_types.size() << " atom types.";
-        } else {
-            oss << "Force field is incomplete:\n";
-            if (!result.missing_atom_masses.empty()) {
-                oss << "  Missing atom masses: " << result.missing_atom_masses.size() << " types\n";
-            }
-            if (!result.missing_lj_params.empty()) {
-                oss << "  Missing LJ parameters: " << result.missing_lj_params.size() << " types\n";
-            }
-        }
-        result.summary = oss.str();
-
-        return result;
-    }
+    explicit ForceFieldAnalyzer(const ForceFieldStorage& storage) : storage_(storage) {}
+    ~ForceFieldAnalyzer() = default;
 
     // === Statistics Methods ===
 
     /**
      * @brief Get comprehensive statistics about the force field
+     * @return ForceFieldStats structure with counts
      */
     ForceFieldStats get_statistics() const {
         return storage_.get_statistics();
@@ -92,6 +40,7 @@ public:
 
     /**
      * @brief Get a human-readable summary of the force field
+     * @return String summary with basic statistics
      */
     std::string get_summary() const {
         auto stats = get_statistics();
@@ -109,6 +58,7 @@ public:
 
     /**
      * @brief Get detailed statistics with parameter information
+     * @return Detailed string with all parameter listings
      */
     std::string get_detailed_statistics() const {
         std::ostringstream oss;
@@ -161,7 +111,7 @@ public:
         if (nb.vfswitch) oss << "vfswitch ";
         oss << "\n\n";
 
-        // Bond parameters summary
+        // Bonded parameters summary
         if (stats.num_bond_types > 0) {
             oss << "Bond Parameters: " << stats.num_bond_types << " types\n";
         }
@@ -178,40 +128,11 @@ public:
         return oss.str();
     }
 
-    // === Direct Access Methods (for Python bindings) ===
-
-    const std::map<std::string, double>& get_atom_masses() const { 
-        return storage_.atom_masses; 
-    }
-    
-    const std::map<std::string, LJParams>& get_lj_params() const { 
-        return storage_.lj_params; 
-    }
-    
-    const std::map<std::pair<std::string, std::string>, NBFIXParams>& get_nbfix() const { 
-        return storage_.nbfix; 
-    }
-    
-    const std::map<std::pair<std::string, std::string>, BondParams>& get_bond_params() const { 
-        return storage_.bond_params; 
-    }
-    
-    const std::map<std::tuple<std::string, std::string, std::string>, AngleParams>& get_angle_params() const { 
-        return storage_.angle_params; 
-    }
-    
-    const std::map<std::tuple<std::string, std::string, std::string, std::string>, std::vector<DihedralParams>>& get_dihedral_params() const { 
-        return storage_.dihedral_params; 
-    }
-    
-    const std::map<std::tuple<std::string, std::string, std::string, std::string>, ImproperParams>& get_improper_params() const { 
-        return storage_.improper_params; 
-    }
-
     // === Analysis Methods ===
 
     /**
      * @brief Find all atom types that have masses but no LJ parameters
+     * @return Set of atom types with missing LJ parameters
      */
     std::set<std::string> find_missing_lj_params() const {
         std::set<std::string> missing;
@@ -225,6 +146,7 @@ public:
 
     /**
      * @brief Find all atom types that have LJ parameters but no masses
+     * @return Set of atom types with missing masses
      */
     std::set<std::string> find_missing_masses() const {
         std::set<std::string> missing;
@@ -238,6 +160,7 @@ public:
 
     /**
      * @brief Get all unique atom types referenced in the force field
+     * @return Set of all atom types found in any parameter set
      */
     std::set<std::string> get_all_referenced_types() const {
         std::set<std::string> types;
@@ -271,49 +194,61 @@ public:
             types.insert(std::get<2>(pair.first));
         }
 
+        // From dihedral parameters
+        for (const auto& pair : storage_.dihedral_params) {
+            types.insert(std::get<0>(pair.first));
+            types.insert(std::get<1>(pair.first));
+            types.insert(std::get<2>(pair.first));
+            types.insert(std::get<3>(pair.first));
+        }
+
+        // From improper parameters
+        for (const auto& pair : storage_.improper_params) {
+            types.insert(std::get<0>(pair.first));
+            types.insert(std::get<1>(pair.first));
+            types.insert(std::get<2>(pair.first));
+            types.insert(std::get<3>(pair.first));
+        }
+
         return types;
     }
 
-    /**
-     * @brief Check if force field parameters are consistent
-     */
-    std::vector<std::string> validate_consistency() const {
-        std::vector<std::string> issues;
+    // === Direct Access Methods (for Python bindings) ===
 
-        // Check for missing masses
-        auto missing_masses = find_missing_masses();
-        if (!missing_masses.empty()) {
-            std::ostringstream oss;
-            oss << "Missing atom masses for " << missing_masses.size() << " types with LJ parameters";
-            issues.push_back(oss.str());
-        }
-
-        // Check for missing LJ parameters
-        auto missing_lj = find_missing_lj_params();
-        if (!missing_lj.empty()) {
-            std::ostringstream oss;
-            oss << "Missing LJ parameters for " << missing_lj.size() << " types with masses";
-            issues.push_back(oss.str());
-        }
-
-        // Check nonbonded parameter consistency
-        const auto& nb = storage_.nonbonded_params;
-        if (nb.cutnb <= nb.ctofnb) {
-            issues.push_back("cutnb should be greater than ctofnb");
-        }
-        if (nb.ctofnb <= nb.ctonnb) {
-            issues.push_back("ctofnb should be greater than ctonnb");
-        }
-
-        return issues;
+    const std::map<std::string, double>& get_atom_masses() const { 
+        return storage_.atom_masses; 
+    }
+    
+    const std::map<std::string, LJParams>& get_lj_params() const { 
+        return storage_.lj_params; 
+    }
+    
+    const std::map<std::pair<std::string, std::string>, NBFIXParams>& get_nbfix() const { 
+        return storage_.nbfix; 
+    }
+    
+    const std::map<std::pair<std::string, std::string>, BondParams>& get_bond_params() const { 
+        return storage_.bond_params; 
+    }
+    
+    const std::map<std::tuple<std::string, std::string, std::string>, AngleParams>& get_angle_params() const { 
+        return storage_.angle_params; 
+    }
+    
+    const std::map<std::tuple<std::string, std::string, std::string, std::string>, std::vector<DihedralParams>>& get_dihedral_params() const { 
+        return storage_.dihedral_params; 
+    }
+    
+    const std::map<std::tuple<std::string, std::string, std::string, std::string>, ImproperParams>& get_improper_params() const { 
+        return storage_.improper_params; 
     }
 
 private:
-    const ForceFieldStorage& storage_;
+    const ForceFieldStorage& storage_;  ///< Reference to parameter storage
 };
 
 } // namespace forcefield
 } // namespace model
 } // namespace pygcmc
 
-#endif // PYGCMC_MODEL_FORCEFIELD_UTILS_HPP 
+#endif // PYGCMC_MODEL_FORCEFIELD_ANALYSIS_HPP 

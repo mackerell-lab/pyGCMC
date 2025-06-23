@@ -394,14 +394,14 @@ void init_model(py::module& m) {
         .def_static("makeTypePair", &model::ForceField::makeTypePair)
         .def_static("makeTypeTriple", &model::ForceField::makeTypeTriple)
         .def_static("makeTypeQuad", &model::ForceField::makeTypeQuad)
-        // Property accessors
+        // Property accessors - using new _map methods for accessing full parameter maps
         .def_property_readonly("atom_masses", static_cast<const std::map<std::string, double>& (model::ForceField::*)() const>(&model::ForceField::get_atom_masses))
-        .def_property_readonly("lj_params", static_cast<const std::map<std::string, model::LJParams>& (model::ForceField::*)() const>(&model::ForceField::get_lj_params))
-        .def_property_readonly("nbfix", static_cast<const std::map<std::pair<std::string, std::string>, model::NBFIXParams>& (model::ForceField::*)() const>(&model::ForceField::get_nbfix))
-        .def_property_readonly("bond_params", static_cast<const std::map<std::pair<std::string, std::string>, model::BondParams>& (model::ForceField::*)() const>(&model::ForceField::get_bond_params))
-        .def_property_readonly("angle_params", static_cast<const std::map<std::tuple<std::string, std::string, std::string>, model::AngleParams>& (model::ForceField::*)() const>(&model::ForceField::get_angle_params))
-        .def_property_readonly("dihedral_params", static_cast<const std::map<std::tuple<std::string, std::string, std::string, std::string>, std::vector<model::DihedralParams>>& (model::ForceField::*)() const>(&model::ForceField::get_dihedral_params))
-        .def_property_readonly("improper_params", static_cast<const std::map<std::tuple<std::string, std::string, std::string, std::string>, model::ImproperParams>& (model::ForceField::*)() const>(&model::ForceField::get_improper_params));
+        .def_property_readonly("lj_params", static_cast<const std::map<std::string, model::LJParams>& (model::ForceField::*)() const>(&model::ForceField::get_lj_params_map))
+        .def_property_readonly("nbfix", static_cast<const std::map<std::pair<std::string, std::string>, model::NBFIXParams>& (model::ForceField::*)() const>(&model::ForceField::get_nbfix_map))
+        .def_property_readonly("bond_params", static_cast<const std::map<std::pair<std::string, std::string>, model::BondParams>& (model::ForceField::*)() const>(&model::ForceField::get_bond_params_map))
+        .def_property_readonly("angle_params", static_cast<const std::map<std::tuple<std::string, std::string, std::string>, model::AngleParams>& (model::ForceField::*)() const>(&model::ForceField::get_angle_params_map))
+        .def_property_readonly("dihedral_params", static_cast<const std::map<std::tuple<std::string, std::string, std::string, std::string>, std::vector<model::DihedralParams>>& (model::ForceField::*)() const>(&model::ForceField::get_dihedral_params_map))
+        .def_property_readonly("improper_params", static_cast<const std::map<std::tuple<std::string, std::string, std::string, std::string>, model::ImproperParams>& (model::ForceField::*)() const>(&model::ForceField::get_improper_params_map));
 
     // Bind Param class and its nested structs
     auto param = py::class_<model::Param>(model, "Param")

@@ -20,25 +20,41 @@
  * - ParamKeyUtils for consistent parameter keys
  * - Statistics and completeness check structures
  * 
- * **ForceFieldCore.hpp** - Core Management Operations
- * - ForceFieldManager class for parameter operations
- * - Parameter addition with full validation
- * - Parameter retrieval with error checking
- * - Existence checks and size queries
- * - Bidirectional angle parameter lookup
+ * **ForceFieldInterface.hpp** - Abstract Interfaces (295 lines)
+ * - IForceFieldOperations interface for parameter operations
+ * - IForceFieldAnalysis interface for analysis operations
+ * - IForceFieldChecker interface for existence checks
+ * - IForceField complete interface combining all operations
  * 
- * **ForceFieldUtils.hpp** - Analysis and Utility Functions
- * - ForceFieldUtils class for analysis operations
- * - Validation and completeness checking
- * - Statistical analysis and summaries
- * - Consistency validation
- * - Missing parameter detection
+ * **ForceFieldManager.hpp** - Parameter Management (299 lines)
+ * - ForceFieldParameterManager class for all parameter operations
+ * - Parameter addition with full validation and error checking
+ * - Parameter retrieval with bidirectional lookup support
+ * - Clean separation of management concerns
  * 
- * **ForceFieldMain.hpp** - Main Interface Class
+ * **ForceFieldOperations.hpp** - Existence Checks & Queries (246 lines)
+ * - ForceFieldOperations class for existence checks
+ * - Size queries and summary operations
+ * - Read-only operations optimized for performance
+ * - Type collection and analysis helpers
+ * 
+ * **ForceFieldAnalysis.hpp** - Statistics and Analysis (218 lines)
+ * - ForceFieldAnalyzer class for analysis operations
+ * - Statistical analysis and detailed summaries
+ * - Missing parameter detection and reporting
+ * - Direct access methods for Python bindings
+ * 
+ * **ForceFieldValidation.hpp** - Validation and Completeness (278 lines)
+ * - ForceFieldValidator class for validation operations
+ * - Completeness checking for atom type sets
+ * - Consistency validation and parameter range checks
+ * - Comprehensive validation reporting
+ * 
+ * **ForceFieldMain.hpp** - Main Interface Class (286 lines)
  * - Complete ForceField class with all functionality
- * - Backward compatibility with original API
- * - Composition-based architecture
- * - IValidatable interface implementation
+ * - Composition-based architecture using specialized components
+ * - Full backward compatibility with original API
+ * - IForceField interface implementation with clean delegation
  * 
  * **Key Features:**
  * - Complete CHARMM force field support
@@ -106,8 +122,11 @@
 
 // === Core Components ===
 #include "ForceFieldParams.hpp"
-#include "ForceFieldCore.hpp"
-#include "ForceFieldUtils.hpp"
+#include "ForceFieldInterface.hpp"
+#include "ForceFieldManager.hpp"
+#include "ForceFieldOperations.hpp"
+#include "ForceFieldAnalysis.hpp"
+#include "ForceFieldValidation.hpp"
 #include "ForceFieldMain.hpp"
 
 namespace pygcmc {
@@ -135,13 +154,13 @@ namespace info {
  * @brief Get module information
  */
 inline std::string get_forcefield_module_info() {
-    return "ForceField Module v1.0 - Complete CHARMM Force Field Parameter Management\n"
-           "- Parameter structures: LJ, Bond, Angle, Dihedral, Improper, NBFIX\n"
-           "- Core management with full validation\n"
-           "- Analysis and utility functions\n"
-           "- Backward compatible main interface\n"
-           "- Thread-safe read operations\n"
-           "- AI-friendly modular architecture";
+    return "ForceField Module v2.0 - Refactored AI-Friendly CHARMM Force Field Management\n"
+           "- 7 specialized components, each under 300 lines\n"
+           "- Clear separation of concerns with dedicated interfaces\n"
+           "- Parameter management, operations, analysis, and validation\n"
+           "- Full backward compatibility with original API\n"
+           "- Thread-safe read operations and comprehensive error checking\n"
+           "- Composition-based architecture for better maintainability";
 }
 
 /**
