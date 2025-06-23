@@ -190,6 +190,28 @@ public:
     size_t get_num_cmaps() const { return storage_.cmaps.size(); }
     size_t get_num_groups() const { return storage_.groups.size(); }
 
+    // Advanced check methods for topology elements
+    bool has_donor(int donor_atom) const {
+        return std::any_of(storage_.donors.begin(), storage_.donors.end(),
+            [donor_atom](const TopologyDonor& donor) {
+                return donor.donor_atom == donor_atom;
+            });
+    }
+
+    bool has_donor(int donor_atom, int hydrogen_atom) const {
+        return std::any_of(storage_.donors.begin(), storage_.donors.end(),
+            [donor_atom, hydrogen_atom](const TopologyDonor& donor) {
+                return donor.donor_atom == donor_atom && donor.hydrogen_atom == hydrogen_atom;
+            });
+    }
+
+    bool has_acceptor(int acceptor_atom) const {
+        return std::any_of(storage_.acceptors.begin(), storage_.acceptors.end(),
+            [acceptor_atom](const TopologyAcceptor& acceptor) {
+                return acceptor.acceptor_atom == acceptor_atom;
+            });
+    }
+
     // Check methods
     bool has_bond(int atom1, int atom2) const {
         return std::any_of(storage_.bonds.begin(), storage_.bonds.end(),
