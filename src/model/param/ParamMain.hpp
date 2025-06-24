@@ -293,6 +293,15 @@ public:
     Param() = default;
     ~Param() = default;
 
+    // === Backward Compatibility Nested Types ===
+    using BasicInfo = ::pygcmc::model::param::BasicInfo;
+    using SpaceInfo = ::pygcmc::model::param::SpaceInfo;
+    using MCInfo = ::pygcmc::model::param::MCParams;
+    using EnergyInfo = ::pygcmc::model::param::EnergyInfo;
+    using FragmentInfo = ::pygcmc::model::param::FragmentInfo;
+    using BiasInfo = ::pygcmc::model::param::BiasInfo;
+    using FileInfo = ::pygcmc::model::param::FileInfo;
+
     // IValidatable interface
     bool is_valid() const override {
         // Check basic validity
@@ -309,7 +318,7 @@ public:
     // Getters (const)
     const BasicInfo& get_basic_info() const { return basic_info_; }
     const SpaceInfo& get_space_info() const { return space_info_; }
-    const MCParams& get_mc_info() const { return mc_info_; }
+    const MCInfo& get_mc_info() const { return mc_info_; }
     const EnergyInfo& get_energy_info() const { return energy_info_; }
     const FragmentInfo& get_fragment_info() const { return fragment_info_; }
     const BiasInfo& get_bias_info() const { return bias_info_; }
@@ -318,7 +327,7 @@ public:
     // Non-const getters for modification
     BasicInfo& get_basic_info() { return basic_info_; }
     SpaceInfo& get_space_info() { return space_info_; }
-    MCParams& get_mc_info() { return mc_info_; }
+    MCInfo& get_mc_info() { return mc_info_; }
     EnergyInfo& get_energy_info() { return energy_info_; }
     FragmentInfo& get_fragment_info() { return fragment_info_; }
     BiasInfo& get_bias_info() { return bias_info_; }
@@ -327,7 +336,7 @@ public:
     // Setters
     void set_basic_info(const BasicInfo& info) { basic_info_ = info; }
     void set_space_info(const SpaceInfo& info) { space_info_ = info; }
-    void set_mc_info(const MCParams& info) { mc_info_ = info; }
+    void set_mc_info(const MCInfo& info) { mc_info_ = info; }
     void set_energy_info(const EnergyInfo& info) { energy_info_ = info; }
     void set_fragment_info(const FragmentInfo& info) { fragment_info_ = info; }
     void set_bias_info(const BiasInfo& info) { bias_info_ = info; }
@@ -372,7 +381,7 @@ public:
     void clear() {
         basic_info_ = BasicInfo();
         space_info_ = SpaceInfo();
-        mc_info_ = MCParams();
+        mc_info_ = MCInfo();
         energy_info_ = EnergyInfo();
         fragment_info_ = FragmentInfo();
         bias_info_ = BiasInfo();
@@ -414,7 +423,7 @@ public:
 private:
     BasicInfo basic_info_;
     SpaceInfo space_info_;
-    MCParams mc_info_;
+    MCInfo mc_info_;
     EnergyInfo energy_info_;
     FragmentInfo fragment_info_;
     BiasInfo bias_info_;

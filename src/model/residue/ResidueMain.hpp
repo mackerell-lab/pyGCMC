@@ -346,6 +346,22 @@ auto find_residues_in_range(const Container& residues, int start, int end) {
 
 } // namespace utils
 
+/**
+ * @brief Validate a residue
+ * @param residue The residue to validate
+ * @return true if the residue is valid, false otherwise
+ */
+inline bool validate_residue(const Residue& residue) {
+    if (!residue.is_valid()) return false;
+    
+    // Check all atoms in the residue
+    for (const auto& atom : residue.get_atoms()) {
+        if (!atom || !atom->is_valid()) return false;
+    }
+    
+    return true;
+}
+
 } // namespace residue
 } // namespace model
 } // namespace pygcmc

@@ -53,42 +53,22 @@
  * - StructureMain.hpp: High-level structural data organization
  * - Features: Multi-chain structures, structural validation, format conversion
  * 
- * **utils/ directory** - Factory Functions and Testing
- * - UtilsFactory.hpp: Factory functions, version info, type aliases, and utilities
- * - Features: Water molecule creation, protein residue templates, system validation
- * 
  * **Usage Examples:**
  * 
  * ```cpp
  * #include "model/ModelModule.hpp"
  * using namespace pygcmc::model;
  * 
- * // 1. Create molecular components
- * auto water = factory::create_water_molecule(1);
- * auto alanine = factory::create_alanine_residue(2);
+ * // Create molecular components
+ * auto molecular = std::make_shared<molecule::Molecular>();
  * 
- * // 2. Build molecular system
- * auto molecular = std::make_shared<Molecular>();
- * molecular->add_residue(water);
- * molecular->add_residue(alanine);
- * 
- * // 3. Validate and analyze
- * if (factory::validate_molecular_system(*molecular)) {
- *     std::string summary = factory::get_system_summary(*molecular);
- *     std::cout << summary << std::endl;
+ * // Validate system
+ * if (validate_molecular_system(*molecular)) {
+ *     std::cout << "System is valid" << std::endl;
  * }
  * 
- * // 4. Access detailed statistics
- * auto stats = molecular->get_system_statistics();
- * std::cout << "Total atoms: " << stats.num_atoms << std::endl;
- * std::cout << "Total mass: " << stats.total_mass << " amu" << std::endl;
- * 
- * // 5. Module information and validation (following system pattern)
- * std::cout << get_module_info() << std::endl;
+ * // Version info
  * std::cout << "Version: " << getModelVersion() << std::endl;
- * if (utils::validate_module()) {
- *     std::cout << "Module validation passed!" << std::endl;
- * }
  * ```
  * 
  * **Backward Compatibility:**
@@ -105,6 +85,7 @@
  */
 
 // === Core Interfaces and Utilities ===
+#include <iostream>
 #include "common/ModelInterface.hpp"
 #include "common/ModelConstants.hpp"
 #include "common/ModelUtils.hpp"
@@ -125,22 +106,34 @@
 // === Parameters and Configuration ===
 #include "param/ParamMain.hpp"
 
-// === Factory, Utilities, Version Info, and Type Aliases ===
-#include "utils/UtilsMain.hpp"
-
 namespace pygcmc {
 namespace model {
 
-// All functionality is now provided through UtilsMain.hpp (following system pattern):
-// - Module information: info namespace and get_module_info()
-// - Version info: getModelVersion() (exported to parent namespace)
-// - Type aliases: Direct using declarations (Atom, Residue, Molecular, etc.)
-// - Validation: utils::validate_module() and related functions
-// - Factory functions: factory::create_water_molecule(), etc.
+// Backward compatibility type aliases
+using Atom = atom::Atom;
+using Residue = residue::Residue;
+using Molecular = molecule::Molecular;
+using Structure = structure::Structure;
+using Topology = topology::Topology;
+using ForceField = forcefield::ForceField;
+using MCState = montecarlo::MCState;
+using Param = param::Param;
 
-// === Import all utilities and compatibility aliases ===
-// The type aliases (Atom, Residue, Molecular, Structure, etc.) are defined in UtilsCompatibility.hpp
-// and automatically available in the model namespace through UtilsMain.hpp inclusion
+// Force field type aliases
+using NonbondedParams = forcefield::NonbondedParams;
+using LJParams = forcefield::LJParams;
+using BondParams = forcefield::BondParams;
+using AngleParams = forcefield::AngleParams;
+using DihedralParams = forcefield::DihedralParams;
+using ImproperParams = forcefield::ImproperParams;
+using NBFIXParams = forcefield::NBFIXParams;
+
+/**
+ * @brief Get model module version
+ */
+inline const char* getModelVersion() {
+    return "1.0.0";
+}
 
 } // namespace model
 } // namespace pygcmc

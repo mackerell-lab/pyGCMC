@@ -263,6 +263,15 @@ auto find_atoms_by_residue(const Container& atoms, const std::string& resname, i
 
 } // namespace utils
 
+/**
+ * @brief Validate an atom
+ * @param atom The atom to validate
+ * @return true if the atom is valid, false otherwise
+ */
+inline bool validate_atom(const Atom& atom) {
+    return atom.is_valid();
+}
+
 } // namespace atom
 } // namespace model
 } // namespace pygcmc

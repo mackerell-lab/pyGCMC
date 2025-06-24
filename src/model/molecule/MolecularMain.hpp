@@ -300,6 +300,28 @@ public:
     }
 };
 
+/**
+ * @brief Validate a complete molecular system
+ * @param system The molecular system to validate
+ * @return true if the system is valid, false otherwise
+ */
+inline bool validate_molecular_system(const Molecular& system) {
+    // Check basic validity
+    if (!system.is_valid()) return false;
+    
+    // Check all residues
+    for (const auto& residue : system.get_residues()) {
+        if (!residue || !residue->is_valid()) return false;
+    }
+    
+    // Check all atoms
+    for (const auto& atom : system.get_atoms()) {
+        if (!atom || !atom->is_valid()) return false;
+    }
+    
+    return true;
+}
+
 } // namespace molecule
 
 // Backward compatibility: provide the Molecular class in the model namespace
@@ -307,6 +329,13 @@ using Molecular = molecule::Molecular;
 
 // Backward compatibility: provide the StandardCmap struct in the model namespace
 using StandardCmap = molecule::StandardCmap;
+
+/**
+ * @brief Validate a complete molecular system (backward compatibility)
+ */
+inline bool validate_molecular_system(const Molecular& system) {
+    return molecule::validate_molecular_system(system);
+}
 
 } // namespace model
 } // namespace pygcmc
