@@ -1,6 +1,6 @@
 // src/io/inpParser.cpp
 
-#include "io/inpParser.hpp"
+#include "inpParser.hpp"
 #include <fstream>
 #include <sstream>
 #include <algorithm>

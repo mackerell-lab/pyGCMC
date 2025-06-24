@@ -2,11 +2,7 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include "io/pdbParser.hpp"
-#include "io/psfParser.hpp"
-#include "io/topParser.hpp"
-#include "io/prmParser.hpp"
-#include "io/inpParser.hpp"
+#include "io/IOModule.hpp"
 
 namespace py = pybind11;
 
