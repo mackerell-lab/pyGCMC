@@ -236,7 +236,6 @@ void init_model(py::module& m) {
         .def("get_residue_id", &model::Residue::get_residue_id)
         .def("set_residue_id", &model::Residue::set_residue_id)
         .def("find_atom_by_pdb_name", &model::Residue::find_atom_by_pdb_name)
-        .def("update_atom_map", &model::Residue::refresh_atom_map)
         .def("get_atom_range", &model::Residue::get_atom_range);
 
     // Bind Topology class

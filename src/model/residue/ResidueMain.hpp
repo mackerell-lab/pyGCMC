@@ -52,7 +52,6 @@ public:
             throw std::invalid_argument("Atom does not belong to this residue");
         }
         atoms_.push_back(std::make_shared<atom::Atom>(atom));
-        update_atom_map();
     }
 
     void add_atom(std::shared_ptr<atom::Atom> atom) {
@@ -62,7 +61,6 @@ public:
             throw std::invalid_argument("Atom does not belong to this residue");
         }
         atoms_.push_back(atom);
-        update_atom_map();
     }
 
     const std::vector<std::shared_ptr<atom::Atom>>& get_atoms() const noexcept { 
@@ -186,45 +184,9 @@ public:
     bool is_hetatm() const noexcept { return data_.hetatm; }
     void set_hetatm(bool het) noexcept { data_.hetatm = het; }
 
-    // Residue type checking methods (used by molecule utils)
-    bool is_protein_residue() const {
-        // Standard protein residues
-        static const std::vector<std::string> protein_residues = {
-            "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", "HIS", "ILE",
-            "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL"
-        };
-        return std::find(protein_residues.begin(), protein_residues.end(), data_.resname) != protein_residues.end();
-    }
 
-    bool is_nucleic_acid_residue() const {
-        // Standard nucleic acid residues
-        static const std::vector<std::string> nucleic_residues = {
-            "A", "T", "G", "C", "U", "DA", "DT", "DG", "DC", "DU",
-            "ADE", "THY", "GUA", "CYT", "URA"
-        };
-        return std::find(nucleic_residues.begin(), nucleic_residues.end(), data_.resname) != nucleic_residues.end();
-    }
 
-    // Distance calculation method (used by molecule utils)
-    double distance_to(const Residue& other) const {
-        const auto& com1 = get_center_of_mass();
-        const auto& com2 = other.get_center_of_mass();
-        double dx = com1[0] - com2[0];
-        double dy = com1[1] - com2[1];
-        double dz = com1[2] - com2[2];
-        return std::sqrt(dx*dx + dy*dy + dz*dz);
-    }
 
-    // Clone method (used by molecule main)
-    std::shared_ptr<Residue> clone() const {
-        auto cloned = std::make_shared<Residue>(*this);
-        return cloned;
-    }
-
-    // Public atom map update (used by Python bindings)
-    void refresh_atom_map() {
-        update_atom_map();
-    }
 
 private:
     void update_atom_map() {
