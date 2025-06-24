@@ -5,6 +5,7 @@
 
 #include "TopologyCore.hpp"
 #include "TopologyValidation.hpp"
+#include "TopologySearch.hpp"
 #include <stdexcept>
 #include <iostream>
 
@@ -17,7 +18,8 @@ namespace topology {
  */
 class TopologyAtomManager : public ValidationMixin {
 public:
-    TopologyAtomManager(TopologyStorage& storage) : ValidationMixin(storage), storage_(storage) {}
+    TopologyAtomManager(TopologyStorage& storage) 
+        : ValidationMixin(storage), storage_(storage), searcher_(storage) {}
 
     /**
      * @brief Add an atom to the topology
@@ -169,43 +171,25 @@ public:
     }
 
     /**
-     * @brief Find atom by residue and atom name
+     * @brief Find atom by residue and atom name - delegate to searcher
      */
     std::optional<int> find_atom(const std::string& residue_name, int residue_number,
                                 const std::string& atom_name) const {
-        // Try to find the atom in any segment
-        for (const auto& segment : storage_.segments) {
-            auto it = storage_.atom_map.find(std::make_tuple(residue_name, residue_number, segment.name, atom_name));
-            if (it != storage_.atom_map.end()) {
-                return it->second;
-            }
-        }
-        return std::nullopt;
+        return searcher_.find_atom(residue_name, residue_number, atom_name);
     }
 
     /**
-     * @brief Find residue by name and number
+     * @brief Find residue by name and number - delegate to searcher
      */
     std::optional<int> find_residue(const std::string& name, int number) const {
-        // Try to find the residue in any segment
-        for (const auto& segment : storage_.segments) {
-            auto it = storage_.residue_map.find(std::make_tuple(name, number, segment.name));
-            if (it != storage_.residue_map.end()) {
-                return it->second;
-            }
-        }
-        return std::nullopt;
+        return searcher_.find_residue(name, number);
     }
 
     /**
-     * @brief Find segment by name
+     * @brief Find segment by name - delegate to searcher
      */
     std::optional<int> find_segment(const std::string& name) const {
-        auto it = storage_.segment_map.find(name);
-        if (it != storage_.segment_map.end()) {
-            return it->second;
-        }
-        return std::nullopt;
+        return searcher_.find_segment(name);
     }
 
     /**
@@ -222,6 +206,7 @@ public:
 
 private:
     TopologyStorage& storage_;
+    TopologySearcher searcher_;  // Add searcher member for delegation
 
     /**
      * @brief Ensure segment exists, create if necessary

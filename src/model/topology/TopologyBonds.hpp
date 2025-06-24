@@ -5,6 +5,7 @@
 
 #include "TopologyCore.hpp"
 #include "TopologyValidation.hpp"
+#include "TopologySearch.hpp"
 #include <stdexcept>
 #include <algorithm>
 
@@ -17,7 +18,8 @@ namespace topology {
  */
 class TopologyBondManager : public ValidationMixin {
 public:
-    TopologyBondManager(TopologyStorage& storage) : ValidationMixin(storage), storage_(storage) {}
+    TopologyBondManager(TopologyStorage& storage) 
+        : ValidationMixin(storage), storage_(storage), searcher_(storage) {}
 
     /**
      * @brief Add a bond between two atoms
@@ -133,11 +135,7 @@ public:
 
     // Check methods for core structures
     bool has_bond(int atom1, int atom2) const {
-        return std::any_of(storage_.bonds.begin(), storage_.bonds.end(),
-            [atom1, atom2](const TopologyBond& bond) {
-                return (bond.atom1 == atom1 && bond.atom2 == atom2) ||
-                       (bond.atom1 == atom2 && bond.atom2 == atom1);
-            });
+        return searcher_.are_bonded(atom1, atom2);
     }
 
     bool has_angle(int atom1, int atom2, int atom3) const {
@@ -172,6 +170,7 @@ public:
 
 private:
     TopologyStorage& storage_;
+    TopologySearcher searcher_;
 };
 
 } // namespace topology

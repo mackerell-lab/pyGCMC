@@ -75,15 +75,30 @@ public:
     bool has_cmap() const { return special_manager_.has_cmap(); }
     
     /**
-     * @brief Check for CMAP with specific atoms - delegate to special manager
+     * @brief Check for CMAP with specific atoms - support both 5-atom and 8-atom formats
      */
     bool has_cmap(const std::vector<int>& atoms) const {
-        if (atoms.size() < 5) return false;
-        std::array<int, 5> atom_array;
-        for (size_t i = 0; i < 5; ++i) {
-            atom_array[i] = atoms[i];
+        if (atoms.size() == 8) {
+            // CHARMM format: Use all 8 atoms
+            std::array<int, 8> atom_array;
+            for (size_t i = 0; i < 8; ++i) {
+                atom_array[i] = atoms[i];
+            }
+            // Check against stored CMAPs
+            return std::any_of(storage_.cmaps.begin(), storage_.cmaps.end(),
+                [&atom_array](const TopologyCmap& cmap) {
+                    return cmap.atoms == atom_array;
+                });
         }
-        return special_manager_.has_cmap(atom_array);
+        else if (atoms.size() == 5) {
+            // GROMACS format: Use first 5 atoms
+            std::array<int, 5> atom_array;
+            for (size_t i = 0; i < 5; ++i) {
+                atom_array[i] = atoms[i];
+            }
+            return special_manager_.has_cmap(atom_array);
+        }
+        return false;
     }
 
     // Direct access to specialized components

@@ -183,16 +183,29 @@ public:
     const TopologyGroup& get_group(int index) const { return special_manager_.get_group(index); }
     void reserve_atoms(size_t n) { atom_manager_.reserve_atoms(n); }
 
-    // CMAP check with atoms vector
+    // CMAP check with atoms vector - support both 5-atom and 8-atom formats
     bool has_cmap(const std::vector<int>& atoms) const {
-        if (atoms.size() < 5) return false;
-        return std::any_of(special_manager_.get_cmaps().begin(), special_manager_.get_cmaps().end(),
-            [&atoms](const TopologyCmap& cmap) {
-                for (size_t i = 0; i < 5 && i < atoms.size(); ++i) {
-                    if (cmap.atoms[i] != atoms[i]) return false;
-                }
-                return true;
-            });
+        if (atoms.size() == 8) {
+            // CHARMM format with 8 atoms
+            return std::any_of(special_manager_.get_cmaps().begin(), special_manager_.get_cmaps().end(),
+                [&atoms](const TopologyCmap& cmap) {
+                    for (size_t i = 0; i < 8; ++i) {
+                        if (cmap.atoms[i] != atoms[i]) return false;
+                    }
+                    return true;
+                });
+        }
+        else if (atoms.size() == 5) {
+            // GROMACS format with 5 atoms
+            return std::any_of(special_manager_.get_cmaps().begin(), special_manager_.get_cmaps().end(),
+                [&atoms](const TopologyCmap& cmap) {
+                    for (size_t i = 0; i < 5; ++i) {
+                        if (cmap.atoms[i] != atoms[i]) return false;
+                    }
+                    return true;
+                });
+        }
+        return false;
     }
 
     // Access to specialized managers for advanced usage
