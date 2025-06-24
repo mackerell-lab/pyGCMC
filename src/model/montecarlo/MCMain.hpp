@@ -1,16 +1,13 @@
 #pragma once
 
 #include "MCStructures.hpp"
-#include "MCOperations.hpp"
 #include <memory>
 #include <optional>
+#include <stdexcept>
 
 /**
  * @file   MCMain.hpp
  * @brief  Main interface for Monte Carlo state management
- *
- * Complete Monte Carlo state class that maintains the same API as the original.
- * Provides direct access to all functionality while delegating to operations.
  */
 
 namespace pygcmc {
@@ -19,9 +16,6 @@ namespace montecarlo {
 
 /**
  * @brief Current state of the Monte Carlo system
- * 
- * Contains all information about the current state of the system,
- * including atoms, residues, type mappings, and force field parameters.
  */
 struct MCState {
     // Core data arrays
@@ -38,24 +32,46 @@ struct MCState {
     MCForceField forcefield;
     EwaldEnergy ewald_energy;
 
-    // Constructor to initialize counts
     MCState() = default;
 
     // === Essential Operations ===
     int addAtom(const MCAtom& atom) {
-        return MCOperations::addAtom(atoms, activeAtomCount, atom);
+        if (activeAtomCount >= static_cast<int>(atoms.size())) {
+            atoms.push_back(atom);
+        } else {
+            atoms[activeAtomCount] = atom;
+        }
+        return activeAtomCount++;
     }
 
     void removeAtom(int index) {
-        MCOperations::removeAtom(atoms, activeAtomCount, index);
+        if (index >= 0 && index < activeAtomCount) {
+            if (index < activeAtomCount - 1) {
+                atoms[index] = atoms[activeAtomCount - 1];
+            }
+            activeAtomCount--;
+        }
     }
 
     int addResidue(const MCResidue& residue) {
-        return MCOperations::addResidue(residues, activeResidueCount, residue);
+        if (activeResidueCount >= static_cast<int>(residues.size())) {
+            residues.push_back(residue);
+        } else {
+            residues[activeResidueCount] = residue;
+        }
+        residues[activeResidueCount].active = true;
+        return activeResidueCount++;
     }
 
     void removeResidue(int index) {
-        MCOperations::removeResidue(residues, activeResidueCount, index);
+        if (index >= 0 && index < activeResidueCount) {
+            residues[index].active = false;
+            if (index < activeResidueCount - 1) {
+                residues[index] = residues[activeResidueCount - 1];
+                residues[index].active = true;
+            }
+            activeResidueCount--;
+        }
     }
 
     // === System Management ===
@@ -64,16 +80,31 @@ struct MCState {
     }
 
     void setBoxDimensions(float x, float y, float z) { 
-        MCOperations::setBox(info, x, y, z); 
+        info.box[0] = x; info.box[1] = y; info.box[2] = z;
+        info.volume = x * y * z;
     }
 
     void setupForceField(int totalTypes, int movementTypes = 0) { 
-        MCOperations::initializeForceField(forcefield, totalTypes, movementTypes); 
+        forcefield.numTotalTypes = totalTypes;
+        forcefield.numMovementTypes = movementTypes;
+        size_t matrix_size = totalTypes * totalTypes;
+        forcefield.ljSigma.resize(matrix_size, 0.0f);
+        forcefield.ljEps.resize(matrix_size, 0.0f);
         numMovementAtomTypes = movementTypes; 
     }
 
     void setLJParameters(int type1, int type2, float sigma, float epsilon) { 
-        MCOperations::setLJParams(forcefield, type1, type2, sigma, epsilon); 
+        if (type1 >= forcefield.numTotalTypes || type2 >= forcefield.numTotalTypes || type1 < 0 || type2 < 0) {
+            throw std::out_of_range("Type index out of range");
+        }
+        int index = type1 * forcefield.numTotalTypes + type2;
+        forcefield.ljSigma[index] = sigma;
+        forcefield.ljEps[index] = epsilon;
+        if (type1 != type2) {
+            int sym_index = type2 * forcefield.numTotalTypes + type1;
+            forcefield.ljSigma[sym_index] = sigma;
+            forcefield.ljEps[sym_index] = epsilon;
+        }
     }
 
     // === Type Management ===
@@ -87,22 +118,23 @@ struct MCState {
 
     // === Statistics ===
     void incrementMoveStats(bool accepted) { 
-        MCOperations::updateStatistics(info.stats, accepted);
+        info.stats.totalMoves++;
+        if (accepted) info.stats.acceptedMoves++;
     }
 
     void incrementInsertionStats(bool accepted) { 
-        MCOperations::updateStatistics(info.stats, accepted, true, false);
+        info.stats.insertionAttempts++;
+        if (accepted) info.stats.acceptedInsertions++;
     }
 
     void incrementDeletionStats(bool accepted) { 
-        MCOperations::updateStatistics(info.stats, accepted, false, true);
+        info.stats.deletionAttempts++;
+        if (accepted) info.stats.acceptedDeletions++;
     }
 
     // === Basic Queries ===
     int getActiveAtomCount() const { return activeAtomCount; }
     int getActiveResidueCount() const { return activeResidueCount; }
-    int getTotalAtomCount() const { return static_cast<int>(atoms.size()); }
-    int getTotalResidueCount() const { return static_cast<int>(residues.size()); }
 
     std::optional<int> findAtomByType(int type) const {
         for (int i = 0; i < activeAtomCount; ++i) {
@@ -131,13 +163,6 @@ struct MCState {
         }
         
         return true;
-    }
-
-    void clear() {
-        MCOperations::clearSystem(atoms, residues, residueTypes, atomTypes,
-                                        movementResidues, movementAtomTypes,
-                                        activeAtomCount, activeResidueCount, numMovementAtomTypes,
-                                        ewald_energy, info.stats);
     }
 
     std::unique_ptr<MCState> clone() const {

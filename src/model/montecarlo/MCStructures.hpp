@@ -8,10 +8,6 @@
 /**
  * @file   MCStructures.hpp
  * @brief  Core data structures for GCMC simulation
- *
- * Pure data structures with minimal methods. Units:
- * - Length: nanometers (nm), Energy: kilojoules per mole (kJ/mol)
- * - Charge: electron charge (e), Temperature: Kelvin (K)
  */
 
 namespace pygcmc {
