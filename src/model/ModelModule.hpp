@@ -41,8 +41,9 @@
  * - Features: CHARMM force field support, parameter validation, topology building
  * 
  * **montecarlo/ directory** - Monte Carlo Simulation States
- * - MCMain.hpp: Monte Carlo state management for GCMC simulations
- * - MCStateCore.hpp: Core MC state data with insertion/deletion tracking
+ * - MCStructures.hpp: Pure data structures (TypeMaps, MCInfo, MCAtom, MCResidue)
+ * - MCOperations.hpp: Essential operations (add/remove atoms/residues, statistics)
+ * - MCMain.hpp: Main interface with complete MCState functionality
  * - Features: Residue insertion/deletion, energy state management, move validation
  * 
  * **param/ directory** - Global Simulation Parameters
@@ -117,6 +118,10 @@ using Structure = structure::Structure;
 using Topology = topology::Topology;
 using ForceField = forcefield::ForceField;
 using MCState = montecarlo::MCState;
+using MCAtom = montecarlo::MCAtom;
+using MCResidue = montecarlo::MCResidue;
+using MCInfo = montecarlo::MCInfo;
+using MCForceField = montecarlo::MCForceField;
 using Param = param::Param;
 
 // Force field type aliases
