@@ -13,44 +13,40 @@
  * 
  * **Module Organization:**
  * 
- * **common/ directory** - Core Interfaces and Utilities
- * - ModelInterface.hpp: Abstract interfaces (ICloneable, ISerializable, IValidatable)
- * - ModelConstants.hpp: Physical constants, unit conversions, and molecular data
- * - ModelUtils.hpp: Mathematical utilities, hashing, and validation helpers
- * 
- * **atom/ directory** - Atomic-Level Data Structures
- * - AtomMain.hpp: Complete Atom class with PDB format support and utilities
+ * **atom** - Atomic-Level Data Structures
  * - AtomCore.hpp: Core atom data structure with coordinates, mass, charge
- * - Features: Distance calculations, PDB record generation, atom identification
+ * - AtomMain.hpp: Complete Atom class with PDB format support and utilities
  * 
- * **residue/ directory** - Residue-Level Composition
- * - ResidueMain.hpp: Main interface with atom management and validation
- * - ResidueComposite.hpp: High-level residue composition and geometry
- * - ResidueValidator.hpp: Comprehensive validation for backbone, charge, mass
- * - Features: Backbone/sidechain selection, geometry validation, statistics
+ * **residue** - Residue-Level Composition
+ * - ResidueCore.hpp: Core residue data structure and atom management
+ * - ResidueMain.hpp: Main interface with validation and utilities
  * 
- * **molecule/ directory** - Molecular System Management
- * - MolecularMain.hpp: Complete molecular system with multi-residue support (simplified from old molecular.hpp)
- * - Features: Structure and topology data integration, CMAP handling, lookup mappings
+ * **molecule** - Molecular System Management
+ * - MolecularMain.hpp: Complete molecular system with multi-residue support
  * 
- * **topology/ directory** - Force Field and Topology
- * - TopologyMain.hpp: Topology data structures (bonds, angles, dihedrals)
- * - TopologyForceField.hpp: Force field parameters (LJ, bonded, NBFIX)
- * - Features: CHARMM force field support, parameter validation, topology building
+ * **topology** - Topology and Connectivity (follows 4-file pattern)
+ * - TopologyStructures.hpp: Data structures (atoms, bonds, angles, dihedrals)
+ * - TopologyOperations.hpp: Add/modify operations (static methods)
+ * - TopologyQueries.hpp: Find/check/count operations (static methods)
+ * - TopologyMain.hpp: Main interface (delegates to operations/queries)
  * 
- * **montecarlo/ directory** - Monte Carlo Simulation States
+ * **forcefield** - Force Field Parameters
+ * - ForceFieldTypes.hpp: Parameter type definitions
+ * - ForceFieldAccessors.hpp: Parameter access utilities
+ * - ForceFieldMain.hpp: Main force field interface
+ * 
+ * **montecarlo** - Monte Carlo Simulation States
  * - MCStructures.hpp: Pure data structures (TypeMaps, MCInfo, MCAtom, MCResidue)
- * - MCOperations.hpp: Essential operations (add/remove atoms/residues, statistics)
  * - MCMain.hpp: Main interface with complete MCState functionality
- * - Features: Residue insertion/deletion, energy state management, move validation
  * 
- * **param/ directory** - Global Simulation Parameters
- * - ParamMain.hpp: Comprehensive parameter management for all simulation aspects
- * - Features: Basic info, space info, energy parameters, fragment management
+ * **param** - Global Simulation Parameters (follows 4-file pattern)
+ * - ParamStructures.hpp: Parameter data structures
+ * - ParamOperations.hpp: Parameter modification operations
+ * - ParamQueries.hpp: Parameter query operations
+ * - ParamMain.hpp: Comprehensive parameter management
  * 
- * **structure/ directory** - Structural Data Management
+ * **structure** - Structural Data Management
  * - StructureMain.hpp: High-level structural data organization
- * - Features: Multi-chain structures, structural validation, format conversion
  * 
  * **Usage Examples:**
  * 
@@ -59,12 +55,9 @@
  * using namespace pygcmc::model;
  * 
  * // Create molecular components
- * auto molecular = std::make_shared<molecule::Molecular>();
- * 
- * // Validate system
- * if (validate_molecular_system(*molecular)) {
- *     std::cout << "System is valid" << std::endl;
- * }
+ * auto molecular = std::make_shared<Molecular>();
+ * auto topology = std::make_shared<Topology>();
+ * auto mcstate = std::make_shared<MCState>();
  * 
  * // Version info
  * std::cout << "Version: " << getModelVersion() << std::endl;
@@ -77,10 +70,9 @@
  * **Design Philosophy:**
  * - Single header inclusion for all data structure functionality
  * - Modular architecture with clear separation of concerns
- * - Each component is independently testable and maintainable
- * - AI-friendly: focused responsibilities with comprehensive documentation
+ * - AI-friendly: focused responsibilities with predictable file organization
  * - Performance-oriented: efficient data structures with minimal overhead
- * - Follows system module naming patterns for consistency
+ * - Consistent patterns: topology/ and param/ follow 4-file pattern (Structures/Operations/Queries/Main)
  */
 
 // === Core Utilities ===
