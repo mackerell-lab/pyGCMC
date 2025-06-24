@@ -4,9 +4,12 @@
 #define PYGCMC_MODEL_MONTECARLO_MAIN_HPP
 
 #include "MCStateCore.hpp"
+#include "MCOperations.hpp"
+#include "MCQueries.hpp"
 #include "../common/ModelUtils.hpp"
 #include <string>
 #include <sstream>
+#include <memory>
 
 namespace pygcmc {
 namespace model {
@@ -43,111 +46,74 @@ public:
     MCForceField& getForceField() { return forcefield; }
     const MCForceField& getForceField() const { return forcefield; }
 
-    // Movement residue management
+    // Movement residue management - delegate to MCOperations
     void addMovementResidue(const std::string& resName, int startIndex, int totalCount) {
-        MCMovementResidueInfo info(startIndex, 0, totalCount, resName);
-        movementResidues.push_back(info);
+        MCOperations::addMovementResidue(movementResidues, resName, startIndex, totalCount);
     }
 
     void updateMovementResidueCount(size_t index, int activeCount) {
-        if (index < movementResidues.size()) {
-            movementResidues[index].activeCount = activeCount;
-        }
+        MCOperations::updateMovementResidueCount(movementResidues, index, activeCount);
     }
 
     const std::vector<MCMovementResidueInfo>& getMovementResidues() const {
         return movementResidues;
     }
 
-    // Atom management with swap-and-pop semantics
+    // Atom management - delegate to MCOperations
     int addAtom(const MCAtom& atom) {
-        if (activeAtomCount >= static_cast<int>(atoms.size())) {
-            atoms.push_back(atom);
-        } else {
-            atoms[activeAtomCount] = atom;
-        }
-        return activeAtomCount++;
+        return MCOperations::addAtom(atoms, activeAtomCount, atom);
     }
 
     void removeAtom(int index) {
+        MCOperations::removeAtom(atoms, activeAtomCount, index);
+    }
+
+    void updateAtomPosition(int index, float x, float y, float z) {
         if (index >= 0 && index < activeAtomCount) {
-            // Swap with last active atom and decrease count
-            if (index < activeAtomCount - 1) {
-                atoms[index] = atoms[activeAtomCount - 1];
-            }
-            activeAtomCount--;
+            MCOperations::updateAtomPosition(atoms[index], x, y, z);
         }
     }
 
-    // Residue management with swap-and-pop semantics
+    // Residue management - delegate to MCOperations
     int addResidue(const MCResidue& residue) {
-        if (activeResidueCount >= static_cast<int>(residues.size())) {
-            residues.push_back(residue);
-        } else {
-            residues[activeResidueCount] = residue;
-        }
-        residues[activeResidueCount].active = true;
-        return activeResidueCount++;
+        return MCOperations::addResidue(residues, activeResidueCount, residue);
     }
 
     void removeResidue(int index) {
-        if (index >= 0 && index < activeResidueCount) {
-            // Mark as inactive
-            residues[index].active = false;
-            
-            // Swap with last active residue and decrease count
-            if (index < activeResidueCount - 1) {
-                residues[index] = residues[activeResidueCount - 1];
-                residues[index].active = true;
-            }
-            activeResidueCount--;
-        }
+        MCOperations::removeResidue(residues, activeResidueCount, index);
     }
 
-    // Energy utilities
+    // Energy utilities - delegate to MCOperations
     void updateResidueEnergy(int index, float vdw_energy, float elec_energy) {
         if (index >= 0 && index < activeResidueCount) {
-            residues[index].energy_vdw = vdw_energy;
-            residues[index].energy_elec = elec_energy;
+            MCOperations::updateResidueEnergy(residues[index], vdw_energy, elec_energy);
         }
     }
 
     void updateEwaldEnergy(double real_space, double reciprocal, double self_energy) {
-        ewald_energy.real_space = real_space;
-        ewald_energy.reciprocal = reciprocal;
-        ewald_energy.self = self_energy;
-        ewald_energy.updateTotal();
+        MCOperations::updateEwaldEnergy(ewald_energy, real_space, reciprocal, self_energy);
     }
 
-    // Statistics methods
+    // Statistics methods - delegate to MCOperations
     void incrementMoveStats(bool accepted) {
-        info.stats.totalMoves++;
-        if (accepted) {
-            info.stats.acceptedMoves++;
-        }
+        MCOperations::updateStatistics(info.stats, accepted);
     }
 
     void incrementInsertionStats(bool accepted) {
-        info.stats.insertionAttempts++;
-        if (accepted) {
-            info.stats.acceptedInsertions++;
-        }
+        MCOperations::updateStatistics(info.stats, accepted, true, false);
     }
 
     void incrementDeletionStats(bool accepted) {
-        info.stats.deletionAttempts++;
-        if (accepted) {
-            info.stats.acceptedDeletions++;
-        }
+        MCOperations::updateStatistics(info.stats, accepted, false, true);
     }
 
-    // System properties
+    // System properties - delegate to MCOperations
     void setBoxDimensions(float x, float y, float z) {
-        info.setBox(x, y, z);
+        MCOperations::setBox(info, x, y, z);
     }
 
     void setTemperature(float temperature) {
-        info.setTemperature(temperature);
+        MCOperations::setTemperature(info, temperature);
     }
 
     void setCutoff(float cutoff) {
@@ -160,50 +126,37 @@ public:
         info.r_off = r_off;
     }
 
-    // Type management
+    // Type management - delegate to MCOperations
     int getOrAddAtomType(const std::string& type) {
-        return atomTypes.getOrAddType(type);
+        return MCOperations::getOrAddType(atomTypes, type);
     }
 
     int getOrAddResidueType(const std::string& type) {
-        return residueTypes.getOrAddType(type);
+        return MCOperations::getOrAddType(residueTypes, type);
     }
 
-    // Force field setup
+    // Force field setup - delegate to MCOperations
     void setupForceField(int totalTypes, int movementTypes = 0) {
-        forcefield.initialize(totalTypes, movementTypes);
+        MCOperations::initializeForceField(forcefield, totalTypes, movementTypes);
         numMovementAtomTypes = movementTypes;
     }
 
     void setLJParameters(int type1, int type2, float sigma, float epsilon) {
-        forcefield.setLJParams(type1, type2, sigma, epsilon);
+        MCOperations::setLJParams(forcefield, type1, type2, sigma, epsilon);
     }
 
-    // Validation and diagnostics
+    // Validation and diagnostics - delegate to MCQueries
     bool checkConsistency() const {
-        if (!is_valid()) return false;
-
-        // Check active atom consistency
-        for (int i = 0; i < activeResidueCount; ++i) {
-            const auto& residue = residues[i];
-            if (!residue.active) continue;
-            
-            // Check if residue's atoms are within active range
-            if (residue.atomStart + residue.atomCount > activeAtomCount) {
-                return false;
-            }
-        }
-
-        return true;
+        return MCQueries::isConsistentState(atoms, residues, activeAtomCount, activeResidueCount);
     }
 
     std::string getSystemSummary() const {
         std::stringstream ss;
         ss << "MC System: " << activeAtomCount << "/" << atoms.size() << " atoms, "
            << activeResidueCount << "/" << residues.size() << " residues\n";
-        ss << "Temperature: " << info.getTemperature() << " K, ";
+        ss << "Temperature: " << MCQueries::getTemperature(info) << " K, ";
         ss << "Box: [" << info.box[0] << ", " << info.box[1] << ", " << info.box[2] << "] nm\n";
-        ss << "Acceptance rates: Overall=" << info.stats.getAcceptanceRate() 
+        ss << "Acceptance rates: Overall=" << MCQueries::getAcceptanceRate(info.stats) 
            << ", Insertion=" << info.stats.getInsertionRate() 
            << ", Deletion=" << info.stats.getDeletionRate();
         return ss.str();
@@ -230,9 +183,42 @@ public:
         return cloned;
     }
 
-    // String representation
+    // String representation - delegate to MCQueries
     std::string to_string() const {
         return getSystemSummary();
+    }
+
+    // Additional query methods - delegate to MCQueries
+    std::optional<int> findAtomByType(int type) const {
+        return MCQueries::findAtomByType(atoms, activeAtomCount, type);
+    }
+
+    std::optional<int> findResidueByType(int type) const {
+        return MCQueries::findResidueByType(residues, activeResidueCount, type);
+    }
+
+    int countAtomsByType(int type) const {
+        return MCQueries::countAtomsByType(atoms, activeAtomCount, type);
+    }
+
+    int countResiduesByType(int type) const {
+        return MCQueries::countResiduesByType(residues, activeResidueCount, type);
+    }
+
+    double getTotalSystemEnergy() const {
+        return ewald_energy.total + MCQueries::getTotalResidueEnergy(residues, activeResidueCount);
+    }
+
+    // System management - delegate to MCOperations
+    void reserveCapacity(int max_atoms, int max_residues) {
+        MCOperations::reserveCapacity(atoms, residues, info, max_atoms, max_residues);
+    }
+
+    void clearSystem() {
+        MCOperations::clearSystem(atoms, residues, residueTypes, atomTypes,
+                                movementResidues, movementAtomTypes,
+                                activeAtomCount, activeResidueCount, numMovementAtomTypes,
+                                ewald_energy, info.stats);
     }
 };
 
