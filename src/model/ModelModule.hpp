@@ -30,10 +30,8 @@
  * - Features: Backbone/sidechain selection, geometry validation, statistics
  * 
  * **molecule/ directory** - Molecular System Management
- * - MolecularMain.hpp: Complete molecular system with multi-residue support
- * - MolecularComposite.hpp: System-level composition and coordinate management
- * - MolecularUtils.hpp: Utilities for molecular manipulation and analysis
- * - Features: Center of mass, system statistics, molecular transformations
+ * - MolecularMain.hpp: Complete molecular system with multi-residue support (simplified from old molecular.hpp)
+ * - Features: Structure and topology data integration, CMAP handling, lookup mappings
  * 
  * **topology/ directory** - Force Field and Topology
  * - TopologyMain.hpp: Topology data structures (bonds, angles, dihedrals)
@@ -114,6 +112,7 @@ namespace model {
 using Atom = atom::Atom;
 using Residue = residue::Residue;
 using Molecular = molecule::Molecular;
+using StandardCmap = molecule::StandardCmap;
 using Structure = structure::Structure;
 using Topology = topology::Topology;
 using ForceField = forcefield::ForceField;

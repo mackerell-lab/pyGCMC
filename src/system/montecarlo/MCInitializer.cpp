@@ -14,9 +14,9 @@ void MCInitializer::initializeFromMolecular(model::MCState& state, const std::sh
     }
     
     // Set box dimensions from molecular system
-    state.info.box[0] = molecular->box_dimensions[0] * ANGSTROM_TO_NM;  // Convert Å to nm
-    state.info.box[1] = molecular->box_dimensions[1] * ANGSTROM_TO_NM;  // Convert Å to nm
-    state.info.box[2] = molecular->box_dimensions[2] * ANGSTROM_TO_NM;  // Convert Å to nm
+    state.info.box[0] = molecular->boxDimensions[0] * ANGSTROM_TO_NM;  // Convert Å to nm
+    state.info.box[1] = molecular->boxDimensions[1] * ANGSTROM_TO_NM;  // Convert Å to nm
+    state.info.box[2] = molecular->boxDimensions[2] * ANGSTROM_TO_NM;  // Convert Å to nm
     state.info.volume = state.info.box[0] * state.info.box[1] * state.info.box[2];
 
     // Convert residues and atoms

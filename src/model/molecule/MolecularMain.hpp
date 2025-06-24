@@ -3,341 +3,167 @@
 #ifndef PYGCMC_MODEL_MOLECULE_MAIN_HPP
 #define PYGCMC_MODEL_MOLECULE_MAIN_HPP
 
-#include "MolecularComposite.hpp"
-#include "MolecularUtils.hpp"
-#include "../common/ModelUtils.hpp"
+#include <vector>
+#include <memory>
+#include <map>
 #include <string>
+#include <unordered_map>
+#include <array>
+#include <set>
+#include "../atom/AtomMain.hpp"
+#include "../residue/ResidueMain.hpp"
+#include "../structure/StructureMain.hpp"
+#include "../topology/TopologyMain.hpp"
 
 namespace pygcmc {
 namespace model {
 namespace molecule {
 
 /**
- * @brief Complete Molecular class with full functionality and backward compatibility
- * This class maintains the same API as the original molecular.hpp while using the refactored structure
+ * @brief Standardized CMAP structure, used for unified processing of PSF and TOP formats
  */
-class Molecular : public MolecularComposite {
+struct StandardCmap {
+    std::array<int, 5> atoms;     ///< Standardized 5 atom indices
+    std::array<int, 8> raw_atoms; ///< Original format atom indices (8 for PSF, 5+3 of -1 for TOP)
+    bool is_psf_format;           ///< Whether it is PSF format
+    int function_type = 1;        ///< CMAP function type
+};
+
+/**
+ * @brief Molecular class, merges Structure and Topology data for subsequent calculations
+ */
+class Molecular {
 public:
     Molecular() = default;
     ~Molecular() = default;
 
-    // Backward compatibility accessors - use functions instead of references for Python binding compatibility
-    std::vector<std::shared_ptr<atom::Atom>>& get_atoms_ref() { return MolecularComposite::get_atoms(); }
-    std::vector<std::shared_ptr<residue::Residue>>& get_residues_ref() { return MolecularComposite::get_residues(); }
+    // Structure (PDB) related data
+    std::vector<std::shared_ptr<atom::Atom>> atoms;  // Atom list
+    std::vector<std::shared_ptr<residue::Residue>> residues;  // Residue list
+    std::vector<structure::Structure::TerminalInfo> terminals;  // Chain termination information
+    std::map<std::string, std::vector<structure::Structure::SecondaryStructure>> helices;  // Helical structures
+    std::map<std::string, std::vector<std::string>> sheets;  // β-sheet structures
+    std::vector<std::string> ssbonds;  // Disulfide bonds
+    std::vector<double> boxDimensions;  // Box dimensions
+
+    // Topology (PSF/TOP) related data
+    std::vector<topology::TopologyAtom> topology_atoms;  // Atom information in topology (includes charge, mass, etc.)
+    std::vector<topology::TopologyResidue> topology_residues;  // Residue information in topology
+    std::vector<topology::TopologySegment> segments;  // Fragment information
+    std::vector<topology::TopologyBond> bonds;  // Bond
+    std::vector<topology::TopologyAngle> angles;  // Bond angle
+    std::vector<topology::TopologyDihedral> dihedrals;  // Dihedral angle (including improper)
+    std::vector<topology::TopologyDonor> donors;  // Hydrogen bond donor
+    std::vector<topology::TopologyAcceptor> acceptors;  // Hydrogen bond acceptor
+    std::map<int, std::set<int>> exclusions;  // Non-bond exclusion
+    std::vector<topology::TopologyGroup> groups;  // Atom group
+    std::vector<topology::TopologyCmap> cmaps;  // Original CMAP item
+    std::vector<StandardCmap> standard_cmaps;  // Standardized CMAP item
+    std::vector<std::string> titles;  // PSF file title information
+
+    // Lookup mapping
+    std::unordered_map<std::string, int> segment_map;  // segment_name -> index
+    std::map<std::pair<std::string, int>, int> residue_map;  // (residue_name, number) -> index
+    std::map<std::tuple<std::string, int, std::string>, int> atom_map;  // (residue_name, number, atom_name) -> index
+
+    // Get atom count
+    size_t get_num_atoms() const { return atoms.size(); }
     
-    // Structure info accessors
-    std::vector<StructureInfo::TerminalInfo>& get_terminals_ref() { return get_structure_info().terminals; }
-    std::map<std::string, std::vector<StructureInfo::SecondaryStructure>>& get_helices_ref() { return get_structure_info().helices; }
-    std::map<std::string, std::vector<std::string>>& get_sheets_ref() { return get_structure_info().sheets; }
-    std::vector<std::string>& get_ssbonds_ref() { return get_structure_info().ssbonds; }
-    std::vector<double>& get_box_dimensions_ref() { return get_structure_info().box_dimensions; }
-
-    // Topology info accessors
-    std::vector<topology::TopologyAtom>& get_topology_atoms_ref() { return get_topology_info().atoms; }
-    std::vector<topology::TopologyResidue>& get_topology_residues_ref() { return get_topology_info().residues; }
-    std::vector<topology::TopologySegment>& get_segments_ref() { return get_topology_info().segments; }
-    std::vector<topology::TopologyBond>& get_bonds_ref() { return get_topology_info().bonds; }
-    std::vector<topology::TopologyAngle>& get_angles_ref() { return get_topology_info().angles; }
-    std::vector<topology::TopologyDihedral>& get_dihedrals_ref() { return get_topology_info().dihedrals; }
-    std::vector<topology::TopologyDonor>& get_donors_ref() { return get_topology_info().donors; }
-    std::vector<topology::TopologyAcceptor>& get_acceptors_ref() { return get_topology_info().acceptors; }
-    std::map<int, std::set<int>>& get_exclusions_ref() { return get_topology_info().exclusions; }
-    std::vector<topology::TopologyGroup>& get_groups_ref() { return get_topology_info().groups; }
-    std::vector<topology::TopologyCmap>& get_cmaps_ref() { return get_topology_info().cmaps; }
-    std::vector<std::string>& get_titles_ref() { return get_topology_info().titles; }
-    std::vector<StandardCmap>& get_standard_cmaps_ref() { return get_standard_cmaps(); }
-
-    // Lookup mapping accessors 
-    std::unordered_map<std::string, int>& get_segment_map_ref() { return const_cast<std::unordered_map<std::string, int>&>(get_segment_map()); }
-    std::map<std::pair<std::string, int>, int>& get_residue_map_ref() { return const_cast<std::map<std::pair<std::string, int>, int>&>(get_residue_map()); }
-    std::map<std::tuple<std::string, int, std::string>, int>& get_atom_map_ref() { return const_cast<std::map<std::tuple<std::string, int, std::string>, int>&>(get_atom_map()); }
-
-    // Backward compatibility properties - kept as member variables for legacy code compatibility
-    std::vector<std::shared_ptr<atom::Atom>>& atoms = get_atoms_ref();
-    std::vector<std::shared_ptr<residue::Residue>>& residues = get_residues_ref();
-    std::vector<StructureInfo::TerminalInfo>& terminals = get_terminals_ref();
-    std::map<std::string, std::vector<StructureInfo::SecondaryStructure>>& helices = get_helices_ref();
-    std::map<std::string, std::vector<std::string>>& sheets = get_sheets_ref();
-    std::vector<std::string>& ssbonds = get_ssbonds_ref();
-    std::vector<double>& box_dimensions = get_box_dimensions_ref();
-    std::vector<topology::TopologyAtom>& topology_atoms = get_topology_atoms_ref();
-    std::vector<topology::TopologyResidue>& topology_residues = get_topology_residues_ref();
-    std::vector<topology::TopologySegment>& segments = get_segments_ref();
-    std::vector<topology::TopologyBond>& bonds = get_bonds_ref();
-    std::vector<topology::TopologyAngle>& angles = get_angles_ref();
-    std::vector<topology::TopologyDihedral>& dihedrals = get_dihedrals_ref();
-    std::vector<topology::TopologyDonor>& donors = get_donors_ref();
-    std::vector<topology::TopologyAcceptor>& acceptors = get_acceptors_ref();
-    std::map<int, std::set<int>>& exclusions = get_exclusions_ref();
-    std::vector<topology::TopologyGroup>& groups = get_groups_ref();
-    std::vector<topology::TopologyCmap>& cmaps = get_cmaps_ref();
-    std::vector<std::string>& titles = get_titles_ref();
-    std::vector<StandardCmap>& standard_cmaps = get_standard_cmaps_ref();
-    std::unordered_map<std::string, int>& segment_map = get_segment_map_ref();
-    std::map<std::pair<std::string, int>, int>& residue_map = get_residue_map_ref();
-    std::map<std::tuple<std::string, int, std::string>, int>& atom_map = get_atom_map_ref();
-
-    // Enhanced selection and analysis methods
-    template<typename Predicate>
-    std::vector<std::shared_ptr<atom::Atom>> select_atoms(Predicate&& predicate) const {
-        return utils::selection::find_atoms_if(*this, std::forward<Predicate>(predicate));
+    // Get residue count
+    size_t get_num_residues() const { return residues.size(); }
+    
+    // Get fragment count
+    size_t get_num_segments() const { return segments.size(); }
+    
+    // Get bond count
+    size_t get_num_bonds() const { return bonds.size(); }
+    
+    // Get bond angle count
+    size_t get_num_angles() const { return angles.size(); }
+    
+    // Get dihedral angle count (excluding improper)
+    size_t get_num_dihedrals() const {
+        size_t count = 0;
+        for (const auto& dihedral : dihedrals) {
+            if (!dihedral.improper) count++;
+        }
+        return count;
+    }
+    
+    // Get improper count
+    size_t get_num_impropers() const {
+        size_t count = 0;
+        for (const auto& dihedral : dihedrals) {
+            if (dihedral.improper) count++;
+        }
+        return count;
     }
 
-    template<typename Predicate>
-    std::vector<std::shared_ptr<residue::Residue>> select_residues(Predicate&& predicate) const {
-        return utils::selection::find_residues_if(*this, std::forward<Predicate>(predicate));
-    }
-
-    // Convenient selection methods
-    std::vector<std::shared_ptr<atom::Atom>> get_atoms_by_segment(const std::string& segment_id) const {
-        return utils::selection::find_atoms_by_segment(*this, segment_id);
-    }
-
-    std::vector<std::shared_ptr<atom::Atom>> get_atoms_by_resname(const std::string& resname) const {
-        return utils::selection::find_atoms_by_resname(*this, resname);
-    }
-
-    std::vector<std::shared_ptr<atom::Atom>> get_atoms_by_type(const std::string& atom_type) const {
-        return utils::selection::find_atoms_by_type(*this, atom_type);
-    }
-
-    std::vector<std::shared_ptr<residue::Residue>> get_residues_by_segment(const std::string& segment_id) const {
-        return utils::selection::find_residues_by_segment(*this, segment_id);
-    }
-
-    std::vector<std::shared_ptr<residue::Residue>> get_residues_by_chain(char chain_id) const {
-        return utils::selection::find_residues_by_chain(*this, chain_id);
-    }
-
-    std::vector<std::shared_ptr<residue::Residue>> get_residues_by_name(const std::string& resname) const {
-        return utils::selection::find_residues_by_name(*this, resname);
-    }
-
-    std::vector<std::shared_ptr<residue::Residue>> get_protein_residues() const {
-        return utils::selection::find_protein_residues(*this);
-    }
-
-    std::vector<std::shared_ptr<residue::Residue>> get_nucleic_residues() const {
-        return utils::selection::find_nucleic_residues(*this);
-    }
-
-    std::vector<std::shared_ptr<atom::Atom>> get_heavy_atoms() const {
-        return utils::selection::find_heavy_atoms(*this);
-    }
-
-    std::vector<std::shared_ptr<atom::Atom>> get_hydrogen_atoms() const {
-        return utils::selection::find_hydrogen_atoms(*this);
-    }
-
-    // Analysis methods
-    double get_total_mass() const {
-        return utils::analysis::calculate_total_mass(*this);
-    }
-
-    double get_total_charge() const {
-        return utils::analysis::calculate_total_charge(*this);
-    }
-
-    std::array<double, 3> get_center_of_mass() const {
-        return utils::analysis::calculate_center_of_mass(*this);
-    }
-
-    std::array<double, 3> get_geometric_center() const {
-        return utils::analysis::calculate_geometric_center(*this);
-    }
-
-    std::pair<std::array<double, 3>, std::array<double, 3>> get_bounding_box() const {
-        return utils::analysis::calculate_bounding_box(*this);
-    }
-
-    std::set<char> get_chain_ids() const {
-        return utils::analysis::get_chain_ids(*this);
-    }
-
-    std::set<std::string> get_segment_ids() const {
-        return utils::analysis::get_segment_ids(*this);
-    }
-
-    utils::analysis::SystemStatistics get_system_statistics() const {
-        return utils::analysis::calculate_system_statistics(*this);
-    }
-
-    // Distance utilities
-    std::vector<std::shared_ptr<atom::Atom>> find_atoms_within_distance(
-        const std::array<double, 3>& point, double max_distance) const {
-        return utils::distance::find_atoms_within_distance(*this, point, max_distance);
-    }
-
-    std::vector<std::shared_ptr<atom::Atom>> find_atoms_within_distance(
-        const atom::Atom& reference_atom, double max_distance) const {
-        return utils::distance::find_atoms_within_distance(*this, reference_atom, max_distance);
-    }
-
-    // Grouping utilities
-    std::map<std::string, std::vector<std::shared_ptr<atom::Atom>>> group_atoms_by_segment() const {
-        return utils::grouping::group_atoms_by_segment(*this);
-    }
-
-    std::map<std::string, std::vector<std::shared_ptr<atom::Atom>>> group_atoms_by_resname() const {
-        return utils::grouping::group_atoms_by_resname(*this);
-    }
-
-    std::map<std::string, std::vector<std::shared_ptr<atom::Atom>>> group_atoms_by_type() const {
-        return utils::grouping::group_atoms_by_type(*this);
-    }
-
-    std::map<std::string, std::vector<std::shared_ptr<residue::Residue>>> group_residues_by_segment() const {
-        return utils::grouping::group_residues_by_segment(*this);
-    }
-
-    std::map<char, std::vector<std::shared_ptr<residue::Residue>>> group_residues_by_chain() const {
-        return utils::grouping::group_residues_by_chain(*this);
-    }
-
-    std::map<std::string, std::vector<std::shared_ptr<residue::Residue>>> group_residues_by_name() const {
-        return utils::grouping::group_residues_by_name(*this);
-    }
-
-    // String representation
-    std::string to_string() const {
-        std::stringstream ss;
-        ss << "Molecular System: " << get_num_atoms() << " atoms, " 
-           << get_num_residues() << " residues";
+    // Standardized CMAP related methods
+    void add_standard_cmap(const topology::TopologyCmap& cmap) {
+        StandardCmap std_cmap;
+        std_cmap.raw_atoms = cmap.atoms;
+        std_cmap.is_psf_format = (cmap.atoms[5] != -1);  // Determine if it is PSF format
         
-        auto segments = get_segment_ids();
-        if (!segments.empty()) {
-            ss << ", segments: ";
-            bool first = true;
-            for (const auto& seg : segments) {
-                if (!first) ss << ", ";
-                ss << seg;
-                first = false;
+        // Set standardized 5 atoms
+        if (std_cmap.is_psf_format) {
+            // PSF format: Use the first 4 atoms and the 8th atom
+            for (int i = 0; i < 4; ++i) {
+                std_cmap.atoms[i] = cmap.atoms[i];
+            }
+            std_cmap.atoms[4] = cmap.atoms[7];  // Use the 8th atom as the 5th atom
+        } else {
+            // TOP format: Directly use the first 5 atoms
+            for (int i = 0; i < 5; ++i) {
+                std_cmap.atoms[i] = cmap.atoms[i];
             }
         }
-        
-        auto chains = get_chain_ids();
-        if (chains.size() > 1) {
-            ss << ", chains: ";
-            bool first = true;
-            for (char chain : chains) {
-                if (chain != ' ') {
-                    if (!first) ss << ", ";
-                    ss << chain;
-                    first = false;
-                }
-            }
-        }
-        
-        return ss.str();
+        std_cmap.function_type = cmap.function_type;
+        standard_cmaps.push_back(std_cmap);
     }
 
-    // PDB format output
-    std::string to_pdb_string() const {
-        std::stringstream ss;
-        
-        // Write HEADER
-        ss << "HEADER    MOLECULAR SYSTEM                        " 
-           << std::setfill('0') << std::setw(2) << 1  // day
-           << "-" << std::setw(3) << "JAN"             // month  
-           << "-" << std::setw(2) << 24                // year
-           << "   PYGE\n";  // PDB ID
-        
-        // Write TITLE
-        if (!titles.empty()) {
-            for (size_t i = 0; i < titles.size(); ++i) {
-                ss << "TITLE    ";
-                if (i > 0) ss << std::setw(2) << (i + 1) << " ";
-                ss << titles[i] << "\n";
-            }
-        }
-        
-        // Write atoms
-        for (const auto& atom : atoms) {
-            if (atom) {
-                ss << atom->get_pdb_record() << "\n";
-            }
-        }
-        
-        ss << "END\n";
-        return ss.str();
-    }
+    // Get standardized CMAP count
+    size_t get_num_standard_cmaps() const { return standard_cmaps.size(); }
 
-    // Comparison operators
-    bool operator==(const Molecular& other) const {
-        return get_num_atoms() == other.get_num_atoms() &&
-               get_num_residues() == other.get_num_residues() &&
-               common::utils::double_equals(get_total_mass(), other.get_total_mass()) &&
-               common::utils::double_equals(get_total_charge(), other.get_total_charge());
-    }
+    // Clear all data
+    void clear() {
+        // Structure data
+        atoms.clear();
+        residues.clear();
+        terminals.clear();
+        helices.clear();
+        sheets.clear();
+        ssbonds.clear();
+        boxDimensions.clear();
 
-    bool operator!=(const Molecular& other) const {
-        return !(*this == other);
-    }
+        // Topology data
+        topology_atoms.clear();
+        topology_residues.clear();
+        segments.clear();
+        bonds.clear();
+        angles.clear();
+        dihedrals.clear();
+        donors.clear();
+        acceptors.clear();
+        exclusions.clear();
+        groups.clear();
+        cmaps.clear();
+        standard_cmaps.clear();
+        titles.clear();
 
-    // Clone method
-    std::unique_ptr<Molecular> clone() const {
-        auto cloned = std::make_unique<Molecular>();
-        
-        // Copy atoms
-        for (const auto& atom : atoms) {
-            if (atom) {
-                cloned->add_atom(atom->clone());
-            }
-        }
-        
-        // Copy residues
-        for (const auto& residue : residues) {
-            if (residue) {
-                cloned->add_residue(residue->clone());
-            }
-        }
-        
-        // Copy structure and topology info
-        cloned->get_structure_info() = get_structure_info();
-        cloned->get_topology_info() = get_topology_info();
-        
-        return cloned;
+        // Lookup mapping
+        segment_map.clear();
+        residue_map.clear();
+        atom_map.clear();
     }
 };
 
-/**
- * @brief Validate a complete molecular system
- * @param system The molecular system to validate
- * @return true if the system is valid, false otherwise
- */
-inline bool validate_molecular_system(const Molecular& system) {
-    // Check basic validity
-    if (!system.is_valid()) return false;
-    
-    // Check all residues
-    for (const auto& residue : system.get_residues()) {
-        if (!residue || !residue->is_valid()) return false;
-    }
-    
-    // Check all atoms
-    for (const auto& atom : system.get_atoms()) {
-        if (!atom || !atom->is_valid()) return false;
-    }
-    
-    return true;
-}
-
 } // namespace molecule
 
-// Backward compatibility: provide the Molecular class in the model namespace
+// Backward compatibility: provide Molecular in the model namespace
 using Molecular = molecule::Molecular;
-
-// Backward compatibility: provide the StandardCmap struct in the model namespace
-using StandardCmap = molecule::StandardCmap;
-
-/**
- * @brief Validate a complete molecular system (backward compatibility)
- */
-inline bool validate_molecular_system(const Molecular& system) {
-    return molecule::validate_molecular_system(system);
-}
 
 } // namespace model
 } // namespace pygcmc
 
-#endif // PYGCMC_MODEL_MOLECULE_MAIN_HPP 
+#endif // PYGCMC_MODEL_MOLECULE_MAIN_HPP

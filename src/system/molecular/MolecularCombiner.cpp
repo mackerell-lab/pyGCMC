@@ -84,7 +84,7 @@ void MolecularCombiner::copyStructureData(
     molecular->helices = structure->get_helices();
     molecular->sheets = structure->get_sheets();
     molecular->ssbonds = structure->get_ssbonds();
-    molecular->box_dimensions = structure->get_box_dimensions();
+    molecular->boxDimensions = structure->get_box_dimensions();
 }
 
 void MolecularCombiner::copyTopologyData(
