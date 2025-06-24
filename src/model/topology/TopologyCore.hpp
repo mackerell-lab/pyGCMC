@@ -1,10 +1,5 @@
 #pragma once
 
-#ifndef PYGCMC_MODEL_TOPOLOGY_CORE_HPP
-#define PYGCMC_MODEL_TOPOLOGY_CORE_HPP
-
-#include "../common/ModelInterface.hpp"
-#include "../common/ModelConstants.hpp"
 #include <string>
 #include <vector>
 #include <map>
@@ -130,76 +125,6 @@ struct TopologyCmap {
     int function_type = 1;     ///< CMAP function type (default: 1)
 };
 
-/**
- * @brief Key types for topology mappings
- */
-using AtomKey = std::tuple<std::string, int, std::string, std::string>; // residue_name, residue_number, segment_name, atom_name
-using ResidueKey = std::tuple<std::string, int, std::string>; // residue_name, residue_number, segment_name
-using SegmentKey = std::string; // segment_name
-
-/**
- * @brief Storage containers for topology data
- */
-struct TopologyStorage {
-    // Core data
-    std::vector<TopologyAtom> atoms;
-    std::vector<TopologyResidue> residues;
-    std::vector<TopologySegment> segments;
-    
-    // Connectivity
-    std::vector<TopologyBond> bonds;
-    std::vector<TopologyAngle> angles;
-    std::vector<TopologyDihedral> dihedrals;
-    
-    // Hydrogen bonding
-    std::vector<TopologyDonor> donors;
-    std::vector<TopologyAcceptor> acceptors;
-    
-    // Additional structures
-    std::map<int, std::set<int>> exclusions;
-    std::vector<TopologyGroup> groups;
-    std::vector<TopologyCmap> cmaps;
-    
-    // Index mappings
-    std::unordered_map<SegmentKey, int> segment_map;
-    std::map<ResidueKey, int> residue_map;
-    std::map<AtomKey, int> atom_map;
-    
-    // Metadata
-    std::vector<std::string> titles;
-    
-    // Constructor
-    TopologyStorage() = default;
-    
-    // Clear all data
-    void clear() {
-        atoms.clear();
-        residues.clear();
-        segments.clear();
-        bonds.clear();
-        angles.clear();
-        dihedrals.clear();
-        donors.clear();
-        acceptors.clear();
-        exclusions.clear();
-        groups.clear();
-        cmaps.clear();
-        segment_map.clear();
-        residue_map.clear();
-        atom_map.clear();
-        titles.clear();
-    }
-    
-    // Reserve space for efficiency
-    void reserve(size_t num_atoms, size_t num_residues = 0, size_t num_segments = 0) {
-        atoms.reserve(num_atoms);
-        if (num_residues > 0) residues.reserve(num_residues);
-        if (num_segments > 0) segments.reserve(num_segments);
-    }
-};
-
 } // namespace topology
 } // namespace model
 } // namespace pygcmc
-
-#endif // PYGCMC_MODEL_TOPOLOGY_CORE_HPP 
