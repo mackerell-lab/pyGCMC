@@ -3,7 +3,6 @@
 #ifndef PYGCMC_MODEL_PARAM_MAIN_HPP
 #define PYGCMC_MODEL_PARAM_MAIN_HPP
 
-#include "../common/ModelInterface.hpp"
 #include "ParamStructures.hpp"
 #include "ParamOperations.hpp"
 #include "ParamQueries.hpp"
@@ -17,7 +16,7 @@ namespace param {
  * @brief Complete GCMC parameter class with modular design and backward compatibility
  * Uses delegation pattern to maintain clean separation of concerns
  */
-class Param : public common::IValidatable {
+class Param {
 public:
     Param() = default;
     ~Param() = default;
@@ -32,7 +31,7 @@ public:
     using FileInfo = ::pygcmc::model::param::FileInfo;
 
     // === IValidatable Interface ===
-    bool is_valid() const override {
+    bool is_valid() const {
         return ParamQueries::isValidParam(basic_info_, space_info_, mc_info_, 
                                         energy_info_, fragment_info_, bias_info_, file_info_);
     }

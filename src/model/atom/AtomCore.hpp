@@ -3,8 +3,6 @@
 #ifndef PYGCMC_MODEL_ATOM_CORE_HPP
 #define PYGCMC_MODEL_ATOM_CORE_HPP
 
-#include "../common/ModelInterface.hpp"
-#include "../common/ModelConstants.hpp"
 #include <string>
 #include <array>
 #include <cmath>
@@ -21,60 +19,60 @@ namespace atom {
  * @brief Core Atom class following CHARMM naming conventions and PDB format
  * This is the minimal, core implementation with essential functionality
  */
-class AtomCore : public common::IValidatable, public common::IIdentifiable {
+class AtomCore {
 public:
     // Core constructors
     AtomCore() : 
         bynu(0), ires(0), iseg(0), igro(0),
-        altloc(common::constants::DEFAULT_ALTLOC),
-        chain(common::constants::DEFAULT_CHAIN),
-        inscode(common::constants::DEFAULT_INSCODE),
+        altloc(' '),
+        chain(' '),
+        inscode(' '),
         coor{0.0, 0.0, 0.0},
-        occupancy(common::constants::DEFAULT_OCCUPANCY),
-        tempfactor(common::constants::DEFAULT_TEMPFACTOR),
-        wmain(common::constants::DEFAULT_WMAIN),
-        wcomp(common::constants::DEFAULT_WCOMP),
+        occupancy(1.0),
+        tempfactor(0.0),
+        wmain(1.0),
+        wcomp(1.0),
         mass(0.0), charge(0.0), radius(0.0), alpha(0.0),
-        eps(common::constants::INVALID_DOUBLE),
-        rmin(common::constants::INVALID_DOUBLE),
+        eps(std::numeric_limits<double>::quiet_NaN()),
+        rmin(std::numeric_limits<double>::quiet_NaN()),
         fbeta(0.0),
-        move(common::constants::DEFAULT_MOVE),
-        ignore(common::constants::DEFAULT_IGNORE),
-        constrain(common::constants::DEFAULT_CONSTRAIN),
+        move(1),
+        ignore(0),
+        constrain(0),
         hetatm(false), initial(false)
     {}
 
     AtomCore(int bynu, const std::string& type, const std::string& resname,
              int ires, const std::string& segid = "", int iseg = 0,
              double x = 0.0, double y = 0.0, double z = 0.0,
-             double wmain = common::constants::DEFAULT_WMAIN, 
+             double wmain = 1.0, 
              double mass = 0.0, double charge = 0.0,
              const std::string& chem = "", bool hetatm = false) :
         bynu(bynu), type(type), resname(resname), ires(ires),
         segid(segid), iseg(iseg), igro(0),
-        altloc(common::constants::DEFAULT_ALTLOC),
-        chain(common::constants::DEFAULT_CHAIN),
-        inscode(common::constants::DEFAULT_INSCODE),
+        altloc(' '),
+        chain(' '),
+        inscode(' '),
         coor{x, y, z},
-        occupancy(common::constants::DEFAULT_OCCUPANCY),
-        tempfactor(common::constants::DEFAULT_TEMPFACTOR),
-        wmain(wmain), wcomp(common::constants::DEFAULT_WCOMP),
+        occupancy(1.0),
+        tempfactor(0.0),
+        wmain(wmain), wcomp(1.0),
         mass(mass), charge(charge), chem(chem),
-        eps(common::constants::INVALID_DOUBLE),
-        rmin(common::constants::INVALID_DOUBLE),
+        eps(std::numeric_limits<double>::quiet_NaN()),
+        rmin(std::numeric_limits<double>::quiet_NaN()),
         hetatm(hetatm), initial(false) {}
 
     virtual ~AtomCore() = default;
 
     // IIdentifiable interface
-    int get_id() const override { return bynu; }
-    void set_id(int id) override { 
+    int get_id() const { return bynu; }
+    void set_id(int id) { 
         if (id <= 0) throw std::invalid_argument("Invalid atom number");
         bynu = id; 
     }
 
     // IValidatable interface
-    bool is_valid() const override {
+    bool is_valid() const {
         return bynu > 0 && !type.empty() && !resname.empty() &&
                ires > 0 && std::isfinite(mass) && std::isfinite(charge) &&
                std::all_of(coor.begin(), coor.end(), 

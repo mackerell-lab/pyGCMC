@@ -4,7 +4,6 @@
 #define PYGCMC_MODEL_ATOM_MAIN_HPP
 
 #include "AtomCore.hpp"
-#include "../common/ModelUtils.hpp"
 #include <string>
 #include <sstream>
 #include <iomanip>
@@ -206,32 +205,16 @@ public:
                resname == other.resname &&
                ires == other.ires && 
                segid == other.segid &&
-               common::utils::double_equals(coor[0], other.coor[0]) &&
-               common::utils::double_equals(coor[1], other.coor[1]) &&
-               common::utils::double_equals(coor[2], other.coor[2]);
+               std::abs(coor[0] - other.coor[0]) < 1e-9 &&
+               std::abs(coor[1] - other.coor[1]) < 1e-9 &&
+               std::abs(coor[2] - other.coor[2]) < 1e-9;
     }
 
     bool operator!=(const Atom& other) const {
         return !(*this == other);
     }
 
-    // Hash function for use in unordered containers
-    struct Hash {
-        std::size_t operator()(const Atom& atom) const {
-            std::size_t seed = 0;
-            common::utils::hash_combine(seed, atom.bynu);
-            common::utils::hash_combine(seed, atom.type);
-            common::utils::hash_combine(seed, atom.resname);
-            common::utils::hash_combine(seed, atom.ires);
-            common::utils::hash_combine(seed, atom.segid);
-            return seed;
-        }
-    };
 
-    // Clone method for copying
-    std::unique_ptr<Atom> clone() const {
-        return std::make_unique<Atom>(*this);
-    }
 };
 
 // Utility functions for atom collections

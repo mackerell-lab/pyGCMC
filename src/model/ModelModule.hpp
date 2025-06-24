@@ -83,11 +83,9 @@
  * - Follows system module naming patterns for consistency
  */
 
-// === Core Interfaces and Utilities ===
+// === Core Utilities ===
 #include <iostream>
-#include "common/ModelInterface.hpp"
-#include "common/ModelConstants.hpp"
-#include "common/ModelUtils.hpp"
+#include <limits>
 
 // === Data Structure Layers ===
 #include "atom/AtomMain.hpp"
