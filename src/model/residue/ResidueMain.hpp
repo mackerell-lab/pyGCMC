@@ -1,353 +1,253 @@
 #pragma once
 
-#ifndef PYGCMC_MODEL_RESIDUE_MAIN_HPP
-#define PYGCMC_MODEL_RESIDUE_MAIN_HPP
-
-#include "ResidueComposite.hpp"
-#include "ResidueValidator.hpp"
-#include "../common/ModelUtils.hpp"
-#include <string>
-#include <sstream>
-#include <iomanip>
+#include "ResidueCore.hpp"
+#include "../atom/AtomMain.hpp"
+#include <vector>
+#include <memory>
+#include <algorithm>
+#include <functional>
+#include <unordered_map>
+#include <stdexcept>
+#include <cmath>
 
 namespace pygcmc {
 namespace model {
 namespace residue {
 
 /**
- * @brief Complete Residue class with full functionality and backward compatibility
- * This class extends ResidueComposite with additional utilities and maintains API compatibility
+ * @brief Residue class following CHARMM naming conventions
  */
-class Residue : public ResidueComposite {
+class Residue {
 public:
-    // Inherit constructors
-    using ResidueComposite::ResidueComposite;
+    // Constructors
+    Residue() = default;
+
+    Residue(const std::string& resname, int ires, 
+            const std::string& segid = "", int iseg = 0,
+            char chain = ' ', char inscode = ' ') {
+        data_.resname = resname;
+        data_.ires = ires;
+        data_.segid = segid;
+        data_.iseg = iseg;
+        data_.chain = chain;
+        data_.inscode = inscode;
+    }
+
+    // CHARMM standard getters
+    const std::string& get_resname() const noexcept { return data_.resname; }
+    int get_ires() const noexcept { return data_.ires; }
+    const std::string& get_segid() const noexcept { return data_.segid; }
+    int get_iseg() const noexcept { return data_.iseg; }
+    char get_chain() const noexcept { return data_.chain; }
+    char get_inscode() const noexcept { return data_.inscode; }
+    
+    // CHARMM standard setters
+    void set_resname(const std::string& name) noexcept { data_.resname = name; }
+    
+    // Atom management
+    void add_atom(const atom::Atom& atom) {
+        // Verify atom belongs to this residue
+        if (atom.get_resname() != data_.resname || atom.get_ires() != data_.ires ||
+            atom.get_segid() != data_.segid || atom.get_iseg() != data_.iseg) {
+            throw std::invalid_argument("Atom does not belong to this residue");
+        }
+        atoms_.push_back(std::make_shared<atom::Atom>(atom));
+        update_atom_map();
+    }
+
+    void add_atom(std::shared_ptr<atom::Atom> atom) {
+        if (!atom) return;
+        if (atom->get_resname() != data_.resname || atom->get_ires() != data_.ires ||
+            atom->get_segid() != data_.segid || atom->get_iseg() != data_.iseg) {
+            throw std::invalid_argument("Atom does not belong to this residue");
+        }
+        atoms_.push_back(atom);
+        update_atom_map();
+    }
+
+    const std::vector<std::shared_ptr<atom::Atom>>& get_atoms() const noexcept { 
+        return atoms_; 
+    }
+
+    std::shared_ptr<atom::Atom> find_atom(const std::string& type) const {
+        auto it = std::find_if(atoms_.begin(), atoms_.end(),
+            [&type](const std::shared_ptr<atom::Atom>& atom) {
+                return atom && atom->get_type() == type;
+            });
+        return (it != atoms_.end()) ? *it : nullptr;
+    }
+
+    // Utility methods
+    size_t atom_count() const noexcept {
+        return atoms_.size();
+    }
+
+    bool is_valid() const {
+        return !data_.resname.empty() && data_.ires > 0 && !data_.segid.empty() &&
+               std::all_of(atoms_.begin(), atoms_.end(),
+                          [](const std::shared_ptr<atom::Atom>& atom) {
+                              return atom && atom->is_valid();
+                          });
+    }
+
+    // Center of mass calculation and storage
+    void calculate_center_of_mass() {
+        data_.com = {0.0, 0.0, 0.0};
+        double totalMass = 0.0;
+
+        for (const auto& atom : atoms_) {
+            if (!atom) continue;
+            double mass = atom->get_mass();
+            const auto& coor = atom->get_coor();
+            for (int i = 0; i < 3; ++i) {
+                data_.com[i] += mass * coor[i];
+            }
+            totalMass += mass;
+        }
+
+        if (totalMass > 0.0) {
+            for (double& x : data_.com) x /= totalMass;
+        }
+    }
+
+    const std::array<double, 3>& get_center_of_mass() const noexcept {
+        return data_.com;
+    }
+
+    // Selection methods for CHARMM compatibility
+    bool has_atom_type(const std::string& type) const {
+        return std::any_of(atoms_.begin(), atoms_.end(),
+            [&type](const std::shared_ptr<atom::Atom>& atom) {
+                return atom && atom->get_type() == type;
+            });
+    }
+
+    std::vector<std::shared_ptr<atom::Atom>> select_atoms(
+        const std::function<bool(const atom::Atom&)>& predicate) const {
+        std::vector<std::shared_ptr<atom::Atom>> selected;
+        for (const auto& atom : atoms_) {
+            if (atom && predicate(*atom)) {
+                selected.push_back(atom);
+            }
+        }
+        return selected;
+    }
+
+    // Secondary structure getters/setters
+    SecondaryStructure get_secondary_structure() const noexcept { return data_.secStruct; }
+    const SheetStrand& get_sheet_info() const noexcept { return data_.sheetInfo; }
+    const SSBond& get_ssbond() const noexcept { return data_.ssbond; }
+
+    void set_secondary_structure(SecondaryStructure ss) { data_.secStruct = ss; }
+    void set_sheet_info(const SheetStrand& si) { data_.sheetInfo = si; }
+    void set_ssbond(const SSBond& sb) { data_.ssbond = sb; }
 
     // PDB format utilities
     std::string get_residue_id() const {
         // Combine residue number and insertion code (e.g., "153A")
-        if (inscode == ' ') {
-            return std::to_string(ires);
+        if (data_.inscode == ' ') {
+            return std::to_string(data_.ires);
         }
-        return std::to_string(ires) + inscode;
+        return std::to_string(data_.ires) + data_.inscode;
     }
 
     void set_residue_id(const std::string& resid) {
         // Parse residue ID (e.g., "153A" -> ires=153, inscode='A')
         size_t numLen = 0;
         try {
-            ires = std::stoi(resid, &numLen);
+            data_.ires = std::stoi(resid, &numLen);
         } catch (const std::exception&) {
             throw std::invalid_argument("Invalid residue ID format");
         }
         
         if (numLen < resid.length()) {
-            inscode = resid[numLen];
+            data_.inscode = resid[numLen];
         } else {
-            inscode = ' ';
+            data_.inscode = ' ';
         }
     }
 
     // Enhanced atom lookup methods
     std::shared_ptr<atom::Atom> find_atom_by_pdb_name(const std::string& pdbName) const {
-        auto it = std::find_if(atoms.begin(), atoms.end(),
+        // Find atom by PDB formatted name
+        auto it = std::find_if(atoms_.begin(), atoms_.end(),
             [&pdbName](const std::shared_ptr<atom::Atom>& atom) {
                 return atom && atom->get_formatted_atom_name() == pdbName;
             });
-        return (it != atoms.end()) ? *it : nullptr;
+        return (it != atoms_.end()) ? *it : nullptr;
     }
 
-    /**
-     * @brief Update internal atom mapping for efficient lookups
-     */
-    void refresh_atom_map() {
-        atomMap.clear();
-        for (const auto& atom : atoms) {
-            if (atom) {
-                atomMap[atom->get_type()] = atom;
-            }
-        }
+    // CHARMM-style atom range
+    std::pair<size_t, size_t> get_atom_range() const {
+        return {0, atoms_.size()};  // Equivalent to IBASE(IRES) to IBASE(IRES+1)
     }
 
-    /**
-     * @brief Update internal atom mapping (for compatibility)
-     */
-    void update_atom_map() {
-        atomMap.clear();
-        for (const auto& atom : atoms) {
-            if (atom) {
-                atomMap[atom->get_type()] = atom;
-            }
-        }
-    }
+    // HETATM support
+    bool is_hetatm() const noexcept { return data_.hetatm; }
+    void set_hetatm(bool het) noexcept { data_.hetatm = het; }
 
-    // Advanced selection methods
-    std::vector<std::shared_ptr<atom::Atom>> select_atoms_by_type(
-        const std::vector<std::string>& types) const {
-        std::vector<std::shared_ptr<atom::Atom>> selected;
-        for (const std::string& type : types) {
-            auto atom = find_atom(type);
-            if (atom) selected.push_back(atom);
-        }
-        return selected;
-    }
-
-    std::vector<std::shared_ptr<atom::Atom>> select_backbone_atoms() const {
-        static const std::vector<std::string> backbone_types = {"N", "CA", "C", "O"};
-        return select_atoms_by_type(backbone_types);
-    }
-
-    std::vector<std::shared_ptr<atom::Atom>> select_sidechain_atoms() const {
-        std::vector<std::shared_ptr<atom::Atom>> sidechain;
-        static const std::set<std::string> backbone_set = {"N", "CA", "C", "O", "H", "HA"};
-        
-        for (const auto& atom : atoms) {
-            if (atom && backbone_set.find(atom->get_type()) == backbone_set.end()) {
-                sidechain.push_back(atom);
-            }
-        }
-        return sidechain;
-    }
-
-    std::vector<std::shared_ptr<atom::Atom>> select_heavy_atoms() const {
-        return select_atoms([](const atom::Atom& atom) {
-            const std::string& type = atom.get_type();
-            return !type.empty() && type[0] != 'H';
-        });
-    }
-
-    std::vector<std::shared_ptr<atom::Atom>> select_hydrogen_atoms() const {
-        return select_atoms([](const atom::Atom& atom) {
-            const std::string& type = atom.get_type();
-            return !type.empty() && type[0] == 'H';
-        });
-    }
-
-    // Enhanced properties calculation
-    double get_total_mass() const {
-        return ResidueValidator::calculate_total_mass(*this);
-    }
-
-    double get_total_charge() const {
-        return ResidueValidator::calculate_total_charge(*this);
-    }
-
-    bool has_reasonable_geometry() const {
-        return ResidueValidator::has_reasonable_geometry(*this);
-    }
-
-    bool has_reasonable_charge(double tolerance = 0.01) const {
-        return ResidueValidator::is_charge_reasonable(*this, tolerance);
-    }
-
-    bool has_reasonable_mass() const {
-        return ResidueValidator::is_mass_reasonable(*this);
-    }
-
-    // Residue type checking
+    // Residue type checking methods (used by molecule utils)
     bool is_protein_residue() const {
-        return ResidueValidator::is_protein_residue(resname);
+        // Standard protein residues
+        static const std::vector<std::string> protein_residues = {
+            "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", "HIS", "ILE",
+            "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL"
+        };
+        return std::find(protein_residues.begin(), protein_residues.end(), data_.resname) != protein_residues.end();
     }
 
     bool is_nucleic_acid_residue() const {
-        return ResidueValidator::is_nucleic_acid_residue(resname);
+        // Standard nucleic acid residues
+        static const std::vector<std::string> nucleic_residues = {
+            "A", "T", "G", "C", "U", "DA", "DT", "DG", "DC", "DU",
+            "ADE", "THY", "GUA", "CYT", "URA"
+        };
+        return std::find(nucleic_residues.begin(), nucleic_residues.end(), data_.resname) != nucleic_residues.end();
     }
 
-    bool has_complete_backbone() const {
-        if (is_protein_residue()) {
-            return ResidueValidator::has_backbone_atoms(*this);
-        } else if (is_nucleic_acid_residue()) {
-            return ResidueValidator::has_nucleic_backbone_atoms(*this);
-        }
-        return true; // Unknown residue types are assumed complete
-    }
-
-    // Comprehensive validation
-    bool is_valid() const override {
-        return ResidueValidator::is_valid(*this);
-    }
-
-    std::string get_validation_report() const {
-        return ResidueValidator::get_validation_report(*this);
-    }
-
-    // Enhanced atom access with bounds checking
-    std::shared_ptr<atom::Atom> get_atom_by_index(size_t index) const {
-        return (index < atoms.size()) ? atoms[index] : nullptr;
-    }
-
-    // Distance calculations
+    // Distance calculation method (used by molecule utils)
     double distance_to(const Residue& other) const {
-        // Distance between centers of mass
         const auto& com1 = get_center_of_mass();
         const auto& com2 = other.get_center_of_mass();
-        
         double dx = com1[0] - com2[0];
         double dy = com1[1] - com2[1];
         double dz = com1[2] - com2[2];
-        
         return std::sqrt(dx*dx + dy*dy + dz*dz);
     }
 
-    double min_distance_to(const Residue& other) const {
-        // Minimum distance between any atoms
-        double min_dist = std::numeric_limits<double>::max();
-        
-        for (const auto& atom1 : atoms) {
-            if (!atom1) continue;
-            for (const auto& atom2 : other.atoms) {
-                if (!atom2) continue;
-                double dist = atom1->distance_to(*atom2);
-                min_dist = std::min(min_dist, dist);
-            }
-        }
-        
-        return (min_dist == std::numeric_limits<double>::max()) ? 0.0 : min_dist;
+    // Clone method (used by molecule main)
+    std::shared_ptr<Residue> clone() const {
+        auto cloned = std::make_shared<Residue>(*this);
+        return cloned;
     }
 
-    // Comparison operators for sorting/searching
-    bool operator<(const Residue& other) const {
-        if (segid != other.segid) return segid < other.segid;
-        if (chain != other.chain) return chain < other.chain;
-        return ires < other.ires;
-    }
-
-    bool operator==(const Residue& other) const {
-        return resname == other.resname && 
-               ires == other.ires && 
-               segid == other.segid &&
-               chain == other.chain &&
-               inscode == other.inscode;
-    }
-
-    bool operator!=(const Residue& other) const {
-        return !(*this == other);
-    }
-
-    // Hash function for use in unordered containers
-    struct Hash {
-        std::size_t operator()(const Residue& residue) const {
-            std::size_t seed = 0;
-            common::utils::hash_combine(seed, residue.resname);
-            common::utils::hash_combine(seed, residue.ires);
-            common::utils::hash_combine(seed, residue.segid);
-            common::utils::hash_combine(seed, residue.chain);
-            common::utils::hash_combine(seed, residue.inscode);
-            return seed;
-        }
-    };
-
-    // Clone method
-    std::unique_ptr<Residue> clone() const {
-        return std::make_unique<Residue>(*this);
-    }
-
-    // String representation
-    std::string to_string() const {
-        std::stringstream ss;
-        ss << resname << " " << ires;
-        if (inscode != ' ') ss << inscode;
-        if (chain != ' ') ss << " (chain " << chain << ")";
-        ss << " [" << segid << "]";
-        ss << " (" << atoms.size() << " atoms)";
-        return ss.str();
-    }
-
-    // PDB format output for all atoms
-    std::string to_pdb_string() const {
-        std::stringstream ss;
-        for (const auto& atom : atoms) {
-            if (atom) {
-                ss << atom->get_pdb_record() << "\n";
-            }
-        }
-        return ss.str();
-    }
-
-    // Summary statistics
-    struct Statistics {
-        size_t total_atoms;
-        size_t heavy_atoms;
-        size_t hydrogen_atoms;
-        double total_mass;
-        double total_charge;
-        std::array<double, 3> center_of_mass;
-        bool is_complete;
-        bool is_valid;
-    };
-
-    Statistics get_statistics() const {
-        Statistics stats;
-        stats.total_atoms = atoms.size();
-        stats.heavy_atoms = select_heavy_atoms().size();
-        stats.hydrogen_atoms = select_hydrogen_atoms().size();
-        stats.total_mass = get_total_mass();
-        stats.total_charge = get_total_charge();
-        stats.center_of_mass = get_center_of_mass();
-        stats.is_complete = has_complete_backbone();
-        stats.is_valid = is_valid();
-        return stats;
-    }
-
-    // Utility methods for CHARMM compatibility
-    std::string get_unique_identifier() const {
-        std::stringstream ss;
-        ss << segid << ":" << resname << ":" << ires;
-        if (inscode != ' ') ss << inscode;
-        if (chain != ' ') ss << ":" << chain;
-        return ss.str();
+    // Public atom map update (used by Python bindings)
+    void refresh_atom_map() {
+        update_atom_map();
     }
 
 private:
+    void update_atom_map() {
+        atomMap_.clear();
+        for (const auto& atom : atoms_) {
+            if (atom) {
+                // Store both raw and PDB-formatted names
+                atomMap_[atom->get_type()] = atom;
+                atomMap_[atom->get_formatted_atom_name()] = atom;
+            }
+        }
+    }
+
+    // Core data
+    ResidueData data_;
+
+    // Atom storage
+    std::vector<std::shared_ptr<atom::Atom>> atoms_;  ///< Atoms in residue
+    std::unordered_map<std::string, std::shared_ptr<atom::Atom>> atomMap_;  ///< Quick atom lookup by type
 };
 
-// Utility functions for residue collections
-namespace utils {
-
 /**
- * @brief Find residues by name in a collection
- */
-template<typename Container>
-auto find_residues_by_name(const Container& residues, const std::string& resname) {
-    std::vector<typename Container::value_type> result;
-    std::copy_if(residues.begin(), residues.end(), std::back_inserter(result),
-                [&resname](const auto& residue) { 
-                    return residue.get_resname() == resname; 
-                });
-    return result;
-}
-
-/**
- * @brief Find residues by chain in a collection
- */
-template<typename Container>
-auto find_residues_by_chain(const Container& residues, char chain) {
-    std::vector<typename Container::value_type> result;
-    std::copy_if(residues.begin(), residues.end(), std::back_inserter(result),
-                [chain](const auto& residue) { 
-                    return residue.get_chain() == chain; 
-                });
-    return result;
-}
-
-/**
- * @brief Find residues in range
- */
-template<typename Container>
-auto find_residues_in_range(const Container& residues, int start, int end) {
-    std::vector<typename Container::value_type> result;
-    std::copy_if(residues.begin(), residues.end(), std::back_inserter(result),
-                [start, end](const auto& residue) { 
-                    int ires = residue.get_ires();
-                    return ires >= start && ires <= end; 
-                });
-    return result;
-}
-
-} // namespace utils
-
-/**
- * @brief Validate a residue
+ * @brief Validate a residue (from original codebase)
  * @param residue The residue to validate
  * @return true if the residue is valid, false otherwise
  */
@@ -365,5 +265,3 @@ inline bool validate_residue(const Residue& residue) {
 } // namespace residue
 } // namespace model
 } // namespace pygcmc
-
-#endif // PYGCMC_MODEL_RESIDUE_MAIN_HPP 

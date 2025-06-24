@@ -171,7 +171,7 @@ void init_model(py::module& m) {
     // Needed so that derived classes can list them as bases    
     // ----------------------------------------------------------
     py::class_<model::atom::AtomCore, std::shared_ptr<model::atom::AtomCore>>(m, "_AtomCore");
-    py::class_<model::residue::ResidueComposite, std::shared_ptr<model::residue::ResidueComposite>>(m, "_ResidueComposite");
+
 
     // Bind Atom class with base AtomCore to enable inherited method bindings
     py::class_<model::Atom, model::atom::AtomCore, std::shared_ptr<model::Atom>>(model, "Atom")
@@ -214,8 +214,8 @@ void init_model(py::module& m) {
         .def("has_lj_params", &model::Atom::has_lj_params)
         .def("is_valid", &model::Atom::is_valid);
 
-    // Bind Residue class with base ResidueComposite for inherited methods
-    py::class_<model::Residue, model::residue::ResidueComposite, std::shared_ptr<model::Residue>>(model, "Residue")
+    // Bind Residue class
+    py::class_<model::Residue, std::shared_ptr<model::Residue>>(model, "Residue")
         .def(py::init<>())
         .def("get_resname", &model::Residue::get_resname)
         .def("set_resname", &model::Residue::set_resname)
@@ -236,7 +236,7 @@ void init_model(py::module& m) {
         .def("get_residue_id", &model::Residue::get_residue_id)
         .def("set_residue_id", &model::Residue::set_residue_id)
         .def("find_atom_by_pdb_name", &model::Residue::find_atom_by_pdb_name)
-        .def("update_atom_map", &model::Residue::update_atom_map)
+        .def("update_atom_map", &model::Residue::refresh_atom_map)
         .def("get_atom_range", &model::Residue::get_atom_range);
 
     // Bind Topology class
