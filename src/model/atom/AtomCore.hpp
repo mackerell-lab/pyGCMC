@@ -62,16 +62,9 @@ public:
         rmin(std::numeric_limits<double>::quiet_NaN()),
         hetatm(hetatm), initial(false) {}
 
-    virtual ~AtomCore() = default;
+    ~AtomCore() = default;
 
-    // IIdentifiable interface
-    int get_id() const { return bynu; }
-    void set_id(int id) { 
-        if (id <= 0) throw std::invalid_argument("Invalid atom number");
-        bynu = id; 
-    }
-
-    // IValidatable interface
+    // Validation method
     bool is_valid() const {
         return bynu > 0 && !type.empty() && !resname.empty() &&
                ires > 0 && std::isfinite(mass) && std::isfinite(charge) &&

@@ -107,97 +107,9 @@ public:
         }
     }
 
-    // Advanced utility methods
-    std::string get_atom_identifier() const {
-        // Generate unique atom identifier: segid:resname:ires:type
-        std::stringstream ss;
-        ss << segid << ":" << resname << ":" << ires << ":" << type;
-        return ss.str();
-    }
 
-    std::string get_pdb_record() const {
-        // Generate PDB ATOM/HETATM record
-        std::stringstream ss;
-        
-        // Record type
-        ss << (hetatm ? "HETATM" : "ATOM  ");
-        
-        // Atom serial number (5 chars, right-aligned)
-        ss << std::setw(5) << std::right << bynu;
-        
-        // Space
-        ss << " ";
-        
-        // Atom name (4 chars, formatted)
-        ss << get_formatted_atom_name();
-        
-        // Alternate location (1 char)
-        ss << altloc;
-        
-        // Residue name (3 chars, left-aligned)
-        ss << std::setw(3) << std::left << resname;
-        
-        // Space + Chain ID
-        ss << " " << chain;
-        
-        // Residue sequence number (4 chars, right-aligned)
-        ss << std::setw(4) << std::right << ires;
-        
-        // Insertion code
-        ss << inscode;
-        
-        // Spaces (3 chars)
-        ss << "   ";
-        
-        // Coordinates (8.3 format each)
-        ss << std::fixed << std::setprecision(3);
-        ss << std::setw(8) << std::right << coor[0];
-        ss << std::setw(8) << std::right << coor[1];
-        ss << std::setw(8) << std::right << coor[2];
-        
-        // Occupancy and temperature factor
-        ss << std::setw(6) << std::setprecision(2) << occupancy;
-        ss << std::setw(6) << std::setprecision(2) << tempfactor;
-        
-        // Spaces (10 chars)
-        ss << "          ";
-        
-        // Element symbol (2 chars, right-aligned)
-        if (!element.empty()) {
-            ss << std::setw(2) << std::right << element;
-        } else {
-            ss << "  ";
-        }
-        
-        // Charge (2 chars)
-        if (!chargestr.empty()) {
-            ss << std::setw(2) << std::right << chargestr;
-        }
-        
-        return ss.str();
-    }
 
-    // Distance calculation utilities
-    double distance_to(const Atom& other) const {
-        double dx = coor[0] - other.coor[0];
-        double dy = coor[1] - other.coor[1];
-        double dz = coor[2] - other.coor[2];
-        return std::sqrt(dx*dx + dy*dy + dz*dz);
-    }
 
-    double distance_squared_to(const Atom& other) const {
-        double dx = coor[0] - other.coor[0];
-        double dy = coor[1] - other.coor[1];
-        double dz = coor[2] - other.coor[2];
-        return dx*dx + dy*dy + dz*dz;
-    }
-
-    // Comparison operators for sorting/searching
-    bool operator<(const Atom& other) const {
-        if (segid != other.segid) return segid < other.segid;
-        if (ires != other.ires) return ires < other.ires;
-        return bynu < other.bynu;
-    }
 
     bool operator==(const Atom& other) const {
         return bynu == other.bynu && 
@@ -217,43 +129,6 @@ public:
 
 };
 
-// Utility functions for atom collections
-namespace utils {
-
-/**
- * @brief Find atoms by type in a collection
- */
-template<typename Container>
-auto find_atoms_by_type(const Container& atoms, const std::string& type) {
-    std::vector<typename Container::value_type> result;
-    std::copy_if(atoms.begin(), atoms.end(), std::back_inserter(result),
-                [&type](const auto& atom) { return atom.get_type() == type; });
-    return result;
-}
-
-/**
- * @brief Find atoms by residue in a collection
- */
-template<typename Container>
-auto find_atoms_by_residue(const Container& atoms, const std::string& resname, int ires) {
-    std::vector<typename Container::value_type> result;
-    std::copy_if(atoms.begin(), atoms.end(), std::back_inserter(result),
-                [&resname, ires](const auto& atom) { 
-                    return atom.get_resname() == resname && atom.get_ires() == ires; 
-                });
-    return result;
-}
-
-} // namespace utils
-
-/**
- * @brief Validate an atom
- * @param atom The atom to validate
- * @return true if the atom is valid, false otherwise
- */
-inline bool validate_atom(const Atom& atom) {
-    return atom.is_valid();
-}
 
 } // namespace atom
 } // namespace model
