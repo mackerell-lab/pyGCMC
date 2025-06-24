@@ -197,6 +197,7 @@ public:
         cmaps.push_back(cmap);
     }
 
+
     static inline void addExclusion(std::map<int, std::set<int>>& exclusions,
                                    const std::vector<TopologyAtom>& atoms,
                                    int atom1, int atom2) {

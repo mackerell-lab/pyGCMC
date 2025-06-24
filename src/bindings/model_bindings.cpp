@@ -53,10 +53,7 @@ void init_model(py::module& m) {
         .def_readwrite("mass", &model::TopologyAtom::mass)
         .def_readwrite("residue_id", &model::TopologyAtom::residue_id)
         .def_readwrite("segment_id", &model::TopologyAtom::segment_id)
-        .def_readwrite("typeB", &model::TopologyAtom::typeB)
-        .def_readwrite("chargeB", &model::TopologyAtom::chargeB)
-        .def_readwrite("massB", &model::TopologyAtom::massB)
-        .def_readwrite("has_b_state", &model::TopologyAtom::has_b_state);
+        ;
 
     // Bind TopologySegment
     py::class_<model::TopologySegment>(model, "TopologySegment")
@@ -89,9 +86,6 @@ void init_model(py::module& m) {
         .def_readwrite("angle", &model::TopologyAngle::angle)
         .def_readwrite("force_constant", &model::TopologyAngle::force_constant)
         .def_readwrite("function_type", &model::TopologyAngle::function_type)
-        .def_readwrite("ub_length", &model::TopologyAngle::ub_length)
-        .def_readwrite("ub_constant", &model::TopologyAngle::ub_constant)
-        .def_readwrite("has_ub", &model::TopologyAngle::has_ub)
         .def("__len__", [](const model::TopologyAngle&) { return 3; })  // Angle always involves 3 atoms
         .def("__getitem__", [](const model::TopologyAngle& angle, size_t i) {
             if (i == 0) return angle.atom1;
@@ -271,7 +265,6 @@ void init_model(py::module& m) {
         .def("has_angle", &model::Topology::has_angle)
         .def("has_dihedral", &model::Topology::has_dihedral)
         .def("has_improper", &model::Topology::has_improper)
-        .def("has_donor", py::overload_cast<int>(&model::Topology::has_donor, py::const_))
         .def("has_donor", py::overload_cast<int, int>(&model::Topology::has_donor, py::const_))
         .def("has_acceptor", &model::Topology::has_acceptor)
         .def("has_cmap", py::overload_cast<>(&model::Topology::has_cmap, py::const_))

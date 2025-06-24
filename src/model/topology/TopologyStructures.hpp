@@ -24,11 +24,6 @@ struct TopologyAtom {
     double mass;            ///< Atomic mass
     int residue_id;        ///< ID of the residue this atom belongs to
     int segment_id;        ///< ID of the segment this atom belongs to
-    // B-state parameters for free energy calculations
-    std::string typeB;
-    double chargeB = 0.0;
-    double massB = 0.0;
-    bool has_b_state = false;
 };
 
 /**
@@ -72,10 +67,6 @@ struct TopologyAngle {
     double angle;           ///< Equilibrium angle in degrees (optional)
     double force_constant;  ///< Angle force constant (optional)
     int function_type = 1;   // Default to GROMACS function type 1
-    // Urey-Bradley terms
-    double ub_length = 0.0;
-    double ub_constant = 0.0;
-    bool has_ub = false;
 };
 
 /**

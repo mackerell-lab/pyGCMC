@@ -86,41 +86,19 @@ public:
 
     static inline bool hasImproper(const std::vector<TopologyDihedral>& dihedrals,
                                   int atom1, int atom2, int atom3, int atom4) {
-        std::vector<int> query_others = {atom2, atom3, atom4};
-        std::sort(query_others.begin(), query_others.end());
-
         for (const auto& dihedral : dihedrals) {
             if (!dihedral.improper) continue;
-            
-            std::array<int, 4> atoms = {dihedral.atom1, dihedral.atom2, dihedral.atom3, dihedral.atom4};
-            for (int i = 0; i < 4; ++i) {
-                if (atoms[i] == atom1) {
-                    std::vector<int> others;
-                    for (int j = 0; j < 4; ++j) {
-                        if (j != i) {
-                            others.push_back(atoms[j]);
-                        }
-                    }
-                    std::sort(others.begin(), others.end());
-                    if (others == query_others) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
-    }
-
-    // Check special features
-    static inline bool hasDonor(const std::vector<TopologyDonor>& donors, int donor_atom) {
-        for (const auto& donor : donors) {
-            if (donor.donor_atom == donor_atom) {
+            if ((dihedral.atom1 == atom1 && dihedral.atom2 == atom2 &&
+                 dihedral.atom3 == atom3 && dihedral.atom4 == atom4) ||
+                (dihedral.atom1 == atom4 && dihedral.atom2 == atom3 &&
+                 dihedral.atom3 == atom2 && dihedral.atom4 == atom1)) {
                 return true;
             }
         }
         return false;
     }
 
+    // Check special features
     static inline bool hasDonor(const std::vector<TopologyDonor>& donors, int donor_atom, int hydrogen_atom) {
         for (const auto& donor : donors) {
             if (donor.donor_atom == donor_atom && donor.hydrogen_atom == hydrogen_atom) {
@@ -150,6 +128,13 @@ public:
 
     static inline bool hasCmap(const std::vector<TopologyCmap>& cmaps) {
         return !cmaps.empty();
+    }
+
+    static inline bool hasCmap(const std::vector<TopologyCmap>& cmaps, const std::array<int, 8>& atoms) {
+        for (const auto& cmap : cmaps) {
+            if (cmap.atoms == atoms) return true;
+        }
+        return false;
     }
 
     static inline bool hasCmap(const std::vector<TopologyCmap>& cmaps, const std::vector<int>& atoms) {

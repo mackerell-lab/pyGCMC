@@ -76,6 +76,7 @@ public:
         TopologyOperations::addCmap(cmaps_, atoms_, atoms, function_type);
     }
 
+
     // Getters
     inline const TopologyAtom& get_atom(int index) const {
         if (!TopologyQueries::hasAtom(atoms_, index)) throw std::out_of_range("Invalid atom index");
@@ -150,10 +151,6 @@ public:
         return TopologyQueries::hasImproper(dihedrals_, atom1, atom2, atom3, atom4);
     }
 
-    inline bool has_donor(int donor_atom) const {
-        return TopologyQueries::hasDonor(donors_, donor_atom);
-    }
-
     inline bool has_donor(int donor_atom, int hydrogen_atom) const {
         return TopologyQueries::hasDonor(donors_, donor_atom, hydrogen_atom);
     }
@@ -164,6 +161,10 @@ public:
 
     inline bool has_cmap() const {
         return TopologyQueries::hasCmap(cmaps_);
+    }
+
+    inline bool has_cmap(const std::array<int, 8>& atoms) const {
+        return TopologyQueries::hasCmap(cmaps_, atoms);
     }
 
     inline bool has_cmap(const std::vector<int>& atoms) const {
