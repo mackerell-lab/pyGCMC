@@ -13,40 +13,41 @@
  * 
  * **Module Organization:**
  * 
- * **atom** - Atomic-Level Data Structures
- * - AtomCore.hpp: Core atom data structure with coordinates, mass, charge
- * - AtomMain.hpp: Complete Atom class with PDB format support and utilities
+ * **atom** - Atomic-Level Data (Core + Inheritance Pattern)
+ * - AtomCore.hpp: Foundation class with 25+ properties (coordinates, force field parameters, PDB fields)
+ * - AtomMain.hpp: Extended class adding PDB formatting, validation, and comparison operators
  * 
- * **residue** - Residue-Level Composition
- * - ResidueCore.hpp: Core residue data structure and atom management
- * - ResidueMain.hpp: Main interface with validation and utilities
+ * **residue** - Residue-Level Composition (Core + Composition Pattern)
+ * - ResidueCore.hpp: Pure data structures including secondary structure and disulfide bond support
+ * - ResidueMain.hpp: Container class managing atom collections with validation and center-of-mass calculation
  * 
- * **molecule** - Molecular System Management
- * - MolecularMain.hpp: Complete molecular system with multi-residue support
+ * **molecule** - Molecular System Integration (Single File)
+ * - MolecularMain.hpp: Data fusion class combining structural (PDB) and topological (PSF/TOP) information
+ *   with standardized CMAP handling and comprehensive lookup mappings
  * 
- * **topology** - Topology and Connectivity (follows 4-file pattern)
- * - TopologyStructures.hpp: Data structures (atoms, bonds, angles, dihedrals)
- * - TopologyOperations.hpp: Add/modify operations (static methods)
- * - TopologyQueries.hpp: Find/check/count operations (static methods)
- * - TopologyMain.hpp: Main interface (delegates to operations/queries)
+ * **topology** - Molecular Connectivity (4-File Modular Pattern)
+ * - TopologyStructures.hpp: Data structures for atoms, bonds, angles, dihedrals, and special features
+ * - TopologyOperations.hpp: Static methods for adding topology elements with hierarchical validation
+ * - TopologyQueries.hpp: Static methods for finding, checking, and counting topology elements
+ * - TopologyMain.hpp: Main interface class delegating to operations and queries with private data storage
  * 
- * **forcefield** - Force Field Parameters
- * - ForceFieldTypes.hpp: Parameter type definitions
- * - ForceFieldAccessors.hpp: Parameter access utilities
- * - ForceFieldMain.hpp: Main force field interface
+ * **forcefield** - Force Field Parameters (3-File Optimized Pattern)
+ * - ForceFieldTypes.hpp: Parameter type definitions for LJ, bonded, and NBFIX interactions
+ * - ForceFieldAccessors.hpp: Comprehensive inline implementations with smart key generation and symmetry
+ * - ForceFieldMain.hpp: Main class declaration providing parameter access interface
  * 
- * **montecarlo** - Monte Carlo Simulation States
- * - MCStructures.hpp: Pure data structures (TypeMaps, MCInfo, MCAtom, MCResidue)
- * - MCMain.hpp: Main interface with complete MCState functionality
+ * **montecarlo** - Monte Carlo Simulation (2-File Efficient Pattern)
+ * - MCStructures.hpp: Performance-optimized data structures for simulation state and type mapping
+ * - MCMain.hpp: Complete MCState class with atom/residue management and statistics tracking
  * 
- * **param** - Global Simulation Parameters (follows 4-file pattern)
- * - ParamStructures.hpp: Parameter data structures
- * - ParamOperations.hpp: Parameter modification operations
- * - ParamQueries.hpp: Parameter query operations
- * - ParamMain.hpp: Comprehensive parameter management
+ * **param** - Simulation Parameters (4-File Modular Pattern)
+ * - ParamStructures.hpp: Seven parameter structure definitions covering all GCMC simulation aspects
+ * - ParamOperations.hpp: Static utility methods for parameter updates and derived value calculations
+ * - ParamQueries.hpp: Validation, string conversion, and parameter query methods
+ * - ParamMain.hpp: Main interface class with complete delegation to operations and queries
  * 
- * **structure** - Structural Data Management
- * - StructureMain.hpp: High-level structural data organization
+ * **structure** - Basic Structural Data (Single File)
+ * - StructureMain.hpp: Simple container for atoms, residues, and secondary structure elements
  * 
  * **Usage Examples:**
  * 
@@ -69,10 +70,11 @@
  * 
  * **Design Philosophy:**
  * - Single header inclusion for all data structure functionality
- * - Modular architecture with clear separation of concerns
- * - AI-friendly: focused responsibilities with predictable file organization
+ * - Intelligent pattern selection: each module uses the optimal file organization for its complexity
+ * - AI-friendly: predictable organization with clear separation where beneficial
  * - Performance-oriented: efficient data structures with minimal overhead
- * - Consistent patterns: topology/ and param/ follow 4-file pattern (Structures/Operations/Queries/Main)
+ * - Backward compatibility: all original APIs preserved through type aliases
+ * - Pattern diversity: 4-file (topology/param), 3-file (forcefield), 2-file (montecarlo/atom/residue), single-file (molecule/structure)
  */
 
 // === Core Utilities ===
