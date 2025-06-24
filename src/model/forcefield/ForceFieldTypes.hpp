@@ -82,49 +82,7 @@ struct NBFIXParams {
     double rmin = 0.0;        ///< Distance at minimum energy (Angstroms)
 };
 
-/**
- * @brief Statistics for force field parameters
- */
-struct ForceFieldStats {
-    size_t num_atom_types = 0;
-    size_t num_lj_params = 0;
-    size_t num_nbfix = 0;
-    size_t num_bond_types = 0;
-    size_t num_angle_types = 0;
-    size_t num_dihedral_types = 0;
-    size_t num_improper_types = 0;
-};
 
-/**
- * @brief Completeness check result
- */
-struct CompletenessResult {
-    bool is_complete = false;
-    std::set<std::string> missing_atom_masses;
-    std::set<std::string> missing_lj_params;
-    std::string summary;
-};
-
-/**
- * @brief Utility class for creating parameter keys
- */
-class ParamKeyUtils {
-public:
-    static std::pair<std::string, std::string> makeTypePair(const std::string& type1, const std::string& type2) {
-        return type1 < type2 ? std::make_pair(type1, type2) : std::make_pair(type2, type1);
-    }
-
-    static std::tuple<std::string, std::string, std::string> makeTypeTriple(
-        const std::string& type1, const std::string& type2, const std::string& type3) {
-        return std::make_tuple(type1, type2, type3);
-    }
-
-    static std::tuple<std::string, std::string, std::string, std::string> makeTypeQuad(
-        const std::string& type1, const std::string& type2,
-        const std::string& type3, const std::string& type4) {
-        return std::make_tuple(type1, type2, type3, type4);
-    }
-};
 
 } // namespace forcefield
 } // namespace model

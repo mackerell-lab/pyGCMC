@@ -72,14 +72,6 @@ public:
     size_t get_num_dihedral_types() const { return dihedral_params_.size(); }
     size_t get_num_improper_types() const { return improper_params_.size(); }
 
-    // === Utility Methods ===
-    void clear() {
-        atom_masses_.clear(); lj_params_.clear(); nbfix_.clear();
-        bond_params_.clear(); angle_params_.clear(); 
-        dihedral_params_.clear(); improper_params_.clear();
-        nonbonded_params_ = NonbondedParams{};
-    }
-    std::set<std::string> get_atom_types() const;
 
     // === Nonbonded Parameters ===
     const NonbondedParams& get_nonbonded_params() const { return nonbonded_params_; }
@@ -94,8 +86,21 @@ public:
     const std::map<std::tuple<std::string, std::string, std::string, std::string>, std::vector<DihedralParams>>& get_dihedral_params_map() const { return dihedral_params_; }
     const std::map<std::tuple<std::string, std::string, std::string, std::string>, ImproperParams>& get_improper_params_map() const { return improper_params_; }
 
-    // === Friend class for analysis ===
-    friend class ForceFieldAnalysis;
+    // === Static helper methods for making parameter keys ===
+    static std::pair<std::string, std::string> makeTypePair(const std::string& type1, const std::string& type2) {
+        return type1 < type2 ? std::make_pair(type1, type2) : std::make_pair(type2, type1);
+    }
+
+    static std::tuple<std::string, std::string, std::string> makeTypeTriple(
+        const std::string& type1, const std::string& type2, const std::string& type3) {
+        return std::make_tuple(type1, type2, type3);
+    }
+
+    static std::tuple<std::string, std::string, std::string, std::string> makeTypeQuad(
+        const std::string& type1, const std::string& type2,
+        const std::string& type3, const std::string& type4) {
+        return std::make_tuple(type1, type2, type3, type4);
+    }
 
 private:
     std::map<std::string, double> atom_masses_;
@@ -113,7 +118,6 @@ private:
 } // namespace pygcmc
 
 // Include implementations
-#include "ForceFieldAnalysis.hpp"
 #include "ForceFieldAccessors.hpp"
 
 #endif // PYGCMC_MODEL_FORCEFIELD_MAIN_HPP 

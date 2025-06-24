@@ -391,9 +391,9 @@ void init_model(py::module& m) {
         .def("get_num_dihedral_types", &model::ForceField::get_num_dihedral_types)
         .def("get_num_improper_types", &model::ForceField::get_num_improper_types)
         .def("get_nonbonded_params", static_cast<const model::NonbondedParams& (model::ForceField::*)() const>(&model::ForceField::get_nonbonded_params))
-        .def_static("makeTypePair", &model::forcefield::ParamKeyUtils::makeTypePair)
-        .def_static("makeTypeTriple", &model::forcefield::ParamKeyUtils::makeTypeTriple)
-        .def_static("makeTypeQuad", &model::forcefield::ParamKeyUtils::makeTypeQuad)
+        .def_static("makeTypePair", &model::ForceField::makeTypePair)
+        .def_static("makeTypeTriple", &model::ForceField::makeTypeTriple)
+        .def_static("makeTypeQuad", &model::ForceField::makeTypeQuad)
         // Property accessors - using new _map methods for accessing full parameter maps
         .def_property_readonly("atom_masses", static_cast<const std::map<std::string, double>& (model::ForceField::*)() const>(&model::ForceField::get_atom_masses))
         .def_property_readonly("lj_params", static_cast<const std::map<std::string, model::LJParams>& (model::ForceField::*)() const>(&model::ForceField::get_lj_params_map))
