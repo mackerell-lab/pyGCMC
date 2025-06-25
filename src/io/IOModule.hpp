@@ -17,11 +17,11 @@
 namespace pygcmc {
 namespace io {
     // Maintain backward compatibility - all original class names remain accessible
-    using PDBParser = structure::PdbParserMain;  // structure::PdbParserMain
-    using PSFParser = PSFParser;  // topology::PSFParser  
-    using TOPParser = TOPParser;  // topology::TOPParser
-    using PRMParser = PRMParser;  // forcefield::PRMParser
-    using INPParser = parameters::InpParserMain;  // parameters::InpParserMain
+    using PDBParser = structure::PdbParserMain;  // Map structure::PdbParserMain to PDBParser
+    using INPParser = parameters::InpParserMain;  // Map parameters::InpParserMain to INPParser
+    
+    // Note: PSFParser, TOPParser, and PRMParser are already defined directly in pygcmc::io namespace
+    // so no using declarations are needed for them
 }
 }
 
