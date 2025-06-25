@@ -17,14 +17,24 @@ else()
     message(STATUS "Using system-installed pybind11")
 endif()
 
-# Create Python module - only list the files we're using
+# Automatically discover all source files
+file(GLOB_RECURSE BINDING_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cxx"
+)
+
+# Automatically discover all header files (for IDE display)
+file(GLOB_RECURSE BINDING_HEADERS CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.hxx"
+)
+
+# Create Python module
 pybind11_add_module(pygcmc 
-    bindings.cpp
-    BindingsModule.cpp
-    io/IOBindings.cpp
-    model_bindings.cpp
-    system_bindings.cpp
-    simulation_bindings.cpp
+    ${BINDING_SOURCES}
+    ${BINDING_HEADERS}
 )
 
 # Link against other libraries
