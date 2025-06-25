@@ -10,7 +10,7 @@ namespace topology {
 
 /**
  * @brief Main topology class following system module design patterns
- * AI-friendly: clear separation of structures, operations, and queries
+ * Well-organized: clear separation of structures, operations, and queries
  */
 class Topology {
 public:

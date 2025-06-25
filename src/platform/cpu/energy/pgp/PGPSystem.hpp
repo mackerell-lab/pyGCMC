@@ -9,7 +9,7 @@ namespace platform {
 namespace cpu {
 
 /**
- * @brief Function Location Guide for AI Agents:
+ * @brief Function Reference Guide:
  * - System energy calculation: computeSystemEnergyPGP*
  * - Movement energy calculation: computeMovementEnergyPGP*
  * - Grid interpolation: PGPInterpolation.hpp -> interpolateMoleculeEnergy*, calculateMoleculeEnergy*

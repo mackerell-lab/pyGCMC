@@ -25,7 +25,7 @@
  *   computeSystemEnergyPME(state);
  *   computeMovementEnergyPME(state);
  * 
- * @note AI Agents functionality guide:
+ * @note Module functionality guide:
  * - Energy calculation: PMEInterface.hpp -> computeSystemEnergyPME, computeMovementEnergyPME
  * - Component calculation: PMEInterface.hpp -> computeReciprocalPME, computeSelfEnergyPME, computeRealSpacePME
  * - Parameter setting: PMESetup.hpp -> setPMEParameters, autoAdjustPMEParameters

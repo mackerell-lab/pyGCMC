@@ -70,8 +70,8 @@
  * 
  * **Design Philosophy:**
  * - Single header inclusion for all data structure functionality
- * - Intelligent pattern selection: each module uses the optimal file organization for its complexity
- * - AI-friendly: predictable organization with clear separation where beneficial
+ * - Optimal pattern selection: each module uses the best file organization for its complexity
+ * - Well-designed: predictable organization with clear separation where beneficial
  * - Performance-oriented: efficient data structures with minimal overhead
  * - Backward compatibility: all original APIs preserved through type aliases
  * - Pattern diversity: 4-file (topology/param), 3-file (forcefield), 2-file (montecarlo/atom/residue), single-file (molecule/structure)

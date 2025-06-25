@@ -114,7 +114,7 @@
  * - Single header inclusion for all energy functionality
  * - Method-agnostic unified interface for easy switching
  * - Optimized implementations for different system sizes
- * - AI-friendly: each file under 300 lines with focused responsibilities
+ * - Well-structured: each file under 300 lines with focused responsibilities
  * - Performance-critical: minimal overhead through careful design
  * - Backward compatible: maintains existing API while providing new features
  */ 

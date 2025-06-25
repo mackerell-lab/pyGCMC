@@ -22,7 +22,7 @@
  *   computeSystemEnergyPGP(state);
  *   computeMovementEnergyPGP(state);
  * 
- * @note AI Agents functionality guide:
+ * @note Module functionality guide:
  * - Energy calculation: PGPSystem.hpp -> computeSystemEnergyPGP, computeMovementEnergyPGP
  * - Grid interpolation: PGPSystem.hpp -> interpolateMoleculeEnergy, calculateMoleculeEnergy
  * - Grid precomputation: PGPPrecompute.hpp -> precomputeGridPotential, setPGPParameters

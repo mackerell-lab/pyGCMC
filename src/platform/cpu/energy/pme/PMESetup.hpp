@@ -7,7 +7,7 @@ namespace platform {
 namespace cpu {
 
 /**
- * @brief Function Location Guide for AI Agents:
+ * @brief Function Reference Guide:
  * - Parameter setting: setPMEParameters, autoAdjustPMEParameters
  * - Initialization: initializePMEParameters, initializePMETables, initializePMEBsplines
  * - Box management: setPMEBox

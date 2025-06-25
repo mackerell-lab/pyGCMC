@@ -90,6 +90,6 @@
  * - Single header inclusion for all functionality
  * - Modular architecture with clear separation of concerns
  * - Each sub-module is independently testable and maintainable
- * - AI-friendly: each file under 300 lines with focused responsibilities
+ * - Well-structured: each file under 300 lines with focused responsibilities
  * - Performance-oriented: minimal overhead through careful design
  */ 

@@ -17,11 +17,12 @@ else()
     message(STATUS "Using system-installed pybind11")
 endif()
 
-# Create Python module
+# Create Python module - only list the files we're using
 pybind11_add_module(pygcmc 
     bindings.cpp
+    BindingsModule.cpp
+    io/IOBindings.cpp
     model_bindings.cpp
-    io_bindings.cpp
     system_bindings.cpp
     simulation_bindings.cpp
 )
@@ -35,13 +36,20 @@ target_link_libraries(pygcmc
         pygcmc_simulation
 )
 
+# Set position independent code (following system/io pattern)
+set_property(TARGET pygcmc PROPERTY POSITION_INDEPENDENT_CODE ON)
+
 # Set output directory to build root
 set_target_properties(pygcmc PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
+    LINKER_LANGUAGE CXX
 )
 
-# Set include directories
+# Set include directories (following system/io pattern)
 target_include_directories(pygcmc
     PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
         ${CMAKE_SOURCE_DIR}/src
 ) 

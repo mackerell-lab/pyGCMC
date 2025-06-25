@@ -7,7 +7,7 @@ namespace platform {
 namespace cpu {
 
 /**
- * @brief Function Location Guide for AI Agents:
+ * @brief Function Reference Guide:
  * - System energy calculation: computeSystemEnergyPME
  * - Movement energy calculation: computeMovementEnergyPME  
  * - Component calculations: computeReciprocalPME, computeSelfEnergyPME, computeRealSpacePME

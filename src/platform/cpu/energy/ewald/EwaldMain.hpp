@@ -19,7 +19,7 @@
  *   computeSystemEnergyEwald(state);
  *   computeMovementEnergyEwald(state);
  * 
- * @note AI Agents functionality guide:
+ * @note Module functionality guide:
  * - Energy calculation: EwaldComposite.hpp -> computeSystemEnergyEwald, computeMovementEnergyEwald
  * - Real space: EwaldReal.hpp -> computeRealSpaceEwald, calcPairEnergyEwaldRealSpace
  * - Reciprocal space: EwaldRecip.hpp -> computeReciprocalEnergy

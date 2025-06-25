@@ -14,7 +14,7 @@ namespace platform {
 namespace cpu {
 
 /**
- * @brief Function Location Guide for AI Agents:
+ * @brief Function Reference Guide:
  * - Parameter structure: PMEParams struct
  * - Setup and initialization: PMESetup.hpp
  * - High-level interfaces: PMEInterface.hpp

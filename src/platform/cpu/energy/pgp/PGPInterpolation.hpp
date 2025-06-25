@@ -8,7 +8,7 @@ namespace platform {
 namespace cpu {
 
 /**
- * @brief Function Location Guide for AI Agents:
+ * @brief Function Reference Guide:
  * - Grid interpolation: interpolateMoleculeEnergyImpl, calculateMoleculeEnergyImpl
  * - Global energy calculation: computeMoleculeEnergyGlobalImpl
  * - B-spline interpolation: Internal B-spline coefficient calculations

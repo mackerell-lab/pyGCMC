@@ -42,7 +42,7 @@ public:
     std::vector<std::shared_ptr<residue::Residue>> residues;  // Residue list
     std::vector<structure::Structure::TerminalInfo> terminals;  // Chain termination information
     std::map<std::string, std::vector<structure::Structure::SecondaryStructure>> helices;  // Helical structures
-    std::map<std::string, std::vector<std::string>> sheets;  // β-sheet structures
+    std::map<std::string, std::vector<std::string>> sheets;  // Beta-sheet structures
     std::vector<std::string> ssbonds;  // Disulfide bonds
     std::vector<double> boxDimensions;  // Box dimensions
 
