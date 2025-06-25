@@ -1,24 +1,19 @@
 #pragma once
-#ifndef PYGCMC_IO_INPPARSER_HPP
-#define PYGCMC_IO_INPPARSER_HPP
+#ifndef PYGCMC_IO_PARAMETERS_INPPARSERMAIN_HPP
+#define PYGCMC_IO_PARAMETERS_INPPARSERMAIN_HPP
 
 #include <string>
 #include "model/ModelModule.hpp"
+#include "InpParserStructures.hpp"
 
 namespace pygcmc {
 namespace io {
+namespace parameters {
 
 /**
- * @brief GCMC input file parser class
- * @details Used to parse GCMC simulation input files and store parameters in the Param data structure
- * Supported parameters include:
- * - File path parameters: par, fragitp, atomtypes, top, pdb, etc.
- * - Spatial parameters: grid_dx, box_size, cutoff, etc.
- * - Fragment parameters: fragname, fragconc, fragmuex
- * - Simulation control parameters: nprint, mcsteps, etc.
- * - Biased sampling parameters: use_cavity_bias, use_conf_bias
+ * @brief Modular INP parser implementation
  */
-class INPParser {
+class InpParserMain {
 public:
     /**
      * @brief Parse input file and return a new Param object
@@ -70,7 +65,8 @@ private:
     static void validate_parameters(model::Param& param);
 };
 
+} // namespace parameters
 } // namespace io
 } // namespace pygcmc
 
-#endif // PYGCMC_IO_INPPARSER_HPP
+#endif // PYGCMC_IO_PARAMETERS_INPPARSERMAIN_HPP

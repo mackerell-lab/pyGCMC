@@ -2,7 +2,7 @@
 #define PYGCMC_IO_IOMODULE_HPP
 
 // Structure parsers
-#include "structure/pdbParser.hpp"
+#include "structure/PdbParserMain.hpp"
 
 // Topology parsers  
 #include "topology/psfParser.hpp"
@@ -12,16 +12,16 @@
 #include "forcefield/prmParser.hpp"
 
 // Parameter parsers
-#include "parameters/inpParser.hpp"
+#include "parameters/InpParserMain.hpp"
 
 namespace pygcmc {
 namespace io {
     // Maintain backward compatibility - all original class names remain accessible
-    using PDBParser = PDBParser;  // structure::PDBParser
+    using PDBParser = structure::PdbParserMain;  // structure::PdbParserMain
     using PSFParser = PSFParser;  // topology::PSFParser  
     using TOPParser = TOPParser;  // topology::TOPParser
     using PRMParser = PRMParser;  // forcefield::PRMParser
-    using INPParser = INPParser;  // parameters::INPParser
+    using INPParser = parameters::InpParserMain;  // parameters::InpParserMain
 }
 }
 
