@@ -18,6 +18,9 @@
  */
 
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+
+namespace py = pybind11;
 
 namespace pygcmc {
 namespace bindings {
@@ -34,3 +37,14 @@ void init_simulation_bindings(pybind11::module& m);
 
 } // namespace bindings
 } // namespace pygcmc
+
+// Main pybind11 module definition
+PYBIND11_MODULE(pygcmc, m) {
+    m.doc() = "Python bindings for GCMC simulation library";
+    
+    // Initialize bindings - only io is refactored for now
+    pygcmc::bindings::io::init_io_bindings(m);
+    pygcmc::bindings::init_model(m);
+    pygcmc::bindings::init_system(m);
+    pygcmc::bindings::init_simulation_bindings(m);
+}
