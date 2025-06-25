@@ -1,6 +1,10 @@
 // src/io/forcefield/PrmParserMain.cpp
 
 #include "PrmParserMain.hpp"
+#include "PrmParserOperations.hpp"
+#include "PrmParserSections.hpp"
+#include "model/ModelModule.hpp"
+#include <fstream>
 
 namespace pygcmc {
 namespace io {
@@ -8,67 +12,51 @@ namespace io {
 // Initialize static debug flag
 bool PRMParser::debug_output = false;
 
-// Static methods for parsing (delegate to operations)
 void PRMParser::parse_string(const std::string& content, pygcmc::model::ForceField& ff) {
-    PrmParserOperations::parse_string(content, ff);
+    // Sync debug flags
+    PrmParserOperations::getDebugFlag() = debug_output;
+    PrmParserSections::getDebugFlag() = debug_output;
+    std::istringstream iss(content);
+    PrmParserOperations::parseStream(iss, ff);
 }
 
 void PRMParser::parse_file_to_forcefield(const std::string& filename, pygcmc::model::ForceField& ff) {
-    PrmParserOperations::parse_file_to_forcefield(filename, ff);
+    // Sync debug flags
+    PrmParserOperations::getDebugFlag() = debug_output;
+    PrmParserSections::getDebugFlag() = debug_output;
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        throw std::runtime_error("Failed to open parameter file: " + filename);
+    }
+    PrmParserOperations::parseStream(file, ff);
 }
 
 pygcmc::model::ForceField PRMParser::parse_file(const std::string& filename) {
-    return PrmParserOperations::parse_file(filename);
+    pygcmc::model::ForceField ff;
+    parse_file_to_forcefield(filename, ff);
+    return ff;
 }
 
 pygcmc::model::ForceField PRMParser::parse_files(const std::vector<std::string>& filenames) {
-    return PrmParserOperations::parse_files(filenames);
+    pygcmc::model::ForceField ff;
+    for (const auto& filename : filenames) {
+        parse_file_to_forcefield(filename, ff);
+    }
+    return ff;
 }
 
 // Instance method for backward compatibility
 void PRMParser::parse(const std::string& filename, pygcmc::model::ForceField& ff) {
-    PrmParserOperations::parse_file_to_forcefield(filename, ff);
+    parse_file_to_forcefield(filename, ff);
 }
 
-// Helper functions (delegate to structures for compatibility)
-void PRMParser::skipComments(std::istream&) {
-    // Not used in current implementation, kept for compatibility
+// Delegate section parsing methods to PrmParserOperations
+void PRMParser::parseStream(std::istream& input, pygcmc::model::ForceField& ff) {
+    // Sync debug flags
+    PrmParserOperations::getDebugFlag() = debug_output;
+    PrmParserOperations::parseStream(input, ff);
 }
 
-std::vector<std::string> PRMParser::tokenize(const std::string& line) {
-    return PrmParserStructures::tokenize(line);
-}
-
-// Section detection (delegate to structures)
-bool PRMParser::isAtomsSection(const std::string& line) {
-    return PrmParserStructures::isAtomsSection(line);
-}
-
-bool PRMParser::isBondsSection(const std::string& line) {
-    return PrmParserStructures::isBondsSection(line);
-}
-
-bool PRMParser::isAnglesSection(const std::string& line) {
-    return PrmParserStructures::isAnglesSection(line);
-}
-
-bool PRMParser::isDihedralsSection(const std::string& line) {
-    return PrmParserStructures::isDihedralsSection(line);
-}
-
-bool PRMParser::isImproperSection(const std::string& line) {
-    return PrmParserStructures::isImproperSection(line);
-}
-
-bool PRMParser::isNonbondedSection(const std::string& line) {
-    return PrmParserStructures::isNonbondedSection(line);
-}
-
-bool PRMParser::isNBFixSection(const std::string& line) {
-    return PrmParserStructures::isNBFixSection(line);
-}
-
-// Section parsing (delegate to operations)
 void PRMParser::parseAtomsSection(std::istream& input, pygcmc::model::ForceField& ff) {
     PrmParserOperations::parseAtomsSection(input, ff);
 }
@@ -82,57 +70,19 @@ void PRMParser::parseAnglesSection(std::istream& input, pygcmc::model::ForceFiel
 }
 
 void PRMParser::parseDihedralsSection(std::istream& input, pygcmc::model::ForceField& ff) {
-    PrmParserOperations::parseDihedralsSection(input, ff);
+    PrmParserSections::parseDihedralsSection(input, ff);
 }
 
 void PRMParser::parseImproperSection(std::istream& input, pygcmc::model::ForceField& ff) {
-    PrmParserOperations::parseImproperSection(input, ff);
+    PrmParserSections::parseImproperSection(input, ff);
 }
 
 void PRMParser::parseNonbondedSection(std::istream& input, pygcmc::model::ForceField& ff, const std::string& firstLine) {
-    PrmParserOperations::parseNonbondedSection(input, ff, firstLine);
+    PrmParserSections::parseNonbondedSection(input, ff, firstLine);
 }
 
 void PRMParser::parseNBFixSection(std::istream& input, pygcmc::model::ForceField& ff) {
-    PrmParserOperations::parseNBFixSection(input, ff);
-}
-
-// Stream parsing (delegate to operations)
-void PRMParser::parseStream(std::istream& input, pygcmc::model::ForceField& ff) {
-    PrmParserOperations::parseStream(input, ff);
-}
-
-// Line processing helpers (delegate to structures)
-std::string PRMParser::readContinuationLine(std::istream& input, std::string firstLine) {
-    return PrmParserStructures::readContinuationLine(input, firstLine);
-}
-
-bool PRMParser::isCommentLine(const std::string& line) {
-    return PrmParserStructures::isCommentLine(line);
-}
-
-std::string PRMParser::removeComments(const std::string& line) {
-    return PrmParserStructures::removeComments(line);
-}
-
-std::string PRMParser::trim(const std::string& str) {
-    return PrmParserStructures::trim(str);
-}
-
-// Parameter processing helpers (delegate to structures)
-std::pair<std::string, std::string> PRMParser::make_type_pair(const std::string& type1, const std::string& type2) const {
-    return PrmParserStructures::make_type_pair(type1, type2);
-}
-
-std::tuple<std::string, std::string, std::string> PRMParser::make_type_triple(
-    const std::string& type1, const std::string& type2, const std::string& type3) const {
-    return PrmParserStructures::make_type_triple(type1, type2, type3);
-}
-
-std::tuple<std::string, std::string, std::string, std::string> PRMParser::make_type_quad(
-    const std::string& type1, const std::string& type2, 
-    const std::string& type3, const std::string& type4) const {
-    return PrmParserStructures::make_type_quad(type1, type2, type3, type4);
+    PrmParserSections::parseNBFixSection(input, ff);
 }
 
 } // namespace io
