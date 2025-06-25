@@ -1,0 +1,173 @@
+// src/io/forcefield/PrmParserStructures.cpp
+
+#include "PrmParserStructures.hpp"
+#include "model/ModelModule.hpp"
+#include <algorithm>
+#include <cctype>
+#include <iomanip>
+#include <iostream>
+
+// Forward declaration for debug access
+namespace pygcmc { namespace io { class PRMParser; } }
+
+namespace pygcmc {
+namespace io {
+
+// Forward declaration for access to PRMParser debug flag
+namespace pygcmc { namespace io { class PRMParser; } }
+
+double PrmParserStructures::safe_stod(const std::string& str, const std::string& context) {
+    try {
+        return std::stod(str);
+    } catch (const std::exception& e) {
+        throw std::runtime_error("Failed to convert '" + str + "' to double in " + context);
+    }
+}
+
+int PrmParserStructures::safe_stoi(const std::string& str, const std::string& context) {
+    try {
+        return std::stoi(str);
+    } catch (const std::exception& e) {
+        throw std::runtime_error("Failed to convert '" + str + "' to integer in " + context);
+    }
+}
+
+std::vector<std::string> PrmParserStructures::tokenize(const std::string& line) {
+    std::vector<std::string> tokens;
+    std::istringstream iss(line);
+    std::string token;
+    
+    while (iss >> token) {
+        if (token[0] == '!' || token[0] == '#') break;  // Stop at comments
+        if (token == "-") continue;  // Skip continuation character
+        tokens.push_back(token);
+    }
+    
+    return tokens;
+}
+
+bool PrmParserStructures::isCommentLine(const std::string& line) {
+    return line.empty() || line[0] == '!' || line[0] == '*' || line[0] == '#';
+}
+
+std::string PrmParserStructures::removeComments(const std::string& line) {
+    size_t commentPos = line.find_first_of("!*#");
+    if (commentPos != std::string::npos) {
+        return line.substr(0, commentPos);
+    }
+    return line;
+}
+
+std::string PrmParserStructures::trim(const std::string& str) {
+    size_t first = str.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) return "";
+    size_t last = str.find_last_not_of(" \t\r\n");
+    return str.substr(first, last - first + 1);
+}
+
+std::string PrmParserStructures::readContinuationLine(std::istream& input, std::string firstLine) {
+    // Debug output removed from utility functions for better separation
+    std::string fullLine = firstLine;
+    std::string currentLine;
+    
+    bool hasContinuation = false;
+    if (!fullLine.empty() && fullLine.back() == '-') {
+        hasContinuation = true;
+        fullLine.pop_back();
+        fullLine = trim(fullLine);
+    }
+    
+    while (hasContinuation) {
+        if (!std::getline(input, currentLine)) {
+            break;
+        }
+        // Debug output removed
+        
+        while (isCommentLine(currentLine)) {
+            if (!std::getline(input, currentLine)) {
+                return fullLine;
+            }
+            // Debug output removed
+        }
+        
+        currentLine = removeComments(currentLine);
+        currentLine = trim(currentLine);
+        
+        if (currentLine.empty()) {
+            break;
+        }
+        
+        hasContinuation = false;
+        if (!currentLine.empty() && currentLine.back() == '-') {
+            hasContinuation = true;
+            currentLine.pop_back();
+            currentLine = trim(currentLine);
+        }
+        
+        if (!fullLine.empty() && !currentLine.empty()) {
+            fullLine += " ";
+        }
+        fullLine += currentLine;
+        
+        // Debug output removed
+    }
+    
+    // Debug output removed
+    return fullLine;
+}
+
+bool PrmParserStructures::isAtomsSection(const std::string& line) {
+    return line.find("ATOMS") != std::string::npos || line.find("MASS") != std::string::npos;
+}
+
+bool PrmParserStructures::isBondsSection(const std::string& line) {
+    bool result = line.find("BONDS") != std::string::npos;
+    // Debug output removed
+    return result;
+}
+
+bool PrmParserStructures::isAnglesSection(const std::string& line) {
+    return line.find("ANGLES") != std::string::npos;
+}
+
+bool PrmParserStructures::isDihedralsSection(const std::string& line) {
+    return line.find("DIHEDRALS") != std::string::npos;
+}
+
+bool PrmParserStructures::isImproperSection(const std::string& line) {
+    return line.find("IMPROPER") != std::string::npos;
+}
+
+bool PrmParserStructures::isNonbondedSection(const std::string& line) {
+    return line.find("NONBONDED") != std::string::npos || 
+           line.find("cutnb") != std::string::npos;
+}
+
+bool PrmParserStructures::isNBFixSection(const std::string& line) {
+    return line.find("NBFIX") != std::string::npos;
+}
+
+std::pair<std::string, std::string> PrmParserStructures::make_type_pair(
+    const std::string& type1, const std::string& type2) {
+    // In CHARMM parameter files, bond parameters are stored in the order they appear
+    // Do not reorder them based on string comparison
+    return std::make_pair(type1, type2);
+}
+
+std::tuple<std::string, std::string, std::string> PrmParserStructures::make_type_triple(
+    const std::string& type1, const std::string& type2, const std::string& type3) {
+    // For angle parameters in CHARMM force field:
+    // 1. The middle atom (type2) must stay in the middle
+    // 2. Store parameters in the order they appear in the parameter file
+    // This ensures we store the parameters exactly as they appear in the force field
+    return std::make_tuple(type1, type2, type3);
+}
+
+std::tuple<std::string, std::string, std::string, std::string> PrmParserStructures::make_type_quad(
+    const std::string& type1, const std::string& type2, 
+    const std::string& type3, const std::string& type4) {
+    return std::make_tuple(type1, type2, type3, type4);
+}
+
+} // namespace io
+} // namespace pygcmc

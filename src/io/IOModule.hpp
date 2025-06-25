@@ -9,7 +9,7 @@
 #include "topology/topParser.hpp"
 
 // Force field parsers
-#include "forcefield/prmParser.hpp"
+#include "forcefield/PrmParserMain.hpp"
 
 // Parameter parsers
 #include "parameters/InpParserMain.hpp"
