@@ -52,31 +52,36 @@ def test_parse_hetatm():
     assert water.get_resname() == "HOH"
     assert water.get_type() == "O"
     
-    # Check residue indices
-    water_residues = [res for res in result.residues if res.get_name() == "HOH"]
-    assert len(water_residues) == 1
-    
-    water_res = water_residues[0]
-    assert water_res.get_name() == "HOH"
-    assert len(water_res.get_atoms()) == 3
+    # Check water coordinates (from original test)
+    coords = water.get_coor()
+    assert math.isclose(coords[0], 15.168, rel_tol=1e-5)
+    assert math.isclose(coords[1], 20.391, rel_tol=1e-5)
+    assert math.isclose(coords[2], 18.649, rel_tol=1e-5)
 
 
 def test_parse_ter():
-    """Test parsing TER records that terminate chains."""
+    """Test parsing TER records and chain termination."""
     pdb_path = os.path.join(TEST_DATA_DIR, "multichain.pdb")
     result = pygcmc.PDBParser.parse_file(pdb_path)
     
-    # Check that we have multiple chains
+    # Check chain counts
     chains = set(atom.get_chain() for atom in result.atoms)
-    assert len(chains) >= 2  # At least two chains
+    assert chains == {"A", "B", "C"}
     
-    # Check that TER records properly terminate chains
-    chain_a_atoms = [atom for atom in result.atoms if atom.get_chain() == "A"]
-    chain_b_atoms = [atom for atom in result.atoms if atom.get_chain() == "B"]
+    # Check residues in different chains
+    chain_residues = {}
+    for res in result.residues:
+        chain = res.get_chain()
+        if chain not in chain_residues:
+            chain_residues[chain] = []
+        chain_residues[chain].append(res)
     
-    assert len(chain_a_atoms) > 0
-    assert len(chain_b_atoms) > 0
+    # Verify chain contents
+    assert len(chain_residues["A"]) == 1  # GLY
+    assert len(chain_residues["B"]) == 1  # ALA
+    assert len(chain_residues["C"]) == 1  # VAL
     
-    # Verify that chain termination is handled correctly
-    # The exact test depends on the multichain.pdb content
-    assert len(result.atoms) == len(chain_a_atoms) + len(chain_b_atoms)
+    # Check residue types
+    assert chain_residues["A"][0].get_resname() == "GLY"
+    assert chain_residues["B"][0].get_resname() == "ALA"
+    assert chain_residues["C"][0].get_resname() == "VAL"

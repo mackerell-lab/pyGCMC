@@ -19,7 +19,7 @@ def test_parse_protein_fragment():
     assert len(result.atoms) > 8  # More than a single residue
     
     # Check residue variety
-    residue_names = set(res.get_name() for res in result.residues)
+    residue_names = set(res.get_resname() for res in result.residues)
     assert len(residue_names) > 1  # Multiple residue types
     
     # Check chain continuity
@@ -65,7 +65,7 @@ def test_parse_solvent_and_ligands():
     
     # Check water molecule structure
     water_residues = [res for res in result.residues 
-                     if res.get_name() in ["HOH", "WAT", "TIP", "TIP3", "SPC"]]
+                     if res.get_resname() in ["HOH", "WAT", "TIP", "TIP3", "SPC"]]
     
     if water_residues:
         water_res = water_residues[0]

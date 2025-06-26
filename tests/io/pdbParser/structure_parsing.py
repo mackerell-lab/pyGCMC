@@ -1,4 +1,4 @@
-# tests/io/pdb/structure_parsing.py
+# tests/io/pdbParser/structure_parsing.py
 """PDB Parser special structure parsing tests."""
 
 import pytest
@@ -10,83 +10,72 @@ TEST_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__f
 
 
 def test_parse_secondary_structure():
-    """Test parsing secondary structure information."""
+    """Test parsing HELIX and SHEET records."""
     pdb_path = os.path.join(TEST_DATA_DIR, "secondary.pdb")
     result = pygcmc.PDBParser.parse_file(pdb_path)
     
-    # Check that atoms were parsed
-    assert len(result.atoms) > 0
-    assert len(result.residues) > 0
+    # Check HELIX records
+    assert len(result.helices) == 1  # Chain A has helices
+    assert len(result.helices["A"]) == 2  # Two helices in chain A
     
-    # Check for secondary structure elements
-    # Note: This test depends on the specific content of secondary.pdb
-    # We're checking for basic parsing capability rather than specific values
-    helices = result.secondary_structures.get("HELIX", [])
-    sheets = result.secondary_structures.get("SHEET", [])
+    # Check helix classes
+    helices = result.helices["A"]
+    assert helices[0].helixClass == 1  # Right-handed alpha
+    assert helices[1].helixClass == 1  # Right-handed alpha
     
-    # At least one secondary structure element should be present
-    assert len(helices) + len(sheets) > 0
+    # Check SHEET records
+    assert len(result.sheets) == 1  # Chain B has sheets
+    assert len(result.sheets["B"]) == 2  # Two strands in chain B
     
-    # Check helix properties if present
-    if helices:
-        helix = helices[0]
-        assert hasattr(helix, 'initResName')
-        assert hasattr(helix, 'initChainID')
-        assert hasattr(helix, 'initSeqNum')
-        assert hasattr(helix, 'endResName')
-        assert hasattr(helix, 'endChainID')
-        assert hasattr(helix, 'endSeqNum')
+    # Check sheet info format
+    sheet_info = result.sheets["B"][1]  # Second strand
+    parts = sheet_info.split(":")
+    assert len(parts) == 3
+    assert parts[0] == "S1"  # Sheet ID
+    assert parts[1] == "2"   # Strand number
+    assert parts[2] == "-1"  # Anti-parallel sense
 
 
 def test_parse_ssbond():
-    """Test parsing disulfide bond information."""
+    """Test parsing SSBOND records."""
     pdb_path = os.path.join(TEST_DATA_DIR, "ssbond.pdb")
     result = pygcmc.PDBParser.parse_file(pdb_path)
-    
-    # Check that atoms were parsed
-    assert len(result.atoms) > 0
-    assert len(result.residues) > 0
-    
-    # Check for disulfide bonds
-    ssbonds = result.ssbonds
-    assert len(ssbonds) > 0
-    
-    # Check disulfide bond properties
-    ssbond = ssbonds[0]
-    assert hasattr(ssbond, 'res1Name')
-    assert hasattr(ssbond, 'chainID1') 
-    assert hasattr(ssbond, 'seqNum1')
-    assert hasattr(ssbond, 'res2Name')
-    assert hasattr(ssbond, 'chainID2')
-    assert hasattr(ssbond, 'seqNum2')
-    
-    # Both residues should be cysteine
-    assert ssbond.res1Name == "CYS"
-    assert ssbond.res2Name == "CYS"
+
+    # Check SSBOND records
+    assert len(result.ssbonds) == 2
+
+    # Check first bond (intra-chain)
+    bond1 = result.ssbonds[0]
+    parts = bond1.split("-")
+    assert parts[0] == "A:3 "   # First CYS: chain A, residue 3
+    assert parts[1] == "A:20 "  # Second CYS: chain A, residue 20
+
+    # Check second bond (inter-chain)
+    bond2 = result.ssbonds[1]
+    parts = bond2.split("-")
+    assert parts[0] == "A:15 "  # First CYS: chain A, residue 15
+    assert parts[1] == "B:5 "   # Second CYS: chain B, residue 5
+
+    # Check CYS residue structure
+    cys_residues = [res for res in result.residues if res.get_resname() == "CYS"]
+    assert len(cys_residues) > 0
+    assert cys_residues[0].get_resname() == "CYS"
 
 
 def test_parse_crystal_info():
-    """Test parsing crystallographic information."""
+    """Test parsing CRYST1 records."""
     pdb_path = os.path.join(TEST_DATA_DIR, "water.pdb")
     result = pygcmc.PDBParser.parse_file(pdb_path)
     
-    # Check that crystal information was parsed if present
-    if hasattr(result, 'crystal_info') and result.crystal_info:
-        crystal = result.crystal_info
-        
-        # Check for unit cell parameters
-        if hasattr(crystal, 'a'):
-            assert crystal.a > 0
-        if hasattr(crystal, 'b'):
-            assert crystal.b > 0  
-        if hasattr(crystal, 'c'):
-            assert crystal.c > 0
-        if hasattr(crystal, 'alpha'):
-            assert 0 < crystal.alpha <= 180
-        if hasattr(crystal, 'beta'):
-            assert 0 < crystal.beta <= 180
-        if hasattr(crystal, 'gamma'):
-            assert 0 < crystal.gamma <= 180
+    # Check that crystal information was parsed
+    if hasattr(result, 'crystal_parameters'):
+        crystal = result.crystal_parameters
+        assert crystal[0] > 0  # a
+        assert crystal[1] > 0  # b
+        assert crystal[2] > 0  # c
+        assert 0 < crystal[3] <= 180  # alpha
+        assert 0 < crystal[4] <= 180  # beta
+        assert 0 < crystal[5] <= 180  # gamma
     
     # At minimum, atoms should be parsed
     assert len(result.atoms) > 0
