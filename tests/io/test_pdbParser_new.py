@@ -7,9 +7,9 @@ Run: pytest tests/io/test_pdbParser.py
 
 Modular structure:
 - basic_parsing.py: Basic PDB parsing tests (3 functions)
-- structure_parsing.py: Special structure parsing tests (3 functions)  
+- structure_parsing.py: Special structure parsing tests (2 functions)  
 - data_processing.py: Data processing and validation tests (4 functions)
-- complex_structures.py: Complex structure parsing tests (3 functions)
+- complex_structures.py: Complex structure parsing tests (4 functions)
 - calculations.py: Calculation and analysis tests (1 function)
 """
 
@@ -23,8 +23,7 @@ from pdbParser.basic_parsing import (
 # Special structure parsing
 from pdbParser.structure_parsing import (
     test_parse_secondary_structure,
-    test_parse_ssbond,
-    test_parse_crystal_info
+    test_parse_ssbond
 )
 
 # Data processing and validation
@@ -38,6 +37,7 @@ from pdbParser.data_processing import (
 # Complex structure parsing
 from pdbParser.complex_structures import (
     test_parse_protein_fragment,
+    test_parse_crystal_info,
     test_parse_solvent_and_ligands,
     test_hydrogen_atoms
 )

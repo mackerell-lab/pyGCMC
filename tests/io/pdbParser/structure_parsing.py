@@ -62,20 +62,3 @@ def test_parse_ssbond():
     assert cys_residues[0].get_resname() == "CYS"
 
 
-def test_parse_crystal_info():
-    """Test parsing CRYST1 records."""
-    pdb_path = os.path.join(TEST_DATA_DIR, "water.pdb")
-    result = pygcmc.PDBParser.parse_file(pdb_path)
-    
-    # Check that crystal information was parsed
-    if hasattr(result, 'crystal_parameters'):
-        crystal = result.crystal_parameters
-        assert crystal[0] > 0  # a
-        assert crystal[1] > 0  # b
-        assert crystal[2] > 0  # c
-        assert 0 < crystal[3] <= 180  # alpha
-        assert 0 < crystal[4] <= 180  # beta
-        assert 0 < crystal[5] <= 180  # gamma
-    
-    # At minimum, atoms should be parsed
-    assert len(result.atoms) > 0

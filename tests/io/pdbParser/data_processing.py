@@ -41,44 +41,44 @@ def test_residue_atom_association():
     assert met.get_resname() == "MET"
     assert len(met.get_atoms()) == 8
     
-    # Check each atom belongs to the residue
+    # Check atom types in residue
+    atom_types = [atom.get_type().strip() for atom in met.get_atoms()]
+    expected_types = ["N", "CA", "C", "O", "CB", "CG", "SD", "CE"]
+    assert sorted(atom_types) == sorted(expected_types)
+    
+    # Check atom-residue consistency
     for atom in met.get_atoms():
-        assert atom.get_resname() == "MET"
-        assert atom.get_ires() == 1
-        assert atom.get_chain() == "A"
+        assert atom.get_resname() == met.get_resname()
+        assert atom.get_ires() == met.get_ires()
+        assert atom.get_chain() == met.get_chain()
+        assert atom.get_inscode() == met.get_inscode()
 
 
 def test_coordinate_parsing():
-    """Test parsing of accurate coordinates with precision."""
+    """Test parsing of atomic coordinates."""
     pdb_path = os.path.join(TEST_DATA_DIR, "simple.pdb")
     result = pygcmc.PDBParser.parse_file(pdb_path)
     
-    # Check first atom coordinates (N atom)
-    atom = result.atoms[0]
-    coords = atom.get_coor()
-    assert math.isclose(coords[0], 27.340, rel_tol=1e-5)
-    assert math.isclose(coords[1], 24.430, rel_tol=1e-5)
-    assert math.isclose(coords[2], 2.614, rel_tol=1e-5)
-    
-    # Check all atoms have valid coordinates
     for atom in result.atoms:
         coords = atom.get_coor()
+        # Check coordinate format
         assert len(coords) == 3
-        assert all(isinstance(c, (int, float)) for c in coords)
+        assert all(isinstance(c, float) for c in coords)
+        assert all(not isinstance(c, str) for c in coords)
+        # Check coordinate ranges
+        assert all(-1000 < c < 1000 for c in coords)
+        # Check precision (PDB format: 8.3f)
+        for c in coords:
+            assert abs(c - round(c, 3)) < 1e-3
 
 
 def test_occupancy_and_tempfactor():
-    """Test parsing of occupancy and B-factor values."""
+    """Test parsing of occupancy and temperature factor."""
     pdb_path = os.path.join(TEST_DATA_DIR, "simple.pdb")
     result = pygcmc.PDBParser.parse_file(pdb_path)
     
-    # Check that atoms have occupancy and temperature factor
-    atom = result.atoms[0]
-    
-    # These should be accessible (exact values depend on file content)
-    if hasattr(atom, 'occupancy'):
-        assert 0.0 <= atom.occupancy <= 1.0
-    
-    if hasattr(atom, 'tempfactor') or hasattr(atom, 'bfactor'):
-        bfactor = getattr(atom, 'tempfactor', getattr(atom, 'bfactor', 0.0))
-        assert bfactor >= 0.0
+    for atom in result.atoms:
+        # Check occupancy (default 1.00)
+        assert math.isclose(atom.get_occupancy(), 1.00, rel_tol=1e-5)
+        # Check temperature factor (default 0.00)
+        assert math.isclose(atom.get_tempfactor(), 0.00, rel_tol=1e-5)

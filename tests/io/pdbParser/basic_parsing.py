@@ -1,4 +1,4 @@
-# tests/io/pdb/basic_parsing.py
+# tests/io/pdbParser/basic_parsing.py
 """PDB Parser basic parsing tests."""
 
 import pytest
