@@ -8,9 +8,25 @@ namespace py = pybind11;
 namespace pygcmc {
 namespace bindings {
 
-// Forward declarations for binding init functions from other modules
-void init_system(pybind11::module& m);  
+// Forward declarations for binding init functions from other modules  
 void init_simulation_bindings(pybind11::module& m);
+
+// Forward declarations for System binding init functions from separate files
+namespace system {
+void init_common_bindings(py::module& m, py::module& system_module);
+void init_molecular_bindings(py::module& m, py::module& system_module);
+void init_montecarlo_bindings(py::module& m, py::module& system_module);
+
+void init_system(py::module& m) {
+    // Create system submodule
+    auto system_module = m.def_submodule("system", "System management classes");
+    
+    // Initialize all System binding groups
+    init_common_bindings(m, system_module);
+    init_molecular_bindings(m, system_module);
+    init_montecarlo_bindings(m, system_module);
+}
+}
 
 // Forward declarations for Model binding init functions from separate files
 namespace model {
@@ -65,9 +81,9 @@ void init_io_bindings(py::module& m) {
 PYBIND11_MODULE(pygcmc, m) {
     m.doc() = "Python bindings for GCMC simulation library";
     
-    // Initialize bindings - io and model are refactored
+    // Initialize bindings - io, model, and system are refactored
     pygcmc::bindings::io::init_io_bindings(m);
     pygcmc::bindings::model::init_model(m);
-    pygcmc::bindings::init_system(m);
+    pygcmc::bindings::system::init_system(m);
     pygcmc::bindings::init_simulation_bindings(m);
 }
