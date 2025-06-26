@@ -8,8 +8,21 @@ namespace py = pybind11;
 namespace pygcmc {
 namespace bindings {
 
-// Forward declarations for binding init functions from other modules  
-void init_simulation_bindings(pybind11::module& m);
+// Forward declarations for Simulation binding init functions from separate files
+namespace simulation {
+void init_basic_bindings(py::module& m);
+void init_ewald_bindings(py::module& m);
+void init_pme_bindings(py::module& m);
+void init_pgp_bindings(py::module& m);
+
+void init_simulation_bindings(py::module& m) {
+    // Initialize all Simulation binding groups
+    init_basic_bindings(m);
+    init_ewald_bindings(m);
+    init_pme_bindings(m);
+    init_pgp_bindings(m);
+}
+}
 
 // Forward declarations for System binding init functions from separate files
 namespace system {
@@ -85,5 +98,5 @@ PYBIND11_MODULE(pygcmc, m) {
     pygcmc::bindings::io::init_io_bindings(m);
     pygcmc::bindings::model::init_model(m);
     pygcmc::bindings::system::init_system(m);
-    pygcmc::bindings::init_simulation_bindings(m);
+    pygcmc::bindings::simulation::init_simulation_bindings(m);
 }
