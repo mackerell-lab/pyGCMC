@@ -13,18 +13,24 @@ Modular structure:
 """
 
 # File parsing functionality
-from inp.file_parsing import (
+# These tests read INP data from files on disk and verify the parsed
+# Parameter object matches the expected reference values.
+from inpParser.file_parsing import (
     test_read_gcmc_inp,
     test_inp_parser_file
 )
 
 # String parsing functionality
-from inp.string_parsing import (
+# Verifies that INP content supplied as a raw string is parsed correctly
+# without relying on the filesystem.
+from inpParser.string_parsing import (
     test_inp_parser_string
 )
 
 # Validation and error handling
-from inp.validation import (
+# Ensures malformed or incomplete INP content raises the expected RuntimeError
+# with a clear, descriptive message.
+from inpParser.validation import (
     test_inp_parser_validation
 )
 
