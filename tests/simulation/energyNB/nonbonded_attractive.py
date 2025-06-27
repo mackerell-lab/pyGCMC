@@ -96,47 +96,50 @@ def test_attractive_interaction():
 
 
 def test_electrostatic_interaction():
-    """Test nonbonded energy calculation for electrostatic interaction only.
+    """Test nonbonded energy calculation for electrostatic interaction.
     
     Setup:
-    - Two residues: one movement (+1 charge) and one fixed (-1 charge)
-    - LJ parameters set to zero to isolate electrostatic effects
-    - r = 1.0 (distance between charges)
+    - Two residues: one movement (type 0) and one fixed (type 1)
+    - Each residue has one atom with opposite charges (+1 and -1)
+    - Both residues are active
+    - Force field parameters:
+        eps = 0.0 (no vdw interaction)
+        r = 1.0 nm
     
     Expected:
-    V_elec = k * q1 * q2 / r
+    V = k_c * q1*q2/r where:
+    - k_c = 138.935458 kJ·nm/mol/e^2 (Coulomb constant)
+    - q1 = +1e, q2 = -1e
+    - r = 1.0 nm
+    Therefore:
+    V = 138.935458 * (+1) * (-1) / 1.0 = -138.935458 kJ/mol
     """
-    # Create a state object
     state = pygcmc.MCState()
     
-    # 1. Set up force field (zero LJ parameters)
-    state.forcefield.numTotalTypes = 2  # Two types: movement and fixed
-    state.forcefield.numMovementTypes = 1  # One movement type
-    
-    # Set LJ parameters to zero to isolate electrostatic interaction
-    state.forcefield.ljEps = [0.0, 0.0, 0.0, 0.0]    # Zero LJ interaction
-    state.forcefield.ljSigma = [1.0, 1.0, 1.0, 1.0]  # Dummy sigma values (won't affect energy with zero eps)
+    # 1. Set up force field (no vdw interaction)
+    state.forcefield.numTotalTypes = 2
+    state.forcefield.numMovementTypes = 1
+    state.forcefield.ljEps = [0.0, 0.0, 0.0, 0.0]    # Complete 2x2 matrix with eps = 0.0
+    state.forcefield.ljSigma = [1.0, 1.0, 1.0, 1.0]  # Complete 2x2 matrix with sigma = 1.0
     
     # Set up movement atom types
     state.movementAtomTypes = [0]  # Type 0 is a movement type
     state.numMovementAtomTypes = 1
     
-    # 2. Set up atoms with charges
-    # First atom (for movement residue)
+    # 2. Set up atoms with opposite charges
     atom1 = pygcmc.MCAtom()
     atom1.x = 0.0
     atom1.y = 0.0
     atom1.z = 0.0
     atom1.charge = 1.0  # Positive charge
-    atom1.type = 0  # Movement type
+    atom1.type = 0
     
-    # Second atom (for fixed residue)
     atom2 = pygcmc.MCAtom()
-    atom2.x = 1.0  # At distance 1.0 from first atom
+    atom2.x = 1.0  # Distance of 1.0 nm
     atom2.y = 0.0
     atom2.z = 0.0
     atom2.charge = -1.0  # Negative charge
-    atom2.type = 1  # Fixed type
+    atom2.type = 1
     
     state.atoms = [atom1, atom2]
     state.activeAtomCount = 2
@@ -144,13 +147,13 @@ def test_electrostatic_interaction():
     # 3. Set up residues
     movement_res = pygcmc.MCResidue()
     movement_res.active = True
-    movement_res.type = 0  # Movement type
+    movement_res.type = 0
     movement_res.atomStart = 0
     movement_res.atomCount = 1
     
     fixed_res = pygcmc.MCResidue()
     fixed_res.active = True
-    fixed_res.type = 1  # Fixed type
+    fixed_res.type = 1
     fixed_res.atomStart = 1
     fixed_res.atomCount = 1
     
@@ -162,6 +165,7 @@ def test_electrostatic_interaction():
     movement_info.startIndex = 0
     movement_info.activeCount = 1
     movement_info.totalCount = 1
+    movement_info.resName = "MOV"  # Add residue name
     
     state.movementResidues = [movement_info]
     
@@ -169,5 +173,9 @@ def test_electrostatic_interaction():
     pygcmc.computeMovementEnergy(state)
     energy = state.residues[0].energy_vdw + state.residues[0].energy_elec
     
-    # Check that we get an attractive (negative) electrostatic interaction
-    assert energy < 0, "Expected negative (attractive) electrostatic energy for opposite charges"
+    # Expected energy with Coulomb constant
+    COULOMB = 138.935458  # kJ·nm/mol/e^2
+    expected_energy = -COULOMB  # k_c * (+1) * (-1) / 1.0
+    
+    # Check result with appropriate tolerance for single-precision float
+    assert abs(energy - expected_energy) < 1e-5, f"Expected energy {expected_energy}, got {energy}"

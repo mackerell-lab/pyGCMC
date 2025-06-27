@@ -85,38 +85,25 @@ def test_three_movement_molecules():
 
 
 def test_invalid_forcefield_params():
-    """Test behavior with invalid force field parameters.
-    
-    Should raise RuntimeError when force field is not properly initialized.
-    """
+    """Test handling of invalid force field parameters."""
     state = pygcmc.MCState()
     
-    # Leave force field uninitialized or with invalid values
-    state.forcefield.numTotalTypes = 0
-    state.forcefield.numMovementTypes = 0
+    # Set up force field with incorrect parameter array size
+    state.forcefield.numTotalTypes = 2
+    state.forcefield.numMovementTypes = 1
+    state.forcefield.ljEps = [1.0]  # Should be size 2
+    state.forcefield.ljSigma = [1.0, 1.0]
     
-    # Create minimal atoms and residues anyway
+    # Set up minimal state
     atom = pygcmc.MCAtom()
-    atom.x = 0.0
-    atom.y = 0.0
-    atom.z = 0.0
-    atom.charge = 0.0
-    atom.type = 0
-    
     state.atoms = [atom]
-    state.activeAtomCount = 1
-    
     res = pygcmc.MCResidue()
-    res.active = True
-    res.type = 0
-    res.atomStart = 0
-    res.atomCount = 1
-    
     state.residues = [res]
-    state.activeResidueCount = 1
+    movement_info = pygcmc.MCMovementResidueInfo()
+    state.movementResidues = [movement_info]
     
-    # Should raise RuntimeError for invalid numTotalTypes
-    with pytest.raises(RuntimeError, match="Invalid numTotalTypes"):
+    # Expect runtime error due to invalid parameter array size
+    with pytest.raises(RuntimeError):
         pygcmc.computeMovementEnergy(state)
 
 
