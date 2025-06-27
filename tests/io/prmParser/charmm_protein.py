@@ -5,13 +5,11 @@ import os
 import pytest
 import pygcmc
 
-# Get the directory containing test data files
-TEST_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
-
-
 def test_charmm_prm_files():
     """Test parsing of CHARMM force field files (par_all36m_prot.prm)."""
-    prm_file = os.path.join(TEST_DATA_DIR, "par_all36m_prot.prm")
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(test_dir)), "data")
+    prm_file = os.path.join(data_dir, "par_all36m_prot.prm")
 
     ff = pygcmc.ForceField()
     pygcmc.PRMParser.parse_file_to_forcefield(prm_file, ff)
@@ -169,7 +167,9 @@ def test_charmm_prm_files():
 
 def test_cgenff_prm_file():
     """Test parsing of CHARMM General Force Field file (par_all36_cgenff.prm)."""
-    prm_file = os.path.join(TEST_DATA_DIR, "par_all36_cgenff.prm")
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(test_dir)), "data")
+    prm_file = os.path.join(data_dir, "par_all36_cgenff.prm")
 
     ff = pygcmc.ForceField()
     pygcmc.PRMParser.parse_file_to_forcefield(prm_file, ff)

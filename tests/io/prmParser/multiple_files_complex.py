@@ -238,3 +238,33 @@ def test_prm_and_str_files():
     # Between ions
     epsilon, rmin, found = ff.get_nbfix("SOD", "POT")
     assert found == False
+
+    # 6. Test parameter overriding and coexistence
+    # Parse water_ions file again to ensure parameters are not duplicated or corrupted
+    pygcmc.PRMParser.parse_file_to_forcefield(water_ions_file, ff)
+    
+    # Water parameters should remain unchanged
+    ht_params = ff.get_lj_params("HT")
+    assert ht_params.epsilon == pytest.approx(-0.046)
+    assert ht_params.rmin_half == pytest.approx(0.2245)
+    
+    # SILCS parameters should still be present
+    epsilon, rmin, found = ff.get_nbfix("LP", "LP")
+    assert found == True
+    assert epsilon == pytest.approx(-0.01)
+    assert rmin == pytest.approx(12.0)
+
+    # 7. Verify nonbonded parameters are properly maintained
+    params = ff.get_nonbonded_params()
+    assert params.nbxmod == 5
+    assert params.cdiel == True
+    assert params.fshift == True
+    assert params.vatom == True
+    assert params.vdistance == True
+    assert params.vfswitch == True
+    assert params.cutnb == pytest.approx(14.0)
+    assert params.ctofnb == pytest.approx(12.0)
+    assert params.ctonnb == pytest.approx(10.0)
+    assert params.eps == pytest.approx(1.0)
+    assert params.e14fac == pytest.approx(1.0)
+    assert params.wmin == pytest.approx(1.5)

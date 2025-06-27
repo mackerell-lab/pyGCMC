@@ -96,36 +96,29 @@ def test_nucleic_parameters():
 
 def test_cross_forcefield_compatibility():
     """Test parameter compatibility between protein and CGenFF force fields."""
-    protein_file = os.path.join(TEST_DATA_DIR, "par_all36m_prot.prm")
+    prot_file = os.path.join(TEST_DATA_DIR, "par_all36m_prot.prm")
     cgenff_file = os.path.join(TEST_DATA_DIR, "par_all36_cgenff.prm")
 
     ff = pygcmc.ForceField()
     
-    # Parse both force fields
-    pygcmc.PRMParser.parse_file_to_forcefield(protein_file, ff)
+    # Load both force fields
+    pygcmc.PRMParser.parse_file_to_forcefield(prot_file, ff)
     pygcmc.PRMParser.parse_file_to_forcefield(cgenff_file, ff)
 
-    # Test that protein parameters are preserved
-    assert ff.get_atom_mass("N") == pytest.approx(14.00700)      # protein backbone N
-    assert ff.get_atom_mass("CA") == pytest.approx(12.01100)     # protein aromatic C
-    assert ff.get_atom_mass("C") == pytest.approx(12.01100)      # protein carbonyl C
+    # Test CT2A parameters (special carbon type in GLU/HSP)
+    ct2a_params = ff.get_lj_params("CT2A")
+    assert ct2a_params.epsilon == pytest.approx(-0.0560)
+    assert ct2a_params.rmin_half == pytest.approx(2.010)
 
-    # Test that CGenFF parameters are also present
-    assert ff.get_atom_mass("CG321") == pytest.approx(12.01100)  # CGenFF aliphatic C
-    assert ff.get_atom_mass("NG321") == pytest.approx(14.00700)  # CGenFF amide N
-    assert ff.get_atom_mass("OG2D1") == pytest.approx(15.99940)  # CGenFF carbonyl O
+    # Test compatibility of common atom types between force fields
+    # Aromatic carbon parameters should be consistent
+    ca_prot = ff.get_lj_params("CA")
+    cg2r61 = ff.get_lj_params("CG2R61")
+    assert abs(ca_prot.epsilon - cg2r61.epsilon) < 0.01  # Should be similar
+    assert abs(ca_prot.rmin_half - cg2r61.rmin_half) < 0.1  # Should be similar
 
-    # Test that common atom types have consistent masses between force fields
-    # Both should have similar hydrogen masses
-    assert ff.get_atom_mass("H") == pytest.approx(1.00800)       # protein polar H
-    assert ff.get_atom_mass("HGP1") == pytest.approx(1.00800)    # CGenFF polar H
-
-    # Test LJ parameters for common types
-    # Check that LJ parameters exist for both protein and CGenFF atoms
-    protein_n_params = ff.get_lj_params("N")
-    assert protein_n_params.epsilon < 0  # Should have attractive interaction
-    assert protein_n_params.rmin_half > 0
-
-    cgenff_n_params = ff.get_lj_params("NG321")
-    assert cgenff_n_params.epsilon < 0  # Should have attractive interaction
-    assert cgenff_n_params.rmin_half > 0
+    # Test compatibility of peptide backbone parameters
+    c_prot = ff.get_lj_params("C")    # Protein carbonyl carbon
+    cg2o1 = ff.get_lj_params("CG2O1") # CGenFF carbonyl carbon
+    assert abs(c_prot.epsilon - cg2o1.epsilon) < 0.01  # Should be similar
+    assert abs(c_prot.rmin_half - cg2o1.rmin_half) < 0.1  # Should be similar
