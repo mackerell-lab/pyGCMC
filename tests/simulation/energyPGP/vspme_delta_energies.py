@@ -1,4 +1,4 @@
-# tests/simulation/pgp/pgpvspme_delta_energies.py
+# tests/simulation/energyPGP/vspme_delta_energies.py
 """PGP vs PME delta energies comparison test."""
 
 import pytest
@@ -9,7 +9,7 @@ from pygcmc import computeSystemVdwEnergyCutoff, computeSystemEnergyPME, compute
 from pygcmc import computeMovementEnergyPME, computeMovementEnergyPGP
 from pygcmc import setPMEParameters, setPGPParameters, initializePMEParameters, precomputeGridPotential
 import sys
-from .helpers import create_test_system
+from .vspme_helpers import create_test_system
 
 
 def test_compare_pgp_pme_delta_energies():
