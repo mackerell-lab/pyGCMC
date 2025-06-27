@@ -6,13 +6,10 @@ import pytest
 from pygcmc.io import PSFParser
 from pygcmc.model import Topology, TopologyResidue, TopologyAtom
 
-# Get the directory containing test data files
-TEST_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 
-
-def test_parse_protein_psf():
+def test_parse_protein_psf(test_data_dir):
     """Test parsing protein PSF file (test_proa.psf)."""
-    psf_file = os.path.join(TEST_DATA_DIR, "test_proa.psf")
+    psf_file = os.path.join(test_data_dir, "test_proa.psf")
     parser = PSFParser()
     topology = Topology()
     
@@ -62,16 +59,16 @@ def test_parse_protein_psf():
         assert abs(ht.charge - 0.33) < 1e-6, f"Wrong charge for {ht.name}"
 
 
-def test_parse_nonexistent_file():
+def test_parse_nonexistent_file(test_data_dir):
     """Test parsing a non-existent PSF file."""
-    psf_file = os.path.join(TEST_DATA_DIR, "nonexistent.psf")
+    psf_file = os.path.join(test_data_dir, "nonexistent.psf")
     parser = PSFParser()
     topology = Topology()
     
     assert not parser.parse_to_topology(psf_file, topology), "Should fail for non-existent file"
 
 
-def test_parse_invalid_psf(tmp_path):
+def test_parse_invalid_psf(test_data_dir, tmp_path):
     """Test parsing an invalid PSF file."""
     # Create an invalid PSF file
     invalid_psf = tmp_path / "invalid.psf"
@@ -84,10 +81,10 @@ def test_parse_invalid_psf(tmp_path):
     assert not parser.parse_to_topology(str(invalid_psf), topology), "Should fail for invalid PSF file"
 
 
-def test_parse_out_of_order_psf(tmp_path):
+def test_parse_out_of_order_psf(test_data_dir, tmp_path):
     """Test parsing PSF file with sections in non-standard order."""
     # Read the original PSF file
-    original_psf = os.path.join(TEST_DATA_DIR, "test_proa.psf")
+    original_psf = os.path.join(test_data_dir, "test_proa.psf")
     with open(original_psf, "r") as f:
         lines = f.readlines()
 

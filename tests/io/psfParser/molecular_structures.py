@@ -6,13 +6,10 @@ import pytest
 from pygcmc.io import PSFParser
 from pygcmc.model import Topology, TopologyResidue, TopologyAtom
 
-# Get the directory containing test data files
-TEST_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 
-
-def test_parse_solvent_psf():
+def test_parse_solvent_psf(test_data_dir):
     """Test parsing solvent PSF file (sol.psf)."""
-    psf_file = os.path.join(TEST_DATA_DIR, "mols", "sol.psf")
+    psf_file = os.path.join(test_data_dir, "mols", "sol.psf")
     parser = PSFParser()
     topology = Topology()
     
@@ -58,9 +55,9 @@ def test_parse_solvent_psf():
             assert abs(h.mass - 1.0080) < 1e-6, f"Wrong mass for {h.name}"
 
 
-def test_parse_benzene_psf():
+def test_parse_benzene_psf(test_data_dir):
     """Test parsing benzene PSF file (benx.psf)."""
-    psf_file = os.path.join(TEST_DATA_DIR, "mols", "benx.psf")
+    psf_file = os.path.join(test_data_dir, "mols", "benx.psf")
     parser = PSFParser()
     topology = Topology()
     
@@ -105,9 +102,9 @@ def test_parse_benzene_psf():
         assert found_atoms == expected_atoms, f"Missing or extra atoms in benzene residue"
 
 
-def test_parse_propane_psf():
+def test_parse_propane_psf(test_data_dir):
     """Test parsing propane PSF file (prpx.psf)."""
-    psf_file = os.path.join(TEST_DATA_DIR, "mols", "prpx.psf")
+    psf_file = os.path.join(test_data_dir, "mols", "prpx.psf")
     parser = PSFParser()
     topology = Topology()
     
@@ -156,9 +153,9 @@ def test_parse_propane_psf():
         assert found_atoms == expected_atoms, f"Missing or extra atoms in propane residue"
 
 
-def test_parse_step1_psf():
+def test_parse_step1_psf(test_data_dir):
     """Test parsing step1_pdbreader.psf file (which includes MG and TIP3 molecules) using PSFParser."""
-    psf_file = os.path.join(TEST_DATA_DIR, "step1_pdbreader.psf")
+    psf_file = os.path.join(test_data_dir, "step1_pdbreader.psf")
     parser = PSFParser()
     topology = Topology()
     

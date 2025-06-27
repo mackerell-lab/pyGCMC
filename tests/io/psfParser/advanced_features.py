@@ -6,13 +6,10 @@ import pytest
 from pygcmc.io import PSFParser
 from pygcmc.model import Topology, TopologyResidue, TopologyAtom
 
-# Get the directory containing test data files
-TEST_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 
-
-def test_parse_donors_acceptors():
+def test_parse_donors_acceptors(test_data_dir):
     """Test parsing hydrogen bond donors and acceptors from PSF file."""
-    psf_file = os.path.join(TEST_DATA_DIR, "test_proa.psf")
+    psf_file = os.path.join(test_data_dir, "test_proa.psf")
     parser = PSFParser()
     topology = Topology()
     
@@ -51,9 +48,9 @@ def test_parse_donors_acceptors():
     assert topology.has_acceptor(od1_idx), "Missing OD1 acceptor"
 
 
-def test_parse_cmap():
+def test_parse_cmap(test_data_dir):
     """Test parsing CMAP (correction map) terms from PSF file."""
-    psf_file = os.path.join(TEST_DATA_DIR, "test_proa.psf")
+    psf_file = os.path.join(test_data_dir, "test_proa.psf")
     parser = PSFParser()
     topology = Topology()
     
@@ -132,9 +129,9 @@ def test_parse_cmap():
     assert topology.has_cmap(cmap_atoms), "Missing CMAP term between VAL-8 and PRO-9"
 
 
-def test_parse_groups():
+def test_parse_groups(test_data_dir):
     """Test parsing group definitions from PSF file."""
-    psf_file = os.path.join(TEST_DATA_DIR, "test_proa.psf")
+    psf_file = os.path.join(test_data_dir, "test_proa.psf")
     parser = PSFParser()
     topology = Topology()
     
@@ -156,9 +153,9 @@ def test_parse_groups():
             assert topology.has_atom(atom_idx), f"Invalid atom index {atom_idx} in group {i}"
 
 
-def test_parse_all_cmaps():
+def test_parse_all_cmaps(test_data_dir):
     """Test parsing all CMAP terms from PSF file."""
-    psf_file = os.path.join(TEST_DATA_DIR, "test_proa.psf")
+    psf_file = os.path.join(test_data_dir, "test_proa.psf")
     parser = PSFParser()
     topology = Topology()
     
