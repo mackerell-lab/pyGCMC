@@ -6,20 +6,17 @@ import pytest
 from pygcmc.io import TOPParser
 from pygcmc.model import Topology, TopologyResidue, TopologyAtom
 
-# Get the directory containing test data files
-TEST_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 
-
-def test_parse_nonexistent_file():
+def test_parse_nonexistent_file(test_data_dir):
     """Test parsing a non-existent topology file."""
-    top_file = os.path.join(TEST_DATA_DIR, "nonexistent.top")
+    top_file = os.path.join(test_data_dir, "nonexistent.top")
     parser = TOPParser()
     topology = Topology()
     
     assert not parser.parse_to_topology(top_file, topology), "Should fail for non-existent file"
 
 
-def test_parse_invalid_top(tmp_path):
+def test_parse_invalid_top(test_data_dir, tmp_path):
     """Test parsing an invalid topology file."""
     # Create an invalid topology file
     invalid_top = tmp_path / "invalid.top"

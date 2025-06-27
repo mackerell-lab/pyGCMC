@@ -12,6 +12,15 @@ Modular structure:
 - error_handling.py: Error handling tests (2 functions)
 """
 
+import os
+import pytest
+
+@pytest.fixture
+def test_data_dir():
+    """Get the path to the test data directory."""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(current_dir, "..", "data")
+
 # Basic parsing functionality
 from topParser.basic_parsing import (
     test_parse_protein_top,
