@@ -5,10 +5,6 @@ import os
 import pytest
 import pygcmc
 
-# Get the directory containing test data files
-TEST_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
-
-
 def test_multiple_nbfix_combinations():
     content = """
 NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -
@@ -72,8 +68,11 @@ END
 
 
 def test_multiple_file_parsing():
-    water_ions_file = os.path.join(TEST_DATA_DIR, "toppar_water_ions.str")
-    silcs_file = os.path.join(TEST_DATA_DIR, "silcs.str")
+    """Test parsing parameter files in sequence with cumulative effects."""
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(test_dir)), "data")
+    water_ions_file = os.path.join(data_dir, "toppar_water_ions.str")
+    silcs_file = os.path.join(data_dir, "silcs.str")
 
     ff = pygcmc.ForceField()
     
@@ -131,9 +130,12 @@ def test_multiple_file_parsing():
 
 
 def test_random_parameter_combinations():
-    """Test random parameter combinations from multiple parameter files."""
-    water_ions_file = os.path.join(TEST_DATA_DIR, "toppar_water_ions.str")
-    silcs_file = os.path.join(TEST_DATA_DIR, "silcs.str")
+    """Test access to parameters loaded from multiple files."""
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(test_dir)), "data")
+    water_ions_file = os.path.join(data_dir, "toppar_water_ions.str")
+    silcs_file = os.path.join(data_dir, "silcs.str")
+    cgenff_file = os.path.join(data_dir, "par_all36_cgenff.prm")
 
     ff = pygcmc.ForceField()
     
@@ -237,10 +239,12 @@ def test_random_parameter_combinations():
 
 def test_parse_multiple_files():
     """Test parsing multiple parameter files at once."""
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(test_dir)), "data")
     # Define the files to parse
-    water_ions_file = os.path.join(TEST_DATA_DIR, "toppar_water_ions.str")
-    silcs_file = os.path.join(TEST_DATA_DIR, "silcs.str")
-    cgenff_file = os.path.join(TEST_DATA_DIR, "par_all36_cgenff.prm")
+    water_ions_file = os.path.join(data_dir, "toppar_water_ions.str")
+    silcs_file = os.path.join(data_dir, "silcs.str")
+    cgenff_file = os.path.join(data_dir, "par_all36_cgenff.prm")
     
     # Parse all files at once
     ff = pygcmc.PRMParser.parse_files([water_ions_file, silcs_file, cgenff_file])
@@ -276,7 +280,9 @@ def test_parse_multiple_files():
 
 def test_parse_multiple_files_with_invalid():
     """Test parsing multiple files with an invalid file."""
-    water_ions_file = os.path.join(TEST_DATA_DIR, "toppar_water_ions.str")
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(test_dir)), "data")
+    water_ions_file = os.path.join(data_dir, "toppar_water_ions.str")
     
     # Try to parse with a non-existent file
     with pytest.raises(RuntimeError):

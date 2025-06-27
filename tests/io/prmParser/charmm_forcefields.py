@@ -5,13 +5,11 @@ import os
 import pytest
 import pygcmc
 
-# Get the directory containing test data files
-TEST_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
-
-
 def test_ion_ligand_nbfix():
     """Test ion-ligand NBFIX parameters from toppar_water_ions.str."""
-    param_file = os.path.join(TEST_DATA_DIR, "toppar_water_ions.str")
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(test_dir)), "data")
+    param_file = os.path.join(data_dir, "toppar_water_ions.str")
 
     ff = pygcmc.ForceField()
     pygcmc.PRMParser.parse_file_to_forcefield(param_file, ff)
@@ -46,7 +44,9 @@ def test_ion_ligand_nbfix():
 
 def test_heterocyclic_parameters():
     """Test parameters for heterocyclic compounds from par_all36_cgenff.prm."""
-    prm_file = os.path.join(TEST_DATA_DIR, "par_all36_cgenff.prm")
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(test_dir)), "data")
+    prm_file = os.path.join(data_dir, "par_all36_cgenff.prm")
 
     ff = pygcmc.ForceField()
     pygcmc.PRMParser.parse_file_to_forcefield(prm_file, ff)
@@ -77,7 +77,9 @@ def test_heterocyclic_parameters():
 
 def test_nucleic_parameters():
     """Test nucleic acid related parameters from par_all36_cgenff.prm."""
-    prm_file = os.path.join(TEST_DATA_DIR, "par_all36_cgenff.prm")
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(test_dir)), "data")
+    prm_file = os.path.join(data_dir, "par_all36_cgenff.prm")
 
     ff = pygcmc.ForceField()
     pygcmc.PRMParser.parse_file_to_forcefield(prm_file, ff)
@@ -96,8 +98,10 @@ def test_nucleic_parameters():
 
 def test_cross_forcefield_compatibility():
     """Test parameter compatibility between protein and CGenFF force fields."""
-    prot_file = os.path.join(TEST_DATA_DIR, "par_all36m_prot.prm")
-    cgenff_file = os.path.join(TEST_DATA_DIR, "par_all36_cgenff.prm")
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(test_dir)), "data")
+    prot_file = os.path.join(data_dir, "par_all36m_prot.prm")
+    cgenff_file = os.path.join(data_dir, "par_all36_cgenff.prm")
 
     ff = pygcmc.ForceField()
     

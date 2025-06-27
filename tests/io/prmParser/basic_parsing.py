@@ -5,13 +5,11 @@ import os
 import pytest
 import pygcmc
 
-# Get the directory containing test data files
-TEST_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
-
-
 def test_parse_file_direct():
-    """Test the new parse_file method that returns a ForceField object directly."""
-    param_file = os.path.join(TEST_DATA_DIR, "toppar_water_ions.str")
+    """Test direct parsing of a parameter file."""
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(test_dir)), "data")
+    param_file = os.path.join(data_dir, "toppar_water_ions.str")
 
     # Test direct parsing
     ff = pygcmc.PRMParser.parse_file(param_file)
@@ -98,8 +96,10 @@ POT    CLA      -0.114236   4.081
 
 
 def test_parse_from_file():
-    """Test the original parse_file method that takes a ForceField object."""
-    param_file = os.path.join(TEST_DATA_DIR, "toppar_water_ions.str")
+    """Test parsing from file with proper docstring."""
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(test_dir)), "data")
+    param_file = os.path.join(data_dir, "toppar_water_ions.str")
 
     ff = pygcmc.ForceField()
     pygcmc.PRMParser.parse_file_to_forcefield(param_file, ff)  # Changed from parse_file to parse_file_to_forcefield

@@ -5,15 +5,13 @@ import os
 import pytest
 import pygcmc
 
-# Get the directory containing test data files
-TEST_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
-
-
 def test_multiple_parameter_files():
     """Test reading and combining multiple parameter files."""
-    water_ions_file = os.path.join(TEST_DATA_DIR, "toppar_water_ions.str")
-    silcs_file = os.path.join(TEST_DATA_DIR, "silcs.str")
-    prot_file = os.path.join(TEST_DATA_DIR, "par_all36m_prot.prm")
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(test_dir)), "data")
+    water_ions_file = os.path.join(data_dir, "toppar_water_ions.str")
+    silcs_file = os.path.join(data_dir, "silcs.str")
+    prot_file = os.path.join(data_dir, "par_all36m_prot.prm")
 
     ff = pygcmc.ForceField()
     
@@ -144,9 +142,10 @@ def test_multiple_parameter_files():
 
 def test_prm_and_str_files():
     """Test reading both .prm and .str files together."""
-    # Load .str files
-    water_ions_file = os.path.join(TEST_DATA_DIR, "toppar_water_ions.str")
-    silcs_file = os.path.join(TEST_DATA_DIR, "silcs.str")
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(test_dir)), "data")
+    water_ions_file = os.path.join(data_dir, "toppar_water_ions.str")
+    silcs_file = os.path.join(data_dir, "silcs.str")
 
     ff = pygcmc.ForceField()
     
