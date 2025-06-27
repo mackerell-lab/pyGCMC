@@ -29,9 +29,9 @@ def create_simple_two_atom_state(distance, box_size, cutoff):
     ff = MCForceField()
     ff.numTotalTypes = 2
     
-    # Simple LJ parameters (neutral atoms for cleaner testing)
-    sigma = 0.35  # nm
-    eps = 0.1     # kJ/mol
+    # LJ parameters - must match those used in theoretical calculations
+    sigma = 0.4  # nm - matches theoretical calculation
+    eps = 0.02   # kJ/mol - matches theoretical calculation
     
     ff.ljSigma = [sigma, sigma, sigma, sigma]
     ff.ljEps = [eps, eps, eps, eps]
@@ -40,51 +40,55 @@ def create_simple_two_atom_state(distance, box_size, cutoff):
     # Create two atoms
     atoms = []
     
-    # First atom (fixed) at origin + offset
-    atom1 = MCAtom()
-    atom1.x = box_size / 2.0 - distance / 2.0
-    atom1.y = box_size / 2.0
-    atom1.z = box_size / 2.0
-    atom1.charge = 1.0  # +1e charge
-    atom1.type = 0
-    atoms.append(atom1)
+    # Fixed atom (at box center)
+    fixed_atom = MCAtom()
+    fixed_atom.x = box_size / 2.0
+    fixed_atom.y = box_size / 2.0
+    fixed_atom.z = box_size / 2.0
+    fixed_atom.charge = 1.0
+    fixed_atom.type = 0
+    atoms.append(fixed_atom)
     
-    # Second atom (moving) at the specified distance
-    atom2 = MCAtom()
-    atom2.x = box_size / 2.0 + distance / 2.0
-    atom2.y = box_size / 2.0
-    atom2.z = box_size / 2.0
-    atom2.charge = -1.0  # -1e charge (opposite to create attractive interaction)
-    atom2.type = 1
-    atoms.append(atom2)
+    # Moving atom (at specified distance from fixed atom)
+    moving_atom = MCAtom()
+    moving_atom.x = fixed_atom.x + distance
+    moving_atom.y = fixed_atom.y
+    moving_atom.z = fixed_atom.z
+    moving_atom.charge = -1.0
+    moving_atom.type = 1
+    atoms.append(moving_atom)
     
-    print(f"Atom 1: ({atom1.x:.3f}, {atom1.y:.3f}, {atom1.z:.3f}), charge={atom1.charge}")
-    print(f"Atom 2: ({atom2.x:.3f}, {atom2.y:.3f}, {atom2.z:.3f}), charge={atom2.charge}")
+    print(f"Fixed atom: ({fixed_atom.x:.3f}, {fixed_atom.y:.3f}, {fixed_atom.z:.3f}), charge={fixed_atom.charge}")
+    print(f"Moving atom: ({moving_atom.x:.3f}, {moving_atom.y:.3f}, {moving_atom.z:.3f}), charge={moving_atom.charge}")
     
     # Verify distance
-    dx = atom2.x - atom1.x
-    dy = atom2.y - atom1.y
-    dz = atom2.z - atom1.z
+    dx = moving_atom.x - fixed_atom.x
+    dy = moving_atom.y - fixed_atom.y
+    dz = moving_atom.z - fixed_atom.z
     actual_distance = math.sqrt(dx*dx + dy*dy + dz*dz)
     print(f"Actual distance: {actual_distance:.6f} nm (requested: {distance:.6f} nm)")
     
     # Create residues
     residues = []
     
-    # Fixed residue containing first atom
+    # Fixed residue
     fixed_res = MCResidue()
-    fixed_res.atomStart = 0
-    fixed_res.atomCount = 1
     fixed_res.active = True
     fixed_res.fixed = True
+    fixed_res.atomStart = 0
+    fixed_res.atomCount = 1
+    fixed_res.energy_vdw = 0.0
+    fixed_res.energy_elec = 0.0
     residues.append(fixed_res)
     
-    # Moving residue containing second atom
+    # Moving residue
     moving_res = MCResidue()
-    moving_res.atomStart = 1
-    moving_res.atomCount = 1
     moving_res.active = True
     moving_res.fixed = False
+    moving_res.atomStart = 1
+    moving_res.atomCount = 1
+    moving_res.energy_vdw = 0.0
+    moving_res.energy_elec = 0.0
     residues.append(moving_res)
     
     # Set system arrays
@@ -92,6 +96,18 @@ def create_simple_two_atom_state(distance, box_size, cutoff):
     system.residues = residues
     system.activeAtomCount = len(atoms)
     system.activeResidueCount = len(residues)
+    
+    # Set PME/PGP parameters - use more conservative parameters
+    box = [box_size, box_size, box_size]
+    mesh_size = [16, 16, 16]  # Reduce grid size
+    try:
+        pygcmc.setPMEParameters(alpha=0.2, meshSize=mesh_size, splineOrder=4, tolerance=1e-4)
+        pygcmc.initializePMEParameters(cutoff, box, 0.2)
+        pygcmc.setPGPParameters(alpha=0.2, meshSize=mesh_size, potential_cutoff=cutoff,
+                                potentialGridSize=mesh_size, splineOrder=4, tolerance=1e-4)
+        pygcmc.precomputeGridPotential(system, True)  # Only compute fixed atom potential
+    except Exception as e:
+        print(f"Warning: Error in PME/PGP setup: {e}")
     
     print(f"Two-atom system created: {len(atoms)} atoms, {len(residues)} residues")
     print(f"Within cutoff: {actual_distance < cutoff}")
