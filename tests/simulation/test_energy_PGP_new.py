@@ -6,7 +6,7 @@ This file imports all Energy PGP tests from modular sub-files.
 Run: pytest tests/simulation/test_energy_PGP_new.py
 
 Modular structure (all modules under 300 lines):
-- helpers.py: Shared helper functions and utilities (267 lines)
+- helpers.py: Shared helper functions and utilities (650 lines)
 - basic_operations.py: Basic PGP operations tests (162 lines, 3 functions)
 - method_comparison.py: PME vs PGP comparison tests (173 lines, 1 function)
 - complex_systems.py: Complex multi-algorithm comparison tests (204 lines, 1 function)
@@ -14,38 +14,60 @@ Modular structure (all modules under 300 lines):
 - asymmetric_water_complete.py: Complete asymmetric water test (227 lines, 1 function)
 - asymmetric_water_movement.py: Movement loop for asymmetric water (159 lines, helper)
 - asymmetric_nacl.py: Large NaCl asymmetric test (283 lines, 1 function)
+- vspme_delta_energies.py: PGP vs PME delta energies comparison (215 lines, 1 function)
+- vspme_direct_lj.py: PGP with direct space and LJ interactions (347 lines, 1 function)
+- vspme_lj_energy.py: LJ energy calculation in PME and PGP (360 lines, 1 function)
+- vspme_two_atom.py: Simple two-atom system energy comparison (190 lines, 1 function)
+- vspme_combined.py: Combined energy calculation diagnostic (410 lines, 1 function)
 
-Total: 8 test functions across 8 modules, all under 300 lines each.
+Total: 13 test functions across 13 modules (8 PGP + 5 PGPvsPME).
 """
 
 # Basic PGP operations tests
-from pgp.basic_operations import (
+from energyPGP.basic_operations import (
     test_pgp_parameter_setting,
     test_precompute_grid_potential,
     test_interpolate_molecule_energy
 )
 
 # PME vs PGP comparison tests
-from pgp.method_comparison import (
+from energyPGP.method_comparison import (
     test_compare_pme_pgp_energy
 )
 
 # Complex multi-algorithm comparison tests
-from pgp.complex_systems import (
+from energyPGP.complex_systems import (
     test_compare_ewald_pme_pgp_complex
 )
 
 # Planar systems tests
-from pgp.planar_systems import (
+from energyPGP.planar_systems import (
     test_compare_ewald_pme_pgp_planar
 )
 
 # Asymmetric charge distribution tests
-from pgp.asymmetric_water_complete import (
+from energyPGP.asymmetric_water_complete import (
     test_compare_ewald_pme_pgp_asymmetric
 )
-from pgp.asymmetric_nacl import (
+from energyPGP.asymmetric_nacl import (
     test_compare_ewald_pme_pgp_asymmetric_nacl
+)
+
+# PGPvsPME comparison tests
+from energyPGP.vspme_delta_energies import (
+    test_compare_pgp_pme_delta_energies
+)
+from energyPGP.vspme_direct_lj import (
+    test_pgp_direct_and_lj_energies
+)
+from energyPGP.vspme_lj_energy import (
+    test_lj_energy_pme_pgp
+)
+from energyPGP.vspme_two_atom import (
+    test_simple_two_atom_system
+)
+from energyPGP.vspme_combined import (
+    test_combined_energy_calculation
 )
 
 # Support direct execution for testing
