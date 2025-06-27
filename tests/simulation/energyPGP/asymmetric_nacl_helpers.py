@@ -290,7 +290,7 @@ def verify_moved_position_safety(system, mobile_res, fixed_positions, cutoff, bo
     else:
         min_dist = float('inf')
         for mobile_pos in current_positions:
-            for fixed_pos in fixed_positions:
+            for fixed_pos, _ in fixed_positions:
                 dist = calculate_pbc_distance(mobile_pos, fixed_pos, box_size)
                 min_dist = min(min_dist, dist)
         print(f"Moved position safe, minimum distance from fixed particles: {min_dist:.4f} nm (cutoff={cutoff} nm)")
