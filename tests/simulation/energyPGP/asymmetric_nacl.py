@@ -1,12 +1,19 @@
-# tests/simulation/pgp/asymmetric_nacl.py
-"""PGP asymmetric NaCl systems test - Simplified version."""
+# tests/simulation/energyPGP/asymmetric_nacl.py
+"""PGP asymmetric NaCl systems test - Complete implementation with complex movement algorithm."""
 
 import pytest
 import math
 import pygcmc
 from pygcmc import MCState, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
 import sys
-from .helpers import calculate_pbc_distance
+from .helpers import calculate_pbc_distance, is_safe_position
+from .asymmetric_nacl_helpers import (
+    create_nacl_crystal_system,
+    handle_initial_position_safety,
+    calculate_complex_movement_vector,
+    apply_movement_to_residue,
+    verify_moved_position_safety
+)
 
 
 def test_compare_ewald_pme_pgp_asymmetric_nacl():
@@ -24,8 +31,8 @@ def test_compare_ewald_pme_pgp_asymmetric_nacl():
     # Set system parameters
     n_cells = 4      # 4x4x4 supercell
     a = 0.564        # NaCl lattice constant (nm)
-    box_size = 5.0   # nm
-    cutoff = 1.0     # nm
+    box_size = 5.0   # nm - Use large box to ensure sufficient space
+    cutoff = 1.0     # nm - Note: even if distance is smaller than this value, we only compare reciprocal space energy
     potential_cutoff = 1.0  # nm
     box = [box_size, box_size, box_size]
     
@@ -40,137 +47,16 @@ def test_compare_ewald_pme_pgp_asymmetric_nacl():
     print("Creating NaCl crystal system with moving NaCl residue...")
     sys.stdout.flush()
     
-    # Create test system
-    system = MCState()
-    system.info.box = box
-    system.info.setTemperature(300.0)
-    system.info.cutoff = cutoff
-    
-    # Set force field parameters
-    ff = MCForceField()
-    ff.numTotalTypes = 2  # Na+ and Cl-
-    
-    # LJ parameters (from OPLS-AA force field)
-    sigma_na = 0.333  # nm
-    sigma_cl = 0.442  # nm
-    eps_na = 0.0115  # kJ/mol
-    eps_cl = 0.4184  # kJ/mol
-    
-    # Set LJ parameter matrix
-    ff.ljSigma = [
-        sigma_na, (sigma_na + sigma_cl)/2.0,
-        (sigma_na + sigma_cl)/2.0, sigma_cl
-    ]
-    ff.ljEps = [
-        eps_na, math.sqrt(eps_na * eps_cl),
-        math.sqrt(eps_na * eps_cl), eps_cl
-    ]
-    
-    system.forcefield = ff
-    
-    # Initialize NaCl lattice
-    atoms = []
-    residues = []
-    
-    # Create NaCl lattice
+    # Create NaCl crystal system
     print(f"\nCreating {n_cells}x{n_cells}x{n_cells} NaCl crystal...")
-    fixed_positions = []
-    
-    # Calculate offset to center the crystal in the box
-    offset = (box_size - n_cells * a) / 2.0
-    print(f"Crystal centered in box with offset: {offset} nm")
-    
-    for i in range(n_cells):
-        for j in range(n_cells):
-            for k in range(n_cells):
-                # Na+ ion position
-                na_pos = (i * a + offset, j * a + offset, k * a + offset)
-                
-                # Cl- ion position
-                cl_pos = (i * a + a/2 + offset, j * a + a/2 + offset, k * a + a/2 + offset)
-                
-                # Create residue for each ion pair (Na+, Cl-)
-                if i == n_cells-1 and j == n_cells-1 and k == n_cells-1:
-                    # Last ion pair will be the moving residue
-                    # Add as separate residue later
-                    continue
-                else:
-                    # Add Na+ ion
-                    na = MCAtom()
-                    na.x, na.y, na.z = na_pos
-                    na.charge = 1.0
-                    na.type = 0
-                    atoms.append(na)
-                    fixed_positions.append(na_pos)
-                    
-                    # Add Cl- ion
-                    cl = MCAtom()
-                    cl.x, cl.y, cl.z = cl_pos
-                    cl.charge = -1.0
-                    cl.type = 1
-                    atoms.append(cl)
-                    fixed_positions.append(cl_pos)
-                    
-                    # Create a residue for this ion pair
-                    res = MCResidue()
-                    res.atomStart = len(atoms) - 2
-                    res.atomCount = 2
-                    res.active = True
-                    res.fixed = True
-                    residues.append(res)
-    
-    # Create moving NaCl residue (the last ion pair)
-    mobile_start_idx = len(atoms)
-    
-    # Position moving residue at box center for safety
-    center = box_size / 2.0
-    na_pos = (center, center, center)
-    cl_pos = (center + a/2, center + a/2, center + a/2)
-    
-    # Add Na+ ion for moving residue
-    na = MCAtom()
-    na.x, na.y, na.z = na_pos
-    na.charge = 1.0
-    na.type = 0
-    atoms.append(na)
-    
-    # Add Cl- ion for moving residue
-    cl = MCAtom()
-    cl.x, cl.y, cl.z = cl_pos
-    cl.charge = -1.0
-    cl.type = 1
-    atoms.append(cl)
-    
-    # Create moving residue
-    mobile_res = MCResidue()
-    mobile_res.atomStart = mobile_start_idx
-    mobile_res.atomCount = 2  # NaCl has 2 atoms
-    mobile_res.active = True
-    mobile_res.fixed = False
-    residues.append(mobile_res)
-    
-    print(f"Moving NaCl residue: Na+ position=({na_pos[0]:.3f}, {na_pos[1]:.3f}, {na_pos[2]:.3f}), charge=1.0")
-    print(f"  Cl- position=({cl_pos[0]:.3f}, {cl_pos[1]:.3f}, {cl_pos[2]:.3f}), charge=-1.0")
-    
-    # Set system
-    system.atoms = atoms
-    system.residues = residues
-    system.activeAtomCount = len(atoms)
-    system.activeResidueCount = len(residues)
+    system, mobile_res, fixed_positions = create_nacl_crystal_system(n_cells, a, box_size, cutoff)
     
     # Calculate system total charge
-    total_system_charge = sum(atom.charge for atom in atoms)
+    total_system_charge = sum(atom.charge for atom in system.atoms)
     print(f"System total charge: {total_system_charge}")
     
-    # Set moving residue info
-    system.movementResidues.clear()
-    movement_info = pygcmc.MCMovementResidueInfo()
-    movement_info.startIndex = len(residues) - 1  # Last residue is the moving residue
-    movement_info.activeCount = 1  # Only one moving residue
-    system.movementResidues.append(movement_info)
-    
     print(f"System created: {system.activeAtomCount} atoms, {system.activeResidueCount} residues")
-    print(f"Fixed atoms: {len(atoms) - 2}, Moving atoms: 2 (NaCl ion pair)")
+    print(f"Fixed atoms: {len(system.atoms) - 2}, Moving atoms: 2 (NaCl ion pair)")
     sys.stdout.flush()
     
     # Initialize Ewald, PME, and PGP
@@ -179,106 +65,160 @@ def test_compare_ewald_pme_pgp_asymmetric_nacl():
     # Ewald parameters initialization
     print("Initializing Ewald parameters...")
     pygcmc.setEwaldParameters(alpha, kmax)
-    pygcmc.initializeEwaldParameters(cutoff, box, alpha)
     
     # PME parameters initialization
     print("Initializing PME parameters...")
-    pygcmc.setPMEParameters(alpha, mesh_size, spline_order, tolerance)
+    pygcmc.setPMEParameters(alpha=alpha, meshSize=mesh_size, splineOrder=spline_order, tolerance=tolerance)
     pygcmc.initializePMEParameters(cutoff, box, alpha)
     
     # PGP parameters initialization
     print("Initializing PGP parameters...")
-    pygcmc.setPGPParameters(alpha, mesh_size, potential_cutoff, 
-                         potential_grid_size, spline_order, tolerance)
+    pygcmc.setPGPParameters(alpha=alpha, meshSize=mesh_size, potential_cutoff=potential_cutoff,
+                           potentialGridSize=potential_grid_size, splineOrder=spline_order, tolerance=tolerance)
     
-    # Precompute grid potential for fixed parts
-    print("Precomputing fixed parts grid potential...")
+    # Precompute grid potential for fixed particles
+    print("Precomputing PGP grid potential for fixed particles...")
     pygcmc.precomputeGridPotential(system, fixed_only=True)
     
-    # Execute single movement test (simplified to reduce size)
-    print("Executing single movement test")
+    # Execute multiple movements
+    num_moves = 5  # Reduce test times to speed up test
+    print(f"Executing {num_moves} random movement tests")
     
-    # Step 1: Calculate initial energy
-    print("Calculating initial energy...")
+    # Store relative errors between methods
+    pgp_pme_errors = []
+    ewald_pme_errors = []
+    pgp_ewald_errors = []
     
-    # Ewald energy calculation
-    initial_ewald_result = pygcmc.computeSystemEnergyEwald(system)
-    initial_ewald_elec = initial_ewald_result[0]
-    initial_ewald_dict = initial_ewald_result[2]
-    initial_ewald_reciprocal = initial_ewald_dict['reciprocal']
+    # Handle initial position safety
+    handle_initial_position_safety(system, mobile_res, fixed_positions, cutoff, box_size)
     
-    # PME energy calculation
-    initial_pme_result = pygcmc.computeMovementEnergyPME(system)
-    initial_pme_energy = initial_pme_result[0]
-    initial_pme_dict = initial_pme_result[2]
-    initial_pme_reciprocal = initial_pme_dict['reciprocal']
-    
-    # PGP energy calculation
-    initial_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
-    
-    print(f"Initial Ewald reciprocal energy: {initial_ewald_reciprocal}")
-    print(f"Initial PME reciprocal energy: {initial_pme_reciprocal}")
-    print(f"Initial PGP energy: {initial_pgp_energy}")
-    
-    # Step 2: Simple movement (translate by 0.2 nm)
-    movement_vector = [0.2, 0.2, 0.2]
-    print(f"Movement vector: {movement_vector}")
-    
-    # Apply movement to all atoms in the moving residue
-    for i in range(mobile_res.atomCount):
-        atom_idx = mobile_res.atomStart + i
-        system.atoms[atom_idx].x += movement_vector[0]
-        system.atoms[atom_idx].y += movement_vector[1]
-        system.atoms[atom_idx].z += movement_vector[2]
+    # Execute multiple movements
+    for move_idx in range(num_moves):
+        print(f"\nExecuting {move_idx+1}/{num_moves} movement test")
         
-        # Apply PBC
-        system.atoms[atom_idx].x %= box_size
-        system.atoms[atom_idx].y %= box_size
-        system.atoms[atom_idx].z %= box_size
+        # Step 1: Calculate initial energy
+        print("Calculating initial energy...")
         
-        print(f"Moved atom {i} to: ({system.atoms[atom_idx].x:.4f}, {system.atoms[atom_idx].y:.4f}, {system.atoms[atom_idx].z:.4f})")
+        # Ewald energy calculation
+        initial_ewald_result = pygcmc.computeSystemEnergyEwald(system)
+        initial_ewald_elec = initial_ewald_result[0]
+        initial_ewald_dict = initial_ewald_result[2]
+        initial_ewald_reciprocal = initial_ewald_dict['reciprocal']
+        
+        # PME energy calculation
+        initial_pme_result = pygcmc.computeMovementEnergyPME(system)
+        initial_pme_energy = initial_pme_result[0]
+        initial_pme_dict = initial_pme_result[2]
+        initial_pme_reciprocal = initial_pme_dict['reciprocal']
+        
+        # PGP energy calculation
+        initial_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
+        
+        print(f"Initial Ewald reciprocal energy: {initial_ewald_reciprocal}")
+        print(f"Initial PME reciprocal energy: {initial_pme_reciprocal}")
+        print(f"Initial PGP energy: {initial_pgp_energy}")
+        
+        # Step 2: Calculate complex movement vector
+        movement_vector = calculate_complex_movement_vector(system, mobile_res, system.residues, box_size)
+        
+        # Step 3: Apply movement
+        apply_movement_to_residue(system, mobile_res, movement_vector, box_size)
+        
+        # Step 4: Verify moved position safety
+        verify_moved_position_safety(system, mobile_res, fixed_positions, cutoff, box_size)
+        
+        # Step 5: Calculate moved energy
+        print("Calculating moved energy...")
+        
+        # Ewald energy calculation
+        moved_ewald_result = pygcmc.computeSystemEnergyEwald(system)
+        moved_ewald_elec = moved_ewald_result[0]
+        moved_ewald_dict = moved_ewald_result[2]
+        moved_ewald_reciprocal = moved_ewald_dict['reciprocal']
+        
+        # PME energy calculation
+        moved_pme_result = pygcmc.computeMovementEnergyPME(system)
+        moved_pme_energy = moved_pme_result[0]
+        moved_pme_dict = moved_pme_result[2]
+        moved_pme_reciprocal = moved_pme_dict['reciprocal']
+        
+        # Check direct space energy
+        moved_pme_direct = moved_pme_dict.get('direct', 0.0)
+        if abs(moved_pme_direct) > 1e-10:
+            print(f"PME direct space energy: {moved_pme_direct}")
+            print("Particles are within cutoff distance - but we only compare reciprocal space energy changes")
+        
+        # PGP energy calculation
+        moved_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
+        
+        print(f"Moved Ewald reciprocal energy: {moved_ewald_reciprocal}")
+        print(f"Moved PME reciprocal energy: {moved_pme_reciprocal}")
+        print(f"Moved PGP energy: {moved_pgp_energy}")
+        
+        # Calculate energy change
+        ewald_energy_change = moved_ewald_reciprocal - initial_ewald_reciprocal
+        pme_energy_change = moved_pme_reciprocal - initial_pme_reciprocal
+        pgp_energy_change = moved_pgp_energy - initial_pgp_energy
+        
+        print(f"Ewald reciprocal energy change: {ewald_energy_change}")
+        print(f"PME reciprocal energy change: {pme_energy_change}")
+        print(f"PGP energy change: {pgp_energy_change}")
+        
+        # Note: We only compare reciprocal space energy changes, even if distance is smaller than cutoff
+        # This is because PGP's purpose is to simulate PME's reciprocal space calculation, direct space calculation is handled separately
+        
+        # Calculate relative error
+        if abs(pme_energy_change) > 1e-6:
+            # PGP relative error compared to PME
+            pgp_pme_error = abs((pgp_energy_change - pme_energy_change) / pme_energy_change)
+            print(f"PGP relative error: {pgp_pme_error*100:.4f}%")
+            pgp_pme_errors.append(pgp_pme_error)
+            
+            # Ewald relative error compared to PME
+            ewald_pme_error = abs((ewald_energy_change - pme_energy_change) / pme_energy_change)
+            print(f"Ewald relative error: {ewald_pme_error*100:.4f}%")
+            ewald_pme_errors.append(ewald_pme_error)
+            
+            # PGP relative error compared to Ewald
+            if abs(ewald_energy_change) > 1e-6:
+                pgp_ewald_error = abs((pgp_energy_change - ewald_energy_change) / ewald_energy_change)
+                print(f"PGP relative error: {pgp_ewald_error*100:.4f}%")
+                pgp_ewald_errors.append(pgp_ewald_error)
+        else:
+            print("PME energy change near zero, skipping relative error calculation")
     
-    # Step 3: Calculate moved energy
-    print("Calculating moved energy...")
+    # Calculate average error
+    print("\nError analysis statistics:")
     
-    # Ewald energy calculation
-    moved_ewald_result = pygcmc.computeSystemEnergyEwald(system)
-    moved_ewald_elec = moved_ewald_result[0]
-    moved_ewald_dict = moved_ewald_result[2]
-    moved_ewald_reciprocal = moved_ewald_dict['reciprocal']
-    
-    # PME energy calculation
-    moved_pme_result = pygcmc.computeMovementEnergyPME(system)
-    moved_pme_energy = moved_pme_result[0]
-    moved_pme_dict = moved_pme_result[2]
-    moved_pme_reciprocal = moved_pme_dict['reciprocal']
-    
-    # PGP energy calculation
-    moved_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
-    
-    print(f"Moved Ewald reciprocal energy: {moved_ewald_reciprocal}")
-    print(f"Moved PME reciprocal energy: {moved_pme_reciprocal}")
-    print(f"Moved PGP energy: {moved_pgp_energy}")
-    
-    # Calculate energy change
-    ewald_energy_change = moved_ewald_reciprocal - initial_ewald_reciprocal
-    pme_energy_change = moved_pme_reciprocal - initial_pme_reciprocal
-    pgp_energy_change = moved_pgp_energy - initial_pgp_energy
-    
-    print(f"Ewald reciprocal energy change: {ewald_energy_change}")
-    print(f"PME reciprocal energy change: {pme_energy_change}")
-    print(f"PGP energy change: {pgp_energy_change}")
-    
-    # Calculate relative error
-    if abs(pme_energy_change) > 1e-6:
-        # PGP relative error compared to PME
-        pgp_pme_error = abs((pgp_energy_change - pme_energy_change) / pme_energy_change)
-        print(f"PGP relative error: {pgp_pme_error*100:.4f}%")
+    if pgp_pme_errors:
+        avg_pgp_pme_error = sum(pgp_pme_errors) / len(pgp_pme_errors)
+        print(f"Average PGP relative error: {avg_pgp_pme_error*100:.4f}%")
         
         # Use more lenient error tolerance because PGP is an approximation method
         acceptable_error = 0.5  # Allow 50% error
-        assert pgp_pme_error < acceptable_error, f"PGP relative error too large: {pgp_pme_error*100:.2f}%"
+        assert avg_pgp_pme_error < acceptable_error, f"Average PGP relative error too large: {avg_pgp_pme_error*100:.2f}%"
     else:
-        print("PME energy change near zero, skipping relative error calculation")
+        print("PGP relative error: No valid error data for statistics")
     
-    print("Test completed successfully (simplified version)")
+    if ewald_pme_errors:
+        avg_ewald_pme_error = sum(ewald_pme_errors) / len(ewald_pme_errors)
+        print(f"Average Ewald relative error: {avg_ewald_pme_error*100:.4f}%")
+        
+        # Ewald and PME should theoretically have very high consistency
+        acceptable_error = 0.2  # Allow 20% error
+        assert avg_ewald_pme_error < acceptable_error, f"Average Ewald relative error too large: {avg_ewald_pme_error*100:.2f}%"
+    else:
+        print("Ewald relative error: No valid error data for statistics")
+    
+    if pgp_ewald_errors:
+        avg_pgp_ewald_error = sum(pgp_ewald_errors) / len(pgp_ewald_errors)
+        print(f"Average PGP relative error: {avg_pgp_ewald_error*100:.4f}%")
+        
+        # Use more lenient error tolerance because PGP is an approximation method
+        acceptable_error = 0.5  # Allow 50% error
+        assert avg_pgp_ewald_error < acceptable_error, f"Average PGP relative error too large: {avg_pgp_ewald_error*100:.2f}%"
+    else:
+        print("PGP relative error: No valid error data for statistics")
+    
+    print("\n--- Test completed successfully ---")
+    sys.stdout.flush()
