@@ -27,10 +27,13 @@ Total: 26 test functions across modular files (all modules under 300 lines each)
 """
 
 # Non-bonded basic interaction tests
-from energyNB.nonbonded_basic import (
+from energyNB.nonbonded_attractive import (
     test_attractive_interaction,
+    test_electrostatic_interaction
+)
+
+from energyNB.nonbonded_repulsive import (
     test_repulsive_interaction,
-    test_electrostatic_interaction,
     test_combined_interaction
 )
 
@@ -54,12 +57,19 @@ from energyNB.nonbonded_system import (
     test_all_residues_inactive
 )
 
-# Non-bonded PBC and cutoff tests
-from energyNB.nonbonded_pbc import (
-    test_cutoff_nonperiodic,
+# Non-bonded cutoff tests
+from energyNB.nonbonded_cutoff import (
+    test_cutoff_nonperiodic
+)
+
+# Non-bonded PBC tests
+from energyNB.nonbonded_pbc_basic import (
     test_pbc_basic,
     test_pbc_invalid_box,
-    test_pbc_vs_nopbc,
+    test_pbc_vs_nopbc
+)
+
+from energyNB.nonbonded_pbc_advanced import (
     test_pbc_cross_boundary
 )
 
@@ -76,9 +86,15 @@ from energyNB.switching_methods import (
 )
 
 # Switching function diagnostic tests
-from energyNB.switching_diagnostics import (
-    test_print_switching_values,
-    test_compare_energy_with_without_switching,
+from energyNB.switching_print import (
+    test_print_switching_values
+)
+
+from energyNB.switching_comparison import (
+    test_compare_energy_with_without_switching
+)
+
+from energyNB.switching_internal import (
     test_internal_switching_function,
     test_internal_switching_function_ewald,
     test_mcs_energy_calculation_with_switching

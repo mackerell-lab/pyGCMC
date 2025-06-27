@@ -1,9 +1,9 @@
-# tests/simulation/test_energy_ewald_new.py
+# tests/simulation/test_energy_ewald.py
 """
 Energy Ewald Tests - Main Entry Point
 
 This file imports all Energy Ewald tests from modular sub-files.
-Run: pytest tests/simulation/test_energy_ewald_new.py
+Run: pytest tests/simulation/test_energy_ewald.py
 
 Modular structure:
 - basic_comparison.py: Basic energy comparison tests (3 functions)

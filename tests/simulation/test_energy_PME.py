@@ -1,9 +1,9 @@
-# tests/simulation/test_energy_PME_new.py
+# tests/simulation/test_energy_PME.py
 """
 Energy PME Tests - Main Entry Point
 
 This file imports all Energy PME tests from modular sub-files.
-Run: pytest tests/simulation/test_energy_PME_new.py
+Run: pytest tests/simulation/test_energy_PME.py
 
 Consolidated modular structure (all modules under 300 lines):
 - helpers.py: Shared NaCl crystal creation helper (87 lines)
