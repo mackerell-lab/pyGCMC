@@ -6,13 +6,10 @@ import pytest
 from pygcmc.io import TOPParser
 from pygcmc.model import Topology, TopologyResidue, TopologyAtom
 
-# Get the directory containing test data files
-TEST_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 
-
-def test_parse_bonds():
+def test_parse_bonds(test_data_dir):
     """Test parsing bonds section from topology file."""
-    top_file = os.path.join(TEST_DATA_DIR, "test.top")
+    top_file = os.path.join(test_data_dir, "test.top")
     parser = TOPParser()
     topology = Topology()
     
@@ -47,9 +44,9 @@ def test_parse_bonds():
     assert topology.has_bond(n_idx, ca_idx), f"Missing N-CA bond between atoms {n_idx} and {ca_idx}"
 
 
-def test_parse_angles():
+def test_parse_angles(test_data_dir):
     """Test parsing angles section from topology file."""
-    top_file = os.path.join(TEST_DATA_DIR, "test.top")
+    top_file = os.path.join(test_data_dir, "test.top")
     parser = TOPParser()
     topology = Topology()
     
@@ -88,9 +85,9 @@ def test_parse_angles():
             f"Missing HT-N-CA angle between atoms {ht_idx}, {n_idx}, and {ca_idx}"
 
 
-def test_parse_dihedrals():
+def test_parse_dihedrals(test_data_dir):
     """Test parsing dihedrals section from topology file."""
-    top_file = os.path.join(TEST_DATA_DIR, "test.top")
+    top_file = os.path.join(test_data_dir, "test.top")
     parser = TOPParser()
     topology = Topology()
     

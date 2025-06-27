@@ -6,13 +6,10 @@ import pytest
 from pygcmc.io import TOPParser
 from pygcmc.model import Topology, TopologyResidue, TopologyAtom
 
-# Get the directory containing test data files
-TEST_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 
-
-def test_parse_protein_top():
+def test_parse_protein_top(test_data_dir):
     """Test parsing protein topology file (test.top)."""
-    top_file = os.path.join(TEST_DATA_DIR, "test.top")
+    top_file = os.path.join(test_data_dir, "test.top")
     parser = TOPParser()
     topology = Topology()
     
@@ -63,9 +60,9 @@ def test_parse_protein_top():
         assert abs(h.charge - 0.33) < 1e-6, f"Wrong charge for {h.name}"
 
 
-def test_parse_step1_top():
+def test_parse_step1_top(test_data_dir):
     """Test parsing step1_pdbreader.top file (which includes step1_pdbreader.itp)."""
-    top_file = os.path.join(TEST_DATA_DIR, "step1_pdbreader.top")
+    top_file = os.path.join(test_data_dir, "step1_pdbreader.top")
     parser = TOPParser()
     topology = Topology()
     

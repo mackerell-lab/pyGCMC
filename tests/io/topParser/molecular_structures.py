@@ -6,13 +6,10 @@ import pytest
 from pygcmc.io import TOPParser
 from pygcmc.model import Topology, TopologyResidue, TopologyAtom
 
-# Get the directory containing test data files
-TEST_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 
-
-def test_parse_solvent_top():
+def test_parse_solvent_top(test_data_dir):
     """Test parsing solvent topology file (sol.itp)."""
-    top_file = os.path.join(TEST_DATA_DIR, "mols", "sol.itp")
+    top_file = os.path.join(test_data_dir, "mols", "sol.itp")
     parser = TOPParser()
     topology = Topology()
     
@@ -58,9 +55,9 @@ def test_parse_solvent_top():
             assert abs(h.mass - 1.0080) < 1e-6, f"Wrong mass for {h.name}"
 
 
-def test_parse_benzene_top():
+def test_parse_benzene_top(test_data_dir):
     """Test parsing benzene topology file (benx.itp)."""
-    top_file = os.path.join(TEST_DATA_DIR, "mols", "benx.itp")
+    top_file = os.path.join(test_data_dir, "mols", "benx.itp")
     parser = TOPParser()
     topology = Topology()
     
@@ -105,9 +102,9 @@ def test_parse_benzene_top():
         assert found_atoms == expected_atoms, f"Missing or extra atoms in benzene residue"
 
 
-def test_parse_propane_top():
+def test_parse_propane_top(test_data_dir):
     """Test parsing propane topology file (prpx.itp)."""
-    top_file = os.path.join(TEST_DATA_DIR, "mols", "prpx.itp")
+    top_file = os.path.join(test_data_dir, "mols", "prpx.itp")
     parser = TOPParser()
     topology = Topology()
     
