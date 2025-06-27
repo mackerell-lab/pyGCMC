@@ -173,3 +173,38 @@ OT     0.0         -0.1521        1.7682
     ot_params = ff.get_lj_params("OT")
     assert ot_params.epsilon == pytest.approx(-0.1521)
     assert ot_params.rmin_half == pytest.approx(1.7682)
+
+
+# def test_atom_priority_ordering():
+#     """Test if parameter sorting rules conform to CHARMM specifications"""
+#     ff = pygcmc.ForceField()
+#     
+#     # Test bond parameter sorting - using correct CHARMM format
+#     content = """
+# BONDS
+# !V(bond) = Kb(b - b0)**2
+# !
+# !Kb: kcal/mole/A**2
+# !b0: A
+# !
+# !atom type Kb          b0
+# CT1  CS    222.500   1.5380 ! 
+# """
+#     pygcmc.PRMParser.parse_string(content, ff)
+#     assert ff.get_bond_params("CT1", "CS") is not None
+#     assert ff.get_bond_params("CS", "CT1") is None  # Should automatically sort when storing
+#     
+#     # Test dihedral angle inversion rules
+#     content = """
+# DIHEDRALS
+# !V(dihedral) = Kchi(1 + cos(n(chi) - delta))
+# !
+# !Kchi: kcal/mole
+# !n: multiplicity
+# !delta: degrees
+# !
+# !atom types             Kchi    n   delta
+# CS   CT1  CT2  HA2    0.200   3     0.00 ! 
+# """
+#     pygcmc.PRMParser.parse_string(content, ff)
+#     assert ff.get_dihedral_params("HA2", "CT2", "CT1", "CS") is not None
