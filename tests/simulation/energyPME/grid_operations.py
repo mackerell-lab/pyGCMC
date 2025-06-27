@@ -17,6 +17,7 @@ def test_pme_grid_operations():
     print("\nRunning test_pme_grid_operations...")
     
     # Set log level to INFO to view detailed debug output
+    import pygcmc
     # First set System log level
     pygcmc.System.set_log_level(pygcmc.LogLevel.INFO)
     # Enable debug output for energy calculations

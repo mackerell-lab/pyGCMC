@@ -38,6 +38,7 @@ def test_pme_parameters():
     
     # Create atoms with random positions
     # Use a fixed seed for reproducibility, matching the C++ version
+    import random
     random.seed(12345)
     
     atoms = []

@@ -28,9 +28,9 @@ def test_ewald_vs_pme_comparison():
     
     # Set a simple force field
     ff = MCForceField()
-    ff.numTotalTypes = 2  # Two atom types (Na+ and Cl-)
-    ff.ljSigma = [0.3, 0.3, 0.3, 0.3]  # 2x2 matrix
-    ff.ljEps = [0.0, 0.0, 0.0, 0.0]    # 2x2 matrix - no LJ interactions
+    ff.numTotalTypes = 1  # Single atom type for simplicity
+    ff.ljSigma = [0.3]  # Dummy LJ parameters - size matches numTotalTypes^2
+    ff.ljEps = [0.0]  # Set LJ epsilon to zero to eliminate LJ interactions
     
     state.forcefield = ff
     
@@ -71,9 +71,16 @@ def test_ewald_vs_pme_comparison():
     
     # Set active atom and residue counts
     state.atoms = atoms
-    state.residues = residues
-    state.activeAtomCount = len(atoms)
-    state.activeResidueCount = len(residues)
+    state.residues = residues  # Set residues
+    state.activeAtomCount = len(atoms)  # Add active atom count
+    state.activeResidueCount = len(residues)  # Add active residue count
+    
+    # Update force field parameters to support two atom types
+    ff.numTotalTypes = 2  # Change to 2 atom types (Na+ and Cl-)
+    ff.ljSigma = [0.3, 0.3, 0.3, 0.3]  # Expand to 2x2 matrix
+    ff.ljEps = [0.0, 0.0, 0.0, 0.0]    # Expand to 2x2 matrix
+    
+    state.forcefield = ff
     
     # Calculate total charge to verify system is neutral
     total_charge = sum(atom.charge for atom in atoms)

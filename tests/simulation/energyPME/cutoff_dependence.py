@@ -56,6 +56,7 @@ def test_cutoff_dependence():
     state.forcefield = ff
     
     # Create atoms with random positions using the same seed as C++ version
+    import random
     random.seed(54321)  # Same seed as C++ version
     
     atoms = []
