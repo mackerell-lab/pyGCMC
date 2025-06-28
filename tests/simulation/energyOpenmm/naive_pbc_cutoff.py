@@ -1,7 +1,8 @@
 # tests/simulation/energyOpenmm/naive_pbc_cutoff.py
 
 import pytest
-from .naive_helpers import *
+from .naive_system_helpers import *
+from .naive_conversion_helpers import *
 
 def test_compare_pbc_energies():
     """Compare PBC energy calculations between OpenMM and naive implementation."""

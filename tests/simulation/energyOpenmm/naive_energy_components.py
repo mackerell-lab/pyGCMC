@@ -1,7 +1,8 @@
 # tests/simulation/energyOpenmm/naive_energy_components.py
 
 import pytest
-from .naive_helpers import *
+from .naive_system_helpers import *
+from .naive_conversion_helpers import *
 
 def test_openmm_energy_components():
     """Test OpenMM energy components separately."""
@@ -52,36 +53,6 @@ def test_naive_energy_components():
     print(f"VDW energy: {state.residues[0].energy_vdw:.6f} kJ/mol")
     print(f"Elec energy: {state.residues[0].energy_elec:.6f} kJ/mol")
     print(f"Total energy: {(state.residues[0].energy_vdw + state.residues[0].energy_elec):.6f} kJ/mol")
-
-def print_force_field_params():
-    """Print force field parameters for both implementations."""
-    state, system, positions = convert_openmm_state_to_mcstate()
-    
-    # Print OpenMM parameters
-    nb_force = None
-    for force in system.getForces():
-        if isinstance(force, NonbondedForce):
-            nb_force = force
-            break
-            
-    print("\nOpenMM parameters:")
-    for i in range(nb_force.getNumParticles()):
-        charge, sigma, epsilon = nb_force.getParticleParameters(i)
-        print(f"Atom {i}: q={charge.value_in_unit(elementary_charge):.3f}e, "
-              f"sigma={sigma.value_in_unit(nanometers):.3f}nm, "
-              f"epsilon={epsilon.value_in_unit(kilojoules_per_mole):.3f}kJ/mol")
-        
-    print("\nNaive implementation parameters:")
-    print("LJ Epsilon matrix [kJ/mol]:")
-    n = int(math.sqrt(len(state.forcefield.ljEps)))
-    for i in range(n):
-        row = state.forcefield.ljEps[i*n:(i+1)*n]
-        print(f"Type {i}: {[f'{x:.3f}' for x in row]}")
-    
-    print("\nLJ Sigma matrix [nm]:")
-    for i in range(n):
-        row = state.forcefield.ljSigma[i*n:(i+1)*n]
-        print(f"Type {i}: {[f'{x:.3f}' for x in row]}")
 
 def test_compare_openmm_naive_nonbonded():
     """Compare nonbonded energy calculations between OpenMM and naive implementation."""
