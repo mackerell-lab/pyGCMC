@@ -14,6 +14,7 @@ Modular structure (all files under 300 lines):
   * energyOpenmm/simple_pbc_cutoff.py: PBC interaction tests (2 functions)
   * energyOpenmm/intermediate_energy_symmetry.py: Energy symmetry test (1 function)
   * energyOpenmm/intermediate_custom_vs_standard.py: Custom vs standard test (1 function)
+  * energyOpenmm/method_combined.py: Combined method comparison test (1 function)
   * energyOpenmm/method_nocutoff.py: NoCutoff method test (1 function)
   * energyOpenmm/method_cutoff_nonperiodic.py: CutoffNonPeriodic method test (1 function)
   * energyOpenmm/method_switching_functions.py: Switching function test (1 function)
@@ -27,7 +28,7 @@ Modular structure (all files under 300 lines):
   * energyOpenmm/periodic_force_parameters.py: Force parameter test (1 function)
 - Original test_openmm_nonbonded_file.py (207 lines, 1 function) → energyOpenmm/file_based.py
 
-Total: 23 test functions across modular files (all modules under 260 lines each).
+Total: 24 test functions across modular files (all modules under 280 lines each).
 Original total: 3160 lines → New structure: 4285 lines (+36% for better organization)
 """
 
@@ -61,6 +62,7 @@ from energyOpenmm.intermediate_energy_symmetry import test_energy_symmetry
 from energyOpenmm.intermediate_custom_vs_standard import test_compare_custom_vs_standard_nonbonded
 
 # Method comparison tests (1 function each)
+from energyOpenmm.method_combined import test_compare_nonbonded_methods
 from energyOpenmm.method_nocutoff import test_compare_nonbonded_nocutoff
 from energyOpenmm.method_cutoff_nonperiodic import test_compare_nonbonded_cutoff_nonperiodic
 from energyOpenmm.method_switching_functions import test_compare_switching_functions
