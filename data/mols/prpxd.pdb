@@ -1,0 +1,19 @@
+REMARK  GENERATE ALL 9 GCMC MOLECULES WITH DRUDE PARTICLES USING 2024A FORCE FIELD    
+REMARK  UNIFIED GENERATION SCRIPT FOR CONSISTENT PARAMETERS                           
+REMARK   DATE:     6/29/25      4:12: 6      CREATED BY USER: zhaomt                  
+ATOM      1  C1  PRPA    1      -0.102  -0.007  -0.000  1.00  0.00      PR1 
+ATOM      2  DC1 PRPA    1      -0.091   0.005  -0.000  1.00  0.00      PR1 
+ATOM      3  H11 PRPA    1      -0.512   1.025   0.000  1.00  0.00      PR1 
+ATOM      4  H12 PRPA    1      -0.501  -0.527   0.897  1.00  0.00      PR1 
+ATOM      5  H13 PRPA    1      -0.501  -0.527  -0.897  1.00  0.00      PR1 
+ATOM      6  C2  PRPA    1       1.430  -0.013   0.000  1.00  0.00      PR1 
+ATOM      7  DC2 PRPA    1       1.435  -0.021   0.000  1.00  0.00      PR1 
+ATOM      8  H21 PRPA    1       1.789  -0.572   0.894  1.00  0.00      PR1 
+ATOM      9  H22 PRPA    1       1.789  -0.572  -0.894  1.00  0.00      PR1 
+ATOM     10  C3  PRPA    1       2.061   1.384  -0.000  1.00  0.00      PR1 
+ATOM     11  DC3 PRPA    1       2.046   1.378  -0.000  1.00  0.00      PR1 
+ATOM     12  H31 PRPA    1       2.700   1.531   0.897  1.00  0.00      PR1 
+ATOM     13  H32 PRPA    1       2.700   1.531  -0.897  1.00  0.00      PR1 
+ATOM     14  H33 PRPA    1       1.293   2.185   0.000  1.00  0.00      PR1 
+TER      15      PRPA     1
+END

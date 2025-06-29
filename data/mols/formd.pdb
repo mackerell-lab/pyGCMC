@@ -1,0 +1,16 @@
+REMARK  GENERATE ALL 9 GCMC MOLECULES WITH DRUDE PARTICLES USING 2024A FORCE FIELD    
+REMARK  UNIFIED GENERATION SCRIPT FOR CONSISTENT PARAMETERS                           
+REMARK   DATE:     6/29/25      4:12: 6      CREATED BY USER: zhaomt                  
+ATOM      1  C   FORM    1       0.073  -0.342  -0.000  1.00  0.00      FOR 
+ATOM      2  DC  FORM    1       0.074  -0.343  -0.000  1.00  0.00      FOR 
+ATOM      3  HA  FORM    1       0.276  -1.419   0.000  1.00  0.00      FOR 
+ATOM      4  O   FORM    1       1.001   0.445  -0.000  1.00  0.00      FOR 
+ATOM      5  DO  FORM    1       0.966   0.452  -0.000  1.00  0.00      FOR 
+ATOM      6  LPA FORM    1       1.199   0.220  -0.000  1.00  0.00      FOR 
+ATOM      7  LPB FORM    1       0.811   0.677  -0.000  1.00  0.00      FOR 
+ATOM      8  N   FORM    1      -1.226  -0.021   0.000  1.00  0.00      FOR 
+ATOM      9  DN  FORM    1      -1.226  -0.021   0.000  1.00  0.00      FOR 
+ATOM     10  HC  FORM    1      -1.456   0.975  -0.000  1.00  0.00      FOR 
+ATOM     11  HT  FORM    1      -1.945  -0.746   0.000  1.00  0.00      FOR 
+TER      12      FORM     1
+END

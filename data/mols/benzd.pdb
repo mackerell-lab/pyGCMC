@@ -1,0 +1,24 @@
+REMARK  GENERATE ALL 9 GCMC MOLECULES WITH DRUDE PARTICLES USING 2024A FORCE FIELD    
+REMARK  UNIFIED GENERATION SCRIPT FOR CONSISTENT PARAMETERS                           
+REMARK   DATE:     6/29/25      4:12: 6      CREATED BY USER: zhaomt                  
+ATOM      1  CG  BENZ    1       1.751   0.647   0.000  1.00  0.00      BEN 
+ATOM      2  DCG BENZ    1       1.745   0.640   0.000  1.00  0.00      BEN 
+ATOM      3  HG  BENZ    1       2.530   1.409   0.000  1.00  0.00      BEN 
+ATOM      4  CD1 BENZ    1       0.615   1.218   0.000  1.00  0.00      BEN 
+ATOM      5 DCD1 BENZ    1       0.487   0.600   0.000  1.00  0.00      BEN 
+ATOM      6  HD1 BENZ    1       0.374   2.431   0.000  1.00  0.00      BEN 
+ATOM      7  CD2 BENZ    1       0.504   0.600   0.000  1.00  0.00      BEN 
+ATOM      8 DCD2 BENZ    1       0.619   1.222   0.000  1.00  0.00      BEN 
+ATOM      9  HD2 BENZ    1      -1.070   1.417   0.000  1.00  0.00      BEN 
+ATOM     10  CE1 BENZ    1      -1.420  -0.423   0.000  1.00  0.00      BEN 
+ATOM     11 DCE1 BENZ    1      -0.739  -0.671   0.000  1.00  0.00      BEN 
+ATOM     12  HE1 BENZ    1      -2.479  -0.100   0.000  1.00  0.00      BEN 
+ATOM     13  CE2 BENZ    1      -0.700  -0.726   0.000  1.00  0.00      BEN 
+ATOM     14 DCE2 BENZ    1      -1.396  -0.465   0.000  1.00  0.00      BEN 
+ATOM     15  HE2 BENZ    1      -0.944  -2.123   0.000  1.00  0.00      BEN 
+ATOM     16  CZ  BENZ    1      -0.065  -1.536   0.000  1.00  0.00      BEN 
+ATOM     17  DCZ BENZ    1      -0.069  -1.522   0.000  1.00  0.00      BEN 
+ATOM     18  HZ  BENZ    1       0.255  -2.616   0.000  1.00  0.00      BEN 
+ATOM     19  LP  BENZ    1       0.366   0.951   0.000  1.00  0.00      BEN 
+TER      20      BENZ     1
+END

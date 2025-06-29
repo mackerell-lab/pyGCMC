@@ -1,0 +1,67 @@
+PSF EXT CMAP DRUDE XPLOR AUTOG
+
+         3 !NTITLE
+* GENERATE ALL 9 GCMC MOLECULES WITH DRUDE PARTICLES USING 2024A FORCE FIELD    
+* UNIFIED GENERATION SCRIPT FOR CONSISTENT PARAMETERS                           
+*  DATE:     6/29/25      4:12: 6      CREATED BY USER: zhaomt                  
+
+        10 !NATOM
+         1 MET      1        MEOH     C1       CD33B     1.59530       11.6110           0  -1.00000       1.30000    
+         2 MET      1        MEOH     DC1      DRUD     -1.73530      0.400000           0   0.00000       0.00000    
+         3 MET      1        MEOH     O1       OD31A     1.75950       15.5994           0  -1.02800       1.30000    
+         4 MET      1        MEOH     DO1      DRUD     -1.75950      0.400000           0   0.00000       0.00000    
+         5 MET      1        MEOH     HO1      HDP1A    0.360000       1.00800           0   0.00000       0.00000    
+         6 MET      1        MEOH     H1A      HDA3B    0.800000E-01   1.00800           0   0.00000       0.00000    
+         7 MET      1        MEOH     H1B      HDA3B    0.800000E-01   1.00800           0   0.00000       0.00000    
+         8 MET      1        MEOH     H1C      HDA3B    0.800000E-01   1.00800           0   0.00000       0.00000    
+         9 MET      1        MEOH     LP1A     LPD     -0.230000       0.00000          -1   0.00000       0.00000    
+        10 MET      1        MEOH     LP1B     LPD     -0.230000       0.00000          -1   0.00000       0.00000    
+
+         9 !NBOND: bonds
+         1         2         3         4         1         3         3         5
+         1         6         1         7         1         8         3         9
+         3        10
+
+         7 !NTHETA: angles
+         3         1         6         3         1         7         3         1         8
+         6         1         7         6         1         8         7         1         8
+         1         3         5
+
+         3 !NPHI: dihedrals
+         5         3         1         6         5         3         1         7
+         5         3         1         8
+
+         0 !NIMPHI: impropers
+
+
+         0 !NDON: donors
+
+
+         0 !NACC: acceptors
+
+
+         0 !NNB
+
+         0         0         0         0         0         0         0         0
+         0         0
+
+         1         0 !NGRP NST2
+         0         1         0
+
+         2         8 !NUMLP NUMLPH
+         3         1   F  0.350000       110.000       91.0000    
+         3         5   F  0.350000       110.000       269.000    
+         9         3         1         5        10         3         1         5
+
+         1 !NUMANISO
+             102.800      -102.758       13.8746    
+         3         1         9        10
+
+         0 !NCRTERM: cross-terms
+
+
+         0 !AUTOGEN
+         0        15         0        15         0         0         0         0
+        15        15
+         0         0         0         0         0         0         0         0
+         0

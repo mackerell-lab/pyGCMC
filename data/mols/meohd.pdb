@@ -1,0 +1,15 @@
+REMARK  GENERATE ALL 9 GCMC MOLECULES WITH DRUDE PARTICLES USING 2024A FORCE FIELD    
+REMARK  UNIFIED GENERATION SCRIPT FOR CONSISTENT PARAMETERS                           
+REMARK   DATE:     6/29/25      4:12: 6      CREATED BY USER: zhaomt                  
+ATOM      1  C1  MEOH    1       1.361   1.368  -0.000  1.00  0.00      MET 
+ATOM      2  DC1 MEOH    1       1.361   1.368  -0.000  1.00  0.00      MET 
+ATOM      3  O1  MEOH    1       0.954  -0.002  -0.000  1.00  0.00      MET 
+ATOM      4  DO1 MEOH    1       0.954  -0.002  -0.000  1.00  0.00      MET 
+ATOM      5  HO1 MEOH    1      -0.018  -0.021   0.000  1.00  0.00      MET 
+ATOM      6  H1A MEOH    1       2.471   1.425  -0.000  1.00  0.00      MET 
+ATOM      7  H1B MEOH    1       0.974   1.881   0.908  1.00  0.00      MET 
+ATOM      8  H1C MEOH    1       0.974   1.881  -0.908  1.00  0.00      MET 
+ATOM      9 LP1A MEOH    1       0.925  -0.119  -0.329  1.00  0.00      MET 
+ATOM     10 LP1B MEOH    1       0.925  -0.119   0.329  1.00  0.00      MET 
+TER      11      MEOH     1
+END

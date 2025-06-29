@@ -1,0 +1,10 @@
+REMARK  GENERATE ALL 9 GCMC MOLECULES WITH DRUDE PARTICLES USING 2024A FORCE FIELD    
+REMARK  UNIFIED GENERATION SCRIPT FOR CONSISTENT PARAMETERS                           
+REMARK   DATE:     6/29/25      4:12: 6      CREATED BY USER: zhaomt                  
+ATOM      1  OH2 SWHL    1       0.000  -0.379   0.000  1.00  0.00      WAT 
+ATOM      2 DOH2 SWHL    1       0.000  -0.379   0.000  1.00  0.00      WAT 
+ATOM      3  OM  SWHL    1       0.000  -0.162   0.000  1.00  0.00      WAT 
+ATOM      4  H1  SWHL    1       0.775   0.183   0.000  1.00  0.00      WAT 
+ATOM      5  H2  SWHL    1      -0.775   0.183   0.000  1.00  0.00      WAT 
+TER       6      SWHL     1
+END

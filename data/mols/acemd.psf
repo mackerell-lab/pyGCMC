@@ -1,0 +1,77 @@
+PSF EXT CMAP DRUDE XPLOR AUTOG
+
+         3 !NTITLE
+* GENERATE ALL 9 GCMC MOLECULES WITH DRUDE PARTICLES USING 2024A FORCE FIELD    
+* UNIFIED GENERATION SCRIPT FOR CONSISTENT PARAMETERS                           
+*  DATE:     6/29/25      4:12: 6      CREATED BY USER: zhaomt                  
+
+        15 !NATOM
+         1 ACE      1        ACEM     CL       CD33C     1.68170       11.6110           0  -1.41700       1.13000    
+         2 ACE      1        ACEM     DCL      DRUD     -2.06570      0.400000           0   0.00000       0.00000    
+         3 ACE      1        ACEM     C        CD2O1A    3.08940       11.6110           0  -1.58300       1.09500    
+         4 ACE      1        ACEM     DC       DRUD     -2.18340      0.400000           0   0.00000       0.00000    
+         5 ACE      1        ACEM     N        ND2A1     1.49190       13.6070           0  -1.71700       1.13200    
+         6 ACE      1        ACEM     DN       DRUD     -2.27390      0.400000           0   0.00000       0.00000    
+         7 ACE      1        ACEM     HC       HDP1A    0.303000       1.00800           0   0.00000       0.00000    
+         8 ACE      1        ACEM     HT       HDP1A    0.351000       1.00800           0   0.00000       0.00000    
+         9 ACE      1        ACEM     O        OD2C1A    1.66750       15.5994           0 -0.885000       1.22700    
+        10 ACE      1        ACEM     DO       DRUD     -1.63250      0.400000           0   0.00000       0.00000    
+        11 ACE      1        ACEM     HL1      HDA3A    0.820000E-01   1.00800           0   0.00000       0.00000    
+        12 ACE      1        ACEM     HL2      HDA3A    0.820000E-01   1.00800           0   0.00000       0.00000    
+        13 ACE      1        ACEM     HL3      HDA3A    0.820000E-01   1.00800           0   0.00000       0.00000    
+        14 ACE      1        ACEM     LPA      LPDO1   -0.411000       0.00000          -1   0.00000       0.00000    
+        15 ACE      1        ACEM     LPB      LPDO1   -0.264000       0.00000          -1   0.00000       0.00000    
+
+        14 !NBOND: bonds
+         1         2         3         4         5         6         9        10
+         3         5         5         7         5         8         3         9
+         3         1         1        11         1        12         1        13
+         9        14         9        15
+
+        12 !NTHETA: angles
+         3         1        11         3         1        12         3         1        13
+        11         1        12        11         1        13        12         1        13
+         1         3         5         1         3         9         5         3         9
+         3         5         7         3         5         8         7         5         8
+
+        10 !NPHI: dihedrals
+         1         3         5         7         1         3         5         8
+         5         3         1        11         5         3         1        12
+         5         3         1        13         7         5         3         9
+         8         5         3         9         9         3         1        11
+         9         3         1        12         9         3         1        13
+
+         2 !NIMPHI: impropers
+         3         1         5         9         5         7         8         3
+
+         0 !NDON: donors
+
+
+         0 !NACC: acceptors
+
+
+         0 !NNB
+
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0
+
+         1         0 !NGRP NST2
+         0         1         0
+
+         2         8 !NUMLP NUMLPH
+         3         1   F  0.300000       91.0000       0.00000    
+         3         5   F  0.300000       91.0000       180.000    
+        14         9         3         1        15         9         3         1
+
+         1 !NUMANISO
+             123.559      -46.4888      -16.1883    
+         9         3        14        15
+
+         0 !NCRTERM: cross-terms
+
+
+         0 !AUTOGEN
+         0        15         0        15         0        15         0         0
+         0        15         0         0         0        15        15
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0

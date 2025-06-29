@@ -1,0 +1,91 @@
+PSF EXT CMAP DRUDE XPLOR AUTOG
+
+         3 !NTITLE
+* GENERATE ALL 9 GCMC MOLECULES WITH DRUDE PARTICLES USING 2024A FORCE FIELD    
+* UNIFIED GENERATION SCRIPT FOR CONSISTENT PARAMETERS                           
+*  DATE:     6/29/25      4:12: 6      CREATED BY USER: zhaomt                  
+
+        19 !NATOM
+         1 BEN      1        BENZ     CG       CD2R6A    2.09470       11.6110           0  -1.61500       1.19500    
+         2 BEN      1        BENZ     DCG      DRUD     -2.20530      0.400000           0   0.00000       0.00000    
+         3 BEN      1        BENZ     HG       HDR6A    0.110600       1.00800           0   0.00000       0.00000    
+         4 BEN      1        BENZ     CD1      CD2R6A    2.09470       11.6110           0  -1.61500       1.19500    
+         5 BEN      1        BENZ     DCD1     DRUD     -2.20530      0.400000           0   0.00000       0.00000    
+         6 BEN      1        BENZ     HD1      HDR6A    0.110600       1.00800           0   0.00000       0.00000    
+         7 BEN      1        BENZ     CD2      CD2R6A    2.09470       11.6110           0  -1.61500       1.19500    
+         8 BEN      1        BENZ     DCD2     DRUD     -2.20530      0.400000           0   0.00000       0.00000    
+         9 BEN      1        BENZ     HD2      HDR6A    0.110600       1.00800           0   0.00000       0.00000    
+        10 BEN      1        BENZ     CE1      CD2R6A    2.09470       11.6110           0  -1.61500       1.19500    
+        11 BEN      1        BENZ     DCE1     DRUD     -2.20530      0.400000           0   0.00000       0.00000    
+        12 BEN      1        BENZ     HE1      HDR6A    0.110600       1.00800           0   0.00000       0.00000    
+        13 BEN      1        BENZ     CE2      CD2R6A    2.09470       11.6110           0  -1.61500       1.19500    
+        14 BEN      1        BENZ     DCE2     DRUD     -2.20530      0.400000           0   0.00000       0.00000    
+        15 BEN      1        BENZ     HE2      HDR6A    0.110600       1.00800           0   0.00000       0.00000    
+        16 BEN      1        BENZ     CZ       CD2R6A    2.09470       11.6110           0  -1.61500       1.19500    
+        17 BEN      1        BENZ     DCZ      DRUD     -2.20530      0.400000           0   0.00000       0.00000    
+        18 BEN      1        BENZ     HZ       HDR6A    0.110600       1.00800           0   0.00000       0.00000    
+        19 BEN      1        BENZ     LP       LPA1      0.00000       0.00000          -1   0.00000       0.00000    
+
+        18 !NBOND: bonds
+         1         2         4         5         7         8        10        11
+        13        14        16        17         4         1         7         1
+        10         4        13         7        16        10        16        13
+         1         3         4         6         7         9        10        12
+        13        15        16        18
+
+        18 !NTHETA: angles
+         3         1         4         3         1         7         4         1         7
+         1         4         6         1         4        10         6         4        10
+         1         7         9         1         7        13         9         7        13
+         4        10        12         4        10        16        12        10        16
+         7        13        15         7        13        16        15        13        16
+        10        16        13        10        16        18        13        16        18
+
+        24 !NPHI: dihedrals
+         1         4        10        12         1         4        10        16
+         1         7        13        15         1         7        13        16
+         3         1         4         6         3         1         4        10
+         3         1         7         9         3         1         7        13
+         4         1         7         9         4         1         7        13
+         4        10        16        13         4        10        16        18
+         6         4         1         7         6         4        10        12
+         6         4        10        16         7         1         4        10
+         7        13        16        10         7        13        16        18
+         9         7        13        15         9         7        13        16
+        10        16        13        15        12        10        16        13
+        12        10        16        18        15        13        16        18
+
+         0 !NIMPHI: impropers
+
+
+         0 !NDON: donors
+
+
+         0 !NACC: acceptors
+
+
+         0 !NNB
+
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0
+
+         1         0 !NGRP NST2
+         0         1         0
+
+         1         4 !NUMLP NUMLPH
+         3         1   F  -1.41900       0.00000       0.00000    
+        19         1         4         7
+
+         0 !NUMANISO
+
+         0 !NCRTERM: cross-terms
+
+
+         0 !AUTOGEN
+         0        15         0         0        15         0         0        15
+         0         0        15         0         0        15         0         0
+        15         0        15
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0
