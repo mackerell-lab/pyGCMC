@@ -8,8 +8,8 @@
 #include <memory>
 #include <map>
 #include <string>
-#include "atom/AtomMain.hpp"
-#include "residue/ResidueMain.hpp"
+#include "model/atom/AtomMain.hpp"
+#include "model/residue/ResidueMain.hpp"
 
 namespace pygcmc {
 namespace model {

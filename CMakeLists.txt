@@ -19,9 +19,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# Set global include directory
-include_directories(${PROJECT_SOURCE_DIR}/src)
-
 # ==============================================================================
 # UTILITY FUNCTIONS TO AVOID REPETITION
 # ==============================================================================
@@ -48,9 +45,7 @@ function(add_pygcmc_library target_name source_dir library_type)
         target_sources(${target_name} INTERFACE ${LIB_HEADERS})
         target_include_directories(${target_name}
             INTERFACE
-                ${source_dir}/..
                 ${CMAKE_SOURCE_DIR}/src
-                ${source_dir}
         )
     else()
         add_library(${target_name} ${library_type}
@@ -64,7 +59,6 @@ function(add_pygcmc_library target_name source_dir library_type)
         # Add include directories
         target_include_directories(${target_name}
             PUBLIC
-                ${source_dir}/..
                 ${CMAKE_SOURCE_DIR}/src
         )
     endif()
@@ -75,6 +69,25 @@ function(add_pygcmc_library target_name source_dir library_type)
         SOVERSION ${PROJECT_VERSION_MAJOR}
         LINKER_LANGUAGE CXX
     )
+endfunction()
+
+# Function to setup pybind11 with version control
+function(setup_pybind11)
+    # Try to find system-installed pybind11 first
+    find_package(pybind11 CONFIG)
+    
+    if(NOT pybind11_FOUND)
+        message(STATUS "System pybind11 not found, downloading from GitHub...")
+        include(FetchContent)
+        FetchContent_Declare(
+            pybind11
+            GIT_REPOSITORY https://github.com/pybind/pybind11.git
+            GIT_TAG        v2.11.1  # Lock to stable version
+        )
+        FetchContent_MakeAvailable(pybind11)
+    else()
+        message(STATUS "Using system-installed pybind11")
+    endif()
 endfunction()
 
 # ==============================================================================
@@ -96,44 +109,16 @@ target_link_libraries(pygcmc_system PUBLIC pygcmc_model)
 add_pygcmc_library(pygcmc_platform "${CMAKE_CURRENT_SOURCE_DIR}/src/platform" STATIC)
 target_link_libraries(pygcmc_platform PUBLIC pygcmc_model)
 
-# 5. Simulation library (depends on platform and model)
-add_library(pygcmc_simulation STATIC
-    src/simulation/simulation.hpp
-    src/simulation/simulation.cpp
-)
-set_property(TARGET pygcmc_simulation PROPERTY POSITION_INDEPENDENT_CODE ON)
-target_include_directories(pygcmc_simulation
-    PUBLIC
-        ${CMAKE_SOURCE_DIR}/src
-)
-target_link_libraries(pygcmc_simulation
-    PUBLIC
-        pygcmc_platform
-        pygcmc_model
-)
-set_target_properties(pygcmc_simulation PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
-    LINKER_LANGUAGE CXX
-)
+# 5. Simulation library (depends on platform and model) - now uses unified function
+add_pygcmc_library(pygcmc_simulation "${CMAKE_CURRENT_SOURCE_DIR}/src/simulation" STATIC)
+target_link_libraries(pygcmc_simulation PUBLIC pygcmc_platform pygcmc_model)
 
 # ==============================================================================
 # PYTHON BINDINGS
 # ==============================================================================
 
-# Find or download pybind11
-find_package(pybind11 CONFIG)
-if(NOT pybind11_FOUND)
-    message(STATUS "System pybind11 not found, downloading from GitHub...")
-    include(FetchContent)
-    FetchContent_Declare(
-        pybind11
-        GIT_REPOSITORY https://github.com/pybind/pybind11.git
-    )
-    FetchContent_MakeAvailable(pybind11)
-else()
-    message(STATUS "Using system-installed pybind11")
-endif()
+# Setup pybind11
+setup_pybind11()
 
 # Auto-discover binding source files
 file(GLOB_RECURSE BINDING_SOURCES CONFIGURE_DEPENDS
@@ -142,7 +127,7 @@ file(GLOB_RECURSE BINDING_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/bindings/*.cxx"
 )
 
-# Auto-discover binding header files
+# Auto-discover binding header files  
 file(GLOB_RECURSE BINDING_HEADERS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/bindings/*.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/bindings/*.h"
@@ -174,6 +159,7 @@ set_target_properties(pygcmc PROPERTIES
     LINKER_LANGUAGE CXX
 )
 
+# Use target-specific include instead of global
 target_include_directories(pygcmc
     PRIVATE
         ${CMAKE_SOURCE_DIR}/src
@@ -189,4 +175,29 @@ if(BUILD_TESTING)
     enable_testing()
     # Uncomment when tests are ready
     # add_subdirectory(tests)
+endif()
+
+# ==============================================================================
+# DEVELOPMENT OPTIONS
+# ==============================================================================
+
+# Optional: Add development options
+option(ENABLE_COVERAGE "Enable code coverage" OFF)
+option(ENABLE_SANITIZERS "Enable address/memory sanitizers" OFF)
+
+if(ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(pygcmc_io PRIVATE --coverage)
+    target_compile_options(pygcmc_system PRIVATE --coverage)
+    target_compile_options(pygcmc_platform PRIVATE --coverage)
+    target_compile_options(pygcmc_simulation PRIVATE --coverage)
+    target_link_options(pygcmc PRIVATE --coverage)
+endif()
+
+if(ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    set(SANITIZER_FLAGS "-fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer")
+    target_compile_options(pygcmc_io PRIVATE ${SANITIZER_FLAGS})
+    target_compile_options(pygcmc_system PRIVATE ${SANITIZER_FLAGS})
+    target_compile_options(pygcmc_platform PRIVATE ${SANITIZER_FLAGS})
+    target_compile_options(pygcmc_simulation PRIVATE ${SANITIZER_FLAGS})
+    target_link_options(pygcmc PRIVATE ${SANITIZER_FLAGS})
 endif()
