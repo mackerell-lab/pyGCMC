@@ -55,6 +55,14 @@ from pdbParser.gcmc_systems import (
     test_4wp7_coordinate_validation
 )
 
+# Comparison validation with direct Python parsing
+from pdbParser.comparison_validation import (
+    test_4wp7_direct_vs_pygcmc_parsing,
+    test_4wp7_residue_statistics_comparison,
+    test_4wp7_coordinate_ranges_comparison,
+    test_specific_atom_verification
+)
+
 # Support direct execution for testing
 if __name__ == "__main__":
     import pytest

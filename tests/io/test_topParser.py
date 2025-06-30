@@ -3,13 +3,14 @@
 TOP Parser Tests - Main Entry Point
 
 This file imports all TOP parser tests from modular sub-files.
-Run: pytest tests/io/test_topParser_new.py
+Run: pytest tests/io/test_topParser.py
 
 Modular structure:
 - basic_parsing.py: Basic TOP parsing tests (2 functions)
 - molecular_structures.py: Molecular structure tests (3 functions)
 - topology_terms.py: Topology terms tests (3 functions)
 - error_handling.py: Error handling tests (2 functions)
+- gcmc_systems.py: GCMC system topology tests (4 functions)
 """
 
 import os
@@ -45,6 +46,14 @@ from topParser.topology_terms import (
 from topParser.error_handling import (
     test_parse_nonexistent_file,
     test_parse_invalid_top
+)
+
+# GCMC systems testing
+from topParser.gcmc_systems import (
+    test_parse_4wp7_gcmc_topology,
+    test_4wp7_topology_atom_types,
+    test_4wp7_force_field_includes,
+    test_4wp7_multiple_protein_chains
 )
 
 # Support direct execution for testing

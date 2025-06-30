@@ -74,8 +74,8 @@ def test_4wp7_system_residue_distribution():
     
     result = pygcmc.PDBParser.parse_file(pdb_path)
     
-    # Count residue occurrences
-    residue_counts = {}
+    # Count residue occurrences (counting atoms per residue type)
+    residue_counts = {}  # This counts ATOMS per residue type, not molecules
     for atom in result.atoms:
         resname = atom.get_resname()
         residue_counts[resname] = residue_counts.get(resname, 0) + 1
@@ -95,22 +95,27 @@ def test_4wp7_system_residue_distribution():
                 f"{molecule} count {count} outside expected range [{min_count}, {max_count}]"
     
     # Verify we have protein residues
-    protein_residues_found = 0
+    protein_atoms_found = 0  # Renamed for clarity: this counts ATOMS, not residues
     for resname in residue_counts:
         if resname in {"ALA", "ARG", "ASN", "ASP", "GLN", "GLU", "GLY", "HIS", "ILE", 
                       "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL"}:
-            protein_residues_found += residue_counts[resname]
+            protein_atoms_found += residue_counts[resname]
     
     # Should have significant protein content (multiple copies of the protein)
-    assert protein_residues_found > 25000, f"Expected substantial protein content, got {protein_residues_found} atoms"
+    assert protein_atoms_found > 25000, f"Expected substantial protein content, got {protein_atoms_found} atoms"
+    # Add stricter check based on actual data (~29k protein atoms)
+    assert 28000 <= protein_atoms_found <= 32000, f"Expected ~29k protein atoms for 4wp7 system, got {protein_atoms_found}"
     
     # Total system should be dominated by non-protein molecules (GCMC + solvent)
     total_atoms = len(result.atoms)
-    small_molecule_atoms = total_atoms - protein_residues_found
+    small_molecule_atoms = total_atoms - protein_atoms_found
     
     # Based on actual data: ~29k protein, ~192k non-protein (ratio ~6.5:1)
-    assert small_molecule_atoms > protein_residues_found * 5, \
-        f"GCMC+solvent system should be dominated by small molecules, got ratio {small_molecule_atoms/protein_residues_found:.1f}:1"
+    assert small_molecule_atoms > protein_atoms_found * 5, \
+        f"GCMC+solvent system should be dominated by small molecules, got ratio {small_molecule_atoms/protein_atoms_found:.1f}:1"
+    # Add stricter check based on actual data
+    ratio = small_molecule_atoms / protein_atoms_found
+    assert 6.0 <= ratio <= 7.5, f"Expected ratio ~6.5:1 for 4wp7 system, got {ratio:.1f}:1"
 
 
 def test_4wp7_coordinate_validation():
@@ -124,6 +129,7 @@ def test_4wp7_coordinate_validation():
     result = pygcmc.PDBParser.parse_file(pdb_path)
     
     # Sample atoms for coordinate testing (test first 1000 atoms for performance)
+    # Note: Using first 1000 atoms for deterministic testing, but has order dependency
     sample_atoms = result.atoms[:1000]
     
     valid_coordinates = 0
