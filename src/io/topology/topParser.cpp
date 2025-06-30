@@ -92,6 +92,7 @@ bool TOPParser::parse_to_topology(const std::string& filename, model::Topology& 
     // Collect all lines with preprocessor handling
     std::vector<LineInfo> all_lines;
     PreprocessorState pp_state;
+    // Check if force field defines are already present in files
     if (!collect_all_lines(filename, all_lines, pp_state, true)) {
         return false;
     }
@@ -628,7 +629,7 @@ bool TOPParser::parse_atoms_section(const std::vector<LineInfo>& lines, model::T
     for (const auto& line_info : lines) {
         const std::string& line = line_info.content;
         auto tokens = split(remove_comment(line));
-        if (tokens.size() < 8) continue;
+        if (tokens.size() < 7) continue;
         try {
             int resnum = std::stoi(tokens[2]);
             max_resnum = std::max(max_resnum, resnum);
@@ -641,7 +642,7 @@ bool TOPParser::parse_atoms_section(const std::vector<LineInfo>& lines, model::T
     for (const auto& line_info : lines) {
         const std::string& line = line_info.content;
         auto tokens = split(remove_comment(line));
-        if (tokens.size() < 8) continue;  // Need at least 8 columns
+        if (tokens.size() < 7) continue;  // Need at least 7 columns (tip3p.itp format)
 
         try {
             // Parse atom data
@@ -650,7 +651,7 @@ bool TOPParser::parse_atoms_section(const std::vector<LineInfo>& lines, model::T
             std::string residue_name = tokens[3];
             std::string atom_name = tokens[4];
             double charge = std::stod(tokens[6]);
-            double mass = std::stod(tokens[7]);
+            double mass = (tokens.size() >= 8) ? std::stod(tokens[7]) : 0.0;  // Default mass if not provided
 
             // Adjust residue number based on segment index
             int adjusted_resnum = residue_number + (segment_index * max_resnum);
