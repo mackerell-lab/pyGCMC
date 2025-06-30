@@ -66,6 +66,14 @@ from pdbParser.residue_comparison import (
     test_4wp7_residue_statistics_comparison
 )
 
+# Enhanced 4wp7 tests
+from pdbParser.enhanced_4wp7_tests import (
+    test_4wp7_molecule_integrity,
+    test_4wp7_crystal_cell_parsing,
+    test_4wp7_protein_structure_analysis,
+    test_4wp7_chemical_composition
+)
+
 # Support direct execution for testing
 if __name__ == "__main__":
     import pytest
