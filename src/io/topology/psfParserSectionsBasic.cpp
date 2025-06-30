@@ -278,5 +278,10 @@ bool PSFParserSectionsBasic::parse_dihedrals_from_lines(const std::vector<std::s
     return true;
 }
 
+bool PSFParserSectionsBasic::parse_dihedrals_from_lines(const std::vector<std::string>& dihedral_lines,
+                                                       model::Topology& topology) {
+    return parse_dihedrals_from_lines(dihedral_lines, topology, "");
+}
+
 } // namespace io
 } // namespace pygcmc

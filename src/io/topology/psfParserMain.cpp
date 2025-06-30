@@ -109,7 +109,7 @@ bool PSFParser::parse_to_topology(const std::string& filename, model::Topology& 
     }
 
     // Now process sections in the required order
-    // NATOM must be present
+    // NATOM must be first
     if (!sections.count("NATOM")) {
         std::cerr << "Missing required NATOM section" << std::endl;
         return false;
@@ -121,59 +121,36 @@ bool PSFParser::parse_to_topology(const std::string& filename, model::Topology& 
     }
 
     // Process optional sections in order
-    if (sections.count("NBOND")) {
-        if (!PSFParserSections::parse_bonds_from_lines(sections["NBOND"], topology)) {
-            std::cerr << "Failed to parse NBOND section" << std::endl;
-            return false;
-        }
-    }
+    const std::vector<std::string> optional_sections = {
+        "NBOND", "NTHETA", "NPHI", "NIMPHI", "CMAP", "NGRP", "NDON", "NACC"
+    };
 
-    if (sections.count("NTHETA")) {
-        if (!PSFParserSections::parse_angles_from_lines(sections["NTHETA"], topology)) {
-            std::cerr << "Failed to parse NTHETA section" << std::endl;
-            return false;
-        }
-    }
+    for (const auto& section : optional_sections) {
+        if (sections.count(section)) {
+            bool success = false;
 
-    if (sections.count("NPHI")) {
-        if (!PSFParserSections::parse_dihedrals_from_lines(sections["NPHI"], topology, "NPHI")) {
-            std::cerr << "Failed to parse NPHI section" << std::endl;
-            return false;
-        }
-    }
+            if (section == "NBOND") {
+                success = PSFParserSections::parse_bonds_from_lines(sections[section], topology);
+            } else if (section == "NTHETA") {
+                success = PSFParserSections::parse_angles_from_lines(sections[section], topology);
+            } else if (section == "NPHI") {
+                success = PSFParserSections::parse_dihedrals_from_lines(sections[section], topology);
+            } else if (section == "NIMPHI") {
+                success = PSFParserSections::parse_impropers_from_lines(sections[section], topology);
+            } else if (section == "CMAP") {
+                success = PSFParserSections::parse_cmap_from_lines(sections[section], topology);
+            } else if (section == "NGRP") {
+                success = PSFParserSections::parse_groups_from_lines(sections[section], topology);
+            } else if (section == "NDON") {
+                success = PSFParserSections::parse_donors_from_lines(sections[section], topology);
+            } else if (section == "NACC") {
+                success = PSFParserSections::parse_acceptors_from_lines(sections[section], topology);
+            }
 
-    if (sections.count("NIMPHI")) {
-        if (!PSFParserSections::parse_impropers_from_lines(sections["NIMPHI"], topology)) {
-            std::cerr << "Failed to parse NIMPHI section" << std::endl;
-            return false;
-        }
-    }
-
-    if (sections.count("NDON")) {
-        if (!PSFParserSections::parse_donors_from_lines(sections["NDON"], topology)) {
-            std::cerr << "Failed to parse NDON section" << std::endl;
-            return false;
-        }
-    }
-
-    if (sections.count("NACC")) {
-        if (!PSFParserSections::parse_acceptors_from_lines(sections["NACC"], topology)) {
-            std::cerr << "Failed to parse NACC section" << std::endl;
-            return false;
-        }
-    }
-
-    if (sections.count("CMAP")) {
-        if (!PSFParserSections::parse_cmap_from_lines(sections["CMAP"], topology)) {
-            std::cerr << "Failed to parse CMAP section" << std::endl;
-            return false;
-        }
-    }
-
-    if (sections.count("NGRP")) {
-        if (!PSFParserSections::parse_groups_from_lines(sections["NGRP"], topology)) {
-            std::cerr << "Failed to parse NGRP section" << std::endl;
-            return false;
+            if (!success) {
+                std::cerr << "Failed to parse " << section << " section" << std::endl;
+                return false;
+            }
         }
     }
 

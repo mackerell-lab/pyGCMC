@@ -37,6 +37,12 @@ public:
     static bool parse_dihedrals_from_lines(const std::vector<std::string>& dihedral_lines,
                                          model::Topology& topology, 
                                          const std::string& section_name);
+    
+    /**
+     * Parse dihedrals section from PSF lines (original 2-parameter version)
+     */
+    static bool parse_dihedrals_from_lines(const std::vector<std::string>& dihedral_lines,
+                                         model::Topology& topology);
 };
 
 } // namespace io
