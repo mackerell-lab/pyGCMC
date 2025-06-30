@@ -56,11 +56,14 @@ from pdbParser.gcmc_systems import (
 )
 
 # Comparison validation with direct Python parsing
-from pdbParser.comparison_validation import (
+from pdbParser.comparison_tests import (
     test_4wp7_direct_vs_pygcmc_parsing,
-    test_4wp7_residue_statistics_comparison,
     test_4wp7_coordinate_ranges_comparison,
     test_specific_atom_verification
+)
+# Residue-level comparison testing
+from pdbParser.residue_comparison import (
+    test_4wp7_residue_statistics_comparison
 )
 
 # Support direct execution for testing
