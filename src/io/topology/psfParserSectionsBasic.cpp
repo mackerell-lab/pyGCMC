@@ -6,12 +6,24 @@
 #include <iostream>
 #include <algorithm>
 
+namespace {
+    // Local trim function to match original behavior exactly
+    std::string trim(const std::string& str) {
+        const auto start = str.find_first_not_of(" \t\r\n");
+        if (start == std::string::npos) {
+            return "";
+        }
+        const auto end = str.find_last_not_of(" \t\r\n");
+        return str.substr(start, end - start + 1);
+    }
+}
+
 namespace pygcmc {
 namespace io {
 
 bool PSFParserSectionsBasic::parse_title_from_lines(const std::vector<std::string>& lines, size_t& current_line, model::Topology& topology) {
     // Parse number of titles from the current line
-    std::istringstream iss(PSFParserStringUtils::trim(lines[current_line]));
+    std::istringstream iss(trim(lines[current_line]));
     int num_titles = 0;
     if (!(iss >> num_titles)) {
         std::cerr << "Failed to parse number of title lines" << std::endl;
@@ -34,7 +46,7 @@ bool PSFParserSectionsBasic::parse_title_from_lines(const std::vector<std::strin
 
 bool PSFParserSectionsBasic::parse_atoms_from_lines(const std::vector<std::string>& lines, model::Topology& topology) {
     // Parse number of atoms from the first line (header)
-    std::istringstream iss(PSFParserStringUtils::trim(lines[0]));  // Always use first line as header
+    std::istringstream iss(trim(lines[0]));  // Always use first line as header
     int num_atoms = 0;
     std::string marker;  // For "!NATOM" marker
     
@@ -56,7 +68,7 @@ bool PSFParserSectionsBasic::parse_atoms_from_lines(const std::vector<std::strin
     // Start from line 1 (after header) and read atom lines
     int atoms_read = 0;
     for (size_t i = 1; i < lines.size() && atoms_read < num_atoms; ++i) {
-        std::string line = PSFParserStringUtils::trim(lines[i]);
+        std::string line = trim(lines[i]);
         if (line.empty()) continue;
 
         std::istringstream iss(line);
@@ -117,7 +129,7 @@ bool PSFParserSectionsBasic::parse_atoms_from_lines(const std::vector<std::strin
 
 bool PSFParserSectionsBasic::parse_bonds_from_lines(const std::vector<std::string>& lines, model::Topology& topology) {
     // Parse number of bonds from the first line
-    std::istringstream iss(PSFParserStringUtils::trim(lines[0]));
+    std::istringstream iss(trim(lines[0]));
     int num_bonds = 0;
     std::string marker;  // For "!NBOND" marker
     
@@ -141,7 +153,7 @@ bool PSFParserSectionsBasic::parse_bonds_from_lines(const std::vector<std::strin
     bond_indices.reserve(num_bonds * 2);
 
     for (size_t i = 1; i < lines.size(); ++i) {
-        std::string line = PSFParserStringUtils::trim(lines[i]);
+        std::string line = trim(lines[i]);
         // Skip lines that look like section headers
         if (line.find('!') != std::string::npos) {
             continue;
@@ -174,7 +186,7 @@ bool PSFParserSectionsBasic::parse_bonds_from_lines(const std::vector<std::strin
 
 bool PSFParserSectionsBasic::parse_angles_from_lines(const std::vector<std::string>& lines, model::Topology& topology) {
     // Parse number of angles from the first line
-    std::istringstream iss(PSFParserStringUtils::trim(lines[0]));
+    std::istringstream iss(trim(lines[0]));
     int num_angles = 0;
     if (!(iss >> num_angles)) {
         std::cerr << "Failed to parse number of angles" << std::endl;
@@ -191,7 +203,7 @@ bool PSFParserSectionsBasic::parse_angles_from_lines(const std::vector<std::stri
     angle_indices.reserve(num_angles * 3);
 
     for (size_t i = 1; i < lines.size(); ++i) {
-        std::string line = PSFParserStringUtils::trim(lines[i]);
+        std::string line = trim(lines[i]);
         std::istringstream iss(line);
         int idx;
         while (iss >> idx) {
@@ -230,7 +242,7 @@ bool PSFParserSectionsBasic::parse_dihedrals_from_lines(const std::vector<std::s
     }
 
     // The first line should contain the number of dihedrals
-    std::istringstream iss(PSFParserStringUtils::trim(dihedral_lines[0]));
+    std::istringstream iss(trim(dihedral_lines[0]));
     int num_dihedrals = 0;
     if (!(iss >> num_dihedrals)) {
         std::cerr << "Failed to parse dihedral count from line: " << dihedral_lines[0] << std::endl;
@@ -248,7 +260,7 @@ bool PSFParserSectionsBasic::parse_dihedrals_from_lines(const std::vector<std::s
 
     // Begin from line 1 because line 0 is the count
     for (size_t line_idx = 1; line_idx < dihedral_lines.size(); ++line_idx) {
-        std::istringstream iss_line(PSFParserStringUtils::trim(dihedral_lines[line_idx]));
+        std::istringstream iss_line(trim(dihedral_lines[line_idx]));
         int atom_idx;
         while (iss_line >> atom_idx) {
             if (atom_idx == 0) continue;  // Skip fillers

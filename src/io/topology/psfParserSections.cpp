@@ -7,11 +7,23 @@
 #include <array>
 #include <algorithm>
 
+namespace {
+    // Local trim function to match original behavior exactly
+    std::string trim(const std::string& str) {
+        const auto start = str.find_first_not_of(" \t\r\n");
+        if (start == std::string::npos) {
+            return "";
+        }
+        const auto end = str.find_last_not_of(" \t\r\n");
+        return str.substr(start, end - start + 1);
+    }
+}
+
 namespace pygcmc {
 namespace io {
 
 bool PSFParserSections::parse_impropers_from_lines(const std::vector<std::string>& lines, model::Topology& topology) {
-    std::istringstream iss(PSFParserStringUtils::trim(lines[0]));
+    std::istringstream iss(trim(lines[0]));
     int num_impropers = 0;
     if (!(iss >> num_impropers)) {
         std::cerr << "Failed to parse number of impropers" << std::endl;
@@ -27,7 +39,7 @@ bool PSFParserSections::parse_impropers_from_lines(const std::vector<std::string
     std::vector<int> tmp_indices;
 
     for (size_t i = 1; i < lines.size(); ++i) {
-        std::string line = PSFParserStringUtils::trim(lines[i]);
+        std::string line = trim(lines[i]);
         std::istringstream iss_line(line);
         int idx;
         while (iss_line >> idx) {
@@ -53,7 +65,7 @@ bool PSFParserSections::parse_impropers_from_lines(const std::vector<std::string
 }
 
 bool PSFParserSections::parse_donors_from_lines(const std::vector<std::string>& lines, model::Topology& topology) {
-    std::istringstream iss(PSFParserStringUtils::trim(lines[0]));
+    std::istringstream iss(trim(lines[0]));
     size_t num_donors = 0;
     if (!(iss >> num_donors)) {
         std::cerr << "Failed to parse number of donors" << std::endl;
@@ -62,7 +74,7 @@ bool PSFParserSections::parse_donors_from_lines(const std::vector<std::string>& 
 
     size_t donors_parsed = 0;
     for (size_t i = 1; i < lines.size() && donors_parsed < num_donors; i++) {
-        std::string line = PSFParserStringUtils::trim(lines[i]);
+        std::string line = trim(lines[i]);
         std::istringstream iss_line(line);
         int donor_idx, hydrogen_idx;
         while (iss_line >> donor_idx >> hydrogen_idx) {
@@ -80,7 +92,7 @@ bool PSFParserSections::parse_donors_from_lines(const std::vector<std::string>& 
 }
 
 bool PSFParserSections::parse_acceptors_from_lines(const std::vector<std::string>& lines, model::Topology& topology) {
-    std::istringstream iss(PSFParserStringUtils::trim(lines[0]));
+    std::istringstream iss(trim(lines[0]));
     size_t num_acceptors = 0;
     if (!(iss >> num_acceptors)) {
         std::cerr << "Failed to parse number of acceptors" << std::endl;
@@ -89,7 +101,7 @@ bool PSFParserSections::parse_acceptors_from_lines(const std::vector<std::string
 
     size_t acceptors_parsed = 0;
     for (size_t i = 1; i < lines.size() && acceptors_parsed < num_acceptors; i++) {
-        std::string line = PSFParserStringUtils::trim(lines[i]);
+        std::string line = trim(lines[i]);
         std::istringstream iss_line(line);
         int acceptor_idx;
         while (iss_line >> acceptor_idx) {
@@ -106,7 +118,7 @@ bool PSFParserSections::parse_acceptors_from_lines(const std::vector<std::string
 }
 
 bool PSFParserSections::parse_cmap_from_lines(const std::vector<std::string>& lines, model::Topology& topology) {
-    std::istringstream iss(PSFParserStringUtils::trim(lines[0]));
+    std::istringstream iss(trim(lines[0]));
     size_t num_cmaps = 0;
     if (!(iss >> num_cmaps)) {
         std::cerr << "Failed to parse number of CMAP terms" << std::endl;
@@ -116,7 +128,7 @@ bool PSFParserSections::parse_cmap_from_lines(const std::vector<std::string>& li
     size_t cmaps_parsed = 0;
     std::vector<int> buffer;
     for (size_t i = 1; i < lines.size() && cmaps_parsed < num_cmaps; i++) {
-        std::string line = PSFParserStringUtils::trim(lines[i]);
+        std::string line = trim(lines[i]);
         std::istringstream iss_line(line);
         int idx;
         while (iss_line >> idx) {
@@ -138,7 +150,7 @@ bool PSFParserSections::parse_cmap_from_lines(const std::vector<std::string>& li
 }
 
 bool PSFParserSections::parse_groups_from_lines(const std::vector<std::string>& lines, model::Topology& topology) {
-    std::istringstream iss(PSFParserStringUtils::trim(lines[0]));
+    std::istringstream iss(trim(lines[0]));
     size_t num_groups = 0;
     if (!(iss >> num_groups)) {
         std::cerr << "Failed to parse number of groups" << std::endl;
@@ -150,7 +162,7 @@ bool PSFParserSections::parse_groups_from_lines(const std::vector<std::string>& 
     int current_group_id = 1;  // Start with group ID 1
 
     for (size_t i = 1; i < lines.size() && groups_parsed < num_groups; i++) {
-        std::string line = PSFParserStringUtils::trim(lines[i]);
+        std::string line = trim(lines[i]);
         std::istringstream iss_line(line);
         int idx;
         while (iss_line >> idx) {
