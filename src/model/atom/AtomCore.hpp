@@ -66,8 +66,8 @@ public:
 
     // Validation method
     bool is_valid() const {
-        return bynu > 0 && !type.empty() && !resname.empty() &&
-               ires > 0 && std::isfinite(mass) && std::isfinite(charge) &&
+        return bynu >= 0 && !type.empty() && !resname.empty() &&
+               ires >= 0 && std::isfinite(mass) && std::isfinite(charge) &&
                std::all_of(coor.begin(), coor.end(), 
                           [](double x) { return std::isfinite(x); }) &&
                std::isfinite(occupancy) && std::isfinite(tempfactor);
