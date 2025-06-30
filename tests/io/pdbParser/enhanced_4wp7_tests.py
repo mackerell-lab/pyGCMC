@@ -218,8 +218,8 @@ def test_4wp7_protein_structure_analysis():
     
     for res_key in sample_residues:
         atoms_in_residue = protein_residues[res_key]
-        atom_names = {atom.atom_name for atom in atoms_in_residue}
-        res_name = atoms_in_residue[0].residue_name
+        atom_names = {atom.atom_name() for atom in atoms_in_residue}
+        res_name = atoms_in_residue[0].residue_name()
         
         # All non-proline residues should have N, CA, C, O
         if res_name != "PRO":  # Proline has different N
