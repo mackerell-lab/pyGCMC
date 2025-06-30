@@ -139,6 +139,9 @@ private:
     std::vector<std::string> split(const std::string& str);
     std::string remove_comment(const std::string& line);  // New helper for comment handling
 
+    // 新增: 根据原子类型推断默认质量
+    static double default_mass_for_atom_type(const std::string& atom_type);
+
     // Internal state
     std::set<std::string> processed_files_;
     std::string current_molecule_type_;

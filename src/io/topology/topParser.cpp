@@ -651,32 +651,9 @@ bool TOPParser::parse_atoms_section(const std::vector<LineInfo>& lines, model::T
             std::string residue_name = tokens[3];
             std::string atom_name = tokens[4];
             double charge = std::stod(tokens[6]);
-            // Default mass based on atom type if not provided
-            double mass = 0.0;
-            if (tokens.size() >= 8) {
-                mass = std::stod(tokens[7]);
-            } else {
-                // Assign standard atomic masses based on atom type
-                if (atom_type.substr(0, 1) == "H") {
-                    mass = 1.008;   // Hydrogen
-                } else if (atom_type.substr(0, 1) == "C" || atom_type.substr(0, 2) == "CT" || atom_type.substr(0, 2) == "CA") {
-                    mass = 12.011;  // Carbon
-                } else if (atom_type.substr(0, 1) == "N" || atom_type.substr(0, 2) == "NH") {
-                    mass = 14.007;  // Nitrogen
-                } else if (atom_type.substr(0, 1) == "O" || atom_type.substr(0, 2) == "OT" || atom_type.substr(0, 2) == "OH") {
-                    mass = 15.999;  // Oxygen
-                } else if (atom_type.substr(0, 1) == "S") {
-                    mass = 32.065;  // Sulfur
-                } else if (atom_type.substr(0, 1) == "P") {
-                    mass = 30.974;  // Phosphorus
-                } else if (atom_type.substr(0, 1) == "L") {
-                    mass = 0.0;     // Lone pair virtual sites
-                } else if (atom_type.substr(0, 1) == "D") {
-                    mass = 0.4;     // Drude oscillator particles
-                } else {
-                    mass = 1.0;     // Generic fallback for unknown types
-                }
-            }
+            // Use explicit mass if present; otherwise infer default
+            double mass = (tokens.size() >= 8) ? std::stod(tokens[7])
+                                              : default_mass_for_atom_type(atom_type);
 
             // Adjust residue number based on segment index
             int adjusted_resnum = residue_number + (segment_index * max_resnum);
@@ -949,6 +926,47 @@ bool TOPParser::parse_cmaps_section(const std::vector<LineInfo>& lines, model::T
         }
     }
     return true;
+}
+
+// 新增: 根据原子类型推断默认质量
+double TOPParser::default_mass_for_atom_type(const std::string& atom_type) {
+    auto starts_with = [](const std::string& s, const std::string& prefix) {
+        return s.rfind(prefix, 0) == 0;
+    };
+
+    if (atom_type.empty()) {
+        return 1.0; // fallback
+    }
+
+    switch (atom_type[0]) {
+        case 'H':
+            return 1.008; // Hydrogen
+        case 'C':
+            if (starts_with(atom_type, "CT") || starts_with(atom_type, "CA")) {
+                return 12.011;
+            }
+            return 12.011; // Carbon
+        case 'N':
+            if (starts_with(atom_type, "NH")) {
+                return 14.007;
+            }
+            return 14.007; // Nitrogen
+        case 'O':
+            if (starts_with(atom_type, "OT") || starts_with(atom_type, "OH")) {
+                return 15.999;
+            }
+            return 15.999; // Oxygen
+        case 'S':
+            return 32.065; // Sulfur
+        case 'P':
+            return 30.974; // Phosphorus
+        case 'L':
+            return 0.0;    // Lone pair virtual sites
+        case 'D':
+            return 0.4;    // Drude oscillator particles
+        default:
+            return 1.0;    // Generic fallback for unknown types
+    }
 }
 
 } // namespace io
