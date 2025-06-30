@@ -2,18 +2,22 @@
 """
 TOP Parser tests for GCMC systems - focusing on 4wp7 topology parsing.
 
-IMPORTANT LIMITATION DISCOVERED:
-The current TOP parser has partial functionality:
-✅ WORKS: Processes #include directives for small molecules (.itp files)
-✅ WORKS: Considers [ molecules ] section for protein and small molecules
-❌ FAILS: Cannot process water molecules (tip3p.itp)
+PARSER ENHANCEMENT COMPLETED:
+The TOP parser now handles preprocessor directives (#ifdef, #endif) with default CHARMM support:
+
+✅ WORKS: Processes #include directives for all molecule types (.itp files)
+✅ WORKS: Considers [ molecules ] section for complete system composition
+✅ WORKS: Processes water molecules via _FF_CHARMM preprocessor support in tip3p.itp
+✅ WORKS: Handles 7-token atom format in tip3p.itp (vs 8-token format in other files)
+
+SOLUTION IMPLEMENTED: Added default _FF_CHARMM define and flexible atom parsing
+- pp_state.defines["_FF_CHARMM"] = "1" enables CHARMM-specific sections
+- Modified atom parsing to handle both 7-token and 8-token formats
+- Result: Complete system parsing with all components
 
 Expected vs Actual for 4wp7:
-- Expected: ~218k atoms (protein 30k + water 171k + small molecules 17k)  
-- Actual:   ~50k atoms (protein 30k + small molecules 20k, but NO water)
-
-This means the parser only reads the protein topology template, not the full GCMC system.
-Future development should enhance the parser to handle complete TOP file specifications.
+- Expected: ~218k atoms (protein 30k + water 171k + small molecules 17k)
+- Actual:   ~221k atoms (complete system successfully parsed)
 """
 
 import pytest
@@ -28,7 +32,7 @@ TEST_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__f
 
 
 def test_parse_4wp7_gcmc_topology():
-    """Test parsing 4wp7 TOP file - LIMITATION: parser only reads first moleculetype, ignores includes and [ molecules ]."""
+    """Test parsing 4wp7 TOP file - complete system parsing including water molecules."""
     top_path = os.path.join(TEST_DATA_DIR, "4wp7", "4wp7_fixed_with_5l13_silcs.1.gc.74.top")
     
     # Skip test if file doesn't exist
@@ -42,64 +46,77 @@ def test_parse_4wp7_gcmc_topology():
     success = parser.parse_to_topology(top_path, topology)
     assert success, "Failed to parse 4wp7 TOP file"
     
-    # Verify protein chain topology (parser only reads single molecule template)
-    # Expected: ~30k atoms (single protein chain from [ atoms ] section)
+    # Verify parser reads complete system (protein + small molecules + water)
+    # Expected: ~218k atoms (protein 30k + small molecules 17k + water 171k)
     total_atoms = topology.get_num_atoms()
-    assert 28000 <= total_atoms <= 32000, f"Expected 28k-32k atoms for single protein chain, got {total_atoms}"
+    assert 200000 <= total_atoms <= 230000, f"Expected 200k-230k atoms (complete system), got {total_atoms}"
     
-    # Expected: ~494 residues (protein residues from resid 8 to 501)
+    # Expected: ~60k residues (protein 494 + small molecules 2176 + water 57077)
     total_residues = topology.get_num_residues()
-    assert 480 <= total_residues <= 510, f"Expected ~494 protein residues, got {total_residues}"
+    assert 55000 <= total_residues <= 65000, f"Expected ~60k residues (complete system), got {total_residues}"
     
     # Single protein chain system
     total_segments = topology.get_num_segments()
     assert total_segments >= 1, f"Expected at least 1 segment for protein, got {total_segments}"
     
-    # Verify protein connectivity (actual measured values)
-    # Bonds: ~31k, Angles: ~56k, Dihedrals: ~82k
+    # Verify connectivity for protein + small molecules (but NO water)
     bonds = topology.get_num_bonds()
     angles = topology.get_num_angles() 
     dihedrals = topology.get_num_dihedrals()
     
-    assert 28000 <= bonds <= 35000, f"Expected 28k-35k bonds for protein chain, got {bonds}"
-    assert 50000 <= angles <= 65000, f"Expected 50k-65k angles for protein chain, got {angles}"
-    assert 75000 <= dihedrals <= 90000, f"Expected 75k-90k dihedrals for protein chain, got {dihedrals}"
+    # Based on actual measurement: protein ~31k + small molecules ~20k bonds
+    assert 45000 <= bonds <= 55000, f"Expected 45k-55k bonds (protein + small molecules), got {bonds}"
+    assert 70000 <= angles <= 85000, f"Expected 70k-85k angles (protein + small molecules), got {angles}"  
+    assert 100000 <= dihedrals <= 120000, f"Expected 100k-120k dihedrals (protein + small molecules), got {dihedrals}"
     
-    # Verify all residues are protein residues (no water/small molecules)
+    # Verify we have both protein residues AND small molecules (but NO water)
     protein_residue_names = {"ALA", "ARG", "ASN", "ASP", "GLN", "GLU", "GLY", "HIS", "ILE",
                            "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL", "HSD"}
     
+    gcmc_molecules = {"BENX", "PRPX", "DMEE", "MEOH", "FORM", "IMIA", "ACEY", "MAMY"}
+    
     protein_residues = 0
-    non_protein_residues = 0
+    gcmc_residues = 0
+    water_residues = 0
     asp_residues = 0
     
     for i in range(topology.get_num_residues()):
         residue = topology.get_residue(i)
-        if residue.name in protein_residue_names:
+        res_name = residue.name
+        
+        if res_name in protein_residue_names:
             protein_residues += 1
-            if residue.name == "ASP":
+            if res_name == "ASP":
                 asp_residues += 1
-        else:
-            non_protein_residues += 1
+        elif res_name in gcmc_molecules:
+            gcmc_residues += 1
+        elif res_name == "SOL":
+            water_residues += 1
     
-    # All residues should be protein residues
-    assert protein_residues == total_residues, \
-        f"Expected all {total_residues} residues to be protein, found {protein_residues} protein + {non_protein_residues} non-protein"
+    # Should have protein residues (~494)
+    assert 450 <= protein_residues <= 550, f"Expected ~494 protein residues, found {protein_residues}"
+    
+    # Should have GCMC small molecules (~2176) 
+    assert 2000 <= gcmc_residues <= 2300, f"Expected ~2176 GCMC molecules, found {gcmc_residues}"
     
     # Should find multiple ASP residues in the protein
-    assert asp_residues >= 5, f"Expected multiple ASP residues in protein chain, found {asp_residues}"
+    assert asp_residues >= 20, f"Expected multiple ASP residues in protein chain, found {asp_residues}"
     
-    # Verify no GCMC molecules or water (parser only reads protein template)
-    gcmc_molecules = {"BENX", "PRPX", "DMEE", "MEOH", "FORM", "IMIA", "ACEY", "MAMY", "SOL"}
-    found_gcmc = set()
+    # Should have water molecules (~57077)
+    assert 50000 <= water_residues <= 60000, \
+        f"Expected ~57k water molecules, found {water_residues}"
     
+    # Verify specific GCMC molecules are present
+    found_gcmc_types = set()
     for i in range(topology.get_num_residues()):
         residue = topology.get_residue(i)
         if residue.name in gcmc_molecules:
-            found_gcmc.add(residue.name)
+            found_gcmc_types.add(residue.name)
     
-    assert len(found_gcmc) == 0, \
-        f"TOP parser should only read protein template, but found: {found_gcmc}"
+    assert len(found_gcmc_types) >= 7, \
+        f"Expected most GCMC molecule types, found {len(found_gcmc_types)}: {found_gcmc_types}"
+        
+    print(f"✓ Parser successfully reads complete system: {protein_residues} protein + {gcmc_residues} GCMC + {water_residues} water")
 
 
 def test_4wp7_topology_atom_types():
@@ -184,12 +201,12 @@ def test_4wp7_force_field_includes():
     assert "charmm36" in content.lower(), "Should reference CHARMM36 force field"
     assert "#include" in content, "Should have include directives"
     
-    # Check for proper moleculetype definition
-    assert "[moleculetype]" in content, "Should have moleculetype section"
+    # Check for proper moleculetype definition (allow space variations)
+    assert "[ moleculetype ]" in content or "[moleculetype]" in content, "Should have moleculetype section"
     assert "Protein_chain_P" in content, "Should define protein chain molecule type"
     
-    # Should have atoms section
-    assert "[atoms]" in content, "Should have atoms section"
+    # Should have atoms section (allow space variations)
+    assert "[ atoms ]" in content or "[atoms]" in content, "Should have atoms section"
     
     # Verify file structure includes key sections
     required_sections = ["moleculetype", "atoms"]
@@ -257,7 +274,7 @@ def test_4wp7_parser_limitations():
         print(f"PARSER ENHANCED: Now reading complete system ({total_atoms} atoms, {total_residues} residues)")
         
         # When parser is enhanced, verify complete system
-        expected_total_atoms = 200000  # Protein 30k + water 171k + small molecules 17k
+        expected_total_atoms = 220000  # Protein 30k + water 171k + small molecules 17k (actual ~221k)
         expected_total_residues = 60000  # Protein 494 + water 57k + small molecules 2.4k
         
         assert expected_total_atoms * 0.9 <= total_atoms <= expected_total_atoms * 1.1, \

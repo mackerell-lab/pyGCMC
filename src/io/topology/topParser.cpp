@@ -651,7 +651,32 @@ bool TOPParser::parse_atoms_section(const std::vector<LineInfo>& lines, model::T
             std::string residue_name = tokens[3];
             std::string atom_name = tokens[4];
             double charge = std::stod(tokens[6]);
-            double mass = (tokens.size() >= 8) ? std::stod(tokens[7]) : 0.0;  // Default mass if not provided
+            // Default mass based on atom type if not provided
+            double mass = 0.0;
+            if (tokens.size() >= 8) {
+                mass = std::stod(tokens[7]);
+            } else {
+                // Assign standard atomic masses based on atom type
+                if (atom_type.substr(0, 1) == "H") {
+                    mass = 1.008;   // Hydrogen
+                } else if (atom_type.substr(0, 1) == "C" || atom_type.substr(0, 2) == "CT" || atom_type.substr(0, 2) == "CA") {
+                    mass = 12.011;  // Carbon
+                } else if (atom_type.substr(0, 1) == "N" || atom_type.substr(0, 2) == "NH") {
+                    mass = 14.007;  // Nitrogen
+                } else if (atom_type.substr(0, 1) == "O" || atom_type.substr(0, 2) == "OT" || atom_type.substr(0, 2) == "OH") {
+                    mass = 15.999;  // Oxygen
+                } else if (atom_type.substr(0, 1) == "S") {
+                    mass = 32.065;  // Sulfur
+                } else if (atom_type.substr(0, 1) == "P") {
+                    mass = 30.974;  // Phosphorus
+                } else if (atom_type.substr(0, 1) == "L") {
+                    mass = 0.0;     // Lone pair virtual sites
+                } else if (atom_type.substr(0, 1) == "D") {
+                    mass = 0.4;     // Drude oscillator particles
+                } else {
+                    mass = 1.0;     // Generic fallback for unknown types
+                }
+            }
 
             // Adjust residue number based on segment index
             int adjusted_resnum = residue_number + (segment_index * max_resnum);
