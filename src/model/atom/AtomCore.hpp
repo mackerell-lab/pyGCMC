@@ -149,7 +149,7 @@ public:
     void set_hetatm(bool het) { hetatm = het; }
     
     void set_bynu(int num) {
-        if (num <= 0) throw std::invalid_argument("Invalid atom number");
+        if (num < 0) throw std::invalid_argument("Invalid atom number");
         bynu = num;
     }
 
