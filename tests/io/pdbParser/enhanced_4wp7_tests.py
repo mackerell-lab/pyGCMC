@@ -46,25 +46,21 @@ def test_4wp7_molecule_integrity():
         "FORM": {"atoms_per_molecule": 6, "description": "Formamide"}
     }
     
-    # Count atoms per residue type
+    # Count atoms per residue - now using actual residue objects from parser
     residue_atom_counts = {}
     residue_instances = {}
     
-    for atom in result.atoms:
-        res_name = atom.get_resname()
-        res_num = atom.get_ires()
-        
-        # Create unique residue identifier
-        res_id = f"{res_name}_{res_num}"
-        
+    # Use the residue objects from the parser instead of counting atoms manually
+    for residue in result.residues:
+        res_name = residue.get_resname()
         if res_name in expected_gcmc_molecules or res_name == "SOL":
-            if res_id not in residue_atom_counts:
-                residue_atom_counts[res_id] = 1
-                if res_name not in residue_instances:
-                    residue_instances[res_name] = []
-                residue_instances[res_name].append(res_id)
-            else:
-                residue_atom_counts[res_id] += 1
+            atom_count = residue.atom_count()
+            res_id = f"{res_name}_{residue.get_ires()}_{id(residue)}"  # Include object ID to make unique
+            
+            residue_atom_counts[res_id] = atom_count
+            if res_name not in residue_instances:
+                residue_instances[res_name] = []
+            residue_instances[res_name].append(res_id)
     
     # Verify GCMC molecule structures
     for mol_name, expected_info in expected_gcmc_molecules.items():
@@ -192,9 +188,9 @@ def test_4wp7_protein_structure_analysis():
     
     # Collect protein atoms and residues
     for atom in result.atoms:
-        if atom.residue_name in standard_amino_acids or atom.residue_name in special_residues:
+        if atom.residue_name() in standard_amino_acids or atom.residue_name() in special_residues:
             protein_atoms.append(atom)
-            res_key = f"{atom.residue_name}_{atom.residue_number}"
+            res_key = f"{atom.residue_name()}_{atom.residue_number()}"
             if res_key not in protein_residues:
                 protein_residues[res_key] = []
             protein_residues[res_key].append(atom)
@@ -202,7 +198,7 @@ def test_4wp7_protein_structure_analysis():
     assert len(protein_atoms) > 28000, f"Expected >28k protein atoms, got {len(protein_atoms)}"
     
     # Verify protein residue sequence continuity
-    residue_numbers = sorted(set(atom.residue_number for atom in protein_atoms))
+    residue_numbers = sorted(set(atom.residue_number() for atom in protein_atoms))
     
     # Check for reasonable sequence continuity (allowing some gaps)
     min_res = min(residue_numbers)
@@ -269,7 +265,7 @@ def test_4wp7_chemical_composition():
     
     for atom in result.atoms:
         # Extract element from atom name (last character usually indicates element)
-        atom_name = atom.atom_name.strip()
+        atom_name = atom.atom_name().strip()
         
         # Determine element from atom name
         if atom_name.startswith(('C', 'CA', 'CB', 'CG', 'CD', 'CE', 'CZ')):

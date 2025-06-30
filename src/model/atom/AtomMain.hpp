@@ -88,6 +88,19 @@ public:
         return type;
     }
 
+    // Additional convenience properties for enhanced test compatibility
+    std::string atom_name() const {
+        return type;
+    }
+
+    std::string residue_name() const {
+        return resname;
+    }
+
+    int residue_number() const {
+        return ires;
+    }
+
     std::string get_residue_id() const {
         // Combine residue number and insertion code (e.g., "153A")
         if (inscode == ' ') {

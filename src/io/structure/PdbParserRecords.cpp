@@ -4,6 +4,8 @@
 #include <sstream>
 #include <stdexcept>
 #include <iostream>
+#include <cmath>
+#include <set>
 
 namespace pygcmc {
 namespace io {
@@ -77,11 +79,30 @@ bool PdbParserRecords::parseAtomRecord(const std::string& line,
         // Create residue if needed
         char chainChar = chainId.empty() ? ' ' : chainId[0];
         char iCodeChar = iCode.empty() ? ' ' : iCode[0];
+        
+        bool needNewResidue = false;
+        
+        // Standard residue identification criteria
         if (!currentResidue || currentResidue->get_resname() != resName || 
             currentResidue->get_chain() != chainChar || 
             currentResidue->get_ires() != resSeq || 
             currentResidue->get_inscode() != iCodeChar) {
-            
+            needNewResidue = true;
+        }
+        // Additional continuity check for small molecules - non-consecutive atoms = different molecules
+        else if (isSmallMolecule(resName) && currentResidue->atom_count() > 0) {
+            // Get the last atom's serial number from current residue
+            const auto& atoms = currentResidue->get_atoms();
+            if (!atoms.empty()) {
+                int lastSerialNum = atoms.back()->get_bynu();
+                // If current atom serial number is not consecutive, it's a different molecule
+                if (serialNum != lastSerialNum + 1) {
+                    needNewResidue = true;
+                }
+            }
+        }
+        
+        if (needNewResidue) {
             if (currentResidue) {
                 currentResidue->calculate_center_of_mass();
             }
@@ -328,6 +349,27 @@ bool PdbParserRecords::parseCryst1Record(const std::string& line, model::Structu
         std::cerr << "Error parsing CRYST1 record: " << e.what() << std::endl;
         return false;
     }
+}
+
+bool PdbParserRecords::isSmallMolecule(const std::string& resName) {
+    // Common GCMC molecules and small molecules that should use continuity checking
+    static const std::set<std::string> smallMolecules = {
+        // GCMC molecules from 4wp7 system
+        "ACEY", "BENX", "DMEE", "FORM", "IMIA", "MAMY", "MEOH", "PRPX",
+        // Common water and ions
+        "SOL", "HOH", "WAT", "TIP", "TIP3", "SPC", "SPCE",
+        "NA", "CL", "K", "CA", "MG", "ZN", "FE", "CU",
+        "NA+", "CL-", "K+", "CA2+", "MG2+", "ZN2+", "FE2+", "FE3+", "CU2+",
+        // Common small molecules and ligands
+        "ATP", "ADP", "AMP", "GTP", "GDP", "GMP", "NAD", "FAD", "FMN",
+        "HEM", "CHL", "BCL", "PHE", "TYR", "TRP", "HIS", "ARG", "LYS",
+        // Organic solvents
+        "DMSO", "ACE", "MOH", "EOH", "CHX", "DCM", "TCE", "TOL", "BEN",
+        // Gases
+        "CO2", "O2", "N2", "H2", "CO", "NH3", "CH4", "H2S", "SO2"
+    };
+    
+    return smallMolecules.find(resName) != smallMolecules.end();
 }
 
 } // namespace structure

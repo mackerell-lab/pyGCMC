@@ -71,6 +71,14 @@ public:
      * @return bool True if parsing succeeded
      */
     static bool parseCryst1Record(const std::string& line, model::Structure& structure);
+
+private:
+    /**
+     * @brief Check if residue type is a small molecule that should use continuity checking
+     * @param resName Residue name
+     * @return bool True if should check atom serial number continuity
+     */
+    static bool isSmallMolecule(const std::string& resName);
 };
 
 } // namespace structure
