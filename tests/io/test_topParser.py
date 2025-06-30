@@ -53,7 +53,7 @@ from topParser.gcmc_systems import (
     test_parse_4wp7_gcmc_topology,
     test_4wp7_topology_atom_types,
     test_4wp7_force_field_includes,
-    test_4wp7_multiple_protein_chains
+    test_4wp7_parser_limitations
 )
 
 # Support direct execution for testing
