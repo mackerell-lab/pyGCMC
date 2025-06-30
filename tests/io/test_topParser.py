@@ -11,6 +11,7 @@ Modular structure:
 - topology_terms.py: Topology terms tests (3 functions)
 - error_handling.py: Error handling tests (2 functions)
 - gcmc_systems.py: GCMC system topology tests (4 functions)
+- enhanced_4wp7_tests.py: Enhanced 4wp7 analysis tests (5 functions)
 """
 
 import os
@@ -54,6 +55,15 @@ from topParser.gcmc_systems import (
     test_4wp7_topology_atom_types,
     test_4wp7_force_field_includes,
     test_4wp7_parser_limitations
+)
+
+# Enhanced 4wp7 tests
+from topParser.enhanced_4wp7_tests import (
+    test_4wp7_gcmc_molecules_detailed,
+    test_4wp7_topology_connectivity,
+    test_4wp7_preprocessor_directives,
+    test_4wp7_error_handling,
+    test_4wp7_water_structure_validation
 )
 
 # Support direct execution for testing
