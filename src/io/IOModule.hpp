@@ -6,7 +6,7 @@
 
 // Topology parsers  
 #include "topology/psfParser.hpp"
-#include "topology/topParser.hpp"
+#include "topology/topParserMain.hpp"
 
 // Force field parsers
 #include "forcefield/PrmParserMain.hpp"

@@ -1,6 +1,6 @@
-// src/io/topology/topParser.cpp
+// src/io/topology/topParserMain.cpp
 
-#include "topParser.hpp"
+#include "topParserMain.hpp"
 #include <fstream>
 #include <sstream>
 #include <algorithm>
