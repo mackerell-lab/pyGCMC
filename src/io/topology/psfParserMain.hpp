@@ -1,8 +1,8 @@
-// src/io/psfParser.hpp
+// src/io/topology/psfParserMain.hpp
 
 #pragma once
 
-#include "model/ModelModule.hpp"
+#include "../../model/ModelModule.hpp"
 #include <string>
 #include <vector>
 

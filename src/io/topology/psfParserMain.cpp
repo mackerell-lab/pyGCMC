@@ -1,0 +1,184 @@
+// src/io/topology/psfParserMain.cpp
+
+#include "psfParserMain.hpp"
+#include "psfParserStringUtils.hpp"
+#include "psfParserSections.hpp"
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <array>
+#include <algorithm>
+#include <iostream>
+#include <unordered_map>
+#include <set>
+#include <filesystem>
+
+namespace pygcmc {
+namespace io {
+
+model::Topology PSFParser::parse_file(const std::string& filename) {
+    model::Topology topology;
+    PSFParser parser;
+    if (!parser.parse_to_topology(filename, topology)) {
+        throw std::runtime_error("Failed to parse PSF file: " + filename);
+    }
+    return topology;
+}
+
+model::Topology PSFParser::parse_string(const std::string& psf_str) {
+    return PSFParserStringUtils::parse_string(psf_str);
+}
+
+// Helper function to read file lines
+bool readFileToLines(const std::string& filename, std::vector<std::string>& lines) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open file: " << filename << std::endl;
+        return false;
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        lines.push_back(line);
+    }
+
+    return true;
+}
+
+std::string PSFParser::trim(const std::string& str) {
+    return PSFParserStringUtils::trim(str);
+}
+
+bool PSFParser::parse_to_topology(const std::string& filename, model::Topology& topology) {
+    // Read all lines at once
+    std::vector<std::string> lines;
+    if (!readFileToLines(filename, lines)) {
+        return false;
+    }
+
+    // First, collect all sections
+    std::unordered_map<std::string, std::vector<std::string>> sections;
+    std::string current_section;
+    std::vector<std::string> current_lines;
+
+    for (const auto& line : lines) {
+        std::string trimmed = trim(line);
+        if (trimmed.empty()) continue;
+
+        // Check if this is a section header
+        if (trimmed.find('!') != std::string::npos) {
+            // Save previous section if any
+            if (!current_section.empty() && !current_lines.empty()) {
+                sections[current_section] = current_lines;
+            }
+
+            // Determine new section type
+            if (trimmed.find("!NATOM") != std::string::npos) {
+                current_section = "NATOM";
+            } else if (trimmed.find("!NBOND") != std::string::npos) {
+                current_section = "NBOND";
+            } else if (trimmed.find("!NTHETA") != std::string::npos) {
+                current_section = "NTHETA";
+            } else if (trimmed.find("!NPHI") != std::string::npos) {
+                current_section = "NPHI";
+            } else if (trimmed.find("!NIMPHI") != std::string::npos) {
+                current_section = "NIMPHI";
+            } else if (trimmed.find("!NCRTERM") != std::string::npos ||
+                      trimmed.find("!NCMAP") != std::string::npos) {
+                current_section = "CMAP";
+            } else if (trimmed.find("!NGRP") != std::string::npos) {
+                current_section = "NGRP";
+            } else if (trimmed.find("!NDON") != std::string::npos) {
+                current_section = "NDON";
+            } else if (trimmed.find("!NACC") != std::string::npos) {
+                current_section = "NACC";
+            } else {
+                current_section = "";  // Unknown section
+            }
+            current_lines.clear();
+            current_lines.push_back(trimmed);  // Include the header line
+        } else if (!current_section.empty()) {
+            // Add line to current section
+            current_lines.push_back(trimmed);
+        }
+    }
+
+    // Add the last section if any
+    if (!current_section.empty() && !current_lines.empty()) {
+        sections[current_section] = current_lines;
+    }
+
+    // Now process sections in the required order
+    // NATOM must be present
+    if (!sections.count("NATOM")) {
+        std::cerr << "Missing required NATOM section" << std::endl;
+        return false;
+    }
+
+    if (!PSFParserSections::parse_atoms_from_lines(sections["NATOM"], topology)) {
+        std::cerr << "Failed to parse NATOM section" << std::endl;
+        return false;
+    }
+
+    // Process optional sections in order
+    if (sections.count("NBOND")) {
+        if (!PSFParserSections::parse_bonds_from_lines(sections["NBOND"], topology)) {
+            std::cerr << "Failed to parse NBOND section" << std::endl;
+            return false;
+        }
+    }
+
+    if (sections.count("NTHETA")) {
+        if (!PSFParserSections::parse_angles_from_lines(sections["NTHETA"], topology)) {
+            std::cerr << "Failed to parse NTHETA section" << std::endl;
+            return false;
+        }
+    }
+
+    if (sections.count("NPHI")) {
+        if (!PSFParserSections::parse_dihedrals_from_lines(sections["NPHI"], topology, "NPHI")) {
+            std::cerr << "Failed to parse NPHI section" << std::endl;
+            return false;
+        }
+    }
+
+    if (sections.count("NIMPHI")) {
+        if (!PSFParserSections::parse_impropers_from_lines(sections["NIMPHI"], topology)) {
+            std::cerr << "Failed to parse NIMPHI section" << std::endl;
+            return false;
+        }
+    }
+
+    if (sections.count("NDON")) {
+        if (!PSFParserSections::parse_donors_from_lines(sections["NDON"], topology)) {
+            std::cerr << "Failed to parse NDON section" << std::endl;
+            return false;
+        }
+    }
+
+    if (sections.count("NACC")) {
+        if (!PSFParserSections::parse_acceptors_from_lines(sections["NACC"], topology)) {
+            std::cerr << "Failed to parse NACC section" << std::endl;
+            return false;
+        }
+    }
+
+    if (sections.count("CMAP")) {
+        if (!PSFParserSections::parse_cmap_from_lines(sections["CMAP"], topology)) {
+            std::cerr << "Failed to parse CMAP section" << std::endl;
+            return false;
+        }
+    }
+
+    if (sections.count("NGRP")) {
+        if (!PSFParserSections::parse_groups_from_lines(sections["NGRP"], topology)) {
+            std::cerr << "Failed to parse NGRP section" << std::endl;
+            return false;
+        }
+    }
+
+    return true;
+}
+
+} // namespace io
+} // namespace pygcmc

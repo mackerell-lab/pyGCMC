@@ -5,7 +5,7 @@
 #include "structure/PdbParserMain.hpp"
 
 // Topology parsers  
-#include "topology/psfParser.hpp"
+#include "topology/psfParserMain.hpp"
 #include "topology/topParserMain.hpp"
 
 // Force field parsers
