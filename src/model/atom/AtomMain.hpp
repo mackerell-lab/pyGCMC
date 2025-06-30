@@ -83,6 +83,11 @@ public:
         return format_pdb_atom_name(type);
     }
 
+    // Convenience method for get_name() to match common API expectations
+    std::string get_name() const {
+        return type;
+    }
+
     std::string get_residue_id() const {
         // Combine residue number and insertion code (e.g., "153A")
         if (inscode == ' ') {

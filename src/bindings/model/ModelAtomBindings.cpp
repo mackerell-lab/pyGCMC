@@ -37,6 +37,7 @@ void init_atom_bindings(py::module& m, py::module& model_module) {
         .def("get_segid", &::pygcmc::model::Atom::get_segid)
         .def("get_inscode", &::pygcmc::model::Atom::get_inscode)
         .def("get_formatted_atom_name", &::pygcmc::model::Atom::get_formatted_atom_name)
+        .def("get_name", &::pygcmc::model::Atom::get_name)
         .def("get_residue_id", &::pygcmc::model::Atom::get_residue_id)
         .def("get_mass", &::pygcmc::model::Atom::get_mass)
         .def("get_charge", &::pygcmc::model::Atom::get_charge)
