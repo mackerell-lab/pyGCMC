@@ -140,7 +140,7 @@ public:
     }
     
     void set_ires(int ir) { 
-        if (ir <= 0) throw std::invalid_argument("Invalid residue number");
+        if (ir < 0) throw std::invalid_argument("Invalid residue number");
         ires = ir; 
     }
     
