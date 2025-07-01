@@ -154,8 +154,9 @@ bool PSFParserSectionsBasic::parse_atoms_from_lines(const std::vector<std::strin
             try {
                 model::TopologyAtom& atom = topology.get_atom(atom_index);
                 atom.set_drude_params(alpha, thole);
-                std::cout << "Set alpha=" << alpha << " thole=" << thole 
-                          << " for atom " << atom_name << " (index " << atom_index << ")" << std::endl;
+                // Debug output disabled - uncomment if needed for debugging
+                // std::cout << "Set alpha=" << alpha << " thole=" << thole 
+                //           << " for atom " << atom_name << " (index " << atom_index << ")" << std::endl;
             } catch (const std::exception& e) {
                 std::cerr << "Failed to set Drude parameters for atom " << atom_index 
                           << ": " << e.what() << std::endl;
