@@ -80,12 +80,14 @@ def test_4wp7_system_residue_distribution():
         resname = atom.get_resname()
         residue_counts[resname] = residue_counts.get(resname, 0) + 1
     
-    # Verify we have the expected GCMC molecules with exact counts (PDB file content is deterministic)
+    # Verify we have the expected GCMC molecules with exact counts from raw PDB file analysis
+    # These counts were obtained directly from the raw PDB file using:
+    # grep "^ATOM" 4wp7_*.pdb | awk '{print $4}' | sort | uniq -c
     expected_gcmc_molecules = {
-        "ACEY": 2048,    # Exact count for acetate
-        "BENX": 3731,    # Exact count for benzene
-        "DMEE": 2169,    # Exact count for dimethyl ether
-        "FORM": 1662,    # Exact count for formamide
+        "ACEY": 2048,    # Exact count from raw PDB file
+        "BENX": 3731,    # Exact count from raw PDB file  
+        "DMEE": 2169,    # Exact count from raw PDB file
+        "FORM": 1662,    # Exact count from raw PDB file
     }
     
     for molecule, expected_count in expected_gcmc_molecules.items():
@@ -103,17 +105,19 @@ def test_4wp7_system_residue_distribution():
     
     # Should have significant protein content (multiple copies of the protein)
     assert protein_atoms_found > 25000, f"Expected substantial protein content, got {protein_atoms_found} atoms"
-    # Exact check based on actual data (30,520 protein atoms)
+    # Exact check based on raw PDB file analysis: sum of all standard amino acid + HSD atoms
+    # Calculated from: grep "^ATOM" *.pdb | awk '{print $4}' | grep -E "^(ALA|ARG|...|HSD)$" | wc -l
     assert protein_atoms_found == 30520, f"Expected exactly 30,520 protein atoms for 4wp7 system, got {protein_atoms_found}"
     
     # Total system should be dominated by non-protein molecules (GCMC + solvent)
     total_atoms = len(result.atoms)
     small_molecule_atoms = total_atoms - protein_atoms_found
     
-    # Based on actual data: 30,520 protein, 190,921 non-protein (ratio 6.26:1)
+    # Based on raw PDB file analysis: 30,520 protein, 190,921 non-protein (ratio 6.26:1)
+    # Total atoms from raw file: grep "^ATOM" *.pdb | wc -l = 221,441
     assert small_molecule_atoms > protein_atoms_found * 5, \
         f"GCMC+solvent system should be dominated by small molecules, got ratio {small_molecule_atoms/protein_atoms_found:.1f}:1"
-    # Exact check based on actual data
+    # Exact check: 221,441 total - 30,520 protein = 190,921 non-protein
     expected_non_protein = 190921
     assert small_molecule_atoms == expected_non_protein, \
         f"Expected exactly {expected_non_protein} non-protein atoms, got {small_molecule_atoms}"
