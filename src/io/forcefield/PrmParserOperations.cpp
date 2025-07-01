@@ -38,7 +38,15 @@ void PrmParserOperations::parseStream(std::istream& input, pygcmc::model::ForceF
         
         if (cleanLine.empty()) continue;
         
-        if (cleanLine == "END") {
+        // Skip topology lines from STR files
+        if (PrmParserStructures::isTopologyLine(cleanLine)) {
+            if (debug_output) std::cerr << "Skipping topology line: " << cleanLine << std::endl;
+            continue;
+        }
+        
+        // Note: In STR files, "end" may mark the end of topology section,
+        // not the end of the file. Continue parsing for parameter sections.
+        if (cleanLine == "END" || cleanLine == "end") {
             inSection = false;
             currentSection.clear();
             continue;
@@ -143,11 +151,19 @@ void PrmParserOperations::parseAtomsSection(std::istream& input, pygcmc::model::
         
         if (debug_output) std::cerr << "Processed line: [" << fullLine << "]" << std::endl;
         
+        // Skip topology lines from STR files
+        if (PrmParserStructures::isTopologyLine(fullLine)) {
+            if (debug_output) std::cerr << "Skipping topology line in atoms section: " << fullLine << std::endl;
+            continue;
+        }
+        
         // Check for section end
-        if (fullLine == "END" || PrmParserStructures::isBondsSection(fullLine) || PrmParserStructures::isAnglesSection(fullLine) || 
+        if (fullLine == "END" || fullLine == "end" || PrmParserStructures::isBondsSection(fullLine) || PrmParserStructures::isAnglesSection(fullLine) || 
             PrmParserStructures::isDihedralsSection(fullLine) || PrmParserStructures::isImproperSection(fullLine) || 
             PrmParserStructures::isNonbondedSection(fullLine) || PrmParserStructures::isNBFixSection(fullLine)) {
             if (debug_output) std::cerr << "Found section end marker: " << fullLine << std::endl;
+            // Note: For atoms section, we use the original line length, not fullLine
+            // because fullLine may be concatenated from multiple lines
             input.seekg(-static_cast<std::streamoff>(line.length() + 1), std::ios::cur);
             break;
         }
@@ -188,6 +204,9 @@ void PrmParserOperations::parseBondsSection(std::istream& input, pygcmc::model::
     while (std::getline(input, line)) {
         if (debug_output) std::cerr << "Raw bond line: [" << line << "]" << std::endl;
         
+        // Save original line length before any modifications
+        size_t originalLineLength = line.length();
+        
         if (PrmParserStructures::isCommentLine(line)) {
             if (debug_output) std::cerr << "Skipping comment line in bonds section" << std::endl;
             continue;
@@ -200,12 +219,18 @@ void PrmParserOperations::parseBondsSection(std::istream& input, pygcmc::model::
             continue;
         }
         
+        // Skip topology lines from STR files
+        if (PrmParserStructures::isTopologyLine(line)) {
+            if (debug_output) std::cerr << "Skipping topology line in bonds section: " << line << std::endl;
+            continue;
+        }
+        
         // Check for section end
-        if (line == "END" || PrmParserStructures::isAtomsSection(line) || PrmParserStructures::isAnglesSection(line) || 
+        if (line == "END" || line == "end" || PrmParserStructures::isAtomsSection(line) || PrmParserStructures::isAnglesSection(line) || 
             PrmParserStructures::isDihedralsSection(line) || PrmParserStructures::isImproperSection(line) || 
             PrmParserStructures::isNonbondedSection(line) || PrmParserStructures::isNBFixSection(line)) {
             if (debug_output) std::cerr << "Found section end marker in bonds: " << line << std::endl;
-            input.seekg(-static_cast<std::streamoff>(line.length() + 1), std::ios::cur);
+            input.seekg(-static_cast<std::streamoff>(originalLineLength + 1), std::ios::cur);
             break;
         }
         
@@ -250,6 +275,9 @@ void PrmParserOperations::parseAnglesSection(std::istream& input, pygcmc::model:
     while (std::getline(input, line)) {
         if (debug_output) std::cerr << "Raw angle line: [" << line << "]" << std::endl;
         
+        // Save original line length before any modifications
+        size_t originalLineLength = line.length();
+        
         if (PrmParserStructures::isCommentLine(line)) {
             if (debug_output) std::cerr << "Skipping comment line in angles section" << std::endl;
             continue;
@@ -259,11 +287,17 @@ void PrmParserOperations::parseAnglesSection(std::istream& input, pygcmc::model:
         line = PrmParserStructures::trim(line);
         if (line.empty()) continue;
         
+        // Skip topology lines from STR files
+        if (PrmParserStructures::isTopologyLine(line)) {
+            if (debug_output) std::cerr << "Skipping topology line in angles section: " << line << std::endl;
+            continue;
+        }
+        
         // Check for section end
-        if (line == "END" || PrmParserStructures::isAtomsSection(line) || PrmParserStructures::isBondsSection(line) || 
+        if (line == "END" || line == "end" || PrmParserStructures::isAtomsSection(line) || PrmParserStructures::isBondsSection(line) || 
             PrmParserStructures::isDihedralsSection(line) || PrmParserStructures::isImproperSection(line) || 
             PrmParserStructures::isNonbondedSection(line) || PrmParserStructures::isNBFixSection(line)) {
-            input.seekg(-static_cast<std::streamoff>(line.length() + 1), std::ios::cur);
+            input.seekg(-static_cast<std::streamoff>(originalLineLength + 1), std::ios::cur);
             break;
         }
         

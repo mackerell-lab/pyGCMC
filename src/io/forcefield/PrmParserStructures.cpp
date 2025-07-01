@@ -169,5 +169,82 @@ std::tuple<std::string, std::string, std::string, std::string> PrmParserStructur
     return std::make_tuple(type1, type2, type3, type4);
 }
 
+bool PrmParserStructures::isTopologyLine(const std::string& line) {
+    // Check if this line is a topology definition from STR files
+    // These should be skipped when parsing parameters
+    
+    // Residue and patch definitions
+    if (line.find("RESI ") == 0 || line.find("PRES ") == 0) {
+        return true;
+    }
+    
+    // Atom definitions within topology
+    if (line.find("ATOM ") == 0) {
+        return true;
+    }
+    
+    // Group definitions
+    if (line.find("GROUP") == 0) {
+        return true;
+    }
+    
+    // Topology bonds (note the space after BOND to distinguish from BONDS section)
+    if (line.find("BOND ") == 0) {
+        return true;
+    }
+    
+    // Topology impropers (note: IMPR with space, not IMPROPER section)
+    if (line.find("IMPR ") == 0) {
+        return true;
+    }
+    
+    // Topology dihedrals
+    if (line.find("DIHE ") == 0) {
+        return true;
+    }
+    
+    // Other topology-specific keywords
+    if (line.find("DONOR ") == 0 || line.find("ACCEPTOR ") == 0) {
+        return true;
+    }
+    
+    // IC (internal coordinate) definitions
+    if (line.find("IC ") == 0) {
+        return true;
+    }
+    
+    // PATCH applications
+    if (line.find("PATCH") == 0) {
+        return true;
+    }
+    
+    // patch first none last none (lowercase patch)
+    if (line.find("patch ") == 0) {
+        return true;
+    }
+    
+    // Other STR-specific keywords that should be ignored
+    if (line.find("NOANG") == 0 || line.find("NODIHE") == 0) {
+        return true;
+    }
+    
+    // LONEPAIR definitions (Drude-specific)
+    if (line.find("LONEPAIR") == 0) {
+        return true;
+    }
+    
+    // ANISOTROPY definitions (Drude-specific)
+    if (line.find("ANISOTROPY") == 0) {
+        return true;
+    }
+    
+    // CMAP definitions in topology
+    if (line.find("CMAP") == 0) {
+        return true;
+    }
+    
+    return false;
+}
+
 } // namespace io
 } // namespace pygcmc

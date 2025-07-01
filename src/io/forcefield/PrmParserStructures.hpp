@@ -36,6 +36,9 @@ struct PrmParserStructures {
     static bool isNonbondedSection(const std::string& line);
     static bool isNBFixSection(const std::string& line);
     
+    // Topology line detection (for STR file parsing)
+    static bool isTopologyLine(const std::string& line);
+    
     // Parameter processing helpers
     static std::pair<std::string, std::string> make_type_pair(
         const std::string& type1, const std::string& type2);
