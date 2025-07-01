@@ -61,6 +61,9 @@ from prmParser.charmm_forcefields import (
     test_cross_forcefield_compatibility
 )
 
+# Drude STR parsing tests
+from prmParser.drude_str_parsing import TestDrudeSTRParsing
+
 # Support direct execution for testing
 if __name__ == "__main__":
     import pytest
