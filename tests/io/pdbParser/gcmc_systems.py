@@ -80,42 +80,43 @@ def test_4wp7_system_residue_distribution():
         resname = atom.get_resname()
         residue_counts[resname] = residue_counts.get(resname, 0) + 1
     
-    # Verify we have the expected GCMC molecules with reasonable counts  
+    # Verify we have the expected GCMC molecules with exact counts (PDB file content is deterministic)
     expected_gcmc_molecules = {
-        "ACEY": (1800, 2200),    # Expected range for acetate (~2048)
-        "BENX": (3500, 4000),    # Expected range for benzene (~3731)
-        "DMEE": (2000, 2400),    # Expected range for dimethyl ether (~2169)
-        "FORM": (1500, 1800),    # Expected range for formamide (~1662)
+        "ACEY": 2048,    # Exact count for acetate
+        "BENX": 3731,    # Exact count for benzene
+        "DMEE": 2169,    # Exact count for dimethyl ether
+        "FORM": 1662,    # Exact count for formamide
     }
     
-    for molecule, (min_count, max_count) in expected_gcmc_molecules.items():
+    for molecule, expected_count in expected_gcmc_molecules.items():
         if molecule in residue_counts:
-            count = residue_counts[molecule]
-            assert min_count <= count <= max_count, \
-                f"{molecule} count {count} outside expected range [{min_count}, {max_count}]"
+            actual_count = residue_counts[molecule]
+            assert actual_count == expected_count, \
+                f"{molecule} count {actual_count} does not match expected {expected_count}"
     
-    # Verify we have protein residues
+    # Verify we have protein residues (including HSD as protonated histidine and CYS)
     protein_atoms_found = 0  # Renamed for clarity: this counts ATOMS, not residues
     for resname in residue_counts:
-        if resname in {"ALA", "ARG", "ASN", "ASP", "GLN", "GLU", "GLY", "HIS", "ILE", 
-                      "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL"}:
+        if resname in {"ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", "HIS", "ILE", 
+                      "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL", "HSD"}:
             protein_atoms_found += residue_counts[resname]
     
     # Should have significant protein content (multiple copies of the protein)
     assert protein_atoms_found > 25000, f"Expected substantial protein content, got {protein_atoms_found} atoms"
-    # Add stricter check based on actual data (~29k protein atoms)
-    assert 28000 <= protein_atoms_found <= 32000, f"Expected ~29k protein atoms for 4wp7 system, got {protein_atoms_found}"
+    # Exact check based on actual data (30,520 protein atoms)
+    assert protein_atoms_found == 30520, f"Expected exactly 30,520 protein atoms for 4wp7 system, got {protein_atoms_found}"
     
     # Total system should be dominated by non-protein molecules (GCMC + solvent)
     total_atoms = len(result.atoms)
     small_molecule_atoms = total_atoms - protein_atoms_found
     
-    # Based on actual data: ~29k protein, ~192k non-protein (ratio ~6.5:1)
+    # Based on actual data: 30,520 protein, 190,921 non-protein (ratio 6.26:1)
     assert small_molecule_atoms > protein_atoms_found * 5, \
         f"GCMC+solvent system should be dominated by small molecules, got ratio {small_molecule_atoms/protein_atoms_found:.1f}:1"
-    # Add stricter check based on actual data
-    ratio = small_molecule_atoms / protein_atoms_found
-    assert 6.0 <= ratio <= 7.5, f"Expected ratio ~6.5:1 for 4wp7 system, got {ratio:.1f}:1"
+    # Exact check based on actual data
+    expected_non_protein = 190921
+    assert small_molecule_atoms == expected_non_protein, \
+        f"Expected exactly {expected_non_protein} non-protein atoms, got {small_molecule_atoms}"
 
 
 def test_4wp7_coordinate_validation():
