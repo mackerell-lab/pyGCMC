@@ -150,6 +150,8 @@ void init_topology_bindings(py::module&, py::module& model_module) {
         .def("get_residue", &::pygcmc::model::Topology::get_residue, py::return_value_policy::reference_internal, "Get residue by index")
         .def("get_segment", &::pygcmc::model::Topology::get_segment, py::return_value_policy::reference_internal, "Get segment by index")
         .def("get_group", &::pygcmc::model::Topology::get_group, py::return_value_policy::reference_internal, "Get group by index")
+        .def("get_donor", &::pygcmc::model::Topology::get_donor, py::return_value_policy::reference_internal, "Get donor by index")
+        .def("get_acceptor", &::pygcmc::model::Topology::get_acceptor, py::return_value_policy::reference_internal, "Get acceptor by index")
         .def("find_atom", &::pygcmc::model::Topology::find_atom)
         .def("find_residue", &::pygcmc::model::Topology::find_residue)
         .def("find_segment", &::pygcmc::model::Topology::find_segment)

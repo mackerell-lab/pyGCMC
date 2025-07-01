@@ -264,12 +264,11 @@ def test_hydrogen_bonding_analysis():
     donor_type_counts = {}
     for i in range(num_donors):
         donor = topology.get_donor(i)
-        atom_idx = donor.hydrogen  # The hydrogen atom index
-        atom = topology.get_atom(atom_idx)
-        parent_idx = donor.atom  # The parent atom index
-        parent = topology.get_atom(parent_idx)
-        parent_type = parent.type
-        donor_type_counts[parent_type] = donor_type_counts.get(parent_type, 0) + 1
+        hydrogen_idx = donor.hydrogen_atom  # The hydrogen atom index
+        donor_idx = donor.donor_atom  # The donor atom index
+        donor_atom = topology.get_atom(donor_idx)
+        donor_type = donor_atom.type
+        donor_type_counts[donor_type] = donor_type_counts.get(donor_type, 0) + 1
     
     # Verify top donor types
     expected_donor_types = {
@@ -289,7 +288,7 @@ def test_hydrogen_bonding_analysis():
     acceptor_type_counts = {}
     for i in range(num_acceptors):
         acceptor = topology.get_acceptor(i)
-        atom_idx = acceptor.atom  # The acceptor atom index
+        atom_idx = acceptor.acceptor_atom  # The acceptor atom index
         atom = topology.get_atom(atom_idx)
         atom_type = atom.type
         acceptor_type_counts[atom_type] = acceptor_type_counts.get(atom_type, 0) + 1
@@ -375,7 +374,8 @@ def test_psf_validation_summary():
     
     for i in range(topology.get_num_atoms()):
         atom = topology.get_atom(i)
-        if atom.type == "LP":
+        # Check if atom name starts with "LP" (like LPOA, LPOB, LP1A, etc.)
+        if atom.name.startswith("LP"):
             lp_count += 1
             assert abs(atom.mass - lp_mass) < 0.001, \
                 f"Lone pair {atom.name} has unexpected mass {atom.mass}"

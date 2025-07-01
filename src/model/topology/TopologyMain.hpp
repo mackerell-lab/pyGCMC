@@ -187,6 +187,20 @@ public:
         return groups_[index];
     }
 
+    inline const TopologyDonor& get_donor(int index) const {
+        if (index < 0 || index >= static_cast<int>(donors_.size())) {
+            throw std::out_of_range("Invalid donor index");
+        }
+        return donors_[index];
+    }
+
+    inline const TopologyAcceptor& get_acceptor(int index) const {
+        if (index < 0 || index >= static_cast<int>(acceptors_.size())) {
+            throw std::out_of_range("Invalid acceptor index");
+        }
+        return acceptors_[index];
+    }
+
     // Additional compatibility methods
     inline void add_title(const std::string& title) { titles_.push_back(title); }
     inline const std::vector<std::string>& get_titles() const { return titles_; }
