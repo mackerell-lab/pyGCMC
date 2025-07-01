@@ -51,13 +51,8 @@ def test_drude_polarizability_distribution():
     for i in range(topology.get_num_atoms()):
         atom = topology.get_atom(i)
         
-        # Get alpha value (this will fail in current implementation)
-        if hasattr(atom, 'alpha'):
-            alpha = atom.alpha
-        elif hasattr(atom, 'get_alpha'):
-            alpha = atom.get_alpha()
-        else:
-            continue
+        # Get alpha value using the getter method
+        alpha = atom.get_alpha()
             
         if alpha > 0:
             if alpha < 0.5:
@@ -100,13 +95,8 @@ def test_drude_residue_polarizability():
         residue = topology.get_residue(atom.residue_id)
         res_name = residue.name
         
-        # Get alpha value (this will fail in current implementation)
-        if hasattr(atom, 'alpha'):
-            alpha = atom.alpha
-        elif hasattr(atom, 'get_alpha'):
-            alpha = atom.get_alpha()
-        else:
-            continue
+        # Get alpha value using the getter method
+        alpha = atom.get_alpha()
             
         if alpha > 0:
             if res_name not in residue_alpha:
@@ -144,6 +134,9 @@ def test_drude_anisotropy_information():
     From analysis:
     - Anisotropic sites: 745
     - Anisotropic fraction: 19.53% of Drude particles
+    
+    NOTE: Anisotropy parsing is not yet implemented in the PSF parser.
+    This test documents the expected values for future implementation.
     """
     psf_path = os.path.join(TEST_DATA_DIR, "4wp7", "4wp7_drude.psf")
     
@@ -155,19 +148,16 @@ def test_drude_anisotropy_information():
     success = parser.parse_to_topology(psf_path, topology)
     assert success, "Failed to parse 4wp7_drude.psf"
     
-    # The PSF file should have anisotropic information
-    # This would need to be parsed from the NUMANISO section
-    # For now, we document the expected values
+    # Document expected values for anisotropic information
     expected_anisotropic_sites = 745
     expected_drude_particles = 3814
     expected_fraction = 0.1953  # 19.53%
     
-    # These would need to be implemented in the parser
+    # TODO: When anisotropy parsing is implemented, update this test to:
     # anisotropic_sites = topology.get_num_anisotropic()
     # assert anisotropic_sites == expected_anisotropic_sites
     
-    # Document that anisotropic information should be available
-    # For now, just check if we can access the expected counts from our basic tests
+    # For now, we just document the expected values
     assert expected_anisotropic_sites == 745
     assert expected_drude_particles == 3814
     assert abs(expected_fraction - 0.1953) < 1e-4

@@ -83,14 +83,8 @@ def test_drude_alpha_parameters_parsing():
     for i in range(topology.get_num_atoms()):
         atom = topology.get_atom(i)
         
-        # The atom should have alpha property or get_alpha() method
-        if hasattr(atom, 'alpha'):
-            alpha = atom.alpha
-        elif hasattr(atom, 'get_alpha'):
-            alpha = atom.get_alpha()
-        else:
-            # This is where current implementation fails
-            continue
+        # Get alpha value using the getter method
+        alpha = atom.get_alpha()
             
         if alpha > 0:
             atoms_with_alpha += 1
@@ -143,15 +137,8 @@ def test_drude_thole_parameters_parsing():
     for i in range(topology.get_num_atoms()):
         atom = topology.get_atom(i)
         
-        # The atom should have thole property or get_thole() method
-        # Note: The Atom class may need a thole field added
-        if hasattr(atom, 'thole'):
-            thole = atom.thole
-        elif hasattr(atom, 'get_thole'):
-            thole = atom.get_thole()
-        else:
-            # This is where current implementation fails
-            continue
+        # Get thole value using the getter method
+        thole = atom.get_thole()
             
         if thole != 0:
             atoms_with_thole += 1
