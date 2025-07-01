@@ -12,6 +12,8 @@ Modular structure:
 - advanced_features.py: Advanced features tests (4 functions)
 - drude_particles.py: Drude particle tests (4 functions)
 - drude_validation.py: Drude validation tests (4 functions)
+- drude_extended_format.py: Drude extended format tests (4 functions)
+- drude_polarizability_analysis.py: Drude polarizability tests (3 functions)
 """
 
 import os
@@ -69,6 +71,21 @@ from psfParser.drude_validation import (
     test_parse_drude_hydrogen_bonding,
     test_parse_drude_atom_types,
     test_parse_drude_residue_composition
+)
+
+# Drude extended format
+from psfParser.drude_extended_format import (
+    test_drude_psf_extended_format_detection,
+    test_drude_alpha_parameters_parsing,
+    test_drude_thole_parameters_parsing,
+    test_drude_extended_atom_line_format
+)
+
+# Drude polarizability analysis
+from psfParser.drude_polarizability_analysis import (
+    test_drude_polarizability_distribution,
+    test_drude_residue_polarizability,
+    test_drude_anisotropy_information
 )
 
 # Support direct execution for testing
