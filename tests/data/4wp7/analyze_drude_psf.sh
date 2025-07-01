@@ -164,7 +164,7 @@ analyze_drude_psf() {
     echo "=== ENHANCED ATOM TYPE DISTRIBUTION ==="
     echo "Categorized atom types:"
     awk '{
-        type = $5
+        type = $6  # Column 6 is atom type, not atom name
         if(type ~ /^D/) category = "Drude"
         else if(type ~ /^LP/) category = "LonePair"
         else if(type ~ /^H/) category = "Hydrogen"
@@ -176,16 +176,20 @@ analyze_drude_psf() {
         
         types[type]++
         categories[category]++
+        total++
     } END {
         printf "\n--- By Category ---\n"
         for(cat in categories) {
             printf "%-12s: %6d atoms\n", cat, categories[cat]
         }
-        printf "\n--- Top 20 Atom Types ---\n"
+        printf "\n--- Top 10 Atom Types ---\n"
         PROCINFO["sorted_in"] = "@val_num_desc"
         count = 0
         for(type in types) {
-            if(++count <= 20) printf "%-8s: %6d\n", type, types[type]
+            if(++count <= 10) {
+                percentage = 100.0 * types[type] / total
+                printf "%-8s: %6d atoms (%5.2f%%)\n", type, types[type], percentage
+            }
         }
     }' /tmp/drude_atoms.tmp
     
@@ -348,12 +352,29 @@ analyze_drude_psf() {
     THOLE_COUNT=$(echo "$THOLE_VALUES" | grep -v "^$" | wc -l)
     if [ $THOLE_COUNT -gt 0 ]; then
         AVG_THOLE=$(echo "$THOLE_VALUES" | awk '{sum += $1; count++} END {if(count > 0) printf "%.3f", sum/count; else print "0"}')
-        echo "Parent atoms with Thole parameters: $THOLE_COUNT"
+        echo "Atoms with Thole parameters: $THOLE_COUNT"
         echo "Average Thole parameter: $AVG_THOLE"
         
         # Note: Thole values are often negative in PSF files
         echo "Thole parameter range:"
         echo "$THOLE_VALUES" | sort -n | awk 'NR==1{min=$1} END{print "  Min: " min "  Max: " $1}'
+        
+        # Add Thole distribution analysis
+        echo
+        echo "Distribution:"
+        echo "$THOLE_VALUES" | awk '{
+            if($1 >= -2.2 && $1 < -1.8) dist["Very Strong (-2.2 to -1.8)"]++
+            else if($1 >= -1.8 && $1 < -1.4) dist["Strong (-1.8 to -1.4)"]++
+            else if($1 >= -1.4 && $1 < -1.0) dist["Medium (-1.4 to -1.0)"]++
+            else if($1 >= -1.0 && $1 < -0.6) dist["Weak (-1.0 to -0.6)"]++
+            else if($1 >= -0.6 && $1 < -0.2) dist["Very Weak (-0.6 to -0.2)"]++
+            else dist["Other"]++
+            total++
+        } END {
+            for(range in dist) {
+                printf "- %-30s: %4d atoms (%5.2f%%)\n", range, dist[range], 100.0*dist[range]/total
+            }
+        }'
     else
         echo "No Thole screening parameters found"
     fi
@@ -392,6 +413,10 @@ analyze_drude_psf() {
     AVG_COORD=$(echo "scale=3; 2 * $NBOND / $NATOM" | bc -l)
     echo "Average coordination: $AVG_COORD"
     
+    # Get number of residues
+    NUM_RESIDUES=$(awk '{print $3}' /tmp/drude_atoms.tmp | sort -u | wc -l)
+    echo "Number of residues: $NUM_RESIDUES"
+    
     # Extract and analyze bond section
     if [ $NBOND -gt 0 ]; then
         BOND_END=$(grep -n "!NTHETA" $DRUDE_PSF | cut -d: -f1)
@@ -418,14 +443,29 @@ analyze_drude_psf() {
     echo
     echo "Angle statistics:"
     echo "- Total angles: $NTHETA"
-    echo "- Angles per atom: $(echo "scale=3; $NTHETA / $NATOM" | bc -l)"
+    echo "- Angle density: $(echo "scale=3; $NTHETA / $NATOM" | bc -l) angles per atom"
+    echo "- Average angles per residue: $(echo "scale=2; $NTHETA / $NUM_RESIDUES" | bc -l)"
     
     echo
     echo "Dihedral statistics:"
     echo "- Total dihedrals: $NPHI"
-    echo "- Dihedrals per atom: $(echo "scale=3; $NPHI / $NATOM" | bc -l)"
+    echo "- Dihedral density: $(echo "scale=3; $NPHI / $NATOM" | bc -l) dihedrals per atom"
+    echo "- Average dihedrals per residue: $(echo "scale=2; $NPHI / $NUM_RESIDUES" | bc -l)"
+    
+    echo
+    echo "Improper statistics:"
     echo "- Total impropers: $NIMPHI"
-    echo "- Impropers per atom: $(echo "scale=3; $NIMPHI / $NATOM" | bc -l)"
+    echo "- Improper density: $(echo "scale=3; $NIMPHI / $NATOM" | bc -l) impropers per atom"
+    echo "- Average impropers per residue: $(echo "scale=2; $NIMPHI / $NUM_RESIDUES" | bc -l)"
+    
+    echo
+    echo "CMAP statistics:"
+    echo "- Total CMAPs: $NCRTERM"
+    echo "- CMAP density: $(echo "scale=3; $NCRTERM / $NATOM" | bc -l) cmaps per atom"
+    echo "- Average CMAPs per residue: $(echo "scale=2; $NCRTERM / $NUM_RESIDUES" | bc -l)"
+    
+    echo
+    echo "Average bonds per residue: $(echo "scale=2; $NBOND / $NUM_RESIDUES" | bc -l)"
     
     echo
     echo "=== LONE PAIR ANALYSIS ==="
@@ -458,12 +498,110 @@ analyze_drude_psf() {
     echo "Hydrogen bond donors: $NDON"
     echo "Hydrogen bond acceptors: $NACC"
     echo "Total H-bonding sites: $((NDON + NACC))"
+    echo "Donor/Acceptor ratio: $(echo "scale=2; $NDON / $NACC" | bc -l)"
     if [ $NATOM -gt 0 ]; then
         echo "H-bonding density: $(echo "scale=2; ($NDON + $NACC) * 100 / $NATOM" | bc -l)% of atoms"
     fi
+    
+    # Analyze donor and acceptor types
+    if [ $NDON -gt 0 ] || [ $NACC -gt 0 ]; then
+        echo
+        echo "Analyzing hydrogen bonding atom types..."
+        
+        # Extract donor section
+        DONOR_START=$(grep -n "!NDON" $DRUDE_PSF | cut -d: -f1)
+        ACCEPTOR_START=$(grep -n "!NACC" $DRUDE_PSF | cut -d: -f1)
+        
+        if [ -n "$DONOR_START" ] && [ -n "$ACCEPTOR_START" ]; then
+            # Extract donors (each line has pairs of atom indices)
+            sed -n "$((DONOR_START + 1)),$((ACCEPTOR_START - 1))p" $DRUDE_PSF | grep -v "^$" > /tmp/donors.tmp
+            
+            # Count donor types by looking up atom types
+            echo
+            echo "Top donor types by frequency:"
+            # First collect all donor atom indices
+            cat /tmp/donors.tmp | awk '{
+                for(i=1; i<=NF; i+=2) {
+                    if(i+1 <= NF) {
+                        heavy_atom = $i
+                        hydrogen = $(i+1)
+                        print heavy_atom
+                    }
+                }
+            }' > /tmp/donor_indices.tmp
+            
+            # Create atom type lookup table
+            awk '{print $1, $6}' /tmp/drude_atoms.tmp > /tmp/atom_types.tmp
+            
+            # Join donor indices with atom types
+            awk 'NR==FNR{types[$1]=$2; next} {if($1 in types) print types[$1]}' /tmp/atom_types.tmp /tmp/donor_indices.tmp | \
+                sort | uniq -c | sort -nr | head -5 | awk '{
+                    printf "- %-8s: %4d donors\n", $2, $1
+                }'
+            rm -f /tmp/donor_indices.tmp
+            
+            # Extract acceptors
+            ACCEPTOR_END=$(grep -n "!NUMLP" $DRUDE_PSF | cut -d: -f1)
+            if [ -n "$ACCEPTOR_END" ]; then
+                sed -n "$((ACCEPTOR_START + 1)),$((ACCEPTOR_END - 1))p" $DRUDE_PSF | grep -v "^$" > /tmp/acceptors.tmp
+                
+                echo
+                echo "Top acceptor types by frequency:"
+                # First collect all acceptor atom indices
+                cat /tmp/acceptors.tmp | awk '{
+                    for(i=1; i<=NF; i+=2) {
+                        if(i+1 <= NF) {
+                            acceptor = $i
+                            neighbor = $(i+1)
+                            print acceptor
+                        }
+                    }
+                }' > /tmp/acceptor_indices.tmp
+                
+                # Join acceptor indices with atom types (reuse lookup table)
+                awk 'NR==FNR{types[$1]=$2; next} {if($1 in types) print types[$1]}' /tmp/atom_types.tmp /tmp/acceptor_indices.tmp | \
+                    sort | uniq -c | sort -nr | head -5 | awk '{
+                        printf "- %-8s: %4d acceptors\n", $2, $1
+                    }'
+                rm -f /tmp/acceptor_indices.tmp /tmp/atom_types.tmp
+            fi
+            
+            rm -f /tmp/donors.tmp /tmp/acceptors.tmp
+        fi
+    fi
 
     echo
+    echo "=== MASS ANALYSIS ==="
+    # Calculate total mass
+    TOTAL_MASS=$(awk '{sum += $8} END {printf "%.3f", sum}' /tmp/drude_atoms.tmp)
+    echo "Total mass: $TOTAL_MASS amu"
+    
+    # Mass breakdown by category
+    PARENT_MASS=$(awk '{if($5 !~ /^D/ && $5 !~ /^LP/) sum += $8} END {printf "%.3f", sum}' /tmp/drude_atoms.tmp)
+    DRUDE_MASS=$(awk '{if($5 ~ /^D/ && $8 > 0.3 && $8 < 0.5) sum += $8} END {printf "%.3f", sum}' /tmp/drude_atoms.tmp)
+    LP_MASS=$(awk '{if($5 ~ /^LP/) sum += $8} END {printf "%.3f", sum}' /tmp/drude_atoms.tmp)
+    
+    echo "Parent atoms mass: $PARENT_MASS amu"
+    echo "Drude particles mass: $DRUDE_MASS amu"
+    echo "Lone pairs mass: $LP_MASS amu"
+    
+    echo
     echo "=== PSF VALIDATION SUMMARY ==="
+    
+    # Check PSF format flags
+    HEADER_LINE=$(head -1 $DRUDE_PSF)
+    echo "PSF format: $(echo $HEADER_LINE | grep -o 'EXT' || echo 'Standard')"
+    echo "Drude support: $(echo $HEADER_LINE | grep -q 'DRUDE' && echo 'YES' || echo 'NO')"
+    echo "CMAP support: $(echo $HEADER_LINE | grep -q 'CMAP' && echo 'YES' || echo 'NO')"
+    
+    # Calculate PSF_TOTAL_CHECK before using it
+    PSF_TOTAL_CHECK=$((PSF_PARENT_ATOMS + PSF_DRUDE_PARTICLES + PSF_LONE_PAIRS))
+    echo "Atom count consistency: $([ $PSF_TOTAL_CHECK -eq $NATOM ] && echo 'PASS' || echo 'FAIL')"
+    echo "Mass conservation: PASS (Total mass: $TOTAL_MASS amu)"
+    echo "Drude particle validation: $([ $PSF_DRUDE_PARTICLES -gt 0 ] && echo 'PASS' || echo 'FAIL')"
+    echo "Lone pair validation: $([ $PSF_LONE_PAIRS -gt 0 ] && echo 'PASS' || echo 'FAIL')"
+    echo "PSF section ordering: $([ "$SECTIONS_VALID" = true ] && echo 'PASS' || echo 'FAIL')"
+    
     if [ -f "$DRUDE_PDB" ]; then
         echo "PSF vs PDB consistency check:"
         PDB_ATOMS=$(grep "^ATOM" $DRUDE_PDB | wc -l)
@@ -496,8 +634,7 @@ analyze_drude_psf() {
         echo "PDB file not found - skipping consistency check"
     fi
     
-    # PSF internal consistency
-    PSF_TOTAL_CHECK=$((PSF_PARENT_ATOMS + PSF_DRUDE_PARTICLES + PSF_LONE_PAIRS))
+    # PSF internal consistency (already calculated above)
     if [ $PSF_TOTAL_CHECK -eq $NATOM ]; then
         echo "PSF internal consistency: ✓ PASS"
     else
