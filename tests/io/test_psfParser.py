@@ -1,15 +1,17 @@
-# tests/io/test_psfParser_new.py
+# tests/io/test_psfParser.py
 """
 PSF Parser Tests - Main Entry Point
 
 This file imports all PSF parser tests from modular sub-files.
-Run: pytest tests/io/test_psfParser_new.py
+Run: pytest tests/io/test_psfParser.py
 
 Modular structure:
 - basic_parsing.py: Basic PSF parsing tests (4 functions)
 - molecular_structures.py: Molecular structure tests (4 functions)
 - topology_terms.py: Topology terms tests (4 functions)
 - advanced_features.py: Advanced features tests (4 functions)
+- drude_particles.py: Drude particle tests (4 functions)
+- drude_validation.py: Drude validation tests (4 functions)
 """
 
 import os
@@ -51,6 +53,22 @@ from psfParser.advanced_features import (
     test_parse_cmap,
     test_parse_groups,
     test_parse_all_cmaps
+)
+
+# Drude particles and lone pairs
+from psfParser.drude_particles import (
+    test_parse_drude_psf_basic,
+    test_parse_drude_particles,
+    test_parse_lone_pairs,
+    test_parse_drude_charge_neutrality
+)
+
+# Drude system validation
+from psfParser.drude_validation import (
+    test_parse_drude_connectivity,
+    test_parse_drude_hydrogen_bonding,
+    test_parse_drude_atom_types,
+    test_parse_drude_residue_composition
 )
 
 # Support direct execution for testing
