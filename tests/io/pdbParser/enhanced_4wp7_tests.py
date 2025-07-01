@@ -34,7 +34,7 @@ def test_4wp7_molecule_integrity():
     result = PDBParser.parse_file(pdb_path)
     assert result is not None, "Failed to parse 4wp7 PDB file"
     
-    # Expected molecular structures based on residue analysis
+    # Expected molecular structures based on actual PDB parser output
     expected_gcmc_molecules = {
         "BENX": {"atoms_per_molecule": 13, "description": "Benzene with hydrogens"},
         "PRPX": {"atoms_per_molecule": 12, "description": "Propane with explicit hydrogens"},

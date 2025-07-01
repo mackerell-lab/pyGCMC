@@ -82,10 +82,10 @@ def test_4wp7_system_residue_distribution():
     
     # Verify we have the expected GCMC molecules with reasonable counts  
     expected_gcmc_molecules = {
-        "ACEY": (1800, 2200),    # Expected range for acetylene (~2048)
+        "ACEY": (1800, 2200),    # Expected range for acetate (~2048)
         "BENX": (3500, 4000),    # Expected range for benzene (~3731)
         "DMEE": (2000, 2400),    # Expected range for dimethyl ether (~2169)
-        "FORM": (1500, 1800),    # Expected range for formaldehyde (~1662)
+        "FORM": (1500, 1800),    # Expected range for formamide (~1662)
     }
     
     for molecule, (min_count, max_count) in expected_gcmc_molecules.items():

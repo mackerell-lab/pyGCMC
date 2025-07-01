@@ -354,7 +354,9 @@ bool PdbParserRecords::parseCryst1Record(const std::string& line, model::Structu
 bool PdbParserRecords::isSmallMolecule(const std::string& resName) {
     // Common GCMC molecules and small molecules that should use continuity checking
     static const std::set<std::string> smallMolecules = {
-        // GCMC molecules from 4wp7 system
+        // GCMC molecules from 4wp7 system (actual names)
+        "ACE", "BEN", "DME", "FOR", "IMI", "MAM", "MEO", "PRP",
+        // Legacy names for compatibility
         "ACEY", "BENX", "DMEE", "FORM", "IMIA", "MAMY", "MEOH", "PRPX",
         // Common water and ions
         "SOL", "HOH", "WAT", "TIP", "TIP3", "SPC", "SPCE",
