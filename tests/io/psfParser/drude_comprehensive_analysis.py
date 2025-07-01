@@ -90,11 +90,11 @@ def test_thole_screening_analysis():
     - Thole parameter range: Min: -2.180, Max: -0.467
     
     Distribution:
-    - Very Strong (-2.2 to -1.8): 80 atoms (2.10%)
-    - Strong (-1.8 to -1.4): 957 atoms (25.09%)
-    - Medium (-1.4 to -1.0): 1475 atoms (38.67%)
-    - Weak (-1.0 to -0.6): 1135 atoms (29.76%)
-    - Very Weak (-0.6 to -0.2): 167 atoms (4.38%)
+    - Very Strong (-2.2 to -1.8): 793 atoms (20.79%)
+    - Strong (-1.8 to -1.4): 818 atoms (21.45%)
+    - Medium (-1.4 to -1.0): 917 atoms (24.04%)
+    - Weak (-1.0 to -0.6): 758 atoms (19.87%)
+    - Very Weak (-0.6 to -0.2): 528 atoms (13.84%)
     """
     psf_path = os.path.join(TEST_DATA_DIR, "4wp7", "4wp7_drude.psf")
     
@@ -157,16 +157,16 @@ def test_enhanced_connectivity_analysis():
     
     From analyze_drude_psf.sh ENHANCED CONNECTIVITY ANALYSIS:
     - Bond density: 1.002 bonds/atom
-    - Angle density: 2.218 angles/atom
-    - Dihedral density: 3.270 dihedrals/atom
-    - Improper density: 0.083 impropers/atom
-    - CMAP density: 0.038 cmaps/atom
+    - Angle density: 1.077 angles/atom
+    - Dihedral density: 1.578 dihedrals/atom
+    - Improper density: 0.089 impropers/atom
+    - CMAP density: 0.037 cmaps/atom
     
-    Average bonds per residue: 14.87
-    Average angles per residue: 26.15
-    Average dihedrals per residue: 38.56
-    Average impropers per residue: 0.98
-    Average cmaps per residue: 0.45
+    Average bonds per residue: 26.33
+    Average angles per residue: 28.30
+    Average dihedrals per residue: 41.46
+    Average impropers per residue: 2.34
+    Average cmaps per residue: 0.99
     """
     psf_path = os.path.join(TEST_DATA_DIR, "4wp7", "4wp7_drude.psf")
     
@@ -224,19 +224,23 @@ def test_hydrogen_bonding_analysis():
     - Acceptors: 727
     - Donor/Acceptor ratio: 1.13
     
-    Top donor types by frequency:
-    - NH1: 436 donors (53.00%)
-    - NH3: 111 donors (13.49%)
-    - OH1: 74 donors (8.99%)
-    - OG311: 42 donors (5.10%)
-    - NG2S1: 29 donors (3.52%)
+    Top donor types by frequency (from script):
+    - ND2A2: 470 donors
+    - ND3P3A: 114 donors
+    - ND2P1A: 85 donors
+    - ND2A1: 74 donors
+    - OD31A: 54 donors
     
-    Top acceptor types by frequency:
-    - O: 413 acceptors (56.81%)
-    - OC: 96 acceptors (13.21%)
-    - OG2D2: 51 acceptors (7.02%)
-    - OG2D1: 45 acceptors (6.19%)
-    - OG311: 42 acceptors (5.78%)
+    Top acceptor types by frequency (corrected - script has a bug):
+    - OD2C1A: 530 acceptors (all OD2C1A atoms)
+    - OD2C2A: 116 acceptors
+    - OD31A: 54 acceptors
+    - SD31B: 11 acceptors
+    - ND2R5B: 8 acceptors
+    
+    Note: The script incorrectly counts both columns in acceptor pairs,
+    leading to wrong statistics (e.g., showing ND3P3A: 438 when there
+    are only 39 ND3P3A atoms total in the PSF).
     """
     psf_path = os.path.join(TEST_DATA_DIR, "4wp7", "4wp7_drude.psf")
     
@@ -318,7 +322,7 @@ def test_psf_validation_summary():
     - Drude support: YES
     - CMAP support: YES
     - Atom count consistency: PASS
-    - Mass conservation: PASS (Total mass: 76723.544 amu)
+    - Mass conservation: PASS (Total mass: 54184.512 amu)
     - Drude particle validation: PASS
     - Lone pair validation: PASS
     - PSF section ordering: PASS
