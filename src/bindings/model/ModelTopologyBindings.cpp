@@ -22,7 +22,14 @@ void init_topology_bindings(py::module&, py::module& model_module) {
         .def_readwrite("charge", &::pygcmc::model::TopologyAtom::charge)
         .def_readwrite("mass", &::pygcmc::model::TopologyAtom::mass)
         .def_readwrite("residue_id", &::pygcmc::model::TopologyAtom::residue_id)
-        .def_readwrite("segment_id", &::pygcmc::model::TopologyAtom::segment_id);
+        .def_readwrite("segment_id", &::pygcmc::model::TopologyAtom::segment_id)
+        .def_readwrite("alpha", &::pygcmc::model::TopologyAtom::alpha)
+        .def_readwrite("thole", &::pygcmc::model::TopologyAtom::thole)
+        .def("get_alpha", &::pygcmc::model::TopologyAtom::get_alpha)
+        .def("get_thole", &::pygcmc::model::TopologyAtom::get_thole)
+        .def("set_alpha", &::pygcmc::model::TopologyAtom::set_alpha)
+        .def("set_thole", &::pygcmc::model::TopologyAtom::set_thole)
+        .def("set_drude_params", &::pygcmc::model::TopologyAtom::set_drude_params);
 
     // Bind TopologySegment
     py::class_<::pygcmc::model::TopologySegment>(model_module, "TopologySegment")
@@ -139,7 +146,7 @@ void init_topology_bindings(py::module&, py::module& model_module) {
         .def("has_cmap", py::overload_cast<>(&::pygcmc::model::Topology::has_cmap, py::const_))
         .def("has_cmap", py::overload_cast<const std::vector<int>&>(&::pygcmc::model::Topology::has_cmap, py::const_))
         .def("has_group", &::pygcmc::model::Topology::has_group)
-        .def("get_atom", &::pygcmc::model::Topology::get_atom, py::return_value_policy::reference_internal, "Get atom by index")
+        .def("get_atom", py::overload_cast<int>(&::pygcmc::model::Topology::get_atom, py::const_), py::return_value_policy::reference_internal, "Get atom by index")
         .def("get_residue", &::pygcmc::model::Topology::get_residue, py::return_value_policy::reference_internal, "Get residue by index")
         .def("get_segment", &::pygcmc::model::Topology::get_segment, py::return_value_policy::reference_internal, "Get segment by index")
         .def("get_group", &::pygcmc::model::Topology::get_group, py::return_value_policy::reference_internal, "Get group by index")

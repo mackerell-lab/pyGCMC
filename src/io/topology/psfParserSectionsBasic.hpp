@@ -22,6 +22,12 @@ public:
     static bool parse_atoms_from_lines(const std::vector<std::string>& lines, model::Topology& topology);
     
     /**
+     * Parse atoms section from PSF lines with format flags
+     */
+    static bool parse_atoms_from_lines(const std::vector<std::string>& lines, model::Topology& topology,
+                                     bool is_extended_format, bool is_drude_format);
+    
+    /**
      * Parse bonds section from PSF lines
      */
     static bool parse_bonds_from_lines(const std::vector<std::string>& lines, model::Topology& topology);

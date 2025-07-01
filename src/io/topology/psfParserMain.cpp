@@ -55,6 +55,21 @@ bool PSFParser::parse_to_topology(const std::string& filename, model::Topology& 
     if (!readFileToLines(filename, lines)) {
         return false;
     }
+    
+    // Check for extended Drude format in header
+    bool is_extended_format = false;
+    bool is_drude_format = false;
+    if (!lines.empty()) {
+        std::string header = trim(lines[0]);
+        if (header.find("PSF") != std::string::npos) {
+            is_extended_format = header.find("EXT") != std::string::npos;
+            is_drude_format = header.find("DRUDE") != std::string::npos;
+            
+            if (is_drude_format && is_extended_format) {
+                std::cout << "Detected extended Drude PSF format" << std::endl;
+            }
+        }
+    }
 
     // First, collect all sections
     std::unordered_map<std::string, std::vector<std::string>> sections;
@@ -115,7 +130,7 @@ bool PSFParser::parse_to_topology(const std::string& filename, model::Topology& 
         return false;
     }
 
-    if (!PSFParserSections::parse_atoms_from_lines(sections["NATOM"], topology)) {
+    if (!PSFParserSections::parse_atoms_from_lines(sections["NATOM"], topology, is_extended_format, is_drude_format)) {
         std::cerr << "Failed to parse NATOM section" << std::endl;
         return false;
     }

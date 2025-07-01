@@ -82,6 +82,11 @@ public:
         if (!TopologyQueries::hasAtom(atoms_, index)) throw std::out_of_range("Invalid atom index");
         return atoms_[index];
     }
+    
+    inline TopologyAtom& get_atom(int index) {
+        if (!TopologyQueries::hasAtom(atoms_, index)) throw std::out_of_range("Invalid atom index");
+        return atoms_[index];
+    }
 
     inline const TopologyResidue& get_residue(int index) const {
         if (!TopologyQueries::hasResidue(residues_, index)) throw std::out_of_range("Invalid residue index");

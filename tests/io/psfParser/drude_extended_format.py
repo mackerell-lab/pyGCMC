@@ -49,7 +49,6 @@ def test_drude_psf_extended_format_detection():
         assert flag in header_line, f"Expected flag '{flag}' not found in header"
 
 
-@pytest.mark.xfail(reason="PSF parser does not yet support extended Drude format with alpha values")
 def test_drude_alpha_parameters_parsing():
     """Test if PSF parser reads alpha (polarizability) parameters.
     
@@ -119,7 +118,6 @@ def test_drude_alpha_parameters_parsing():
         assert abs(avg_oe2 - 2.3990) < 0.001, f"Expected OE2 alpha 2.3990, got {avg_oe2}"
 
 
-@pytest.mark.xfail(reason="PSF parser does not yet support extended Drude format with Thole parameters")
 def test_drude_thole_parameters_parsing():
     """Test if PSF parser reads Thole screening parameters.
     

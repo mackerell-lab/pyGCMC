@@ -32,7 +32,7 @@ public:
         tempfactor(0.0),
         wmain(1.0),
         wcomp(1.0),
-        mass(0.0), charge(0.0), radius(0.0), alpha(0.0),
+        mass(0.0), charge(0.0), radius(0.0), alpha(0.0), thole(0.0),
         eps(std::numeric_limits<double>::quiet_NaN()),
         rmin(std::numeric_limits<double>::quiet_NaN()),
         fbeta(0.0),
@@ -70,7 +70,8 @@ public:
                ires >= 0 && std::isfinite(mass) && std::isfinite(charge) &&
                std::all_of(coor.begin(), coor.end(), 
                           [](double x) { return std::isfinite(x); }) &&
-               std::isfinite(occupancy) && std::isfinite(tempfactor);
+               std::isfinite(occupancy) && std::isfinite(tempfactor) &&
+               std::isfinite(alpha) && std::isfinite(thole);
     }
 
     // Core getters
@@ -95,6 +96,10 @@ public:
     // Force field parameters
     double get_eps() const noexcept { return eps; }
     double get_rmin() const noexcept { return rmin; }
+    
+    // Drude force field parameters
+    double get_alpha() const noexcept { return alpha; }
+    double get_thole() const noexcept { return thole; }
 
     // PDB specific getters
     char get_altloc() const noexcept { return altloc; }
@@ -126,6 +131,29 @@ public:
         }
         eps = epsilon;
         rmin = r;
+    }
+    
+    void set_drude_params(double polarizability, double thole_param) {
+        if (!std::isfinite(polarizability) || polarizability < 0.0 || 
+            !std::isfinite(thole_param)) {
+            throw std::invalid_argument("Invalid Drude parameters");
+        }
+        alpha = polarizability;
+        thole = thole_param;
+    }
+    
+    void set_alpha(double polarizability) {
+        if (!std::isfinite(polarizability) || polarizability < 0.0) {
+            throw std::invalid_argument("Invalid polarizability");
+        }
+        alpha = polarizability;
+    }
+    
+    void set_thole(double thole_param) {
+        if (!std::isfinite(thole_param)) {
+            throw std::invalid_argument("Invalid Thole parameter");
+        }
+        thole = thole_param;
     }
 
     // Basic setters
@@ -180,6 +208,7 @@ protected:
     std::string chem;            ///< Chemical type (CHEM)
     double radius;               ///< VDW radius (RADIUS)
     double alpha;                ///< Polarizability (ALPHA)
+    double thole;                ///< Thole screening parameter (THOLE)
     double eps;                  ///< LJ well depth (epsilon)
     double rmin;                 ///< LJ Rmin/2 (rmin)
     double fbeta;                ///< Force beta (FBETA)

@@ -44,7 +44,13 @@ bool PSFParserSectionsBasic::parse_title_from_lines(const std::vector<std::strin
     return true;
 }
 
+// Overloaded version for backward compatibility
 bool PSFParserSectionsBasic::parse_atoms_from_lines(const std::vector<std::string>& lines, model::Topology& topology) {
+    return parse_atoms_from_lines(lines, topology, false, false);
+}
+
+bool PSFParserSectionsBasic::parse_atoms_from_lines(const std::vector<std::string>& lines, model::Topology& topology,
+                                                   bool is_extended_format, bool is_drude_format) {
     // Parse number of atoms from the first line (header)
     std::istringstream iss(trim(lines[0]));  // Always use first line as header
     int num_atoms = 0;
@@ -81,23 +87,48 @@ bool PSFParserSectionsBasic::parse_atoms_from_lines(const std::vector<std::strin
         double charge;
         double mass;
         int unusedField = 0;  // Optional field
+        double thole = 0.0;   // Thole parameter (column 10 in extended format)
+        double alpha = 0.0;   // Polarizability (column 11 in extended format)
 
-        // Try to parse with all fields
-        if (iss >> atomIndex >> segment_name >> residue_number
-                >> residue_name >> atom_name >> atom_type
-                >> charge >> mass >> unusedField) {
-            // Successfully parsed all fields
+        bool parsed_successfully = false;
+        
+        if (is_extended_format && is_drude_format) {
+            // Extended Drude format: try to parse 11 fields
+            // Format: atomIndex segmentName residueNumber residueName atomName atomType 
+            //         charge mass unusedField thole alpha
+            if (iss >> atomIndex >> segment_name >> residue_number
+                    >> residue_name >> atom_name >> atom_type
+                    >> charge >> mass >> unusedField >> thole >> alpha) {
+                parsed_successfully = true;
+            }
         }
-        // Try without the unused field
-        else {
+        
+        if (!parsed_successfully) {
+            // Fall back to standard format
             iss.clear();
             iss.seekg(0);
-            if (!(iss >> atomIndex >> segment_name >> residue_number
+            
+            // Try to parse with unusedField
+            if (iss >> atomIndex >> segment_name >> residue_number
                     >> residue_name >> atom_name >> atom_type
-                    >> charge >> mass)) {
-                std::cerr << "Failed to parse atom line: " << line << std::endl;
-                return false;
+                    >> charge >> mass >> unusedField) {
+                parsed_successfully = true;
             }
+            // Try without the unused field
+            else {
+                iss.clear();
+                iss.seekg(0);
+                if (iss >> atomIndex >> segment_name >> residue_number
+                        >> residue_name >> atom_name >> atom_type
+                        >> charge >> mass) {
+                    parsed_successfully = true;
+                }
+            }
+        }
+        
+        if (!parsed_successfully) {
+            std::cerr << "Failed to parse atom line: " << line << std::endl;
+            return false;
         }
 
         // Convert to 0-based indexing
@@ -107,7 +138,7 @@ bool PSFParserSectionsBasic::parse_atoms_from_lines(const std::vector<std::strin
             return false;
         }
 
-        topology.add_atom(
+        int atom_index = topology.add_atom(
             atom_name,
             atom_type,
             charge,
@@ -116,6 +147,21 @@ bool PSFParserSectionsBasic::parse_atoms_from_lines(const std::vector<std::strin
             residue_number,
             segment_name
         );
+        
+        // Set Drude parameters if extended format was used
+        if (is_extended_format && is_drude_format && (alpha > 0.0 || thole != 0.0)) {
+            // Get the atom and set the Drude parameters
+            try {
+                model::TopologyAtom& atom = topology.get_atom(atom_index);
+                atom.set_drude_params(alpha, thole);
+                std::cout << "Set alpha=" << alpha << " thole=" << thole 
+                          << " for atom " << atom_name << " (index " << atom_index << ")" << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "Failed to set Drude parameters for atom " << atom_index 
+                          << ": " << e.what() << std::endl;
+            }
+        }
+        
         atoms_read++;
     }
 
