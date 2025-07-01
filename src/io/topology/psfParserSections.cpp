@@ -103,8 +103,9 @@ bool PSFParserSections::parse_acceptors_from_lines(const std::vector<std::string
     for (size_t i = 1; i < lines.size() && acceptors_parsed < num_acceptors; i++) {
         std::string line = trim(lines[i]);
         std::istringstream iss_line(line);
-        int acceptor_idx;
-        while (iss_line >> acceptor_idx) {
+        int acceptor_idx, antecedent_idx;
+        // Read pairs of (acceptor, antecedent) indices
+        while (iss_line >> acceptor_idx >> antecedent_idx) {
             if (acceptor_idx == 0) continue;
             acceptor_idx--; // Convert to 0-based indexing
             topology.add_acceptor(acceptor_idx);
