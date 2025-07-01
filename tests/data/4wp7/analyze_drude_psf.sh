@@ -67,10 +67,11 @@ analyze_drude_psf() {
     # Extract atom section and analyze (exclude empty lines)
     sed -n "$((ATOM_START + 1)),$((ATOM_END))p" $DRUDE_PSF | grep -v "^$" > /tmp/drude_atoms.tmp
     
-    # Count different atom types by atom name (column 5) and type (column 6)
-    PSF_PARENT_ATOMS=$(awk '{if($5 !~ /^D/ && $5 !~ /^LP/) print $5}' /tmp/drude_atoms.tmp | wc -l)
-    PSF_DRUDE_PARTICLES=$(awk '{if($6 == "DRUD") print $5}' /tmp/drude_atoms.tmp | wc -l)
+    # Count different atom types using robust identification
+    # Drude particles: name starts with D AND mass ≈ 0.4 (more robust than type check)
+    PSF_DRUDE_PARTICLES=$(awk '{if($5 ~ /^D/ && $8 > 0.3 && $8 < 0.5) print $5}' /tmp/drude_atoms.tmp | wc -l)
     PSF_LONE_PAIRS=$(awk '{if($5 ~ /^LP/) print $5}' /tmp/drude_atoms.tmp | wc -l)
+    PSF_PARENT_ATOMS=$(awk '{if($5 !~ /^D/ && $5 !~ /^LP/) print $5}' /tmp/drude_atoms.tmp | wc -l)
     
     echo "PSF Parent atoms: $PSF_PARENT_ATOMS"
     echo "PSF Drude particles (DRUD type): $PSF_DRUDE_PARTICLES"
@@ -87,8 +88,8 @@ analyze_drude_psf() {
     echo
     echo "=== CHARGE ANALYSIS ==="
     TOTAL_CHARGE=$(awk '{sum += $7} END {printf "%.3f", sum}' /tmp/drude_atoms.tmp)
-    DRUDE_CHARGE=$(awk '{if($6 == "DRUD") sum += $7} END {printf "%.3f", sum}' /tmp/drude_atoms.tmp)
-    PARENT_CHARGE=$(awk '{if($6 != "DRUD" && $5 !~ /^LP/) sum += $7} END {printf "%.3f", sum}' /tmp/drude_atoms.tmp)
+    DRUDE_CHARGE=$(awk '{if($5 ~ /^D/ && $8 > 0.3 && $8 < 0.5) sum += $7} END {printf "%.3f", sum}' /tmp/drude_atoms.tmp)
+    PARENT_CHARGE=$(awk '{if($5 !~ /^D/ && $5 !~ /^LP/) sum += $7} END {printf "%.3f", sum}' /tmp/drude_atoms.tmp)
     LP_CHARGE=$(awk '{if($5 ~ /^LP/) sum += $7} END {printf "%.3f", sum}' /tmp/drude_atoms.tmp)
     
     echo "Total system charge: $TOTAL_CHARGE"
@@ -103,47 +104,81 @@ analyze_drude_psf() {
         echo "Charge neutrality: ✗ WARNING (|q| = $TOTAL_CHARGE)"
     fi
     
-    # Analyze polarizability (alpha values in column 7)
+    # Analyze polarizability (alpha values in column 11 for parent atoms)
     echo
     echo "=== POLARIZABILITY ANALYSIS ==="
-    DRUDE_ALPHAS=$(awk '{if($6 == "DRUD" && $8 > 0) print $8}' /tmp/drude_atoms.tmp)
-    ALPHA_COUNT=$(echo "$DRUDE_ALPHAS" | grep -v "^$" | wc -l)
+    # Alpha values are stored with parent atoms, not Drude particles
+    PARENT_ALPHAS=$(awk '{if($6 != "DRUD" && $5 !~ /^LP/ && $11 > 0) print $11}' /tmp/drude_atoms.tmp)
+    ALPHA_COUNT=$(echo "$PARENT_ALPHAS" | grep -v "^$" | wc -l)
     if [ $ALPHA_COUNT -gt 0 ]; then
-        AVG_ALPHA=$(echo "$DRUDE_ALPHAS" | awk '{sum += $1; count++} END {if(count > 0) printf "%.3f", sum/count; else print "0"}')
-        MAX_ALPHA=$(echo "$DRUDE_ALPHAS" | sort -n | tail -1)
-        MIN_ALPHA=$(echo "$DRUDE_ALPHAS" | sort -n | head -1)
-        echo "Drude particles with polarizability: $ALPHA_COUNT"
-        echo "Average polarizability (α): $AVG_ALPHA"
-        echo "Max polarizability: $MAX_ALPHA"
-        echo "Min polarizability: $MIN_ALPHA"
+        AVG_ALPHA=$(echo "$PARENT_ALPHAS" | awk '{sum += $1; count++} END {if(count > 0) printf "%.3f", sum/count; else print "0"}')
+        MAX_ALPHA=$(echo "$PARENT_ALPHAS" | sort -n | tail -1)
+        MIN_ALPHA=$(echo "$PARENT_ALPHAS" | sort -n | head -1)
+        echo "Parent atoms with polarizability: $ALPHA_COUNT"
+        echo "Average polarizability (α): $AVG_ALPHA Å³"
+        echo "Max polarizability: $MAX_ALPHA Å³"
+        echo "Min polarizability: $MIN_ALPHA Å³"
         
         # Analyze polarizability distribution
         echo "Polarizability distribution:"
-        echo "$DRUDE_ALPHAS" | awk '{
+        echo "$PARENT_ALPHAS" | awk '{
             if($1 < 0.5) small++
             else if($1 < 1.0) medium++
-            else large++
+            else if($1 < 2.0) large++
+            else xlarge++
         } END {
-            printf "  Small (α < 0.5): %d\n", small
-            printf "  Medium (0.5 ≤ α < 1.0): %d\n", medium  
-            printf "  Large (α ≥ 1.0): %d\n", large
+            printf "  Small (α < 0.5): %d\n", small+0
+            printf "  Medium (0.5 ≤ α < 1.0): %d\n", medium+0
+            printf "  Large (1.0 ≤ α < 2.0): %d\n", large+0
+            printf "  X-Large (α ≥ 2.0): %d\n", xlarge+0
         }'
+        
+        # Show sample alpha values by atom type
+        echo "Sample alpha values by atom type:"
+        awk '{if($6 != "DRUD" && $5 !~ /^LP/ && $11 > 0) print $5, $11}' /tmp/drude_atoms.tmp | sort | uniq | head -10
     else
-        echo "No explicit polarizability values found in DRUD atoms"
+        echo "No polarizability values found in parent atoms"
     fi
     
-    # Analyze Drude spring constants (if present in column 8)
+    # Analyze Thole screening parameters (column 10 for parent atoms)
     echo
-    echo "=== DRUDE SPRING CONSTANT ANALYSIS ==="
-    SPRING_CONSTANTS=$(awk '{if($6 == "DRUD" && $9 > 0) print $9}' /tmp/drude_atoms.tmp)
-    SPRING_COUNT=$(echo "$SPRING_CONSTANTS" | grep -v "^$" | wc -l)
-    if [ $SPRING_COUNT -gt 0 ]; then
-        AVG_SPRING=$(echo "$SPRING_CONSTANTS" | awk '{sum += $1; count++} END {if(count > 0) printf "%.3f", sum/count; else print "0"}')
-        echo "Drude particles with spring constants: $SPRING_COUNT"
-        echo "Average spring constant (k): $AVG_SPRING kcal/mol/Å²"
+    echo "=== THOLE SCREENING ANALYSIS ==="
+    THOLE_VALUES=$(awk '{if($6 != "DRUD" && $5 !~ /^LP/ && $10 != 0) print $10}' /tmp/drude_atoms.tmp)
+    THOLE_COUNT=$(echo "$THOLE_VALUES" | grep -v "^$" | wc -l)
+    if [ $THOLE_COUNT -gt 0 ]; then
+        AVG_THOLE=$(echo "$THOLE_VALUES" | awk '{sum += $1; count++} END {if(count > 0) printf "%.3f", sum/count; else print "0"}')
+        echo "Parent atoms with Thole parameters: $THOLE_COUNT"
+        echo "Average Thole parameter: $AVG_THOLE"
+        
+        # Note: Thole values are often negative in PSF files
+        echo "Thole parameter range:"
+        echo "$THOLE_VALUES" | sort -n | awk 'NR==1{min=$1} END{print "  Min: " min "  Max: " $1}'
     else
-        echo "No explicit spring constants found in DRUD atoms"
+        echo "No Thole screening parameters found"
     fi
+    
+    # Analyze Drude particle masses (should be ~0.4 amu)
+    echo
+    echo "=== DRUDE PARTICLE MASS ANALYSIS ==="
+    DRUDE_MASSES=$(awk '{if($5 ~ /^D/ && $8 > 0.3 && $8 < 0.5) print $8}' /tmp/drude_atoms.tmp)
+    DRUDE_MASS_COUNT=$(echo "$DRUDE_MASSES" | grep -v "^$" | wc -l)
+    if [ $DRUDE_MASS_COUNT -gt 0 ]; then
+        AVG_DRUDE_MASS=$(echo "$DRUDE_MASSES" | awk '{sum += $1; count++} END {if(count > 0) printf "%.3f", sum/count; else print "0"}')
+        echo "Drude particles: $DRUDE_MASS_COUNT"
+        echo "Average Drude mass: $AVG_DRUDE_MASS amu (should be ~0.4)"
+        
+        # Check for mass consistency
+        MASS_CONSISTENCY=$(echo "$DRUDE_MASSES" | awk '{if($1 < 0.3 || $1 > 0.5) bad++} END {if(bad) print "INCONSISTENT"; else print "CONSISTENT"}')
+        echo "Mass consistency: $MASS_CONSISTENCY"
+    fi
+    
+    # Note about spring constants
+    echo
+    echo "=== DRUDE SPRING CONSTANT INFO ==="
+    echo "Note: Drude spring constants (k) are not stored per-atom in PSF files."
+    echo "They are typically defined globally in parameter files as:"
+    echo "  BOND DRUD X   500.000 0.000  (k=500 kcal/mol/Å²)"
+    echo "  or KDRUDE = 500.0 in CHARMM"
 
     echo
     echo "=== CONNECTIVITY ANALYSIS ==="
