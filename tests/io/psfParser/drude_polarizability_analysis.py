@@ -170,4 +170,4 @@ def test_drude_anisotropy_information():
     # For now, just check if we can access the expected counts from our basic tests
     assert expected_anisotropic_sites == 745
     assert expected_drude_particles == 3814
-    assert abs(expected_fraction - 0.1953) < 0.001
+    assert abs(expected_fraction - 0.1953) < 1e-4

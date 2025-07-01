@@ -83,7 +83,7 @@ def test_parse_drude_particles():
     assert parent_atoms == 7630, f"Expected 7630 parent atoms, got {parent_atoms}"
     
     # Verify Drude particle masses (should all be 0.4 amu)
-    assert all(abs(mass - 0.4) < 0.001 for mass in drude_masses), \
+    assert all(abs(mass - 0.4) < 1e-4 for mass in drude_masses), \
         "All Drude particles should have mass 0.4 amu"
     
     # Verify total Drude charge

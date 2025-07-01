@@ -106,16 +106,16 @@ def test_drude_alpha_parameters_parsing():
     # Verify alpha value statistics
     assert len(alpha_values) == 3814
     avg_alpha = sum(alpha_values) / len(alpha_values)
-    assert abs(avg_alpha - 0.8018) < 0.001, f"Expected average alpha 0.8018, got {avg_alpha:.4f}"
+    assert abs(avg_alpha - 0.8018) < 1e-4, f"Expected average alpha 0.8018, got {avg_alpha:.4f}"
     
     # Verify range
-    assert abs(min(alpha_values) - 0.1260) < 0.001, f"Expected min alpha 0.1260, got {min(alpha_values)}"
-    assert abs(max(alpha_values) - 2.3990) < 0.001, f"Expected max alpha 2.3990, got {max(alpha_values)}"
+    assert abs(min(alpha_values) - 0.1260) < 1e-4, f"Expected min alpha 0.1260, got {min(alpha_values)}"
+    assert abs(max(alpha_values) - 2.3990) < 1e-4, f"Expected max alpha 2.3990, got {max(alpha_values)}"
     
     # Verify specific atom types have expected alpha values
     if "OE2" in alpha_by_type:
         avg_oe2 = sum(alpha_by_type["OE2"]) / len(alpha_by_type["OE2"])
-        assert abs(avg_oe2 - 2.3990) < 0.001, f"Expected OE2 alpha 2.3990, got {avg_oe2}"
+        assert abs(avg_oe2 - 2.3990) < 1e-4, f"Expected OE2 alpha 2.3990, got {avg_oe2}"
 
 
 def test_drude_thole_parameters_parsing():
@@ -162,11 +162,11 @@ def test_drude_thole_parameters_parsing():
     
     # Verify Thole statistics
     avg_thole = sum(thole_values) / len(thole_values)
-    assert abs(avg_thole - (-1.220)) < 0.001, f"Expected average Thole -1.220, got {avg_thole:.3f}"
+    assert abs(avg_thole - (-1.220)) < 1e-3, f"Expected average Thole -1.220, got {avg_thole:.3f}"
     
     # Verify range
-    assert abs(min(thole_values) - (-2.180)) < 0.001, f"Expected min Thole -2.180, got {min(thole_values)}"
-    assert abs(max(thole_values) - (-0.467)) < 0.001, f"Expected max Thole -0.467, got {max(thole_values)}"
+    assert abs(min(thole_values) - (-2.180)) < 1e-4, f"Expected min Thole -2.180, got {min(thole_values)}"
+    assert abs(max(thole_values) - (-0.467)) < 1e-4, f"Expected max Thole -0.467, got {max(thole_values)}"
 
 
 def test_drude_extended_atom_line_format():
@@ -230,4 +230,4 @@ def test_drude_extended_atom_line_format():
     # Parse the Drude particle line
     parts = sample_drude_line.split()
     drude_mass = float(parts[7])
-    assert abs(drude_mass - 0.4) < 0.001, f"Drude particle mass should be 0.4, got {drude_mass}"
+    assert abs(drude_mass - 0.4) < 1e-4, f"Drude particle mass should be 0.4, got {drude_mass}"

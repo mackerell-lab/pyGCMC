@@ -83,7 +83,7 @@ def test_parse_drude_hydrogen_bonding():
     assert num_donors == 823, f"Expected 823 donors, got {num_donors}"
     assert num_acceptors == 727, f"Expected 727 acceptors, got {num_acceptors}"
     assert total_hbond_sites == 1550, f"Expected 1550 H-bond sites, got {total_hbond_sites}"
-    assert abs(hbond_density - 0.1194) < 0.001, \
+    assert abs(hbond_density - 0.1194) < 1e-4, \
         f"Expected H-bond density 0.1194, got {hbond_density:.4f}"
 
 
