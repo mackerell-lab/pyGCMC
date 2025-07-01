@@ -530,7 +530,7 @@ analyze_drude_psf() {
                 }
             }' > /tmp/donor_indices.tmp
             
-            # Create atom type lookup table
+            # Create atom type lookup table (PSF uses 1-based indexing)
             awk '{print $1, $6}' /tmp/drude_atoms.tmp > /tmp/atom_types.tmp
             
             # Join donor indices with atom types
@@ -547,16 +547,21 @@ analyze_drude_psf() {
                 
                 echo
                 echo "Top acceptor types by frequency:"
-                # First collect all acceptor atom indices
+                echo "(Fixed: Only counting actual acceptor atoms, not their neighbors)"
+                # First collect all acceptor atom indices (ONLY first of each pair)
                 cat /tmp/acceptors.tmp | awk '{
                     for(i=1; i<=NF; i+=2) {
-                        if(i+1 <= NF) {
+                        if(i <= NF) {
                             acceptor = $i
-                            neighbor = $(i+1)
+                            # Skip the neighbor index at position i+1
                             print acceptor
                         }
                     }
                 }' > /tmp/acceptor_indices.tmp
+                
+                # Count unique acceptor indices
+                UNIQUE_ACCEPTORS=$(sort -u /tmp/acceptor_indices.tmp | wc -l)
+                echo "Unique acceptor atoms: $UNIQUE_ACCEPTORS"
                 
                 # Join acceptor indices with atom types (reuse lookup table)
                 awk 'NR==FNR{types[$1]=$2; next} {if($1 in types) print types[$1]}' /tmp/atom_types.tmp /tmp/acceptor_indices.tmp | \
