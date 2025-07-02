@@ -3,6 +3,7 @@
 #include "psfParserMain.hpp"
 #include "psfParserStringUtils.hpp"
 #include "psfParserSections.hpp"
+#include "psfParserSectionsConnectivity.hpp"
 #include <fstream>
 #include <sstream>
 #include <vector>
@@ -145,11 +146,11 @@ bool PSFParser::parse_to_topology(const std::string& filename, model::Topology& 
             bool success = false;
 
             if (section == "NBOND") {
-                success = PSFParserSections::parse_bonds_from_lines(sections[section], topology);
+                success = PSFParserSectionsConnectivity::parse_bonds_from_lines(sections[section], topology);
             } else if (section == "NTHETA") {
-                success = PSFParserSections::parse_angles_from_lines(sections[section], topology);
+                success = PSFParserSectionsConnectivity::parse_angles_from_lines(sections[section], topology);
             } else if (section == "NPHI") {
-                success = PSFParserSections::parse_dihedrals_from_lines(sections[section], topology);
+                success = PSFParserSectionsConnectivity::parse_dihedrals_from_lines(sections[section], topology);
             } else if (section == "NIMPHI") {
                 success = PSFParserSections::parse_impropers_from_lines(sections[section], topology);
             } else if (section == "CMAP") {

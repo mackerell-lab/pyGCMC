@@ -3,6 +3,7 @@
 #pragma once
 
 #include "psfParserSectionsBasic.hpp"
+#include "psfParserSectionsConnectivity.hpp"
 #include "../../model/ModelModule.hpp"
 #include <string>
 #include <vector>
