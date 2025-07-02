@@ -202,6 +202,32 @@ inline bool ForceField::has_alpha_params(const std::string& type) const {
     return alpha_thole_params_.find(type) != alpha_thole_params_.end();
 }
 
+// === NBTHOLE Methods Implementation ===
+
+inline void ForceField::add_nbthole(const std::string& type1, const std::string& type2, double thole) {
+    auto key = makeTypePair(type1, type2);
+    nbthole_params_[key] = NBTHOLEParams{thole};
+}
+
+inline std::tuple<double, bool> ForceField::get_nbthole(const std::string& type1, const std::string& type2) const {
+    auto key = makeTypePair(type1, type2);
+    auto it = nbthole_params_.find(key);
+    if (it != nbthole_params_.end()) {
+        return std::make_tuple(it->second.thole, true);
+    }
+    return std::make_tuple(0.0, false);
+}
+
+inline bool ForceField::has_nbthole(const std::string& type1, const std::string& type2) const {
+    auto key = makeTypePair(type1, type2);
+    return nbthole_params_.find(key) != nbthole_params_.end();
+}
+
+inline void ForceField::set_drude_global_params(double tcut, int maxnbthole) {
+    drude_global_params_.tcut = tcut;
+    drude_global_params_.maxnbthole = maxnbthole;
+}
+
 
 } // namespace forcefield
 } // namespace model

@@ -126,6 +126,8 @@ using NBFIXParams = forcefield::NBFIXParams;
 using AlphaTHoleParams = forcefield::AlphaTHoleParams;
 using LonePairParams = forcefield::LonePairParams;
 using AnisotropyParams = forcefield::AnisotropyParams;
+using NBTHOLEParams = forcefield::NBTHOLEParams;
+using DrudeGlobalParams = forcefield::DrudeGlobalParams;
 
 /**
  * @brief Get model module version

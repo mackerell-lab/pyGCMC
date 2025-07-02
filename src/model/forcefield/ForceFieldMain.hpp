@@ -41,6 +41,8 @@ public:
     void add_alpha_thole_params(const std::string& type, double alpha, double thole);
     void add_lonepair(const LonePairParams& params);
     void add_anisotropy(const AnisotropyParams& params);
+    void add_nbthole(const std::string& type1, const std::string& type2, double thole);
+    void set_drude_global_params(double tcut, int maxnbthole);
 
     // === Parameter Retrieval Methods ===
     double get_atom_mass(const std::string& type) const;
@@ -60,6 +62,9 @@ public:
     const AlphaTHoleParams& get_alpha_params(const std::string& type) const;
     const std::vector<LonePairParams>& get_lonepairs() const { return lonepairs_; }
     const std::vector<AnisotropyParams>& get_anisotropies() const { return anisotropies_; }
+    std::tuple<double, bool> get_nbthole(const std::string& type1, const std::string& type2) const;
+    double get_tcut() const { return drude_global_params_.tcut; }
+    int get_maxnbthole() const { return drude_global_params_.maxnbthole; }
 
     // === Existence Check Methods ===
     bool has_atom_mass(const std::string& type) const;
@@ -75,6 +80,7 @@ public:
     
     // === Drude-specific Existence Check Methods ===
     bool has_alpha_params(const std::string& type) const;
+    bool has_nbthole(const std::string& type1, const std::string& type2) const;
 
     // === Size Methods ===
     size_t get_num_atom_types() const { return atom_masses_.size(); }
@@ -89,6 +95,7 @@ public:
     size_t get_num_alpha_params() const { return alpha_thole_params_.size(); }
     size_t get_num_lonepairs() const { return lonepairs_.size(); }
     size_t get_num_anisotropies() const { return anisotropies_.size(); }
+    size_t get_num_nbthole() const { return nbthole_params_.size(); }
 
 
     // === Nonbonded Parameters ===
@@ -134,6 +141,8 @@ private:
     std::map<std::string, AlphaTHoleParams> alpha_thole_params_;
     std::vector<LonePairParams> lonepairs_;
     std::vector<AnisotropyParams> anisotropies_;
+    std::map<std::pair<std::string, std::string>, NBTHOLEParams> nbthole_params_;
+    DrudeGlobalParams drude_global_params_;
 };
 
 } // namespace forcefield

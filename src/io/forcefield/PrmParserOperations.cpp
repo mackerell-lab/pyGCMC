@@ -189,6 +189,62 @@ void PrmParserOperations::parseStream(std::istream& input, pygcmc::model::ForceF
                 }
             }
         }
+        
+        // Check for THOLE global parameters line (THOLE TCUT ... MAXNBTHOLE ...)
+        if (cleanScanLine.find("THOLE") == 0 && cleanScanLine.find("TCUT") != std::string::npos) {
+            auto tokens = PrmParserStructures::tokenize(cleanScanLine);
+            double tcut = 5.0;  // default
+            int maxnbthole = 5000;  // default
+            
+            for (size_t i = 0; i < tokens.size(); ++i) {
+                if (tokens[i] == "TCUT" && i + 1 < tokens.size()) {
+                    tcut = PrmParserStructures::safe_stod(tokens[i + 1], "TCUT");
+                } else if (tokens[i] == "MAXNBTHOLE" && i + 1 < tokens.size()) {
+                    maxnbthole = PrmParserStructures::safe_stoi(tokens[i + 1], "MAXNBTHOLE");
+                }
+            }
+            
+            ff.set_drude_global_params(tcut, maxnbthole);
+            if (debug_output) {
+                std::cerr << "Pre-scan: Set THOLE global params: TCUT=" << tcut 
+                          << ", MAXNBTHOLE=" << maxnbthole << std::endl;
+            }
+        }
+        
+        // Check for NBTHOLE lines (atom1 atom2 value)
+        // These appear after the THOLE global line and before "end"
+        if (!cleanScanLine.empty() && !in_patch) {
+            auto tokens = PrmParserStructures::tokenize(cleanScanLine);
+            if (tokens.size() == 3) {
+                // Check if this might be an NBTHOLE line (two atom types + value)
+                // NBTHOLE lines have format: ATOM1 ATOM2 VALUE
+                // Atom types typically contain letters and numbers
+                bool isAtomType1 = tokens[0].find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") == std::string::npos;
+                bool isAtomType2 = tokens[1].find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") == std::string::npos;
+                
+                if (isAtomType1 && isAtomType2 && tokens[0].length() <= 8 && tokens[1].length() <= 8) {
+                    try {
+                        // Try to parse the third token as a double
+                        double thole = PrmParserStructures::safe_stod(tokens[2], "potential NBTHOLE value");
+                        
+                        // Additional checks to avoid parsing other sections
+                        if (tokens[0] != "MASS" && tokens[0] != "ATOM" && tokens[0] != "BOND" &&
+                            tokens[0] != "ANGLE" && tokens[0] != "DIHE" && tokens[0] != "IMPR" &&
+                            tokens[0] != "NONB" && tokens[0] != "NBFIX" && tokens[0] != "HBOND" &&
+                            tokens[0] != "CMAP" && tokens[0] != "END" && tokens[0] != "end") {
+                            // Likely an NBTHOLE line
+                            ff.add_nbthole(tokens[0], tokens[1], thole);
+                            if (debug_output) {
+                                std::cerr << "Pre-scan: Added NBTHOLE for " << tokens[0] 
+                                          << "-" << tokens[1] << " = " << thole << std::endl;
+                            }
+                        }
+                    } catch (...) {
+                        // Not an NBTHOLE line, ignore
+                    }
+                }
+            }
+        }
     }
     
     if (debug_output) {

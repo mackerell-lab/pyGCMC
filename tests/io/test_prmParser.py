@@ -75,7 +75,9 @@ from prmParser.drude_str_parsing import (
     test_lonepair_definitions,
     test_anisotropy_definitions,
     test_atom_type_count,
-    test_specific_drude_atom_types
+    test_specific_drude_atom_types,
+    test_nbthole_parameters_from_str,
+    test_drude_global_parameters_from_str
 )
 
 # Support direct execution for testing

@@ -115,6 +115,21 @@ struct AnisotropyParams {
     // Note: For 2D anisotropy in Drude model, often only a11 and a22 are used
 };
 
+/**
+ * @brief Parameters for NBTHOLE (pairwise Thole screening parameters)
+ */
+struct NBTHOLEParams {
+    double thole = 0.0;       ///< Pairwise Thole screening parameter (dimensionless)
+};
+
+/**
+ * @brief Global Drude model parameters
+ */
+struct DrudeGlobalParams {
+    double tcut = 5.0;         ///< Thole screening cutoff distance (Angstroms)
+    int maxnbthole = 5000;     ///< Maximum number of NBTHOLE entries allowed
+};
+
 
 
 } // namespace forcefield

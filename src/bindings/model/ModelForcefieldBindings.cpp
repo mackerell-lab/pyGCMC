@@ -131,13 +131,23 @@ void init_forcefield_bindings(py::module& m, py::module&) {
         .def("add_alpha_thole_params", &::pygcmc::model::ForceField::add_alpha_thole_params)
         .def("add_lonepair", &::pygcmc::model::ForceField::add_lonepair)
         .def("add_anisotropy", &::pygcmc::model::ForceField::add_anisotropy)
+        .def("add_nbthole", &::pygcmc::model::ForceField::add_nbthole)
+        .def("set_drude_global_params", &::pygcmc::model::ForceField::set_drude_global_params)
         .def("get_alpha_params", &::pygcmc::model::ForceField::get_alpha_params)
         .def("get_lonepairs", &::pygcmc::model::ForceField::get_lonepairs, py::return_value_policy::reference_internal)
         .def("get_anisotropies", &::pygcmc::model::ForceField::get_anisotropies, py::return_value_policy::reference_internal)
+        .def("get_nbthole", [](const ::pygcmc::model::ForceField& ff, const std::string& type1, const std::string& type2) {
+            auto result = ff.get_nbthole(type1, type2);
+            return std::make_tuple(std::get<0>(result), std::get<1>(result));
+        }, "Get NBTHOLE parameters for a pair of atom types. Returns (thole, found)")
+        .def("get_tcut", &::pygcmc::model::ForceField::get_tcut)
+        .def("get_maxnbthole", &::pygcmc::model::ForceField::get_maxnbthole)
         .def("has_alpha_params", &::pygcmc::model::ForceField::has_alpha_params)
+        .def("has_nbthole", &::pygcmc::model::ForceField::has_nbthole)
         .def("get_num_alpha_params", &::pygcmc::model::ForceField::get_num_alpha_params)
         .def("get_num_lonepairs", &::pygcmc::model::ForceField::get_num_lonepairs)
         .def("get_num_anisotropies", &::pygcmc::model::ForceField::get_num_anisotropies)
+        .def("get_num_nbthole", &::pygcmc::model::ForceField::get_num_nbthole)
         .def("get_nonbonded_params", static_cast<const ::pygcmc::model::NonbondedParams& (::pygcmc::model::ForceField::*)() const>(&::pygcmc::model::ForceField::get_nonbonded_params))
         .def_static("makeTypePair", &::pygcmc::model::ForceField::makeTypePair)
         .def_static("makeTypeTriple", &::pygcmc::model::ForceField::makeTypeTriple)

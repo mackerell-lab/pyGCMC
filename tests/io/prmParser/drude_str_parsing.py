@@ -180,5 +180,41 @@ def test_specific_drude_atom_types(str_file_path):
     assert lj_params.epsilon == 0.0
     assert lj_params.rmin_half == 0.01
 
+def test_nbthole_parameters_from_str(str_file_path):
+    """Test reading of NBTHOLE parameters (pairwise Thole screening)"""
+    ff = pygcmc.PRMParser.parse_file(str_file_path)
+    
+    # Test specific NBTHOLE parameters from the file
+    # OD2C2B-CD32B has NBTHOLE = 1.45000 (line 8246)
+    thole, found = ff.get_nbthole('OD2C2B', 'CD32B')
+    assert found == True
+    assert thole == 1.45000
+    
+    # ODW-CALD has NBTHOLE = 1.50877 (line 8249)
+    thole, found = ff.get_nbthole('ODW', 'CALD')
+    assert found == True
+    assert thole == 1.50877
+    
+    # SODD-OD2C1A has NBTHOLE = 1.04000 (line 8254)
+    thole, found = ff.get_nbthole('SODD', 'OD2C1A')
+    assert found == True
+    assert thole == 1.04000
+    
+    # Test non-existent pair
+    thole, found = ff.get_nbthole('XXX', 'YYY')
+    assert found == False
+
+def test_drude_global_parameters_from_str(str_file_path):
+    """Test reading of global Drude parameters (TCUT, MAXNBTHOLE)"""
+    ff = pygcmc.PRMParser.parse_file(str_file_path)
+    
+    # Test if TCUT and MAXNBTHOLE are accessible
+    # According to the file: THOLE TCUT 5.0 MAXNBTHOLE 5000 (line 8242)
+    tcut = ff.get_tcut()
+    assert tcut == 5.0
+    
+    maxnbthole = ff.get_maxnbthole()
+    assert maxnbthole == 5000
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
