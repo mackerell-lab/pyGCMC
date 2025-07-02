@@ -3,6 +3,7 @@
 #include "PrmParserMain.hpp"
 #include "PrmParserOperations.hpp"
 #include "PrmParserSections.hpp"
+#include "PrmParserSectionHandlers.hpp"
 #include "model/ModelModule.hpp"
 #include <fstream>
 
@@ -61,15 +62,15 @@ void PRMParser::parseStream(std::istream& input, pygcmc::model::ForceField& ff) 
 }
 
 void PRMParser::parseAtomsSection(std::istream& input, pygcmc::model::ForceField& ff) {
-    PrmParserOperations::parseAtomsSection(input, ff);
+    PrmParserSectionHandlers::parseAtomsSection(input, ff, debug_output);
 }
 
 void PRMParser::parseBondsSection(std::istream& input, pygcmc::model::ForceField& ff) {
-    PrmParserOperations::parseBondsSection(input, ff);
+    PrmParserSectionHandlers::parseBondsSection(input, ff, debug_output);
 }
 
 void PRMParser::parseAnglesSection(std::istream& input, pygcmc::model::ForceField& ff) {
-    PrmParserOperations::parseAnglesSection(input, ff);
+    PrmParserSectionHandlers::parseAnglesSection(input, ff, debug_output);
 }
 
 void PRMParser::parseDihedralsSection(std::istream& input, pygcmc::model::ForceField& ff) {

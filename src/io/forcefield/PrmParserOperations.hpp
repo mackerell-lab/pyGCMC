@@ -10,11 +10,6 @@ namespace io {
 
 class PrmParserOperations {
 public:
-    // Basic section parsing operations
-    static void parseAtomsSection(std::istream& input, pygcmc::model::ForceField& ff);
-    static void parseBondsSection(std::istream& input, pygcmc::model::ForceField& ff);
-    static void parseAnglesSection(std::istream& input, pygcmc::model::ForceField& ff);
-    
     // Stream parsing - the main parsing loop
     static void parseStream(std::istream& input, pygcmc::model::ForceField& ff);
     
