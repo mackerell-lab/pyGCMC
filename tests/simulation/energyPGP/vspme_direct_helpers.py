@@ -82,7 +82,7 @@ def test_initial_energy_components(system, moving_residue_index):
     for i, residue in enumerate(system.residues):
         print(f"Residue {i} LJ energy: {residue.energy_vdw:.6f} kJ/mol")
 
-    # 注意：computeRealSpacePGP函数虽然在C++代码中存在，但未被暴露到Python绑定中
+    # Note: computeRealSpacePGP function exists in C++ code but is not exposed to Python bindings
     print("\nNote: computeRealSpacePGP is defined in C++ but not exposed to Python.")
     print("Direct space energy calculation will be handled by regular PGP methods instead.")
     

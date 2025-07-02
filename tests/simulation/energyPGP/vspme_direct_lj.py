@@ -112,7 +112,7 @@ def test_pgp_direct_and_lj_energies():
     print("\nNote: Individual component verification skipped - focusing on energy changes after movement")
     
     # --- Move Molecule ---
-    translation = [0.15, 0.15, 0.15]  # 增加移动距离，使LJ能量变化明显
+    translation = [0.15, 0.15, 0.15]  # Increase movement distance to make LJ energy changes significant
     moving_residue = system.residues[moving_residue_index]
 
     print(f"\nMoving residue {moving_residue_index} by {translation} nm...")

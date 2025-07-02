@@ -98,7 +98,7 @@ def test_compare_pgp_pme_delta_energies():
     sys.stdout.flush()
 
     # --- Move Molecule ---
-    translation = [0.15, 0.15, 0.15]  # 增加移动距离，使LJ能量变化明显
+    translation = [0.15, 0.15, 0.15]  # Increase movement distance to make LJ energy changes significant
     moving_residue = system.residues[moving_residue_index]
 
     print(f"\nMoving residue {moving_residue_index} by {translation} nm...")
