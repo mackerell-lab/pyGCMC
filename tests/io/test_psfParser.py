@@ -14,7 +14,8 @@ Modular structure:
 - drude_validation.py: Drude validation tests (4 functions)
 - drude_extended_format.py: Drude extended format tests (4 functions)
 - drude_polarizability_analysis.py: Drude polarizability tests (3 functions)
-- drude_comprehensive_analysis.py: Drude comprehensive analysis tests (5 functions)
+- drude_atom_and_connectivity.py: Drude atom type and connectivity tests (3 functions)
+- drude_bonding_and_validation.py: Drude hydrogen bonding and validation tests (2 functions)
 """
 
 import os
@@ -89,11 +90,15 @@ from psfParser.drude_polarizability_analysis import (
     test_drude_anisotropy_information
 )
 
-# Drude comprehensive analysis
-from psfParser.drude_comprehensive_analysis import (
+# Drude atom type and connectivity analysis
+from psfParser.drude_atom_and_connectivity import (
     test_enhanced_atom_type_distribution,
     test_thole_screening_analysis,
-    test_enhanced_connectivity_analysis,
+    test_enhanced_connectivity_analysis
+)
+
+# Drude hydrogen bonding and validation
+from psfParser.drude_bonding_and_validation import (
     test_hydrogen_bonding_analysis,
     test_psf_validation_summary
 )
