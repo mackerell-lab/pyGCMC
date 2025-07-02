@@ -7,7 +7,8 @@ Run: pytest tests/simulation/test_energy_ewald.py
 
 Modular structure:
 - basic_comparison.py: Basic energy comparison tests (3 functions)
-- parameter_studies.py: Parameter studies tests (3 functions)
+- ewald_sensitivity_convergence.py: Parameter sensitivity and convergence tests (2 functions)
+- ewald_error_tolerance.py: Error tolerance test (1 function)
 - advanced_analysis.py: Advanced analysis tests (2 functions)
 - accuracy_validation.py: Accuracy validation tests (2 functions)
 """
@@ -19,10 +20,14 @@ from energyEwald.basic_comparison import (
     test_ewald_symmetry
 )
 
-# Parameter studies tests
-from energyEwald.parameter_studies import (
+# Parameter sensitivity and convergence tests
+from energyEwald.ewald_sensitivity_convergence import (
     test_ewald_parameter_sensitivity,
-    test_ewald_error_convergence,
+    test_ewald_error_convergence
+)
+
+# Error tolerance test
+from energyEwald.ewald_error_tolerance import (
     test_ewald_error_tolerance
 )
 
