@@ -78,13 +78,17 @@ from pdbParser.test_4wp7_composition import (
     test_4wp7_chemical_composition
 )
 
-# Drude force field tests
-from pdbParser.drude_pdb import (
+# Drude basic parsing tests
+from pdbParser.drude_basic_parsing import (
     test_drude_pdb_file_exists,
     test_drude_pdb_basic_parsing,
     test_drude_pdb_atom_counts,
     test_drude_pdb_atom_type_recognition,
-    test_drude_polarizable_residue_types,
+    test_drude_polarizable_residue_types
+)
+
+# Drude advanced validation tests
+from pdbParser.drude_advanced_validation import (
     test_drude_parent_drude_pairing,
     test_drude_coordinate_precision,
     test_drude_lone_pair_distribution,
