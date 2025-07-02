@@ -62,7 +62,21 @@ from prmParser.charmm_forcefields import (
 )
 
 # Drude STR parsing tests
-from prmParser.drude_str_parsing import TestDrudeSTRParsing
+from prmParser.drude_str_parsing import (
+    str_file_path,
+    test_parse_drude_str_file,
+    test_bond_parameters_from_str,
+    test_angle_parameters_from_str,
+    test_dihedral_parameters_from_str,
+    test_improper_parameters_from_str,
+    test_nonbonded_parameters_from_str,
+    test_nbfix_parameters_from_str,
+    test_drude_alpha_thole_parameters,
+    test_lonepair_definitions,
+    test_anisotropy_definitions,
+    test_atom_type_count,
+    test_specific_drude_atom_types
+)
 
 # Support direct execution for testing
 if __name__ == "__main__":
