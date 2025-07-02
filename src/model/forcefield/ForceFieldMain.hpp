@@ -36,6 +36,11 @@ public:
     void add_improper_params(const std::string& type1, const std::string& type2,
                             const std::string& type3, const std::string& type4,
                             double kpsi, double psi0);
+    
+    // === Drude-specific Parameter Addition Methods ===
+    void add_alpha_thole_params(const std::string& type, double alpha, double thole);
+    void add_lonepair(const LonePairParams& params);
+    void add_anisotropy(const AnisotropyParams& params);
 
     // === Parameter Retrieval Methods ===
     double get_atom_mass(const std::string& type) const;
@@ -50,6 +55,11 @@ public:
                                                           const std::string& type4) const;
     const ImproperParams& get_improper_params(const std::string& type1, const std::string& type2,
                                             const std::string& type3, const std::string& type4) const;
+    
+    // === Drude-specific Parameter Retrieval Methods ===
+    const AlphaTHoleParams& get_alpha_params(const std::string& type) const;
+    const std::vector<LonePairParams>& get_lonepairs() const { return lonepairs_; }
+    const std::vector<AnisotropyParams>& get_anisotropies() const { return anisotropies_; }
 
     // === Existence Check Methods ===
     bool has_atom_mass(const std::string& type) const;
@@ -62,6 +72,9 @@ public:
                             const std::string& type3, const std::string& type4) const;
     bool has_improper_params(const std::string& type1, const std::string& type2,
                             const std::string& type3, const std::string& type4) const;
+    
+    // === Drude-specific Existence Check Methods ===
+    bool has_alpha_params(const std::string& type) const;
 
     // === Size Methods ===
     size_t get_num_atom_types() const { return atom_masses_.size(); }
@@ -71,6 +84,11 @@ public:
     size_t get_num_angle_types() const { return angle_params_.size(); }
     size_t get_num_dihedral_types() const { return dihedral_params_.size(); }
     size_t get_num_improper_types() const { return improper_params_.size(); }
+    
+    // === Drude-specific Size Methods ===
+    size_t get_num_alpha_params() const { return alpha_thole_params_.size(); }
+    size_t get_num_lonepairs() const { return lonepairs_.size(); }
+    size_t get_num_anisotropies() const { return anisotropies_.size(); }
 
 
     // === Nonbonded Parameters ===
@@ -111,6 +129,11 @@ private:
     std::map<std::tuple<std::string, std::string, std::string, std::string>, std::vector<DihedralParams>> dihedral_params_;
     std::map<std::tuple<std::string, std::string, std::string, std::string>, ImproperParams> improper_params_;
     NonbondedParams nonbonded_params_;
+    
+    // Drude-specific parameters
+    std::map<std::string, AlphaTHoleParams> alpha_thole_params_;
+    std::vector<LonePairParams> lonepairs_;
+    std::vector<AnisotropyParams> anisotropies_;
 };
 
 } // namespace forcefield

@@ -32,6 +32,9 @@ void PRMParser::parse_file_to_forcefield(const std::string& filename, pygcmc::mo
 }
 
 pygcmc::model::ForceField PRMParser::parse_file(const std::string& filename) {
+    // Sync debug flags
+    PrmParserOperations::getDebugFlag() = debug_output;
+    PrmParserSections::getDebugFlag() = debug_output;
     pygcmc::model::ForceField ff;
     parse_file_to_forcefield(filename, ff);
     return ff;

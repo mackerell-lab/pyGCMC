@@ -172,6 +172,36 @@ inline bool ForceField::has_improper_params(const std::string& type1, const std:
     return improper_params_.find(key) != improper_params_.end();
 }
 
+// === Drude-specific Parameter Addition Methods ===
+
+inline void ForceField::add_alpha_thole_params(const std::string& type, double alpha, double thole) {
+    alpha_thole_params_[type] = AlphaTHoleParams{alpha, thole};
+}
+
+inline void ForceField::add_lonepair(const LonePairParams& params) {
+    lonepairs_.push_back(params);
+}
+
+inline void ForceField::add_anisotropy(const AnisotropyParams& params) {
+    anisotropies_.push_back(params);
+}
+
+// === Drude-specific Parameter Retrieval Methods ===
+
+inline const AlphaTHoleParams& ForceField::get_alpha_params(const std::string& type) const {
+    auto it = alpha_thole_params_.find(type);
+    if (it == alpha_thole_params_.end()) {
+        throw std::runtime_error("Alpha/Thole parameters not found for type: " + type);
+    }
+    return it->second;
+}
+
+// === Drude-specific Existence Check Methods ===
+
+inline bool ForceField::has_alpha_params(const std::string& type) const {
+    return alpha_thole_params_.find(type) != alpha_thole_params_.end();
+}
+
 
 } // namespace forcefield
 } // namespace model

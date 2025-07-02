@@ -123,6 +123,9 @@ using AngleParams = forcefield::AngleParams;
 using DihedralParams = forcefield::DihedralParams;
 using ImproperParams = forcefield::ImproperParams;
 using NBFIXParams = forcefield::NBFIXParams;
+using AlphaTHoleParams = forcefield::AlphaTHoleParams;
+using LonePairParams = forcefield::LonePairParams;
+using AnisotropyParams = forcefield::AnisotropyParams;
 
 /**
  * @brief Get model module version

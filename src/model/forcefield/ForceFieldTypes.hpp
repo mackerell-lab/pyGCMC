@@ -82,6 +82,39 @@ struct NBFIXParams {
     double rmin = 0.0;        ///< Distance at minimum energy (Angstroms)
 };
 
+/**
+ * @brief Parameters for Drude polarizability (ALPHA/THOLE)
+ */
+struct AlphaTHoleParams {
+    double alpha = 0.0;       ///< Polarizability (Angstrom^3)
+    double thole = 0.0;       ///< Thole screening parameter (dimensionless)
+};
+
+/**
+ * @brief Parameters for lone pair particles
+ */
+struct LonePairParams {
+    std::string type;         ///< Type of lone pair (e.g., "bisector", "relative")
+    std::string host;         ///< Host atom type
+    std::string atom1;        ///< First reference atom
+    std::string atom2;        ///< Second reference atom
+    std::string atom3;        ///< Third reference atom (if needed)
+    double distance = 0.0;    ///< Distance from host atom (Angstroms)
+    double angle = 0.0;       ///< Angle parameter (degrees)
+    double dihedral = 0.0;    ///< Dihedral parameter (degrees)
+};
+
+/**
+ * @brief Parameters for anisotropic polarizability
+ */
+struct AnisotropyParams {
+    std::string type;         ///< Atom type
+    double a11 = 0.0;         ///< XX component of polarizability tensor
+    double a22 = 0.0;         ///< YY component of polarizability tensor
+    double a33 = 0.0;         ///< ZZ component of polarizability tensor (optional)
+    // Note: For 2D anisotropy in Drude model, often only a11 and a22 are used
+};
+
 
 
 } // namespace forcefield

@@ -121,17 +121,24 @@ bool PrmParserStructures::isAtomsSection(const std::string& line) {
 }
 
 bool PrmParserStructures::isBondsSection(const std::string& line) {
-    bool result = line.find("BONDS") != std::string::npos;
-    // Debug output removed
-    return result;
+    // Only treat a line that is exactly "BONDS" (after trimming)
+    // as the start of the parameter BONDS section.
+    const std::string trimmed = trim(line);
+    return trimmed == "BONDS";
 }
 
 bool PrmParserStructures::isAnglesSection(const std::string& line) {
-    return line.find("ANGLES") != std::string::npos;
+    // Only treat a line that is exactly "ANGLES" (after trimming) 
+    // as the start of the parameter ANGLES section.
+    const std::string trimmed = trim(line);
+    return trimmed == "ANGLES";
 }
 
 bool PrmParserStructures::isDihedralsSection(const std::string& line) {
-    return line.find("DIHEDRALS") != std::string::npos;
+    // Only treat a line that is exactly "DIHEDRALS" (after trimming)
+    // as the start of the parameter DIHEDRALS section.
+    const std::string trimmed = trim(line);
+    return trimmed == "DIHEDRALS";
 }
 
 bool PrmParserStructures::isImproperSection(const std::string& line) {
@@ -145,6 +152,22 @@ bool PrmParserStructures::isNonbondedSection(const std::string& line) {
 
 bool PrmParserStructures::isNBFixSection(const std::string& line) {
     return line.find("NBFIX") != std::string::npos;
+}
+
+bool PrmParserStructures::isAlphaTHoleSection(const std::string& line) {
+    return line.find("ALPHA") != std::string::npos && line.find("THOLE") != std::string::npos;
+}
+
+bool PrmParserStructures::isLonePairSection(const std::string& line) {
+    return line.find("LONEPAIR") != std::string::npos;
+}
+
+bool PrmParserStructures::isAnisotropySection(const std::string& line) {
+    return line.find("ANISOTROPY") != std::string::npos;
+}
+
+bool PrmParserStructures::isTHoleSection(const std::string& line) {
+    return line.find("THOLE") != std::string::npos && line.find("TCUT") != std::string::npos;
 }
 
 std::pair<std::string, std::string> PrmParserStructures::make_type_pair(
@@ -173,12 +196,18 @@ bool PrmParserStructures::isTopologyLine(const std::string& line) {
     // Check if this line is a topology definition from STR files
     // These should be skipped when parsing parameters
     
+    // SPECIAL CASE: ATOM lines with ALPHA/THOLE are parameter definitions, not topology
+    if (line.find("ATOM ") == 0 && 
+        (line.find("ALPHA") != std::string::npos || line.find("THOLE") != std::string::npos)) {
+        return false;  // This is a parameter line, not topology
+    }
+    
     // Residue and patch definitions
     if (line.find("RESI ") == 0 || line.find("PRES ") == 0) {
         return true;
     }
     
-    // Atom definitions within topology
+    // Atom definitions within topology (without ALPHA/THOLE)
     if (line.find("ATOM ") == 0) {
         return true;
     }
@@ -228,18 +257,38 @@ bool PrmParserStructures::isTopologyLine(const std::string& line) {
         return true;
     }
     
-    // LONEPAIR definitions (Drude-specific)
+    // LONEPAIR definitions (Drude-specific) - but not if they have parameters
     if (line.find("LONEPAIR") == 0) {
+        // If line contains parameter keywords, it's a parameter line not topology
+        if (line.find("distance") != std::string::npos || 
+            line.find("angle") != std::string::npos ||
+            line.find("dihe") != std::string::npos) {
+            return false;
+        }
         return true;
     }
     
-    // ANISOTROPY definitions (Drude-specific)
+    // ANISOTROPY definitions (Drude-specific) - but not if they have parameters
     if (line.find("ANISOTROPY") == 0) {
+        // If line contains A11, A22, A33, it's a parameter line not topology
+        if (line.find("A11") != std::string::npos || 
+            line.find("A22") != std::string::npos ||
+            line.find("A33") != std::string::npos) {
+            return false;
+        }
         return true;
     }
     
     // CMAP definitions in topology
     if (line.find("CMAP") == 0) {
+        return true;
+    }
+    
+    // Other topology directives from STR files
+    if (line.find("AUTOGENERATE") == 0 ||
+        line.find("DECL") == 0 ||
+        line.find("DEFA") == 0 ||
+        line.find("ANGLE ") == 0) {
         return true;
     }
     

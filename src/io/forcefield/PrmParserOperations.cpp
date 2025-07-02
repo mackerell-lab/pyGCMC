@@ -24,7 +24,190 @@ void PrmParserOperations::parseStream(std::istream& input, pygcmc::model::ForceF
     // Sync debug flags
     PrmParserSections::getDebugFlag() = debug_output;
     
+    // Debug output
+    static int call_count = 0;
+    call_count++;
+    if (debug_output) std::cerr << "DEBUG: parseStream called #" << call_count << ", debug_output=" << debug_output << std::endl;
+    int total_lines = 0;
+    int atom_lines = 0;
+    std::string first_line, last_line;
+    
+    // First pass: collect all ATOM lines with ALPHA/THOLE from the entire file
+    auto startPos = input.tellg();
+    std::string scanLine;
+    bool in_patch = false;  // Track if we're inside a PRES (patch) block
+    int pres_count = 0;  // Count PRES blocks
+    
+    while (std::getline(input, scanLine)) {
+        if (PrmParserStructures::isCommentLine(scanLine)) continue;
+        
+        std::string cleanScanLine = PrmParserStructures::removeComments(scanLine);
+        cleanScanLine = PrmParserStructures::trim(cleanScanLine);
+        
+        // Check if we're entering a PRES (patch) block - skip these
+        if (cleanScanLine.find("PRES ") == 0) {
+            in_patch = true;
+            pres_count++;
+            if (debug_output) {
+                std::cerr << "Pre-scan: Entering PRES block #" << pres_count << ": " << cleanScanLine << std::endl;
+            }
+            continue;
+        }
+        
+        
+        // Check if we're exiting a patch block
+        if (in_patch && (cleanScanLine == "end" || cleanScanLine == "END")) {
+            in_patch = false;
+            if (debug_output) {
+                std::cerr << "Pre-scan: Exiting PRES block" << std::endl;
+            }
+            continue;
+        }
+        
+        // For ATOM lines with ALPHA/THOLE, skip if inside patch blocks
+        // But LONEPAIR and ANISOTROPY should be processed even in patch blocks
+        
+        if (cleanScanLine.find("ATOM ") == 0 &&
+            (cleanScanLine.find("ALPHA") != std::string::npos || cleanScanLine.find("THOLE") != std::string::npos))
+        {
+            // Skip ATOM lines with ALPHA/THOLE if inside patch blocks
+            if (in_patch) {
+                if (debug_output) {
+                    std::cerr << "Pre-scan: Skipping ATOM line in PRES block: " << cleanScanLine << std::endl;
+                }
+                continue;
+            }
+            // Parse ALPHA/THOLE from ATOM line
+            auto tokens = PrmParserStructures::tokenize(cleanScanLine);
+            if (tokens.size() >= 4) {
+                std::string atomType = tokens[2];  // The atom type (e.g., ODW)
+                
+                // Note: For CHARMM force fields, we keep the last occurrence, not the first
+                // So we don't skip duplicates here
+                
+                // Special logging for ND2A2
+                if (atomType == "ND2A2" && debug_output) {
+                    std::cerr << "Pre-scan: Processing ND2A2 line: " << cleanScanLine << std::endl;
+                    std::cerr << "Pre-scan: in_patch = " << in_patch << std::endl;
+                }
+                
+                // Find ALPHA and THOLE values
+                for (size_t i = 0; i < tokens.size(); ++i) {
+                    if (tokens[i] == "ALPHA" && i + 1 < tokens.size()) {
+                        try {
+                            double alpha = PrmParserStructures::safe_stod(tokens[i + 1], "ALPHA for " + atomType);
+                            double thole = 0.0; // Default thole
+                            
+                            // Look for THOLE after ALPHA
+                            if (i + 3 < tokens.size() && tokens[i + 2] == "THOLE") {
+                                thole = PrmParserStructures::safe_stod(tokens[i + 3], "THOLE for " + atomType);
+                            }
+                            
+                            ff.add_alpha_thole_params(atomType, alpha, thole);
+                            atom_lines++;
+                            if (debug_output) {
+                                std::cerr << "Pre-scan: Added ALPHA/THOLE for " << atomType
+                                          << ": alpha=" << alpha << ", thole=" << thole << std::endl;
+                            }
+                            break; 
+                        } catch (const std::exception& e) {
+                            if (debug_output) {
+                                std::cerr << "Pre-scan: Failed to parse ALPHA/THOLE from line: " << cleanScanLine << std::endl;
+                                std::cerr << "Error: " << e.what() << std::endl;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Check for LONEPAIR lines (include those in PRES blocks)
+        if (cleanScanLine.find("LONEPAIR") == 0) {
+            auto tokens = PrmParserStructures::tokenize(cleanScanLine);
+            if (tokens.size() >= 8) {
+                try {
+                    pygcmc::model::LonePairParams params;
+                    params.type = tokens[1];  // e.g., "bisector" or "relative"
+                    params.atom1 = tokens[2]; // The lonepair atom
+                    params.host = tokens[3];  // Host atom
+                    params.atom2 = tokens[4]; // Reference atom 1
+                    params.atom3 = tokens[5]; // Reference atom 2
+                    
+                    // Find "distance", "angle", "dihe" keywords
+                    for (size_t i = 6; i < tokens.size(); ++i) {
+                        if (tokens[i] == "distance" && i + 1 < tokens.size()) {
+                            params.distance = PrmParserStructures::safe_stod(tokens[i + 1], "LONEPAIR distance");
+                        } else if (tokens[i] == "angle" && i + 1 < tokens.size()) {
+                            params.angle = PrmParserStructures::safe_stod(tokens[i + 1], "LONEPAIR angle");
+                        } else if (tokens[i] == "dihe" && i + 1 < tokens.size()) {
+                            params.dihedral = PrmParserStructures::safe_stod(tokens[i + 1], "LONEPAIR dihedral");
+                        }
+                    }
+                    
+                    ff.add_lonepair(params);
+                    if (debug_output) {
+                        std::cerr << "Pre-scan: Added LONEPAIR " << params.type << " for " << params.atom1 << std::endl;
+                    }
+                } catch (const std::exception& e) {
+                    if (debug_output) {
+                        std::cerr << "Pre-scan: Failed to parse LONEPAIR from line: " << cleanScanLine << std::endl;
+                        std::cerr << "Error: " << e.what() << std::endl;
+                    }
+                }
+            }
+        }
+        
+        // Check for ANISOTROPY lines (include those in PRES blocks)
+        if (cleanScanLine.find("ANISOTROPY") == 0) {
+            auto tokens = PrmParserStructures::tokenize(cleanScanLine);
+            if (tokens.size() >= 8) {
+                try {
+                    pygcmc::model::AnisotropyParams params;
+                    params.type = tokens[1];  // atom type
+                    // tokens[2], [3], [4] are reference atoms, but we'll skip them for now
+                    
+                    // Find A11, A22, A33 values
+                    for (size_t i = 5; i < tokens.size(); ++i) {
+                        if (tokens[i] == "A11" && i + 1 < tokens.size()) {
+                            params.a11 = PrmParserStructures::safe_stod(tokens[i + 1], "ANISOTROPY A11");
+                        } else if (tokens[i] == "A22" && i + 1 < tokens.size()) {
+                            params.a22 = PrmParserStructures::safe_stod(tokens[i + 1], "ANISOTROPY A22");
+                        } else if (tokens[i] == "A33" && i + 1 < tokens.size()) {
+                            params.a33 = PrmParserStructures::safe_stod(tokens[i + 1], "ANISOTROPY A33");
+                        }
+                    }
+                    
+                    ff.add_anisotropy(params);
+                    if (debug_output) {
+                        std::cerr << "Pre-scan: Added ANISOTROPY for " << params.type << std::endl;
+                    }
+                } catch (const std::exception& e) {
+                    if (debug_output) {
+                        std::cerr << "Pre-scan: Failed to parse ANISOTROPY from line: " << cleanScanLine << std::endl;
+                        std::cerr << "Error: " << e.what() << std::endl;
+                    }
+                }
+            }
+        }
+    }
+    
+    if (debug_output) {
+        std::cerr << "Pre-scan complete: found " << atom_lines << " ATOM lines with ALPHA/THOLE" << std::endl;
+        std::cerr << "Pre-scan: Detected " << pres_count << " PRES blocks" << std::endl;
+        if (in_patch) {
+            std::cerr << "WARNING: Pre-scan ended while still in_patch=true" << std::endl;
+        }
+    }
+    
+    // Reset to beginning of stream for normal parsing
+    input.clear();
+    input.seekg(startPos);
+    
+    // Now do normal parsing
     while (std::getline(input, line)) {
+        total_lines++;
+        if (total_lines == 1) first_line = line;
+        last_line = line;
         if (debug_output) std::cerr << "Raw line: [" << line << "]" << std::endl;
         
         if (PrmParserStructures::isCommentLine(line)) {
@@ -38,7 +221,7 @@ void PrmParserOperations::parseStream(std::istream& input, pygcmc::model::ForceF
         
         if (cleanLine.empty()) continue;
         
-        // Skip topology lines from STR files
+        // Skip topology lines from STR files (ATOM lines with ALPHA/THOLE were handled in pre-scan)
         if (PrmParserStructures::isTopologyLine(cleanLine)) {
             if (debug_output) std::cerr << "Skipping topology line: " << cleanLine << std::endl;
             continue;
@@ -113,6 +296,21 @@ void PrmParserOperations::parseStream(std::istream& input, pygcmc::model::ForceF
             inSection = true;
             currentSection = "NBFIX";
             PrmParserSections::parseNBFixSection(input, ff);
+        } else if (PrmParserStructures::isAlphaTHoleSection(cleanLine)) {
+            if (debug_output) std::cerr << "Found ALPHA/THOLE section" << std::endl;
+            inSection = true;
+            currentSection = "ALPHA";
+            PrmParserSections::parseAlphaTHoleSection(input, ff);
+        } else if (PrmParserStructures::isLonePairSection(cleanLine)) {
+            if (debug_output) std::cerr << "Found LONEPAIR section" << std::endl;
+            inSection = true;
+            currentSection = "LONEPAIR";
+            PrmParserSections::parseLonePairSection(input, ff);
+        } else if (PrmParserStructures::isAnisotropySection(cleanLine)) {
+            if (debug_output) std::cerr << "Found ANISOTROPY section" << std::endl;
+            inSection = true;
+            currentSection = "ANISOTROPY";
+            PrmParserSections::parseAnisotropySection(input, ff);
         } else if (!inSection) {
             // Handle non-section content if needed
             auto tokens = PrmParserStructures::tokenize(cleanLine);
@@ -126,13 +324,28 @@ void PrmParserOperations::parseStream(std::istream& input, pygcmc::model::ForceF
             }
         }
     }
+    
+    // Debug output
+    if (debug_output) {
+        std::cerr << "DEBUG: parseStream #" << call_count << " finished. Total lines: " << total_lines 
+                  << ", ATOM lines with ALPHA/THOLE: " << atom_lines << std::endl;
+        if (total_lines > 0) {
+            std::cerr << "  First line: " << first_line << std::endl;
+            std::cerr << "  Last line: " << last_line << std::endl;
+        }
+    }
 }
 
 void PrmParserOperations::parseAtomsSection(std::istream& input, pygcmc::model::ForceField& ff) {
     std::string line;
     if (debug_output) std::cerr << "\n=== Entering ATOMS/MASS section parsing ===" << std::endl;
     
+    // Add debug counter
+    int lines_processed = 0;
+    int atoms_with_alpha = 0;
+    
     while (std::getline(input, line)) {
+        lines_processed++;
         if (debug_output) std::cerr << "Raw atom line: [" << line << "]" << std::endl;
         
         if (PrmParserStructures::isCommentLine(line)) {
@@ -151,7 +364,10 @@ void PrmParserOperations::parseAtomsSection(std::istream& input, pygcmc::model::
         
         if (debug_output) std::cerr << "Processed line: [" << fullLine << "]" << std::endl;
         
-        // Skip topology lines from STR files
+        // Note: ATOM lines with ALPHA/THOLE are handled in the pre-scan phase
+        // parseAtomsSection should only parse MASS entries, not ATOM lines
+        
+        // Skip other topology lines from STR files
         if (PrmParserStructures::isTopologyLine(fullLine)) {
             if (debug_output) std::cerr << "Skipping topology line in atoms section: " << fullLine << std::endl;
             continue;
@@ -194,6 +410,13 @@ void PrmParserOperations::parseAtomsSection(std::istream& input, pygcmc::model::
         for (const auto& pair : ff.get_atom_masses()) {
             std::cerr << pair.first << " = " << pair.second << std::endl;
         }
+    }
+    
+    // Add debug summary
+    if (debug_output) {
+        std::cerr << "\n=== Exiting ATOMS/MASS section parsing ===" << std::endl;
+        std::cerr << "Lines processed: " << lines_processed << std::endl;
+        std::cerr << "ATOM lines with ALPHA/THOLE found: " << atoms_with_alpha << std::endl;
     }
 }
 
@@ -273,6 +496,9 @@ void PrmParserOperations::parseAnglesSection(std::istream& input, pygcmc::model:
     if (debug_output) std::cerr << "\n=== Entering ANGLES section parsing ===" << std::endl;
     
     while (std::getline(input, line)) {
+        if (debug_output && line.find("ATOM") != std::string::npos) {
+            std::cerr << "WARNING: ATOM line in angles section: [" << line << "]" << std::endl;
+        }
         if (debug_output) std::cerr << "Raw angle line: [" << line << "]" << std::endl;
         
         // Save original line length before any modifications
@@ -286,6 +512,12 @@ void PrmParserOperations::parseAnglesSection(std::istream& input, pygcmc::model:
         line = PrmParserStructures::removeComments(line);
         line = PrmParserStructures::trim(line);
         if (line.empty()) continue;
+        
+        // Skip ATOM lines (they're not angle parameters)
+        if (line.find("ATOM ") == 0) {
+            if (debug_output) std::cerr << "Skipping ATOM line in angles section: " << line << std::endl;
+            continue;
+        }
         
         // Skip topology lines from STR files
         if (PrmParserStructures::isTopologyLine(line)) {

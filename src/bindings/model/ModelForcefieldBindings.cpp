@@ -67,6 +67,32 @@ void init_forcefield_bindings(py::module& m, py::module&) {
         .def_readwrite("epsilon", &::pygcmc::model::NBFIXParams::epsilon)
         .def_readwrite("rmin", &::pygcmc::model::NBFIXParams::rmin);
 
+    // AlphaTHoleParams
+    py::class_<::pygcmc::model::AlphaTHoleParams>(m, "AlphaTHoleParams")
+        .def(py::init<>())
+        .def_readwrite("alpha", &::pygcmc::model::AlphaTHoleParams::alpha)
+        .def_readwrite("thole", &::pygcmc::model::AlphaTHoleParams::thole);
+
+    // LonePairParams
+    py::class_<::pygcmc::model::LonePairParams>(m, "LonePairParams")
+        .def(py::init<>())
+        .def_readwrite("type", &::pygcmc::model::LonePairParams::type)
+        .def_readwrite("host", &::pygcmc::model::LonePairParams::host)
+        .def_readwrite("atom1", &::pygcmc::model::LonePairParams::atom1)
+        .def_readwrite("atom2", &::pygcmc::model::LonePairParams::atom2)
+        .def_readwrite("atom3", &::pygcmc::model::LonePairParams::atom3)
+        .def_readwrite("distance", &::pygcmc::model::LonePairParams::distance)
+        .def_readwrite("angle", &::pygcmc::model::LonePairParams::angle)
+        .def_readwrite("dihedral", &::pygcmc::model::LonePairParams::dihedral);
+
+    // AnisotropyParams
+    py::class_<::pygcmc::model::AnisotropyParams>(m, "AnisotropyParams")
+        .def(py::init<>())
+        .def_readwrite("type", &::pygcmc::model::AnisotropyParams::type)
+        .def_readwrite("a11", &::pygcmc::model::AnisotropyParams::a11)
+        .def_readwrite("a22", &::pygcmc::model::AnisotropyParams::a22)
+        .def_readwrite("a33", &::pygcmc::model::AnisotropyParams::a33);
+
     // Bind ForceField
     py::class_<::pygcmc::model::ForceField>(m, "ForceField")
         .def(py::init<>())
@@ -101,6 +127,17 @@ void init_forcefield_bindings(py::module& m, py::module&) {
         .def("get_num_angle_types", &::pygcmc::model::ForceField::get_num_angle_types)
         .def("get_num_dihedral_types", &::pygcmc::model::ForceField::get_num_dihedral_types)
         .def("get_num_improper_types", &::pygcmc::model::ForceField::get_num_improper_types)
+        // Drude-specific methods
+        .def("add_alpha_thole_params", &::pygcmc::model::ForceField::add_alpha_thole_params)
+        .def("add_lonepair", &::pygcmc::model::ForceField::add_lonepair)
+        .def("add_anisotropy", &::pygcmc::model::ForceField::add_anisotropy)
+        .def("get_alpha_params", &::pygcmc::model::ForceField::get_alpha_params)
+        .def("get_lonepairs", &::pygcmc::model::ForceField::get_lonepairs, py::return_value_policy::reference_internal)
+        .def("get_anisotropies", &::pygcmc::model::ForceField::get_anisotropies, py::return_value_policy::reference_internal)
+        .def("has_alpha_params", &::pygcmc::model::ForceField::has_alpha_params)
+        .def("get_num_alpha_params", &::pygcmc::model::ForceField::get_num_alpha_params)
+        .def("get_num_lonepairs", &::pygcmc::model::ForceField::get_num_lonepairs)
+        .def("get_num_anisotropies", &::pygcmc::model::ForceField::get_num_anisotropies)
         .def("get_nonbonded_params", static_cast<const ::pygcmc::model::NonbondedParams& (::pygcmc::model::ForceField::*)() const>(&::pygcmc::model::ForceField::get_nonbonded_params))
         .def_static("makeTypePair", &::pygcmc::model::ForceField::makeTypePair)
         .def_static("makeTypeTriple", &::pygcmc::model::ForceField::makeTypeTriple)

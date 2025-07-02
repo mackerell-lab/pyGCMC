@@ -35,6 +35,10 @@ struct PrmParserStructures {
     static bool isImproperSection(const std::string& line);
     static bool isNonbondedSection(const std::string& line);
     static bool isNBFixSection(const std::string& line);
+    static bool isAlphaTHoleSection(const std::string& line);
+    static bool isLonePairSection(const std::string& line);
+    static bool isAnisotropySection(const std::string& line);
+    static bool isTHoleSection(const std::string& line);
     
     // Topology line detection (for STR file parsing)
     static bool isTopologyLine(const std::string& line);
