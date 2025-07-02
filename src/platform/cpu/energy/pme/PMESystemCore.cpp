@@ -1,6 +1,5 @@
 #include "PMESystemCore.hpp"
 #include "PMECore.hpp"
-#include "PMEFFT.hpp"
 #include "PMEGridCharge.hpp"
 #include "PMERecip.hpp"
 #include "platform/platform.hpp"

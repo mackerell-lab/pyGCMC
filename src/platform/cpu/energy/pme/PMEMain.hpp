@@ -42,7 +42,6 @@
 #include "PMEConfig.hpp"
 #include "PMESetup.hpp"
 #include "PMEInterface.hpp"
-#include "PMEFFT.hpp"
 #include "PMESpline.hpp"
 #include "PMEGrid.hpp"
 #include "PMEReal.hpp"

@@ -50,7 +50,8 @@
  * - PMEComposite.hpp: High-level PME calculation coordination
  * - PMECore.hpp: Core PME algorithm implementation
  * - PMEGrid.hpp: Grid-based charge assignment and force interpolation
- * - PMEFFT.hpp: Fast Fourier Transform operations for PME
+ * - PMEFFTCore.hpp: Core FFT algorithms
+ * - PMEFFT3D.hpp: 3D FFT batch operations for PME
  * - PMEBSpline.hpp: B-spline interpolation for charge assignment
  * - PMEReal.hpp: Real-space contribution calculations (similar to Ewald)
  * - PMERecip.hpp: Reciprocal-space calculations using FFT

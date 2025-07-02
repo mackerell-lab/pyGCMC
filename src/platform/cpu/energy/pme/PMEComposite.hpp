@@ -4,7 +4,6 @@
 #include "PMECore.hpp"
 #include "PMESetup.hpp"
 #include "PMEInterface.hpp"
-#include "PMEFFT.hpp"
 #include "PMESpline.hpp"
 #include "PMEGrid.hpp"
 #include "PMERecip.hpp"
