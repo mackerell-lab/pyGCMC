@@ -1,6 +1,7 @@
 // src/io/structure/PdbParserMain.cpp
 
 #include "PdbParserMain.hpp"
+#include "PdbParserStructureRecords.hpp"
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -60,16 +61,16 @@ bool PdbParserMain::parse_common(std::istream& input, model::Structure& structur
                 success = PdbParserRecords::parseTerRecord(line, currentResidue, structure);
                 break;
             case PdbParserStructures::RecordType::HELIX:
-                success = PdbParserRecords::parseHelixRecord(line, structure);
+                success = PdbParserStructureRecords::parseHelixRecord(line, structure);
                 break;
             case PdbParserStructures::RecordType::SHEET:
-                success = PdbParserRecords::parseSheetRecord(line, structure);
+                success = PdbParserStructureRecords::parseSheetRecord(line, structure);
                 break;
             case PdbParserStructures::RecordType::SSBOND:
-                success = PdbParserRecords::parseSSBondRecord(line, structure);
+                success = PdbParserStructureRecords::parseSSBondRecord(line, structure);
                 break;
             case PdbParserStructures::RecordType::CRYST1:
-                success = PdbParserRecords::parseCryst1Record(line, structure);
+                success = PdbParserStructureRecords::parseCryst1Record(line, structure);
                 break;
             default:
                 continue;

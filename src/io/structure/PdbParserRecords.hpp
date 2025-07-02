@@ -40,45 +40,6 @@ public:
                               std::shared_ptr<model::Residue>& currentResidue,
                               model::Structure& structure);
 
-    /**
-     * @brief Parse HELIX record
-     * @param line PDB line to parse
-     * @param structure Structure to populate
-     * @return bool True if parsing succeeded
-     */
-    static bool parseHelixRecord(const std::string& line, model::Structure& structure);
-
-    /**
-     * @brief Parse SHEET record
-     * @param line PDB line to parse
-     * @param structure Structure to populate
-     * @return bool True if parsing succeeded
-     */
-    static bool parseSheetRecord(const std::string& line, model::Structure& structure);
-
-    /**
-     * @brief Parse SSBOND record
-     * @param line PDB line to parse
-     * @param structure Structure to populate
-     * @return bool True if parsing succeeded
-     */
-    static bool parseSSBondRecord(const std::string& line, model::Structure& structure);
-
-    /**
-     * @brief Parse CRYST1 record
-     * @param line PDB line to parse
-     * @param structure Structure to populate
-     * @return bool True if parsing succeeded
-     */
-    static bool parseCryst1Record(const std::string& line, model::Structure& structure);
-
-private:
-    /**
-     * @brief Check if residue type is a small molecule that should use continuity checking
-     * @param resName Residue name
-     * @return bool True if should check atom serial number continuity
-     */
-    static bool isSmallMolecule(const std::string& resName);
 };
 
 } // namespace structure
