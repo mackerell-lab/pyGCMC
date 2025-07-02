@@ -66,10 +66,14 @@ from pdbParser.residue_comparison import (
     test_4wp7_residue_statistics_comparison
 )
 
-# Enhanced 4wp7 tests
-from pdbParser.enhanced_4wp7_tests import (
+# 4wp7 structure tests
+from pdbParser.test_4wp7_structure import (
     test_4wp7_molecule_integrity,
-    test_4wp7_crystal_cell_parsing,
+    test_4wp7_crystal_cell_parsing
+)
+
+# 4wp7 composition tests
+from pdbParser.test_4wp7_composition import (
     test_4wp7_protein_structure_analysis,
     test_4wp7_chemical_composition
 )
