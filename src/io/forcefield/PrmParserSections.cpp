@@ -2,6 +2,7 @@
 
 #include "PrmParserSections.hpp"
 #include "PrmParserStructures.hpp"
+#include "PrmParserBondedSections.hpp"
 #include "model/ModelModule.hpp"
 
 namespace pygcmc {
@@ -14,153 +15,17 @@ bool& PrmParserSections::getDebugFlag() {
     return debug_output;
 }
 
-void PrmParserSections::parseDihedralsSection(std::istream& input, pygcmc::model::ForceField& ff) {
-    std::string line;
-    while (std::getline(input, line)) {
-        // Save original line length before any modifications
-        size_t originalLineLength = line.length();
-        
-        if (PrmParserStructures::isCommentLine(line)) continue;
-        
-        line = PrmParserStructures::removeComments(line);
-        line = PrmParserStructures::trim(line);
-        if (line.empty()) continue;
-        
-        // Skip topology lines from STR files
-        if (PrmParserStructures::isTopologyLine(line)) {
-            if (debug_output) std::cerr << "Skipping topology line in dihedrals section: " << line << std::endl;
-            continue;
-        }
-        
-        // Check for section end
-        if (line == "END" || line == "end" || PrmParserStructures::isAtomsSection(line) || PrmParserStructures::isBondsSection(line) || 
-            PrmParserStructures::isAnglesSection(line) || PrmParserStructures::isImproperSection(line) || 
-            PrmParserStructures::isNonbondedSection(line) || PrmParserStructures::isNBFixSection(line)) {
-            input.seekg(-static_cast<std::streamoff>(originalLineLength + 1), std::ios::cur);
-            break;
-        }
-        
-        auto tokens = PrmParserStructures::tokenize(line);
-        if (tokens.size() >= 7) {
-            std::string type1 = tokens[0];
-            std::string type2 = tokens[1];
-            std::string type3 = tokens[2];
-            std::string type4 = tokens[3];
-            double kchi = PrmParserStructures::safe_stod(tokens[4], "dihedral Kchi for " + type1 + "-" + type2 + "-" + type3 + "-" + type4);
-            int n = PrmParserStructures::safe_stoi(tokens[5], "dihedral n for " + type1 + "-" + type2 + "-" + type3 + "-" + type4);
-            double delta = PrmParserStructures::safe_stod(tokens[6], "dihedral delta for " + type1 + "-" + type2 + "-" + type3 + "-" + type4);
-            
-            ff.add_dihedral_params(type1, type2, type3, type4, kchi, n, delta);
-        }
-    }
-}
-
-void PrmParserSections::parseImproperSection(std::istream& input, pygcmc::model::ForceField& ff) {
-    std::string line;
-    while (std::getline(input, line)) {
-        // Save original line length before any modifications
-        size_t originalLineLength = line.length();
-        
-        if (PrmParserStructures::isCommentLine(line)) continue;
-        
-        line = PrmParserStructures::removeComments(line);
-        line = PrmParserStructures::trim(line);
-        if (line.empty()) continue;
-        
-        // Skip topology lines from STR files
-        if (PrmParserStructures::isTopologyLine(line)) {
-            if (debug_output) std::cerr << "Skipping topology line in improper section: " << line << std::endl;
-            continue;
-        }
-        
-        // Check for section end
-        if (line == "END" || line == "end" || PrmParserStructures::isAtomsSection(line) || PrmParserStructures::isBondsSection(line) || 
-            PrmParserStructures::isAnglesSection(line) || PrmParserStructures::isDihedralsSection(line) || 
-            PrmParserStructures::isNonbondedSection(line) || PrmParserStructures::isNBFixSection(line)) {
-            input.seekg(-static_cast<std::streamoff>(originalLineLength + 1), std::ios::cur);
-            break;
-        }
-        
-        auto tokens = PrmParserStructures::tokenize(line);
-        if (tokens.size() >= 6) {
-            try {
-                std::string type1 = tokens[0];
-                std::string type2 = tokens[1];
-                std::string type3 = tokens[2];
-                std::string type4 = tokens[3];
-                double kpsi = PrmParserStructures::safe_stod(tokens[4], "improper Kpsi");
-                double psi0 = PrmParserStructures::safe_stod(tokens[5], "improper psi0");
-                
-                ff.add_improper_params(type1, type2, type3, type4, kpsi, psi0);
-            } catch (const std::exception& e) {
-                if (PrmParserSections::getDebugFlag()) std::cerr << "Warning: Skipping improper line due to parsing error: " << line << std::endl;
-                continue;
-            }
-        }
-    }
-}
-
-void PrmParserSections::parseNBFixSection(std::istream& input, pygcmc::model::ForceField& ff) {
-    std::string line;
-    while (std::getline(input, line)) {
-        if (PrmParserStructures::isCommentLine(line)) continue;
-        
-        line = PrmParserStructures::removeComments(line);
-        line = PrmParserStructures::trim(line);
-        if (line.empty()) continue;
-        
-        // Skip topology lines from STR files
-        if (PrmParserStructures::isTopologyLine(line)) {
-            if (PrmParserSections::getDebugFlag()) std::cerr << "Skipping topology line in NBFIX section: " << line << std::endl;
-            continue;
-        }
-        
-        // Check for section end or new section
-        if (line == "END" || line == "end" || PrmParserStructures::isAtomsSection(line) || PrmParserStructures::isBondsSection(line) || 
-            PrmParserStructures::isAnglesSection(line) || PrmParserStructures::isDihedralsSection(line) || 
-            PrmParserStructures::isImproperSection(line) || PrmParserStructures::isNonbondedSection(line) || 
-            line == "BOMLEV" || line == "WRNLEV" || line == "return") {
-            input.seekg(-static_cast<std::streamoff>(line.length() + 1), std::ios::cur);
-            break;
-        }
-        
-        auto tokens = PrmParserStructures::tokenize(line);
-        // Skip special directive lines like "HBOND CUTHB 0.5"
-        if (tokens.size() >= 1 && (tokens[0] == "HBOND" || tokens[0] == "NBFIX")) {
-            continue;
-        }
-        
-        if (tokens.size() >= 4) {
-            try {
-                std::string type1 = tokens[0];
-                std::string type2 = tokens[1];
-                double epsilon = PrmParserStructures::safe_stod(tokens[2], "NBFIX epsilon for " + type1 + "-" + type2);
-                double rmin = PrmParserStructures::safe_stod(tokens[3], "NBFIX Rmin for " + type1 + "-" + type2);
-                
-                // In CHARMM, NBFIX parameters are specified with full Rmin value
-                // No need to multiply by 2 since we store the full Rmin value
-                ff.add_nbfix(type1, type2, epsilon, rmin);
-                
-                if (PrmParserSections::getDebugFlag()) std::cerr << "Stored NBFIX for " << type1 << "-" << type2 
-                    << ": epsilon = " << epsilon << ", Rmin = " << rmin << std::endl;
-            } catch (const std::exception& e) {
-                if (PrmParserSections::getDebugFlag()) std::cerr << "Warning: Skipping NBFIX line due to parsing error: " << line << std::endl;
-            }
-        }
-    }
-}
-
 void PrmParserSections::parseNonbondedSection(std::istream& input, pygcmc::model::ForceField& ff, const std::string& firstLine) {
     std::string line = firstLine;
     std::string fullLine = PrmParserStructures::readContinuationLine(input, line);
     
-    if (PrmParserSections::getDebugFlag()) std::cerr << "=== Entering NONBONDED section parsing ===" << std::endl;
-    if (PrmParserSections::getDebugFlag()) std::cerr << "First line: [" << firstLine << "]" << std::endl;
+    if (debug_output) std::cerr << "=== Entering NONBONDED section parsing ===" << std::endl;
+    if (debug_output) std::cerr << "First line: [" << firstLine << "]" << std::endl;
     
     // Parse header parameters
     auto tokens = PrmParserStructures::tokenize(fullLine);
     if (!tokens.empty()) {
-        if (PrmParserSections::getDebugFlag()) {
+        if (debug_output) {
             std::cerr << "Initial tokens:";
             for (const auto& token : tokens) {
                 std::cerr << " [" << token << "]";
@@ -170,57 +35,57 @@ void PrmParserSections::parseNonbondedSection(std::istream& input, pygcmc::model
         
         // Skip the NONBONDED keyword
         if (tokens[0] == "NONBONDED") {
-            if (PrmParserSections::getDebugFlag()) std::cerr << "Skipping NONBONDED keyword" << std::endl;
+            if (debug_output) std::cerr << "Skipping NONBONDED keyword" << std::endl;
             tokens.erase(tokens.begin());
         }
         
         // Process parameters
         auto& params = ff.get_nonbonded_params();
         for (size_t i = 0; i < tokens.size(); ++i) {
-            if (PrmParserSections::getDebugFlag()) std::cerr << "Processing parameter token: [" << tokens[i] << "]" << std::endl;
+            if (debug_output) std::cerr << "Processing parameter token: [" << tokens[i] << "]" << std::endl;
             
             if (tokens[i] == "nbxmod" && i + 1 < tokens.size()) {
                 params.nbxmod = PrmParserStructures::safe_stoi(tokens[++i], "nbxmod");
-                if (PrmParserSections::getDebugFlag()) std::cerr << "Set nbxmod = " << params.nbxmod << std::endl;
+                if (debug_output) std::cerr << "Set nbxmod = " << params.nbxmod << std::endl;
             } else if (tokens[i] == "cutnb" && i + 1 < tokens.size()) {
                 params.cutnb = PrmParserStructures::safe_stod(tokens[++i], "cutnb");
-                if (PrmParserSections::getDebugFlag()) std::cerr << "Set cutnb = " << params.cutnb << std::endl;
+                if (debug_output) std::cerr << "Set cutnb = " << params.cutnb << std::endl;
             } else if (tokens[i] == "ctofnb" && i + 1 < tokens.size()) {
                 params.ctofnb = PrmParserStructures::safe_stod(tokens[++i], "ctofnb");
-                if (PrmParserSections::getDebugFlag()) std::cerr << "Set ctofnb = " << params.ctofnb << std::endl;
+                if (debug_output) std::cerr << "Set ctofnb = " << params.ctofnb << std::endl;
             } else if (tokens[i] == "ctonnb" && i + 1 < tokens.size()) {
                 params.ctonnb = PrmParserStructures::safe_stod(tokens[++i], "ctonnb");
-                if (PrmParserSections::getDebugFlag()) std::cerr << "Set ctonnb = " << params.ctonnb << std::endl;
+                if (debug_output) std::cerr << "Set ctonnb = " << params.ctonnb << std::endl;
             } else if (tokens[i] == "eps" && i + 1 < tokens.size()) {
                 params.eps = PrmParserStructures::safe_stod(tokens[++i], "eps");
-                if (PrmParserSections::getDebugFlag()) std::cerr << "Set eps = " << params.eps << std::endl;
+                if (debug_output) std::cerr << "Set eps = " << params.eps << std::endl;
             } else if (tokens[i] == "e14fac" && i + 1 < tokens.size()) {
                 params.e14fac = PrmParserStructures::safe_stod(tokens[++i], "e14fac");
-                if (PrmParserSections::getDebugFlag()) std::cerr << "Set e14fac = " << params.e14fac << std::endl;
+                if (debug_output) std::cerr << "Set e14fac = " << params.e14fac << std::endl;
             } else if (tokens[i] == "wmin" && i + 1 < tokens.size()) {
                 params.wmin = PrmParserStructures::safe_stod(tokens[++i], "wmin");
-                if (PrmParserSections::getDebugFlag()) std::cerr << "Set wmin = " << params.wmin << std::endl;
+                if (debug_output) std::cerr << "Set wmin = " << params.wmin << std::endl;
             } else if (tokens[i] == "cdiel") {
                 params.cdiel = true;
-                if (PrmParserSections::getDebugFlag()) std::cerr << "Set cdiel = true" << std::endl;
+                if (debug_output) std::cerr << "Set cdiel = true" << std::endl;
             } else if (tokens[i] == "fshift") {
                 params.fshift = true;
-                if (PrmParserSections::getDebugFlag()) std::cerr << "Set fshift = true" << std::endl;
+                if (debug_output) std::cerr << "Set fshift = true" << std::endl;
             } else if (tokens[i] == "vatom") {
                 params.vatom = true;
-                if (PrmParserSections::getDebugFlag()) std::cerr << "Set vatom = true" << std::endl;
+                if (debug_output) std::cerr << "Set vatom = true" << std::endl;
             } else if (tokens[i] == "vdistance") {
                 params.vdistance = true;
-                if (PrmParserSections::getDebugFlag()) std::cerr << "Set vdistance = true" << std::endl;
+                if (debug_output) std::cerr << "Set vdistance = true" << std::endl;
             } else if (tokens[i] == "vfswitch") {
                 params.vfswitch = true;
-                if (PrmParserSections::getDebugFlag()) std::cerr << "Set vfswitch = true" << std::endl;
+                if (debug_output) std::cerr << "Set vfswitch = true" << std::endl;
             }
         }
     }
     
-    if (PrmParserSections::getDebugFlag()) std::cerr << "\n=== Starting atom type parameters parsing ===" << std::endl;
-    if (PrmParserSections::getDebugFlag()) std::cerr << "Current lj_params map size: " << ff.get_num_lj_params() << std::endl;
+    if (debug_output) std::cerr << "\n=== Starting atom type parameters parsing ===" << std::endl;
+    if (debug_output) std::cerr << "Current lj_params map size: " << ff.get_num_lj_params() << std::endl;
     
     // Parse atom type parameters
     while (std::getline(input, line)) {
@@ -229,19 +94,19 @@ void PrmParserSections::parseNonbondedSection(std::istream& input, pygcmc::model
         line = PrmParserStructures::removeComments(line);
         line = PrmParserStructures::trim(line);
         if (line.empty()) {
-            if (PrmParserSections::getDebugFlag()) std::cerr << "Skipping empty line" << std::endl;
+            if (debug_output) std::cerr << "Skipping empty line" << std::endl;
             continue;
         }
         
         // Skip topology lines from STR files
         if (PrmParserStructures::isTopologyLine(line)) {
-            if (PrmParserSections::getDebugFlag()) std::cerr << "Skipping topology line in nonbonded section: " << line << std::endl;
+            if (debug_output) std::cerr << "Skipping topology line in nonbonded section: " << line << std::endl;
             continue;
         }
         
-        if (PrmParserSections::getDebugFlag()) std::cerr << "Processing cleaned line: [" << line << "]" << std::endl;
+        if (debug_output) std::cerr << "Processing cleaned line: [" << line << "]" << std::endl;
         tokens = PrmParserStructures::tokenize(line);
-        if (PrmParserSections::getDebugFlag()) {
+        if (debug_output) {
             std::cerr << "Tokens:";
             for (const auto& token : tokens) {
                 std::cerr << " [" << token << "]";
@@ -255,14 +120,14 @@ void PrmParserSections::parseNonbondedSection(std::istream& input, pygcmc::model
         if (line == "END" || line == "end" || PrmParserStructures::isAtomsSection(line) || PrmParserStructures::isBondsSection(line) || 
             PrmParserStructures::isAnglesSection(line) || PrmParserStructures::isDihedralsSection(line) || 
             PrmParserStructures::isImproperSection(line)) {
-            if (PrmParserSections::getDebugFlag()) std::cerr << "Found section end marker: " << tokens[0] << std::endl;
+            if (debug_output) std::cerr << "Found section end marker: " << tokens[0] << std::endl;
             break;
         }
         
         // If we find NBFIX, parse it as a new section
         if (PrmParserStructures::isNBFixSection(line)) {
-            if (PrmParserSections::getDebugFlag()) std::cerr << "Found NBFIX section" << std::endl;
-            parseNBFixSection(input, ff);
+            if (debug_output) std::cerr << "Found NBFIX section" << std::endl;
+            PrmParserBondedSections::parseNBFixSection(input, ff, debug_output);
             break;
         }
         
@@ -274,7 +139,7 @@ void PrmParserSections::parseNonbondedSection(std::istream& input, pygcmc::model
                 double epsilon = PrmParserStructures::safe_stod(tokens[2], "LJ epsilon for " + atomType);
                 double rmin_half = PrmParserStructures::safe_stod(tokens[3], "LJ Rmin/2 for " + atomType);
                 
-                if (PrmParserSections::getDebugFlag()) {
+                if (debug_output) {
                     std::cerr << "\n*** Parsing atom type: " << atomType << " ***" << std::endl;
                     std::cerr << "  epsilon = " << epsilon << std::endl;
                     std::cerr << "  rmin_half = " << rmin_half << std::endl;
@@ -282,7 +147,7 @@ void PrmParserSections::parseNonbondedSection(std::istream& input, pygcmc::model
                 
                 ff.add_lj_params(atomType, epsilon, rmin_half);
                 
-                if (PrmParserSections::getDebugFlag()) {
+                if (debug_output) {
                     std::cerr << "Successfully stored " << atomType << " parameters" << std::endl;
                     std::cerr << "Current lj_params map size: " << ff.get_num_lj_params() << std::endl;
                 }
@@ -295,188 +160,8 @@ void PrmParserSections::parseNonbondedSection(std::istream& input, pygcmc::model
         }
     }
     
-    if (PrmParserSections::getDebugFlag()) std::cerr << "\n=== Finished NONBONDED section parsing ===" << std::endl;
-    if (PrmParserSections::getDebugFlag()) std::cerr << "Final lj_params map size: " << ff.get_num_lj_params() << std::endl;
-}
-
-void PrmParserSections::parseAlphaTHoleSection(std::istream& input, pygcmc::model::ForceField& ff) {
-    std::string line;
-    while (std::getline(input, line)) {
-        // Save original line length before any modifications
-        size_t originalLineLength = line.length();
-        
-        if (PrmParserStructures::isCommentLine(line)) continue;
-        
-        line = PrmParserStructures::removeComments(line);
-        line = PrmParserStructures::trim(line);
-        if (line.empty()) continue;
-        
-        // Skip topology lines from STR files
-        if (PrmParserStructures::isTopologyLine(line)) {
-            if (debug_output) std::cerr << "Skipping topology line in ALPHA/THOLE section: " << line << std::endl;
-            continue;
-        }
-        
-        // Check for section end
-        if (line == "END" || line == "end" || PrmParserStructures::isAtomsSection(line) || 
-            PrmParserStructures::isBondsSection(line) || PrmParserStructures::isAnglesSection(line) || 
-            PrmParserStructures::isDihedralsSection(line) || PrmParserStructures::isImproperSection(line) ||
-            PrmParserStructures::isNonbondedSection(line) || PrmParserStructures::isNBFixSection(line) ||
-            PrmParserStructures::isLonePairSection(line) || PrmParserStructures::isAnisotropySection(line)) {
-            input.seekg(-static_cast<std::streamoff>(originalLineLength + 1), std::ios::cur);
-            break;
-        }
-        
-        auto tokens = PrmParserStructures::tokenize(line);
-        // Format: atomType  alpha  thole
-        if (tokens.size() >= 3) {
-            try {
-                std::string type = tokens[0];
-                double alpha = PrmParserStructures::safe_stod(tokens[1], "alpha for " + type);
-                double thole = PrmParserStructures::safe_stod(tokens[2], "thole for " + type);
-                
-                ff.add_alpha_thole_params(type, alpha, thole);
-                
-                if (debug_output) {
-                    std::cerr << "Added ALPHA/THOLE for " << type 
-                              << ": alpha = " << alpha << ", thole = " << thole << std::endl;
-                }
-            } catch (const std::exception& e) {
-                if (debug_output) std::cerr << "Warning: Skipping ALPHA/THOLE line due to parsing error: " << line << std::endl;
-                continue;
-            }
-        }
-    }
-}
-
-void PrmParserSections::parseLonePairSection(std::istream& input, pygcmc::model::ForceField& ff) {
-    std::string line;
-    while (std::getline(input, line)) {
-        // Save original line length before any modifications
-        size_t originalLineLength = line.length();
-        
-        if (PrmParserStructures::isCommentLine(line)) continue;
-        
-        line = PrmParserStructures::removeComments(line);
-        line = PrmParserStructures::trim(line);
-        if (line.empty()) continue;
-        
-        // Skip topology lines from STR files
-        if (PrmParserStructures::isTopologyLine(line)) {
-            if (debug_output) std::cerr << "Skipping topology line in LONEPAIR section: " << line << std::endl;
-            continue;
-        }
-        
-        // Check for section end
-        if (line == "END" || line == "end" || PrmParserStructures::isAtomsSection(line) || 
-            PrmParserStructures::isBondsSection(line) || PrmParserStructures::isAnglesSection(line) || 
-            PrmParserStructures::isDihedralsSection(line) || PrmParserStructures::isImproperSection(line) ||
-            PrmParserStructures::isNonbondedSection(line) || PrmParserStructures::isNBFixSection(line) ||
-            PrmParserStructures::isAlphaTHoleSection(line) || PrmParserStructures::isAnisotropySection(line)) {
-            input.seekg(-static_cast<std::streamoff>(originalLineLength + 1), std::ios::cur);
-            break;
-        }
-        
-        auto tokens = PrmParserStructures::tokenize(line);
-        // Various formats for LONEPAIR definitions
-        // Common format: type host atom1 atom2 atom3 distance angle dihedral
-        if (tokens.size() >= 5) {
-            try {
-                pygcmc::model::LonePairParams params;
-                params.type = tokens[0];
-                params.host = tokens[1];
-                params.atom1 = tokens[2];
-                params.atom2 = tokens[3];
-                
-                // Handle different lonepair formats
-                if (tokens.size() >= 6) {
-                    params.atom3 = tokens[4];
-                    if (tokens.size() >= 7) {
-                        params.distance = PrmParserStructures::safe_stod(tokens[5], "lonepair distance");
-                        if (tokens.size() >= 8) {
-                            params.angle = PrmParserStructures::safe_stod(tokens[6], "lonepair angle");
-                            if (tokens.size() >= 9) {
-                                params.dihedral = PrmParserStructures::safe_stod(tokens[7], "lonepair dihedral");
-                            }
-                        }
-                    }
-                } else {
-                    // Some formats have only 4 atoms
-                    params.atom3 = tokens[4];
-                }
-                
-                ff.add_lonepair(params);
-                
-                if (debug_output) {
-                    std::cerr << "Added LONEPAIR: type=" << params.type 
-                              << ", host=" << params.host << std::endl;
-                }
-            } catch (const std::exception& e) {
-                if (debug_output) std::cerr << "Warning: Skipping LONEPAIR line due to parsing error: " << line << std::endl;
-                continue;
-            }
-        }
-    }
-}
-
-void PrmParserSections::parseAnisotropySection(std::istream& input, pygcmc::model::ForceField& ff) {
-    std::string line;
-    while (std::getline(input, line)) {
-        // Save original line length before any modifications
-        size_t originalLineLength = line.length();
-        
-        if (PrmParserStructures::isCommentLine(line)) continue;
-        
-        line = PrmParserStructures::removeComments(line);
-        line = PrmParserStructures::trim(line);
-        if (line.empty()) continue;
-        
-        // Skip topology lines from STR files
-        if (PrmParserStructures::isTopologyLine(line)) {
-            if (debug_output) std::cerr << "Skipping topology line in ANISOTROPY section: " << line << std::endl;
-            continue;
-        }
-        
-        // Check for section end
-        if (line == "END" || line == "end" || PrmParserStructures::isAtomsSection(line) || 
-            PrmParserStructures::isBondsSection(line) || PrmParserStructures::isAnglesSection(line) || 
-            PrmParserStructures::isDihedralsSection(line) || PrmParserStructures::isImproperSection(line) ||
-            PrmParserStructures::isNonbondedSection(line) || PrmParserStructures::isNBFixSection(line) ||
-            PrmParserStructures::isAlphaTHoleSection(line) || PrmParserStructures::isLonePairSection(line)) {
-            input.seekg(-static_cast<std::streamoff>(originalLineLength + 1), std::ios::cur);
-            break;
-        }
-        
-        auto tokens = PrmParserStructures::tokenize(line);
-        // Format: atomType a11 a22 [a33]
-        if (tokens.size() >= 3) {
-            try {
-                pygcmc::model::AnisotropyParams params;
-                params.type = tokens[0];
-                params.a11 = PrmParserStructures::safe_stod(tokens[1], "anisotropy a11 for " + params.type);
-                params.a22 = PrmParserStructures::safe_stod(tokens[2], "anisotropy a22 for " + params.type);
-                
-                // Optional a33 component
-                if (tokens.size() >= 4) {
-                    params.a33 = PrmParserStructures::safe_stod(tokens[3], "anisotropy a33 for " + params.type);
-                }
-                
-                ff.add_anisotropy(params);
-                
-                if (debug_output) {
-                    std::cerr << "Added ANISOTROPY for " << params.type 
-                              << ": a11=" << params.a11 << ", a22=" << params.a22;
-                    if (tokens.size() >= 4) {
-                        std::cerr << ", a33=" << params.a33;
-                    }
-                    std::cerr << std::endl;
-                }
-            } catch (const std::exception& e) {
-                if (debug_output) std::cerr << "Warning: Skipping ANISOTROPY line due to parsing error: " << line << std::endl;
-                continue;
-            }
-        }
-    }
+    if (debug_output) std::cerr << "\n=== Finished NONBONDED section parsing ===" << std::endl;
+    if (debug_output) std::cerr << "Final lj_params map size: " << ff.get_num_lj_params() << std::endl;
 }
 
 } // namespace io

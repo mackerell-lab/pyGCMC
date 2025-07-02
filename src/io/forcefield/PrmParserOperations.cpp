@@ -5,6 +5,8 @@
 #include "PrmParserStructures.hpp"
 #include "PrmParserDrudeScan.hpp"
 #include "PrmParserSectionHandlers.hpp"
+#include "PrmParserBondedSections.hpp"
+#include "PrmParserDrudeSections.hpp"
 #include "model/ModelModule.hpp"
 #include <fstream>
 
@@ -88,12 +90,12 @@ void PrmParserOperations::parseStream(std::istream& input, pygcmc::model::ForceF
             if (debug_output) std::cerr << "Found DIHEDRALS section" << std::endl;
             inSection = true;
             currentSection = "DIHEDRALS";
-            PrmParserSections::parseDihedralsSection(input, ff);
+            PrmParserBondedSections::parseDihedralsSection(input, ff, debug_output);
         } else if (PrmParserStructures::isImproperSection(cleanLine)) {
             if (debug_output) std::cerr << "Found IMPROPER section" << std::endl;
             inSection = true;
             currentSection = "IMPROPER";
-            PrmParserSections::parseImproperSection(input, ff);
+            PrmParserBondedSections::parseImproperSection(input, ff, debug_output);
         } else if (PrmParserStructures::isNonbondedSection(cleanLine)) {
             if (debug_output) std::cerr << "Found NONBONDED section" << std::endl;
             inSection = true;
@@ -129,22 +131,22 @@ void PrmParserOperations::parseStream(std::istream& input, pygcmc::model::ForceF
             if (debug_output) std::cerr << "Found NBFIX section" << std::endl;
             inSection = true;
             currentSection = "NBFIX";
-            PrmParserSections::parseNBFixSection(input, ff);
+            PrmParserBondedSections::parseNBFixSection(input, ff, debug_output);
         } else if (PrmParserStructures::isAlphaTHoleSection(cleanLine)) {
             if (debug_output) std::cerr << "Found ALPHA/THOLE section" << std::endl;
             inSection = true;
             currentSection = "ALPHA";
-            PrmParserSections::parseAlphaTHoleSection(input, ff);
+            PrmParserDrudeSections::parseAlphaTHoleSection(input, ff, debug_output);
         } else if (PrmParserStructures::isLonePairSection(cleanLine)) {
             if (debug_output) std::cerr << "Found LONEPAIR section" << std::endl;
             inSection = true;
             currentSection = "LONEPAIR";
-            PrmParserSections::parseLonePairSection(input, ff);
+            PrmParserDrudeSections::parseLonePairSection(input, ff, debug_output);
         } else if (PrmParserStructures::isAnisotropySection(cleanLine)) {
             if (debug_output) std::cerr << "Found ANISOTROPY section" << std::endl;
             inSection = true;
             currentSection = "ANISOTROPY";
-            PrmParserSections::parseAnisotropySection(input, ff);
+            PrmParserDrudeSections::parseAnisotropySection(input, ff, debug_output);
         } else if (!inSection) {
             // Handle non-section content if needed
             auto tokens = PrmParserStructures::tokenize(cleanLine);

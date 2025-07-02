@@ -4,6 +4,8 @@
 #include "PrmParserOperations.hpp"
 #include "PrmParserSections.hpp"
 #include "PrmParserSectionHandlers.hpp"
+#include "PrmParserBondedSections.hpp"
+#include "PrmParserDrudeSections.hpp"
 #include "model/ModelModule.hpp"
 #include <fstream>
 
@@ -74,11 +76,11 @@ void PRMParser::parseAnglesSection(std::istream& input, pygcmc::model::ForceFiel
 }
 
 void PRMParser::parseDihedralsSection(std::istream& input, pygcmc::model::ForceField& ff) {
-    PrmParserSections::parseDihedralsSection(input, ff);
+    PrmParserBondedSections::parseDihedralsSection(input, ff, debug_output);
 }
 
 void PRMParser::parseImproperSection(std::istream& input, pygcmc::model::ForceField& ff) {
-    PrmParserSections::parseImproperSection(input, ff);
+    PrmParserBondedSections::parseImproperSection(input, ff, debug_output);
 }
 
 void PRMParser::parseNonbondedSection(std::istream& input, pygcmc::model::ForceField& ff, const std::string& firstLine) {
@@ -86,7 +88,7 @@ void PRMParser::parseNonbondedSection(std::istream& input, pygcmc::model::ForceF
 }
 
 void PRMParser::parseNBFixSection(std::istream& input, pygcmc::model::ForceField& ff) {
-    PrmParserSections::parseNBFixSection(input, ff);
+    PrmParserBondedSections::parseNBFixSection(input, ff, debug_output);
 }
 
 } // namespace io
