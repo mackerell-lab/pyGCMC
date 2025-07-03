@@ -38,7 +38,7 @@ from movementInsert.advanced_insertion_sequential_tests import (
 )
 
 # Residue activation tests (4 functions) - moved from energyGCMC
-from movementInsert.residue_activation import (
+from movementInsert.residue_activation_tests import (
     test_residue_addition_energy,
     test_movement_energy_calculation,
     test_residue_activation_deactivation,
