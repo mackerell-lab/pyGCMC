@@ -56,7 +56,7 @@ from movementInsert.insertion_deletion import (
 )
 
 # GCMC algorithm tests (3 functions)
-from movementInsert.gcmc_insertion_test import (
+from movementInsert.gcmc_insertion_test_functions import (
     test_gcmc_benzene_insertion_in_protein,
     test_gcmc_water_insertion_simple,
     test_verify_detailed_balance
