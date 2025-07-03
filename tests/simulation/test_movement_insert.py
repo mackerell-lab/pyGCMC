@@ -63,11 +63,9 @@ from movementInsert.gcmc_insertion_test import (
 )
 
 # Practical GCMC tests (3 functions)
-from movementInsert.practical_gcmc_insertion import (
-    test_practical_benzene_insertion,
-    test_water_insertion_with_real_energy,
-    test_cavity_bias_effect
-)
+from movementInsert.practical_gcmc_benzene_test import test_practical_benzene_insertion
+from movementInsert.practical_gcmc_water_test import test_water_insertion_with_real_energy
+from movementInsert.practical_gcmc_cavity_bias_test import test_cavity_bias_effect
 
 # Total: 26 test functions covering comprehensive GCMC insertion operations
 
