@@ -19,12 +19,26 @@ Modular structure (all modules under 300 lines):
 - vspme_lj_energy.py: LJ energy calculation in PME and PGP (360 lines, 1 function)
 - vspme_two_atom.py: Simple two-atom system energy comparison (190 lines, 1 function)
 - vspme_combined.py: Combined energy calculation diagnostic (410 lines, 1 function)
+- pgp_lj_neutral_systems.py: PGP tests with neutral particles for LJ (1 function)
+- pgp_lj_minimum_energy.py: PGP LJ energy at close distances (1 function)
+- pgp_real_space.py: PGP real-space calculation tests (2 functions)
+- pgp_real_space_debug.py: Debug tests for PGP real-space (2 functions)
+- pgp_real_minimal.py: Minimal PGP real-space test (1 function)
+- pgp_real_fixed.py: Fixed PGP implementation test (1 function)
+- pgp_initialization_order.py: PGP initialization order tests (2 functions)
+- pgp_pme_cutoff.py: PGP PME cutoff test (1 function)
+- pgp_cutoff_issue.py: PGP cutoff issue tests (2 functions)
+- pgp_erfc_debug.py: PGP erfc table debug tests (2 functions)
 
-Total: 13 test functions across 13 modules (8 PGP + 5 PGPvsPME).
-- PGP tests (8): basic_operations (3), method_comparison (1), complex_systems (1), 
-  planar_systems (1), asymmetric_water_complete (1), asymmetric_nacl (1)
-- PGPvsPME tests (5): vspme_delta_energies (1), vspme_direct_lj (1), vspme_lj_energy (1),
-  vspme_two_atom (1), vspme_combined (1)
+Total: 28 test functions across 24 modules.
+- Basic PGP tests (3): basic_operations
+- PGP comparison tests (8): method_comparison, complex_systems, planar_systems, 
+  asymmetric_water_complete, asymmetric_nacl, pgp_lj_neutral_systems, pgp_lj_minimum_energy
+- PGPvsPME tests (5): vspme_delta_energies, vspme_direct_lj, vspme_lj_energy,
+  vspme_two_atom, vspme_combined
+- PGP debug/fix tests (12): pgp_real_space (2), pgp_real_space_debug (2), pgp_real_minimal (1),
+  pgp_real_fixed (1), pgp_initialization_order (2), pgp_pme_cutoff (1), pgp_cutoff_issue (2),
+  pgp_erfc_debug (2)
 """
 
 # Basic PGP operations tests
@@ -80,6 +94,39 @@ from energyPGP.pgp_lj_neutral_systems import (
 )
 from energyPGP.pgp_lj_minimum_energy import (
     test_pgp_lj_close_interaction
+)
+
+# PGP real-space calculation tests (bug fixes and verification)
+from energyPGP.pgp_real_space import (
+    test_pgp_real_space_calculation,
+    test_pgp_real_space_with_fixed_atoms
+)
+from energyPGP.pgp_real_space_debug import (
+    test_pgp_real_space_debug,
+    test_pgp_with_water_molecule
+)
+from energyPGP.pgp_real_minimal import (
+    test_pgp_real_space_minimal
+)
+from energyPGP.pgp_real_fixed import (
+    test_pgp_real_space_fixed
+)
+
+# PGP initialization and configuration tests
+from energyPGP.pgp_initialization_order import (
+    test_pgp_with_correct_initialization,
+    test_pgp_initialization_methods
+)
+from energyPGP.pgp_pme_cutoff import (
+    test_pme_cutoff_in_pgp
+)
+from energyPGP.pgp_cutoff_issue import (
+    test_pgp_cutoff_issue,
+    test_pgp_with_different_cutoffs
+)
+from energyPGP.pgp_erfc_debug import (
+    test_pgp_erfc_table,
+    test_compare_initialization_sequences
 )
 
 # Support direct execution for testing
