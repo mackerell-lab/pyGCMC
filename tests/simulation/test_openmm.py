@@ -83,14 +83,16 @@ from energyOpenmm.periodic_force_parameters import test_compare_force_parameters
 from energyOpenmm.file_based import test_verify_openmm_expressions
 
 # NBFIX tests (6 functions)
-from energyOpenmm.nbfix_tests import (
+from energyOpenmm.nbfix_parameters import (
     test_nbfix_overrides_lj_combination,
-    test_ion_water_nbfix_energy,
-    test_nbfix_energy_vs_openmm,
-    test_multiple_nbfix_pairs,
-    test_nbfix_energy_components_separately,
-    test_nbfix_across_pbc
+    test_multiple_nbfix_pairs
 )
+from energyOpenmm.nbfix_energy import test_ion_water_nbfix_energy
+from energyOpenmm.nbfix_openmm import (
+    test_nbfix_energy_vs_openmm,
+    test_nbfix_energy_components_separately
+)
+from energyOpenmm.nbfix_pbc import test_nbfix_across_pbc
 
 # Residue activation demonstration functions are not tests
 # If you want to run them as tests, create wrapper functions:
