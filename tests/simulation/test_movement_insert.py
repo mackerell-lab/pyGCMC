@@ -15,7 +15,7 @@ Test categories:
 """
 
 # Basic insertion tests (5 functions)
-from movementInsert.basic_insertion import (
+from movementInsert.basic_insertion_tests import (
     test_insert_single_molecule,
     test_insert_multiple_water_molecules,
     test_insert_ion_pair,
