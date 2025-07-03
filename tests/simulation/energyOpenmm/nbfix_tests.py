@@ -223,8 +223,18 @@ def setup_mcstate_with_forcefield(state, forcefield):
     return state
 
 
-def setup_openmm_system_with_nbfix(mc_state, forcefield):
-    """Create OpenMM system with NBFIX parameters matching MCState"""
+def setup_openmm_system_with_nbfix(mc_state, forcefield, separate_forces=False):
+    """Create OpenMM system with NBFIX parameters matching MCState
+    
+    Args:
+        mc_state: PyGCMC MCState object
+        forcefield: PyGCMC ForceField object with NBFIX parameters
+        separate_forces: If True, create separate VDW and electrostatic forces for detailed comparison
+    
+    Returns:
+        system: OpenMM System object
+        positions: List of atomic positions
+    """
     system = System()
     
     # Add particles with masses (use standard masses for now)
@@ -242,18 +252,6 @@ def setup_openmm_system_with_nbfix(mc_state, forcefield):
         Vec3(0, 0, box[2]) * nanometers
     )
     
-    # Create CustomNonbondedForce to handle NBFIX
-    # Use lookup tables for parameters
-    energy_expr = """4*epsilon*((sigma/r)^12-(sigma/r)^6) + kC*q1*q2/r;
-                    sigma=sigma_table(type1, type2);
-                    epsilon=epsilon_table(type1, type2)"""
-    
-    nbforce = CustomNonbondedForce(energy_expr)
-    # Add global parameter with units for clarity
-    nbforce.addGlobalParameter("kC", kC)  # kC = 138.935456 kJ·nm/mol/e²
-    nbforce.addPerParticleParameter("q")
-    nbforce.addPerParticleParameter("type")
-    
     # Build parameter tables from MCState forcefield
     n_types = mc_state.forcefield.numTotalTypes
     sigma_table = []
@@ -264,28 +262,89 @@ def setup_openmm_system_with_nbfix(mc_state, forcefield):
         sigma_table.append(mc_state.forcefield.ljSigma[idx])
         epsilon_table.append(mc_state.forcefield.ljEps[idx])
     
-    # Add tables to force
-    nbforce.addTabulatedFunction("sigma_table", 
-                                Discrete2DFunction(n_types, n_types, sigma_table))
-    nbforce.addTabulatedFunction("epsilon_table", 
-                                Discrete2DFunction(n_types, n_types, epsilon_table))
-    
-    # Add particles with parameters - ensure type is float to avoid interpolation issues
-    for i in range(mc_state.activeAtomCount):
-        atom = mc_state.atoms[i]
-        nbforce.addParticle([atom.charge, float(atom.type)])
-    
-    # Set method and cutoff
-    nbforce.setNonbondedMethod(CustomNonbondedForce.CutoffPeriodic)
-    nbforce.setCutoffDistance(mc_state.info.cutoff * nanometers)
-    
-    # Add exclusions for bonded atoms in water (TIP3P has 3 atoms)
-    # Water has atoms at indices 1, 2, 3 (OT, HT, HT)
-    nbforce.addExclusion(1, 2)  # O-H1
-    nbforce.addExclusion(1, 3)  # O-H2
-    nbforce.addExclusion(2, 3)  # H1-H2
-    
-    system.addForce(nbforce)
+    if separate_forces:
+        # Create separate VDW and electrostatic forces for detailed energy comparison
+        
+        # VDW Force (Force Group 1)
+        vdw_expr = """4*epsilon*((sigma/r)^12-(sigma/r)^6);
+                      sigma=sigma_table(type1, type2);
+                      epsilon=epsilon_table(type1, type2)"""
+        vdw_force = CustomNonbondedForce(vdw_expr)
+        vdw_force.addPerParticleParameter("type")
+        
+        # Add tables for VDW
+        vdw_force.addTabulatedFunction("sigma_table", 
+                                      Discrete2DFunction(n_types, n_types, sigma_table))
+        vdw_force.addTabulatedFunction("epsilon_table", 
+                                      Discrete2DFunction(n_types, n_types, epsilon_table))
+        
+        # Add particles to VDW force
+        for i in range(mc_state.activeAtomCount):
+            vdw_force.addParticle([float(mc_state.atoms[i].type)])
+        
+        # Set VDW cutoff and method
+        vdw_force.setNonbondedMethod(CustomNonbondedForce.CutoffPeriodic)
+        vdw_force.setCutoffDistance(mc_state.info.cutoff * nanometers)
+        vdw_force.setForceGroup(1)
+        
+        # Electrostatic Force (Force Group 2)
+        elec_expr = "kC*q1*q2/r"
+        elec_force = CustomNonbondedForce(elec_expr)
+        elec_force.addGlobalParameter("kC", kC)  # kC = 138.935456 kJ·nm/mol/e²
+        elec_force.addPerParticleParameter("q")
+        
+        # Add particles to electrostatic force
+        for i in range(mc_state.activeAtomCount):
+            elec_force.addParticle([mc_state.atoms[i].charge])
+        
+        # Set electrostatic cutoff and method
+        elec_force.setNonbondedMethod(CustomNonbondedForce.CutoffPeriodic)
+        elec_force.setCutoffDistance(mc_state.info.cutoff * nanometers)
+        elec_force.setForceGroup(2)
+        
+        # Add exclusions to BOTH forces for bonded atoms in water
+        # Water has atoms at indices 1, 2, 3 (OT, HT, HT)
+        vdw_force.addExclusion(1, 2)   # O-H1
+        vdw_force.addExclusion(1, 3)   # O-H2
+        vdw_force.addExclusion(2, 3)   # H1-H2
+        elec_force.addExclusion(1, 2)  # O-H1
+        elec_force.addExclusion(1, 3)  # O-H2
+        elec_force.addExclusion(2, 3)  # H1-H2
+        
+        system.addForce(vdw_force)
+        system.addForce(elec_force)
+    else:
+        # Create combined force (original behavior)
+        energy_expr = """4*epsilon*((sigma/r)^12-(sigma/r)^6) + kC*q1*q2/r;
+                        sigma=sigma_table(type1, type2);
+                        epsilon=epsilon_table(type1, type2)"""
+        
+        nbforce = CustomNonbondedForce(energy_expr)
+        nbforce.addGlobalParameter("kC", kC)  # kC = 138.935456 kJ·nm/mol/e²
+        nbforce.addPerParticleParameter("q")
+        nbforce.addPerParticleParameter("type")
+        
+        # Add tables to force
+        nbforce.addTabulatedFunction("sigma_table", 
+                                    Discrete2DFunction(n_types, n_types, sigma_table))
+        nbforce.addTabulatedFunction("epsilon_table", 
+                                    Discrete2DFunction(n_types, n_types, epsilon_table))
+        
+        # Add particles with parameters - ensure type is float to avoid interpolation issues
+        for i in range(mc_state.activeAtomCount):
+            atom = mc_state.atoms[i]
+            nbforce.addParticle([atom.charge, float(atom.type)])
+        
+        # Set method and cutoff
+        nbforce.setNonbondedMethod(CustomNonbondedForce.CutoffPeriodic)
+        nbforce.setCutoffDistance(mc_state.info.cutoff * nanometers)
+        
+        # Add exclusions for bonded atoms in water (TIP3P has 3 atoms)
+        nbforce.addExclusion(1, 2)  # O-H1
+        nbforce.addExclusion(1, 3)  # O-H2
+        nbforce.addExclusion(2, 3)  # H1-H2
+        
+        system.addForce(nbforce)
     
     # Create positions
     positions = []
@@ -545,11 +604,202 @@ def test_multiple_nbfix_pairs():
 #     pass
 
 
+@pytest.mark.skipif(not HAS_OPENMM, reason="OpenMM not available")
+def test_nbfix_energy_components_separately():
+    """Compare VDW and electrostatic energy components separately between PyGCMC and OpenMM
+    
+    This test provides more detailed validation by comparing energy components individually,
+    which helps identify whether discrepancies come from VDW or electrostatic calculations.
+    """
+    
+    # Create system and force field
+    mc_state = create_simple_ion_water_mcstate()
+    forcefield = create_nbfix_forcefield()
+    
+    # Apply force field with NBFIX
+    mc_state = setup_mcstate_with_forcefield(mc_state, forcefield)
+    pygcmc.computeSystemEnergyPBCCutoff(mc_state)
+    
+    # Get PyGCMC energy components
+    pygcmc_vdw = 0.0
+    pygcmc_elec = 0.0
+    for i in range(mc_state.activeResidueCount):
+        pygcmc_vdw += mc_state.residues[i].energy_vdw
+        pygcmc_elec += mc_state.residues[i].energy_elec
+    
+    # IMPORTANT: PyGCMC's computeSystemEnergy* functions count each interaction twice
+    # This is a known behavior that requires division by 2 for comparison with OpenMM
+    pygcmc_vdw_corrected = pygcmc_vdw / 2.0
+    pygcmc_elec_corrected = pygcmc_elec / 2.0
+    
+    # Set up OpenMM system with separate forces
+    omm_system, positions = setup_openmm_system_with_nbfix(mc_state, forcefield, separate_forces=True)
+    
+    # Calculate OpenMM energy components
+    integrator = VerletIntegrator(0.001 * picoseconds)
+    platform = Platform.getPlatformByName('Reference')
+    context = Context(omm_system, integrator, platform)
+    context.setPositions(positions)
+    
+    # Get VDW energy (force group 1)
+    state_vdw = context.getState(getEnergy=True, groups={1})
+    omm_vdw = state_vdw.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
+    
+    # Get electrostatic energy (force group 2)
+    state_elec = context.getState(getEnergy=True, groups={2})
+    omm_elec = state_elec.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
+    
+    # Get total energy
+    state_total = context.getState(getEnergy=True)
+    omm_total = state_total.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
+    
+    print(f"\n=== Detailed Energy Component Comparison ===")
+    print(f"VDW Energy:")
+    print(f"  PyGCMC (raw): {pygcmc_vdw:.6f} kJ/mol")
+    print(f"  PyGCMC (corrected /2): {pygcmc_vdw_corrected:.6f} kJ/mol")
+    print(f"  OpenMM: {omm_vdw:.6f} kJ/mol")
+    print(f"  Relative error: {abs(pygcmc_vdw_corrected - omm_vdw) / abs(omm_vdw) * 100:.2f}%")
+    
+    print(f"\nElectrostatic Energy:")
+    print(f"  PyGCMC (raw): {pygcmc_elec:.6f} kJ/mol")
+    print(f"  PyGCMC (corrected /2): {pygcmc_elec_corrected:.6f} kJ/mol")
+    print(f"  OpenMM: {omm_elec:.6f} kJ/mol")
+    print(f"  Relative error: {abs(pygcmc_elec_corrected - omm_elec) / abs(omm_elec) * 100:.2f}%")
+    
+    print(f"\nTotal Energy:")
+    print(f"  PyGCMC (corrected): {pygcmc_vdw_corrected + pygcmc_elec_corrected:.6f} kJ/mol")
+    print(f"  OpenMM: {omm_total:.6f} kJ/mol")
+    
+    # Compare components separately with 1% tolerance
+    rel_tol = 0.01
+    
+    # Check VDW energy
+    if abs(omm_vdw) > 1e-6:  # Only check relative error if VDW is non-negligible
+        vdw_rel_error = abs(pygcmc_vdw_corrected - omm_vdw) / abs(omm_vdw)
+        assert vdw_rel_error < rel_tol, f"VDW energy mismatch: PyGCMC={pygcmc_vdw_corrected}, OpenMM={omm_vdw}"
+    else:
+        assert abs(pygcmc_vdw_corrected - omm_vdw) < 1e-3, f"VDW energy should be near zero"
+    
+    # Check electrostatic energy
+    elec_rel_error = abs(pygcmc_elec_corrected - omm_elec) / abs(omm_elec)
+    assert elec_rel_error < rel_tol, f"Electrostatic energy mismatch: PyGCMC={pygcmc_elec_corrected}, OpenMM={omm_elec}"
+    
+    # Check total energy consistency
+    omm_sum = omm_vdw + omm_elec
+    assert abs(omm_total - omm_sum) < 1e-6, "OpenMM total should equal sum of components"
+    
+    # Clean up
+    del context
+
+
+@pytest.mark.skipif(not HAS_OPENMM, reason="OpenMM not available")
+def test_nbfix_across_pbc():
+    """Test NBFIX energy calculation with atoms separated by periodic boundary
+    
+    This tests that PyGCMC correctly applies NBFIX parameters when atoms interact
+    across periodic boundaries, which is a common source of errors.
+    """
+    
+    # Create MCState with atoms near box boundaries
+    state = pygcmc.MCState()
+    
+    # Small box to force PBC interactions
+    state.info.box = [2.0, 2.0, 2.0]  # 2 nm box
+    state.info.cutoff = 1.2  # 1.2 nm cutoff
+    
+    # Define atom types
+    sod_idx = state.atomTypes.get_or_add_type("SOD")
+    cla_idx = state.atomTypes.get_or_add_type("CLA")
+    
+    # Place ions near opposite box edges
+    # They are 1.5 nm apart in real space, but only 0.5 nm via PBC
+    atom_na = pygcmc.MCAtom()
+    atom_na.x = 0.25  # Near left edge
+    atom_na.y = 1.0
+    atom_na.z = 1.0
+    atom_na.charge = 1.0
+    atom_na.type = sod_idx
+    
+    atom_cl = pygcmc.MCAtom()
+    atom_cl.x = 1.75  # Near right edge
+    atom_cl.y = 1.0
+    atom_cl.z = 1.0
+    atom_cl.charge = -1.0
+    atom_cl.type = cla_idx
+    
+    state.atoms = [atom_na, atom_cl]
+    state.activeAtomCount = 2
+    
+    # Add residues
+    res_na = pygcmc.MCResidue()
+    res_na.active = True
+    res_na.atomStart = 0
+    res_na.atomCount = 1
+    res_na.type = 0
+    
+    res_cl = pygcmc.MCResidue()
+    res_cl.active = True
+    res_cl.atomStart = 1
+    res_cl.atomCount = 1
+    res_cl.type = 1
+    
+    state.residues = [res_na, res_cl]
+    state.activeResidueCount = 2
+    
+    # Create and apply force field with NBFIX
+    forcefield = create_nbfix_forcefield()
+    state = setup_mcstate_with_forcefield(state, forcefield)
+    
+    # Calculate PyGCMC energy
+    pygcmc.computeSystemEnergyPBCCutoff(state)
+    pygcmc_total = 0.0
+    for res in state.residues[:state.activeResidueCount]:
+        pygcmc_total += res.energy_vdw + res.energy_elec
+    pygcmc_corrected = pygcmc_total / 2.0
+    
+    # Calculate expected energy manually
+    # Distance via PBC: 2.0 - 1.5 = 0.5 nm
+    pbc_distance = 0.5  # nm
+    
+    # Get NBFIX parameters for SOD-CLA
+    nbfix_result = forcefield.get_nbfix("SOD", "CLA")
+    nbfix_eps = abs(nbfix_result[0]) * KCAL_TO_KJ
+    nbfix_rmin = nbfix_result[1]
+    nbfix_sigma = nbfix_rmin / math.pow(2.0, 1.0/6.0) * ANGSTROM_TO_NM
+    
+    # Calculate expected energies
+    expected_vdw = 4 * nbfix_eps * (math.pow(nbfix_sigma/pbc_distance, 12) - math.pow(nbfix_sigma/pbc_distance, 6))
+    expected_elec = kC * 1.0 * (-1.0) / pbc_distance
+    expected_total = expected_vdw + expected_elec
+    
+    print(f"\n=== PBC NBFIX Test ===")
+    print(f"Box size: {state.info.box}")
+    print(f"Atom positions: Na+ at ({atom_na.x}, {atom_na.y}, {atom_na.z}), Cl- at ({atom_cl.x}, {atom_cl.y}, {atom_cl.z})")
+    print(f"Direct distance: 1.5 nm")
+    print(f"PBC distance: {pbc_distance} nm")
+    print(f"\nExpected energies:")
+    print(f"  VDW: {expected_vdw:.6f} kJ/mol")
+    print(f"  Electrostatic: {expected_elec:.6f} kJ/mol")
+    print(f"  Total: {expected_total:.6f} kJ/mol")
+    print(f"\nPyGCMC energy (corrected): {pygcmc_corrected:.6f} kJ/mol")
+    
+    # At 0.5 nm distance, check the energy
+    # The energy should be negative (attractive) due to opposite charges
+    assert pygcmc_corrected < 0, "Energy should be attractive for opposite charges at 0.5 nm"
+    
+    # Check that the energy is in the right ballpark
+    # Allow larger tolerance due to potential cutoff effects
+    rel_error = abs(pygcmc_corrected - expected_total) / abs(expected_total)
+    assert rel_error < 0.05, f"PBC energy mismatch: PyGCMC={pygcmc_corrected}, Expected={expected_total}"
+
+
 if __name__ == "__main__":
     # Run tests
     if HAS_OPENMM:
         test_nbfix_overrides_lj_combination()
         test_ion_water_nbfix_energy()
         test_nbfix_energy_vs_openmm()
+        test_nbfix_energy_components_separately()
+        test_nbfix_across_pbc()
     test_multiple_nbfix_pairs()
     print("\nAll NBFIX tests passed!")
