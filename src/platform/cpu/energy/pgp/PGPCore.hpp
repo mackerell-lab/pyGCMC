@@ -59,6 +59,11 @@ void computeSystemEnergyPGP(model::MCState& state);
 
 void computeMovementEnergyPGP(model::MCState& state);
 
+// Fixed versions that correctly use pgp_params for erfc calculations
+void computeSystemEnergyPGPFixed(model::MCState& state);
+
+void computeMovementEnergyPGPFixed(model::MCState& state);
+
 // <agent-hook:pgp_core>
 
 } // namespace cpu

@@ -115,8 +115,8 @@ void init_pgp_bindings(py::module& m) {
 
     m.def("computeSystemEnergyPGP", 
         [](::pygcmc::model::MCState& state) {
-            // Call C++ function to calculate energy
-            ::pygcmc::simulation::Simulation::computeSystemEnergyPGP(state);
+            // Call fixed C++ function to calculate energy
+            ::pygcmc::simulation::Simulation::computeSystemEnergyPGPFixed(state);
             
             // Convert from C++ struct to Python dictionary
             py::dict pgp_dict;
@@ -148,8 +148,8 @@ void init_pgp_bindings(py::module& m) {
           
     m.def("computeMovementEnergyPGP", 
         [](::pygcmc::model::MCState& state) {
-            // Call C++ function to calculate energy
-            ::pygcmc::simulation::Simulation::computeMovementEnergyPGP(state);
+            // Call fixed C++ function to calculate energy
+            ::pygcmc::simulation::Simulation::computeMovementEnergyPGPFixed(state);
             
             // Convert from C++ struct to Python dictionary
             py::dict pgp_dict;

@@ -238,6 +238,25 @@ public:
      */
     static void computeMovementEnergyPGP(model::MCState& state);
 
+    /**
+     * @brief Use fixed PGP method to calculate system energy
+     * 
+     * This function uses the corrected PGP implementation that properly uses pgp_params
+     * for erfc calculations and includes intra-residue interactions.
+     * 
+     * @param state MC state
+     */
+    static void computeSystemEnergyPGPFixed(model::MCState& state);
+
+    /**
+     * @brief Use fixed PGP method to calculate energy of moving residues
+     * 
+     * This function uses the corrected PGP implementation for moving residues.
+     * 
+     * @param state MC state
+     */
+    static void computeMovementEnergyPGPFixed(model::MCState& state);
+
 private:
     std::unique_ptr<platform::IPlatform> platform_;
 };

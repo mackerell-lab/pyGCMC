@@ -259,5 +259,19 @@ void Simulation::computeMovementEnergyPGP(model::MCState& state) {
     platform::cpu::computeMovementEnergyPGP(state);
 }
 
+void Simulation::computeSystemEnergyPGPFixed(model::MCState& state) {
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing PGP-Fixed energy for all active residues");
+    }
+    platform::cpu::computeSystemEnergyPGPFixed(state);
+}
+
+void Simulation::computeMovementEnergyPGPFixed(model::MCState& state) {
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing PGP-Fixed energy for movement residues");
+    }
+    platform::cpu::computeMovementEnergyPGPFixed(state);
+}
+
 } // namespace simulation
 } // namespace pygcmc
