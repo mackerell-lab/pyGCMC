@@ -46,7 +46,7 @@ from movementInsert.residue_activation_tests import (
 )
 
 # GCMC insertion/deletion tests (6 functions) - moved from energyGCMC
-from movementInsert.insertion_deletion import (
+from movementInsert.insertion_deletion_tests import (
     test_single_molecule_insertion,
     test_molecule_insertion_with_interactions,
     test_molecule_deletion,
