@@ -74,6 +74,12 @@ from energyPGP.vspme_combined import (
     test_combined_energy_calculation
 )
 
+# LJ-only tests for PGP
+from energyPGP.test_pgp_lj_only import (
+    test_pgp_lj_only_system,
+    test_pgp_lj_close_interaction
+)
+
 # Support direct execution for testing
 if __name__ == "__main__":
     import pytest
