@@ -23,12 +23,16 @@ from movementInsert.basic_insertion import (
     test_insert_random_positions
 )
 
-# Advanced insertion tests (5 functions)
-from movementInsert.advanced_insertion import (
+# Advanced insertion tests (6 functions)
+from movementInsert.advanced_insertion_basic_tests import (
     test_simple_two_particle_insertion,
-    test_cavity_detection,
+    test_cavity_detection
+)
+from movementInsert.advanced_insertion_biased_tests import (
     test_biased_cavity_insertion,
-    test_energy_guided_insertion,
+    test_energy_guided_insertion
+)
+from movementInsert.advanced_insertion_sequential_tests import (
     test_sequential_cavity_filling,
     test_water_cluster_formation
 )
