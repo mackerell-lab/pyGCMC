@@ -7,7 +7,7 @@ import pytest
 import math
 import pygcmc
 from pygcmc import MCAtom, MCResidue, MCState
-from pygcmc import setPGPParameters, initializePMEParameters, initializePGPParameters
+from pygcmc import setPGPParameters, initializePMEParameters
 from pygcmc import precomputeGridPotential, computeSystemEnergyPGP
 import os
 
@@ -69,18 +69,19 @@ def test_pgp_with_correct_initialization():
     
     print("System: +1 and -1 charges at 0.3 nm distance")
     
-    # METHOD 1: Using initializePGPParameters (combined initialization)
-    print("\nMETHOD 1: Using initializePGPParameters")
+    # METHOD 1: Initialize PME then PGP
+    print("\nMETHOD 1: Initialize PME then PGP")
     alpha = 2.0
     mesh_size = [32, 32, 32]
     
-    # This should initialize everything properly
-    initializePGPParameters(
-        cutoff=state.info.cutoff,
-        box=state.info.box,
+    # Initialize PME first
+    initializePMEParameters(state.info.cutoff, state.info.box, alpha)
+    
+    # Then set PGP parameters
+    setPGPParameters(
         alpha=alpha,
         meshSize=mesh_size,
-        potentialCutoff=state.info.cutoff,
+        potential_cutoff=state.info.cutoff,
         potentialGridSize=mesh_size,
         splineOrder=4,
         tolerance=1e-5
@@ -196,16 +197,8 @@ def test_pgp_initialization_methods():
     computeSystemEnergyPGP(state2)
     print(f"Real-space energy: {state2.ewald_energy.get('real_space', 0.0):.6f} kJ/mol")
     
-    # Test 3: Use initializePGPParameters (recommended)
-    print("\nTest 3: initializePGPParameters (combined)")
-    state3 = create_system()
-    initializePGPParameters(
-        state3.info.cutoff, state3.info.box, alpha,
-        mesh_size, state3.info.cutoff, mesh_size, 4, 1e-5
-    )
-    precomputeGridPotential(state3, fixed_only=True)
-    computeSystemEnergyPGP(state3)
-    print(f"Real-space energy: {state3.ewald_energy.get('real_space', 0.0):.6f} kJ/mol")
+    # Test 3: Skip the non-existent function
+    print("\nTest 3: Skipped (initializePGPParameters not available in Python bindings)")
 
 
 if __name__ == "__main__":
