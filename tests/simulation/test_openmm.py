@@ -28,8 +28,8 @@ Modular structure (all files under 300 lines):
   * energyOpenmm/periodic_force_parameters.py: Force parameter test (1 function)
 - Original test_openmm_nonbonded_file.py (207 lines, 1 function) → energyOpenmm/file_based.py
 
-Total: 24 test functions across modular files (all modules under 280 lines each).
-Original total: 3160 lines → New structure: 4285 lines (+36% for better organization)
+Total: 28 test functions across modular files (all modules under 280 lines each).
+Original total: 3160 lines → New structure: 4785 lines (with NBFIX tests)
 """
 
 # Naive nonbonded comparison tests (3 functions)
@@ -81,6 +81,14 @@ from energyOpenmm.periodic_force_parameters import test_compare_force_parameters
 
 # File-based test (1 function)
 from energyOpenmm.file_based import test_verify_openmm_expressions
+
+# NBFIX tests (4 functions)
+from energyOpenmm.nbfix_tests import (
+    test_nbfix_overrides_lj_combination,
+    test_ion_water_nbfix_energy,
+    test_nbfix_energy_vs_openmm,
+    test_multiple_nbfix_pairs
+)
 
 # Support direct execution for testing
 if __name__ == "__main__":
