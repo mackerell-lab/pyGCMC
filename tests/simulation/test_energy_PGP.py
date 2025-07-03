@@ -75,8 +75,10 @@ from energyPGP.vspme_combined import (
 )
 
 # LJ-only tests for PGP
-from energyPGP.test_pgp_lj_only import (
-    test_pgp_lj_only_system,
+from energyPGP.pgp_lj_neutral_systems import (
+    test_pgp_lj_only_system
+)
+from energyPGP.pgp_lj_minimum_energy import (
     test_pgp_lj_close_interaction
 )
 
