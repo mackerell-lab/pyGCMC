@@ -28,8 +28,13 @@ Modular structure (all files under 300 lines):
   * energyOpenmm/periodic_force_parameters.py: Force parameter test (1 function)
 - Original test_openmm_nonbonded_file.py (207 lines, 1 function) → energyOpenmm/file_based.py
 
-Total: 30 test functions across modular files (all modules under 280 lines each).
+Total: 39 test functions across modular files (all modules under 280 lines each).
 Original total: 3160 lines → New structure: ~5000 lines (with NBFIX tests and demonstrations)
+PME Total bug fix tests: 3 functions to verify correct energy calculation
+PGP strict tolerance test: 1 function to test PGP with strict tolerances
+PME-Ewald consistency test: 1 function to verify PME and Ewald agreement
+PME regression tests: 4 functions from analysis tools to prevent bug recurrence
+Note: 2 PME tests are marked as skip due to C++ global state issues that need fixing
 """
 
 # Naive nonbonded comparison tests (3 functions)
@@ -93,6 +98,25 @@ from energyOpenmm.nbfix_openmm import (
     test_nbfix_energy_components_separately
 )
 from energyOpenmm.nbfix_pbc import test_nbfix_across_pbc
+
+# PME Total bug fix tests (3 functions)
+from energyOpenmm.pme_total_fix import (
+    test_pme_total_single_residue,
+    test_pme_total_multiple_residues,
+    test_pme_total_vs_ewald
+)
+
+# PGP strict tolerance test (1 function)
+from energyOpenmm.pgp_strict_tolerance import test_pgp_with_strict_tolerance
+
+# PME-Ewald consistency test (1 function)
+from energyOpenmm.pme_ewald_consistency import test_pme_ewald_consistency
+
+# PME bug analysis tests (4 functions) - now used as regression tests
+from energyOpenmm.pme_total_lj_hypothesis import test_lj_hypothesis
+from energyOpenmm.pme_residue_offset_pattern import test_residue_offset_pattern
+from energyOpenmm.verify_pme_total_source import test_pme_total_sources
+from energyOpenmm.analyze_pme_total_bug import test_pme_total_configurations
 
 # Residue activation demonstration functions are not tests
 # If you want to run them as tests, create wrapper functions:
