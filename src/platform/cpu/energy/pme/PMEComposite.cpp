@@ -80,20 +80,12 @@ void PMEComposite::computeSystemEnergy(model::MCState& state) {
     }
     
     // Calculate total energy - consistent with Ewald, get total energy from residues (including VDW and real-space electrostatics)
-    // Separate VDW and electrostatic contributions to avoid double counting.
-    double vdw_total = 0.0;
-    double elec_total = 0.0;
+    double residue_total = 0.0;
     for (const auto& residue : state.residues) {
         if (residue.active) {
-            vdw_total += residue.energy_vdw;   // full pair energy stored per residue
-            elec_total += residue.energy_elec; // already half-counted in real-space routine
+            residue_total += residue.energy_vdw + residue.energy_elec;
         }
     }
-
-    // Each LJ pair was accumulated twice (once per residue). Correct it.
-    vdw_total *= 0.5;
-
-    double residue_total = vdw_total + elec_total;
     
     // Total energy = residue total energy (including VDW and real-space electrostatics) + Reciprocal + Self
     state.ewald_energy.total = residue_total + 
@@ -125,20 +117,25 @@ void PMEComposite::computeMovementEnergy(model::MCState& state) {
     state.ewald_energy.real_space *= COULOMB;
     
     // Apply COULOMB constant to energies in movement residues - consistent with Ewald
-    double vdw_total = 0.0;
-    double elec_total = 0.0;
     for(const auto& movementInfo : state.movementResidues) {
         for(int i = movementInfo.startIndex;
             i < movementInfo.startIndex + movementInfo.activeCount; i++) {
             if(state.residues[i].active) {
-                vdw_total += state.residues[i].energy_vdw;
-                elec_total += state.residues[i].energy_elec;
+                state.residues[i].energy_elec *= COULOMB;
             }
         }
     }
-
-    vdw_total *= 0.5; // correct double counting
-    double residue_total = vdw_total + elec_total;
+    
+    // Calculate total energy for movement residues - consistent with Ewald
+    double residue_total = 0.0;
+    for(const auto& movementInfo : state.movementResidues) {
+        for(int i = movementInfo.startIndex;
+            i < movementInfo.startIndex + movementInfo.activeCount; i++) {
+            if(state.residues[i].active) {
+                residue_total += state.residues[i].energy_vdw + state.residues[i].energy_elec;
+            }
+        }
+    }
     
     // Total energy = residue total energy (including VDW and real-space electrostatics) + Reciprocal + Self
     state.ewald_energy.total = residue_total + 

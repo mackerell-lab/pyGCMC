@@ -120,8 +120,7 @@ void computeRealSpacePME(model::MCState& state, bool movement_only, bool store_i
                     if(std::abs(qi) < 1e-6 || std::abs(qj) < 1e-6) continue;
                     
                     // Calculate real space contribution for PME - only erfc part
-                    // TEMPORARY FIX: Calculate erfc directly until table issue is resolved
-                    double term = std::erfc(pme_params.alpha * r);
+                    double term = pme_params.erfcApprox(r);
                     double pair_energy = qi * qj * term / r;
                     
                     // Print debug information

@@ -13,15 +13,6 @@ void initializePMETables(double cutoff) {
     pme_params.cutoff = cutoff;
     pme_params.initialized = true;
     
-    // Debug: Check alpha value
-    platform::log(LogLevel::INFO, "DEBUG initializePMETables: alpha = ", pme_params.alpha);
-    
-    // CRITICAL: Check if alpha is valid
-    if (pme_params.alpha <= 0.0) {
-        platform::log(LogLevel::ERROR, "ERROR: Alpha is not set! Using default 1.0");
-        pme_params.alpha = 1.0;
-    }
-    
     // Initialize erfc table for optimization
     pme_params.erfcTable.resize(NUM_TABLE_POINTS);
     pme_params.ewaldScaleTable.resize(NUM_TABLE_POINTS);
@@ -37,24 +28,12 @@ void initializePMETables(double cutoff) {
         double alphaR = pme_params.alpha * r;
         pme_params.erfcTable[i] = std::erfc(alphaR);
         
-        // Debug first few entries
-        if (i < 5) {
-            platform::log(LogLevel::INFO, "DEBUG erfcTable[", i, "] r=", r, " alphaR=", alphaR, " erfc=", pme_params.erfcTable[i]);
-        }
-        
         // Store the scale factor for electrostatics
         if (r > 1e-6) {
             pme_params.ewaldScaleTable[i] = pme_params.erfcTable[i] / r;
         } else {
             pme_params.ewaldScaleTable[i] = 2.0 * pme_params.alpha / std::sqrt(M_PI);
         }
-    }
-    
-    // Debug: Check some table values
-    platform::log(LogLevel::INFO, "DEBUG erfcTable[0] = ", pme_params.erfcTable[0], " (should be 1.0)");
-    int idx_1nm = static_cast<int>(1.0 * pme_params.erfcDXInv);
-    if (idx_1nm < NUM_TABLE_POINTS) {
-        platform::log(LogLevel::INFO, "DEBUG erfcTable[", idx_1nm, "] (r=1.0nm) = ", pme_params.erfcTable[idx_1nm]);
     }
     
     platform::log(LogLevel::INFO, "PME tables initialized with cutoff = ", cutoff,
@@ -76,34 +55,7 @@ void setPMEBox(const double newBox[3]) {
  * @brief Approximate erfc function using lookup table
  */
 double erfcApproximate(double r) {
-    // TEMPORARY FIX: Always calculate erfc directly until we fix the table issue
-    double alpha = pme_params.alpha;
-    if (alpha <= 0.0) alpha = 2.5;  // Default alpha if not set
-    return std::erfc(alpha * r);
-    
-    /* ORIGINAL CODE - DISABLED FOR NOW
-    // TEMPORARY DEBUG: Check if function is being called
-    static int call_count = 0;
-    if (call_count++ < 5) {
-        platform::log(LogLevel::INFO, "DEBUG erfcApproximate called with r=", r, ", cutoff=", pme_params.cutoff, 
-                     ", table size=", pme_params.erfcTable.size(), ", erfcDXInv=", pme_params.erfcDXInv);
-    }
-    
     if (r >= pme_params.cutoff) return 0.0;
-    
-    // Check if table is empty
-    if (pme_params.erfcTable.empty()) {
-        platform::log(LogLevel::ERROR, "ERROR: erfcTable is empty!");
-        return 2.0;  // This would explain our issue!
-    }
-    
-    // CRITICAL CHECK: erfcDXInv must not be 0
-    if (pme_params.erfcDXInv == 0.0) {
-        platform::log(LogLevel::ERROR, "ERROR: erfcDXInv is 0! Table not initialized properly!");
-        // TEMPORARY FIX: Calculate erfc directly
-        return std::erfc(pme_params.alpha * r);
-    }
-    */
     
     double x = r * pme_params.erfcDXInv;
     int index = static_cast<int>(x);
@@ -112,15 +64,7 @@ double erfcApproximate(double r) {
     }
     
     double fraction = x - index;
-    double result = pme_params.erfcTable[index] + fraction * (pme_params.erfcTable[index+1] - pme_params.erfcTable[index]);
-    
-    // Debug for r = 1.0
-    if (std::abs(r - 1.0) < 0.001) {
-        platform::log(LogLevel::INFO, "DEBUG erfcApproximate(1.0): index=", index, ", fraction=", fraction, 
-                     ", table[", index, "]=", pme_params.erfcTable[index], ", result=", result);
-    }
-    
-    return result;
+    return pme_params.erfcTable[index] + fraction * (pme_params.erfcTable[index+1] - pme_params.erfcTable[index]);
 }
 
 /**
@@ -167,4 +111,4 @@ double estimatePMETotalError(const double box[3]) {
 
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc
+} // namespace pygcmc 
