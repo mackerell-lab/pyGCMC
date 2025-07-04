@@ -78,14 +78,12 @@ void EwaldComposite::computeSystemEnergy(model::MCState& state) {
     double self_energy = computeSelfEnergy(state, false);
     state.ewald_energy.self = self_energy;
     
-    // Calculate total energy
-    double residue_total = 0.0;
-    for (const auto& residue : state.residues) {
-        if (residue.active) {
-            residue_total += residue.energy_vdw + residue.energy_elec;
-        }
-    }
-    state.ewald_energy.total = residue_total + state.ewald_energy.reciprocal + state.ewald_energy.self;
+    // Calculate total energy correctly
+    // Total Ewald energy = Real Space + Reciprocal + Self
+    // Note: VDW energy is stored separately in residues and should not be included in ewald_energy.total
+    state.ewald_energy.total = state.ewald_energy.real_space + 
+                              state.ewald_energy.reciprocal + 
+                              state.ewald_energy.self;
     
     // Log energy components
     platform::log(LogLevel::INFO, "\n========== Ewald Energy Components ==========");
@@ -149,17 +147,12 @@ void EwaldComposite::computeMovementEnergy(model::MCState& state) {
     double self_energy = computeSelfEnergy(state, true);
     state.ewald_energy.self = self_energy;
     
-    // Calculate total energy
-    double residue_total = 0.0;
-    for(const auto& movementInfo : state.movementResidues) {
-        for(int i = movementInfo.startIndex;
-            i < movementInfo.startIndex + movementInfo.activeCount; i++) {
-            if(state.residues[i].active) {
-                residue_total += state.residues[i].energy_vdw + state.residues[i].energy_elec;
-            }
-        }
-    }
-    state.ewald_energy.total = residue_total + state.ewald_energy.reciprocal + state.ewald_energy.self;
+    // Calculate total energy correctly
+    // Total Ewald energy = Real Space + Reciprocal + Self
+    // Note: VDW energy is stored separately in residues and should not be included in ewald_energy.total
+    state.ewald_energy.total = state.ewald_energy.real_space + 
+                              state.ewald_energy.reciprocal + 
+                              state.ewald_energy.self;
     
     // Log energy components
     platform::log(LogLevel::INFO, "\n========== Movement Ewald Energy Components ==========");

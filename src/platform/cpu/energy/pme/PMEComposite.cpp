@@ -79,23 +79,16 @@ void PMEComposite::computeSystemEnergy(model::MCState& state) {
         }
     }
     
-    // Calculate total energy - consistent with Ewald, get total energy from residues (including VDW and real-space electrostatics)
-    double residue_total = 0.0;
-    for (const auto& residue : state.residues) {
-        if (residue.active) {
-            residue_total += residue.energy_vdw + residue.energy_elec;
-        }
-    }
-    
-    // Total energy = residue total energy (including VDW and real-space electrostatics) + Reciprocal + Self
-    state.ewald_energy.total = residue_total + 
+    // Calculate total energy correctly
+    // Total PME energy = Real Space + Reciprocal + Self
+    // Note: VDW energy is stored separately in residues and should not be included in ewald_energy.total
+    state.ewald_energy.total = state.ewald_energy.real_space + 
                              state.ewald_energy.reciprocal + 
                              state.ewald_energy.self;
     
     platform::log(LogLevel::INFO, "PME system energy components: real_space=", state.ewald_energy.real_space,
                  " reciprocal=", state.ewald_energy.reciprocal,
                  " self=", state.ewald_energy.self,
-                 " residue_total=", residue_total,
                  " total=", state.ewald_energy.total);
 }
 
@@ -126,26 +119,16 @@ void PMEComposite::computeMovementEnergy(model::MCState& state) {
         }
     }
     
-    // Calculate total energy for movement residues - consistent with Ewald
-    double residue_total = 0.0;
-    for(const auto& movementInfo : state.movementResidues) {
-        for(int i = movementInfo.startIndex;
-            i < movementInfo.startIndex + movementInfo.activeCount; i++) {
-            if(state.residues[i].active) {
-                residue_total += state.residues[i].energy_vdw + state.residues[i].energy_elec;
-            }
-        }
-    }
-    
-    // Total energy = residue total energy (including VDW and real-space electrostatics) + Reciprocal + Self
-    state.ewald_energy.total = residue_total + 
+    // Calculate total energy correctly
+    // Total PME energy = Real Space + Reciprocal + Self
+    // Note: VDW energy is stored separately in residues and should not be included in ewald_energy.total
+    state.ewald_energy.total = state.ewald_energy.real_space + 
                              state.ewald_energy.reciprocal + 
                              state.ewald_energy.self;
     
     platform::log(LogLevel::INFO, "PME movement energy components: real_space=", state.ewald_energy.real_space,
                  " reciprocal=", state.ewald_energy.reciprocal,
                  " self=", state.ewald_energy.self,
-                 " residue_total=", residue_total,
                  " total=", state.ewald_energy.total);
 }
 
