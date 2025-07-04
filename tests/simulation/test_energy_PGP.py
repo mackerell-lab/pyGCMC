@@ -29,8 +29,11 @@ Modular structure (all modules under 300 lines):
 - pgp_pme_cutoff.py: PGP PME cutoff test (1 function)
 - pgp_cutoff_issue.py: PGP cutoff issue tests (2 functions)
 - pgp_erfc_debug.py: PGP erfc table debug tests (2 functions)
+- pgp_cutoff_continuity.py: Energy continuity at cutoff boundary (3 functions)
+- pgp_grid_convergence.py: Grid size and alpha convergence tests (4 functions + 1 slow)
+- pgp_lj_limits.py: LJ potential at extreme distances (6 functions)
 
-Total: 28 test functions across 24 modules.
+Total: 41 test functions across 27 modules (+ 1 slow test).
 - Basic PGP tests (3): basic_operations
 - PGP comparison tests (8): method_comparison, complex_systems, planar_systems, 
   asymmetric_water_complete, asymmetric_nacl, pgp_lj_neutral_systems, pgp_lj_minimum_energy
@@ -39,6 +42,8 @@ Total: 28 test functions across 24 modules.
 - PGP debug/fix tests (12): pgp_real_space (2), pgp_real_space_debug (2), pgp_real_minimal (1),
   pgp_real_fixed (1), pgp_initialization_order (2), pgp_pme_cutoff (1), pgp_cutoff_issue (2),
   pgp_erfc_debug (2)
+- PGP boundary/convergence tests (13): pgp_cutoff_continuity (3), pgp_grid_convergence (4 + 1 slow),
+  pgp_lj_limits (6)
 """
 
 # Basic PGP operations tests
@@ -127,6 +132,27 @@ from energyPGP.pgp_cutoff_issue import (
 from energyPGP.pgp_erfc_debug import (
     test_pgp_erfc_table,
     test_compare_initialization_sequences
+)
+
+# PGP boundary condition and convergence tests
+from energyPGP.pgp_cutoff_continuity import (
+    test_pgp_cutoff_continuity,
+    test_pgp_smooth_transition,
+    test_pgp_lj_cutoff_continuity
+)
+from energyPGP.pgp_grid_convergence import (
+    test_pgp_grid_convergence,
+    test_pgp_alpha_convergence,
+    test_pgp_convergence_trend,
+    test_pgp_large_system_convergence
+)
+from energyPGP.pgp_lj_limits import (
+    test_pgp_lj_near_sigma,
+    test_pgp_lj_minimum,
+    test_pgp_lj_near_cutoff,
+    test_pgp_lj_short_distance,
+    test_pgp_lj_asymptotic_behavior,
+    test_pgp_lj_mixed_distances
 )
 
 # Support direct execution for testing

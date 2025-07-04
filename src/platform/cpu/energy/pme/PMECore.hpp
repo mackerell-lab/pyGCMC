@@ -8,6 +8,7 @@
 #include <array>
 #include <vector>
 #include <complex>
+#include <cmath>
 
 namespace pygcmc {
 namespace platform {
@@ -71,8 +72,9 @@ struct PMEParams {
     }
     
     double erfcApprox(double r) const {
-        // Redirect to standalone function
-        return erfcApproximate(r);
+        // TEMPORARY FIX: Calculate directly
+        return std::erfc(alpha * r);
+        // Original: return erfcApproximate(r);
     }
     
     double ewaldScaleApprox(double r) const {

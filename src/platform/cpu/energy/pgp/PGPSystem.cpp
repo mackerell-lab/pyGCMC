@@ -47,6 +47,9 @@ void computeSystemEnergyPGPImpl(model::MCState& state) {
             vdw_total += residue.energy_vdw;
         }
     }
+    // Each residue stores the full pair interaction energy, so the sum is double-counted.
+    // Divide by two to obtain the correct system VDW energy.
+    vdw_total *= 0.5;
     
     // Calculate total energy
     state.ewald_energy.reciprocal = grid_energy;
@@ -101,6 +104,8 @@ void computeMovementEnergyPGPImpl(model::MCState& state) {
             }
         }
     }
+    // Correct double counting for movement residues as well.
+    vdw_total *= 0.5;
     
     // Calculate total energy
     state.ewald_energy.reciprocal = grid_energy;
