@@ -26,6 +26,26 @@ def test_pme_total_sources():
     state.info.box = [5.0, 5.0, 5.0]
     state.info.cutoff = 2.0
     
+    # ------------------------------------------------------------
+    # 只在函数开头初始化一次 PME
+    # 后续复用同一组全局参数，避免重复释放/重建网格带来的内存问题
+    # ------------------------------------------------------------
+    alpha = 2.5
+    mesh_size = [32, 32, 32]
+    spline_order = 4
+    try:
+        pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
+        pygcmc.initializePMEParameters(
+            state.info.cutoff,
+            state.info.box,
+            alpha,
+            mesh_size,
+            spline_order
+        )
+    except Exception as e:
+        print(f"PME initialization warning: {e}")
+        pass
+    
     ff = MCForceField()
     ff.numTotalTypes = 1
     ff.numMovementTypes = 1

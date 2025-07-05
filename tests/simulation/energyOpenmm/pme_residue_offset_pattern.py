@@ -13,30 +13,49 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 import pygcmc
 from pygcmc import MCState, MCAtom, MCResidue, MCForceField
-from pygcmc import initializePMEParameters, computeSystemEnergyPME
 
-
-@pytest.mark.skip(reason="PME global state causes segfault with multiple MCState instances - needs C++ fix")
 def test_residue_offset_pattern():
     """测试 PME Total 不应该有与残基数量相关的偏移（回归测试）
     
     验证修复后的 PME total 在不同残基配置下都正确
+    为每个测试案例创建新的 MCState 实例以避免状态污染
     """
     
     # 固定系统参数
     box_size = 5.0
     cutoff = 2.0
     alpha = 2.5
+    mesh_size = [32, 32, 32]
+    spline_order = 4
     
-    # 只初始化一次 PME 参数
-    initializePMEParameters(cutoff, [box_size, box_size, box_size], alpha)
+    # ------------------------------------------------------------
+    # 只在函数开头初始化一次 PME（设好 α / 网格 / 样条阶数）
+    # 后续针对不同 MCState 直接调用 computeSystemEnergyPME 即可复用同一组
+    # 全局参数，避免重复释放/重建网格带来的内存问题
+    # ------------------------------------------------------------
+    try:
+        pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
+        pygcmc.initializePMEParameters(
+            cutoff,
+            [box_size, box_size, box_size],
+            alpha,
+            mesh_size,
+            spline_order
+        )
+    except Exception as e:
+        # 如果初始化失败，可能是因为已经初始化过
+        print(f"PME initialization warning: {e}")
+        pass
     
-    # 使用4个原子的系统
+    # 共享的原子位置和电荷
     positions = [[2.0, 2.0, 2.5], [3.0, 2.0, 2.5], [3.0, 3.0, 2.5], [2.0, 3.0, 2.5]]
     charges = [1.0, -1.0, 1.0, -1.0]
     n_atoms = 4
     
     # 测试案例1：1个4原子残基
+    print("测试案例1：1个4原子残基")
+    
+    # 创建新的 state
     state1 = MCState()
     state1.info.box = [box_size, box_size, box_size]
     state1.info.cutoff = cutoff
@@ -48,6 +67,7 @@ def test_residue_offset_pattern():
     ff1.ljSigma = [0.3]
     state1.forcefield = ff1
     
+    # 创建原子
     atoms1 = []
     for i in range(n_atoms):
         atom = MCAtom()
@@ -59,6 +79,7 @@ def test_residue_offset_pattern():
     state1.atoms = atoms1
     state1.activeAtomCount = n_atoms
     
+    # 创建1个包含4个原子的残基
     res1 = MCResidue()
     res1.active = True
     res1.fixed = False
@@ -69,7 +90,8 @@ def test_residue_offset_pattern():
     state1.residues = [res1]
     state1.activeResidueCount = 1
     
-    computeSystemEnergyPME(state1)
+    # 直接计算能量（PME 已在函数开头初始化）
+    pygcmc.computeSystemEnergyPME(state1)
     
     total1 = state1.ewald_energy.get('total', 0.0)
     sum1 = (state1.ewald_energy.get('real_space', 0.0) + 
@@ -77,9 +99,13 @@ def test_residue_offset_pattern():
             state1.ewald_energy.get('self', 0.0))
     offset1 = total1 - sum1
     
+    print(f"  Total: {total1:.6f}, Sum: {sum1:.6f}, Offset: {offset1:.6f}")
     assert abs(offset1) < 1e-6, f"1个残基配置的偏移应该为0，实际为 {offset1}"
     
     # 测试案例2：2个2原子残基
+    print("\n测试案例2：2个2原子残基")
+    
+    # 创建新的 state
     state2 = MCState()
     state2.info.box = [box_size, box_size, box_size]
     state2.info.cutoff = cutoff
@@ -91,6 +117,7 @@ def test_residue_offset_pattern():
     ff2.ljSigma = [0.3]
     state2.forcefield = ff2
     
+    # 创建原子
     atoms2 = []
     for i in range(n_atoms):
         atom = MCAtom()
@@ -102,6 +129,7 @@ def test_residue_offset_pattern():
     state2.atoms = atoms2
     state2.activeAtomCount = n_atoms
     
+    # 创建2个残基，每个包含2个原子
     residues2 = []
     for i in range(2):
         res = MCResidue()
@@ -115,7 +143,8 @@ def test_residue_offset_pattern():
     state2.residues = residues2
     state2.activeResidueCount = 2
     
-    computeSystemEnergyPME(state2)
+    # 直接计算能量，无需再次初始化
+    pygcmc.computeSystemEnergyPME(state2)
     
     total2 = state2.ewald_energy.get('total', 0.0)
     sum2 = (state2.ewald_energy.get('real_space', 0.0) + 
@@ -123,9 +152,13 @@ def test_residue_offset_pattern():
             state2.ewald_energy.get('self', 0.0))
     offset2 = total2 - sum2
     
+    print(f"  Total: {total2:.6f}, Sum: {sum2:.6f}, Offset: {offset2:.6f}")
     assert abs(offset2) < 1e-6, f"2个残基配置的偏移应该为0，实际为 {offset2}"
     
     # 测试案例3：4个1原子残基
+    print("\n测试案例3：4个1原子残基")
+    
+    # 创建新的 state
     state3 = MCState()
     state3.info.box = [box_size, box_size, box_size]
     state3.info.cutoff = cutoff
@@ -137,6 +170,7 @@ def test_residue_offset_pattern():
     ff3.ljSigma = [0.3]
     state3.forcefield = ff3
     
+    # 创建原子
     atoms3 = []
     for i in range(n_atoms):
         atom = MCAtom()
@@ -148,6 +182,7 @@ def test_residue_offset_pattern():
     state3.atoms = atoms3
     state3.activeAtomCount = n_atoms
     
+    # 创建4个残基，每个包含1个原子
     residues3 = []
     for i in range(4):
         res = MCResidue()
@@ -161,7 +196,8 @@ def test_residue_offset_pattern():
     state3.residues = residues3
     state3.activeResidueCount = 4
     
-    computeSystemEnergyPME(state3)
+    # 直接计算能量，无需再次初始化
+    pygcmc.computeSystemEnergyPME(state3)
     
     total3 = state3.ewald_energy.get('total', 0.0)
     sum3 = (state3.ewald_energy.get('real_space', 0.0) + 
@@ -169,9 +205,11 @@ def test_residue_offset_pattern():
             state3.ewald_energy.get('self', 0.0))
     offset3 = total3 - sum3
     
+    print(f"  Total: {total3:.6f}, Sum: {sum3:.6f}, Offset: {offset3:.6f}")
     assert abs(offset3) < 1e-6, f"4个残基配置的偏移应该为0，实际为 {offset3}"
     
     # 验证所有偏移都为 0
+    print(f"\n所有测试通过！偏移量: {offset1:.6f}, {offset2:.6f}, {offset3:.6f}")
     assert abs(offset1) < 1e-6 and abs(offset2) < 1e-6 and abs(offset3) < 1e-6, \
         "PME Total 修复后不应该有与残基数量相关的偏移"
 
