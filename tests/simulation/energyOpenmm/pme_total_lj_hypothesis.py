@@ -4,7 +4,6 @@ Test whether PME Total contains LJ energy
 Hypothesis: PME Total = electrostatic energy + erroneous LJ term
 """
 
-import numpy as np
 import sys
 import os
 

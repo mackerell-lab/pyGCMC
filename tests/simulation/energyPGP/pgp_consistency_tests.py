@@ -6,7 +6,6 @@ without comparing to PME values.
 """
 
 import pytest
-import numpy as np
 import pygcmc
 from pygcmc import MCState, MCAtom, MCResidue, MCForceField
 from pygcmc import setPGPParameters, initializePMEParameters, precomputeGridPotential

@@ -16,7 +16,6 @@ where:
 import pytest
 import math
 import random
-import numpy as np
 import pygcmc
 import os
 
@@ -103,7 +102,7 @@ def test_gcmc_benzene_insertion_in_protein():
             orientation_energies.append(delta_energy)
         
         # Select best orientation (configurational bias)
-        best_idx = np.argmin(orientation_energies)
+        best_idx = min(range(len(orientation_energies)), key=lambda i: orientation_energies[i])
         delta_energy = orientation_energies[best_idx]
         
         # Calculate Rosenbluth factor for configurational bias
@@ -143,7 +142,7 @@ def test_gcmc_benzene_insertion_in_protein():
     
     # Check energy distribution
     if len(energies) > 0:
-        avg_energy = np.mean(energies)
+        avg_energy = sum(energies) / len(energies)
         print(f"Average insertion energy: {avg_energy:.2f} kJ/mol")
         
         # Favorable insertions should have negative energy

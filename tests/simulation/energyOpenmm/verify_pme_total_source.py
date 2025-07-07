@@ -4,7 +4,6 @@ Verify PME Total value sources
 Check differences between state.ewald_energy and function return values
 """
 
-import numpy as np
 import sys
 import os
 

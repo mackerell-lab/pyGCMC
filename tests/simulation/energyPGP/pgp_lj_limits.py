@@ -9,7 +9,7 @@ Verifies correct LJ 12-6 potential behavior at:
 """
 
 import pytest
-import numpy as np
+import math
 import pygcmc
 from pygcmc import MCState, MCAtom, MCResidue, MCForceField
 from pygcmc import setPGPParameters, initializePMEParameters, precomputeGridPotential
@@ -355,7 +355,7 @@ def test_pgp_lj_mixed_distances():
             dx = positions[i][0] - positions[j][0]
             dy = positions[i][1] - positions[j][1]
             dz = positions[i][2] - positions[j][2]
-            r = np.sqrt(dx*dx + dy*dy + dz*dz)
+            r = math.sqrt(dx*dx + dy*dy + dz*dz)
             if r < state.info.cutoff:
                 expected_total += calculate_lj_analytical(r, epsilon, sigma)
                 pair_count += 1

@@ -2,7 +2,6 @@
 """Helper functions for GCMC insertion tests"""
 
 import pytest, math, random, os
-import numpy as np
 import pygcmc
 
 # Constants

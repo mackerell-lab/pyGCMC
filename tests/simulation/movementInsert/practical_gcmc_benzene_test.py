@@ -8,7 +8,6 @@ This module tests GCMC insertion of benzene molecules into protein-like cavities
 import pytest
 import math
 import random
-import numpy as np
 import pygcmc
 import os
 
@@ -88,7 +87,7 @@ def test_practical_benzene_insertion():
         probabilities = [w / rosenbluth for w in weights]
         
         # Choose configuration
-        chosen_idx = np.random.choice(len(trial_configs), p=probabilities)
+        chosen_idx = random.choices(range(len(trial_configs)), weights=probabilities)[0]
         chosen_config = trial_configs[chosen_idx]
         delta_e = chosen_config['energy']
         
@@ -130,8 +129,10 @@ def test_practical_benzene_insertion():
     # Analyze energy distribution
     accepted_energies = [d['delta_e'] for d in insertion_data if d['status'] == 'ACCEPTED']
     if accepted_energies:
-        avg_energy = np.mean(accepted_energies)
-        std_energy = np.std(accepted_energies)
+        avg_energy = sum(accepted_energies) / len(accepted_energies)
+        # Calculate standard deviation manually
+        variance = sum((x - avg_energy) ** 2 for x in accepted_energies) / len(accepted_energies)
+        std_energy = math.sqrt(variance)
         print(f"Average accepted ΔE: {avg_energy:.2f} ± {std_energy:.2f} kJ/mol")
     
     # Verify test ran

@@ -4,9 +4,10 @@
 重现原始 PGP 测试场景，但使用更严格的容错标准
 """
 
-import numpy as np
 import sys
 import os
+import random
+import statistics
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -29,17 +30,17 @@ def test_pgp_with_strict_tolerance():
     box_size = 5.0  # nm
     cutoff = 1.8    # nm
     
-    # 固定分子
-    fixed_positions = np.array([
+    # Fixed molecules
+    fixed_positions = [
         [1.0, 1.0, 2.5],
         [4.0, 1.0, 2.5],
         [4.0, 4.0, 2.5],
         [1.0, 4.0, 2.5]
-    ])
+    ]
     fixed_charges = [1.0, -1.0, 1.0, -1.0]
     
-    # 移动分子（初始位置）
-    moving_position_initial = np.array([2.5, 2.5, 2.5])
+    # Moving molecule (initial position)
+    moving_position_initial = [2.5, 2.5, 2.5]
     moving_charge = 0.5
     
     # 创建系统
@@ -54,8 +55,8 @@ def test_pgp_with_strict_tolerance():
     ff.ljSigma = [0.3]
     state.forcefield = ff
     
-    # 添加原子
-    all_positions_initial = np.vstack([fixed_positions, [moving_position_initial]])
+    # Add atoms
+    all_positions_initial = fixed_positions + [moving_position_initial]
     all_charges = fixed_charges + [moving_charge]
     
     atoms = []
@@ -118,10 +119,10 @@ def test_pgp_with_strict_tolerance():
         initial_ewald_result = computeSystemEnergyEwald(state)
         initial_ewald_recip = initial_ewald_result[2].get('reciprocal', 0.0)
         
-        # 随机移动（较小的位移）
-        dx = np.random.uniform(-0.3, 0.3)
-        dy = np.random.uniform(-0.3, 0.3)
-        dz = np.random.uniform(-0.3, 0.3)
+        # Random movement (small displacement)
+        dx = random.uniform(-0.3, 0.3)
+        dy = random.uniform(-0.3, 0.3)
+        dz = random.uniform(-0.3, 0.3)
         
         # 移动原子
         moving_atom = state.atoms[4]
@@ -168,9 +169,9 @@ def test_pgp_with_strict_tolerance():
     print("="*80)
     
     if errors_pgp_pme:
-        avg_error = np.mean(errors_pgp_pme) * 100
-        max_error = np.max(errors_pgp_pme) * 100
-        min_error = np.min(errors_pgp_pme) * 100
+        avg_error = statistics.mean(errors_pgp_pme) * 100
+        max_error = max(errors_pgp_pme) * 100
+        min_error = min(errors_pgp_pme) * 100
         
         print(f"\nPGP vs PME 误差统计:")
         print(f"平均误差: {avg_error:.2f}%")

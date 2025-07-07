@@ -8,7 +8,6 @@ This module tests GCMC insertion of water molecules with real energy calculation
 import pytest
 import math
 import random
-import numpy as np
 import pygcmc
 import os
 

@@ -14,7 +14,6 @@ and continuous around the cutoff distance.
 """
 
 import pytest
-import numpy as np
 import pygcmc
 from pygcmc import MCState, MCAtom, MCResidue, MCForceField
 from pygcmc import setPGPParameters, initializePMEParameters, precomputeGridPotential
@@ -130,7 +129,9 @@ def test_pgp_cutoff_continuity(delta_factor):
 def test_pgp_smooth_transition():
     """Test smooth energy transition across cutoff with fine sampling."""
     cutoff = 1.2  # nm
-    distances = np.linspace(cutoff - 0.02, cutoff + 0.02, 21)
+    # Create evenly spaced distances
+    start, end, num = cutoff - 0.02, cutoff + 0.02, 21
+    distances = [start + i * (end - start) / (num - 1) for i in range(num)]
     
     energies = []
     real_space_energies = []
@@ -162,9 +163,10 @@ def test_pgp_smooth_transition():
         print(f"{distance:.4f} {marker}     | {total:10.4f} | {real_space:10.4f} | {reciprocal:10.4f}")
     
     # Check for smoothness - no large jumps in energy
-    energy_diffs = np.diff(energies)
-    max_jump = np.max(np.abs(energy_diffs))
-    avg_jump = np.mean(np.abs(energy_diffs))
+    energy_diffs = [energies[i+1] - energies[i] for i in range(len(energies)-1)]
+    abs_diffs = [abs(diff) for diff in energy_diffs]
+    max_jump = max(abs_diffs)
+    avg_jump = sum(abs_diffs) / len(abs_diffs)
     
     print(f"\nMax energy jump: {max_jump:.6e} kJ/mol")
     print(f"Avg energy jump: {avg_jump:.6e} kJ/mol")
@@ -173,7 +175,8 @@ def test_pgp_smooth_transition():
     assert max_jump < 0.5  # PGP has small discontinuities at cutoff, f"Energy jump too large: {max_jump:.6e} kJ/mol"
     
     # Real-space should go to zero at cutoff
-    idx_cutoff = np.argmin(np.abs(distances - cutoff))
+    # Find index closest to cutoff
+    idx_cutoff = min(range(len(distances)), key=lambda i: abs(distances[i] - cutoff))
     assert abs(real_space_energies[idx_cutoff]) < 0.01, "Real-space should be nearly zero at cutoff"
 
 

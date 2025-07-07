@@ -14,7 +14,7 @@ and Ewald parameter alpha are varied.
 """
 
 import pytest
-import numpy as np
+import random
 import pygcmc
 from pygcmc import MCState, MCAtom, MCResidue, MCForceField
 from pygcmc import setPGPParameters, setPMEParameters, initializePMEParameters
@@ -23,7 +23,7 @@ from pygcmc import precomputeGridPotential, computeSystemEnergyPGP, computeSyste
 
 def create_random_charged_system(n_particles=256, box_size=4.0, seed=42):
     """Create a system with random charged particles (overall neutral)."""
-    np.random.seed(seed)
+    random.seed(seed)
     
     state = MCState()
     state.info.box = [box_size, box_size, box_size]
@@ -46,9 +46,9 @@ def create_random_charged_system(n_particles=256, box_size=4.0, seed=42):
     for i in range(n_particles):
         atom = MCAtom()
         # Random position in box
-        atom.x = np.random.uniform(0, box_size)
-        atom.y = np.random.uniform(0, box_size)
-        atom.z = np.random.uniform(0, box_size)
+        atom.x = random.uniform(0, box_size)
+        atom.y = random.uniform(0, box_size)
+        atom.z = random.uniform(0, box_size)
         
         # Alternate charges for neutrality
         if i < n_particles // 2:

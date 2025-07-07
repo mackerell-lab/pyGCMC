@@ -5,7 +5,6 @@ Verify that PME total energy calculation is correct after bug fix
 """
 
 import pytest
-import numpy as np
 import sys
 import os
 

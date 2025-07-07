@@ -8,7 +8,6 @@ This module provides various system creation utilities for practical GCMC testin
 import pytest
 import math
 import random
-import numpy as np
 import pygcmc
 import os
 

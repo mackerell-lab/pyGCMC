@@ -4,7 +4,6 @@
 找出偏移量的规律和来源
 """
 
-import numpy as np
 import sys
 import os
 

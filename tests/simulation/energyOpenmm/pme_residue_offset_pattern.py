@@ -4,7 +4,6 @@ Precise testing of PME Total offset relationship with residues
 Hypothesis: offset = f(number of residues)
 """
 
-import numpy as np
 import sys
 import os
 import subprocess

@@ -6,7 +6,6 @@ Molecule creation and utility functions for practical GCMC tests
 import pytest
 import math
 import random
-import numpy as np
 import pygcmc
 import os
 

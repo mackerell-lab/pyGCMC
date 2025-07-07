@@ -9,7 +9,6 @@ import pygcmc
 from pygcmc import MCAtom, MCResidue, MCState
 from pygcmc import setPGPParameters, initializePMEParameters, precomputeGridPotential
 from pygcmc import computeSystemEnergyPGP, computeSystemEnergyPME
-import numpy as np
 
 
 def test_pgp_real_space_debug():

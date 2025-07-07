@@ -13,7 +13,6 @@ from pygcmc import MCAtom, MCResidue, MCState
 from pygcmc import setPGPParameters, initializePMEParameters, precomputeGridPotential
 from pygcmc import computeSystemEnergyPGP, computeMovementEnergyPGP
 from pygcmc import computeSystemVdwEnergyCutoff
-import numpy as np
 
 
 def test_pgp_lj_close_interaction():

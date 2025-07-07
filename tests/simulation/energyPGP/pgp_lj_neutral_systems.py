@@ -13,7 +13,6 @@ from pygcmc import MCAtom, MCResidue, MCState
 from pygcmc import setPGPParameters, initializePMEParameters, precomputeGridPotential
 from pygcmc import computeSystemEnergyPGP, computeMovementEnergyPGP
 from pygcmc import computeSystemVdwEnergyCutoff
-import numpy as np
 
 
 def create_lj_only_system(box_size=5.0, cutoff=1.2):

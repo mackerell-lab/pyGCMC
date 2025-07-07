@@ -4,7 +4,6 @@
 理论上 PME 是 Ewald 的快速实现，结果应该高度一致
 """
 
-import numpy as np
 import sys
 import os
 
@@ -194,7 +193,7 @@ def test_pme_ewald_consistency():
     ff.ljSigma = [0.3]
     state.forcefield = ff
     
-    positions = np.array(test_case['positions'])
+    positions = test_case['positions']
     charges = test_case['charges']
     n_atoms = len(positions)
     

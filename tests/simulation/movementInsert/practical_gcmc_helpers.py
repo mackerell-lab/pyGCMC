@@ -9,7 +9,6 @@ and energy calculations.
 import pytest
 import math
 import random
-import numpy as np
 import pygcmc
 import os
 
