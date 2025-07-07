@@ -10,7 +10,6 @@ including:
 
 import pytest
 import os
-import time
 import math
 from pygcmc.io import PDBParser
 
