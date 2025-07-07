@@ -41,6 +41,9 @@ void computeSystemVdwEnergyDirect(model::MCState& state, bool use_cutoff, bool u
 // Note: Ewald, PME, PGP and debug functions are defined in their respective modules
 // This interface only provides the direct calculation functions and unified interface
 
+// Clear PME state function
+void clearPMEState();
+
 // Get total energy function
 inline double getTotalEnergy(const model::MCState& state) {
     double total = 0.0;

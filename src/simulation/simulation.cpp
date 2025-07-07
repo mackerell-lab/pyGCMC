@@ -210,6 +210,13 @@ void Simulation::computeMovementEnergyPME(model::MCState& state) {
     platform::cpu::computeMovementEnergyPME(state);
 }
 
+void Simulation::clearPMEEngine() {
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Clearing PME engine state");
+    }
+    platform::cpu::clearPMEState();
+}
+
 // Implementation of PGP-related methods
 void Simulation::setPGPParameters(float alpha, const int meshSize[3], float potential_cutoff, 
                                const int potentialGridSize[3], int splineOrder, float tolerance) {

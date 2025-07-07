@@ -208,6 +208,14 @@ void tfft_convolver(int k, cmplx *A, const cmplx *w) {
     tfft_ifft(k-1, A, w);
 }
 
+/**
+ * @brief Clear static FFT weights to force regeneration on next use
+ */
+void clearFFTWeights() {
+    weights.clear();
+    weights.shrink_to_fit();
+}
+
 // <agent-hook:fft_implementation>
 
 } // namespace CustomFFT

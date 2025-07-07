@@ -99,6 +99,9 @@ struct PMEParams {
 // Global PME parameters instance
 extern PMEParams pme_params;
 
+// Clear all PME state - used for testing to prevent cross-test contamination
+void clearPMEState();
+
 // <agent-hook:pme_core>
 
 } // namespace cpu

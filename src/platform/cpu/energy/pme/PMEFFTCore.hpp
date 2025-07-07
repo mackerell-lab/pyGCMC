@@ -30,6 +30,9 @@ void padded_fft(cmplx* data, int actual_size, bool inverse);
 // Specialized convolution operations
 void tfft_convolver(int k, cmplx *A, const cmplx *w);
 
+// Clear static FFT weights - needed for test isolation
+void clearFFTWeights();
+
 } // namespace CustomFFT
 } // namespace cpu
 } // namespace platform

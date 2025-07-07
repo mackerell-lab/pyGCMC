@@ -257,6 +257,14 @@ public:
      */
     static void computeMovementEnergyPGPFixed(model::MCState& state);
 
+    /**
+     * @brief Clear PME engine state
+     * 
+     * This function clears all global PME state including parameters, grids,
+     * FFT weights, and other cached data to prevent cross-test contamination.
+     */
+    static void clearPMEEngine();
+
 private:
     std::unique_ptr<platform::IPlatform> platform_;
 };

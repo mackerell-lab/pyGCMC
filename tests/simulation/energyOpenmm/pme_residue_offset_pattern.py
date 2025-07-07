@@ -7,12 +7,115 @@
 import numpy as np
 import sys
 import os
+import subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
 import pygcmc
 from pygcmc import MCState, MCAtom, MCResidue, MCForceField
+
+
+def compute_pme_with_state_isolation(n_residues, residue_config):
+    """在隔离的子进程中计算PME能量，避免全局状态污染"""
+    
+    # 构建Python脚本字符串，直接返回结果
+    script = f"""
+import sys
+sys.path.insert(0, '{os.path.dirname(os.path.dirname(os.path.abspath(__file__)))}')
+
+import pygcmc
+from pygcmc import MCState, MCAtom, MCResidue, MCForceField
+
+# 固定系统参数
+box_size = 5.0
+cutoff = 2.0
+alpha = 2.5
+mesh_size = [32, 32, 32]
+spline_order = 4
+
+# 创建新的 state
+state = MCState()
+state.info.box = [box_size, box_size, box_size]
+state.info.cutoff = cutoff
+
+ff = MCForceField()
+ff.numTotalTypes = 1
+ff.numMovementTypes = 1
+ff.ljEps = [0.0]
+ff.ljSigma = [0.3]
+state.forcefield = ff
+
+# 共享的原子位置和电荷
+positions = [[2.0, 2.0, 2.5], [3.0, 2.0, 2.5], [3.0, 3.0, 2.5], [2.0, 3.0, 2.5]]
+charges = [1.0, -1.0, 1.0, -1.0]
+n_atoms = 4
+
+# 创建原子
+atoms = []
+for i in range(n_atoms):
+    atom = MCAtom()
+    atom.x, atom.y, atom.z = positions[i]
+    atom.charge = charges[i]
+    atom.type = 0
+    atoms.append(atom)
+
+state.atoms = atoms
+state.activeAtomCount = n_atoms
+
+# 创建残基配置
+residues = []
+residue_config = {residue_config}
+for res_info in residue_config:
+    res = MCResidue()
+    res.active = True
+    res.fixed = False
+    res.atomStart = res_info['atomStart']
+    res.atomCount = res_info['atomCount']
+    res.type = 0
+    residues.append(res)
+
+state.residues = residues
+state.activeResidueCount = len(residues)
+
+# 初始化PME
+pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
+pygcmc.initializePMEParameters(
+    cutoff,
+    [box_size, box_size, box_size],
+    alpha,
+    mesh_size,
+    spline_order
+)
+
+# 计算能量
+pygcmc.computeSystemEnergyPME(state)
+
+# 直接打印结果字典
+print({{
+    'total': state.ewald_energy.get('total', 0.0),
+    'real_space': state.ewald_energy.get('real_space', 0.0),
+    'reciprocal': state.ewald_energy.get('reciprocal', 0.0),
+    'self': state.ewald_energy.get('self', 0.0)
+}})
+"""
+
+    # 在子进程中运行
+    try:
+        result = subprocess.run(
+            [sys.executable, '-c', script],
+            capture_output=True,
+            text=True,
+            check=True,
+            env={**os.environ, 'PYTHONPATH': os.environ.get('PYTHONPATH', '')}
+        )
+        
+        # 使用eval解析字典（安全因为我们控制输出）
+        return eval(result.stdout)
+    except subprocess.CalledProcessError as e:
+        print(f"Error running subprocess: {e.stderr}")
+        raise
+
 
 def test_residue_offset_pattern():
     """测试 PME Total 不应该有与残基数量相关的偏移（回归测试）
@@ -21,82 +124,13 @@ def test_residue_offset_pattern():
     为每个测试案例创建新的 MCState 实例以避免状态污染
     """
     
-    # 固定系统参数
-    box_size = 5.0
-    cutoff = 2.0
-    alpha = 2.5
-    mesh_size = [32, 32, 32]
-    spline_order = 4
-    
-    # ------------------------------------------------------------
-    # 只在函数开头初始化一次 PME（设好 α / 网格 / 样条阶数）
-    # 后续针对不同 MCState 直接调用 computeSystemEnergyPME 即可复用同一组
-    # 全局参数，避免重复释放/重建网格带来的内存问题
-    # ------------------------------------------------------------
-    try:
-        pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
-        pygcmc.initializePMEParameters(
-            cutoff,
-            [box_size, box_size, box_size],
-            alpha,
-            mesh_size,
-            spline_order
-        )
-    except Exception as e:
-        # 如果初始化失败，可能是因为已经初始化过
-        print(f"PME initialization warning: {e}")
-        pass
-    
-    # 共享的原子位置和电荷
-    positions = [[2.0, 2.0, 2.5], [3.0, 2.0, 2.5], [3.0, 3.0, 2.5], [2.0, 3.0, 2.5]]
-    charges = [1.0, -1.0, 1.0, -1.0]
-    n_atoms = 4
-    
     # 测试案例1：1个4原子残基
     print("测试案例1：1个4原子残基")
+    residue_config1 = [{'atomStart': 0, 'atomCount': 4}]
+    result1 = compute_pme_with_state_isolation(1, residue_config1)
     
-    # 创建新的 state
-    state1 = MCState()
-    state1.info.box = [box_size, box_size, box_size]
-    state1.info.cutoff = cutoff
-    
-    ff1 = MCForceField()
-    ff1.numTotalTypes = 1
-    ff1.numMovementTypes = 1
-    ff1.ljEps = [0.0]
-    ff1.ljSigma = [0.3]
-    state1.forcefield = ff1
-    
-    # 创建原子
-    atoms1 = []
-    for i in range(n_atoms):
-        atom = MCAtom()
-        atom.x, atom.y, atom.z = positions[i]
-        atom.charge = charges[i]
-        atom.type = 0
-        atoms1.append(atom)
-    
-    state1.atoms = atoms1
-    state1.activeAtomCount = n_atoms
-    
-    # 创建1个包含4个原子的残基
-    res1 = MCResidue()
-    res1.active = True
-    res1.fixed = False
-    res1.atomStart = 0
-    res1.atomCount = 4
-    res1.type = 0
-    
-    state1.residues = [res1]
-    state1.activeResidueCount = 1
-    
-    # 直接计算能量（PME 已在函数开头初始化）
-    pygcmc.computeSystemEnergyPME(state1)
-    
-    total1 = state1.ewald_energy.get('total', 0.0)
-    sum1 = (state1.ewald_energy.get('real_space', 0.0) + 
-            state1.ewald_energy.get('reciprocal', 0.0) + 
-            state1.ewald_energy.get('self', 0.0))
+    total1 = result1['total']
+    sum1 = result1['real_space'] + result1['reciprocal'] + result1['self']
     offset1 = total1 - sum1
     
     print(f"  Total: {total1:.6f}, Sum: {sum1:.6f}, Offset: {offset1:.6f}")
@@ -104,52 +138,14 @@ def test_residue_offset_pattern():
     
     # 测试案例2：2个2原子残基
     print("\n测试案例2：2个2原子残基")
+    residue_config2 = [
+        {'atomStart': 0, 'atomCount': 2},
+        {'atomStart': 2, 'atomCount': 2}
+    ]
+    result2 = compute_pme_with_state_isolation(2, residue_config2)
     
-    # 创建新的 state
-    state2 = MCState()
-    state2.info.box = [box_size, box_size, box_size]
-    state2.info.cutoff = cutoff
-    
-    ff2 = MCForceField()
-    ff2.numTotalTypes = 1
-    ff2.numMovementTypes = 1
-    ff2.ljEps = [0.0]
-    ff2.ljSigma = [0.3]
-    state2.forcefield = ff2
-    
-    # 创建原子
-    atoms2 = []
-    for i in range(n_atoms):
-        atom = MCAtom()
-        atom.x, atom.y, atom.z = positions[i]
-        atom.charge = charges[i]
-        atom.type = 0
-        atoms2.append(atom)
-    
-    state2.atoms = atoms2
-    state2.activeAtomCount = n_atoms
-    
-    # 创建2个残基，每个包含2个原子
-    residues2 = []
-    for i in range(2):
-        res = MCResidue()
-        res.active = True
-        res.fixed = False
-        res.atomStart = i * 2
-        res.atomCount = 2
-        res.type = 0
-        residues2.append(res)
-    
-    state2.residues = residues2
-    state2.activeResidueCount = 2
-    
-    # 直接计算能量，无需再次初始化
-    pygcmc.computeSystemEnergyPME(state2)
-    
-    total2 = state2.ewald_energy.get('total', 0.0)
-    sum2 = (state2.ewald_energy.get('real_space', 0.0) + 
-            state2.ewald_energy.get('reciprocal', 0.0) + 
-            state2.ewald_energy.get('self', 0.0))
+    total2 = result2['total']
+    sum2 = result2['real_space'] + result2['reciprocal'] + result2['self']
     offset2 = total2 - sum2
     
     print(f"  Total: {total2:.6f}, Sum: {sum2:.6f}, Offset: {offset2:.6f}")
@@ -157,52 +153,16 @@ def test_residue_offset_pattern():
     
     # 测试案例3：4个1原子残基
     print("\n测试案例3：4个1原子残基")
+    residue_config3 = [
+        {'atomStart': 0, 'atomCount': 1},
+        {'atomStart': 1, 'atomCount': 1},
+        {'atomStart': 2, 'atomCount': 1},
+        {'atomStart': 3, 'atomCount': 1}
+    ]
+    result3 = compute_pme_with_state_isolation(4, residue_config3)
     
-    # 创建新的 state
-    state3 = MCState()
-    state3.info.box = [box_size, box_size, box_size]
-    state3.info.cutoff = cutoff
-    
-    ff3 = MCForceField()
-    ff3.numTotalTypes = 1
-    ff3.numMovementTypes = 1
-    ff3.ljEps = [0.0]
-    ff3.ljSigma = [0.3]
-    state3.forcefield = ff3
-    
-    # 创建原子
-    atoms3 = []
-    for i in range(n_atoms):
-        atom = MCAtom()
-        atom.x, atom.y, atom.z = positions[i]
-        atom.charge = charges[i]
-        atom.type = 0
-        atoms3.append(atom)
-    
-    state3.atoms = atoms3
-    state3.activeAtomCount = n_atoms
-    
-    # 创建4个残基，每个包含1个原子
-    residues3 = []
-    for i in range(4):
-        res = MCResidue()
-        res.active = True
-        res.fixed = False
-        res.atomStart = i
-        res.atomCount = 1
-        res.type = 0
-        residues3.append(res)
-    
-    state3.residues = residues3
-    state3.activeResidueCount = 4
-    
-    # 直接计算能量，无需再次初始化
-    pygcmc.computeSystemEnergyPME(state3)
-    
-    total3 = state3.ewald_energy.get('total', 0.0)
-    sum3 = (state3.ewald_energy.get('real_space', 0.0) + 
-            state3.ewald_energy.get('reciprocal', 0.0) + 
-            state3.ewald_energy.get('self', 0.0))
+    total3 = result3['total']
+    sum3 = result3['real_space'] + result3['reciprocal'] + result3['self']
     offset3 = total3 - sum3
     
     print(f"  Total: {total3:.6f}, Sum: {sum3:.6f}, Offset: {offset3:.6f}")
