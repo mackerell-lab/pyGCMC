@@ -1,7 +1,7 @@
 """
-验证 PME Total 值的来源
+Verify PME Total value sources
 
-检查 state.ewald_energy 和函数返回值的差异
+Check differences between state.ewald_energy and function return values
 """
 
 import numpy as np
@@ -16,19 +16,19 @@ from pygcmc import initializePMEParameters, computeSystemEnergyPME
 
 
 def test_pme_total_sources():
-    """测试 PME Total 值的一致性（回归测试）
+    """Test PME Total value consistency (regression test)
     
-    验证 state.ewald_energy 和函数返回值是否一致
+    Verify whether state.ewald_energy and function return values are consistent
     """
     
-    # 创建简单系统
+    # Create simple system
     state = MCState()
     state.info.box = [5.0, 5.0, 5.0]
     state.info.cutoff = 2.0
     
     # ------------------------------------------------------------
-    # 只在函数开头初始化一次 PME
-    # 后续复用同一组全局参数，避免重复释放/重建网格带来的内存问题
+    # Initialize PME only once at the beginning of the function
+    # Reuse the same set of global parameters to avoid memory issues from repeated release/reconstruction of grids
     # ------------------------------------------------------------
     alpha = 2.5
     mesh_size = [32, 32, 32]
@@ -53,7 +53,7 @@ def test_pme_total_sources():
     ff.ljSigma = [0.35]
     state.forcefield = ff
     
-    # 2个原子
+    # 2 atoms
     positions = [[2.0, 2.5, 2.5], [3.0, 2.5, 2.5]]
     charges = [1.0, -1.0]
     
@@ -68,17 +68,17 @@ def test_pme_total_sources():
     state.atoms = atoms
     state.activeAtomCount = 2
     
-    # 测试不同的残基配置
+    # Test different residue configurations
     configs = [
-        (1, "1个残基"),
-        (2, "2个残基")
+        (1, "1 residue"),
+        (2, "2 residues")
     ]
     
     for n_residues, desc in configs:
-        print(f"\n测试：{desc}")
+        print(f"\nTest: {desc}")
         print("-" * 50)
         
-        # 设置残基
+        # Set residues
         residues = []
         if n_residues == 1:
             res = MCResidue()
@@ -101,54 +101,54 @@ def test_pme_total_sources():
         state.residues = residues
         state.activeResidueCount = n_residues
         
-        # 初始化 PME
+        # Initialize PME
         initializePMEParameters(state.info.cutoff, state.info.box, 2.5)
         
-        # 调用 computeSystemEnergyPME 并获取返回值
+        # Call computeSystemEnergyPME and get return value
         result = computeSystemEnergyPME(state)
         
-        # result 是一个元组: (electrostatic_total, vdw, pme_dict)
+        # result is a tuple: (electrostatic_total, vdw, pme_dict)
         if isinstance(result, tuple) and len(result) == 3:
             elec_total, vdw, pme_dict = result
             
-            print(f"\n从函数返回值获取：")
-            print(f"  静电总能量: {elec_total:.2f}")
-            print(f"  VDW 能量: {vdw:.6f}")
-            print(f"  字典中的 total: {pme_dict.get('total', 'NOT SET')}")
-            print(f"  字典中的 real_space: {pme_dict.get('real_space', 'NOT SET')}")
-            print(f"  字典中的 reciprocal: {pme_dict.get('reciprocal', 'NOT SET')}")
-            print(f"  字典中的 self: {pme_dict.get('self', 'NOT SET')}")
+            print(f"\nFrom function return value:")
+            print(f"  Electrostatic total energy: {elec_total:.2f}")
+            print(f"  VDW energy: {vdw:.6f}")
+            print(f"  Dictionary total: {pme_dict.get('total', 'NOT SET')}")
+            print(f"  Dictionary real_space: {pme_dict.get('real_space', 'NOT SET')}")
+            print(f"  Dictionary reciprocal: {pme_dict.get('reciprocal', 'NOT SET')}")
+            print(f"  Dictionary self: {pme_dict.get('self', 'NOT SET')}")
         
-        # 从 state.ewald_energy 获取
-        print(f"\n从 state.ewald_energy 获取：")
+        # From state.ewald_energy
+        print(f"\nFrom state.ewald_energy:")
         print(f"  total: {state.ewald_energy.get('total', 'NOT SET')}")
         print(f"  real_space: {state.ewald_energy.get('real_space', 'NOT SET')}")
         print(f"  reciprocal: {state.ewald_energy.get('reciprocal', 'NOT SET')}")
         print(f"  self: {state.ewald_energy.get('self', 'NOT SET')}")
         
-        # 手动计算
+        # Manual calculation
         manual_total = (state.ewald_energy.get('real_space', 0) + 
                        state.ewald_energy.get('reciprocal', 0) + 
                        state.ewald_energy.get('self', 0))
         
-        print(f"\n手动计算的静电总能量: {manual_total:.2f}")
+        print(f"\nManually calculated electrostatic total energy: {manual_total:.2f}")
         
-        # 检查差异
+        # Check differences
         if isinstance(result, tuple) and len(result) == 3:
             _, _, pme_dict = result
             dict_total = pme_dict.get('total', 0)
             state_total = state.ewald_energy.get('total', 0)
             
-            print(f"\n差异分析：")
-            print(f"  返回字典的 total: {dict_total:.2f}")
-            print(f"  state 的 total: {state_total:.2f}")
-            print(f"  差异: {abs(dict_total - state_total):.2f}")
+            print(f"\nDifference analysis:")
+            print(f"  Return dictionary total: {dict_total:.2f}")
+            print(f"  State total: {state_total:.2f}")
+            print(f"  Difference: {abs(dict_total - state_total):.2f}")
             
             if abs(dict_total - state_total) > 1e-6:
-                print("  ⚠️  返回值和 state 中的 total 不一致！")
+                print("  ⚠️  Return value and state total are inconsistent!")
     
     print("\n" + "="*80)
 
 
 if __name__ == "__main__":
-    verify_pme_total_source()
+    test_pme_total_sources()

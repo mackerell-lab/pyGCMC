@@ -150,7 +150,7 @@ def test_pme_total_configurations():
     state2.residues = residues2
     state2.activeResidueCount = 3
     
-    # 直接计算能量，无需再次初始化
+    # Calculate energy directly, no need to reinitialize
     pygcmc.computeSystemEnergyPME(state2)
     
     pme_total2 = state2.ewald_energy.get('total', 0.0)
@@ -203,7 +203,7 @@ def test_pme_total_configurations():
     state3.residues = [res3]
     state3.activeResidueCount = 1
     
-    # 直接计算能量，无需再次初始化
+    # Calculate energy directly, no need to reinitialize
     pygcmc.computeSystemEnergyPME(state3)
     
     pme_total3 = state3.ewald_energy.get('total', 0.0)

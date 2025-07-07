@@ -37,7 +37,7 @@ def run_tests():
     print("\n测试 1: test_residue_offset_pattern")
     print("-" * 40)
     try:
-        # 获取原始函数（跳过装饰器）
+        # Get original function (skip decorators)
         if hasattr(test_residue_offset_pattern, '__wrapped__'):
             test_func = test_residue_offset_pattern.__wrapped__
         else:
@@ -53,7 +53,7 @@ def run_tests():
     print("\n测试 2: test_pme_total_configurations")
     print("-" * 40)
     try:
-        # 获取原始函数（跳过装饰器）
+        # Get original function (skip decorators)
         if hasattr(test_pme_total_configurations, '__wrapped__'):
             test_func = test_pme_total_configurations.__wrapped__
         else:

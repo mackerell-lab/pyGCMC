@@ -107,11 +107,11 @@ def test_pme_ewald_consistency():
         for alpha in alpha_values:
             print(f"\n  Alpha = {alpha:.1f}")
             
-            # 初始化 PME
+            # Initialize PME
             mesh_size = [32, 32, 32]
             initializePMEParameters(cutoff, state.info.box, alpha)
             
-            # 初始化 Ewald
+            # Initialize Ewald
             initializeEwaldParameters(cutoff, state.info.box, alpha)
             
             # 计算 PME 能量
@@ -222,7 +222,7 @@ def test_pme_ewald_consistency():
     state.residues = residues
     state.activeResidueCount = n_atoms
     
-    # 初始化
+    # Initialize
     alpha = 2.5
     initializePMEParameters(cutoff, state.info.box, alpha)
     initializeEwaldParameters(cutoff, state.info.box, alpha)

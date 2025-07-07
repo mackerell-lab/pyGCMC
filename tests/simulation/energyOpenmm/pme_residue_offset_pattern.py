@@ -1,7 +1,7 @@
 """
-精确测试 PME Total 偏移量与残基的关系
+Precise testing of PME Total offset relationship with residues
 
-假设：偏移量 = f(残基数量)
+Hypothesis: offset = f(number of residues)
 """
 
 import numpy as np
@@ -17,9 +17,9 @@ from pygcmc import MCState, MCAtom, MCResidue, MCForceField
 
 
 def compute_pme_with_state_isolation(n_residues, residue_config):
-    """在隔离的子进程中计算PME能量，避免全局状态污染"""
+    """Calculate PME energy in isolated subprocess to avoid global state pollution"""
     
-    # 构建Python脚本字符串，直接返回结果
+    # Build Python script string that directly returns results
     script = f"""
 import sys
 sys.path.insert(0, '{os.path.dirname(os.path.dirname(os.path.abspath(__file__)))}')
@@ -27,14 +27,14 @@ sys.path.insert(0, '{os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 import pygcmc
 from pygcmc import MCState, MCAtom, MCResidue, MCForceField
 
-# 固定系统参数
+# Fixed system parameters
 box_size = 5.0
 cutoff = 2.0
 alpha = 2.5
 mesh_size = [32, 32, 32]
 spline_order = 4
 
-# 创建新的 state
+# Create new state
 state = MCState()
 state.info.box = [box_size, box_size, box_size]
 state.info.cutoff = cutoff
@@ -46,12 +46,12 @@ ff.ljEps = [0.0]
 ff.ljSigma = [0.3]
 state.forcefield = ff
 
-# 共享的原子位置和电荷
+# Shared atom positions and charges
 positions = [[2.0, 2.0, 2.5], [3.0, 2.0, 2.5], [3.0, 3.0, 2.5], [2.0, 3.0, 2.5]]
 charges = [1.0, -1.0, 1.0, -1.0]
 n_atoms = 4
 
-# 创建原子
+# Create atoms
 atoms = []
 for i in range(n_atoms):
     atom = MCAtom()
@@ -63,7 +63,7 @@ for i in range(n_atoms):
 state.atoms = atoms
 state.activeAtomCount = n_atoms
 
-# 创建残基配置
+# Create residue configuration
 residues = []
 residue_config = {residue_config}
 for res_info in residue_config:
@@ -78,7 +78,7 @@ for res_info in residue_config:
 state.residues = residues
 state.activeResidueCount = len(residues)
 
-# 初始化PME
+# Initialize PME
 pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
 pygcmc.initializePMEParameters(
     cutoff,
@@ -88,10 +88,10 @@ pygcmc.initializePMEParameters(
     spline_order
 )
 
-# 计算能量
+# Calculate energy
 pygcmc.computeSystemEnergyPME(state)
 
-# 直接打印结果字典
+# Print result dictionary directly
 print({{
     'total': state.ewald_energy.get('total', 0.0),
     'real_space': state.ewald_energy.get('real_space', 0.0),
@@ -100,7 +100,7 @@ print({{
 }})
 """
 
-    # 在子进程中运行
+    # Run in subprocess
     try:
         result = subprocess.run(
             [sys.executable, '-c', script],
@@ -110,7 +110,7 @@ print({{
             env={**os.environ, 'PYTHONPATH': os.environ.get('PYTHONPATH', '')}
         )
         
-        # 使用eval解析字典（安全因为我们控制输出）
+        # Use eval to parse dict (safe because we control the output)
         return eval(result.stdout)
     except subprocess.CalledProcessError as e:
         print(f"Error running subprocess: {e.stderr}")
@@ -118,14 +118,14 @@ print({{
 
 
 def test_residue_offset_pattern():
-    """测试 PME Total 不应该有与残基数量相关的偏移（回归测试）
+    """Test that PME Total should not have residue count-related offset (regression test)
     
-    验证修复后的 PME total 在不同残基配置下都正确
-    为每个测试案例创建新的 MCState 实例以避免状态污染
+    Verify that fixed PME total calculates correctly under different residue configurations
+    Create new MCState instances for each test case to avoid state pollution
     """
     
-    # 测试案例1：1个4原子残基
-    print("测试案例1：1个4原子残基")
+    # Test case 1: 1 residue with 4 atoms
+    print("Test case 1: 1 residue with 4 atoms")
     residue_config1 = [{'atomStart': 0, 'atomCount': 4}]
     result1 = compute_pme_with_state_isolation(1, residue_config1)
     
@@ -134,10 +134,10 @@ def test_residue_offset_pattern():
     offset1 = total1 - sum1
     
     print(f"  Total: {total1:.6f}, Sum: {sum1:.6f}, Offset: {offset1:.6f}")
-    assert abs(offset1) < 1e-6, f"1个残基配置的偏移应该为0，实际为 {offset1}"
+    assert abs(offset1) < 1e-6, f"Offset for 1 residue configuration should be 0, actual: {offset1}"
     
-    # 测试案例2：2个2原子残基
-    print("\n测试案例2：2个2原子残基")
+    # Test case 2: 2 residues with 2 atoms each
+    print("\nTest case 2: 2 residues with 2 atoms each")
     residue_config2 = [
         {'atomStart': 0, 'atomCount': 2},
         {'atomStart': 2, 'atomCount': 2}
@@ -149,10 +149,10 @@ def test_residue_offset_pattern():
     offset2 = total2 - sum2
     
     print(f"  Total: {total2:.6f}, Sum: {sum2:.6f}, Offset: {offset2:.6f}")
-    assert abs(offset2) < 1e-6, f"2个残基配置的偏移应该为0，实际为 {offset2}"
+    assert abs(offset2) < 1e-6, f"Offset for 2 residue configuration should be 0, actual: {offset2}"
     
-    # 测试案例3：4个1原子残基
-    print("\n测试案例3：4个1原子残基")
+    # Test case 3: 4 residues with 1 atom each
+    print("\nTest case 3: 4 residues with 1 atom each")
     residue_config3 = [
         {'atomStart': 0, 'atomCount': 1},
         {'atomStart': 1, 'atomCount': 1},
@@ -166,12 +166,12 @@ def test_residue_offset_pattern():
     offset3 = total3 - sum3
     
     print(f"  Total: {total3:.6f}, Sum: {sum3:.6f}, Offset: {offset3:.6f}")
-    assert abs(offset3) < 1e-6, f"4个残基配置的偏移应该为0，实际为 {offset3}"
+    assert abs(offset3) < 1e-6, f"Offset for 4 residue configuration should be 0, actual: {offset3}"
     
-    # 验证所有偏移都为 0
-    print(f"\n所有测试通过！偏移量: {offset1:.6f}, {offset2:.6f}, {offset3:.6f}")
+    # Verify all offsets are 0
+    print(f"\nAll tests passed! Offsets: {offset1:.6f}, {offset2:.6f}, {offset3:.6f}")
     assert abs(offset1) < 1e-6 and abs(offset2) < 1e-6 and abs(offset3) < 1e-6, \
-        "PME Total 修复后不应该有与残基数量相关的偏移"
+        "Fixed PME Total should not have residue count-related offset"
 
 
 if __name__ == "__main__":

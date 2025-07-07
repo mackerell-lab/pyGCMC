@@ -141,7 +141,7 @@ def test_pgp_with_strict_tolerance():
         delta_pme = moved_pme_recip - initial_pme_recip
         delta_ewald = moved_ewald_recip - initial_ewald_recip
         
-        print(f"\n移动 {move_idx + 1}: ({dx:.3f}, {dy:.3f}, {dz:.3f})")
+        print(f"\nMove {move_idx + 1}: ({dx:.3f}, {dy:.3f}, {dz:.3f})")
         print(f"ΔE_PGP:   {delta_pgp:10.6f} kJ/mol")
         print(f"ΔE_PME:   {delta_pme:10.6f} kJ/mol")
         print(f"ΔE_Ewald: {delta_ewald:10.6f} kJ/mol")
@@ -184,7 +184,7 @@ def test_pgp_with_strict_tolerance():
         
         for tol in tolerances:
             passed = avg_error/100 < tol
-            status = "✓ 通过" if passed else "✗ 失败"
+            status = "✓ Pass" if passed else "✗ Fail"
             print(f"容错 {tol*100:5.1f}%: {status}")
         
         # 检查具体有多少测试会失败

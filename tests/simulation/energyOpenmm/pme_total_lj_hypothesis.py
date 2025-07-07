@@ -1,7 +1,7 @@
 """
-测试 PME Total 是否包含了 LJ 能量
+Test whether PME Total contains LJ energy
 
-假设：PME Total = 静电能量 + 错误的 LJ 项
+Hypothesis: PME Total = electrostatic energy + erroneous LJ term
 """
 
 import numpy as np
@@ -17,18 +17,18 @@ from pygcmc import (initializePMEParameters, computeSystemEnergyPME,
 
 
 def test_lj_hypothesis():
-    """测试 PME Total 是否包含 LJ 能量（回归测试）
+    """Test whether PME Total contains LJ energy (regression test)
     
-    验证修复后的 PME total 不再错误包含 LJ 能量
+    Verify that fixed PME total no longer erroneously contains LJ energy
     """
     
-    # 测试配置
+    # Test configuration
     box_size = 5.0
     cutoff = 2.0
     alpha = 2.5
     
-    # 测试1：纯静电系统（无 LJ）
-    print("\n测试1：纯静电系统（LJ = 0）")
+    # Test 1: Pure electrostatic system (no LJ)
+    print("\nTest 1: Pure electrostatic system (LJ = 0)")
     print("-" * 50)
     
     state = MCState()
@@ -38,11 +38,11 @@ def test_lj_hypothesis():
     ff = MCForceField()
     ff.numTotalTypes = 1
     ff.numMovementTypes = 1
-    ff.ljEps = [0.0]  # 无 LJ
+    ff.ljEps = [0.0]  # No LJ
     ff.ljSigma = [0.3]
     state.forcefield = ff
     
-    # 2个原子
+    # 2 atoms
     atoms = []
     atoms.append(MCAtom())
     atoms[0].x, atoms[0].y, atoms[0].z = 2.0, 2.5, 2.5
@@ -57,7 +57,7 @@ def test_lj_hypothesis():
     state.atoms = atoms
     state.activeAtomCount = 2
     
-    # 2个残基
+    # 2 residues
     residues = []
     for i in range(2):
         res = MCResidue()
@@ -81,11 +81,11 @@ def test_lj_hypothesis():
     offset_no_lj = pme_total_no_lj - pme_sum_no_lj
     
     print(f"PME Total: {pme_total_no_lj:.2f}")
-    print(f"PME 分量和: {pme_sum_no_lj:.2f}")
-    print(f"偏移量: {offset_no_lj:.2f}")
+    print(f"PME component sum: {pme_sum_no_lj:.2f}")
+    print(f"Offset: {offset_no_lj:.2f}")
     
-    # 测试2：有 LJ 的系统
-    print("\n测试2：有 LJ 的系统")
+    # Test 2: System with LJ
+    print("\nTest 2: System with LJ")
     print("-" * 50)
     
     state2 = MCState()
@@ -95,11 +95,11 @@ def test_lj_hypothesis():
     ff2 = MCForceField()
     ff2.numTotalTypes = 1
     ff2.numMovementTypes = 1
-    ff2.ljEps = [1.0]  # 有 LJ
+    ff2.ljEps = [1.0]  # Has LJ
     ff2.ljSigma = [0.35]
     state2.forcefield = ff2
     
-    # 相同的原子配置
+    # Same atom configuration
     atoms2 = []
     atoms2.append(MCAtom())
     atoms2[0].x, atoms2[0].y, atoms2[0].z = 2.0, 2.5, 2.5
@@ -114,7 +114,7 @@ def test_lj_hypothesis():
     state2.atoms = atoms2
     state2.activeAtomCount = 2
     
-    # 相同的残基配置
+    # Same residue configuration
     residues2 = []
     for i in range(2):
         res = MCResidue()
@@ -128,19 +128,19 @@ def test_lj_hypothesis():
     state2.residues = residues2
     state2.activeResidueCount = 2
     
-    # 先计算 LJ 能量
+    # Calculate LJ energy first
     try:
         lj_result = computeSystemVdwEnergyCutoff(state2)
         if lj_result is not None:
             lj_energy = lj_result
         else:
             lj_energy = 0.0
-        print(f"LJ 能量: {lj_energy:.6f}")
+        print(f"LJ energy: {lj_energy:.6f}")
     except:
-        print("LJ 能量计算失败")
+        print("LJ energy calculation failed")
         lj_energy = 0.0
     
-    # 计算 PME
+    # Calculate PME
     initializePMEParameters(cutoff, state2.info.box, alpha)
     computeSystemEnergyPME(state2)
     
@@ -151,28 +151,28 @@ def test_lj_hypothesis():
     offset_with_lj = pme_total_with_lj - pme_sum_with_lj
     
     print(f"PME Total: {pme_total_with_lj:.2f}")
-    print(f"PME 分量和: {pme_sum_with_lj:.2f}")
-    print(f"偏移量: {offset_with_lj:.2f}")
+    print(f"PME component sum: {pme_sum_with_lj:.2f}")
+    print(f"Offset: {offset_with_lj:.2f}")
     
-    print(f"\n偏移量差异: {offset_with_lj - offset_no_lj:.6f}")
-    print(f"与 LJ 能量比较: 差异是否接近 LJ？")
+    print(f"\nOffset difference: {offset_with_lj - offset_no_lj:.6f}")
+    print(f"Compare with LJ energy: Is difference close to LJ?")
     
-    # 测试3：检查残基的 LJ 能量
-    print("\n测试3：残基 LJ 能量")
+    # Test 3: Check residue LJ energy
+    print("\nTest 3: Residue LJ energy")
     print("-" * 50)
     
     total_res_lj = 0.0
     for i, res in enumerate(state2.residues):
         if hasattr(res, 'energy_vdw'):
-            print(f"残基 {i} LJ 能量: {res.energy_vdw:.6f}")
+            print(f"Residue {i} LJ energy: {res.energy_vdw:.6f}")
             total_res_lj += res.energy_vdw
     
-    print(f"残基 LJ 总和: {total_res_lj:.6f}")
+    print(f"Residue LJ sum: {total_res_lj:.6f}")
     if 'lj_energy' in locals():
-        print(f"系统 LJ 能量: {lj_energy:.6f}")
+        print(f"System LJ energy: {lj_energy:.6f}")
     
-    # 测试4：1个残基的情况
-    print("\n测试4：1个残基的系统")
+    # Test 4: 1 residue case
+    print("\nTest 4: System with 1 residue")
     print("-" * 50)
     
     state3 = MCState()
@@ -181,7 +181,7 @@ def test_lj_hypothesis():
     state3.atoms = state2.atoms
     state3.activeAtomCount = state2.activeAtomCount
     
-    # 1个残基包含2个原子
+    # 1 residue containing 2 atoms
     residues3 = []
     res = MCResidue()
     res.active = True
@@ -203,19 +203,19 @@ def test_lj_hypothesis():
                     state3.ewald_energy.get('self', 0.0))
     offset_1res = pme_total_1res - pme_sum_1res
     
-    print(f"1个残基系统偏移量: {offset_1res:.2f} （应该是 0）")
+    print(f"1 residue system offset: {offset_1res:.2f} (should be 0)")
     
     print("\n" + "="*80)
-    print("结论")
+    print("Conclusion")
     print("="*80)
     
     if abs(offset_1res) < 1e-6:
-        print("✓ 确认：1个残基时偏移量为 0")
+        print("✓ Confirmed: Offset is 0 for 1 residue")
     
     if abs(offset_no_lj) == abs(offset_with_lj):
-        print("✓ 偏移量与 LJ 参数无关")
+        print("✓ Offset is independent of LJ parameters")
     else:
-        print(f"✗ 偏移量可能与 LJ 有关：差异 = {abs(offset_with_lj - offset_no_lj):.6f}")
+        print(f"✗ Offset may be related to LJ: difference = {abs(offset_with_lj - offset_no_lj):.6f}")
 
 
 if __name__ == "__main__":
