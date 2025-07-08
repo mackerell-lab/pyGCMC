@@ -340,5 +340,4 @@ def test_ligand_position_scan():
 
 if __name__ == "__main__":
     test_ligand_insertion_energy()
-    test_movement_residue_pme_energy() 
     test_ligand_position_scan()

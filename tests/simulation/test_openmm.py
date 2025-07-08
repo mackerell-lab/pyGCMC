@@ -132,7 +132,7 @@ from energyOpenmm.pme_high_precision_comparison import (
 )
 
 # PME ligand insertion tests (2 functions) - test_movement_residue_pme_energy excluded due to segfault
-from energyOpenmm.test_pme_ligand_insertion import (
+from energyOpenmm.pme_ligand_insertion import (
     test_ligand_insertion_energy,
     test_ligand_position_scan
 )
