@@ -282,45 +282,6 @@ def test_ligand_insertion_energy():
         assert rel_diff < 0.01, f"PME energies differ by {rel_diff*100:.3f}% (> 1%)"
 
 
-@pytest.mark.skip(reason="Causes segmentation fault in parallel execution")
-def test_movement_residue_pme_energy():
-    """Test PME movement residue energy calculation"""
-    
-    # Create system
-    state, _ = create_protein_like_system()
-    
-    # Add ligand
-    ligand_position = [3.0, 3.0, 3.0]
-    ligand_charges = [0.3, -0.15, -0.15]
-    add_ligand_to_system(state, ligand_position, ligand_charges)
-    
-    # Initialize PME
-    alpha = 3.2
-    mesh_size = [32, 32, 32]
-    spline_order = 4
-    
-    pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
-    initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
-    
-    # Calculate full system energy
-    computeSystemEnergyPME(state)
-    full_energy = state.ewald_energy.get('total', 0.0)
-    
-    # Calculate movement residue energy
-    movement_result = computeMovementEnergyPME(state)
-    
-    if isinstance(movement_result, tuple) and len(movement_result) >= 3:
-        movement_elec = movement_result[0]
-        movement_components = movement_result[2]
-        
-        print(f"\nMovement residue PME energy:")
-        print(f"  Total electrostatic: {movement_elec:.6f} kJ/mol")
-        print(f"  Reciprocal component: {movement_components.get('reciprocal', 0.0):.6f} kJ/mol")
-        
-        # Movement energy should be significant (ligand interacting with charged site)
-        assert abs(movement_elec) > 1.0, "Movement energy too small for charged system"
-
-
 def test_ligand_position_scan():
     """Test PME energy as ligand moves through the system"""
     

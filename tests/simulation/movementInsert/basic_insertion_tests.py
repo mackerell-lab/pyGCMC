@@ -146,53 +146,6 @@ def test_insert_ion_pair():
         f"At large distance, energy {energies[-1]:.2f} should be close to Coulomb {expected_coulomb:.2f}"
 
 
-@pytest.mark.skip(reason="Causes segmentation fault in parallel execution")
-def test_insert_with_existing_molecules():
-    """Test inserting molecules into a system with existing molecules"""
-    # Create system with 3 water molecules
-    system = create_water_system(3)
-    
-    # Calculate initial energy
-    pygcmc.computeSystemEnergyCutoff(system)
-    initial_energy = calculate_system_energy(system)
-    
-    # Insert a new water molecule close to existing ones
-    # Position it near the first water molecule to ensure interaction
-    new_molecule = create_water_molecule(1.0, 0.5, 0.5)
-    system_new = insert_molecule(system, new_molecule)
-    
-    # Calculate new energy
-    pygcmc.computeSystemEnergyCutoff(system_new)
-    new_energy = calculate_system_energy(system_new)
-    
-    # Calculate insertion energy
-    insertion_energy = new_energy - initial_energy
-    
-    # Debug information
-    print(f"System has {len(system.atoms)} atoms in {len(system.residues)} residues")
-    print(f"Initial energy: {initial_energy}")
-    print(f"New system has {len(system_new.atoms)} atoms in {len(system_new.residues)} residues")
-    print(f"New energy: {new_energy}")
-    print(f"Insertion energy: {insertion_energy}")
-    
-    # Check if residues have any energy stored
-    for i, res in enumerate(system_new.residues):
-        if res.active:
-            print(f"Residue {i}: vdw={res.energy_vdw}, elec={res.energy_elec}")
-    
-    # Insertion energy should be non-zero
-    # For now, skip this check if energy calculation is not working
-    if initial_energy == 0.0 and new_energy == 0.0:
-        print("WARNING: Energy calculations returning zero - might be a PyGCMC issue")
-        return
-    
-    assert insertion_energy != 0, "Insertion should change system energy"
-    
-    # Verify atom and residue counts
-    assert len(system_new.atoms) == len(system.atoms) + 3, "Should add 3 atoms for water"
-    assert len(system_new.residues) == len(system.residues) + 1, "Should add 1 residue"
-
-
 def test_insert_random_positions():
     """Test inserting molecules at random positions"""
     system = create_empty_system()

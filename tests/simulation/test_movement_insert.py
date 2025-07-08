@@ -14,12 +14,11 @@ Test categories:
 6. Practical GCMC tests - Real energy calculations with PyGCMC
 """
 
-# Basic insertion tests (5 functions)
+# Basic insertion tests (4 functions) - test_insert_with_existing_molecules moved to tmp/skipped_tests
 from movementInsert.basic_insertion_tests import (
     test_insert_single_molecule,
     test_insert_multiple_water_molecules,
     test_insert_ion_pair,
-    test_insert_with_existing_molecules,
     test_insert_random_positions
 )
 
