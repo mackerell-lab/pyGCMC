@@ -27,6 +27,10 @@ Modular structure (all files under 300 lines):
   * energyOpenmm/periodic_lj_coulomb.py: LJ and Coulomb separation test (1 function)
   * energyOpenmm/periodic_force_parameters.py: Force parameter test (1 function)
 - Original test_openmm_nonbonded_file.py (207 lines, 1 function) → energyOpenmm/file_based.py
+- Original pme_lj_only.py (429 lines, 4 functions) split into:
+  * energyOpenmm/pme_lj_only_helpers.py: Shared helper functions (151 lines)
+  * energyOpenmm/pme_lj_only_basic.py: Basic cutoff and PME tests (118 lines, 2 functions)
+  * energyOpenmm/pme_lj_only_analysis.py: Distance scan and mixing rules tests (195 lines, 2 functions)
 
 Total: 70 test functions across modular files (all modules under 280 lines each).
 Original total: 3160 lines → New structure: ~5000 lines (with NBFIX tests and demonstrations)
@@ -171,9 +175,13 @@ from simulation.energyOpenmm.lj_detailed_comparison import (
 )
 
 # PME LJ-only tests (4 functions)
-from simulation.energyOpenmm.pme_lj_only import (
+# Basic tests (2 functions)
+from simulation.energyOpenmm.pme_lj_only_basic import (
     test_lj_only_cutoff,
-    test_lj_only_pme,
+    test_lj_only_pme
+)
+# Analysis tests (2 functions)
+from simulation.energyOpenmm.pme_lj_only_analysis import (
     test_lj_distance_scan,
     test_lj_mixing_rules
 )
