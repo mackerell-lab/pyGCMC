@@ -118,6 +118,25 @@ from energyOpenmm.pme_residue_offset_pattern import test_residue_offset_pattern
 from energyOpenmm.verify_pme_total_source import test_pme_total_sources
 from energyOpenmm.analyze_pme_total_bug import test_pme_total_configurations
 
+# PME ligand energy comparison with OpenMM (2 functions)
+from energyOpenmm.pme_ligand_openmm_comparison import (
+    test_pme_ligand_energy_vs_openmm,
+    test_pme_movement_residues
+)
+
+# High precision PME comparison with OpenMM (3 functions)
+from energyOpenmm.pme_high_precision_comparison import (
+    test_pme_high_precision_simple_system,
+    test_pme_high_precision_complex_system,
+    test_pme_convergence_with_mesh_size
+)
+
+# PME ligand insertion tests (2 functions) - test_movement_residue_pme_energy excluded due to segfault
+from energyOpenmm.test_pme_ligand_insertion import (
+    test_ligand_insertion_energy,
+    test_ligand_position_scan
+)
+
 # Residue activation demonstration functions are not tests
 # If you want to run them as tests, create wrapper functions:
 # def test_residue_activation():
