@@ -156,10 +156,10 @@ from simulation.energyOpenmm.movement_residue_pme import (
 #     assert delta < 0  # Adding a residue should be favorable in this case
 
 # Full nonbonded comparison tests with LJ fix (2 functions)
-from simulation.energyOpenmm.full_nonbonded_comparison import (
-    test_full_nonbonded_pme_lj,
-    test_lj_only_comparison
-)
+# Original file: from simulation.energyOpenmm.full_nonbonded_comparison
+# Now split into three files using sed
+from simulation.energyOpenmm.full_nonbonded_pme import test_full_nonbonded_pme_lj
+from simulation.energyOpenmm.full_nonbonded_cutoff import test_lj_only_comparison
 
 # LJ double counting analysis tests (3 functions)
 from simulation.energyOpenmm.lj_double_counting import (
