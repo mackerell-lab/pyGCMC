@@ -137,6 +137,12 @@ from energyOpenmm.pme_ligand_insertion import (
     test_ligand_position_scan
 )
 
+# Movement residue PME tests (2 functions)
+from energyOpenmm.movement_residue_pme import (
+    test_movement_residue_pme,
+    test_movement_residue_removal
+)
+
 # Residue activation demonstration functions are not tests
 # If you want to run them as tests, create wrapper functions:
 # def test_residue_activation():

@@ -128,6 +128,125 @@ void init_pme_bindings(py::module& m) {
             return py::make_tuple(electrostatic_total, vdw, pme_dict);
         },
         "Calculate movement residue energy using Particle Mesh Ewald summation");
+        
+    // Fixed versions that correct LJ double-counting
+    m.def("computeSystemEnergyPMEFixed", 
+        [](::pygcmc::model::MCState& state) {
+            // Call C++ function to calculate energy
+            ::pygcmc::simulation::Simulation::computeSystemEnergyPME(state);
+            
+            // Convert from C++ struct to Python dictionary
+            py::dict pme_dict;
+            pme_dict["real_space"] = state.ewald_energy.real_space;
+            pme_dict["reciprocal"] = state.ewald_energy.reciprocal;
+            pme_dict["self"] = state.ewald_energy.self;
+            
+            // Calculate total electrostatic energy
+            double electrostatic_total = state.ewald_energy.real_space + 
+                                         state.ewald_energy.reciprocal + 
+                                         state.ewald_energy.self;
+            
+            // Accumulate VDW energy from residues and fix double-counting
+            double vdw = 0.0;
+            for(const auto& res : state.residues) {
+                if(res.active) {
+                    vdw += res.energy_vdw;
+                }
+            }
+            // Fix double-counting: divide by 2
+            vdw /= 2.0;
+            
+            // Also update residue energies to be corrected
+            for(auto& res : state.residues) {
+                if(res.active) {
+                    res.energy_vdw /= 2.0;
+                }
+            }
+            
+            // Correctly calculate and save total energy
+            double total = electrostatic_total + vdw;
+            pme_dict["total"] = total;
+            
+            // Return tuple: (electrostatic_total, vdw_energy, pme_dict)
+            return py::make_tuple(electrostatic_total, vdw, pme_dict);
+        },
+        "Calculate system energy using PME with LJ double-counting fix");
+        
+    m.def("computeSystemEnergyCutoffFixed", 
+        [](::pygcmc::model::MCState& state) {
+            // Call the standard cutoff computation
+            ::pygcmc::simulation::Simulation::computeSystemEnergyCutoff(state);
+            
+            // Fix double-counting by dividing residue energies by 2
+            for(auto& res : state.residues) {
+                if(res.active) {
+                    res.energy_vdw /= 2.0;
+                    res.energy_elec /= 2.0;
+                }
+            }
+            
+            // Calculate corrected totals
+            double total_vdw = 0.0;
+            double total_elec = 0.0;
+            for(const auto& res : state.residues) {
+                if(res.active) {
+                    total_vdw += res.energy_vdw;
+                    total_elec += res.energy_elec;
+                }
+            }
+            
+            // Return tuple: (total_elec, total_vdw, total_energy)
+            return py::make_tuple(total_elec, total_vdw, total_elec + total_vdw);
+        },
+        "Calculate cutoff energy with LJ double-counting fix");
+        
+    m.def("computeMovementEnergyPMEFixed", 
+        [](::pygcmc::model::MCState& state) {
+            // Call C++ function to calculate energy
+            ::pygcmc::simulation::Simulation::computeMovementEnergyPME(state);
+            
+            // Convert from C++ struct to Python dictionary
+            py::dict pme_dict;
+            pme_dict["real_space"] = state.ewald_energy.real_space;
+            pme_dict["reciprocal"] = state.ewald_energy.reciprocal;
+            pme_dict["self"] = state.ewald_energy.self;
+            
+            // Calculate total electrostatic energy
+            double electrostatic_total = state.ewald_energy.real_space + 
+                                         state.ewald_energy.reciprocal + 
+                                         state.ewald_energy.self;
+            
+            // Only accumulate VDW energy from movement residues
+            double vdw = 0.0;
+            for(const auto& movementInfo : state.movementResidues) {
+                for(int i = movementInfo.startIndex;
+                    i < movementInfo.startIndex + movementInfo.activeCount; i++) {
+                    if(state.residues[i].active) {
+                        vdw += state.residues[i].energy_vdw;
+                    }
+                }
+            }
+            // Fix double-counting
+            vdw /= 2.0;
+            
+            // Also update movement residue energies
+            for(const auto& movementInfo : state.movementResidues) {
+                for(int i = movementInfo.startIndex;
+                    i < movementInfo.startIndex + movementInfo.activeCount; i++) {
+                    if(state.residues[i].active) {
+                        state.residues[i].energy_vdw /= 2.0;
+                    }
+                }
+            }
+            
+            // Correctly calculate and save total energy
+            double total = electrostatic_total + vdw;
+            pme_dict["total"] = total;
+            
+            // Return tuple: (electrostatic_total, vdw_energy, pme_dict)
+            return py::make_tuple(electrostatic_total, vdw, pme_dict);
+        },
+        "Calculate movement residue energy using PME with LJ double-counting fix");
 }
 
 } // namespace simulation
