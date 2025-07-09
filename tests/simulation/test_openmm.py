@@ -32,7 +32,7 @@ Modular structure (all files under 300 lines):
   * energyOpenmm/pme_lj_only_basic.py: Basic cutoff and PME tests (118 lines, 2 functions)
   * energyOpenmm/pme_lj_only_analysis.py: Distance scan and mixing rules tests (195 lines, 2 functions)
 
-Total: 73 test functions across modular files (all modules under 280 lines each).
+Total: 75 test functions across modular files (all modules under 280 lines each).
 Original total: 3160 lines → New structure: ~5000 lines (with NBFIX tests and demonstrations)
 PME Total bug fix tests: 3 functions to verify correct energy calculation
 PGP strict tolerance test: 1 function to test PGP with strict tolerances
@@ -43,6 +43,9 @@ PME convergence and comparison tests: 3 functions
   - pme_convergence.py: PME parameter sensitivity test (1 function)
   - pme_medium_complexity.py: Medium complexity system PME test (1 function)
   - pme_simple_comparison.py: Simple two-charge PME comparison test (1 function)
+Intra-residue and NaCl structure tests: 2 functions
+  - intra_residue_difference.py: Test PME vs Ewald intra-residue handling (1 function)
+  - pme_nacl_correct.py: Test PME with correctly structured NaCl crystal (1 function)
 Note: 2 PME tests are marked as skip due to C++ global state issues that need fixing
 """
 
@@ -223,6 +226,10 @@ from simulation.energyOpenmm.fixed_functions import (
 from simulation.energyOpenmm.pme_convergence import test_pme_parameter_sensitivity
 from simulation.energyOpenmm.pme_medium_complexity import test_pme_medium_complexity
 from simulation.energyOpenmm.pme_simple_comparison import test_simple_pme_comparison
+
+# Intra-residue and correct NaCl tests (2 functions)
+from simulation.energyOpenmm.intra_residue_difference import test_intra_residue_handling
+from simulation.energyOpenmm.pme_nacl_correct import test_pme_vs_ewald_correct
 
 # Support direct execution for testing
 if __name__ == "__main__":
