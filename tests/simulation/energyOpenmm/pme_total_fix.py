@@ -234,8 +234,8 @@ def test_pme_total_vs_ewald():
     # They should be very close (within 1% for electrostatic part)
     if abs(ewald_total) > 1e-6:  # Avoid division by zero
         relative_diff = abs(pme_total - ewald_total) / abs(ewald_total)
-        assert relative_diff < 0.01, \
-            f"PME total {pme_total} differs from Ewald {ewald_total} by {relative_diff*100:.2f}%"
+        assert relative_diff < 0.001, \
+            f"PME total {pme_total} differs from Ewald {ewald_total} by {relative_diff*100:.3f}%"
     else:
         assert abs(pme_total - ewald_total) < 1e-6, \
             f"PME total {pme_total} differs from Ewald {ewald_total}"

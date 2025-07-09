@@ -83,7 +83,7 @@ def test_pme_high_precision_simple_system():
         print(f"  Relative difference: {rel_diff*100:.3f}%")
         
         # For simple systems, should agree to within 1%
-        assert rel_diff < 0.01, f"Simple system: PME energies differ by {rel_diff*100:.3f}% (> 1%)"
+        assert rel_diff < 0.0045, f"Simple system: PME energies differ by {rel_diff*100:.3f}% (> 0.45%)"
     else:
         print("\nOpenMM not available, skipping comparison")
         # Still check that PME gives reasonable values
@@ -134,8 +134,8 @@ def test_pme_high_precision_complex_system():
     if OPENMM_AVAILABLE:
         print(f"\nBest alpha: {best_alpha} (difference: {best_diff*100:.3f}%)")
         
-        # For complex systems, allow slightly more tolerance but still < 2%
-        assert best_diff < 0.02, f"Complex system: Best PME match differs by {best_diff*100:.3f}% (> 2%)"
+        # For complex systems, allow slightly more tolerance but still < 1%
+        assert best_diff < 0.01, f"Complex system: Best PME match differs by {best_diff*100:.3f}% (> 1%)"
 
 
 def test_pme_convergence_with_mesh_size():

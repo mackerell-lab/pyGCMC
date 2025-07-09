@@ -266,7 +266,7 @@ def test_pme_medium_complexity():
     print("Complex (ions+lig+water) | 100+  |  Yes  | 15%")
     
     # Check if error is in expected range - updated to reflect improved accuracy
-    assert best_error <= 5.0, f"Medium complexity error {best_error:.2f}% higher than expected (<5%)"
+    assert best_error <= 0.1, f"Medium complexity error {best_error:.2f}% higher than expected (<0.1%)"
     
     # More specifically, we expect it to be closer to simple than complex
     if best_error < 5.0:

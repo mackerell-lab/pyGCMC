@@ -160,7 +160,7 @@ def test_pme_vs_ewald_correct():
     print(f"Total energy difference: {abs(ewald_total - pme_total):.6f} kJ/mol")
     
     # Check if PME and Ewald agree when structure is correct
-    assert total_rel_error < 0.01, f"PME and Ewald should agree for correctly structured system, but error is {total_rel_error:.2%}"
+    assert total_rel_error < 1e-6, f"PME and Ewald should agree for correctly structured system, but error is {total_rel_error:.6%}"
     print("\n✓ PME and Ewald agree for correctly structured NaCl crystal!")
 
 

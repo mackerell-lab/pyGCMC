@@ -84,13 +84,13 @@ def test_pme_alpha_dependency():
         
         # Verify that optimal alpha gives acceptable error
         optimal_result = results[optimal_indices[0]]
-        assert optimal_result['total_error'] < 0.05  # Less than 5% error
+        assert optimal_result['total_error'] < 0.005  # Less than 0.5% error
     else:
         print("\nNo optimal alpha found with close to 50/50 split between real and reciprocal space")
         
     # Verify that all alphas give reasonable accuracy
     for result in results:
-        assert result['total_error'] < 0.1  # Less than 10% error for all alphas
+        assert result['total_error'] < 0.02  # Less than 2% error for all alphas
 
 
 def test_pme_lj_energy():

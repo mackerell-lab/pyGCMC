@@ -151,8 +151,8 @@ def test_ewald_vs_pme_comparison():
     print(f"Real space relative difference:     {rel_diff_real:.6f}")
     print(f"Reciprocal space relative difference: {rel_diff_recip:.6f}")
     
-    # Assert that the difference is small - tolerate up to 1% difference
-    assert rel_diff_total < 0.01, f"Total energy differs by more than 1%: {rel_diff_total:.6f}"
+    # Assert that the difference is small - tolerate up to 0.2% difference
+    assert rel_diff_total < 0.002, f"Total energy differs by more than 0.2%: {rel_diff_total:.6f}"
     
     print("test_ewald_vs_pme_comparison completed successfully")
 

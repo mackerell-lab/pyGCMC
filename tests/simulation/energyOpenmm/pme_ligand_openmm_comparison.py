@@ -92,7 +92,7 @@ def test_pme_ligand_energy_vs_openmm():
         # 3. Different FFT implementations
         # 4. Different handling of periodic boundaries
         # Typically 10-15% difference is acceptable
-        assert rel_diff < 0.15, f"PME energies differ by {rel_diff*100:.2f}% (> 15%)"
+        assert rel_diff < 0.005, f"PME energies differ by {rel_diff*100:.2f}% (> 0.5%)"
         
         # For GCMC, what matters most is relative energies are consistent
         if rel_diff > 0.05:

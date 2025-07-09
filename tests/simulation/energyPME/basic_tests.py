@@ -118,11 +118,11 @@ def test_pme_vs_ewald():
     assert real_rel_error < 1e-6, "Real-space energies don't match"
     assert self_rel_error < 1e-6, "Self energies don't match"
     
-    # Reciprocal space energy should be within 2% for a mesh of 32³
-    assert recip_rel_error < 0.02, f"Reciprocal space error ({recip_rel_error:.2%}) exceeds threshold"
+    # Reciprocal space energy should be within 0.5% for a mesh of 32³
+    assert recip_rel_error < 0.005, f"Reciprocal space error ({recip_rel_error:.2%}) exceeds threshold"
     
-    # Total energy should be within 1%
-    assert total_rel_error < 0.01, f"Total energy error ({total_rel_error:.2%}) exceeds threshold"
+    # Total energy should be within 0.2%
+    assert total_rel_error < 0.002, f"Total energy error ({total_rel_error:.2%}) exceeds threshold"
 
 
 def test_pme_movement_energy():
