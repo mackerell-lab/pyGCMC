@@ -33,11 +33,11 @@ void calculateGridIndicesAndFractions(const model::MCState& state,
         // Convert position to fractional coordinates
         double fractional[3];
         for (int d = 0; d < 3; d++) {
-            // Calculate fractional coordinate - fix: ensure consistent with pme.cpp
-            // Use reciprocal lattice vectors to calculate fractional coordinates, not simple division
+            // Calculate fractional coordinate - consistent with OpenMM
+            // Use reciprocal lattice vectors to calculate fractional coordinates
             fractional[d] = 0.0;
             for (int j = 0; j < 3; j++) {
-                fractional[d] += pos[j] * recipBoxVectors[j][d] / (2.0 * M_PI);
+                fractional[d] += pos[j] * recipBoxVectors[j][d];  // No division by 2π needed
             }
             
             // Ensure in [0,1) range, handle periodic boundary conditions
