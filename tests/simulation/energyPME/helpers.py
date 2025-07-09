@@ -62,6 +62,15 @@ def create_nacl_crystal(box_size, n_cells):
                 na.type = 0
                 atoms.append(na)
                 
+                # Create a residue for Na+
+                res_na = MCResidue()
+                res_na.atomStart = len(atoms) - 1
+                res_na.atomCount = 1
+                res_na.active = True
+                res_na.fixed = False
+                res_na.type = 0
+                residues.append(res_na)
+                
                 # Cl- ion
                 cl = MCAtom()
                 cl.x = i * a + a/2
@@ -71,13 +80,14 @@ def create_nacl_crystal(box_size, n_cells):
                 cl.type = 1
                 atoms.append(cl)
                 
-                # Create a residue for each ion pair
-                res = MCResidue()
-                res.atomStart = len(atoms) - 2
-                res.atomCount = 2
-                res.active = True
-                res.fixed = False
-                residues.append(res)
+                # Create a residue for Cl-
+                res_cl = MCResidue()
+                res_cl.atomStart = len(atoms) - 1
+                res_cl.atomCount = 1
+                res_cl.active = True
+                res_cl.fixed = False
+                res_cl.type = 1
+                residues.append(res_cl)
                 
     print(f"Creation complete, added a total of {len(atoms)} atoms and {len(residues)} residues.")
     state.atoms = atoms

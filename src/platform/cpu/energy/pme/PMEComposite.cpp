@@ -69,10 +69,10 @@ void PMEComposite::computeSystemEnergy(model::MCState& state) {
     // 4. Calculate VDW energy - consistent with Ewald, use Direct method
     computeSystemVdwEnergyDirect(state, true, true);
     
-    // Only multiply real space energy by COULOMB coefficient
+    // Apply COULOMB constant to real-space energy (consistent with Ewald)
     state.ewald_energy.real_space *= COULOMB;
     
-    // Apply COULOMB constant to energies in residues - consistent with Ewald
+    // Apply COULOMB constant to energies in residues (consistent with Ewald)
     for(auto& residue : state.residues) {
         if(residue.active) {
             residue.energy_elec *= COULOMB;

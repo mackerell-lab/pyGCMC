@@ -35,7 +35,7 @@ std::pair<double, double> calcPairEnergyPME(
         // For excluded pairs, we need to subtract erf(αr)/r to compensate for reciprocal space
         double erfc_term = pme_params.erfcApprox(r);
         double erf_term = 1.0 - erfc_term;  // erf(x) = 1 - erfc(x)
-        elec_energy = -COULOMB * q1 * q2 * erf_term / r;  // Note the negative sign
+        elec_energy = -q1 * q2 * erf_term / r;  // Note the negative sign
     }
     
     return {lj_energy, elec_energy};
@@ -67,8 +67,9 @@ void computeRealSpacePME(model::MCState& state, bool movement_only, bool store_i
     // Add debug information
     int debug_count = 0;
     const int max_debug_pairs = 5;
+    const bool enable_debug = false; // Disable debug output for now
 
-    // Loop over all residue pairs - maintain existing residue loop structure
+    // Loop over all residue pairs
     for(int r1 = 0; r1 < state.activeResidueCount; r1++) {
         if(!residues[r1].active) continue;
         if(movement_only) {
@@ -83,6 +84,63 @@ void computeRealSpacePME(model::MCState& state, bool movement_only, bool store_i
             if(!in_movement) continue;
         }
         
+        // First handle intra-residue pairs (atoms within the same residue)
+        for(int i = residues[r1].atomStart; 
+            i < residues[r1].atomStart + residues[r1].atomCount - 1; i++) {
+            if(i >= state.activeAtomCount) continue;
+            
+            for(int j = i + 1; j < residues[r1].atomStart + residues[r1].atomCount; j++) {
+                if(j >= state.activeAtomCount) continue;
+                
+                float dx = atoms[i].x - atoms[j].x;
+                float dy = atoms[i].y - atoms[j].y;
+                float dz = atoms[i].z - atoms[j].z;
+                
+                // Apply periodic boundary conditions
+                dx -= box[0] * round(dx / box[0]);
+                dy -= box[1] * round(dy / box[1]);
+                dz -= box[2] * round(dz / box[2]);
+                
+                float r2 = dx*dx + dy*dy + dz*dz;
+                
+                // Skip pairs beyond cutoff
+                if(r2 > cutoff2) continue;
+                
+                // Compute energy
+                float r = sqrt(r2);
+                float qi = atoms[i].charge;
+                float qj = atoms[j].charge;
+                
+                // Skip neutral atoms
+                if(std::abs(qi) < 1e-6 || std::abs(qj) < 1e-6) continue;
+                
+                // Calculate real space contribution for PME - only erfc part
+                double term = pme_params.erfcApprox(r);
+                double pair_energy = qi * qj * term / r;
+                
+                // Print debug information
+                if (enable_debug && debug_count < max_debug_pairs) {
+                    platform::log(LogLevel::INFO, 
+                        "Debug energyPME (intra): Atom pair (", i, ",", j, "): ",
+                        "r = ", r, " nm, ",
+                        "q1*q2 = ", qi * qj, ", ",
+                        "erfc term = ", term, ", ",
+                        "energy = ", pair_energy, " kJ/mol");
+                    debug_count++;
+                }
+
+                // Accumulate to total energy
+                real_space_total += pair_energy;
+                
+                // Decide how to store energy based on parameters
+                if (store_in_residues) {
+                    // For intra-residue pairs, all energy goes to the same residue
+                    residues[r1].energy_elec += pair_energy;
+                }
+            }
+        }
+        
+        // Then handle inter-residue pairs
         for(int r2 = r1 + 1; r2 < state.activeResidueCount; r2++) {
             if(!residues[r2].active) continue;
             
@@ -124,14 +182,13 @@ void computeRealSpacePME(model::MCState& state, bool movement_only, bool store_i
                     double pair_energy = qi * qj * term / r;
                     
                     // Print debug information
-                    if (debug_count < max_debug_pairs) {
+                    if (enable_debug && debug_count < max_debug_pairs) {
                         platform::log(LogLevel::INFO, 
-                            "Debug energyPME: Atom pair (", i, ",", j, "): ",
+                            "Debug energyPME (inter): Atom pair (", i, ",", j, "): ",
                             "r = ", r, " nm, ",
                             "q1*q2 = ", qi * qj, ", ",
                             "erfc term = ", term, ", ",
-                            "energy = ", pair_energy,
-                            ", with COULOMB = ", COULOMB * pair_energy, " kJ/mol");
+                            "energy = ", pair_energy, " kJ/mol");
                         debug_count++;
                     }
 
@@ -149,7 +206,7 @@ void computeRealSpacePME(model::MCState& state, bool movement_only, bool store_i
         }
     }
     
-    // Store total real-space energy (not yet multiplied by COULOMB)
+    // Store total real-space energy (WITHOUT COULOMB constant, to match Ewald)
     state.ewald_energy.real_space = real_space_total;
 }
 
@@ -198,79 +255,30 @@ double calculateAtomPairEnergyRealSpace(const model::MCAtom& atom1, const model:
  */
 bool validateRealSpaceParameters(double cutoff, double alpha) {
     if (cutoff <= 0.0) {
-        platform::log(LogLevel::ERROR, "Invalid cutoff distance: ", cutoff);
+        platform::log(LogLevel::ERROR, "Invalid cutoff: ", cutoff);
         return false;
     }
     
     if (alpha <= 0.0) {
-        platform::log(LogLevel::ERROR, "Invalid alpha parameter: ", alpha);
+        platform::log(LogLevel::ERROR, "Invalid alpha: ", alpha);
         return false;
     }
     
-    // Check if real space error is reasonable
-    double realSpaceError = std::erfc(alpha * cutoff);
-    if (realSpaceError > 0.1) {
-        platform::log(LogLevel::WARNING, "Real space error may be too large: ", realSpaceError);
-        platform::log(LogLevel::WARNING, "Consider increasing alpha or cutoff");
+    // Check if alpha is reasonable for the given cutoff
+    double alphaR = alpha * cutoff;
+    if (alphaR < 2.0) {
+        platform::log(LogLevel::WARNING, "Alpha may be too small for cutoff. alphaR = ", alphaR);
+    }
+    
+    if (alphaR > 10.0) {
+        platform::log(LogLevel::WARNING, "Alpha may be too large for cutoff. alphaR = ", alphaR);
     }
     
     return true;
 }
 
-/**
- * @brief Get real space interaction count within cutoff
- */
-int getRealSpaceInteractionCount(const model::MCState& state, double cutoff) {
-    const auto& box = state.info.box;
-    const auto& atoms = state.atoms;
-    const auto& residues = state.residues;
-    const float cutoff2 = cutoff * cutoff;
-    
-    int count = 0;
-    
-    // Count interactions within cutoff
-    for(int r1 = 0; r1 < state.activeResidueCount; r1++) {
-        if(!residues[r1].active) continue;
-        
-        for(int r2 = r1 + 1; r2 < state.activeResidueCount; r2++) {
-            if(!residues[r2].active) continue;
-            
-            // Loop over atoms in each residue
-            for(int i = residues[r1].atomStart; 
-                i < residues[r1].atomStart + residues[r1].atomCount; i++) {
-                if(i >= state.activeAtomCount) continue;
-                
-                for(int j = residues[r2].atomStart; 
-                    j < residues[r2].atomStart + residues[r2].atomCount; j++) {
-                    if(j >= state.activeAtomCount) continue;
-                    
-                    float dx = atoms[i].x - atoms[j].x;
-                    float dy = atoms[i].y - atoms[j].y;
-                    float dz = atoms[i].z - atoms[j].z;
-                    
-                    // Apply periodic boundary conditions
-                    dx -= box[0] * round(dx / box[0]);
-                    dy -= box[1] * round(dy / box[1]);
-                    dz -= box[2] * round(dz / box[2]);
-                    
-                    float r2 = dx*dx + dy*dy + dz*dz;
-                    
-                    if(r2 <= cutoff2) {
-                        // Only count charged atom pairs
-                        if(std::abs(atoms[i].charge) > 1e-6 && std::abs(atoms[j].charge) > 1e-6) {
-                            count++;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    return count;
-}
-
-// <agent-hook:realspace_implementation>
+// <agent-hook:real_space_implementation>
 
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc
