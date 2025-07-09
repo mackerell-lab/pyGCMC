@@ -32,13 +32,17 @@ Modular structure (all files under 300 lines):
   * energyOpenmm/pme_lj_only_basic.py: Basic cutoff and PME tests (118 lines, 2 functions)
   * energyOpenmm/pme_lj_only_analysis.py: Distance scan and mixing rules tests (195 lines, 2 functions)
 
-Total: 70 test functions across modular files (all modules under 280 lines each).
+Total: 73 test functions across modular files (all modules under 280 lines each).
 Original total: 3160 lines → New structure: ~5000 lines (with NBFIX tests and demonstrations)
 PME Total bug fix tests: 3 functions to verify correct energy calculation
 PGP strict tolerance test: 1 function to test PGP with strict tolerances
 PME-Ewald consistency test: 1 function to verify PME and Ewald agreement
 PME regression tests: 4 functions from analysis tools to prevent bug recurrence
 LJ double-counting fix tests: 22 functions to verify correct LJ energy calculation
+PME convergence and comparison tests: 3 functions
+  - pme_convergence.py: PME parameter sensitivity test (1 function)
+  - pme_medium_complexity.py: Medium complexity system PME test (1 function)
+  - pme_simple_comparison.py: Simple two-charge PME comparison test (1 function)
 Note: 2 PME tests are marked as skip due to C++ global state issues that need fixing
 """
 
@@ -214,6 +218,11 @@ from simulation.energyOpenmm.fixed_functions import (
     test_pme_fixed,
     test_fixed_vs_openmm
 )
+
+# PME convergence and comparison tests (3 functions)
+from simulation.energyOpenmm.pme_convergence import test_pme_parameter_sensitivity
+from simulation.energyOpenmm.pme_medium_complexity import test_pme_medium_complexity
+from simulation.energyOpenmm.pme_simple_comparison import test_simple_pme_comparison
 
 # Support direct execution for testing
 if __name__ == "__main__":
