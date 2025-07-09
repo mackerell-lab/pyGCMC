@@ -21,6 +21,9 @@ Modular structure (all modules under 300 lines):
 - vspme_combined.py: Combined energy calculation diagnostic (410 lines, 1 function)
 - pgp_lj_neutral_systems.py: PGP tests with neutral particles for LJ (1 function)
 - pgp_lj_minimum_energy.py: PGP LJ energy at close distances (1 function)
+- pgp_lj_extreme_distances.py: PGP LJ tests at extreme distances (3 functions)
+- pgp_lj_boundary_tests.py: PGP LJ boundary condition tests (3 functions)
+- pgp_lj_helpers.py: Helper functions for PGP LJ tests
 - pgp_real_space.py: PGP real-space calculation tests (2 functions)
 - pgp_real_space_debug.py: Debug tests for PGP real-space (2 functions)
 - pgp_real_minimal.py: Minimal PGP real-space test (1 function)
@@ -30,7 +33,7 @@ Modular structure (all modules under 300 lines):
 - pgp_cutoff_issue.py: PGP cutoff issue tests (2 functions)
 - pgp_erfc_debug.py: PGP erfc table debug tests (2 functions)
 
-Total: 28 test functions across 24 modules.
+Total: 34 test functions across 27 modules.
 - Basic PGP tests (3): basic_operations
 - PGP comparison tests (8): method_comparison, complex_systems, planar_systems, 
   asymmetric_water_complete, asymmetric_nacl, pgp_lj_neutral_systems, pgp_lj_minimum_energy
@@ -94,6 +97,17 @@ from energyPGP.pgp_lj_neutral_systems import (
 )
 from energyPGP.pgp_lj_minimum_energy import (
     test_pgp_lj_close_interaction
+)
+# Import tests from split pgp_lj_limits files
+from energyPGP.pgp_lj_extreme_distances import (
+    test_pgp_lj_near_sigma,
+    test_pgp_lj_short_distance,
+    test_pgp_lj_asymptotic_behavior
+)
+from energyPGP.pgp_lj_boundary_tests import (
+    test_pgp_lj_minimum,
+    test_pgp_lj_near_cutoff,
+    test_pgp_lj_mixed_distances
 )
 
 # PGP real-space calculation tests (bug fixes and verification)
