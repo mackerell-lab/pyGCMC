@@ -32,7 +32,7 @@ Modular structure (all files under 300 lines):
   * energyOpenmm/pme_lj_only_basic.py: Basic cutoff and PME tests (118 lines, 2 functions)
   * energyOpenmm/pme_lj_only_analysis.py: Distance scan and mixing rules tests (195 lines, 2 functions)
 
-Total: 75 test functions across modular files (all modules under 280 lines each).
+Total: 84 test functions across modular files (all modules under 280 lines each).
 Original total: 3160 lines → New structure: ~5000 lines (with NBFIX tests and demonstrations)
 PME Total bug fix tests: 3 functions to verify correct energy calculation
 PGP strict tolerance test: 1 function to test PGP with strict tolerances
@@ -46,6 +46,12 @@ PME convergence and comparison tests: 3 functions
 Intra-residue and NaCl structure tests: 2 functions
   - intra_residue_difference.py: Test PME vs Ewald intra-residue handling (1 function)
   - pme_nacl_correct.py: Test PME with correctly structured NaCl crystal (1 function)
+Intramolecular LJ tests: 2 functions
+  - intramolecular_lj.py: Test intramolecular LJ handling in cutoff and PME (2 functions)
+PME Complete tests: 5 functions
+  - pme_complete.py: Test PME Complete functions that include intramolecular LJ (5 functions)
+PME with OpenMM parameters: 2 functions
+  - pme_with_openmm_params.py: Test PME using OpenMM's parameter calculation (2 functions)
 Note: 2 PME tests are marked as skip due to C++ global state issues that need fixing
 """
 
@@ -230,6 +236,27 @@ from simulation.energyOpenmm.pme_simple_comparison import test_simple_pme_compar
 # Intra-residue and correct NaCl tests (2 functions)
 from simulation.energyOpenmm.intra_residue_difference import test_intra_residue_handling
 from simulation.energyOpenmm.pme_nacl_correct import test_pme_vs_ewald_correct
+
+# Intramolecular LJ tests (2 functions)
+from simulation.energyOpenmm.intramolecular_lj import (
+    test_single_molecule_lj,
+    test_two_molecules_lj
+)
+
+# PME Complete tests (5 functions)
+from simulation.energyOpenmm.pme_complete import (
+    test_complete_cutoff_lj_only,
+    test_complete_pme_lj_only,
+    test_complete_pme_full_system,
+    test_complete_vs_fixed_difference,
+    test_complete_consistency
+)
+
+# PME with OpenMM parameters tests (2 functions)
+from simulation.energyOpenmm.pme_with_openmm_params import (
+    test_pme_with_openmm_params,
+    test_simple_two_charge_system
+)
 
 # Support direct execution for testing
 if __name__ == "__main__":

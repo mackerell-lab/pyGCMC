@@ -184,6 +184,83 @@ def calculate_openmm_energy_medium(state, alpha):
     return energy_kj_mol
 
 
+def calculate_openmm_energy_components(state, alpha):
+    """Calculate PME energy components separately using OpenMM"""
+    if not OPENMM_AVAILABLE:
+        return None, None, None
+    
+    # Create two systems - one for electrostatics, one for LJ
+    system_elec = System()
+    system_lj = System()
+    
+    # Add particles to both
+    for atom in state.atoms:
+        system_elec.addParticle(1.0 * dalton)
+        system_lj.addParticle(1.0 * dalton)
+    
+    # Set periodic box for both
+    box = state.info.box
+    box_vectors = [
+        Vec3(box[0], 0, 0) * nanometer,
+        Vec3(0, box[1], 0) * nanometer,
+        Vec3(0, 0, box[2]) * nanometer
+    ]
+    system_elec.setDefaultPeriodicBoxVectors(*box_vectors)
+    system_lj.setDefaultPeriodicBoxVectors(*box_vectors)
+    
+    # Create forces
+    nonbonded_elec = NonbondedForce()
+    nonbonded_lj = NonbondedForce()
+    
+    # Configure PME for both
+    for nb in [nonbonded_elec, nonbonded_lj]:
+        nb.setNonbondedMethod(NonbondedForce.PME)
+        nb.setCutoffDistance(state.info.cutoff * nanometer)
+        nb.setEwaldErrorTolerance(1e-6)
+    
+    # Add particles with appropriate parameters
+    for i, atom in enumerate(state.atoms):
+        # Electrostatics only
+        nonbonded_elec.addParticle(
+            atom.charge * elementary_charge,
+            0.1 * nanometer,  # Small sigma
+            0.0 * kilojoule_per_mole  # No LJ
+        )
+        # LJ only
+        nonbonded_lj.addParticle(
+            0.0 * elementary_charge,  # No charge
+            0.1 * nanometer,  # Small sigma (since ljEps is 0 anyway)
+            0.0 * kilojoule_per_mole  # No LJ in this test system
+        )
+    
+    system_elec.addForce(nonbonded_elec)
+    system_lj.addForce(nonbonded_lj)
+    
+    # Create contexts
+    integrator_elec = VerletIntegrator(1.0 * femtosecond)
+    integrator_lj = VerletIntegrator(1.0 * femtosecond)
+    platform = Platform.getPlatformByName('Reference')
+    context_elec = Context(system_elec, integrator_elec, platform)
+    context_lj = Context(system_lj, integrator_lj, platform)
+    
+    # Set positions
+    positions = []
+    for atom in state.atoms:
+        positions.append(Vec3(atom.x, atom.y, atom.z) * nanometer)
+    context_elec.setPositions(positions)
+    context_lj.setPositions(positions)
+    
+    # Get energies
+    energy_state_elec = context_elec.getState(getEnergy=True)
+    energy_state_lj = context_lj.getState(getEnergy=True)
+    
+    elec_energy = energy_state_elec.getPotentialEnergy().value_in_unit(kilojoule_per_mole)
+    lj_energy = energy_state_lj.getPotentialEnergy().value_in_unit(kilojoule_per_mole)
+    total_energy = elec_energy + lj_energy
+    
+    return elec_energy, lj_energy, total_energy
+
+
 @pytest.mark.skipif(not OPENMM_AVAILABLE, reason="OpenMM not available")
 def test_pme_medium_complexity():
     """Test PME accuracy for medium complexity system"""

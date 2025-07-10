@@ -45,7 +45,7 @@ def test_complete_cutoff_lj_only():
     print(f"  Relative difference: {rel_diff*100:.3f}%")
     
     # Should match very closely now
-    assert rel_diff < 0.01, f"Complete cutoff LJ differs by {rel_diff*100:.3f}% (> 1%)"
+    assert rel_diff < 0.0001, f"Complete cutoff LJ differs by {rel_diff*100:.6f}% (> 0.01%)"
     assert elec == 0.0, "Should have no electrostatic energy for charge-free system"
 
 
@@ -81,7 +81,7 @@ def test_complete_pme_lj_only():
     print(f"  Relative difference: {rel_diff*100:.3f}%")
     
     # Should match very closely
-    assert rel_diff < 0.01, f"Complete PME LJ differs by {rel_diff*100:.3f}% (> 1%)"
+    assert rel_diff < 0.0001, f"Complete PME LJ differs by {rel_diff*100:.6f}% (> 0.01%)"
     assert elec == 0.0, "Should have no electrostatic energy for charge-free system"
 
 
@@ -112,18 +112,27 @@ def test_complete_pme_full_system():
     print(f"  VdW:           {vdw:.6f} kJ/mol")
     print(f"  Total:         {total:.6f} kJ/mol")
     
-    # Calculate with OpenMM
-    openmm_total = calculate_openmm_energy_medium(state, alpha)
+    # Calculate with OpenMM - get components separately
+    from .pme_medium_complexity import calculate_openmm_energy_components
+    openmm_elec, openmm_vdw, openmm_total = calculate_openmm_energy_components(state, alpha)
     
-    print(f"\nOpenMM PME total energy: {openmm_total:.6f} kJ/mol")
+    print(f"\nOpenMM PME energies:")
+    print(f"  Electrostatic: {openmm_elec:.6f} kJ/mol")
+    print(f"  VdW:           {openmm_vdw:.6f} kJ/mol")
+    print(f"  Total:         {openmm_total:.6f} kJ/mol")
     
-    # Check total energy
+    # Compare components
+    elec_diff = abs(elec - openmm_elec) / abs(openmm_elec) if openmm_elec != 0 else 0
+    vdw_diff = abs(vdw - openmm_vdw) / abs(openmm_vdw) if openmm_vdw != 0 else 0
     total_diff = abs(total - openmm_total) / abs(openmm_total) if openmm_total != 0 else 0
     
-    print(f"\nTotal energy relative difference: {total_diff*100:.3f}%")
+    print(f"\nComponent differences:")
+    print(f"  Electrostatic: {elec_diff*100:.3f}%")
+    print(f"  VdW:           {vdw_diff*100:.3f}%")
+    print(f"  Total:         {total_diff*100:.3f}%")
     
     # Complete should match OpenMM total energy well
-    assert total_diff < 0.05, f"Total energy differs by {total_diff*100:.3f}% (> 5%)"
+    assert total_diff < 0.01, f"Total energy differs by {total_diff*100:.3f}% (> 1%)"
 
 
 @pytest.mark.skipif(not OPENMM_AVAILABLE, reason="OpenMM not available")
@@ -195,7 +204,7 @@ def test_complete_consistency():
     vdw_diff = abs(vdw_pme - vdw_cut)
     print(f"  Absolute difference: {vdw_diff:.6f} kJ/mol")
     
-    assert vdw_diff < 1e-6, f"VdW energies should be identical, differ by {vdw_diff}"
+    assert vdw_diff < 1e-10, f"VdW energies should be identical, differ by {vdw_diff:.2e}"
 
 
 if __name__ == "__main__":
