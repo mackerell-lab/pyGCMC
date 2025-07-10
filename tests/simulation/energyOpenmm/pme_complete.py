@@ -16,7 +16,7 @@ from pygcmc import computeSystemEnergyPMEComplete, computeSystemEnergyCutoffComp
 from pygcmc import initializePMEParameters
 
 from .pme_lj_only_helpers import create_lj_only_system_with_molecules, calculate_openmm_lj_energy, OPENMM_AVAILABLE
-from .pme_medium_complexity import create_medium_complexity_system, calculate_openmm_energy_medium
+from .pme_medium_complexity_helpers import create_medium_complexity_system, calculate_openmm_energy_medium
 
 
 @pytest.mark.skipif(not OPENMM_AVAILABLE, reason="OpenMM not available")
@@ -113,7 +113,7 @@ def test_complete_pme_full_system():
     print(f"  Total:         {total:.6f} kJ/mol")
     
     # Calculate with OpenMM - get components separately
-    from .pme_medium_complexity import calculate_openmm_energy_components
+    from .pme_medium_complexity_helpers import calculate_openmm_energy_components
     openmm_elec, openmm_vdw, openmm_total = calculate_openmm_energy_components(state, alpha)
     
     print(f"\nOpenMM PME energies:")
