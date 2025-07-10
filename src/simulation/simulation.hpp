@@ -265,6 +265,27 @@ public:
      */
     static void clearPMEEngine();
 
+    /**
+     * @brief Compute complete system energy using PME with all interactions
+     * 
+     * This version includes intramolecular LJ interactions that are normally
+     * excluded in the Fixed methods, providing energy values that match
+     * reference implementations like OpenMM.
+     * 
+     * @param state MC state containing system information
+     */
+    static void computeSystemEnergyPMEComplete(model::MCState& state);
+
+    /**
+     * @brief Compute complete system energy using cutoff with all interactions
+     * 
+     * This version includes intramolecular LJ interactions for comparison
+     * with PME complete method and reference implementations.
+     * 
+     * @param state MC state containing system information
+     */
+    static void computeSystemEnergyCutoffComplete(model::MCState& state);
+
 private:
     std::unique_ptr<platform::IPlatform> platform_;
 };

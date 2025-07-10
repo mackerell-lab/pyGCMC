@@ -247,6 +247,51 @@ void init_pme_bindings(py::module& m) {
             return py::make_tuple(electrostatic_total, vdw, pme_dict);
         },
         "Calculate movement residue energy using PME with LJ double-counting fix");
+        
+    // Complete energy calculation functions
+    m.def("computeSystemEnergyPMEComplete", 
+        [](::pygcmc::model::MCState& state) {
+            ::pygcmc::simulation::Simulation::computeSystemEnergyPMEComplete(state);
+            
+            // Extract energy components  
+            double elec = state.ewald_energy.real_space + state.ewald_energy.reciprocal + state.ewald_energy.self;
+            double vdw = 0.0;
+            
+            // Sum VdW energy from residues (no division by 2 needed for Complete)
+            for(auto& res : state.residues) {
+                if(res.active) {
+                    vdw += res.energy_vdw;
+                }
+            }
+            
+            double total = elec + vdw;
+            
+            return std::make_tuple(elec, vdw, total);
+        },
+        py::arg("state"),
+        "Compute complete system energy using PME with all interactions including intramolecular");
+        
+    m.def("computeSystemEnergyCutoffComplete",
+        [](::pygcmc::model::MCState& state) {
+            ::pygcmc::simulation::Simulation::computeSystemEnergyCutoffComplete(state);
+            
+            // Extract energy components from C++ struct
+            double elec = state.ewald_energy.real_space + state.ewald_energy.self;
+            double vdw = 0.0;
+            
+            // Sum VdW energy from residues (no division by 2 needed for Complete)
+            for(auto& res : state.residues) {
+                if(res.active) {
+                    vdw += res.energy_vdw;
+                }
+            }
+            
+            double total = elec + vdw;
+            
+            return std::make_tuple(elec, vdw, total);
+        },
+        py::arg("state"),
+        "Compute complete system energy using cutoff with all interactions including intramolecular");
 }
 
 } // namespace simulation

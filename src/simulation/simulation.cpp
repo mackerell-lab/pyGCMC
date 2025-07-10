@@ -217,6 +217,20 @@ void Simulation::clearPMEEngine() {
     platform::cpu::clearPMEState();
 }
 
+void Simulation::computeSystemEnergyPMEComplete(model::MCState& state) {
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing complete PME system energy with intramolecular interactions");
+    }
+    platform::cpu::computeSystemEnergyPMEComplete(state);
+}
+
+void Simulation::computeSystemEnergyCutoffComplete(model::MCState& state) {
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing complete cutoff system energy with intramolecular interactions");
+    }
+    platform::cpu::computeSystemEnergyCutoffComplete(state);
+}
+
 // Implementation of PGP-related methods
 void Simulation::setPGPParameters(float alpha, const int meshSize[3], float potential_cutoff, 
                                const int potentialGridSize[3], int splineOrder, float tolerance) {

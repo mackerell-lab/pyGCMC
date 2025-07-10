@@ -133,7 +133,7 @@ def test_nbfix_across_pbc():
     
     # Check that the energy is in the right ballpark
     # Allow larger tolerance due to potential cutoff effects
-    rel_error = abs(pygcmc_corrected - expected_total) / abs(expected_total)
+    rel_error = abs(pygcmc_corrected - expected_total) / abs(expected_total) if abs(expected_total) > 1e-10 else 0
     assert rel_error < 0.05, f"PBC energy mismatch: PyGCMC={pygcmc_corrected}, Expected={expected_total}"
 
 

@@ -87,6 +87,10 @@ def test_simple_pme_comparison():
     print(f"Number of atoms: {len(state.atoms)}")
     print(f"Active atom count: {state.activeAtomCount}")
     
+    # Track best agreement for assertions
+    best_rel_diff = float('inf')
+    best_alpha = None
+    
     for alpha in alphas:
         # PyGCMC calculation
         pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
@@ -97,6 +101,13 @@ def test_simple_pme_comparison():
         reciprocal = state.ewald_energy['reciprocal']
         self_energy = state.ewald_energy['self']
         pygcmc_total = real_space + reciprocal + self_energy
+        
+        # Validate PyGCMC components
+        assert abs(self_energy) > 0, "Self energy should be non-zero for charged system"
+        assert pygcmc_total != 0, "Total PME energy should be non-zero for charged system"
+        
+        # For two opposite charges, the energy should be negative (attractive)
+        assert pygcmc_total < 0, "Two opposite charges should have negative (attractive) energy"
         
         # OpenMM calculation
         if OPENMM_AVAILABLE:
@@ -143,10 +154,27 @@ def test_simple_pme_comparison():
                     pme_params = force.getPMEParametersInContext(context)
                     actual_alpha = pme_params[0]
             
+            # Calculate differences
+            abs_diff = abs(pygcmc_total - openmm_total)
+            rel_diff = abs_diff / abs(openmm_total) if openmm_total != 0 else 0
+            
             print(f"\nAlpha = {alpha:.1f} (OpenMM actual: {actual_alpha:.3f}):")
             print(f"  PyGCMC: Real={real_space:.4f}, Recip={reciprocal:.4f}, Self={self_energy:.4f}, Total={pygcmc_total:.4f}")
             print(f"  OpenMM: Total={openmm_total:.4f}")
-            print(f"  Difference: {abs(pygcmc_total - openmm_total):.4f} ({abs(pygcmc_total - openmm_total)/abs(openmm_total)*100:.1f}%)")
+            print(f"  Difference: {abs_diff:.4f} ({rel_diff*100:.1f}%)")
+            
+            # Track best agreement
+            if rel_diff < best_rel_diff:
+                best_rel_diff = rel_diff
+                best_alpha = alpha
+            
+            # Assert reasonable agreement for each alpha
+            assert rel_diff < 0.25, f"PME energies differ by {rel_diff*100:.1f}% (> 25%) for alpha={alpha}"
+    
+    # Final assertion: at least one alpha should give good agreement
+    if OPENMM_AVAILABLE:
+        print(f"\nBest agreement with alpha={best_alpha}: {best_rel_diff*100:.2f}% difference")
+        assert best_rel_diff < 0.1, f"Best PME agreement is {best_rel_diff*100:.2f}% (> 10%), which may indicate an issue"
 
 
 if __name__ == "__main__":

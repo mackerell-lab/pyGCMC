@@ -98,6 +98,60 @@ def create_lj_only_system(n_atoms=6):
     return state
 
 
+def create_lj_only_system_with_molecules(n_molecules=2, atoms_per_mol=3):
+    """Create a system with molecules containing multiple atoms (for intramolecular testing)"""
+    
+    box_size = 3.0  # nm
+    cutoff = 1.2    # nm
+    
+    state = MCState()
+    state.info.box = [box_size, box_size, box_size]
+    state.info.cutoff = cutoff
+    
+    # Force field with single LJ type for simplicity
+    ff = MCForceField()
+    ff.numTotalTypes = 1
+    ff.numMovementTypes = 1
+    ff.ljEps = [1.0]    # Simple value
+    ff.ljSigma = [0.35]  # Simple value
+    state.forcefield = ff
+    
+    atoms = []
+    residues = []
+    
+    # Create molecules with atoms arranged in a line
+    atom_idx = 0
+    for mol in range(n_molecules):
+        res = MCResidue()
+        res.active = True
+        res.fixed = True
+        res.atomStart = atom_idx
+        res.atomCount = atoms_per_mol
+        res.type = 0
+        
+        # Place atoms in a line with 0.15 nm spacing (within LJ minimum)
+        # Keep molecules well within box boundaries
+        base_x = 0.5 + mol * 0.7  # Molecules 0.7 nm apart, starting at 0.5
+        for i in range(atoms_per_mol):
+            atom = MCAtom()
+            atom.x = base_x + i * 0.15
+            atom.y = 1.5
+            atom.z = 1.5
+            atom.charge = 0.0
+            atom.type = 0
+            atoms.append(atom)
+            atom_idx += 1
+        
+        residues.append(res)
+    
+    state.atoms = atoms
+    state.activeAtomCount = len(atoms)
+    state.residues = residues
+    state.activeResidueCount = len(residues)
+    
+    return state
+
+
 def calculate_openmm_lj_energy(state, use_pme=False):
     """Calculate LJ-only energy using OpenMM"""
     if not OPENMM_AVAILABLE:

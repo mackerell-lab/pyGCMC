@@ -223,12 +223,20 @@ def test_pme_medium_complexity():
         self_energy = state.ewald_energy.get('self', 0.0)
         pygcmc_total = real_space + reciprocal + self_energy
         
+        # Verify total consistency
+        total_from_dict = state.ewald_energy.get('total', 0.0)
+        if abs(total_from_dict - pygcmc_total) > 1e-9:
+            print(f"WARNING: Total energy inconsistency detected!")
+            print(f"  Sum of components: {pygcmc_total:.6f}")
+            print(f"  Total from dict:   {total_from_dict:.6f}")
+            print(f"  Difference:        {abs(total_from_dict - pygcmc_total):.6e}")
+        
         # OpenMM calculation
         openmm_energy = calculate_openmm_energy_medium(state, alpha)
         
         if openmm_energy is not None:
             diff = abs(pygcmc_total - openmm_energy)
-            rel_diff = diff / abs(openmm_energy) * 100 if openmm_energy != 0 else 0
+            rel_diff = diff / abs(openmm_energy) * 100 if abs(openmm_energy) > 1e-10 else 0
             
             mesh_str = f"{mesh_size[0]}x{mesh_size[1]}x{mesh_size[2]}"
             print(f"{alpha:6.1f} {mesh_str:>12} {pygcmc_total:12.4f} {openmm_energy:12.4f} "

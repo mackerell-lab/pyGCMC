@@ -48,6 +48,7 @@
 #include "PMERecip.hpp"
 #include "PMESelf.hpp"
 #include "PMEComposite.hpp"
+#include "PMEComplete.hpp"
 
 // <agent-hook:pme_main>
 

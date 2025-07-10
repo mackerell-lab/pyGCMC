@@ -88,6 +88,29 @@ std::pair<double, double> calcPairEnergyPME(double r2, double sigma, double eps,
                                           const model::MCInfo& info, 
                                           bool is_excluded = false);
 
+// === Complete Energy Calculation Functions ===
+
+/**
+ * @brief Compute complete system energy using PME with all interactions
+ * 
+ * This version includes intramolecular LJ interactions that are normally
+ * excluded in the Fixed methods, providing energy values that match
+ * reference implementations like OpenMM.
+ * 
+ * @param state MC state containing system information
+ */
+void computeSystemEnergyPMEComplete(model::MCState& state);
+
+/**
+ * @brief Compute complete system energy using cutoff with all interactions
+ * 
+ * This version includes intramolecular LJ interactions for comparison
+ * with PME complete method and reference implementations.
+ * 
+ * @param state MC state containing system information
+ */
+void computeSystemEnergyCutoffComplete(model::MCState& state);
+
 } // namespace cpu
 } // namespace platform
 } // namespace pygcmc 

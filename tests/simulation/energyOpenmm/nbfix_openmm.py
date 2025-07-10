@@ -80,7 +80,7 @@ def test_nbfix_energy_vs_openmm():
     print(f"OpenMM total: {omm_energy:.6f} kJ/mol")
     
     # Allow 1% relative error due to implementation differences
-    rel_error = abs(pygcmc_corrected - omm_energy) / abs(omm_energy)
+    rel_error = abs(pygcmc_corrected - omm_energy) / abs(omm_energy) if abs(omm_energy) > 1e-10 else 0
     assert rel_error < 0.01, f"Energy mismatch: PyGCMC={pygcmc_corrected}, OpenMM={omm_energy}"
     
     # Test moving an atom and recalculating
@@ -192,13 +192,13 @@ def test_nbfix_energy_components_separately():
     
     # Check VDW energy
     if abs(omm_vdw) > 1e-6:  # Only check relative error if VDW is non-negligible
-        vdw_rel_error = abs(pygcmc_vdw_corrected - omm_vdw) / abs(omm_vdw)
+        vdw_rel_error = abs(pygcmc_vdw_corrected - omm_vdw) / abs(omm_vdw) if abs(omm_vdw) > 1e-10 else 0
         assert vdw_rel_error < rel_tol, f"VDW energy mismatch: PyGCMC={pygcmc_vdw_corrected}, OpenMM={omm_vdw}"
     else:
         assert abs(pygcmc_vdw_corrected - omm_vdw) < 1e-3, f"VDW energy should be near zero"
     
     # Check electrostatic energy
-    elec_rel_error = abs(pygcmc_elec_corrected - omm_elec) / abs(omm_elec)
+    elec_rel_error = abs(pygcmc_elec_corrected - omm_elec) / abs(omm_elec) if abs(omm_elec) > 1e-10 else 0
     assert elec_rel_error < rel_tol, f"Electrostatic energy mismatch: PyGCMC={pygcmc_elec_corrected}, OpenMM={omm_elec}"
     
     # Check total energy consistency

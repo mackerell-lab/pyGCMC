@@ -9,6 +9,7 @@
 #include "PMERecip.hpp"
 #include "PMEReal.hpp"
 #include "PMESelf.hpp"
+#include "PMEComplete.hpp"
 
 namespace pygcmc {
 namespace platform {
@@ -171,6 +172,10 @@ inline void computeSystemEnergyPME(model::MCState& state) {
 inline void computeMovementEnergyPME(model::MCState& state) {
     PMEComposite::computeMovementEnergy(state);
 }
+
+// Forward declarations for complete functions
+void computeSystemEnergyPMEComplete(model::MCState& state);
+void computeSystemEnergyCutoffComplete(model::MCState& state);
 
 // <agent-hook:pme_composite>
 
