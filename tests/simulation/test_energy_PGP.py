@@ -131,6 +131,22 @@ from energyPGP.pgp_initialization_order import (
     test_pgp_with_correct_initialization,
     test_pgp_initialization_methods
 )
+
+# PGP vs PME Complete validation tests
+from energyPGP.pgp_pme_complete_validation import (
+    test_pgp_movement_energy,
+    test_pgp_reciprocal_space_comparison,
+    test_pgp_grid_spacing_convergence
+)
+from energyPGP.pgp_absolute_validation import (
+    test_pgp_absolute_energy_validation,
+    test_pgp_fixed_particle_contribution
+)
+from energyPGP.pgp_mixed_interactions import (
+    test_pgp_single_moveable_particle,
+    test_pgp_multiple_moveable_particles,
+    test_pgp_with_pme_movement_comparison
+)
 from energyPGP.pgp_pme_cutoff import (
     test_pme_cutoff_in_pgp
 )
