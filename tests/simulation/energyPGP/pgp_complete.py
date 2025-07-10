@@ -62,7 +62,7 @@ def create_test_system():
     return state
 
 
-def test_pgp_complete_vs_pme_complete():
+def pgp_complete_vs_pme_complete():
     """Test that PGP Complete gives similar results to PME Complete"""
     
     print("\n" + "="*70)
@@ -119,7 +119,7 @@ def test_pgp_complete_vs_pme_complete():
     assert rel_elec_error < 0.1, f"Electrostatic error too large: {rel_elec_error:.4f}%"
 
 
-def test_pgp_complete_movement_energy():
+def pgp_complete_movement_energy():
     """Test PGP Complete movement energy calculation"""
     
     print("\n" + "="*70)
@@ -176,7 +176,7 @@ def test_pgp_complete_movement_energy():
     assert rel_error < 5.0, f"Energy change error too large: {rel_error:.4f}%"
 
 
-def test_pgp_complete_pure_lj():
+def pgp_complete_pure_lj():
     """Test PGP Complete with pure LJ system"""
     
     print("\n" + "="*70)
@@ -259,6 +259,6 @@ def test_pgp_complete_pure_lj():
 
 
 if __name__ == "__main__":
-    test_pgp_complete_vs_pme_complete()
-    test_pgp_complete_movement_energy()
-    test_pgp_complete_pure_lj()
+    pgp_complete_vs_pme_complete()
+    pgp_complete_movement_energy()
+    pgp_complete_pure_lj()
