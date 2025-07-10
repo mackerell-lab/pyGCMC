@@ -147,6 +147,11 @@ from energyPGP.pgp_mixed_interactions import (
     test_pgp_multiple_moveable_particles,
     test_pgp_with_pme_movement_comparison
 )
+from energyPGP.pgp_pme_electrostatic_validation import (
+    test_pgp_pme_pure_electrostatic_exact,
+    test_pgp_pme_different_movements,
+    test_pgp_pme_convergence_with_mesh
+)
 from energyPGP.pgp_pme_cutoff import (
     test_pme_cutoff_in_pgp
 )
