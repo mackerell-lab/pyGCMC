@@ -80,18 +80,18 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
                  i < movementInfo.startIndex + movementInfo.activeCount;
                  ++i) {
                 if (!residues[i].active) continue;
-                computeResidueNonbondedEnergy(state, i, use_cutoff, use_pbc);
+                computeResidueNonbondedEnergy(state, i, use_cutoff, use_pbc, vdw_only);
             }
         }
     } else {
         for (int i = 0; i < state.activeResidueCount; ++i) {
             if (!residues[i].active) continue;
-            computeResidueNonbondedEnergy(state, i, use_cutoff, use_pbc);
+            computeResidueNonbondedEnergy(state, i, use_cutoff, use_pbc, vdw_only);
         }
     }
 }
 
-void computeResidueNonbondedEnergy(model::MCState& state, int residue_idx, bool use_cutoff, bool use_pbc) {
+void computeResidueNonbondedEnergy(model::MCState& state, int residue_idx, bool use_cutoff, bool use_pbc, bool vdw_only) {
     auto& residues = state.residues;
     const auto& forcefield = state.forcefield;
     const auto& atoms = state.atoms;
@@ -139,10 +139,12 @@ void computeResidueNonbondedEnergy(model::MCState& state, int residue_idx, bool 
                 double q1 = atoms[atom_i].charge;
                 double q2 = atoms[atom_j].charge;
                 
-                auto [vdw, elec] = coulomb::calcPairEnergy(r2, sigma, eps, q1, q2, state.info, true);
+                auto [vdw, elec] = coulomb::calcPairEnergy(r2, sigma, eps, q1, q2, state.info, !vdw_only);
                 
                 residues[residue_idx].energy_vdw += static_cast<float>(vdw);
-                residues[residue_idx].energy_elec += static_cast<float>(elec);
+                if (!vdw_only) {
+                    residues[residue_idx].energy_elec += static_cast<float>(elec);
+                }
             }
         }
     }
@@ -213,6 +215,10 @@ void computeMovementEnergyDirect(model::MCState& state, bool use_cutoff, bool us
 
 void computeSystemVdwEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc) {
     computeNonbondedEnergy(state, use_cutoff, false, use_pbc, true);
+}
+
+void computeMovementVdwEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc) {
+    computeNonbondedEnergy(state, use_cutoff, true, use_pbc, true);
 }
 
 } // namespace cpu

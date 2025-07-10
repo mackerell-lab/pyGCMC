@@ -31,8 +31,9 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
  * @param residue_idx Index of the residue to calculate
  * @param use_cutoff Whether to use distance cutoff
  * @param use_pbc Whether to use periodic boundary conditions
+ * @param vdw_only Whether to calculate only VDW interactions
  */
-void computeResidueNonbondedEnergy(model::MCState& state, int residue_idx, bool use_cutoff, bool use_pbc);
+void computeResidueNonbondedEnergy(model::MCState& state, int residue_idx, bool use_cutoff, bool use_pbc, bool vdw_only = false);
 
 /**
  * @brief Basic direct calculation functions (following existing naming pattern)
@@ -42,6 +43,11 @@ void computeMovementEnergyCutoff(model::MCState& state);
 void computeSystemEnergy(model::MCState& state);
 void computeSystemEnergyCutoff(model::MCState& state);
 void computeSystemVdwEnergyCutoff(model::MCState& state);
+
+/**
+ * @brief Movement-specific VDW calculation function
+ */
+void computeMovementVdwEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc);
 
 /**
  * @brief PBC-specific calculation functions

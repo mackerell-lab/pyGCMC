@@ -2,6 +2,7 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/stl_bind.h>
 
 #include "../../simulation/simulation.hpp"
 
@@ -50,6 +51,9 @@ void init_basic_bindings(py::module& m) {
           
     m.def("setEnergyDebugOutput", &::pygcmc::simulation::Simulation::setEnergyDebugOutput,
           "Enable or disable debug output for energy calculations");
+    
+    m.def("getTotalEnergyComponents", &::pygcmc::simulation::Simulation::getTotalEnergyComponents,
+          "Get the total electrostatic and van der Waals energy components as a tuple (elec, vdw)");
     
     // CHARMM switching function related bindings have been removed
     // Please use the set_switching_function and calculate_switching_function methods in the MonteCarloSystem class

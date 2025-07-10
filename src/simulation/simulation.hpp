@@ -264,6 +264,25 @@ public:
      * FFT weights, and other cached data to prevent cross-test contamination.
      */
     static void clearPMEEngine();
+    
+    /**
+     * @brief Compute complete system energy using PGP with all interactions
+     * 
+     * This version includes intramolecular LJ interactions similar to PME Complete,
+     * providing a complete energy calculation for PGP method.
+     * 
+     * @param state MC state
+     */
+    static void computeSystemEnergyPGPComplete(model::MCState& state);
+    
+    /**
+     * @brief Compute movement energy using PGP Complete
+     * 
+     * Calculates energy for movement residues including all LJ interactions.
+     * 
+     * @param state MC state
+     */
+    static void computeMovementEnergyPGPComplete(model::MCState& state);
 
     /**
      * @brief Compute complete system energy using PME with all interactions
@@ -285,6 +304,18 @@ public:
      * @param state MC state containing system information
      */
     static void computeSystemEnergyCutoffComplete(model::MCState& state);
+
+    /**
+     * @brief Get the total electrostatic and van der Waals energy components
+     * 
+     * This function sums the energy components from all active residues and returns
+     * them as a pair. Note that the energies are already divided by 2 to account
+     * for double counting in pairwise calculations.
+     * 
+     * @param state MC state containing system information
+     * @return std::pair<double, double> A pair of (electrostatic_energy, vdw_energy)
+     */
+    static std::pair<double, double> getTotalEnergyComponents(const model::MCState& state);
 
 private:
     std::unique_ptr<platform::IPlatform> platform_;

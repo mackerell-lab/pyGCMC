@@ -41,6 +41,7 @@
 #include "PGPSelf.hpp"
 #include "PGPSystem.hpp"
 #include "PGPComposite.hpp"
+#include "PGPComplete.hpp"
 
 // <agent-hook:pgp_main>
 

@@ -3,6 +3,7 @@
 #include "../platform/cpu/energy/EnergyModule.hpp"
 #include "../platform/cpu/energy/pme/PMEComposite.hpp"
 #include "../platform/cpu/energy/pgp/PGPCore.hpp"
+#include "../platform/cpu/energy/pgp/PGPComplete.hpp"
 #include <cmath>
 
 namespace pygcmc {
@@ -292,6 +293,40 @@ void Simulation::computeMovementEnergyPGPFixed(model::MCState& state) {
         log(LogLevel::DEBUG, "Computing PGP-Fixed energy for movement residues");
     }
     platform::cpu::computeMovementEnergyPGPFixed(state);
+}
+
+std::pair<double, double> Simulation::getTotalEnergyComponents(const model::MCState& state) {
+    double total_elec = 0.0;
+    double total_vdw = 0.0;
+    
+    // Sum energy components from all active residues
+    for (int i = 0; i < state.activeResidueCount; ++i) {
+        if (state.residues[i].active) {
+            total_elec += state.residues[i].energy_elec;
+            total_vdw += state.residues[i].energy_vdw;
+        }
+    }
+    
+    // For direct energy calculations, divide by 2 to account for double counting
+    // Note: For Ewald/PME methods, the reciprocal and self energy terms should be added separately
+    total_elec /= 2.0;
+    total_vdw /= 2.0;
+    
+    return std::make_pair(total_elec, total_vdw);
+}
+
+void Simulation::computeSystemEnergyPGPComplete(model::MCState& state) {
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing PGP Complete energy for all active residues");
+    }
+    platform::cpu::computeSystemEnergyPGPComplete(state);
+}
+
+void Simulation::computeMovementEnergyPGPComplete(model::MCState& state) {
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing PGP Complete energy for movement residues");
+    }
+    platform::cpu::computeMovementEnergyPGPComplete(state);
 }
 
 } // namespace simulation

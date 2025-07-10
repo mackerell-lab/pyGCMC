@@ -17,7 +17,7 @@ from pygcmc import initializePMEParameters, computeSystemEnergyPMEComplete
 from pygcmc import setPMEParameters, setPGPParameters
 from pygcmc import precomputeGridPotential, calculateMoleculeEnergy
 from pygcmc import computeMovementEnergyPME
-from pygcmc import computeSystemEnergyCutoff
+from pygcmc import computeSystemEnergyCutoff, getTotalEnergyComponents
 
 
 def create_lj_only_system():
@@ -79,11 +79,10 @@ def create_lj_only_system():
     state.activeResidueCount = 3
     
     # Set up movement residues
-    state.movementResidues = []
     movement_info = MCMovementResidueInfo()
     movement_info.startIndex = 2
     movement_info.activeCount = 1
-    state.movementResidues.append(movement_info)
+    state.movementResidues = [movement_info]
     
     return state
 
@@ -98,7 +97,8 @@ def test_pgp_lj_only_system():
     state = create_lj_only_system()
     
     # Calculate direct energy for reference
-    elec_direct, vdw_direct = computeSystemEnergyCutoff(state)
+    computeSystemEnergyCutoff(state)
+    elec_direct, vdw_direct = getTotalEnergyComponents(state)
     print(f"\nDirect calculation (cutoff):")
     print(f"  Electrostatic: {elec_direct:.8f} kJ/mol (should be 0)")
     print(f"  VdW:          {vdw_direct:.8f} kJ/mol")
@@ -236,11 +236,10 @@ def test_pgp_mixed_system():
     state.residues = residues
     state.activeResidueCount = 3
     
-    state.movementResidues = []
     movement_info = MCMovementResidueInfo()
     movement_info.startIndex = 2
     movement_info.activeCount = 1
-    state.movementResidues.append(movement_info)
+    state.movementResidues = [movement_info]
     
     # Set up PME
     alpha = 2.2
@@ -359,11 +358,10 @@ def test_pgp_lj_distance_scan():
     state.residues = residues
     state.activeResidueCount = 2
     
-    state.movementResidues = []
     movement_info = MCMovementResidueInfo()
     movement_info.startIndex = 1
     movement_info.activeCount = 1
-    state.movementResidues.append(movement_info)
+    state.movementResidues = [movement_info]
     
     # Set up PME
     alpha = 2.2
@@ -385,7 +383,8 @@ def test_pgp_lj_distance_scan():
         state.atoms[1].x = 5.0 + d
         
         # Calculate direct LJ
-        _, vdw_direct = computeSystemEnergyCutoff(state)
+        computeSystemEnergyCutoff(state)
+        _, vdw_direct = getTotalEnergyComponents(state)
         
         # Calculate PME movement LJ
         pme_move = computeMovementEnergyPME(state)

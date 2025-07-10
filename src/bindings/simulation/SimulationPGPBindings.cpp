@@ -181,6 +181,66 @@ void init_pgp_bindings(py::module& m) {
             return py::make_tuple(electrostatic_total, vdw, pgp_dict);
         },
         "Calculate movement residue energy using PGP-PME method");
+        
+    // PGP Complete bindings
+    m.def("computeSystemEnergyPGPComplete", 
+        [](::pygcmc::model::MCState& state) {
+            // Call C++ function
+            ::pygcmc::simulation::Simulation::computeSystemEnergyPGPComplete(state);
+            
+            // Calculate total electrostatic energy
+            double electrostatic_total = state.ewald_energy.real_space + 
+                                       state.ewald_energy.reciprocal + 
+                                       state.ewald_energy.self;
+            
+            // Accumulate VDW energy from all residues
+            double vdw = 0.0;
+            for (const auto& res : state.residues) {
+                if (res.active) {
+                    vdw += res.energy_vdw;
+                }
+            }
+            
+            // Return tuple: (electrostatic_total, vdw_energy, total_energy)
+            return py::make_tuple(electrostatic_total, vdw, electrostatic_total + vdw);
+        },
+        "Calculate complete system energy using PGP with intramolecular LJ interactions");
+        
+    m.def("computeMovementEnergyPGPComplete", 
+        [](::pygcmc::model::MCState& state) {
+            // Call C++ function
+            ::pygcmc::simulation::Simulation::computeMovementEnergyPGPComplete(state);
+            
+            // Convert from C++ struct to Python dictionary
+            py::dict pgp_dict;
+            pgp_dict["real_space"] = state.ewald_energy.real_space;
+            pgp_dict["reciprocal"] = state.ewald_energy.reciprocal;
+            pgp_dict["self"] = state.ewald_energy.self;
+            
+            // Calculate total electrostatic energy
+            double electrostatic_total = state.ewald_energy.real_space + 
+                                       state.ewald_energy.reciprocal + 
+                                       state.ewald_energy.self;
+            
+            // Only accumulate VDW energy from movement residues
+            double vdw = 0.0;
+            for(const auto& movementInfo : state.movementResidues) {
+                for(int i = movementInfo.startIndex;
+                    i < movementInfo.startIndex + movementInfo.activeCount; i++) {
+                    if(state.residues[i].active) {
+                        vdw += state.residues[i].energy_vdw;
+                    }
+                }
+            }
+            
+            // Save total energy
+            double total = electrostatic_total + vdw;
+            pgp_dict["total"] = total;
+            
+            // Return tuple: (electrostatic_total, vdw_energy, pgp_dict)
+            return py::make_tuple(electrostatic_total, vdw, pgp_dict);
+        },
+        "Calculate movement energy using PGP Complete with LJ interactions");
 }
 
 } // namespace simulation
