@@ -32,9 +32,9 @@ Modular structure (all modules under 300 lines):
 - pgp_pme_cutoff.py: PGP PME cutoff test (1 function)
 - pgp_cutoff_issue.py: PGP cutoff issue tests (2 functions)
 - pgp_erfc_debug.py: PGP erfc table debug tests (2 functions)
-- pgp_complete.py: PGP Complete tests including LJ interactions (3 functions)
+- pgp_complete.py: PGP Complete tests including LJ interactions (6 functions)
 
-Total: 37 test functions across 28 modules.
+Total: 40 test functions across 28 modules.
 - Basic PGP tests (3): basic_operations
 - PGP comparison tests (8): method_comparison, complex_systems, planar_systems, 
   asymmetric_water_complete, asymmetric_nacl, pgp_lj_neutral_systems, pgp_lj_minimum_energy
@@ -166,10 +166,16 @@ from energyPGP.pgp_erfc_debug import (
 )
 
 # PGP Complete tests - including LJ interactions
+# ⚠️ WARNING: These tests WILL CRASH if run with other tests due to C++ global state bug
+# Run them separately: cd build && python ../tests/simulation/energyPGP/run_isolated.py
+# See energyPGP/README_PGP_COMPLETE_TESTS.md for details
 from energyPGP.pgp_complete import (
     pgp_complete_vs_pme_complete as test_pgp_complete_vs_pme_complete,
     pgp_complete_movement_energy as test_pgp_complete_movement_energy,
-    pgp_complete_pure_lj as test_pgp_complete_pure_lj
+    pgp_complete_pure_lj as test_pgp_complete_pure_lj,
+    pgp_complete_multi_atom_residue as test_pgp_complete_multi_atom_residue,
+    pgp_complete_extreme_distances as test_pgp_complete_extreme_distances,
+    pgp_complete_direct_movement_test as test_pgp_complete_direct_movement_test
 )
 
 # Support direct execution for testing
