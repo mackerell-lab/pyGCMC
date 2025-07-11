@@ -15,6 +15,13 @@ namespace simulation {
 
 void init_pgp_bindings(py::module& m) {
     // PGP bindings
+    m.def("resetPGPState",
+        []() {
+            ::pygcmc::simulation::Simulation::resetPGPState();
+        },
+        "Reset PGP global state to fix memory corruption issues. "
+        "Call this between tests or when reinitializing PGP parameters.");
+        
     m.def("setPGPParameters",
         [](float alpha, const std::vector<int>& meshSize, float potential_cutoff, const std::vector<int>& potentialGridSize, 
            int splineOrder, float tolerance) {

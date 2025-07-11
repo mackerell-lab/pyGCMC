@@ -191,6 +191,14 @@ public:
     // PGP method - add the following functions
     
     /**
+     * Reset PGP global state to fix memory corruption issues
+     * 
+     * This function clears all global PGP state and should be called
+     * between test runs or when reinitializing PGP parameters
+     */
+    static void resetPGPState();
+    
+    /**
      * Precompute grid potential for fixed parts of the system
      * 
      * Precompute potential grid for PGP-PME algorithm, which is a key step for accelerating MC simulations

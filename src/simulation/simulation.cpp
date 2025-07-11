@@ -233,6 +233,10 @@ void Simulation::computeSystemEnergyCutoffComplete(model::MCState& state) {
 }
 
 // Implementation of PGP-related methods
+void Simulation::resetPGPState() {
+    platform::cpu::resetPGPState();
+}
+
 void Simulation::setPGPParameters(float alpha, const int meshSize[3], float potential_cutoff, 
                                const int potentialGridSize[3], int splineOrder, float tolerance) {
     // Convert float parameters to double

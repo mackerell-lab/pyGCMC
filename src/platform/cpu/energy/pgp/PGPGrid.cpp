@@ -17,7 +17,9 @@ namespace cpu {
 void PGPParams::initializePotentialGrid() {
     // Calculate total grid size and allocate memory
     int totalSize = potential_grid_size[0] * potential_grid_size[1] * potential_grid_size[2];
-    potentialGrid.resize(totalSize);
+    
+    // Resize the grid and initialize to zero
+    potentialGrid.resize(totalSize, std::complex<double>(0.0, 0.0));
     
     // Set grid spacing, taking the minimum value of the three dimensions
     grid_spacing = std::min({

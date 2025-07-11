@@ -58,8 +58,10 @@ void precomputeGridPotentialImpl(model::MCState& state, bool fixed_only) {
         fixed_only = false;
     }
     
-    // Set pme_params grid size to match pgp_params grid size
+    // Store original PME mesh size
+    int originalMeshSize[3];
     for (int i = 0; i < 3; i++) {
+        originalMeshSize[i] = pme_params.meshSize[i];
         pme_params.meshSize[i] = pgp_params.potential_grid_size[i];
     }
     
@@ -155,8 +157,11 @@ void precomputeGridPotentialImpl(model::MCState& state, bool fixed_only) {
     // Copy modified PME grid to PGP's potentialGrid
     pgp_params.potentialGrid = pme_params.pmeGrid;
 
-    // Restore original PME grid
+    // Restore original PME grid and mesh size
     pme_params.pmeGrid = pmeGridBackup;
+    for (int i = 0; i < 3; i++) {
+        pme_params.meshSize[i] = originalMeshSize[i];
+    }
     
     if (platform::is_debug_mode()) {
         platform::log(LogLevel::DEBUG, "Potential precomputation completed");

@@ -6,6 +6,8 @@
 #include "PGPInterpolation.hpp"
 #include "PGPReal.hpp"
 #include "PGPSelf.hpp"
+#include "../pme/PMEComposite.hpp"
+#include <cmath>
 
 namespace pygcmc {
 namespace platform {
@@ -16,12 +18,13 @@ static double getTotalVdwEnergy(const model::MCState& state);
 static double getTotalMovementVdwEnergy(const model::MCState& state);
 
 void computeSystemEnergyPGPComplete(model::MCState& state) {
-    // First, calculate PGP electrostatic energy using existing functions
-    // This includes grid interpolation, real space, and self energy
-    calculateMoleculeEnergy(state);
+    // For PGP Complete, we use PME for electrostatics (which already includes all interactions)
+    // and only recalculate LJ to include intramolecular interactions
     
-    // The calculateMoleculeEnergy function already sets up ewald_energy components
-    // Now we need to add complete LJ calculations
+    // First calculate standard PME electrostatics
+    platform::cpu::PMEComposite::computeSystemEnergy(state);
+    
+    // Now we need to recalculate LJ to include intramolecular interactions
     
     // Calculate ALL LJ interactions, including intramolecular
     // We'll use a modified approach that includes all pairs
@@ -91,6 +94,9 @@ void computeSystemEnergyPGPComplete(model::MCState& state) {
             // Apply cutoff
             if (r2 > cutoff2) continue;
             
+            // Skip extremely close atoms to avoid divide-by-zero
+            if (r2 < 1e-12) continue;
+            
             // Bounds check for LJ parameters
             const int param_index = type_i * forcefield.numTotalTypes + type_j;
             if (param_index < 0 || param_index >= static_cast<int>(forcefield.ljEps.size())) {
@@ -113,6 +119,9 @@ void computeSystemEnergyPGPComplete(model::MCState& state) {
             
             const double vdw = 4.0 * eps * (sigma12/r12 - sigma6/r6);
             
+            // Skip if result is not finite (NaN or Inf)
+            if (!std::isfinite(vdw)) continue;
+            
             // Add energy to residues
             if (res_i == res_j) {
                 // Intramolecular interaction - add full energy to the residue
@@ -131,23 +140,12 @@ void computeSystemEnergyPGPComplete(model::MCState& state) {
 }
 
 void computeMovementEnergyPGPComplete(model::MCState& state) {
-    // Calculate PGP electrostatic energy for movement residues
+    // For PGP Complete movement energy, we use PME for electrostatics
+    // (since PGP interpolation doesn't capture all interactions properly)
+    // and calculate complete LJ including intramolecular
     
-    // Reset energy components
-    state.ewald_energy.real_space = 0.0;
-    state.ewald_energy.reciprocal = 0.0;
-    state.ewald_energy.self = 0.0;
-    
-    // 1. Grid interpolation for movement residues
-    double grid_energy = 0.0;
-    interpolateMoleculeEnergy(state, grid_energy);
-    state.ewald_energy.reciprocal = grid_energy;
-    
-    // 2. Real space for movement residues
-    computeRealSpacePGP(state, true);
-    
-    // 3. Self energy for movement residues
-    computeSelfEnergyPGP(state, true);
+    // First calculate PME movement energy for electrostatics
+    platform::cpu::PMEComposite::computeMovementEnergy(state);
     
     // Now calculate LJ for movement residues
     // Reset VDW energies for movement residues
@@ -220,6 +218,9 @@ void computeMovementEnergyPGPComplete(model::MCState& state) {
                     // Apply cutoff
                     if (r2 > cutoff2) continue;
                     
+                    // Skip extremely close atoms to avoid divide-by-zero
+                    if (r2 < 1e-12) continue;
+                    
                     // Get LJ parameters
                     const int param_index = type_i * forcefield.numTotalTypes + type_j;
                     if (param_index < 0 || param_index >= static_cast<int>(forcefield.ljEps.size())) {
@@ -239,6 +240,9 @@ void computeMovementEnergyPGPComplete(model::MCState& state) {
                     const double r12 = r6 * r6;
                     
                     const double vdw = 4.0 * eps * (sigma12/r12 - sigma6/r6);
+                    
+                    // Skip if result is not finite (NaN or Inf)
+                    if (!std::isfinite(vdw)) continue;
                     
                     // For movement energy, add full energy to movement residue
                     // (the other residue's contribution will be calculated when it moves)

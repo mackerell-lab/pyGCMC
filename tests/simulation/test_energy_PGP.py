@@ -166,16 +166,15 @@ from energyPGP.pgp_erfc_debug import (
 )
 
 # PGP Complete tests - including LJ interactions
-# ⚠️ WARNING: These tests WILL CRASH if run with other tests due to C++ global state bug
-# Run them separately: cd build && python ../tests/simulation/energyPGP/run_isolated.py
+# These tests use resetPGPState() to clear global state between runs
 # See energyPGP/README_PGP_COMPLETE_TESTS.md for details
 from energyPGP.pgp_complete import (
-    pgp_complete_vs_pme_complete as test_pgp_complete_vs_pme_complete,
-    pgp_complete_movement_energy as test_pgp_complete_movement_energy,
-    pgp_complete_pure_lj as test_pgp_complete_pure_lj,
-    pgp_complete_multi_atom_residue as test_pgp_complete_multi_atom_residue,
-    pgp_complete_extreme_distances as test_pgp_complete_extreme_distances,
-    pgp_complete_direct_movement_test as test_pgp_complete_direct_movement_test
+    test_pgp_complete_vs_pme_complete,
+    test_pgp_complete_movement_energy,
+    test_pgp_complete_pure_lj,
+    test_pgp_complete_multi_atom_residue,
+    test_pgp_complete_extreme_distances,
+    test_pgp_complete_direct_movement_test
 )
 
 # Support direct execution for testing

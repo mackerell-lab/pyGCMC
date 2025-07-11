@@ -14,7 +14,7 @@ EnergyComponents PMEComplete::computeCompleteEnergy(model::MCState& state) {
     // Don't use PMEComposite::computeSystemEnergy as it excludes intramolecular
     
     // Initialize PME calculation
-    PMEComposite pmeComp;
+    // PMEComposite pmeComp;  // Not needed - using static methods
     
     // Calculate PME electrostatics (real + reciprocal + self)
     double real_elec = 0.0;
@@ -264,6 +264,10 @@ void PMEComplete::applyElectrostaticExclusions(model::MCState& state, EnergyComp
     // This is a placeholder for more sophisticated exclusion handling
     // Currently, the standard PME already handles most exclusions properly
     // This method can be extended to handle special cases if needed
+    
+    // Suppress unused parameter warnings
+    (void)state;
+    (void)energy;
 }
 
 } // namespace pme

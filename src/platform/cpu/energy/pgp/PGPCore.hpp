@@ -8,6 +8,7 @@
 #include <array>
 #include <vector>
 #include <complex>
+#include <mutex>
 
 namespace pygcmc {
 namespace platform {
@@ -38,6 +39,9 @@ struct PGPParams : public PMEParams {
 // Global PGP parameters
 extern PGPParams pgp_params;
 
+// Global mutex for thread safety
+extern std::mutex pgp_mutex;
+
 // Core function declarations
 void setPGPParameters(double alpha, const int meshSize[3], double potential_cutoff, 
                         const int potentialGridSize[3], int splineOrder, double tolerance);
@@ -47,6 +51,9 @@ void precomputeGridPotential(model::MCState& state, bool fixed_only = true);
 void interpolateMoleculeEnergy(model::MCState& state, double& energy);
 
 double calculateMoleculeEnergy(model::MCState& state);
+
+// Reset function to clear global state - fixes memory corruption bug
+void resetPGPState();
 
 double computeMoleculeEnergyGlobal(model::MCState& state, const std::vector<int>& movementResidues, 
                                    const std::vector<int>& nearbyResidues, int threadIndex);
