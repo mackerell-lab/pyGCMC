@@ -161,7 +161,8 @@ def test_simple_two_particle_system():
     print(f"  PME reciprocal change: {pme_move_dict_final.get('reciprocal', 0) - pme_move_dict.get('reciprocal', 0):.10f}")
     print(f"  PGP change:           {pgp_de:.10f}")
     
-    return rel_err_pgp
+    # Assert that the relative error is reasonable
+    assert rel_err_pgp < 50.0, f"Relative error too large: {rel_err_pgp:.2f}%"
 
 
 def test_pgp_self_consistency():

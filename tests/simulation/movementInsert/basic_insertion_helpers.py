@@ -146,29 +146,44 @@ def insert_molecule(system, molecule_atoms):
     """Insert a molecule (list of atoms) into the system"""
     # Create a new system to avoid modifying the original
     new_system = pygcmc.MCState()
-    new_system.info = system.info
+    
+    # Deep copy the info structure to avoid shared pointers
+    new_system.info.box = list(system.info.box)
+    new_system.info.cutoff = system.info.cutoff
+    
+    # These can be safely shared (read-only data)
     new_system.atomTypes = system.atomTypes
     new_system.forcefield = system.forcefield
     
     atom_start = len(system.atoms)
     
-    # Build new atoms list
+    # Build new atoms list with deep copies
     new_atoms = []
     
-    # Copy existing atoms
-    for atom in system.atoms:
-        new_atoms.append(atom)
+    # Deep copy existing atoms
+    for old_atom in system.atoms:
+        new_atom = pygcmc.MCAtom()
+        new_atom.x, new_atom.y, new_atom.z = old_atom.x, old_atom.y, old_atom.z
+        new_atom.charge = old_atom.charge
+        new_atom.type = old_atom.type
+        new_atoms.append(new_atom)
     
     # Add new molecule atoms
     for atom in molecule_atoms:
         new_atoms.append(atom)
     
-    # Build new residues list
+    # Build new residues list with deep copies
     new_residues = []
     
-    # Copy existing residues
-    for res in system.residues:
-        new_residues.append(res)
+    # Deep copy existing residues
+    for old_res in system.residues:
+        new_res = pygcmc.MCResidue()
+        new_res.active = old_res.active
+        new_res.fixed = getattr(old_res, 'fixed', False)
+        new_res.atomStart = old_res.atomStart
+        new_res.atomCount = old_res.atomCount
+        new_res.type = old_res.type
+        new_residues.append(new_res)
     
     # Add new residue
     res = pygcmc.MCResidue()

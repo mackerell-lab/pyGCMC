@@ -166,7 +166,9 @@ def add_molecule_to_state(state, molecule, movement_type=False):
     """Add a molecule to an existing state"""
     # Create a copy of the state
     new_state = pygcmc.MCState()
-    new_state.info = state.info
+    # Deep copy the info structure to avoid shared pointers
+    new_state.info.box = list(state.info.box)
+    new_state.info.cutoff = state.info.cutoff
     new_state.atomTypes = state.atomTypes
     new_state.forcefield = state.forcefield
     

@@ -255,7 +255,10 @@ def insert_water_at_position(system, x, y, z):
     
     # Create new system
     new_system = pygcmc.MCState()
-    new_system.info = system.info
+    # Deep copy the info structure to avoid shared pointers
+    new_system.info.box = list(system.info.box)
+    new_system.info.cutoff = system.info.cutoff
+    # These can be safely shared (read-only data)
     new_system.atomTypes = system.atomTypes
     new_system.forcefield = system.forcefield
     new_system.atoms = new_atoms

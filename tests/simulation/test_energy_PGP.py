@@ -177,6 +177,41 @@ from energyPGP.pgp_complete import (
     test_pgp_complete_direct_movement_test
 )
 
+# Additional PGP tests that were missing
+from energyPGP.pgp_simple_test import (
+    test_pgp_simple
+)
+from energyPGP.pgp_consistency_tests import (
+    test_pgp_energy_symmetry,
+    test_pgp_energy_scaling,
+    test_pgp_grid_independence
+)
+from energyPGP.pgp_grid_convergence import (
+    test_pgp_grid_convergence,
+    test_pgp_alpha_convergence,
+    test_pgp_convergence_trend
+)
+from energyPGP.pgp_cutoff_continuity import (
+    test_pgp_cutoff_continuity,
+    test_pgp_smooth_transition,
+    test_pgp_lj_cutoff_continuity
+)
+from energyPGP.pgp_lj_diagnosis import (
+    test_pgp_lj_only_system,
+    test_pgp_mixed_system,
+    test_pgp_lj_distance_scan
+)
+from energyPGP.pgp_pme_debug_electrostatic import (
+    test_simple_two_particle_system,
+    test_pgp_self_consistency
+)
+from energyPGP.debug_movement_residues import (
+    test_movement_residues
+)
+from energyPGP.debug_vdw_movement import (
+    test_vdw_movement_debug
+)
+
 # Support direct execution for testing
 if __name__ == "__main__":
     import pytest

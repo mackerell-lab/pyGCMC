@@ -100,7 +100,9 @@ def test_insert_ion_pair():
     for r in distances:
         # Create system with Cl- at distance r from Na+
         cl_system = pygcmc.MCState()
-        cl_system.info = system.info
+        # Deep copy the info structure to avoid shared pointers
+        cl_system.info.box = list(system.info.box)
+        cl_system.info.cutoff = system.info.cutoff
         cl_system.atomTypes = system.atomTypes
         cl_system.forcefield = create_ion_forcefield()
         
