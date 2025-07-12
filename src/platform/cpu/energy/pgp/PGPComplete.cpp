@@ -112,7 +112,6 @@ void computeMovementEnergyPGPComplete(model::MCState& state) {
 // Calculate complete real space electrostatics including intramolecular
 static void calculateCompleteRealSpaceElectrostatics(model::MCState& state) {
     const auto& atoms = state.atoms;
-    const auto& residues = state.residues;
     const double cutoff2 = state.info.cutoff * state.info.cutoff;
     const double alpha = pgp_params.alpha;
     
