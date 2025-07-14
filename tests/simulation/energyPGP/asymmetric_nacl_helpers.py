@@ -3,8 +3,8 @@
 
 import math
 import pygcmc
-from . import pgp_wrapper
 from .helpers import calculate_pbc_distance, is_safe_position
+
 
 def create_nacl_crystal_system(n_cells, a, box_size, cutoff):
     """Create NaCl crystal system with moving residue."""
@@ -136,6 +136,7 @@ def create_nacl_crystal_system(n_cells, a, box_size, cutoff):
     
     return system, mobile_res, fixed_positions
 
+
 def handle_initial_position_safety(system, mobile_res, fixed_positions, cutoff, box_size):
     """Handle initial position safety checks and corrections."""
     # Get initial mobile atom positions
@@ -188,6 +189,7 @@ def handle_initial_position_safety(system, mobile_res, fixed_positions, cutoff, 
             print("Proceeding with the test anyway, disabling distance checks")
     else:
         print(f"Initial position safe, minimum distance from fixed particles > {cutoff} nm")
+
 
 def calculate_complex_movement_vector(system, mobile_res, residues, box_size):
     """Calculate complex directional movement vector based on nearest residue."""
@@ -249,6 +251,7 @@ def calculate_complex_movement_vector(system, mobile_res, residues, box_size):
     
     return movement_vector
 
+
 def apply_movement_to_residue(system, mobile_res, movement_vector, box_size):
     """Apply movement vector to all atoms in the moving residue."""
     # Apply movement to all atoms in the moving residue
@@ -264,6 +267,7 @@ def apply_movement_to_residue(system, mobile_res, movement_vector, box_size):
         system.atoms[atom_idx].z %= box_size
         
         print(f"Moved atom {i} to: ({system.atoms[atom_idx].x:.4f}, {system.atoms[atom_idx].y:.4f}, {system.atoms[atom_idx].z:.4f})")
+
 
 def verify_moved_position_safety(system, mobile_res, fixed_positions, cutoff, box_size):
     """Verify if moved position is safe and report distances."""

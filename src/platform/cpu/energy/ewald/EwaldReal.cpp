@@ -87,18 +87,12 @@ void computeRealSpaceEwald(model::MCState& state, bool movement_only, bool store
         for(int r2 = r1 + 1; r2 < state.activeResidueCount; r2++) {
             if(!residues[r2].active) continue;
 
-            // Loop over atom pairs between residues with bounds checking
+            // Loop over atom pairs between residues
             for(int i = residues[r1].atomStart; 
-                i < residues[r1].atomStart + residues[r1].atomCount && i < static_cast<int>(atoms.size()); i++) {
-                
-                // Skip if atom index is invalid
-                if (i < 0 || i >= static_cast<int>(atoms.size()) || i >= state.activeAtomCount) continue;
+                i < residues[r1].atomStart + residues[r1].atomCount; i++) {
                 
                 for(int j = residues[r2].atomStart;
-                    j < residues[r2].atomStart + residues[r2].atomCount && j < static_cast<int>(atoms.size()); j++) {
-                    
-                    // Skip if atom index is invalid
-                    if (j < 0 || j >= static_cast<int>(atoms.size()) || j >= state.activeAtomCount) continue;
+                    j < residues[r2].atomStart + residues[r2].atomCount; j++) {
                     
                     // Calculate minimum image distance
                     float dx = atoms[i].x - atoms[j].x;

@@ -53,7 +53,6 @@ def load_test_system():
     
     return system, pdb.positions
 
-@pytest.mark.serial
 def test_verify_openmm_expressions():
     """
     Verify consistency between custom nonbonded expressions and OpenMM default implementation.

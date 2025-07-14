@@ -86,11 +86,11 @@ void computeRealSpacePME(model::MCState& state, bool movement_only, bool store_i
         
         // First handle intra-residue pairs (atoms within the same residue)
         for(int i = residues[r1].atomStart; 
-            i < residues[r1].atomStart + residues[r1].atomCount - 1 && i < static_cast<int>(atoms.size()); i++) {
-            if(i < 0 || i >= static_cast<int>(atoms.size()) || i >= state.activeAtomCount) continue;
+            i < residues[r1].atomStart + residues[r1].atomCount - 1; i++) {
+            if(i >= state.activeAtomCount) continue;
             
-            for(int j = i + 1; j < residues[r1].atomStart + residues[r1].atomCount && j < static_cast<int>(atoms.size()); j++) {
-                if(j < 0 || j >= static_cast<int>(atoms.size()) || j >= state.activeAtomCount) continue;
+            for(int j = i + 1; j < residues[r1].atomStart + residues[r1].atomCount; j++) {
+                if(j >= state.activeAtomCount) continue;
                 
                 float dx = atoms[i].x - atoms[j].x;
                 float dy = atoms[i].y - atoms[j].y;
@@ -144,16 +144,16 @@ void computeRealSpacePME(model::MCState& state, bool movement_only, bool store_i
         for(int r2 = r1 + 1; r2 < state.activeResidueCount; r2++) {
             if(!residues[r2].active) continue;
             
-            // Loop over atoms in each residue with bounds checking
+            // Loop over atoms in each residue
             for(int i = residues[r1].atomStart; 
-                i < residues[r1].atomStart + residues[r1].atomCount && i < static_cast<int>(atoms.size()); i++) {
+                i < residues[r1].atomStart + residues[r1].atomCount; i++) {
                 // Ensure atom index is valid
-                if(i < 0 || i >= static_cast<int>(atoms.size()) || i >= state.activeAtomCount) continue;
+                if(i >= state.activeAtomCount) continue;
                 
                 for(int j = residues[r2].atomStart; 
-                    j < residues[r2].atomStart + residues[r2].atomCount && j < static_cast<int>(atoms.size()); j++) {
+                    j < residues[r2].atomStart + residues[r2].atomCount; j++) {
                     // Ensure atom index is valid
-                    if(j < 0 || j >= static_cast<int>(atoms.size()) || j >= state.activeAtomCount) continue;
+                    if(j >= state.activeAtomCount) continue;
                     
                     float dx = atoms[i].x - atoms[j].x;
                     float dy = atoms[i].y - atoms[j].y;

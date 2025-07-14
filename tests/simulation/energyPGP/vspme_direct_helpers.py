@@ -3,8 +3,8 @@
 
 import math
 import pygcmc
-from . import pgp_wrapper
-from .pgp_wrapper import computeSystemVdwEnergyCutoff, computeMovementEnergyPME, computeMovementEnergyPGP
+from pygcmc import computeSystemVdwEnergyCutoff, computeMovementEnergyPME, computeMovementEnergyPGP
+
 
 def perform_debug_analysis(system):
     """Perform detailed debug analysis of the system configuration."""
@@ -65,6 +65,7 @@ def perform_debug_analysis(system):
                 print(f"  LJ parameters: type_i={i_type}, type_j={j_type}, sigma_idx={sigma_idx}, epsilon_idx={epsilon_idx}")
                 print(f"  LJ sigma={sigma_i}, epsilon={epsilon_i}")
 
+
 def test_initial_energy_components(system, moving_residue_index):
     """Test initial energy components using different methods."""
     # --- Test LJ Energy Calculation Directly ---
@@ -104,7 +105,7 @@ def test_initial_energy_components(system, moving_residue_index):
 
     # Calculate real space interactions using computeMovementEnergyPGP
     print("Calculating energy using PGP method...")
-    pgp_result = pgp_wrapper.computeMovementEnergyPGP(system)
+    pgp_result = pygcmc.computeMovementEnergyPGP(system)
     pgp_components = pgp_result[2]  # Get the dictionary with energy components
     initial_real_space = pgp_components.get('real_space', 0.0)
     initial_lj = pgp_result[1]  # This should be the LJ energy component
@@ -119,6 +120,7 @@ def test_initial_energy_components(system, moving_residue_index):
         print(f"Residue {i} after PGP: energy_vdw={residue.energy_vdw:.6f}, energy_elec={residue.energy_elec:.6f}")
 
     return initial_real_space, initial_lj
+
 
 def print_interaction_verification(initial_pme_direct, initial_real_space, initial_pme_lj):
     """Print verification messages about interactions."""
@@ -136,6 +138,7 @@ def print_interaction_verification(initial_pme_direct, initial_real_space, initi
     
     print("\nNote: Individual component verification skipped - focusing on energy changes after movement")
 
+
 def investigate_missing_interactions(system):
     """Investigate why LJ and direct interactions might be missing."""
     print("\n--- Investigating Missing Interactions ---")
@@ -150,6 +153,7 @@ def investigate_missing_interactions(system):
     print("3. Implementation might require explicit non-bonded pairs")
     print("4. Energy might be capped or thresholded for numerical stability")
     print("5. The PME/PGP implementations might only calculate differential energies (not absolute)")
+
 
 def print_energy_breakdown(delta_pme_total, delta_pme_reciprocal, delta_pme_direct, delta_pme_lj):
     """Print energy component breakdown summary."""

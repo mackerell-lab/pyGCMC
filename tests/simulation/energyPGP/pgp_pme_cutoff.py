@@ -6,10 +6,10 @@ Test to check if pme_params.cutoff is set when using PGP.
 import pytest
 import math
 import pygcmc
-from . import pgp_wrapper
-from .pgp_wrapper import initializePMEParameters, setPGPParameters, precomputeGridPotential
-from .pgp_wrapper import computeSystemEnergyPGP
 from pygcmc import MCAtom, MCResidue, MCState
+from pygcmc import setPGPParameters, initializePMEParameters, precomputeGridPotential
+from pygcmc import computeSystemEnergyPGP
+
 
 def test_pme_cutoff_in_pgp():
     """Test if pme_params.cutoff is properly set when using PGP."""
@@ -66,7 +66,7 @@ def test_pme_cutoff_in_pgp():
     alpha = 2.0
     mesh_size = [32, 32, 32]
     
-    print("Test 1: Only setPGPParameters(no initializePMEParameters, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)")
+    print("Test 1: Only setPGPParameters (no initializePMEParameters)")
     print(f"System cutoff: {state.info.cutoff} nm")
     
     # Only set PGP parameters
@@ -101,7 +101,7 @@ def test_pme_cutoff_in_pgp():
     
     # Calculate again
     computeSystemEnergyPGP(state)
-    real_space = state.ewald_energy.get('real_space')
+    real_space = state.ewald_energy.get('real_space', 0.0)
     
     print(f"PGP real-space: {real_space:.6f} kJ/mol")
     
@@ -109,6 +109,7 @@ def test_pme_cutoff_in_pgp():
         print("❌ Still zero - the issue is deeper than cutoff")
     else:
         print("✅ Non-zero - fixed by initializing PME")
+
 
 if __name__ == "__main__":
     test_pme_cutoff_in_pgp()

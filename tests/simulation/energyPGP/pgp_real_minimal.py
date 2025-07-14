@@ -6,12 +6,11 @@ Minimal test to trace why PGP real-space is zero.
 import pytest
 import math
 import pygcmc
-from . import pgp_wrapper
-from .pgp_wrapper import initializePMEParameters, setPGPParameters, precomputeGridPotential
-from .pgp_wrapper import computeSystemEnergyPGP
-
-import os
 from pygcmc import MCAtom, MCResidue, MCState
+from pygcmc import setPGPParameters, initializePMEParameters, precomputeGridPotential
+from pygcmc import computeSystemEnergyPGP
+import os
+
 
 def test_pgp_real_space_minimal():
     """Minimal test with debug output enabled."""
@@ -105,10 +104,14 @@ def test_pgp_real_space_minimal():
     initializePMEParameters(state.info.cutoff, state.info.box, alpha)
     
     print("\nPrecomputing grid (should be empty since no fixed atoms)...")
-    precomputeGridPotential(state)
+    precomputeGridPotential(state, fixed_only=True)
+    
+    print("\nCalculating system energy with PGP...")
     computeSystemEnergyPGP(state)
-    real_space = state.ewald_energy.get("real_space", 0.0)
-    reciprocal = state.ewald_energy.get('reciprocal')
+    
+    # Check results
+    real_space = state.ewald_energy.get('real_space', 0.0)
+    reciprocal = state.ewald_energy.get('reciprocal', 0.0)
     
     print(f"\nResults:")
     print(f"Real-space energy: {real_space:.6f} kJ/mol")
@@ -133,6 +136,7 @@ def test_pgp_real_space_minimal():
         print("This suggests the real-space calculation is not being performed correctly.")
     else:
         print("\n✅ Real-space energy is non-zero")
+
 
 if __name__ == "__main__":
     test_pgp_real_space_minimal()

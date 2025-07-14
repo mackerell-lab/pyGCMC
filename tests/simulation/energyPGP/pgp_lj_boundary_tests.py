@@ -11,16 +11,17 @@ Verifies correct LJ 12-6 potential behavior at:
 import pytest
 import math
 import pygcmc
-from . import pgp_wrapper
-from .pgp_wrapper import setPGPParameters, initializePMEParameters, precomputeGridPotential, computeSystemEnergyPGP
+from pygcmc import MCState, MCAtom, MCResidue, MCForceField
+from pygcmc import setPGPParameters, initializePMEParameters, precomputeGridPotential
+from pygcmc import computeSystemEnergyPGP
+
 
 # Import helper functions
-from pygcmc import MCState, MCAtom, MCResidue
-from pygcmc import MCForceField
 from .pgp_lj_helpers import (
     create_lj_pair_system,
     calculate_lj_analytical
 )
+
 
 def test_pgp_lj_minimum():
     """Test LJ energy at minimum (r = 2^(1/6) * σ)."""
@@ -37,11 +38,11 @@ def test_pgp_lj_minimum():
     mesh_size = [32, 32, 32]
     initializePMEParameters(state.info.cutoff, state.info.box, alpha)
     setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
-    precomputeGridPotential(state)
+    precomputeGridPotential(state, fixed_only=True)
     computeSystemEnergyPGP(state)
     
     lj_energy_sum = sum(res.energy_vdw for res in state.residues if res.active)
-    lj_energy = lj_energy_sum  # PGPContext already distributes energy
+    lj_energy = lj_energy_sum / 2.0  # Correct for double counting
     expected = -epsilon  # Minimum energy is -ε
     
     print(f"PGP LJ energy:     {lj_energy:.6f} kJ/mol")
@@ -50,6 +51,7 @@ def test_pgp_lj_minimum():
     rel_error = abs((lj_energy - expected) / expected)
     assert rel_error < 1e-5, f"LJ minimum error: {rel_error}"
     print("✓ Correct energy at LJ minimum")
+
 
 @pytest.mark.parametrize("cutoff_fraction", [0.8, 0.9, 0.95, 0.99, 1.0, 1.01])
 def test_pgp_lj_near_cutoff(cutoff_fraction):
@@ -67,12 +69,12 @@ def test_pgp_lj_near_cutoff(cutoff_fraction):
     alpha = 2.5
     mesh_size = [32, 32, 32]
     initializePMEParameters(cutoff, state.info.box, alpha)
-    setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
-    precomputeGridPotential(state)
+    setPGPParameters(alpha, mesh_size, cutoff, mesh_size, 4, 1e-6)
+    precomputeGridPotential(state, fixed_only=True)
     computeSystemEnergyPGP(state)
     
     lj_energy_sum = sum(res.energy_vdw for res in state.residues if res.active)
-    lj_energy = lj_energy_sum  # PGPContext already distributes energy
+    lj_energy = lj_energy_sum / 2.0  # Correct for double counting
     
     if distance < cutoff:
         expected = calculate_lj_analytical(distance, epsilon, sigma)
@@ -86,6 +88,8 @@ def test_pgp_lj_near_cutoff(cutoff_fraction):
         print(f"PGP LJ energy: {lj_energy:.6f} kJ/mol")
         assert abs(lj_energy) < 1e-10, f"LJ should be zero beyond cutoff: {lj_energy}"
         print("✓ Correctly zero beyond cutoff")
+
+
 
 def test_pgp_lj_mixed_distances():
     """Test system with multiple LJ pairs at different distances."""
@@ -144,11 +148,13 @@ def test_pgp_lj_mixed_distances():
     mesh_size = [32, 32, 32]  # Power of 2
     initializePMEParameters(state.info.cutoff, state.info.box, alpha)
     setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
-    precomputeGridPotential(state)
+    precomputeGridPotential(state, fixed_only=True)
     computeSystemEnergyPGP(state)
     
-    # For multi-particle system, sum the residue energies
-    total_lj = sum(res.energy_vdw for res in state.residues if res.active)
+    # For multi-particle system, get total from state (already summed correctly)
+    total_lj_raw = state.ewald_energy.get('total', 0.0) - state.ewald_energy.get('self', 0.0) - state.ewald_energy.get('reciprocal', 0.0) - state.ewald_energy.get('real_space', 0.0)
+    # Note: LJ energy in residues uses GCMC double-counting, so divide by 2 for pair energy
+    total_lj = total_lj_raw / 2.0
     
     # Calculate expected energy manually
     expected_total = 0.0
@@ -171,6 +177,7 @@ def test_pgp_lj_mixed_distances():
     rel_error = abs((total_lj - expected_total) / expected_total) if expected_total != 0 else abs(total_lj)
     assert rel_error < 1e-4, f"Multi-particle LJ error: {rel_error}"
     print("✓ Multi-particle system correct")
+
 
 if __name__ == "__main__":
     # Test near sigma

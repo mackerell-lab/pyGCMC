@@ -5,13 +5,10 @@ import pytest
 import math
 import random
 import pygcmc
-from . import pgp_wrapper
-from .pgp_wrapper import setPMEParameters, initializePMEParameters, setPGPParameters
-from .pgp_wrapper import precomputeGridPotential
+from pygcmc import MCState, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
 import sys
 from .helpers import calculate_pbc_distance, is_safe_position, generate_safe_move
-from pygcmc import MCState, MCAtom, MCResidue
-from pygcmc import MCForceField, MCMovementResidueInfo
+
 
 def test_compare_ewald_pme_pgp_asymmetric():
     """
@@ -22,6 +19,7 @@ def test_compare_ewald_pme_pgp_asymmetric():
     2. Moving residue is a water molecule, far from fixed part
     3. Execute multiple random movements to ensure distance from fixed part is always > cutoff
     4. Verify accuracy by comparing energy calculated by Ewald, PME, and PGP
+    """
     # Set system parameters
     box_size = 8.0  # nm - use a larger box
     cutoff = 1.0    # nm
@@ -174,6 +172,7 @@ def test_compare_ewald_pme_pgp_asymmetric():
     
     print(f"System created: {system.activeAtomCount} atoms, {system.activeResidueCount} residues")
     print(f"Fixed atoms: {len(fixed_particles)}, Moving atoms: 3 (Water molecule)")
+    sys.stdout.flush()
     
     # Initialize Ewald, PME, and PGP
     print("Setting calculation parameters...")
@@ -185,16 +184,17 @@ def test_compare_ewald_pme_pgp_asymmetric():
     
     # PME parameters initialization
     print("Initializing PME parameters...")
-    pgp_wrapper.setPMEParameters(alpha, mesh_size, spline_order, tolerance)
-    pgp_wrapper.initializePMEParameters(cutoff, box, alpha)
+    pygcmc.setPMEParameters(alpha, mesh_size, spline_order, tolerance)
+    pygcmc.initializePMEParameters(cutoff, box, alpha)
     
     # PGP parameters initialization
     print("Initializing PGP parameters...")
-    pgp_wrapper.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
+    pygcmc.setPGPParameters(alpha, mesh_size, potential_cutoff, 
+                         potential_grid_size, spline_order, tolerance)
     
     # Precompute grid potential for fixed parts
     print("Precomputing fixed parts grid potential...")
-    pgp_wrapper.precomputeGridPotential(system)
+    pygcmc.precomputeGridPotential(system, fixed_only=True)
     
     # Set number of random movements to execute
     num_moves = 5  # Reduce test times to speed up test
@@ -226,4 +226,3 @@ def test_compare_ewald_pme_pgp_asymmetric():
     execute_movement_loop(system, mobile_res, fixed_particles, num_moves, 
                          pgp_pme_errors, ewald_pme_errors, pgp_ewald_errors, 
                          cutoff, box_size)
-"""

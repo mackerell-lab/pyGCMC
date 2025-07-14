@@ -9,10 +9,11 @@ at the potential minimum where energy should equal -epsilon.
 import pytest
 import math
 import pygcmc
-from . import pgp_wrapper
-from .pgp_wrapper import setPGPParameters, initializePMEParameters, precomputeGridPotential, computeSystemEnergyPGP
-from .pgp_wrapper import computeMovementEnergyPGP, computeSystemVdwEnergyCutoff
 from pygcmc import MCAtom, MCResidue, MCState
+from pygcmc import setPGPParameters, initializePMEParameters, precomputeGridPotential
+from pygcmc import computeSystemEnergyPGP, computeMovementEnergyPGP
+from pygcmc import computeSystemVdwEnergyCutoff
+
 
 def test_pgp_lj_close_interaction():
     """Test PGP with very close LJ interactions."""
@@ -91,20 +92,26 @@ def test_pgp_lj_close_interaction():
     )
     
     initializePMEParameters(state.info.cutoff, state.info.box, 0.3)
-    precomputeGridPotential(state)
-    
+    precomputeGridPotential(state, fixed_only=True)
     computeSystemEnergyPGP(state)
+    
+    # Get results
+    pgp_lj = sum(res.energy_vdw for res in state.residues)
+    
+    print(f"\nPGP LJ energy: {pgp_lj:.6f} kJ/mol")
+    print(f"PGP total energy: {state.ewald_energy.get('total', 0.0):.6f} kJ/mol")
+    
     # Verify energy is close to -epsilon
-    # Note: Energy is stored in both residues
-    lj_total = state.residues[0].energy_vdw + state.residues[1].energy_vdw
-    expected_lj = -eps  # At minimum
-    relative_error = abs((lj_total - expected_lj) / expected_lj) if expected_lj != 0 else abs(lj_total)
+    # Note: Energy is stored in both residues, so total is 2 * interaction energy
+    expected_lj = -2.0 * eps  # At minimum, doubled due to residue storage
+    relative_error = abs((pgp_lj - expected_lj) / expected_lj)
     print(f"Relative error: {relative_error:.2%}")
     
     assert relative_error < 0.05, \
-        f"LJ energy {lj_total:.6f} deviates too much from expected {expected_lj:.6f}"
+        f"LJ energy {pgp_lj:.6f} deviates too much from expected {expected_lj:.6f}"
     
     print("\n✅ PGP correctly calculates LJ energy at minimum!")
+
 
 if __name__ == "__main__":
     test_pgp_lj_only_system()

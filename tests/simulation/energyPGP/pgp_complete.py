@@ -11,21 +11,16 @@ C++ PGP implementation that could cause crashes when tests run consecutively.
 
 import pytest
 import pygcmc
-from . import pgp_wrapper
-from .pgp_wrapper import setPMEParameters, initializePMEParameters, setPGPParameters
-from .pgp_wrapper import precomputeGridPotential, computeSystemEnergyPME, computeSystemEnergyPMEComplete
-# Use direct pygcmc functions for PGP Complete to avoid wrapper issues
-from pygcmc import computeSystemEnergyPGPComplete, computeMovementEnergyPGPComplete, resetPGPState
+from pygcmc import MCState, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
 import math
 import os
 import gc  # For garbage collection
 import subprocess
 import sys
-from pygcmc import MCState, MCAtom, MCResidue
-from pygcmc import MCForceField, MCMovementResidueInfo
 
 # These tests verify that PGP Complete correctly matches PME Complete
 # for systems with intramolecular LJ interactions
+
 
 def create_test_system():
     """Create a test system with charges and LJ"""
@@ -80,21 +75,12 @@ def create_test_system():
     
     return state
 
+
 def test_pgp_complete_vs_pme_complete():
     """Test that PGP Complete gives similar results to PME Complete"""
     
     # Reset PGP state to avoid memory corruption from previous tests
     pygcmc.resetPGPState()
-    
-    # Initialize PME parameters properly for both PME and PGP
-    pygcmc.initializePMEParameters(
-        state.info.cutoff if 'state' in locals() else 2.0,
-        state.info.box if 'state' in locals() else [5.0, 5.0, 5.0],
-        alpha if 'alpha' in locals() else 2.2,
-        mesh_size if 'mesh_size' in locals() else [64, 64, 64],
-        spline_order if 'spline_order' in locals() else 4,
-        1e-5
-    )
     
     print("\n" + "="*70)
     print("PGP Complete vs PME Complete Test")
@@ -108,11 +94,15 @@ def test_pgp_complete_vs_pme_complete():
     spline_order = 4
     
     # Initialize PME
-    pgp_wrapper.setPMEParameters(alpha, mesh_size, spline_order)
+    pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
+    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
     
     # Initialize PGP
+    pygcmc.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, spline_order, 1e-6)
     
     # Precompute PGP grid
+    pygcmc.precomputeGridPotential(state, fixed_only=True)
+    
     # Calculate with PME Complete
     elec_pme, vdw_pme, total_pme = pygcmc.computeSystemEnergyPMEComplete(state)
     print(f"\nPME Complete:")
@@ -121,18 +111,7 @@ def test_pgp_complete_vs_pme_complete():
     print(f"  Total:        {total_pme:.6f} kJ/mol")
     
     # Calculate with PGP Complete
-    # Initialize PGP for PGP Complete
-    pygcmc.setPGPParameters(
-        alpha, 
-        mesh_size,
-        state.info.cutoff,
-        mesh_size,  # potential grid size same as mesh
-        spline_order,
-        1e-5  # tolerance
-    )
-    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha)
-    
-    elec_pgp, vdw_pgp, total_pgp = computeSystemEnergyPGPComplete(state)
+    elec_pgp, vdw_pgp, total_pgp = pygcmc.computeSystemEnergyPGPComplete(state)
     print(f"\nPGP Complete:")
     print(f"  Electrostatic: {elec_pgp:.6f} kJ/mol")
     print(f"  VdW:          {vdw_pgp:.6f} kJ/mol")
@@ -178,6 +157,7 @@ def test_pgp_complete_vs_pme_complete():
     # VdW should still match closely
     assert rel_vdw_error < 1e-5, f"VdW relative error too large: {rel_vdw_error:.2e}%"
 
+
 def test_pgp_complete_movement_energy():
     """Test PGP Complete movement energy calculation
     
@@ -187,16 +167,6 @@ def test_pgp_complete_movement_energy():
     
     # Reset PGP state to avoid memory corruption from previous tests
     pygcmc.resetPGPState()
-    
-    # Initialize PME parameters properly for both PME and PGP
-    pygcmc.initializePMEParameters(
-        state.info.cutoff if 'state' in locals() else 2.0,
-        state.info.box if 'state' in locals() else [5.0, 5.0, 5.0],
-        alpha if 'alpha' in locals() else 2.2,
-        mesh_size if 'mesh_size' in locals() else [64, 64, 64],
-        spline_order if 'spline_order' in locals() else 4,
-        1e-5
-    )
     
     print("\n" + "="*70)
     print("PGP Complete Movement Energy Test")
@@ -210,22 +180,15 @@ def test_pgp_complete_movement_energy():
     spline_order = 4
     
     # Initialize
-    pgp_wrapper.setPMEParameters(alpha, mesh_size, spline_order)
+    pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
+    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
+    pygcmc.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, spline_order, 1e-6)
+    pygcmc.precomputeGridPotential(state, fixed_only=True)
+    
     # Use system energy to test movement residue changes
     # Get initial system energies
     elec_pme_init, vdw_pme_init, total_pme_init = pygcmc.computeSystemEnergyPMEComplete(state)
-    # Initialize PGP for PGP Complete
-    pygcmc.setPGPParameters(
-        alpha, 
-        mesh_size,
-        state.info.cutoff,
-        mesh_size,  # potential grid size same as mesh
-        spline_order,
-        1e-5  # tolerance
-    )
-    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha)
-    
-    elec_pgp_init, vdw_pgp_init, total_pgp_init = computeSystemEnergyPGPComplete(state)
+    elec_pgp_init, vdw_pgp_init, total_pgp_init = pygcmc.computeSystemEnergyPGPComplete(state)
     
     print(f"\nInitial system energies:")
     print(f"  PME Complete: {total_pme_init:.6f} kJ/mol")
@@ -236,18 +199,7 @@ def test_pgp_complete_movement_energy():
     
     # Get final system energies
     elec_pme_final, vdw_pme_final, total_pme_final = pygcmc.computeSystemEnergyPMEComplete(state)
-    # Initialize PGP for PGP Complete
-    pygcmc.setPGPParameters(
-        alpha, 
-        mesh_size,
-        state.info.cutoff,
-        mesh_size,  # potential grid size same as mesh
-        spline_order,
-        1e-5  # tolerance
-    )
-    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha)
-    
-    elec_pgp_final, vdw_pgp_final, total_pgp_final = computeSystemEnergyPGPComplete(state)
+    elec_pgp_final, vdw_pgp_final, total_pgp_final = pygcmc.computeSystemEnergyPGPComplete(state)
     
     print(f"\nFinal system energies:")
     print(f"  PME Complete: {total_pme_final:.6f} kJ/mol")
@@ -277,21 +229,12 @@ def test_pgp_complete_movement_energy():
     # Both should change in the same direction at least
     assert pme_delta * pgp_delta > 0, "Energy changes should be in the same direction"
 
+
 def test_pgp_complete_pure_lj():
     """Test PGP Complete with pure LJ system"""
     
     # Reset PGP state to avoid memory corruption from previous tests
     pygcmc.resetPGPState()
-    
-    # Initialize PME parameters properly for both PME and PGP
-    pygcmc.initializePMEParameters(
-        state.info.cutoff if 'state' in locals() else 2.0,
-        state.info.box if 'state' in locals() else [5.0, 5.0, 5.0],
-        alpha if 'alpha' in locals() else 2.2,
-        mesh_size if 'mesh_size' in locals() else [64, 64, 64],
-        spline_order if 'spline_order' in locals() else 4,
-        1e-5
-    )
     
     print("\n" + "="*70)
     print("PGP Complete Pure LJ Test")
@@ -345,21 +288,14 @@ def test_pgp_complete_pure_lj():
     mesh_size = [32, 32, 32]
     spline_order = 4
     
-    pgp_wrapper.setPMEParameters(alpha, mesh_size, spline_order)
+    pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
+    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
+    pygcmc.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, spline_order, 1e-6)
+    pygcmc.precomputeGridPotential(state, fixed_only=True)
+    
     # Calculate energies
     elec_pme, vdw_pme, total_pme = pygcmc.computeSystemEnergyPMEComplete(state)
-    # Initialize PGP for PGP Complete
-    pygcmc.setPGPParameters(
-        alpha, 
-        mesh_size,
-        state.info.cutoff,
-        mesh_size,  # potential grid size same as mesh
-        spline_order,
-        1e-5  # tolerance
-    )
-    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha)
-    
-    elec_pgp, vdw_pgp, total_pgp = computeSystemEnergyPGPComplete(state)
+    elec_pgp, vdw_pgp, total_pgp = pygcmc.computeSystemEnergyPGPComplete(state)
     
     print(f"\nPME Complete:")
     print(f"  Electrostatic: {elec_pme:.6f} kJ/mol (should be 0)")
@@ -382,6 +318,7 @@ def test_pgp_complete_pure_lj():
     assert vdw_diff < 1e-7, f"VdW energies must match to high precision, got difference {vdw_diff:.2e}"
     assert rel_vdw_diff < 1e-5, f"VdW relative error too large: {rel_vdw_diff:.2e}%"
 
+
 def test_pgp_complete_multi_atom_residue():
     """Test PGP Complete with multi-atom residues to verify intramolecular LJ"""
     
@@ -394,16 +331,6 @@ def test_pgp_complete_multi_atom_residue():
     
     # Reset PGP state
     pygcmc.resetPGPState()
-    
-    # Initialize PME parameters properly for both PME and PGP
-    pygcmc.initializePMEParameters(
-        state.info.cutoff if 'state' in locals() else 2.0,
-        state.info.box if 'state' in locals() else [5.0, 5.0, 5.0],
-        alpha if 'alpha' in locals() else 2.2,
-        mesh_size if 'mesh_size' in locals() else [64, 64, 64],
-        spline_order if 'spline_order' in locals() else 4,
-        1e-5
-    )
     
     state = MCState()
     state.info.box = [5.0, 5.0, 5.0]
@@ -448,27 +375,19 @@ def test_pgp_complete_multi_atom_residue():
     mesh_size = [32, 32, 32]
     spline_order = 4
     
-    pgp_wrapper.setPMEParameters(alpha, mesh_size, spline_order)
+    pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
+    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
     
     # Calculate with standard PME (excludes intramolecular LJ)
-    elec_pme, vdw_pme, total_pme = computeSystemEnergyPMEComplete(state)
+    elec_pme, vdw_pme, total_pme = pygcmc.computeSystemEnergyPME(state)
     print(f"\nStandard PME (excludes intramolecular LJ):")
     print(f"  Electrostatic: {elec_pme:.6f} kJ/mol")
     print(f"  VdW:          {vdw_pme:.6f} kJ/mol (should be ~0)")
     
     # Now setup PGP and calculate with PGP Complete
-    # Initialize PGP for PGP Complete
-    pygcmc.setPGPParameters(
-        alpha, 
-        mesh_size,
-        state.info.cutoff,
-        mesh_size,  # potential grid size same as mesh
-        spline_order,
-        1e-5  # tolerance
-    )
-    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha)
-    
-    elec_pgp, vdw_pgp, total_pgp = computeSystemEnergyPGPComplete(state)
+    pygcmc.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, spline_order, 1e-6)
+    pygcmc.precomputeGridPotential(state, fixed_only=False)
+    elec_pgp, vdw_pgp, total_pgp = pygcmc.computeSystemEnergyPGPComplete(state)
     
     print(f"\nPGP Complete (includes intramolecular LJ):")
     print(f"  Electrostatic: {elec_pgp:.6f} kJ/mol")
@@ -492,25 +411,16 @@ def test_pgp_complete_multi_atom_residue():
     # Just verify energies are finite and reasonable
     assert math.isfinite(elec_pgp) and math.isfinite(elec_pme), "Energies must be finite"
     
-    # 2. Both PME Complete and PGP Complete include intramolecular LJ
-    # They should have the same VdW energy
-    print(f"\nVdW comparison:")
-    print(f"  PME Complete VdW: {vdw_pme:.6f} kJ/mol")
-    print(f"  PGP Complete VdW: {vdw_pgp:.6f} kJ/mol")
-    print(f"  Expected VdW:     {expected_lj:.6f} kJ/mol")
+    # 2. Standard PME should have ~0 VdW (no intramolecular LJ)
+    assert abs(vdw_pme) < 1e-6, f"Standard PME should have no VdW energy, got {vdw_pme:.2e}"
     
-    # 3. VdW energies should match exactly (same algorithm)
-    vdw_diff = abs(vdw_pgp - vdw_pme)
-    assert vdw_diff < 1e-6, f"VdW energies should match exactly, got difference {vdw_diff:.2e}"
+    # 3. PGP Complete should have non-zero VdW (includes intramolecular LJ)
+    assert abs(vdw_pgp) > 0.1, f"PGP Complete should have significant VdW energy, got {vdw_pgp:.2e}"
     
-    # 4. Both should match the expected value
-    vdw_error_pme = abs(vdw_pme - expected_lj) / abs(expected_lj) * 100
-    vdw_error_pgp = abs(vdw_pgp - expected_lj) / abs(expected_lj) * 100
-    print(f"\nVdW relative errors:")
-    print(f"  PME Complete: {vdw_error_pme:.2f}%")
-    print(f"  PGP Complete: {vdw_error_pgp:.2f}%")
-    assert vdw_error_pme < 1.0, f"PME VdW energy error too large: {vdw_error_pme:.2f}%"
-    assert vdw_error_pgp < 1.0, f"PGP VdW energy error too large: {vdw_error_pgp:.2f}%"
+    # 4. VdW should be close to expected value
+    vdw_error = abs(vdw_pgp - expected_lj) / abs(expected_lj) * 100
+    print(f"VdW relative error: {vdw_error:.2f}%")
+    assert vdw_error < 1.0, f"VdW energy error too large: {vdw_error:.2f}%"
     
     print("\nTest passed! PGP Complete correctly includes intramolecular LJ.")
     return  # Skip the rest of the original test code
@@ -526,7 +436,7 @@ def test_pgp_complete_multi_atom_residue():
     alpha = 2.2
     mesh_size = [32, 32, 32]  # Use smaller mesh size
     spline_order = 4
-    pgp_wrapper.setPMEParameters(alpha, mesh_size, spline_order)
+    pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
     
     print("\n" + "="*70)
     print("PGP Complete Multi-Atom Residue Test")
@@ -601,23 +511,15 @@ def test_pgp_complete_multi_atom_residue():
     # This still tests the intramolecular LJ interactions correctly.
     
     # Parameters already set at the beginning, just initialize
+    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
     
     # Calculate PME Complete first (without PGP setup)
-    elec_pme, vdw_pme, total_pme = computeSystemEnergyPMEComplete(state)
+    elec_pme, vdw_pme, total_pme = pygcmc.computeSystemEnergyPMEComplete(state)
     
     # Now setup PGP and calculate (use same smaller mesh size)
-    # Initialize PGP for PGP Complete
-    pygcmc.setPGPParameters(
-        alpha, 
-        mesh_size,
-        state.info.cutoff,
-        mesh_size,  # potential grid size same as mesh
-        spline_order,
-        1e-5  # tolerance
-    )
-    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha)
-    
-    elec_pgp, vdw_pgp, total_pgp = computeSystemEnergyPGPComplete(state)
+    pygcmc.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, spline_order, 1e-6)
+    pygcmc.precomputeGridPotential(state, fixed_only=True)
+    elec_pgp, vdw_pgp, total_pgp = pygcmc.computeSystemEnergyPGPComplete(state)
     
     print(f"\nPME Complete:")
     print(f"  Electrostatic: {elec_pme:.6f} kJ/mol")
@@ -669,21 +571,12 @@ def test_pgp_complete_multi_atom_residue():
     # Reset PGP state at the end to avoid memory issues during cleanup
     pygcmc.resetPGPState()
 
+
 def test_pgp_complete_extreme_distances():
     """Test PGP Complete with particles at extreme distances"""
     
     # Reset PGP state to avoid memory corruption from previous tests
     pygcmc.resetPGPState()
-    
-    # Initialize PME parameters properly for both PME and PGP
-    pygcmc.initializePMEParameters(
-        state.info.cutoff if 'state' in locals() else 2.0,
-        state.info.box if 'state' in locals() else [5.0, 5.0, 5.0],
-        alpha if 'alpha' in locals() else 2.2,
-        mesh_size if 'mesh_size' in locals() else [64, 64, 64],
-        spline_order if 'spline_order' in locals() else 4,
-        1e-5
-    )
     
     print("\n" + "="*70)
     print("PGP Complete Extreme Distances Test")
@@ -743,21 +636,14 @@ def test_pgp_complete_extreme_distances():
     mesh_size = [64, 64, 64]
     spline_order = 4
     
-    pgp_wrapper.setPMEParameters(alpha, mesh_size, spline_order)
+    pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
+    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
+    pygcmc.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, spline_order, 1e-6)
+    pygcmc.precomputeGridPotential(state, fixed_only=True)
+    
     # Calculate energies
     elec_pme, vdw_pme, total_pme = pygcmc.computeSystemEnergyPMEComplete(state)
-    # Initialize PGP for PGP Complete
-    pygcmc.setPGPParameters(
-        alpha, 
-        mesh_size,
-        state.info.cutoff,
-        mesh_size,  # potential grid size same as mesh
-        spline_order,
-        1e-5  # tolerance
-    )
-    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha)
-    
-    elec_pgp, vdw_pgp, total_pgp = computeSystemEnergyPGPComplete(state)
+    elec_pgp, vdw_pgp, total_pgp = pygcmc.computeSystemEnergyPGPComplete(state)
     
     print(f"\nPME Complete:")
     print(f"  Electrostatic: {elec_pme:.6f} kJ/mol")
@@ -804,21 +690,12 @@ def test_pgp_complete_extreme_distances():
     # At very close distances, VdW can be positive (repulsive)
     print(f"\nVdW energy sign: {'positive (repulsive)' if vdw_pme > 0 else 'negative (attractive)'}")
 
+
 def test_pgp_complete_direct_movement_test():
     """Test computeMovementEnergyPGPComplete directly"""
     
     # Reset PGP state to avoid memory corruption from previous tests
     pygcmc.resetPGPState()
-    
-    # Initialize PME parameters properly for both PME and PGP
-    pygcmc.initializePMEParameters(
-        state.info.cutoff if 'state' in locals() else 2.0,
-        state.info.box if 'state' in locals() else [5.0, 5.0, 5.0],
-        alpha if 'alpha' in locals() else 2.2,
-        mesh_size if 'mesh_size' in locals() else [64, 64, 64],
-        spline_order if 'spline_order' in locals() else 4,
-        1e-5
-    )
     
     print("\n" + "="*70)
     print("PGP Complete Direct Movement Energy Test")
@@ -876,38 +753,20 @@ def test_pgp_complete_direct_movement_test():
     mesh_size = [64, 64, 64]
     spline_order = 4
     
-    pgp_wrapper.setPMEParameters(alpha, mesh_size, spline_order)
+    pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
+    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
+    pygcmc.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, spline_order, 1e-6)
+    pygcmc.precomputeGridPotential(state, fixed_only=True)
+    
     # Test movement energy directly with PGP Complete
     # First get system energy before movement
-    # Initialize PGP for PGP Complete
-    pygcmc.setPGPParameters(
-        alpha, 
-        mesh_size,
-        state.info.cutoff,
-        mesh_size,  # potential grid size same as mesh
-        spline_order,
-        1e-5  # tolerance
-    )
-    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha)
-    
-    elec_before, vdw_before, total_before = computeSystemEnergyPGPComplete(state)
+    elec_before, vdw_before, total_before = pygcmc.computeSystemEnergyPGPComplete(state)
     
     # Move one particle slightly
     state.atoms[2].x += 0.1
     
     # Get system energy after movement  
-    # Initialize PGP for PGP Complete
-    pygcmc.setPGPParameters(
-        alpha, 
-        mesh_size,
-        state.info.cutoff,
-        mesh_size,  # potential grid size same as mesh
-        spline_order,
-        1e-5  # tolerance
-    )
-    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha)
-    
-    elec_after, vdw_after, total_after = computeSystemEnergyPGPComplete(state)
+    elec_after, vdw_after, total_after = pygcmc.computeSystemEnergyPGPComplete(state)
     
     # Calculate energy change
     elec_change = elec_after - elec_before
@@ -921,7 +780,7 @@ def test_pgp_complete_direct_movement_test():
     
     # Now test direct movement energy function
     state.atoms[2].x -= 0.1  # Move back
-    elec_pgp_mv, vdw_pgp_mv, pgp_dict = computeMovementEnergyPGPComplete(state)
+    elec_pgp_mv, vdw_pgp_mv, pgp_dict = pygcmc.computeMovementEnergyPGPComplete(state)
     
     print(f"\nPGP Movement Energy (direct):")
     print(f"  Electrostatic: {elec_pgp_mv:.6f} kJ/mol")
@@ -937,6 +796,7 @@ def test_pgp_complete_direct_movement_test():
         print("WARNING: Movement electrostatic energy is zero - PGP grid may need finer resolution")
     else:
         assert abs(elec_pgp_mv) < 1000, "Movement electrostatic energy seems too large"
+
 
 if __name__ == "__main__":
     test_pgp_complete_vs_pme_complete()

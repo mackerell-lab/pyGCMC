@@ -6,10 +6,10 @@ Debug test to check if PGP erfc table is properly initialized.
 import pytest
 import math
 import pygcmc
-from . import pgp_wrapper
-from .pgp_wrapper import initializePMEParameters, setPGPParameters, precomputeGridPotential
-from .pgp_wrapper import computeSystemEnergyPGP, computeSystemEnergyPME
 from pygcmc import MCAtom, MCResidue, MCState
+from pygcmc import setPGPParameters, initializePMEParameters, precomputeGridPotential
+from pygcmc import computeSystemEnergyPGP, computeSystemEnergyPME
+
 
 def test_pgp_erfc_table():
     """Test if PGP erfc table is properly initialized."""
@@ -75,10 +75,17 @@ def test_pgp_erfc_table():
     initializePMEParameters(state.info.cutoff, state.info.box, alpha)
     
     # Then set PGP parameters (should copy the tables)
-    setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
+    setPGPParameters(
+        alpha=alpha,
+        meshSize=mesh_size,
+        potential_cutoff=state.info.cutoff,
+        potentialGridSize=mesh_size,
+        splineOrder=4,
+        tolerance=1e-5
+    )
     
     # Precompute grid
-    precomputeGridPotential(state)
+    precomputeGridPotential(state, fixed_only=True)
     
     # Calculate with both methods
     print("\nPME calculation:")
@@ -104,6 +111,7 @@ def test_pgp_erfc_table():
         print("This suggests pgp_params.erfcTable is not properly initialized")
     else:
         print("\n✅ PGP real-space is non-zero")
+
 
 def test_compare_initialization_sequences():
     """Compare different ways to initialize PGP."""
@@ -164,23 +172,21 @@ def test_compare_initialization_sequences():
     sequences = [
         ("PME->PGP", lambda s: [
             initializePMEParameters(s.info.cutoff, s.info.box, alpha),
-            setPGPParameters(alpha, mesh_size, s.info.cutoff, mesh_size, 4, 1e-6)
+            setPGPParameters(alpha, mesh_size, s.info.cutoff, mesh_size, 4, 1e-5)
         ]),
         ("PGP->PME", lambda s: [
-            setPGPParameters(alpha, mesh_size, s.info.cutoff, mesh_size, 4, 1e-6),
+            setPGPParameters(alpha, mesh_size, s.info.cutoff, mesh_size, 4, 1e-5),
             initializePMEParameters(s.info.cutoff, s.info.box, alpha)
         ])
     ]
     
     for name, init_func in sequences:
-        print(f"\n--- Sequence: {name} ---")
+        print(f"\n--- {name} ---")
         state = create_system()
         
-        # Apply initialization sequence
+        # Run initialization sequence
         init_func(state)
-        
-        # Precompute grid
-        precomputeGridPotential(state)
+        precomputeGridPotential(state, fixed_only=True)
         
         # Calculate energy
         computeSystemEnergyPGP(state)
@@ -192,6 +198,7 @@ def test_compare_initialization_sequences():
             print("❌ Zero - initialization failed")
         else:
             print("✅ Non-zero - initialization succeeded")
+
 
 if __name__ == "__main__":
     test_pgp_erfc_table()

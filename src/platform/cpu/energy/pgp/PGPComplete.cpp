@@ -6,9 +6,6 @@
 #include "PGPInterpolation.hpp"
 #include "../common/EnergyDirectCore.hpp"
 #include "../common/EnergyUtils.hpp"
-#include "../pme/PMERecip.hpp"
-#include "../pme/PMEGridCharge.hpp"
-#include "../pme/PMESystemCore.hpp"
 #include "platform/platform.hpp"
 #include <cmath>
 
@@ -23,38 +20,18 @@ static double getTotalVdwEnergy(const model::MCState& state);
 static double getTotalMovementVdwEnergy(const model::MCState& state);
 
 void computeSystemEnergyPGPComplete(model::MCState& state) {
-    // PGP Complete uses FFT-based PME method for complete electrostatics
-    // This includes ALL interactions (intramolecular and intermolecular)
+    // PGP Complete uses pure PGP method for electrostatics
+    // but includes ALL interactions (including intramolecular)
     
     if (!pgp_params.initialized) {
         throw std::runtime_error("PGP parameters not initialized. Call setPGPParameters() first.");
     }
     
-    platform::log(LogLevel::DEBUG, "Computing complete system energy using PGP Complete method");
+    platform::log(LogLevel::DEBUG, "Computing complete system energy using PGP method");
     
-    // Reset ewald energy
-    state.ewald_energy.reset();
-    
-    // 1. Calculate reciprocal space energy using FFT (like PME)
-    // Instead of using interpolation from pre-computed grid, we compute the full reciprocal space
-    double reciprocal_energy = 0.0;
-    
-    // Clear PME grid
-    std::fill(pme_params.pmeGrid.begin(), pme_params.pmeGrid.end(), std::complex<double>(0.0, 0.0));
-    
-    // Spread ALL charges onto grid (not just moveable ones)
-    spreadChargesOntoGrid(state, false);  // false = include all atoms
-    
-    // Perform forward FFT
-    performFFTForward();
-    
-    // Apply Ewald factors in reciprocal space and compute energy
-    double box[3] = {
-        static_cast<double>(state.info.box[0]),
-        static_cast<double>(state.info.box[1]),
-        static_cast<double>(state.info.box[2])
-    };
-    computeEnergyFromGrid(reciprocal_energy, box);
+    // 1. Calculate grid potential interpolation part (PGP interpolation)
+    double grid_energy = 0.0;
+    interpolateMoleculeEnergy(state, grid_energy);
     
     // 2. Calculate complete real space electrostatics (including intramolecular)
     calculateCompleteRealSpaceElectrostatics(state);
@@ -71,19 +48,19 @@ void computeSystemEnergyPGPComplete(model::MCState& state) {
     // Calculate total energies
     double vdw_total = getTotalVdwEnergy(state);
     
-    // Store reciprocal energy
-    state.ewald_energy.reciprocal = reciprocal_energy;
-    state.ewald_energy.total = reciprocal_energy + state.ewald_energy.real_space + 
+    // Store grid energy in reciprocal field for consistency
+    state.ewald_energy.reciprocal = grid_energy;
+    state.ewald_energy.total = grid_energy + state.ewald_energy.real_space + 
                              state.ewald_energy.self + vdw_total;
     
-    platform::log(LogLevel::INFO, "PGP Complete: recip=", reciprocal_energy,
+    platform::log(LogLevel::INFO, "PGP Complete: grid=", grid_energy,
                  " real=", state.ewald_energy.real_space,
                  " self=", state.ewald_energy.self,
                  " vdw=", vdw_total);
 }
 
 void computeMovementEnergyPGPComplete(model::MCState& state) {
-    // For movement residues, calculate complete interactions using FFT
+    // For movement residues, calculate complete interactions
     
     if (!pgp_params.initialized) {
         throw std::runtime_error("PGP parameters not initialized. Call setPGPParameters() first.");
@@ -91,32 +68,12 @@ void computeMovementEnergyPGPComplete(model::MCState& state) {
     
     platform::log(LogLevel::DEBUG, "Computing movement energy using PGP Complete method");
     
-    // Reset ewald energy
-    state.ewald_energy.reset();
-    
-    // 1. Calculate reciprocal space energy using FFT for ALL atoms
-    // This is necessary because movement atoms interact with all atoms
-    double reciprocal_energy = 0.0;
-    
-    // Clear PME grid
-    std::fill(pme_params.pmeGrid.begin(), pme_params.pmeGrid.end(), std::complex<double>(0.0, 0.0));
-    
-    // Spread ALL charges onto grid
-    spreadChargesOntoGrid(state, false);  // false = include all atoms
-    
-    // Perform forward FFT
-    performFFTForward();
-    
-    // Apply Ewald factors and compute energy
-    double box[3] = {
-        static_cast<double>(state.info.box[0]),
-        static_cast<double>(state.info.box[1]),
-        static_cast<double>(state.info.box[2])
-    };
-    computeEnergyFromGrid(reciprocal_energy, box);
+    // 1. Calculate grid potential interpolation for movement residues
+    double grid_energy = 0.0;
+    interpolateMoleculeEnergy(state, grid_energy);
     
     // 2. Calculate real space electrostatics for movement residues
-    // This includes ALL interactions of movement atoms
+    // This needs to include ALL interactions of movement atoms
     calculateCompleteRealSpaceElectrostatics(state);
     
     // 3. Calculate self energy for movement residues
@@ -142,11 +99,11 @@ void computeMovementEnergyPGPComplete(model::MCState& state) {
     // Calculate totals
     double vdw_total = getTotalMovementVdwEnergy(state);
     
-    state.ewald_energy.reciprocal = reciprocal_energy;
-    state.ewald_energy.total = reciprocal_energy + state.ewald_energy.real_space + 
+    state.ewald_energy.reciprocal = grid_energy;
+    state.ewald_energy.total = grid_energy + state.ewald_energy.real_space + 
                              state.ewald_energy.self + vdw_total;
     
-    platform::log(LogLevel::INFO, "PGP Complete Movement: recip=", reciprocal_energy,
+    platform::log(LogLevel::INFO, "PGP Complete Movement: grid=", grid_energy,
                  " real=", state.ewald_energy.real_space,  
                  " self=", state.ewald_energy.self,
                  " vdw=", vdw_total);
@@ -158,8 +115,8 @@ static void calculateCompleteRealSpaceElectrostatics(model::MCState& state) {
     const double cutoff2 = state.info.cutoff * state.info.cutoff;
     const double alpha = pgp_params.alpha;
     
-    // Reset all ewald energy components
-    state.ewald_energy.reset();
+    // Reset real space energy
+    state.ewald_energy.real_space = 0.0;
     
     // Calculate all pairwise electrostatic interactions
     for (int i = 0; i < state.activeAtomCount - 1; ++i) {

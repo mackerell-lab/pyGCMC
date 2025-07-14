@@ -1,11 +1,6 @@
 # tests/simulation/energyPME/parameter_optimization.py
 """PME parameter optimization tests: spline order, error tolerance, and mesh accuracy."""
 
-# Import safe initialization utilities
-import sys
-sys.path.insert(0, '/home/zhaomt/gcmc/test107/pygcmc_dev/tests')
-from test_utils.safe_pme_init import safe_initialize_pme
-
 import pygcmc
 from .helpers import create_nacl_crystal
 
@@ -33,7 +28,7 @@ def test_pme_spline_order():
     # Calculate reference energy using very high order spline
     # This will be our "ground truth" for comparison
     pygcmc.setPMEParameters(alpha, mesh_size, 6)  # 6th order as reference value
-    safe_initialize_pme(cutoff, box, alpha, mesh_size, 6)
+    pygcmc.initializePMEParameters(cutoff, box, alpha, mesh_size, 6)
     _, _, reference_dict = pygcmc.computeSystemEnergyPME(state)
     reference_energy = reference_dict["total"]
     
@@ -47,7 +42,7 @@ def test_pme_spline_order():
     for order in test_orders:
         # Initialize PME with specified spline order
         pygcmc.setPMEParameters(alpha, mesh_size, order)
-        safe_initialize_pme(cutoff, box, alpha, mesh_size, order)
+        pygcmc.initializePMEParameters(cutoff, box, alpha, mesh_size, order)
         
         # Calculate energy
         _, _, pme_dict = pygcmc.computeSystemEnergyPME(state)
@@ -100,10 +95,12 @@ def test_pme_error_tolerance():
     
     print(f"\nPME Error Tolerance Test")
     for tol in tolerances:
-        # Let initializePMEParameters auto-calculate optimal parameters
-        # Note: Calling setPMEParameters with alpha=0.0 can cause segfaults on some platforms
-        # The initialization function handles auto-calculation when alpha=0.0
-        safe_initialize_pme(cutoff, box, 0.0, [], 4, tol)
+        # Initialize with auto parameters and specified tolerance
+        default_mesh = [32, 32, 32]  # Default mesh size
+        pygcmc.setPMEParameters(0.0, default_mesh, 4, tol)
+        
+        # Let autoAdjustPMEParameters select optimal parameters
+        pygcmc.initializePMEParameters(cutoff, box, 0.0, [], 4, tol)
         
         # Calculate energy
         _, _, pme_dict = pygcmc.computeSystemEnergyPME(state)
@@ -186,7 +183,7 @@ def test_pme_mesh_accuracy():
         
         # Initialize PME with current mesh size
         pygcmc.setPMEParameters(alpha, mesh, spline_order)
-        safe_initialize_pme(cutoff, box, alpha, mesh, spline_order)
+        pygcmc.initializePMEParameters(cutoff, box, alpha, mesh, spline_order)
         
         # Calculate energy with current PME settings
         _, _, pme_dict = pygcmc.computeSystemEnergyPME(state)

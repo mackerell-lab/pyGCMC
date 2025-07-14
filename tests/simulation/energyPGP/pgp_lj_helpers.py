@@ -11,10 +11,10 @@ Verifies correct LJ 12-6 potential behavior at:
 import pytest
 import math
 import pygcmc
-from . import pgp_wrapper
-from .pgp_wrapper import setPGPParameters, initializePMEParameters, precomputeGridPotential, computeSystemEnergyPGP
-from pygcmc import MCState, MCAtom, MCResidue
-from pygcmc import MCForceField
+from pygcmc import MCState, MCAtom, MCResidue, MCForceField
+from pygcmc import setPGPParameters, initializePMEParameters, precomputeGridPotential
+from pygcmc import computeSystemEnergyPGP
+
 
 def create_lj_pair_system(distance, epsilon=1.0, sigma=0.34, box_size=5.0, cutoff=1.2):
     """Create a system with two LJ particles at specified distance."""
@@ -69,6 +69,7 @@ def create_lj_pair_system(distance, epsilon=1.0, sigma=0.34, box_size=5.0, cutof
     state.activeResidueCount = 2
     
     return state
+
 
 def calculate_lj_analytical(r, epsilon, sigma):
     """Calculate analytical LJ 12-6 energy."""

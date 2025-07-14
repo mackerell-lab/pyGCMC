@@ -218,21 +218,6 @@ public:
      */
     static void interpolateMoleculeEnergy(model::MCState& state, double& energy);
     
-    // Independent PGP methods (no PME coupling)
-    static void setPGPParametersIndependent(double alpha, const int meshSize[3], 
-                                           double potential_cutoff, 
-                                           const int potentialGridSize[3], 
-                                           int splineOrder, double tolerance);
-    
-    static void initializePGPParametersIndependent(double cutoff, const double box[3], 
-                                                  double alpha, const int* meshSize, 
-                                                  double potentialCutoff,
-                                                  const int* potentialGridSize,
-                                                  int splineOrder, double tolerance);
-    
-    static void computeSystemEnergyPGPIndependent(model::MCState& state);
-    static void computeMovementEnergyPGPIndependent(model::MCState& state);
-    
     /**
      * Calculate moving molecule energy through interpolation (return value version)
      * 

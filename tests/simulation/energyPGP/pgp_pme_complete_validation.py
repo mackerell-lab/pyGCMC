@@ -13,11 +13,12 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pygcmc
-from . import pgp_wrapper
-from .pgp_wrapper import initializePMEParameters, computeSystemEnergyPMEComplete, setPMEParameters, setPGPParameters
-from .pgp_wrapper import precomputeGridPotential, calculateMoleculeEnergy, computeMovementEnergyPME
-from pygcmc import MCState, MCAtom, MCResidue
-from pygcmc import MCForceField
+from pygcmc import MCState, MCAtom, MCResidue, MCForceField
+from pygcmc import initializePMEParameters, computeSystemEnergyPMEComplete
+from pygcmc import setPMEParameters, setPGPParameters
+from pygcmc import precomputeGridPotential, calculateMoleculeEnergy
+from pygcmc import computeMovementEnergyPME
+
 
 def create_fixed_and_moveable_system():
     """Create a system with fixed and moveable particles"""
@@ -81,6 +82,7 @@ def create_fixed_and_moveable_system():
     
     return state
 
+
 def test_pgp_movement_energy():
     """Test PGP energy calculation for particle movement"""
     
@@ -97,7 +99,7 @@ def test_pgp_movement_energy():
     
     # Initialize PME
     setPMEParameters(alpha, mesh_size, spline_order)
-    initializePMEParameters(state.info.cutoff, state.info.box, alpha)
+    initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
     
     # 1. Calculate initial energy with PME Complete
     elec_initial, vdw_initial, total_initial = computeSystemEnergyPMEComplete(state)
@@ -148,6 +150,7 @@ def test_pgp_movement_energy():
     # So we expect some difference, but it should be reasonable
     assert rel_diff < 20.0, f"Energy change differs by {rel_diff:.3f}% (> 20%)"
 
+
 def test_pgp_reciprocal_space_comparison():
     """Compare PGP with PME reciprocal space energy"""
     
@@ -164,13 +167,13 @@ def test_pgp_reciprocal_space_comparison():
     
     # Initialize PME
     setPMEParameters(alpha, mesh_size, spline_order)
-    initializePMEParameters(state.info.cutoff, state.info.box, alpha)
+    initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
     
     # Calculate PME movement energy (for moveable particles)
     pme_result = computeMovementEnergyPME(state)
     pme_elec = pme_result[0]
     pme_dict = pme_result[2]
-    pme_reciprocal = pme_dict.get('reciprocal')
+    pme_reciprocal = pme_dict.get('reciprocal', 0.0)
     
     print(f"\nPME movement energy:")
     print(f"  Total electrostatic: {pme_elec:.6f} kJ/mol")
@@ -198,6 +201,7 @@ def test_pgp_reciprocal_space_comparison():
     ratio = pgp_energy / pme_reciprocal if pme_reciprocal != 0 else 0
     print(f"  Ratio (PGP/PME reciprocal): {ratio:.3f}")
 
+
 def test_pgp_grid_spacing_convergence():
     """Test PGP convergence with grid spacing"""
     
@@ -214,7 +218,7 @@ def test_pgp_grid_spacing_convergence():
     
     # Initialize PME
     setPMEParameters(alpha, mesh_size, spline_order)
-    initializePMEParameters(state.info.cutoff, state.info.box, alpha)
+    initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
     
     # Get reference energy change
     elec_initial, vdw_initial, total_initial = computeSystemEnergyPMEComplete(state)
@@ -263,6 +267,7 @@ def test_pgp_grid_spacing_convergence():
     # The finest grid should give reasonable agreement
     # Note: PGP and PME Complete calculate different quantities, so some difference is expected
     assert diff < 5.0, f"Finest grid still differs by {diff:.6f} kJ/mol (> 5.0)"
+
 
 if __name__ == "__main__":
     test_pgp_movement_energy()

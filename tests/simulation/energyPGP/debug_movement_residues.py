@@ -3,14 +3,9 @@ Debug movement residues calculation
 """
 
 import pygcmc
-from . import pgp_wrapper
-from .pgp_wrapper import setPMEParameters, initializePMEParameters, computeMovementEnergyPME
-from pygcmc import MCState, MCAtom, MCResidue
-from pygcmc import MCForceField, MCMovementResidueInfo
+from pygcmc import MCState, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
 
-from .test_decorators import pgp_unstable_test
 
-@pgp_unstable_test
 def test_movement_residues():
     """Debug movement residues"""
     
@@ -96,8 +91,8 @@ def test_movement_residues():
     mesh_size = [32, 32, 32]
     spline_order = 4
     
-    pgp_wrapper.setPMEParameters(alpha, mesh_size, spline_order)
-    pgp_wrapper.initializePMEParameters(state.info.cutoff, state.info.box, alpha)
+    pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
+    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
     
     # Reset energies
     for res in state.residues:
@@ -121,8 +116,8 @@ def test_movement_residues():
     
     print(f"\nResidue energies after PME movement:")
     for i, res in enumerate(state.residues):
-        if res.active:
-            print(f"  Residue {i}: vdw={res.energy_vdw:.6f}")
+        print(f"  Residue {i}: vdw={res.energy_vdw:.6f}")
+
 
 if __name__ == "__main__":
     test_movement_residues()

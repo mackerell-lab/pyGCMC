@@ -3,12 +3,9 @@
 
 import pytest
 import pygcmc
-from . import pgp_wrapper
-from .pgp_wrapper import setPMEParameters, initializePMEParameters, setPGPParameters
-from .pgp_wrapper import precomputeGridPotential, calculateMoleculeEnergy, computeMovementEnergyPME
+from pygcmc import MCState, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
 import sys
-from pygcmc import MCState, MCAtom, MCResidue
-from pygcmc import MCForceField, MCMovementResidueInfo
+
 
 def test_compare_ewald_pme_pgp_complex():
     """
@@ -18,6 +15,7 @@ def test_compare_ewald_pme_pgp_complex():
     1. Creates a complex system with fixed part containing multiple charged particles
     2. Moving part contains 2-3 atoms, distance exceeds cutoff
     3. Compare three methods calculated reciprocal space energy change
+    """
     # Set system parameters
     box_size = 8.0  # nm - use a larger box
     cutoff = 1.0    # nm
@@ -84,6 +82,7 @@ def test_compare_ewald_pme_pgp_complex():
         (box_size/2.0, box_size/2.0, box_size/2.0),       # Central oxygen atom
         (box_size/2.0 + 0.1, box_size/2.0, box_size/2.0), # Hydrogen atom 1
         (box_size/2.0, box_size/2.0 + 0.1, box_size/2.0)  # Hydrogen atom 2
+    ]
     
     mobile_charges = [-0.8, 0.4, 0.4]  # Water molecule charges
     
@@ -118,16 +117,18 @@ def test_compare_ewald_pme_pgp_complex():
     
     print(f"System created: {system.activeAtomCount} atoms, {system.activeResidueCount} residues")
     print(f"Fixed atoms: {len(fixed_positions)}, Moving atoms: {len(mobile_atoms)}")
+    sys.stdout.flush()
     
     # Initialize different charging methods
     print("Setting calculation parameters...")
     
     # PME parameters
-    pgp_wrapper.setPMEParameters(alpha, mesh_size, spline_order, tolerance)
-    pgp_wrapper.initializePMEParameters(cutoff, box, alpha)
+    pygcmc.setPMEParameters(alpha, mesh_size, spline_order, tolerance)
+    pygcmc.initializePMEParameters(cutoff, box, alpha)
     
     # PGP parameters
-    pgp_wrapper.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
+    pygcmc.setPGPParameters(alpha, mesh_size, potential_cutoff, 
+                           potential_grid_size, spline_order, tolerance)
     
     # Ewald parameters (using computeEwaldEnergy function)
     # Note: This assumes your library has a function to calculate standard Ewald energy
@@ -145,8 +146,8 @@ def test_compare_ewald_pme_pgp_complex():
     # initial_ewald_energy = pygcmc.computeEwaldEnergy(system)
     
     # PGP energy
-    pgp_wrapper.precomputeGridPotential(system)
-    initial_pgp_energy = pgp_wrapper.calculateMoleculeEnergy(system)
+    pygcmc.precomputeGridPotential(system, fixed_only=True)
+    initial_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
     
     print(f"Initial PME reciprocal energy: {initial_pme_reciprocal}")
     # print(f"Initial Ewald energy: {initial_ewald_energy}")
@@ -166,14 +167,17 @@ def test_compare_ewald_pme_pgp_complex():
     # Step 3: Calculate energy after movement
     print("Calculating after movement energy...")
     
+    # PME energy
     moved_pme_result = pygcmc.computeMovementEnergyPME(system)
     moved_pme_energy = moved_pme_result[0]
     moved_pme_dict = moved_pme_result[2]
     moved_pme_reciprocal = moved_pme_dict['reciprocal']
     
+    # Ewald energy (if available)
     # moved_ewald_energy = pygcmc.computeEwaldEnergy(system)
     
-    moved_pgp_energy = pgp_wrapper.calculateMoleculeEnergy(system)
+    # PGP energy
+    moved_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
     
     print(f"Moved PME reciprocal energy: {moved_pme_reciprocal}")
     # print(f"Moved Ewald energy: {moved_ewald_energy}")
@@ -199,4 +203,3 @@ def test_compare_ewald_pme_pgp_complex():
     #     ewald_relative_error = abs((ewald_energy_change - pme_energy_change) / pme_energy_change)
     #     print(f"Ewald relative error: {ewald_relative_error*100:.4f}%")
     #     assert ewald_relative_error < 0.1, f"Ewald relative error too large: {ewald_relative_error*100:.2f}%"
-"""

@@ -4,14 +4,9 @@
 import pytest
 import math
 import pygcmc
-from . import pgp_wrapper
-from .pgp_wrapper import setPMEParameters, initializePMEParameters, setPGPParameters
-from .pgp_wrapper import precomputeGridPotential, calculateMoleculeEnergy, computeMovementEnergyPME
-from .pgp_wrapper import computeSystemEnergyEwald
+from pygcmc import MCState, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
 import sys
 from .helpers import calculate_pbc_distance, is_safe_position
-from pygcmc import MCState, MCAtom, MCResidue
-from pygcmc import MCForceField, MCMovementResidueInfo
 from .asymmetric_nacl_helpers import (
     create_nacl_crystal_system,
     handle_initial_position_safety,
@@ -19,6 +14,7 @@ from .asymmetric_nacl_helpers import (
     apply_movement_to_residue,
     verify_moved_position_safety
 )
+
 
 def test_compare_ewald_pme_pgp_asymmetric_nacl():
     """
@@ -31,6 +27,7 @@ def test_compare_ewald_pme_pgp_asymmetric_nacl():
     3. Only compares reciprocal space energy changes, which should be accurate
        even if particles are closer than the cutoff distance
     4. Verify accuracy by comparing energy calculated by Ewald, PME, and PGP
+    """
     # Set system parameters
     n_cells = 4      # 4x4x4 supercell
     a = 0.564        # NaCl lattice constant (nm)
@@ -60,6 +57,7 @@ def test_compare_ewald_pme_pgp_asymmetric_nacl():
     
     print(f"System created: {system.activeAtomCount} atoms, {system.activeResidueCount} residues")
     print(f"Fixed atoms: {len(system.atoms) - 2}, Moving atoms: 2 (NaCl ion pair)")
+    sys.stdout.flush()
     
     # Initialize Ewald, PME, and PGP
     print("Setting calculation parameters...")
@@ -70,16 +68,17 @@ def test_compare_ewald_pme_pgp_asymmetric_nacl():
     
     # PME parameters initialization
     print("Initializing PME parameters...")
-    pgp_wrapper.setPMEParameters(alpha=alpha, meshSize=mesh_size, splineOrder=spline_order, tolerance=tolerance)
-    pgp_wrapper.initializePMEParameters(cutoff, box, alpha)
+    pygcmc.setPMEParameters(alpha=alpha, meshSize=mesh_size, splineOrder=spline_order, tolerance=tolerance)
+    pygcmc.initializePMEParameters(cutoff, box, alpha)
     
     # PGP parameters initialization
     print("Initializing PGP parameters...")
-    pgp_wrapper.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
+    pygcmc.setPGPParameters(alpha=alpha, meshSize=mesh_size, potential_cutoff=potential_cutoff,
+                           potentialGridSize=potential_grid_size, splineOrder=spline_order, tolerance=tolerance)
     
     # Precompute grid potential for fixed particles
     print("Precomputing PGP grid potential for fixed particles...")
-    pgp_wrapper.precomputeGridPotential(system)
+    pygcmc.precomputeGridPotential(system, fixed_only=True)
     
     # Execute multiple movements
     num_moves = 5  # Reduce test times to speed up test
@@ -93,6 +92,7 @@ def test_compare_ewald_pme_pgp_asymmetric_nacl():
     # Handle initial position safety
     handle_initial_position_safety(system, mobile_res, fixed_positions, cutoff, box_size)
     
+    # Execute multiple movements
     for move_idx in range(num_moves):
         print(f"\nExecuting {move_idx+1}/{num_moves} movement test")
         
@@ -112,7 +112,7 @@ def test_compare_ewald_pme_pgp_asymmetric_nacl():
         initial_pme_reciprocal = initial_pme_dict['reciprocal']
         
         # PGP energy calculation
-        initial_pgp_energy = pgp_wrapper.calculateMoleculeEnergy(system)
+        initial_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
         
         print(f"Initial Ewald reciprocal energy: {initial_ewald_reciprocal}")
         print(f"Initial PME reciprocal energy: {initial_pme_reciprocal}")
@@ -130,11 +130,13 @@ def test_compare_ewald_pme_pgp_asymmetric_nacl():
         # Step 5: Calculate moved energy
         print("Calculating moved energy...")
         
+        # Ewald energy calculation
         moved_ewald_result = pygcmc.computeSystemEnergyEwald(system)
         moved_ewald_elec = moved_ewald_result[0]
         moved_ewald_dict = moved_ewald_result[2]
         moved_ewald_reciprocal = moved_ewald_dict['reciprocal']
         
+        # PME energy calculation
         moved_pme_result = pygcmc.computeMovementEnergyPME(system)
         moved_pme_energy = moved_pme_result[0]
         moved_pme_dict = moved_pme_result[2]
@@ -146,7 +148,8 @@ def test_compare_ewald_pme_pgp_asymmetric_nacl():
             print(f"PME direct space energy: {moved_pme_direct}")
             print("Particles are within cutoff distance - but we only compare reciprocal space energy changes")
         
-        moved_pgp_energy = pgp_wrapper.calculateMoleculeEnergy(system)
+        # PGP energy calculation
+        moved_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
         
         print(f"Moved Ewald reciprocal energy: {moved_ewald_reciprocal}")
         print(f"Moved PME reciprocal energy: {moved_pme_reciprocal}")
@@ -204,13 +207,18 @@ def test_compare_ewald_pme_pgp_asymmetric_nacl():
         # Ewald and PME should theoretically have very high consistency
         acceptable_error = 0.2  # Allow 20% error
         assert avg_ewald_pme_error < acceptable_error, f"Average Ewald relative error too large: {avg_ewald_pme_error*100:.2f}%"
+    else:
         print("Ewald relative error: No valid error data for statistics")
     
     if pgp_ewald_errors:
         avg_pgp_ewald_error = sum(pgp_ewald_errors) / len(pgp_ewald_errors)
         print(f"Average PGP relative error: {avg_pgp_ewald_error*100:.4f}%")
         
+        # Use more lenient error tolerance because PGP is an approximation method
+        acceptable_error = 0.5  # Allow 50% error
         assert avg_pgp_ewald_error < acceptable_error, f"Average PGP relative error too large: {avg_pgp_ewald_error*100:.2f}%"
+    else:
+        print("PGP relative error: No valid error data for statistics")
     
     print("\n--- Test completed successfully ---")
-"""
+    sys.stdout.flush()

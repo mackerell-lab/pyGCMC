@@ -3,9 +3,8 @@
 
 import math
 import pygcmc
-from . import pgp_wrapper
-from pygcmc import MCState, MCAtom, MCResidue
-from pygcmc import MCForceField
+from pygcmc import MCState, MCAtom, MCResidue, MCForceField
+
 
 def create_simple_two_atom_state(distance, box_size, cutoff):
     """
@@ -102,10 +101,11 @@ def create_simple_two_atom_state(distance, box_size, cutoff):
     box = [box_size, box_size, box_size]
     mesh_size = [16, 16, 16]  # Reduce grid size
     try:
-        pgp_wrapper.setPMEParameters(alpha=0.2, meshSize=mesh_size, splineOrder=4, tolerance=1e-4)
-        pgp_wrapper.initializePMEParameters(cutoff, box, 0.2)
-        pgp_wrapper.setPGPParameters(0.2, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
-        pgp_wrapper.precomputeGridPotential(system)  # Only compute fixed atom potential
+        pygcmc.setPMEParameters(alpha=0.2, meshSize=mesh_size, splineOrder=4, tolerance=1e-4)
+        pygcmc.initializePMEParameters(cutoff, box, 0.2)
+        pygcmc.setPGPParameters(alpha=0.2, meshSize=mesh_size, potential_cutoff=cutoff,
+                                potentialGridSize=mesh_size, splineOrder=4, tolerance=1e-4)
+        pygcmc.precomputeGridPotential(system, True)  # Only compute fixed atom potential
     except Exception as e:
         print(f"Warning: Error in PME/PGP setup: {e}")
     

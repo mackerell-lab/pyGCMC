@@ -6,10 +6,10 @@ Fixed test that properly initializes PGP parameters.
 import pytest
 import math
 import pygcmc
-from . import pgp_wrapper
-from .pgp_wrapper import initializePMEParameters, setPGPParameters, precomputeGridPotential
-from .pgp_wrapper import computeSystemEnergyPGP
 from pygcmc import MCAtom, MCResidue, MCState
+from pygcmc import setPGPParameters, initializePMEParameters, precomputeGridPotential
+from pygcmc import computeSystemEnergyPGP
+
 
 def test_pgp_real_space_fixed():
     """Test PGP real-space with proper initialization."""
@@ -73,10 +73,17 @@ def test_pgp_real_space_fixed():
     initializePMEParameters(state.info.cutoff, state.info.box, alpha)
     
     # Then set PGP parameters (this will copy from PME)
-    setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
+    setPGPParameters(
+        alpha=alpha,
+        meshSize=mesh_size,
+        potential_cutoff=state.info.cutoff,
+        potentialGridSize=mesh_size,
+        splineOrder=4,
+        tolerance=1e-5
+    )
     
     # Precompute grid
-    precomputeGridPotential(state)
+    precomputeGridPotential(state, fixed_only=True)
     
     # Calculate energy
     computeSystemEnergyPGP(state)
@@ -120,6 +127,7 @@ def test_pgp_real_space_fixed():
             print("✅ Real-space matches expected value!")
         else:
             print(f"⚠️  Real-space differs from expected by {rel_error*100:.1f}%")
+
 
 if __name__ == "__main__":
     test_pgp_real_space_fixed()

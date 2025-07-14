@@ -3,11 +3,10 @@
 
 import math
 import pygcmc
-from . import pgp_wrapper
-from .pgp_wrapper import computeSystemVdwEnergyCutoff, computeMovementEnergyPME, computeMovementEnergyPGP, setPMEParameters
-from .pgp_wrapper import setPGPParameters, initializePMEParameters, precomputeGridPotential
-from pygcmc import MCState, MCAtom, MCResidue
-from pygcmc import MCForceField, MCMovementResidueInfo
+from pygcmc import MCState, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
+from pygcmc import computeSystemVdwEnergyCutoff, computeMovementEnergyPME, computeMovementEnergyPGP
+from pygcmc import setPMEParameters, setPGPParameters, initializePMEParameters, precomputeGridPotential
+
 
 def create_lj_test_system(box_size, cutoff):
     """Create a simple two-atom system for LJ energy testing."""
@@ -89,6 +88,7 @@ def create_lj_test_system(box_size, cutoff):
     state.activeResidueCount = len(residues)
     
     return state, combined_sigma, combined_eps, sigma_1, sigma_2, eps_1, eps_2
+
 
 def test_cumulative_energy_changes(state, fixed_atom, combined_sigma, combined_eps):
     """Test cumulative energy changes from continuous movement."""
@@ -185,6 +185,7 @@ def test_cumulative_energy_changes(state, fixed_atom, combined_sigma, combined_e
         prev_distance = current_distance
     
     return cumul_pme_error, cumul_pgp_error
+
 
 def print_test_summary(cumul_pme_error, cumul_pgp_error):
     """Print test summary and conclusions."""

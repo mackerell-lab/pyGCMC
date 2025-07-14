@@ -6,11 +6,10 @@ Find where the value 2.0 is coming from.
 import sys
 sys.path.insert(0, '/home/zhaomt/gcmc/test107/pygcmc_dev/build')
 import pygcmc
-from . import pgp_wrapper
-from .pgp_wrapper import setPMEParameters, initializePMEParameters, computeSystemEnergyPME
+from pygcmc import MCState, MCAtom, MCResidue, MCForceField
+from pygcmc import setPMEParameters, initializePMEParameters, computeSystemEnergyPME
 import math
-from pygcmc import MCState, MCAtom, MCResidue
-from pygcmc import MCForceField
+
 
 def find_2_source():
     """Test different scenarios to find where 2.0 comes from."""
@@ -84,7 +83,7 @@ def find_2_source():
         # So: erfcApprox(1) = -res_energy / COULOMB²
         inferred_erfc = -res_energy / (138.935456**2)
         
-        print(f"  Alpha={alpha}: Residue energy={res_energy:.2f})
+        print(f"  Alpha={alpha}: Residue energy={res_energy:.2f}, Inferred erfcApprox={inferred_erfc:.6f}")
     
     # Test 3: The special case
     print("\nTest 3: Check if 2.0 comes from a specific formula")
@@ -94,6 +93,7 @@ def find_2_source():
     print(f"  2.0 = 2.0")
     
     print("\nConclusion: erfcApprox is returning exactly 2.0 for all inputs")
+
 
 if __name__ == "__main__":
     find_2_source()

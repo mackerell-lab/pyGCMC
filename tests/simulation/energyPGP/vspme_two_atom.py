@@ -4,14 +4,13 @@
 import pytest
 import math
 import pygcmc
-from . import pgp_wrapper
-from .pgp_wrapper import setPGPParameters, precomputeGridPotential, computeSystemEnergyPGP
-from .pgp_wrapper import computeMovementEnergyPGP, computeSystemEnergyPME, computeMovementEnergyPME
-from .pgp_wrapper import computeSystemVdwEnergyCutoff
+from pygcmc import MCState, MCInfo, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
+from pygcmc import computeSystemVdwEnergyCutoff, computeSystemEnergyPME, computeSystemEnergyPGP
+from pygcmc import computeMovementEnergyPME, computeMovementEnergyPGP
+from pygcmc import setPMEParameters, setPGPParameters, initializePMEParameters, precomputeGridPotential
 import sys
 from .vspme_two_atom_helpers import create_simple_two_atom_state
-from pygcmc import MCState, MCInfo, MCAtom
-from pygcmc import MCResidue, MCForceField, MCMovementResidueInfo
+
 
 def test_simple_two_atom_system():
     """Test comparison of theoretical energy vs calculated energy in simple two-atom system"""
@@ -102,8 +101,8 @@ def test_simple_two_atom_system():
                 # Reset PGP parameters and precompute potential field
                 meshSize = [16, 16, 16]
                 potentialGridSize = [16, 16, 16]
-                setPGPParameters(0.2, meshSize, 1.2, 
-                                potentialGridSize, 4, 1e-4)
+                setPGPParameters(alpha=0.2, meshSize=meshSize, potential_cutoff=1.2, 
+                                potentialGridSize=potentialGridSize, splineOrder=4, tolerance=1e-4)
                 precomputeGridPotential(state, True)
                 
                 # Calculate PGP system energy

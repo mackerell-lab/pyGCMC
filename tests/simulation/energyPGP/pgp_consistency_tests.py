@@ -7,11 +7,10 @@ without comparing to PME values.
 
 import pytest
 import pygcmc
-from . import pgp_wrapper
-from .pgp_wrapper import initializePMEParameters, setPGPParameters, precomputeGridPotential
-from .pgp_wrapper import computeSystemEnergyPGP
-from pygcmc import MCState, MCAtom, MCResidue
-from pygcmc import MCForceField
+from pygcmc import MCState, MCAtom, MCResidue, MCForceField
+from pygcmc import setPGPParameters, initializePMEParameters, precomputeGridPotential
+from pygcmc import computeSystemEnergyPGP
+
 
 def test_pgp_energy_symmetry():
     """Test that PGP gives symmetric results for symmetric configurations."""
@@ -65,7 +64,7 @@ def test_pgp_energy_symmetry():
     mesh_size = [32, 32, 32]
     initializePMEParameters(state.info.cutoff, state.info.box, alpha)
     setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
-    precomputeGridPotential(state)
+    precomputeGridPotential(state, fixed_only=True)
     computeSystemEnergyPGP(state)
     
     energy1 = state.ewald_energy.get('total', 0.0)
@@ -85,6 +84,7 @@ def test_pgp_energy_symmetry():
     
     # Should be symmetric
     assert abs(energy1 - energy2) < 0.1, "PGP should give symmetric results"
+
 
 def test_pgp_energy_scaling():
     """Test that PGP energy scales correctly with charge."""
@@ -141,7 +141,7 @@ def test_pgp_energy_scaling():
         mesh_size = [32, 32, 32]
         initializePMEParameters(state.info.cutoff, state.info.box, alpha)
         setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
-        precomputeGridPotential(state)
+        precomputeGridPotential(state, fixed_only=True)
         computeSystemEnergyPGP(state)
         
         energy = state.ewald_energy.get('total', 0.0)
@@ -158,6 +158,7 @@ def test_pgp_energy_scaling():
     # Allow for PGP approximation errors
     assert abs(ratio1 - 0.25) < 0.1, "Energy should scale with charge squared"
     assert abs(ratio2 - 4.0) < 0.5, "Energy should scale with charge squared"
+
 
 def test_pgp_grid_independence():
     """Test that PGP gives consistent results with different grid offsets."""
@@ -215,7 +216,7 @@ def test_pgp_grid_independence():
         mesh_size = [32, 32, 32]
         initializePMEParameters(state.info.cutoff, state.info.box, alpha)
         setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
-        precomputeGridPotential(state)
+        precomputeGridPotential(state, fixed_only=True)
         computeSystemEnergyPGP(state)
         
         energy = state.ewald_energy.get('total', 0.0)
@@ -231,6 +232,7 @@ def test_pgp_grid_independence():
     print(f"Relative difference: {rel_diff:.6e}")
     
     assert rel_diff < 0.01, "PGP should give consistent results with position shifts"
+
 
 if __name__ == "__main__":
     test_pgp_energy_symmetry()
