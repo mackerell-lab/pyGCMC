@@ -51,16 +51,16 @@ void computeRealSpacePGPImpl(model::MCState& state, bool movement_only, bool sto
             // If both residues are fixed, their interaction is already included in the precomputed grid potential
             if(residues[r1].fixed && residues[r2].fixed) continue;
             
-            // Loop over atoms in each residue
+            // Loop over atoms in each residue with proper bounds checking
             for(int i = residues[r1].atomStart; 
-                i < residues[r1].atomStart + residues[r1].atomCount; i++) {
-                // Ensure atom index is valid
-                if(i >= state.activeAtomCount) continue;
+                i < residues[r1].atomStart + residues[r1].atomCount && i < static_cast<int>(atoms.size()); i++) {
+                // Ensure atom index is valid - check against atoms.size() not just activeAtomCount
+                if(i < 0 || i >= static_cast<int>(atoms.size()) || i >= state.activeAtomCount) continue;
                 
                 for(int j = residues[r2].atomStart; 
-                    j < residues[r2].atomStart + residues[r2].atomCount; j++) {
-                    // Ensure atom index is valid
-                    if(j >= state.activeAtomCount) continue;
+                    j < residues[r2].atomStart + residues[r2].atomCount && j < static_cast<int>(atoms.size()); j++) {
+                    // Ensure atom index is valid - check against atoms.size() not just activeAtomCount
+                    if(j < 0 || j >= static_cast<int>(atoms.size()) || j >= state.activeAtomCount) continue;
                     
                     float dx = atoms[i].x - atoms[j].x;
                     float dy = atoms[i].y - atoms[j].y;

@@ -13,12 +13,12 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pygcmc
-from pygcmc import MCState, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
-from pygcmc import initializePMEParameters, computeSystemEnergyPMEComplete
-from pygcmc import setPMEParameters, setPGPParameters
-from pygcmc import precomputeGridPotential, calculateMoleculeEnergy
-from pygcmc import computeMovementEnergyPME
-
+from . import pgp_wrapper
+from .pgp_wrapper import setPMEParameters, initializePMEParameters, setPGPParameters
+from .pgp_wrapper import precomputeGridPotential, calculateMoleculeEnergy, computeMovementEnergyPME
+from .pgp_wrapper import resetPGPState
+from pygcmc import MCState, MCAtom, MCResidue
+from pygcmc import MCForceField, MCMovementResidueInfo
 
 def create_pure_electrostatic_system():
     """Create a system with only electrostatic interactions (no LJ)"""
@@ -83,7 +83,6 @@ def create_pure_electrostatic_system():
     
     return state
 
-
 def test_pgp_pme_pure_electrostatic_exact():
     """Test that PGP and PME movement energy give identical dE for pure electrostatic systems"""
     
@@ -107,7 +106,7 @@ def test_pgp_pme_pure_electrostatic_exact():
     
     # Initialize PME
     setPMEParameters(alpha, mesh_size, spline_order)
-    initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
+    initializePMEParameters(state.info.cutoff, state.info.box, alpha)
     
     # Calculate initial PME movement energy
     pme_move_init = computeMovementEnergyPME(state)
@@ -115,7 +114,7 @@ def test_pgp_pme_pure_electrostatic_exact():
     print(f"\nInitial PME movement energy: {pme_move_elec_init:.8f} kJ/mol")
     
     # Set up PGP with identical parameters
-    setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, spline_order, 1e-6)
+    setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
     
     # Precompute grid from fixed particles
     print("\nPrecomputing PGP grid from fixed particles...")
@@ -158,7 +157,6 @@ def test_pgp_pme_pure_electrostatic_exact():
     # Very strict tolerance when comparing with PME movement energy
     assert rel_error < 0.1, f"For pure electrostatic system, PGP and PME movement energy should give nearly identical dE. Got {rel_error:.4f}% difference"
 
-
 def test_pgp_pme_different_movements():
     """Test multiple particle movements in pure electrostatic system"""
     
@@ -182,8 +180,8 @@ def test_pgp_pme_different_movements():
     
     # Initialize both methods
     setPMEParameters(alpha, mesh_size, spline_order)
-    initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
-    setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, spline_order, 1e-6)
+    initializePMEParameters(state.info.cutoff, state.info.box, alpha)
+    setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
     
     # Precompute PGP grid
     precomputeGridPotential(state, fixed_only=True)
@@ -231,7 +229,6 @@ def test_pgp_pme_different_movements():
         # Should have very low error when comparing with PME movement energy
         assert rel_err < 0.1, f"Movement ({dx},{dy},{dz}) has {rel_err:.4f}% error (> 0.1%)"
 
-
 def test_pgp_pme_convergence_with_mesh():
     """Test PGP-PME convergence as mesh size increases"""
     
@@ -261,10 +258,13 @@ def test_pgp_pme_convergence_with_mesh():
     for mesh_size in mesh_sizes:
         mesh = [mesh_size, mesh_size, mesh_size]
         
+        # Reset PGP state to avoid conflicts
+        pgp_wrapper.resetPGPState()
+        
         # Initialize both methods with same mesh
         setPMEParameters(alpha, mesh, spline_order)
-        initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh, spline_order)
-        setPGPParameters(alpha, mesh, state.info.cutoff, mesh, spline_order, 1e-6)
+        initializePMEParameters(state.info.cutoff, state.info.box, alpha)
+        setPGPParameters(alpha, mesh, state.info.cutoff, mesh, 4, 1e-6)
         
         # Precompute PGP grid
         precomputeGridPotential(state, fixed_only=True)
@@ -297,7 +297,6 @@ def test_pgp_pme_convergence_with_mesh():
         # Higher mesh sizes should have very low error
         if mesh_size >= 64:
             assert rel_err < 0.05, f"Mesh size {mesh_size} has {rel_err:.4f}% error (> 0.05%)"
-
 
 if __name__ == "__main__":
     test_pgp_pme_pure_electrostatic_exact()

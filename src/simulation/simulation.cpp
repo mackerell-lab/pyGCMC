@@ -4,6 +4,7 @@
 #include "../platform/cpu/energy/pme/PMEComposite.hpp"
 #include "../platform/cpu/energy/pgp/PGPCore.hpp"
 #include "../platform/cpu/energy/pgp/PGPComplete.hpp"
+#include "../platform/cpu/energy/pgp/PGPCoreIndependent.hpp"
 #include <cmath>
 
 namespace pygcmc {
@@ -297,6 +298,44 @@ void Simulation::computeMovementEnergyPGPFixed(model::MCState& state) {
         log(LogLevel::DEBUG, "Computing PGP-Fixed energy for movement residues");
     }
     platform::cpu::computeMovementEnergyPGPFixed(state);
+}
+
+// Independent PGP methods implementation
+void Simulation::setPGPParametersIndependent(double alpha, const int meshSize[3], 
+                                            double potential_cutoff, 
+                                            const int potentialGridSize[3], 
+                                            int splineOrder, double tolerance) {
+    platform::cpu::setPGPParametersIndependent(alpha, meshSize, potential_cutoff,
+                                              potentialGridSize, splineOrder, tolerance);
+}
+
+void Simulation::initializePGPParametersIndependent(double cutoff, const double box[3], 
+                                                   double alpha, const int* meshSize, 
+                                                   double potentialCutoff,
+                                                   const int* potentialGridSize,
+                                                   int splineOrder, double tolerance) {
+    // Handle default mesh sizes
+    int default_mesh[3] = {32, 32, 32};
+    const int* actual_mesh = meshSize ? meshSize : default_mesh;
+    const int* actual_potential_grid = potentialGridSize ? potentialGridSize : default_mesh;
+    
+    platform::cpu::initializePGPParametersIndependent(cutoff, box, alpha, actual_mesh,
+                                                      potentialCutoff, actual_potential_grid,
+                                                      splineOrder, tolerance);
+}
+
+void Simulation::computeSystemEnergyPGPIndependent(model::MCState& state) {
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing independent PGP energy for system");
+    }
+    platform::cpu::computeSystemEnergyPGPIndependent(state);
+}
+
+void Simulation::computeMovementEnergyPGPIndependent(model::MCState& state) {
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing independent PGP energy for movement residues");
+    }
+    platform::cpu::computeMovementEnergyPGPIndependent(state);
 }
 
 std::pair<double, double> Simulation::getTotalEnergyComponents(const model::MCState& state) {

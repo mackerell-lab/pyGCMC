@@ -45,6 +45,9 @@ Total: 40 test functions across 28 modules.
   pgp_erfc_debug (2)
 """
 
+# Import the pgp_wrapper to ensure it's loaded before any tests
+from energyPGP import pgp_wrapper
+
 # Basic PGP operations tests
 from energyPGP.basic_operations import (
     test_pgp_parameter_setting,
@@ -193,7 +196,7 @@ from energyPGP.pgp_grid_convergence import (
 )
 from energyPGP.pgp_cutoff_continuity import (
     test_pgp_cutoff_continuity,
-    test_pgp_smooth_transition,
+    test_pgp_cutoff_fine_sampling,
     test_pgp_lj_cutoff_continuity
 )
 from energyPGP.pgp_lj_diagnosis import (

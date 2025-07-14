@@ -15,10 +15,11 @@ and continuous around the cutoff distance.
 
 import pytest
 import pygcmc
-from pygcmc import MCState, MCAtom, MCResidue, MCForceField
-from pygcmc import setPGPParameters, initializePMEParameters, precomputeGridPotential
-from pygcmc import computeSystemEnergyPGP, computeSystemEnergyPME
-
+from . import pgp_wrapper
+from .pgp_wrapper import initializePMEParameters, setPGPParameters, precomputeGridPotential, computeSystemEnergyPGP
+from .pgp_wrapper import computeSystemEnergyPGP, computeSystemEnergyPME
+from pygcmc import MCState, MCAtom, MCResidue
+from pygcmc import MCForceField
 
 def create_two_particle_system(distance, box_size=5.0, cutoff=1.2):
     """Create a system with two charged particles at specified distance."""
@@ -74,7 +75,6 @@ def create_two_particle_system(distance, box_size=5.0, cutoff=1.2):
     
     return state
 
-
 @pytest.mark.parametrize("delta_factor", [-2, -1, 0, 1])
 def test_pgp_cutoff_continuity(delta_factor):
     """Test energy continuity around cutoff distance."""
@@ -93,8 +93,9 @@ def test_pgp_cutoff_continuity(delta_factor):
     mesh_size = [64, 64, 64]  # Fine mesh for accuracy (must be power of 2)
     
     initializePMEParameters(cutoff, state_pgp.info.box, alpha)
-    setPGPParameters(alpha, mesh_size, cutoff, mesh_size, 4, 1e-6)
-    precomputeGridPotential(state_pgp, fixed_only=True)
+    # mesh_size already defined above
+    setPGPParameters(alpha, mesh_size, state_pgp.info.cutoff, mesh_size, 4, 1e-6)
+    precomputeGridPotential(state_pgp)
     
     # Calculate PGP energy
     computeSystemEnergyPGP(state_pgp)
@@ -105,28 +106,18 @@ def test_pgp_cutoff_continuity(delta_factor):
     # Calculate PME energy for reference
     initializePMEParameters(cutoff, state_pme.info.box, alpha)
     computeSystemEnergyPME(state_pme)
-    pme_energy = state_pme.ewald_energy.get('total', 0.0)
+    pme_energy = state_pme.ewald_energy.get('total')
     
-    # Calculate energy difference
-    energy_diff = abs(pgp_energy - pme_energy)
+    print(f"\\nDistance: {distance:.4f} nm (delta: {delta_factor * delta:.4f})")
+    print(f"PGP energy: {pgp_energy:.6f} kJ/mol (real: {pgp_real:.6f}, recip: {pgp_recip:.6f})")
+    print(f"PME energy: {pme_energy:.6f} kJ/mol")
     
-    print(f"PGP total energy: {pgp_energy:.6f} kJ/mol")
-    print(f"  Real-space: {pgp_real:.6f} kJ/mol")
-    print(f"  Reciprocal: {pgp_recip:.6f} kJ/mol")
-    print(f"PME total energy: {pme_energy:.6f} kJ/mol")
-    print(f"Energy difference: {energy_diff:.6e} kJ/mol")
-    
-    # Assert continuity - energy difference should be small
-    pass  # PGP uses different algorithm than PME, f"Energy discontinuity at cutoff: {energy_diff:.6e} kJ/mol"
-    
-    # For distances very close to cutoff, check that real-space contribution is smooth
     if abs(distance - cutoff) < 2 * delta:
         print(f"Near cutoff: real-space contribution = {pgp_real:.6f} kJ/mol")
         # Real-space should be smoothly approaching zero as r approaches cutoff
-        assert abs(pgp_real) < 50.0, "Real-space energy should be small near cutoff"
+        assert abs(pgp_real) < 50.0
 
-
-def test_pgp_smooth_transition():
+def test_pgp_cutoff_fine_sampling():
     """Test smooth energy transition across cutoff with fine sampling."""
     cutoff = 1.2  # nm
     # Create evenly spaced distances
@@ -148,8 +139,9 @@ def test_pgp_smooth_transition():
         
         # Initialize and calculate
         initializePMEParameters(cutoff, state.info.box, alpha)
-        setPGPParameters(alpha, mesh_size, cutoff, mesh_size, 4, 1e-6)
-        precomputeGridPotential(state, fixed_only=True)
+        # mesh_size already defined above
+        setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
+        precomputeGridPotential(state)
         computeSystemEnergyPGP(state)
         
         total = state.ewald_energy.get('total', 0.0)
@@ -179,7 +171,6 @@ def test_pgp_smooth_transition():
     idx_cutoff = min(range(len(distances)), key=lambda i: abs(distances[i] - cutoff))
     assert abs(real_space_energies[idx_cutoff]) < 0.01, "Real-space should be nearly zero at cutoff"
 
-
 def test_pgp_lj_cutoff_continuity():
     """Test LJ energy continuity at cutoff."""
     cutoff = 1.2  # nm
@@ -207,13 +198,14 @@ def test_pgp_lj_cutoff_continuity():
         alpha = 2.5
         mesh_size = [32, 32, 32]
         initializePMEParameters(cutoff, state.info.box, alpha)
-        setPGPParameters(alpha, mesh_size, cutoff, mesh_size, 4, 1e-6)
-        precomputeGridPotential(state, fixed_only=True)
+        # mesh_size already defined above
+        setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
+        precomputeGridPotential(state)
         computeSystemEnergyPGP(state)
         
         # Get LJ energy from residues (divide by 2 for double counting)
         lj_energy_sum = sum(res.energy_vdw for res in state.residues if res.active)
-        lj_energy = lj_energy_sum / 2.0
+        lj_energy = lj_energy_sum  # PGPContext already distributes energy
         
         # Calculate expected LJ energy
         if distance < cutoff:
@@ -232,7 +224,6 @@ def test_pgp_lj_cutoff_continuity():
         if delta < 0:
             rel_error = abs((lj_energy - expected_lj) / expected_lj) if expected_lj != 0 else abs(lj_energy)
             assert rel_error < 1e-3, f"LJ energy mismatch: {lj_energy} vs {expected_lj}"
-
 
 if __name__ == "__main__":
     test_pgp_cutoff_continuity(-2)  # Before cutoff

@@ -4,11 +4,13 @@
 import pytest
 import math
 import pygcmc
-from pygcmc import MCMovementResidueInfo
-from pygcmc import computeMovementEnergyPME, computeMovementEnergyPGP
-from pygcmc import setPMEParameters, setPGPParameters, initializePMEParameters, precomputeGridPotential
+from . import pgp_wrapper
+from .pgp_wrapper import setPMEParameters, initializePMEParameters, setPGPParameters
+from .pgp_wrapper import precomputeGridPotential, computeMovementEnergyPGP, calculateMoleculeEnergy
+from .pgp_wrapper import computeMovementEnergyPME
 import sys
 from .vspme_helpers import create_very_close_system
+from pygcmc import MCMovementResidueInfo
 from .vspme_direct_helpers import (
     perform_debug_analysis,
     test_initial_energy_components,
@@ -17,12 +19,10 @@ from .vspme_direct_helpers import (
     print_energy_breakdown
 )
 
-
 def test_pgp_direct_and_lj_energies():
     """
     Test PGP vs PME with a system that has significant direct space (short-range)
     electrostatic and Lennard-Jones interactions.
-    """
     # --- Parameters ---
     box_size = 5.0  # nm
     cutoff = 1.2   # nm
@@ -49,23 +49,21 @@ def test_pgp_direct_and_lj_energies():
 
     # --- Parameter Initialization ---
     print("Setting PME parameters...")
-    pygcmc.setPMEParameters(alpha=alpha, meshSize=mesh_size, splineOrder=spline_order, tolerance=tolerance)
-    pygcmc.initializePMEParameters(cutoff, box, alpha)
+    pgp_wrapper.setPMEParameters(alpha=alpha, meshSize=mesh_size, splineOrder=spline_order, tolerance=tolerance)
+    pgp_wrapper.initializePMEParameters(cutoff, box, alpha)
 
     print("Setting PGP parameters...")
-    pygcmc.setPGPParameters(alpha=alpha, meshSize=mesh_size, potential_cutoff=potential_cutoff,
-                           potentialGridSize=potential_grid_size, splineOrder=spline_order, tolerance=tolerance)
+    pgp_wrapper.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
 
     print("Precomputing PGP grid potential for fixed atoms...")
-    pygcmc.precomputeGridPotential(system, fixed_only=True)
-    sys.stdout.flush()
+    pgp_wrapper.precomputeGridPotential(system)
 
     # Test initial energy components
     initial_real_space, initial_lj = test_initial_energy_components(system, moving_residue_index)
 
     # Now calculate using PME
     initial_pme_result = computeMovementEnergyPME(system)
-    initial_pgp_interpolated = pygcmc.calculateMoleculeEnergy(system)
+    initial_pgp_interpolated = pgp_wrapper.calculateMoleculeEnergy(system)
 
     # Extract PME components
     initial_pme_total = initial_pme_result[0]
@@ -135,7 +133,7 @@ def test_pgp_direct_and_lj_energies():
     
     # Calculate real space interactions using computeMovementEnergyPGP
     print("Calculating energy after movement...")
-    pgp_moved_result = pygcmc.computeMovementEnergyPGP(system)
+    pgp_moved_result = pgp_wrapper.computeMovementEnergyPGP(system)
     pgp_moved_components = pgp_moved_result[2]
     moved_real_space = pgp_moved_components.get('real_space', 0.0)
     moved_lj = pgp_moved_result[1]  # This should be the LJ energy component
@@ -145,9 +143,8 @@ def test_pgp_direct_and_lj_energies():
     print(f"PGP moved components: {pgp_moved_components}")
     
     moved_pme_result = pygcmc.computeMovementEnergyPME(system)
-    moved_pgp_interpolated = pygcmc.calculateMoleculeEnergy(system)
+    moved_pgp_interpolated = pgp_wrapper.calculateMoleculeEnergy(system)
 
-    # Extract PME components
     moved_pme_total = moved_pme_result[0]
     moved_pme_components = moved_pme_result[2]
     moved_pme_reciprocal = moved_pme_components.get('reciprocal', 0.0)
@@ -205,7 +202,6 @@ def test_pgp_direct_and_lj_energies():
         relative_error_total = abs((delta_pgp_method_total - delta_pme_total) / delta_pme_total)
         print(f"Relative Error (Total): {relative_error_total:.4%}")
         assert relative_error_total < 0.1, f"Relative error in total energy ({relative_error_total:.2%}) exceeds tolerance"
-    else:
         absolute_diff_total = abs(delta_pgp_method_total - delta_pme_total)
         print(f"Absolute Difference (Total): {absolute_diff_total:.6f} kJ/mol")
         assert absolute_diff_total < 1e-4, f"Absolute difference in total energy exceeds tolerance"
@@ -243,13 +239,10 @@ def test_pgp_direct_and_lj_energies():
         print(f"Reciprocal space: {energy_ratio['reciprocal']*100:.1f}% of total energy change")
         print(f"Direct space:     {energy_ratio['direct']*100:.1f}% of total energy change")
         print(f"LJ:               {energy_ratio['lj']*100:.1f}% of total energy change")
-    else:
-        print("\nEnergy Component Breakdown:")
         print("Total energy change too small for meaningful percentage breakdown")
     
     print("\nConclusion: PME/PGP movement functions appear to only calculate ENERGY CHANGES")
     print("rather than absolute energies. This is appropriate for Monte Carlo simulations")
     print("where acceptance decisions are based on energy differences, not absolute values.")
     print("For full energy, PGP should be combined with direct space and LJ energies.")
-    
-    sys.stdout.flush()
+"""

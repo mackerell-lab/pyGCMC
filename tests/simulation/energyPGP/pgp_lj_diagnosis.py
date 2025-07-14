@@ -12,13 +12,12 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pygcmc
-from pygcmc import MCState, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
-from pygcmc import initializePMEParameters, computeSystemEnergyPMEComplete
-from pygcmc import setPMEParameters, setPGPParameters
-from pygcmc import precomputeGridPotential, calculateMoleculeEnergy
-from pygcmc import computeMovementEnergyPME
-from pygcmc import computeSystemEnergyCutoff, getTotalEnergyComponents
-
+from . import pgp_wrapper
+from .pgp_wrapper import initializePMEParameters, computeSystemEnergyPMEComplete, setPMEParameters, setPGPParameters, computeSystemEnergyPGP
+from .pgp_wrapper import precomputeGridPotential, calculateMoleculeEnergy, computeMovementEnergyPME, computeSystemEnergyPGP
+from pygcmc import MCState, MCAtom, MCResidue
+from pygcmc import MCForceField, MCMovementResidueInfo, computeSystemEnergyCutoff
+from pygcmc import getTotalEnergyComponents
 
 def create_lj_only_system():
     """Create a system with only LJ interactions (no charges)"""
@@ -86,7 +85,6 @@ def create_lj_only_system():
     
     return state
 
-
 def test_pgp_lj_only_system():
     """Test PGP with pure LJ system"""
     
@@ -109,7 +107,7 @@ def test_pgp_lj_only_system():
     spline_order = 4
     
     setPMEParameters(alpha, mesh_size, spline_order)
-    initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
+    initializePMEParameters(state.info.cutoff, state.info.box, alpha)
     
     # Calculate PME Complete
     elec_pme, vdw_pme, total_pme = computeSystemEnergyPMEComplete(state)
@@ -132,6 +130,7 @@ def test_pgp_lj_only_system():
     print("\nPrecomputing PGP grid...")
     precomputeGridPotential(state, fixed_only=True)
     
+    computeSystemEnergyPGP(state)
     # Calculate PGP energy
     pgp_energy = calculateMoleculeEnergy(state)
     print(f"\nPGP energy: {pgp_energy:.8f} kJ/mol")
@@ -171,7 +170,6 @@ def test_pgp_lj_only_system():
     
     rel_error = abs(pgp_delta - pme_delta) / abs(pme_delta) * 100 if pme_delta != 0 else 0
     print(f"  Relative error:    {rel_error:.4f}%")
-
 
 def test_pgp_mixed_system():
     """Test PGP with both charges and LJ"""
@@ -247,7 +245,7 @@ def test_pgp_mixed_system():
     spline_order = 4
     
     setPMEParameters(alpha, mesh_size, spline_order)
-    initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
+    initializePMEParameters(state.info.cutoff, state.info.box, alpha)
     
     # Calculate PME movement energy
     pme_move = computeMovementEnergyPME(state)
@@ -261,9 +259,10 @@ def test_pgp_mixed_system():
     print(f"  Total:        {pme_move_total:.8f} kJ/mol")
     
     # Set up PGP
-    setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, spline_order, 1e-6)
+    setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
     precomputeGridPotential(state, fixed_only=True)
     
+    computeSystemEnergyPGP(state)
     # Calculate PGP energy
     pgp_energy = calculateMoleculeEnergy(state)
     print(f"\nPGP energy: {pgp_energy:.8f} kJ/mol")
@@ -299,7 +298,6 @@ def test_pgp_mixed_system():
     
     rel_error = abs(pgp_delta - pme_delta) / abs(pme_delta) * 100 if pme_delta != 0 else 0
     print(f"  Relative error: {rel_error:.4f}%")
-
 
 def test_pgp_lj_distance_scan():
     """Scan PGP LJ energy at different distances"""
@@ -369,8 +367,8 @@ def test_pgp_lj_distance_scan():
     spline_order = 4
     
     setPMEParameters(alpha, mesh_size, spline_order)
-    initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
-    setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, spline_order, 1e-6)
+    initializePMEParameters(state.info.cutoff, state.info.box, alpha)
+    setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
     
     # Distances to test (in nm)
     distances = [0.35, 0.4, 0.5, 0.6, 0.8, 1.0, 1.5, 2.0, 2.5, 3.0]
@@ -397,7 +395,6 @@ def test_pgp_lj_distance_scan():
         diff = pgp_energy - pme_move_vdw
         
         print(f"{d:10.2f} | {vdw_direct:12.6f} | {pme_move_vdw:12.6f} | {pgp_energy:12.6f} | {diff:12.6f}")
-
 
 if __name__ == "__main__":
     test_pgp_lj_only_system()

@@ -4,9 +4,11 @@
 import pytest
 import math
 import pygcmc
-from pygcmc import MCMovementResidueInfo
+from . import pgp_wrapper
+from .pgp_wrapper import setPMEParameters, initializePMEParameters, setPGPParameters
+from .pgp_wrapper import precomputeGridPotential, calculateMoleculeEnergy
 from .helpers import create_nacl_crystal
-
+from pygcmc import MCMovementResidueInfo
 
 def test_pgp_parameter_setting():
     """
@@ -21,7 +23,7 @@ def test_pgp_parameter_setting():
     potential_cutoff = 0.5  # nm
     
     # Set the parameters
-    pygcmc.setPGPParameters(
+    pgp_wrapper.setPGPParameters(
         alpha=alpha,
         meshSize=mesh_size,
         potential_cutoff=potential_cutoff,
@@ -42,35 +44,22 @@ def test_precompute_grid_potential():
     box_size = 2.82  # nm, approximately 28.2 Å
     n_cells = 2      # 2x2x2 supercell
     cutoff = 1.0   # nm
-    potential_cutoff = 0.5  # nm
     
     # Set PGP parameters
-    alpha = 0.29  # 1/nm
-    mesh_size = [32, 32, 32]
-    potential_grid_size = [16, 16, 16]
-    spline_order = 4
-    tolerance = 1e-5
     box = [box_size, box_size, box_size]
     
     # Initialize parameters
-    pygcmc.setPMEParameters(
-        alpha=alpha,
-        meshSize=mesh_size,
-        splineOrder=spline_order,
-        tolerance=tolerance
-    )
+    alpha = 0.29
+    mesh_size = [32, 32, 32]
+    potential_grid_size = [16, 16, 16]
+    
+    pgp_wrapper.setPMEParameters(alpha, mesh_size)
     
     # Initialize PME parameters - this is a critical step
-    pygcmc.initializePMEParameters(cutoff, box, alpha)
+    pgp_wrapper.initializePMEParameters(cutoff, box, alpha)
     
-    pygcmc.setPGPParameters(
-        alpha=alpha,
-        meshSize=mesh_size,
-        potential_cutoff=potential_cutoff,
-        potentialGridSize=potential_grid_size,
-        splineOrder=spline_order,
-        tolerance=tolerance
-    )
+    # Set PGP parameters
+    pgp_wrapper.setPGPParameters(alpha, mesh_size, cutoff, potential_grid_size, 4, 1e-6)
     
     # Create a model containing fixed and moving parts
     system = create_nacl_crystal(box_size, n_cells)
@@ -81,7 +70,7 @@ def test_precompute_grid_potential():
         system.residues[i].fixed = True
     
     # Precompute grid potential for the fixed part
-    pygcmc.precomputeGridPotential(system, fixed_only=True)
+    pgp_wrapper.precomputeGridPotential(system, fixed_only=True)
     
     # Test successful execution without crashing
     assert True, "Grid potential precomputation succeeded"
@@ -96,41 +85,23 @@ def test_interpolate_molecule_energy():
     box_size = 2.82  # nm, approximately 28.2 Å
     n_cells = 2      # 2x2x2 supercell
     cutoff = 1.0   # nm
-    potential_cutoff = 0.5  # nm
     
     # Set PGP parameters
-    alpha = 0.29  # 1/nm
+    box = [box_size, box_size, box_size]
+    alpha = 0.29
     mesh_size = [32, 32, 32]
     potential_grid_size = [16, 16, 16]
-    spline_order = 4
-    tolerance = 1e-5
-    box = [box_size, box_size, box_size]
     
     # Initialize parameters
-    pygcmc.setPMEParameters(
-        alpha=alpha,
-        meshSize=mesh_size,
-        splineOrder=spline_order,
-        tolerance=tolerance
-    )
-    
-    # Initialize PME parameters - this is a critical step
-    pygcmc.initializePMEParameters(cutoff, box, alpha)
-    
-    pygcmc.setPGPParameters(
-        alpha=alpha,
-        meshSize=mesh_size,
-        potential_cutoff=potential_cutoff,
-        potentialGridSize=potential_grid_size,
-        splineOrder=spline_order,
-        tolerance=tolerance
-    )
+    pgp_wrapper.setPMEParameters(alpha, mesh_size)
+    pgp_wrapper.initializePMEParameters(cutoff, box, alpha)
+    pgp_wrapper.setPGPParameters(alpha, mesh_size, cutoff, potential_grid_size, 4, 1e-6)
     
     # Create a model containing fixed and moving parts
     system = create_nacl_crystal(box_size, n_cells)
+    n_residues = len(system.residues)
     
     # Mark half of the residues as fixed, half as moving
-    n_residues = len(system.residues)
     fixed_residues = []
     moving_residues = []
     
@@ -148,11 +119,11 @@ def test_interpolate_molecule_energy():
     movement_info.activeCount = len(moving_residues)  # Number of moving residues
     system.movementResidues.append(movement_info)
     
-    # Precompute grid potential for the fixed part
-    pygcmc.precomputeGridPotential(system, fixed_only=True)
+    # Precompute grid potential first
+    pgp_wrapper.precomputeGridPotential(system, fixed_only=True)
     
     # Calculate interpolated energy - using new function name
-    energy = pygcmc.calculateMoleculeEnergy(system)
+    energy = pgp_wrapper.calculateMoleculeEnergy(system)
     
     # Check if energy value is reasonable
     # Note: We don't check the specific energy value here, as the calculation result depends on many factors

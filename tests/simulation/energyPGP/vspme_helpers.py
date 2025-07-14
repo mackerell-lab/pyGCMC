@@ -3,11 +3,12 @@
 
 import math
 import pygcmc
-from pygcmc import MCState, MCAtom, MCResidue, MCForceField
+from . import pgp_wrapper
+from pygcmc import MCState, MCAtom, MCResidue
+from pygcmc import MCForceField
 
 # Physical constants
 BOLTZMANN = 0.00831446261815324  # kJ/mol/K
-
 
 def create_test_system(box_size):
     """
@@ -89,22 +90,23 @@ def create_test_system(box_size):
 
     return state
 
-
 def create_close_interaction_system(box_size, cutoff=1.2):
     """
     Creates a test system with atoms close enough to have real-space interactions.
     This system has atoms within the cutoff to test direct space electrostatics and LJ.
-
+    
     Args:
         box_size: Box size (nm)
         cutoff: Cutoff distance (nm)
     """
-    state = MCState()
+    # Create state
+    system = MCState()
+    system.info.box = [box_size, box_size, box_size]
+    system.info.cutoff = cutoff  # Set cutoff
 
-    # Set box size and temperature
-    state.info.box = [box_size, box_size, box_size]
-    state.info.setTemperature(300.0)  # 300K
-    state.info.cutoff = cutoff  # Set cutoff
+    # Initialize lists
+    atoms = []
+    residues = []
 
     # Set force field parameters (example values, enhanced for LJ testing)
     ff = MCForceField()
@@ -121,13 +123,8 @@ def create_close_interaction_system(box_size, cutoff=1.2):
     ff.ljEps = [
         eps_na * 5.0,  # Increase LJ well depth for stronger interactions
         math.sqrt(eps_na * eps_cl) * 5.0,
-        math.sqrt(eps_na * eps_cl) * 5.0,
         eps_cl * 5.0
     ]
-    state.forcefield = ff
-
-    atoms = []
-    residues = []
 
     # Fixed part: two ions
     print(f"Creating close interaction system with box={box_size}nm, cutoff={cutoff}nm...")
@@ -138,7 +135,6 @@ def create_close_interaction_system(box_size, cutoff=1.2):
     ion1.y = 0.5
     ion1.z = 0.5
     ion1.charge = 2.0  # INCREASED charge
-    ion1.type = 0
     atoms.append(ion1)
     
     # Fixed ion 2
@@ -147,16 +143,7 @@ def create_close_interaction_system(box_size, cutoff=1.2):
     ion2.y = box_size - 0.5
     ion2.z = box_size - 0.5
     ion2.charge = -2.0  # INCREASED charge
-    ion2.type = 1
     atoms.append(ion2)
-
-    # Create fixed residue
-    fixed_res = MCResidue()
-    fixed_res.atomStart = 0
-    fixed_res.atomCount = 2
-    fixed_res.active = True
-    fixed_res.fixed = True
-    residues.append(fixed_res)
 
     # Moving part: ion placed VERY close to the first fixed ion (well within cutoff)
     # Place it even closer (0.1 nm) to first ion to ensure strong interactions
@@ -175,30 +162,34 @@ def create_close_interaction_system(box_size, cutoff=1.2):
     dist = math.sqrt(dx*dx + dy*dy + dz*dz)
     
     print(f"Distance between moving ion and fixed ion 1: {dist:.3f} nm (within cutoff: {dist < cutoff})")
-
-    # Create moving residue
-    move_res = MCResidue()
-    move_res.atomStart = 2
-    move_res.atomCount = 1
-    move_res.active = True
-    move_res.fixed = False
-    residues.append(move_res)
+    
+    # Create residues
+    for i in range(3):
+        res = MCResidue()
+        res.active = True
+        res.fixed = (i < 2)  # First two are fixed
+        res.atomStart = i
+        res.atomCount = 1
+        res.type = 0
+        residues.append(res)
+    
+    # Set up system
+    system.atoms = atoms
+    system.activeAtomCount = len(atoms)
+    system.residues = residues
+    system.activeResidueCount = len(residues)
+    system.forcefield = ff
 
     print(f"Close interaction system: {len(atoms)} atoms, {len(residues)} residues.")
-    state.atoms = atoms
-    state.residues = residues
-    state.activeAtomCount = len(atoms)
-    state.activeResidueCount = len(residues)
-
-    return state
-
+    
+    return system
 
 def create_very_close_system(box_size, cutoff=1.2):
     """
     Create a simple test system with atoms positioned at more reasonable distances.
     Places ions close enough to interact but not so close as to cause extreme energies.
     
-    Previous version had atoms at 0.02nm which resulted in unrealistic energy values.
+    Previous version had atoms at 0.02 nm which resulted in unrealistic energy values.
     """
     print(f"Creating system with reasonable interaction distances (box={box_size}nm, cutoff={cutoff}nm)...")
     
@@ -208,7 +199,6 @@ def create_very_close_system(box_size, cutoff=1.2):
     system.info.cutoff = cutoff  # nm
     
     # Create forcefield with strong LJ interactions
-    ff = MCForceField()
     ff.numTotalTypes = 2
     
     # Realistic LJ parameters
@@ -225,7 +215,6 @@ def create_very_close_system(box_size, cutoff=1.2):
     system.forcefield = ff
     
     # Create atoms
-    atoms = []
     
     # Fixed central ion
     fixed_ion = MCAtom()
@@ -259,20 +248,12 @@ def create_very_close_system(box_size, cutoff=1.2):
     dx = moving_ion.x - fixed_ion.x
     dy = moving_ion.y - fixed_ion.y
     dz = moving_ion.z - fixed_ion.z
-    dist = math.sqrt(dx*dx + dy*dy + dz*dz)
-    print(f"Distance between moving ion and fixed ion 1: {dist:.3f} nm (within cutoff: {dist < cutoff})")
     print(f"This distance allows meaningful interactions without extreme energy values")
     
     # Create residues
-    residues = []
     
     # Fixed ions residue
-    fixed_res = MCResidue()
-    fixed_res.atomStart = 0
     fixed_res.atomCount = 2  # Both fixed ions in one residue
-    fixed_res.active = True
-    fixed_res.fixed = True
-    residues.append(fixed_res)
     
     # Moving ion residue
     moving_res = MCResidue()
@@ -290,5 +271,3 @@ def create_very_close_system(box_size, cutoff=1.2):
     
     print(f"Close interaction system created: {len(atoms)} atoms, {len(residues)} residues.")
     return system
-
-

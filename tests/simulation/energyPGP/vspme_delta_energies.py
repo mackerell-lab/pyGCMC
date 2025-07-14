@@ -4,13 +4,13 @@
 import pytest
 import math
 import pygcmc
-from pygcmc import MCState, MCInfo, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
-from pygcmc import computeSystemVdwEnergyCutoff, computeSystemEnergyPME, computeSystemEnergyPGP
-from pygcmc import computeMovementEnergyPME, computeMovementEnergyPGP
-from pygcmc import setPMEParameters, setPGPParameters, initializePMEParameters, precomputeGridPotential
+from . import pgp_wrapper
+from .pgp_wrapper import setPMEParameters, initializePMEParameters, setPGPParameters
+from .pgp_wrapper import precomputeGridPotential, calculateMoleculeEnergy, computeMovementEnergyPME
 import sys
 from .vspme_helpers import create_test_system
-
+from pygcmc import MCState, MCInfo, MCAtom
+from pygcmc import MCResidue, MCForceField, MCMovementResidueInfo
 
 def test_compare_pgp_pme_delta_energies():
     """
@@ -18,7 +18,6 @@ def test_compare_pgp_pme_delta_energies():
     Verifies that the change in reciprocal energy matches between PGP and PME,
     and that the total electrostatic energy change is consistent when using
     PGP for reciprocal and standard calculation for direct space.
-    """
     # --- Parameters ---
     box_size = 5.0  # nm
     cutoff = 1.2   # nm
@@ -50,16 +49,14 @@ def test_compare_pgp_pme_delta_energies():
 
     # --- Parameter Initialization ---
     print("Setting PME parameters...")
-    pygcmc.setPMEParameters(alpha=alpha, meshSize=mesh_size, splineOrder=spline_order, tolerance=tolerance)
-    pygcmc.initializePMEParameters(cutoff, box, alpha) # Critical initialization
+    pgp_wrapper.setPMEParameters(alpha=alpha, meshSize=mesh_size, splineOrder=spline_order, tolerance=tolerance)
+    pgp_wrapper.initializePMEParameters(cutoff, box, alpha) # Critical initialization
 
     print("Setting PGP parameters...")
-    pygcmc.setPGPParameters(alpha=alpha, meshSize=mesh_size, potential_cutoff=potential_cutoff,
-                           potentialGridSize=potential_grid_size, splineOrder=spline_order, tolerance=tolerance)
+    pgp_wrapper.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
 
     print("Precomputing PGP grid potential for fixed atoms...")
-    pygcmc.precomputeGridPotential(system, fixed_only=True)
-    sys.stdout.flush()
+    pgp_wrapper.precomputeGridPotential(system)
 
     # --- Initial State Energy Calculation ---
     print("\nCalculating initial state energies...")
@@ -72,7 +69,7 @@ def test_compare_pgp_pme_delta_energies():
     print(f"Set movement info for PME: startIndex={movement_info.startIndex}, count={movement_info.activeCount}")
     
     initial_pme_result = pygcmc.computeMovementEnergyPME(system)
-    initial_pgp_interpolated = pygcmc.calculateMoleculeEnergy(system) # PGP interpolated energy
+    initial_pgp_interpolated = pgp_wrapper.calculateMoleculeEnergy(system) # PGP interpolated energy
 
     # Extract PME components
     initial_pme_total = initial_pme_result[0]
@@ -95,7 +92,6 @@ def test_compare_pgp_pme_delta_energies():
         print("This suggests PGP grid precomputation may not be fully accurate")
         print("However, the test focuses on energy changes (deltas), not absolute values")
     
-    sys.stdout.flush()
 
     # --- Move Molecule ---
     translation = [0.15, 0.15, 0.15]  # Increase movement distance to make LJ energy changes significant
@@ -112,22 +108,13 @@ def test_compare_pgp_pme_delta_energies():
         atom.y = (atom.y + translation[1]) % box_size
         atom.z = (atom.z + translation[2]) % box_size
         print(f"  Atom {atom_index}: ({initial_pos[-1][0]:.3f}, {initial_pos[-1][1]:.3f}, {initial_pos[-1][2]:.3f}) -> ({atom.x:.3f}, {atom.y:.3f}, {atom.z:.3f})")
-    sys.stdout.flush()
 
     # --- Moved State Energy Calculation ---
     print("\nCalculating moved state energies...")
-    # For PME, need to set up movementResidues immediately before calculation
-    system.movementResidues.clear()
-    movement_info = MCMovementResidueInfo()
-    movement_info.startIndex = moving_residue_index
-    movement_info.activeCount = 1
-    system.movementResidues.append(movement_info)
-    print(f"Set movement info for PME: startIndex={movement_info.startIndex}, count={movement_info.activeCount}")
     
     moved_pme_result = pygcmc.computeMovementEnergyPME(system)
-    moved_pgp_interpolated = pygcmc.calculateMoleculeEnergy(system) # PGP interpolated energy
+    moved_pgp_interpolated = pgp_wrapper.calculateMoleculeEnergy(system) # PGP interpolated energy
 
-    # Extract PME components
     moved_pme_total = moved_pme_result[0]
     moved_pme_components = moved_pme_result[2]
     moved_pme_reciprocal = moved_pme_components.get('reciprocal', 0.0)
@@ -144,7 +131,6 @@ def test_compare_pgp_pme_delta_energies():
         moved_relative_diff = abs((moved_pgp_interpolated - moved_pme_reciprocal) / moved_pme_reciprocal)
         print(f"*** Moved relative difference: {moved_relative_diff:.4%} ***")
     
-    sys.stdout.flush()
 
     # --- Calculate Energy Deltas ---
     print("\nCalculating energy deltas...")
@@ -167,7 +153,6 @@ def test_compare_pgp_pme_delta_energies():
     print(f"Delta PME Total (Reported):{delta_pme_total_reported:.6f} kJ/mol")
     print(f"Delta PME Total (Components):{delta_pme_total_components:.6f} kJ/mol")
     print(f"Delta PGP Method Total:    {delta_pgp_method_total:.6f} kJ/mol")
-    sys.stdout.flush()
 
     # --- Comparisons ---
 
@@ -183,7 +168,6 @@ def test_compare_pgp_pme_delta_energies():
         print(f"Absolute Difference (Reciprocal): {absolute_diff_recip:.6f} kJ/mol (PME delta near zero)")
         assert absolute_diff_recip < 1e-4, f"Absolute difference in delta reciprocal ({absolute_diff_recip:.6f}) exceeds tolerance (1e-4) when PME delta is near zero"
     print("Delta reciprocal energies match within tolerance.")
-    sys.stdout.flush()
 
     # 2. Compare Delta Total Electrostatic Energies (Direct + Reciprocal)
     print("\n--- Comparison 2: Delta Total (PGP Reciprocal + PME Direct/LJ vs PME Total) ---")
@@ -192,12 +176,10 @@ def test_compare_pgp_pme_delta_energies():
         relative_error_total = abs((delta_pgp_method_total - delta_pme_total_components) / delta_pme_total_components)
         print(f"Relative Error (Total): {relative_error_total:.4%}")
         assert relative_error_total < 0.1, f"Relative error in delta total ({relative_error_total:.2%}) exceeds tolerance (10%)"
-    else:
         absolute_diff_total = abs(delta_pgp_method_total - delta_pme_total_components)
         print(f"Absolute Difference (Total): {absolute_diff_total:.6f} kJ/mol (PME delta near zero)")
         assert absolute_diff_total < 1e-4, f"Absolute difference in delta total ({absolute_diff_total:.6f}) exceeds tolerance (1e-4) when PME delta is near zero"
     print("Delta total energies (using PGP reciprocal) match PME total within tolerance.")
-    sys.stdout.flush()
 
     # Optional: Check consistency of PME total reported vs sum of components
     assert math.isclose(delta_pme_total_reported, delta_pme_total_components, rel_tol=1e-9, abs_tol=1e-9), \
@@ -213,4 +195,4 @@ def test_compare_pgp_pme_delta_energies():
         print("However, initial PGP energy was 0 while PME energy was non-zero.")
         print("This is expected because PGP returns only the change in potential energy.")
         print("After precomputation, the 'zero state' is set to the initial configuration.")
-    sys.stdout.flush()
+"""

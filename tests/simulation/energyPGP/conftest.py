@@ -6,6 +6,7 @@ need special handling due to global state issues.
 """
 
 import pytest
+from . import pgp_wrapper
 
 def pytest_configure(config):
     """Register custom markers."""

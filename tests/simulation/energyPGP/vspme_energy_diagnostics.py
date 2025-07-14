@@ -3,11 +3,12 @@
 
 import math
 import pygcmc
-from pygcmc import MCState, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
-from pygcmc import computeSystemVdwEnergyCutoff, computeSystemEnergyPME, computeSystemEnergyPGP
-from pygcmc import computeMovementEnergyPME, computeMovementEnergyPGP
-from pygcmc import setPMEParameters, setPGPParameters, initializePMEParameters, precomputeGridPotential
-
+from . import pgp_wrapper
+from .pgp_wrapper import computeSystemVdwEnergyCutoff, computeSystemEnergyPME, computeSystemEnergyPGP, computeMovementEnergyPME
+from .pgp_wrapper import computeMovementEnergyPGP, setPMEParameters, setPGPParameters, initializePMEParameters
+from .pgp_wrapper import precomputeGridPotential
+from pygcmc import MCState, MCAtom, MCResidue
+from pygcmc import MCForceField, MCMovementResidueInfo
 
 def create_diagnostic_test_system():
     """Create a simple two-atom test system for energy calculation diagnostics."""
@@ -82,7 +83,6 @@ def create_diagnostic_test_system():
     
     return state, box_size, cutoff, sigma, eps
 
-
 def setup_energy_parameters(state, box_size, cutoff):
     """Initialize PME and PGP parameters for energy calculations."""
     mesh_size = [16, 16, 16]
@@ -91,9 +91,8 @@ def setup_energy_parameters(state, box_size, cutoff):
     
     setPMEParameters(alpha=alpha, meshSize=mesh_size, splineOrder=4, tolerance=1e-5)
     initializePMEParameters(cutoff, box, alpha)
-    setPGPParameters(alpha=alpha, meshSize=mesh_size, potential_cutoff=cutoff,
-                    potentialGridSize=mesh_size, splineOrder=4, tolerance=1e-5)
-    precomputeGridPotential(state, fixed_only=True)
+    setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
+    precomputeGridPotential(state)
     
     # Set moving residue information
     state.movementResidues.clear()
@@ -103,7 +102,6 @@ def setup_energy_parameters(state, box_size, cutoff):
     state.movementResidues.append(movement_info)
     
     return alpha, mesh_size
-
 
 def analyze_initial_state_energies(state, sigma, eps):
     """Analyze initial state energy components using different calculation methods."""
@@ -189,5 +187,4 @@ def analyze_initial_state_energies(state, sigma, eps):
     print(f"  PGP energy component sum: {pgp_reciprocal + pgp_real_space + pgp_self + pgp_vdw_total:.6f} kJ/mol")
     
     return vdw_total
-
 

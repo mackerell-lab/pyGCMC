@@ -4,16 +4,17 @@
 import pytest
 import math
 import pygcmc
-from pygcmc import MCMovementResidueInfo
-from pygcmc import computeSystemVdwEnergyCutoff, computeMovementEnergyPME, computeMovementEnergyPGP
-from pygcmc import setPMEParameters, setPGPParameters, initializePMEParameters, precomputeGridPotential
+from . import pgp_wrapper
+from .pgp_wrapper import setPMEParameters, initializePMEParameters, setPGPParameters
+from .pgp_wrapper import precomputeGridPotential, computeMovementEnergyPGP, computeMovementEnergyPME
+from .pgp_wrapper import computeSystemVdwEnergyCutoff
 import sys
+from pygcmc import MCMovementResidueInfo
 from .vspme_lj_helpers import (
     create_lj_test_system,
     test_cumulative_energy_changes,
     print_test_summary
 )
-
 
 def test_lj_energy_pme_pgp():
     """
@@ -23,7 +24,6 @@ def test_lj_energy_pme_pgp():
     1. LJ energy calculations are within reasonable range
     2. Different calculation methods (direct, PME, PGP) produce consistent energy changes
     3. Movement functions correctly calculate energy changes rather than absolute energies
-    """
     # --- Parameter Settings ---
     box_size = 4.0  # nm
     cutoff = 1.2    # nm
@@ -58,9 +58,8 @@ def test_lj_energy_pme_pgp():
     # --- Initialize PME/PGP Parameters ---
     setPMEParameters(alpha=alpha, meshSize=mesh_size, splineOrder=spline_order, tolerance=tolerance)
     initializePMEParameters(cutoff, box, alpha)
-    setPGPParameters(alpha=alpha, meshSize=mesh_size, potential_cutoff=cutoff,
-                    potentialGridSize=mesh_size, splineOrder=spline_order, tolerance=tolerance)
-    precomputeGridPotential(state, fixed_only=True)
+    setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
+    precomputeGridPotential(state)
     
     print("\n1. Initial state energy calculation")
     
@@ -158,7 +157,6 @@ def test_lj_energy_pme_pgp():
         # Calculate direct LJ energy
         computeSystemVdwEnergyCutoff(state)
         direct_lj = 0.0
-        for res in state.residues:
             direct_lj += res.energy_vdw
         
         # Calculate PME movement energy
@@ -187,3 +185,4 @@ def test_lj_energy_pme_pgp():
     
     # Print test summary
     print_test_summary(cumul_pme_error, cumul_pgp_error)
+"""

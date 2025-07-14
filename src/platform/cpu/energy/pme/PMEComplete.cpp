@@ -2,6 +2,8 @@
 #include "PMEComposite.hpp"
 #include "PMEReal.hpp"
 #include <cmath>
+#include <stdexcept>
+#include <algorithm>
 
 namespace pygcmc {
 namespace platform {
@@ -43,8 +45,14 @@ EnergyComponents PMEComplete::computeCompleteEnergy(model::MCState& state) {
         }
     }
     
+    // Validate state consistency before calculation
+    if (state.activeAtomCount > static_cast<int>(state.atoms.size())) {
+        throw std::runtime_error("PMEComplete: activeAtomCount exceeds atoms.size()");
+    }
+    
     // Calculate all LJ pairwise interactions (including intramolecular)
-    for (int i = 0; i < state.activeAtomCount - 1; ++i) {
+    const int maxAtoms = std::min(state.activeAtomCount, static_cast<int>(state.atoms.size()));
+    for (int i = 0; i < maxAtoms - 1; ++i) {
         const auto& atom_i = state.atoms[i];
         int res_i = -1;
         for (int r = 0; r < state.activeResidueCount; ++r) {
@@ -55,7 +63,7 @@ EnergyComponents PMEComplete::computeCompleteEnergy(model::MCState& state) {
             }
         }
         
-        for (int j = i + 1; j < state.activeAtomCount; ++j) {
+        for (int j = i + 1; j < maxAtoms; ++j) {
             const auto& atom_j = state.atoms[j];
             int res_j = -1;
             for (int r = 0; r < state.activeResidueCount; ++r) {
@@ -128,8 +136,11 @@ EnergyComponents PMEComplete::computeCompleteEnergyCutoff(model::MCState& state)
         }
     }
     
+    // Validate state consistency before calculation
+    const int maxAtoms = std::min(state.activeAtomCount, static_cast<int>(state.atoms.size()));
+    
     // Calculate all pairwise interactions (including intramolecular)
-    for (int i = 0; i < state.activeAtomCount - 1; ++i) {
+    for (int i = 0; i < maxAtoms - 1; ++i) {
         const auto& atom_i = state.atoms[i];
         int res_i = -1;
         for (int r = 0; r < state.activeResidueCount; ++r) {
@@ -140,7 +151,7 @@ EnergyComponents PMEComplete::computeCompleteEnergyCutoff(model::MCState& state)
             }
         }
         
-        for (int j = i + 1; j < state.activeAtomCount; ++j) {
+        for (int j = i + 1; j < maxAtoms; ++j) {
             const auto& atom_j = state.atoms[j];
             int res_j = -1;
             for (int r = 0; r < state.activeResidueCount; ++r) {

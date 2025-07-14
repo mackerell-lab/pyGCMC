@@ -7,9 +7,13 @@ implements the PGP method with complete interactions (including intramolecular).
 
 import pytest
 import pygcmc
-from pygcmc import MCState, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
+from . import pgp_wrapper
+from .pgp_wrapper import setPMEParameters, initializePMEParameters, setPGPParameters
+from .pgp_wrapper import precomputeGridPotential, computeSystemEnergyPGP, computeSystemEnergyPGPComplete
+from .pgp_wrapper import computeMovementEnergyPGPComplete, resetPGPState
 import math
-
+from pygcmc import MCState, MCAtom, MCResidue
+from pygcmc import MCForceField, MCMovementResidueInfo
 
 def test_pgp_complete_consistency():
     """Test that PGP Complete is internally consistent"""
@@ -73,15 +77,15 @@ def test_pgp_complete_consistency():
     mesh_size = [64, 64, 64]
     spline_order = 4
     
-    pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
-    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
-    pygcmc.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, spline_order, 1e-6)
+    pgp_wrapper.setPMEParameters(alpha, mesh_size, spline_order)
+    pgp_wrapper.initializePMEParameters(state.info.cutoff, state.info.box, alpha)
+    pgp_wrapper.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
     
     # Precompute PGP grid for fixed particles
-    pygcmc.precomputeGridPotential(state, fixed_only=True)
+    pgp_wrapper.precomputeGridPotential(state, fixed_only=True)
     
     # Calculate initial energy
-    elec1, vdw1, total1 = pygcmc.computeSystemEnergyPGPComplete(state)
+    elec1, vdw1, total1 = pgp_wrapper.computeSystemEnergyPGPComplete(state)
     print(f"\nInitial PGP Complete:")
     print(f"  Electrostatic: {elec1:.6f} kJ/mol")
     print(f"  VdW:          {vdw1:.6f} kJ/mol")
@@ -91,7 +95,7 @@ def test_pgp_complete_consistency():
     state.atoms[2].x = 2.6
     
     # Calculate new energy
-    elec2, vdw2, total2 = pygcmc.computeSystemEnergyPGPComplete(state)
+    elec2, vdw2, total2 = pgp_wrapper.computeSystemEnergyPGPComplete(state)
     print(f"\nAfter moving particle:")
     print(f"  Electrostatic: {elec2:.6f} kJ/mol")
     print(f"  VdW:          {vdw2:.6f} kJ/mol")
@@ -115,7 +119,7 @@ def test_pgp_complete_consistency():
     state.atoms[2].x = 2.5
     
     # Calculate energy again - should match original
-    elec3, vdw3, total3 = pygcmc.computeSystemEnergyPGPComplete(state)
+    elec3, vdw3, total3 = pgp_wrapper.computeSystemEnergyPGPComplete(state)
     print(f"\nAfter moving back:")
     print(f"  Electrostatic: {elec3:.6f} kJ/mol")
     print(f"  VdW:          {vdw3:.6f} kJ/mol")
@@ -126,7 +130,6 @@ def test_pgp_complete_consistency():
     assert abs(elec3 - elec1) < 1e-6, f"Electrostatic energy should be reversible, got diff {abs(elec3 - elec1)}"
     assert abs(vdw3 - vdw1) < 1e-10, f"VdW energy should be reversible, got diff {abs(vdw3 - vdw1)}"
     assert abs(total3 - total1) < 1e-6, f"Total energy should be reversible, got diff {abs(total3 - total1)}"
-
 
 def test_pgp_complete_intramolecular():
     """Test that PGP Complete correctly includes intramolecular interactions"""
@@ -183,22 +186,22 @@ def test_pgp_complete_intramolecular():
     mesh_size = [32, 32, 32]
     spline_order = 4
     
-    pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
-    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
-    pygcmc.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, spline_order, 1e-6)
+    pgp_wrapper.setPMEParameters(alpha, mesh_size, spline_order)
+    pgp_wrapper.initializePMEParameters(state.info.cutoff, state.info.box, alpha)
+    pgp_wrapper.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
     
     # No fixed particles to precompute
-    pygcmc.precomputeGridPotential(state, fixed_only=True)
+    pgp_wrapper.precomputeGridPotential(state, fixed_only=True)
     
     # Calculate energy with PGP Complete
-    elec_pgp, vdw_pgp, total_pgp = pygcmc.computeSystemEnergyPGPComplete(state)
+    elec_pgp, vdw_pgp, total_pgp = pgp_wrapper.computeSystemEnergyPGPComplete(state)
     print(f"\nPGP Complete (includes intramolecular):")
     print(f"  Electrostatic: {elec_pgp:.6f} kJ/mol")
     print(f"  VdW:          {vdw_pgp:.6f} kJ/mol")
     print(f"  Total:        {total_pgp:.6f} kJ/mol")
     
     # Calculate energy with standard PGP (excludes intramolecular LJ)
-    elec_std, vdw_std, pgp_dict = pygcmc.computeSystemEnergyPGP(state)
+    elec_std, vdw_std, pgp_dict = pgp_wrapper.computeSystemEnergyPGP(state)
     total_std = pgp_dict["total"]
     print(f"\nStandard PGP (excludes intramolecular LJ):")
     print(f"  Electrostatic: {elec_std:.6f} kJ/mol")
@@ -227,7 +230,6 @@ def test_pgp_complete_intramolecular():
     # but both should be negative (attractive between opposite charges)
     assert elec_pgp < 0, "Electrostatic energy should be negative for opposite charges"
     assert elec_std < 0, "Electrostatic energy should be negative for opposite charges"
-
 
 def test_pgp_complete_movement_energy():
     """Test PGP Complete movement energy calculation"""
@@ -291,22 +293,22 @@ def test_pgp_complete_movement_energy():
     mesh_size = [32, 32, 32]
     spline_order = 4
     
-    pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
-    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
-    pygcmc.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, spline_order, 1e-6)
+    pgp_wrapper.setPMEParameters(alpha, mesh_size, spline_order)
+    pgp_wrapper.initializePMEParameters(state.info.cutoff, state.info.box, alpha)
+    pgp_wrapper.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
     
     # Precompute grid for fixed particles
-    pygcmc.precomputeGridPotential(state, fixed_only=True)
+    pgp_wrapper.precomputeGridPotential(state, fixed_only=True)
     
     # Calculate full system energy
-    elec_full, vdw_full, total_full = pygcmc.computeSystemEnergyPGPComplete(state)
+    elec_full, vdw_full, total_full = pgp_wrapper.computeSystemEnergyPGPComplete(state)
     print(f"\nFull system energy:")
     print(f"  Electrostatic: {elec_full:.6f} kJ/mol")
     print(f"  VdW:          {vdw_full:.6f} kJ/mol")
     print(f"  Total:        {total_full:.6f} kJ/mol")
     
     # Calculate movement energy only
-    result = pygcmc.computeMovementEnergyPGPComplete(state)
+    result = pgp_wrapper.computeMovementEnergyPGPComplete(state)
     if isinstance(result, tuple) and len(result) == 3:
         elec_move, vdw_move, pgp_dict = result
         total_move = pgp_dict["total"] if isinstance(pgp_dict, dict) else elec_move + vdw_move
@@ -326,7 +328,7 @@ def test_pgp_complete_movement_energy():
     state.activeResidueCount = 2
     
     # Calculate energy without moveable particle
-    elec_fixed, vdw_fixed, total_fixed = pygcmc.computeSystemEnergyPGPComplete(state)
+    elec_fixed, vdw_fixed, total_fixed = pgp_wrapper.computeSystemEnergyPGPComplete(state)
     print(f"\nFixed particles only:")
     print(f"  Electrostatic: {elec_fixed:.6f} kJ/mol")
     print(f"  VdW:          {vdw_fixed:.6f} kJ/mol")
@@ -348,7 +350,6 @@ def test_pgp_complete_movement_energy():
     print(f"  Elec diff vs move: {abs(elec_diff - elec_move):.6e}")
     print(f"  VdW diff vs move:  {abs(vdw_diff - vdw_move):.6e}")
     print(f"  Total diff vs move: {abs(total_diff - total_move):.6e}")
-
 
 if __name__ == "__main__":
     test_pgp_complete_consistency()

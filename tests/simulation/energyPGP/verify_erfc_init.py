@@ -6,10 +6,11 @@ Verify the erfc initialization issue.
 import sys
 sys.path.insert(0, '/home/zhaomt/gcmc/test107/pygcmc_dev/build')
 import pygcmc
-from pygcmc import MCState, MCAtom, MCResidue, MCForceField
-from pygcmc import setPMEParameters, initializePMEParameters, computeSystemEnergyPME
+from . import pgp_wrapper
+from .pgp_wrapper import setPMEParameters, initializePMEParameters, computeSystemEnergyPME
 import math
-
+from pygcmc import MCState, MCAtom, MCResidue
+from pygcmc import MCForceField
 
 def verify_erfc_init():
     """Verify erfc initialization."""
@@ -74,11 +75,11 @@ def verify_erfc_init():
             initializePMEParameters(state.info.cutoff, state.info.box, alpha)
         else:
             print("Order: initializePMEParameters only (auto mode)")
-            initializePMEParameters(state.info.cutoff, state.info.box, 0.0)  # alpha=0 for auto
+            initializePMEParameters(state.info.cutoff)  # alpha=0 for auto
         
         computeSystemEnergyPME(state)
         
-        print(f"Total energy: {state.ewald_energy.get('total', 0.0):.2f} kJ/mol")
+        print(f"Total energy: {state.ewald_energy.get('total'):.2f} kJ/mol")
         print(f"Self energy: {state.ewald_energy.get('self', 0.0):.2f} kJ/mol")
         
         # The self energy is correct, so alpha is being set
@@ -106,7 +107,6 @@ def verify_erfc_init():
     print("\nThe fact that we're getting -19303 kJ/mol per residue suggests:")
     print(f"  erfcApprox is returning {-19303 * 2 / (-kC):.6f} instead of {erfc_val:.6f}")
     print(f"  That's a factor of {(-19303 * 2 / (-kC)) / erfc_val:.1f}")
-
 
 if __name__ == "__main__":
     verify_erfc_init()

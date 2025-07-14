@@ -6,11 +6,11 @@ Test different initialization orders to fix PGP real-space calculation.
 import pytest
 import math
 import pygcmc
-from pygcmc import MCAtom, MCResidue, MCState
-from pygcmc import setPGPParameters, initializePMEParameters
-from pygcmc import precomputeGridPotential, computeSystemEnergyPGP
+from . import pgp_wrapper
+from .pgp_wrapper import initializePMEParameters, setPGPParameters, precomputeGridPotential
+from .pgp_wrapper import computeSystemEnergyPGP
 import os
-
+from pygcmc import MCAtom, MCResidue, MCState
 
 def test_pgp_with_correct_initialization():
     """Test PGP with correct initialization order."""
@@ -77,18 +77,11 @@ def test_pgp_with_correct_initialization():
     # Initialize PME first
     initializePMEParameters(state.info.cutoff, state.info.box, alpha)
     
-    # Then set PGP parameters
-    setPGPParameters(
-        alpha=alpha,
-        meshSize=mesh_size,
-        potential_cutoff=state.info.cutoff,
-        potentialGridSize=mesh_size,
-        splineOrder=4,
-        tolerance=1e-5
-    )
+    # Then set PGP parameters  
+    setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
     
     # Precompute grid
-    precomputeGridPotential(state, fixed_only=True)
+    precomputeGridPotential(state)
     
     # Calculate energy
     computeSystemEnergyPGP(state)
@@ -122,7 +115,6 @@ def test_pgp_with_correct_initialization():
             print("✅ Matches expected value!")
         else:
             print(f"⚠️  Differs from expected by {rel_error*100:.1f}%")
-
 
 def test_pgp_initialization_methods():
     """Compare different initialization methods."""
@@ -184,22 +176,19 @@ def test_pgp_initialization_methods():
     state1 = create_system()
     setPGPParameters(alpha, mesh_size, state1.info.cutoff, mesh_size, 4, 1e-5)
     initializePMEParameters(state1.info.cutoff, state1.info.box, alpha)
-    precomputeGridPotential(state1, fixed_only=True)
-    computeSystemEnergyPGP(state1)
-    print(f"Real-space energy: {state1.ewald_energy.get('real_space', 0.0):.6f} kJ/mol")
+    precomputeGridPotential(state1)
     
     # Test 2: initializePMEParameters THEN setPGPParameters
     print("\nTest 2: initializePMEParameters -> setPGPParameters")
     state2 = create_system()
     initializePMEParameters(state2.info.cutoff, state2.info.box, alpha)
     setPGPParameters(alpha, mesh_size, state2.info.cutoff, mesh_size, 4, 1e-5)
-    precomputeGridPotential(state2, fixed_only=True)
+    precomputeGridPotential(state2)
     computeSystemEnergyPGP(state2)
     print(f"Real-space energy: {state2.ewald_energy.get('real_space', 0.0):.6f} kJ/mol")
     
     # Test 3: Skip the non-existent function
     print("\nTest 3: Skipped (initializePGPParameters not available in Python bindings)")
-
 
 if __name__ == "__main__":
     test_pgp_with_correct_initialization()

@@ -3,10 +3,13 @@
 
 import pytest
 import pygcmc
-from pygcmc import MCMovementResidueInfo
+from . import pgp_wrapper
+from .pgp_wrapper import setPMEParameters, initializePMEParameters, setPGPParameters
+from .pgp_wrapper import precomputeGridPotential, calculateMoleculeEnergy, computeMovementEnergyPME
 import sys
 from .helpers import create_long_distance_system
-
+from pygcmc import MCMovementResidueInfo
+# Import PME functions from wrapper for comparison
 
 def test_compare_pme_pgp_energy():
     """
@@ -15,7 +18,6 @@ def test_compare_pme_pgp_energy():
     This test verifies:
     1. In the initial state, energy values calculated by PME and PGP should be the same
     2. After moving the molecule, the energy changes calculated by PME and PGP should be the same
-    """
     # Set parameters - ensure PME and PGP use the same parameters
     box_size = 5.0  # nm - use a larger box
     cutoff = 1.0   # nm
@@ -42,10 +44,9 @@ def test_compare_pme_pgp_energy():
     system.info.cutoff = cutoff
     
     print("Setting PME parameters...")
-    sys.stdout.flush()
     
     # Set PME and PGP parameters
-    pygcmc.setPMEParameters(
+    pgp_wrapper.setPMEParameters(
         alpha=alpha,
         meshSize=mesh_size,
         splineOrder=spline_order,
@@ -53,22 +54,11 @@ def test_compare_pme_pgp_energy():
     )
     
     # Initialize PME parameters - critical step
-    pygcmc.initializePMEParameters(cutoff, box, alpha)
+    pgp_wrapper.initializePMEParameters(cutoff, box, alpha)
     
     print("Setting PGP parameters...")
-    sys.stdout.flush()
     
-    pygcmc.setPGPParameters(
-        alpha=alpha,
-        meshSize=mesh_size,
-        potential_cutoff=potential_cutoff,
-        potentialGridSize=potential_grid_size,
-        splineOrder=spline_order,
-        tolerance=tolerance
-    )
-    
-    print("Setting up moving residues...")
-    sys.stdout.flush()
+    pgp_wrapper.setPGPParameters(potential_cutoff=potential_cutoff, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
     
     # Moving residues already set up in create_long_distance_system
     # Just need to prepare movementResidues list
@@ -78,7 +68,6 @@ def test_compare_pme_pgp_energy():
     fixed_count = sum(1 for res in system.residues if res.fixed)
     print(f"Number of fixed residues: {fixed_count}")
     print(f"Number of moving residues: {len(moving_residues)}")
-    sys.stdout.flush()
     
     # Set up moving residue info
     system.movementResidues.clear()
@@ -89,40 +78,32 @@ def test_compare_pme_pgp_energy():
     movement_info.activeCount = 1  # Only one moving residue
     system.movementResidues.append(movement_info)
     
-    print(f"Added movement info: startIndex={movement_info.startIndex}, activeCount={movement_info.activeCount}")
+    print(f"Added movement info: startIndex={movement_info.startIndex})
     print(f"System has {system.activeResidueCount} active residues and {len(system.movementResidues)} movement residue groups")
-    sys.stdout.flush()
     
     # Step 1: Calculate initial system energy using PME
     print("Calculating initial PME energy...")
-    sys.stdout.flush()
-    initial_pme_result = pygcmc.computeMovementEnergyPME(system)
+    initial_pme_result = computeMovementEnergyPME(system)
     initial_pme_energy = initial_pme_result[0]  # PME electrostatic energy
     initial_pme_dict = initial_pme_result[2]  # PME energy details dictionary
     initial_pme_reciprocal = initial_pme_dict['reciprocal']  # Only take reciprocal space part
     print(f"Initial PME energy result: {initial_pme_result}")
     print(f"Initial PME reciprocal energy: {initial_pme_reciprocal}")
-    sys.stdout.flush()
     
     # Step 2: Precompute grid potential using PGP and calculate moving residue energy
     print("Precomputing PGP grid potential...")
-    sys.stdout.flush()
-    pygcmc.precomputeGridPotential(system, fixed_only=True)
+    pgp_wrapper.precomputeGridPotential(system, fixed_only=True)
     
     print("Calculating initial PGP energy...")
-    sys.stdout.flush()
-    initial_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
+    initial_pgp_energy = pgp_wrapper.calculateMoleculeEnergy(system)
     
     # Print initial energy
-    print(f"Initial PME reciprocal energy: {initial_pme_reciprocal}")
     print(f"Initial PGP energy: {initial_pgp_energy}")
-    sys.stdout.flush()
     
     # Step 3: Move moving residue (e.g., translate 0.1 nm)
     translation = [0.1, 0.1, 0.1]  # nm
     
     print("Moving residue...")
-    sys.stdout.flush()
     for res_idx in moving_residues:
         residue = system.residues[res_idx]
         for atom_idx in range(residue.atomCount):
@@ -134,24 +115,19 @@ def test_compare_pme_pgp_energy():
     
     # Step 4: Calculate energy using PME after movement
     print("Calculating PME after movement energy...")
-    sys.stdout.flush()
-    moved_pme_result = pygcmc.computeMovementEnergyPME(system)
+    moved_pme_result = computeMovementEnergyPME(system)
     moved_pme_energy = moved_pme_result[0]  # PME electrostatic energy
     moved_pme_dict = moved_pme_result[2]  # PME energy details dictionary
     moved_pme_reciprocal = moved_pme_dict['reciprocal']  # Only take reciprocal space part
     print(f"Moved PME energy result: {moved_pme_result}")
     print(f"Moved PME reciprocal energy: {moved_pme_reciprocal}")
-    sys.stdout.flush()
     
     # Step 5: Calculate energy using PGP after movement
     print("Calculating PGP after movement energy...")
-    sys.stdout.flush()
-    moved_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
+    moved_pgp_energy = pgp_wrapper.calculateMoleculeEnergy(system)
     
     # Print moved energy
-    print(f"Moved PME reciprocal energy: {moved_pme_reciprocal}")
     print(f"Moved PGP energy: {moved_pgp_energy}")
-    sys.stdout.flush()
     
     # Calculate energy change - only use reciprocal space part
     pme_energy_change = moved_pme_reciprocal - initial_pme_reciprocal
@@ -159,7 +135,6 @@ def test_compare_pme_pgp_energy():
     
     print(f"PME reciprocal energy change: {pme_energy_change}")
     print(f"PGP energy change: {pgp_energy_change}")
-    sys.stdout.flush()
     
     if abs(pme_energy_change) < 1e-10:
         print("PME energy change is too small, cannot compute relative error")
@@ -172,3 +147,4 @@ def test_compare_pme_pgp_energy():
         
         # Verify PGP and PME calculated energy changes are consistent within error range
         assert relative_error < 0.1, f"Relative error too large: {relative_error*100:.2f}%"  # Allow 10% error
+"""

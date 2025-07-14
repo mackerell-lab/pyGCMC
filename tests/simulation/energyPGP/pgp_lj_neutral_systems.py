@@ -9,11 +9,10 @@ when there are no electrostatic contributions in the system.
 import pytest
 import math
 import pygcmc
+from . import pgp_wrapper
+from .pgp_wrapper import setPGPParameters, initializePMEParameters, precomputeGridPotential, computeSystemEnergyPGP
+from .pgp_wrapper import computeMovementEnergyPGP, computeSystemVdwEnergyCutoff, computeSystemEnergyPGP
 from pygcmc import MCAtom, MCResidue, MCState
-from pygcmc import setPGPParameters, initializePMEParameters, precomputeGridPotential
-from pygcmc import computeSystemEnergyPGP, computeMovementEnergyPGP
-from pygcmc import computeSystemVdwEnergyCutoff
-
 
 def create_lj_only_system(box_size=5.0, cutoff=1.2):
     """Create a simple system with neutral atoms that have LJ parameters."""
@@ -91,7 +90,6 @@ def create_lj_only_system(box_size=5.0, cutoff=1.2):
     
     return state
 
-
 def calculate_lj_energy_manual(atoms, epsilon, sigma, cutoff):
     """Manually calculate LJ energy for verification."""
     total_energy = 0.0
@@ -114,7 +112,6 @@ def calculate_lj_energy_manual(atoms, epsilon, sigma, cutoff):
                 total_energy += lj_energy
     
     return total_energy
-
 
 def test_pgp_lj_only_system():
     """Test PGP with neutral atoms to verify LJ calculation."""
@@ -176,13 +173,9 @@ def test_pgp_lj_only_system():
     
     # Precompute grid potential (should be zero for neutral atoms)
     print("   Precomputing grid potential for fixed atoms...")
-    precomputeGridPotential(system, fixed_only=True)
-    
-    # Compute system energy using PGP
-    computeSystemEnergyPGP(system)
-    
+    precomputeGridPotential(system)
     print(f"   PGP reciprocal energy: {system.ewald_energy.get('reciprocal', 0.0):.6f} kJ/mol (should be ~0)")
-    print(f"   PGP real space energy: {system.ewald_energy.get('real_space', 0.0):.6f} kJ/mol (should be ~0)")
+    print(f"   PGP real space energy: {system.ewald_energy.get('real_space'):.6f} kJ/mol (should be ~0)")
     print(f"   PGP self energy: {system.ewald_energy.get('self', 0.0):.6f} kJ/mol (should be 0)")
     
     # Get LJ from residues
@@ -236,5 +229,4 @@ def test_pgp_lj_only_system():
     assert delta_total > 0, f"LJ energy should increase when moving away, got delta = {delta_total}"
     
     print("\n✅ PGP correctly handles LJ-only systems!")
-
 

@@ -12,11 +12,11 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pygcmc
-from pygcmc import MCState, MCAtom, MCResidue, MCForceField
-from pygcmc import initializePMEParameters, computeSystemEnergyPMEComplete
-from pygcmc import setPMEParameters, setPGPParameters
-from pygcmc import precomputeGridPotential, calculateMoleculeEnergy
-
+from . import pgp_wrapper
+from .pgp_wrapper import setPMEParameters, initializePMEParameters, setPGPParameters
+from .pgp_wrapper import precomputeGridPotential, calculateMoleculeEnergy, computeSystemEnergyPMEComplete
+from pygcmc import MCState, MCAtom, MCResidue
+from pygcmc import MCForceField
 
 def create_test_system():
     """Create a simple test system with fixed and moveable particles"""
@@ -78,7 +78,6 @@ def create_test_system():
     
     return state
 
-
 def test_pgp_absolute_energy_validation():
     """Test PGP absolute energy against PME Complete"""
     
@@ -95,7 +94,7 @@ def test_pgp_absolute_energy_validation():
     
     # Initialize PME
     setPMEParameters(alpha, mesh_size, spline_order)
-    initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
+    initializePMEParameters(state.info.cutoff, state.info.box, alpha)
     
     # Calculate PME Complete energy
     elec, vdw, total = computeSystemEnergyPMEComplete(state)
@@ -127,7 +126,6 @@ def test_pgp_absolute_energy_validation():
     if abs(pgp_energy) < 0.01:
         print("Warning: PGP energy is near zero - this may be expected for certain configurations")
 
-
 def test_pgp_fixed_particle_contribution():
     """Test PGP with only fixed particles"""
     
@@ -146,7 +144,7 @@ def test_pgp_fixed_particle_contribution():
     
     # Initialize PME
     setPMEParameters(alpha, mesh_size, spline_order)
-    initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
+    initializePMEParameters(state.info.cutoff, state.info.box, alpha)
     
     # Calculate PME Complete energy
     elec, vdw, total = computeSystemEnergyPMEComplete(state)
@@ -162,7 +160,6 @@ def test_pgp_fixed_particle_contribution():
     # With no moveable particles, PGP energy should be zero
     # (since there's nothing to calculate energy for)
     print("PGP with no moveable particles - grid precomputed successfully")
-
 
 if __name__ == "__main__":
     test_pgp_absolute_energy_validation()

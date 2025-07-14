@@ -6,10 +6,10 @@ Test to verify if PGP real-space issue is due to cutoff check.
 import pytest
 import math
 import pygcmc
+from . import pgp_wrapper
+from .pgp_wrapper import initializePMEParameters, setPGPParameters, precomputeGridPotential, computeSystemEnergyPGP
+from .pgp_wrapper import computeSystemEnergyPGP, computeSystemEnergyPME
 from pygcmc import MCAtom, MCResidue, MCState
-from pygcmc import setPGPParameters, initializePMEParameters, precomputeGridPotential
-from pygcmc import computeSystemEnergyPGP, computeSystemEnergyPME
-
 
 def test_pgp_cutoff_issue():
     """Test if PGP real-space issue is due to cutoff check in erfcApproximate."""
@@ -74,16 +74,9 @@ def test_pgp_cutoff_issue():
     initializePMEParameters(state.info.cutoff, state.info.box, alpha)
     
     # Then PGP
-    setPGPParameters(
-        alpha=alpha,
-        meshSize=mesh_size,
-        potential_cutoff=state.info.cutoff,
-        potentialGridSize=mesh_size,
-        splineOrder=4,
-        tolerance=1e-5
-    )
+    setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
     
-    precomputeGridPotential(state, fixed_only=True)
+    precomputeGridPotential(state)
     
     # Calculate with PME
     print("\nPME calculation:")
@@ -111,7 +104,6 @@ def test_pgp_cutoff_issue():
         print("which uses pme_params instead of pgp_params")
     else:
         print("\n✅ PGP real-space is non-zero")
-
 
 def test_pgp_with_different_cutoffs():
     """Test PGP with different cutoff values."""
@@ -178,8 +170,8 @@ def test_pgp_with_different_cutoffs():
         
         # Initialize
         initializePMEParameters(cutoff, state.info.box, alpha)
-        setPGPParameters(alpha, mesh_size, cutoff, mesh_size, 4, 1e-5)
-        precomputeGridPotential(state, fixed_only=True)
+        setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
+        precomputeGridPotential(state)
         
         # Calculate
         computeSystemEnergyPGP(state)
@@ -193,7 +185,6 @@ def test_pgp_with_different_cutoffs():
             print("✓ Zero as expected (distance >= cutoff)")
         else:
             print("✅ Non-zero")
-
 
 if __name__ == "__main__":
     test_pgp_cutoff_issue()

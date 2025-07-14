@@ -4,8 +4,9 @@
 import math
 import random
 import pygcmc
-from pygcmc import MCState, MCInfo, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
 import sys
+from pygcmc import MCState, MCInfo, MCAtom
+from pygcmc import MCResidue, MCForceField, MCMovementResidueInfo
 
 # Set log level to INFO or lower to ensure detailed log output
 # System log settings
@@ -21,7 +22,6 @@ pygcmc.set_platform_debug_mode(True)  # Enable debug mode for testing
 sys.stdout.flush()
 print("Log level settings completed")
 sys.stdout.flush()
-
 
 def create_nacl_crystal(box_size, n_cells):
     """
@@ -103,7 +103,6 @@ def create_nacl_crystal(box_size, n_cells):
     state.activeResidueCount = len(residues)
     
     return state
-
 
 def create_long_distance_system(box_size):
     """
@@ -201,7 +200,6 @@ def create_long_distance_system(box_size):
     
     return state
 
-
 def calculate_pbc_distance(pos1, pos2, box_size):
     """Calculate distance between two points in periodic boundary conditions"""
     dx = abs(pos1[0] - pos2[0])
@@ -218,7 +216,6 @@ def calculate_pbc_distance(pos1, pos2, box_size):
 
     return math.sqrt(dx*dx + dy*dy + dz*dz)
 
-
 def is_safe_position(mobile_positions, fixed_positions, cutoff, box_size):
     """Check if all distances between mobile particles and fixed particles are > cutoff"""
     for mobile_pos in mobile_positions:
@@ -227,7 +224,6 @@ def is_safe_position(mobile_positions, fixed_positions, cutoff, box_size):
             if distance <= cutoff:
                 return False, distance
     return True, None
-
 
 def generate_safe_move(current_positions, fixed_positions, cutoff, box_size, max_step=0.3):
     """Generate a safe random movement vector, ensuring all particles are at distance > cutoff from fixed particles after movement"""

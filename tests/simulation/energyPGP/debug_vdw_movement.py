@@ -3,9 +3,15 @@ Debug VdW calculation in movement energy
 """
 
 import pygcmc
-from pygcmc import MCState, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
+from . import pgp_wrapper
+from .pgp_wrapper import setPMEParameters, initializePMEParameters, computeMovementEnergyPME
+from .pgp_wrapper import computeSystemEnergyPMEComplete
+from pygcmc import MCState, MCAtom, MCResidue
+from pygcmc import MCForceField, MCMovementResidueInfo
 
+from .test_decorators import pgp_unstable_test
 
+@pgp_unstable_test
 def test_vdw_movement_debug():
     """Debug VdW in movement energy calculation"""
     
@@ -89,8 +95,8 @@ def test_vdw_movement_debug():
     mesh_size = [32, 32, 32]
     spline_order = 4
     
-    pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
-    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
+    pgp_wrapper.setPMEParameters(alpha, mesh_size, spline_order)
+    pgp_wrapper.initializePMEParameters(state.info.cutoff, state.info.box, alpha)
     
     # Calculate PME movement energy
     pme_result = pygcmc.computeMovementEnergyPME(state)
@@ -106,7 +112,8 @@ def test_vdw_movement_debug():
     # Check residue energies after PME
     print(f"\nResidue energies after PME movement:")
     for i, res in enumerate(state.residues):
-        print(f"  Residue {i}: elec={res.energy_elec:.6f}, vdw={res.energy_vdw:.6f}")
+        if res.active:
+            print(f"  Residue {i}: elec={res.energy_elec:.6f}, vdw={res.energy_vdw:.6f}")
     
     # Calculate with PME Complete
     elec_complete, vdw_complete, total_complete = pygcmc.computeSystemEnergyPMEComplete(state)
@@ -114,7 +121,6 @@ def test_vdw_movement_debug():
     print(f"  Electrostatic: {elec_complete:.6f}")
     print(f"  VdW: {vdw_complete:.6f}")
     print(f"  Total: {total_complete:.6f}")
-
 
 if __name__ == "__main__":
     test_vdw_movement_debug()

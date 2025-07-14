@@ -2,8 +2,9 @@
 """PGP asymmetric water movement loop - Complete version with all original functionality."""
 
 import pygcmc
+from . import pgp_wrapper
+from .pgp_wrapper import calculateMoleculeEnergy, computeMovementEnergyPME, computeSystemEnergyEwald
 from .helpers import calculate_pbc_distance, is_safe_position, generate_safe_move
-
 
 def execute_movement_loop(system, mobile_res, fixed_particles, num_moves, 
                          pgp_pme_errors, ewald_pme_errors, pgp_ewald_errors, 
@@ -29,7 +30,7 @@ def execute_movement_loop(system, mobile_res, fixed_particles, num_moves,
         initial_pme_reciprocal = initial_pme_dict['reciprocal']
         
         # PGP energy calculation
-        initial_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
+        initial_pgp_energy = pgp_wrapper.calculateMoleculeEnergy(system)
         
         print(f"Initial Ewald reciprocal energy: {initial_ewald_reciprocal}")
         print(f"Initial PME reciprocal energy: {initial_pme_reciprocal}")
@@ -91,7 +92,7 @@ def execute_movement_loop(system, mobile_res, fixed_particles, num_moves,
             print("This means there are particles < cutoff!")
         
         # PGP energy calculation
-        moved_pgp_energy = pygcmc.calculateMoleculeEnergy(system)
+        moved_pgp_energy = pgp_wrapper.calculateMoleculeEnergy(system)
         
         print(f"Moved Ewald reciprocal energy: {moved_ewald_reciprocal}")
         print(f"Moved PME reciprocal energy: {moved_pme_reciprocal}")

@@ -6,10 +6,10 @@ Debug test to understand why PGP real-space is zero.
 import pytest
 import math
 import pygcmc
+from . import pgp_wrapper
+from .pgp_wrapper import initializePMEParameters, setPGPParameters, precomputeGridPotential
+from .pgp_wrapper import computeSystemEnergyPGP, computeSystemEnergyPME
 from pygcmc import MCAtom, MCResidue, MCState
-from pygcmc import setPGPParameters, initializePMEParameters, precomputeGridPotential
-from pygcmc import computeSystemEnergyPGP, computeSystemEnergyPME
-
 
 def test_pgp_real_space_debug():
     """Debug test with two atoms in DIFFERENT residues."""
@@ -88,14 +88,10 @@ def test_pgp_real_space_debug():
     )
     
     initializePMEParameters(state.info.cutoff, state.info.box, alpha)
-    precomputeGridPotential(state, fixed_only=True)
-    
-    # Calculate with PGP
-    print("\n--- PGP Calculation ---")
+    precomputeGridPotential(state)
     computeSystemEnergyPGP(state)
-    
-    pgp_real = state.ewald_energy.get('real_space', 0.0)
-    pgp_recip = state.ewald_energy.get('reciprocal', 0.0)
+    pgp_real = state.ewald_energy.get("real_space", 0.0)
+    pgp_recip = state.ewald_energy.get('reciprocal')
     pgp_self = state.ewald_energy.get('self', 0.0)
     pgp_total = state.ewald_energy.get('total', 0.0)
     
@@ -135,7 +131,6 @@ def test_pgp_real_space_debug():
         print("✅ PGP and PME real-space match")
     else:
         print("❌ PGP and PME real-space differ significantly")
-
 
 def test_pgp_with_water_molecule():
     """Test with a water molecule (3 atoms in same residue)."""
@@ -215,13 +210,10 @@ def test_pgp_with_water_molecule():
     )
     
     initializePMEParameters(state.info.cutoff, state.info.box, alpha)
-    precomputeGridPotential(state, fixed_only=True)
-    
-    # Calculate
+    precomputeGridPotential(state)
     computeSystemEnergyPGP(state)
-    
-    real_space = state.ewald_energy.get('real_space', 0.0)
-    self_energy = state.ewald_energy.get('self', 0.0)
+    real_space = state.ewald_energy.get("real_space", 0.0)
+    self_energy = state.ewald_energy.get("self")
     
     print(f"\nPGP Real-space: {real_space:.6f} kJ/mol")
     print(f"PGP Self energy: {self_energy:.6f} kJ/mol")
@@ -233,7 +225,6 @@ def test_pgp_with_water_molecule():
         print("This confirms that intra-residue interactions are NOT calculated in PGP real-space!")
     else:
         print("\n✅ Real-space is non-zero")
-
 
 if __name__ == "__main__":
     test_pgp_real_space_debug()

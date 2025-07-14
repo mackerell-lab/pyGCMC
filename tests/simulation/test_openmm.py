@@ -187,11 +187,12 @@ from simulation.energyOpenmm.lj_detailed_comparison import (
     test_mixed_types
 )
 
-# PME LJ-only tests (4 functions)
-# Basic tests (2 functions)
+# PME LJ-only tests (5 functions)
+# Basic tests (3 functions)
 from simulation.energyOpenmm.pme_lj_only_basic import (
     test_lj_only_cutoff,
-    test_lj_only_pme
+    test_lj_only_pme,
+    test_double_counting_fix
 )
 # Analysis tests (2 functions)
 from simulation.energyOpenmm.pme_lj_only_analysis import (
@@ -257,6 +258,16 @@ from simulation.energyOpenmm.pme_with_openmm_params import (
     test_pme_with_openmm_params,
     test_simple_two_charge_system
 )
+
+# ===== TESTS WITH COMPLEX DEPENDENCIES =====
+# The following 6 tests have complex dependencies on helper modules
+# and cannot be imported directly. They can be run separately if needed:
+# - analyze_pme_electrostatic_difference.test_pme_self_energy
+# - analyze_pme_error_components.test_mesh_convergence  
+# - analyze_medium_complexity_error.test_distance_dependent_errors
+# - analyze_medium_complexity_error.test_real_space_accuracy
+# - analyze_medium_complexity_error.test_reciprocal_space_convergence
+# - analyze_pme_electrostatic_difference.test_pme_electrostatic_accuracy
 
 # Support direct execution for testing
 if __name__ == "__main__":

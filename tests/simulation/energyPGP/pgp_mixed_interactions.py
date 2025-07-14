@@ -11,12 +11,11 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pygcmc
-from pygcmc import MCState, MCAtom, MCResidue, MCForceField
-from pygcmc import initializePMEParameters, computeSystemEnergyPMEComplete
-from pygcmc import setPMEParameters, setPGPParameters
-from pygcmc import precomputeGridPotential, calculateMoleculeEnergy
-from pygcmc import computeMovementEnergyPME
-
+from . import pgp_wrapper
+from .pgp_wrapper import initializePMEParameters, computeSystemEnergyPMEComplete, setPMEParameters, setPGPParameters
+from .pgp_wrapper import precomputeGridPotential, calculateMoleculeEnergy, computeMovementEnergyPME
+from pygcmc import MCState, MCAtom, MCResidue
+from pygcmc import MCForceField
 
 def create_mixed_system(n_fixed, n_moveable):
     """Create a system with specified numbers of fixed and moveable particles"""
@@ -78,7 +77,6 @@ def create_mixed_system(n_fixed, n_moveable):
     
     return state
 
-
 def test_pgp_single_moveable_particle():
     """Test PGP with one moveable particle in field of fixed particles"""
     
@@ -95,7 +93,7 @@ def test_pgp_single_moveable_particle():
     
     # Initialize PME
     setPMEParameters(alpha, mesh_size, spline_order)
-    initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
+    initializePMEParameters(state.info.cutoff, state.info.box, alpha)
     
     # Set up PGP
     pgp_mesh_size = [64, 64, 64]
@@ -119,7 +117,6 @@ def test_pgp_single_moveable_particle():
     # Energy should change when particle moves
     assert abs(moved_energy - initial_energy) > 0.01, "Energy should change when particle moves"
 
-
 def test_pgp_multiple_moveable_particles():
     """Test PGP with multiple moveable particles"""
     
@@ -136,7 +133,7 @@ def test_pgp_multiple_moveable_particles():
     
     # Initialize PME
     setPMEParameters(alpha, mesh_size, spline_order)
-    initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
+    initializePMEParameters(state.info.cutoff, state.info.box, alpha)
     
     # Set up PGP
     pgp_mesh_size = [64, 64, 64]
@@ -165,7 +162,6 @@ def test_pgp_multiple_moveable_particles():
     # All movements should result in different energies
     assert len(set(energies)) == 3, "Different particle movements should give different energies"
 
-
 def test_pgp_with_pme_movement_comparison():
     """Compare PGP with PME movement energy"""
     
@@ -189,7 +185,7 @@ def test_pgp_with_pme_movement_comparison():
     
     # Initialize PME
     setPMEParameters(alpha, mesh_size, spline_order)
-    initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
+    initializePMEParameters(state.info.cutoff, state.info.box, alpha)
     
     # Calculate PME movement energy
     pme_result = computeMovementEnergyPME(state)
@@ -220,7 +216,6 @@ def test_pgp_with_pme_movement_comparison():
         # Allow a wider range since these calculate fundamentally different things
         assert 0.001 < abs(ratio) < 100.0, f"Energy ratio {ratio} is unreasonable"
         print("Note: PGP calculates particle-in-field energy, not total interaction energy")
-
 
 if __name__ == "__main__":
     test_pgp_single_moveable_particle()

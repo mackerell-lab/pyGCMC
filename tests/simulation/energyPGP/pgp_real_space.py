@@ -9,10 +9,10 @@ electrostatic calculations are working properly.
 import pytest
 import math
 import pygcmc
+from . import pgp_wrapper
+from .pgp_wrapper import initializePMEParameters, setPGPParameters, precomputeGridPotential
+from .pgp_wrapper import computeSystemEnergyPGP
 from pygcmc import MCAtom, MCResidue, MCState
-from pygcmc import setPGPParameters, initializePMEParameters, precomputeGridPotential
-from pygcmc import computeSystemEnergyPGP
-
 
 def test_pgp_real_space_calculation():
     """Test that PGP correctly calculates real-space electrostatic interactions."""
@@ -90,12 +90,8 @@ def test_pgp_real_space_calculation():
     initializePMEParameters(state.info.cutoff, state.info.box, alpha)
     
     # Precompute (should be empty for all-movable system)
-    precomputeGridPotential(state, fixed_only=True)
-    
-    # Calculate energy
+    precomputeGridPotential(state)
     computeSystemEnergyPGP(state)
-    
-    # Get energy components
     real_space = state.ewald_energy.get('real_space', 0.0)
     reciprocal = state.ewald_energy.get('reciprocal', 0.0)
     self_energy = state.ewald_energy.get('self', 0.0)
@@ -140,6 +136,7 @@ def test_pgp_real_space_calculation():
         
         # Recalculate
         computeSystemEnergyPGP(state)
+        real_space = state.ewald_energy.get("real_space", 0.0)
         rs_energy = state.ewald_energy.get('real_space', 0.0)
         real_space_energies.append(rs_energy)
         
@@ -159,7 +156,6 @@ def test_pgp_real_space_calculation():
         "Real-space energy should decay significantly with distance"
     
     print("\n✅ Real-space energy shows correct distance dependence!")
-
 
 def test_pgp_real_space_with_fixed_atoms():
     """Test real-space calculation with mixed fixed and moving atoms."""
@@ -226,13 +222,10 @@ def test_pgp_real_space_with_fixed_atoms():
     
     # Precompute grid for fixed atoms
     print("\nPrecomputing grid potential for fixed atoms...")
-    precomputeGridPotential(state, fixed_only=True)
-    
-    # Calculate energy
+    precomputeGridPotential(state)
     computeSystemEnergyPGP(state)
-    
-    real_space = state.ewald_energy.get('real_space', 0.0)
-    grid_energy = state.ewald_energy.get('reciprocal', 0.0)  # Grid interpolation stored as reciprocal
+    real_space = state.ewald_energy.get("real_space", 0.0)
+    grid_energy = state.ewald_energy.get("reciprocal")  # Grid interpolation stored as reciprocal
     
     print(f"\nEnergy components:")
     print(f"  Real-space energy: {real_space:.6f} kJ/mol")
@@ -248,7 +241,6 @@ def test_pgp_real_space_with_fixed_atoms():
         f"Real-space energy ({real_space:.6f}) too small - fixed-moving interactions not calculated?"
     
     print("\n✅ PGP correctly handles real-space with fixed atoms!")
-
 
 if __name__ == "__main__":
     test_pgp_real_space_calculation()

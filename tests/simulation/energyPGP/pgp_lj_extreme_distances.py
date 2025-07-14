@@ -11,17 +11,17 @@ Verifies correct LJ 12-6 potential behavior at:
 import pytest
 import math
 import pygcmc
-from pygcmc import MCState, MCAtom, MCResidue, MCForceField
-from pygcmc import setPGPParameters, initializePMEParameters, precomputeGridPotential
-from pygcmc import computeSystemEnergyPGP
+from . import pgp_wrapper
+from .pgp_wrapper import setPGPParameters, initializePMEParameters, precomputeGridPotential, computeSystemEnergyPGP
 
+from pygcmc import MCState, MCAtom, MCResidue
+from pygcmc import MCForceField
 
 # Import helper functions
 from .pgp_lj_helpers import (
     create_lj_pair_system,
     calculate_lj_analytical
 )
-
 
 @pytest.mark.parametrize("r_factor", [0.9, 1.0, 1.5, 2.0])
 def test_pgp_lj_near_sigma(r_factor):
@@ -40,15 +40,16 @@ def test_pgp_lj_near_sigma(r_factor):
     mesh_size = [32, 32, 32]
     initializePMEParameters(state.info.cutoff, state.info.box, alpha)
     setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
-    precomputeGridPotential(state, fixed_only=True)
+    precomputeGridPotential(state)
     
+    computeSystemEnergyPGP(state)
     # Calculate energy
     computeSystemEnergyPGP(state)
     
     # Get LJ energy from residues
     # Note: Each residue stores the full pair energy, so we need to divide by 2
     lj_energy_sum = sum(res.energy_vdw for res in state.residues if res.active)
-    lj_energy = lj_energy_sum / 2.0  # Correct for double counting
+    lj_energy = lj_energy_sum  # PGPContext already distributes energy
     
     # Calculate expected energy
     expected = calculate_lj_analytical(distance, epsilon, sigma)
@@ -74,8 +75,6 @@ def test_pgp_lj_near_sigma(r_factor):
             assert lj_energy < 0, "LJ should be attractive for r > σ"
             print("✓ Correctly attractive for r > σ")
 
-
-
 def test_pgp_lj_short_distance():
     """Test LJ at very short distances (strong repulsion)."""
     epsilon = 1.0
@@ -94,12 +93,12 @@ def test_pgp_lj_short_distance():
         mesh_size = [32, 32, 32]
         initializePMEParameters(state.info.cutoff, state.info.box, alpha)
         setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
-        precomputeGridPotential(state, fixed_only=True)
+        precomputeGridPotential(state)
         computeSystemEnergyPGP(state)
         
         # Get LJ energy from residues
         lj_energy_sum = sum(res.energy_vdw for res in state.residues if res.active)
-        lj_energy = lj_energy_sum / 2.0  # Correct for double counting
+        lj_energy = lj_energy_sum  # PGPContext already distributes energy
         expected = calculate_lj_analytical(distance, epsilon, sigma)
         
         rel_error = abs((lj_energy - expected) / expected)
@@ -114,7 +113,6 @@ def test_pgp_lj_short_distance():
         assert rel_error < 1e-4, f"Error too large at short distance: {rel_error}"
     
     print("✓ All short-distance tests passed")
-
 
 def test_pgp_lj_asymptotic_behavior():
     """Test LJ asymptotic behavior at large distances."""
@@ -139,12 +137,12 @@ def test_pgp_lj_asymptotic_behavior():
             alpha = 2.5
             mesh_size = [32, 32, 32]
             initializePMEParameters(cutoff, state.info.box, alpha)
-            setPGPParameters(alpha, mesh_size, cutoff, mesh_size, 4, 1e-6)
-            precomputeGridPotential(state, fixed_only=True)
+            setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-6)
+            precomputeGridPotential(state)
             computeSystemEnergyPGP(state)
             
             lj_energy_sum = sum(res.energy_vdw for res in state.residues if res.active)
-            lj_energy = lj_energy_sum / 2.0  # Correct for double counting
+            lj_energy = lj_energy_sum  # PGPContext already distributes energy
             expected = calculate_lj_analytical(distance, epsilon, sigma)
             
             # At large r, LJ ~ -4ε(σ/r)^6
@@ -158,5 +156,4 @@ def test_pgp_lj_asymptotic_behavior():
             assert rel_diff < 0.1, f"Not approaching r^-6 behavior: {rel_diff}"
     
     print("✓ Correct asymptotic behavior")
-
 
