@@ -192,16 +192,16 @@ from energyPGP.pgp_grid_convergence import (
     test_pgp_alpha_convergence,
     test_pgp_convergence_trend
 )
-# from energyPGP.pgp_cutoff_continuity import (
-#     test_pgp_cutoff_continuity,
-#     test_pgp_smooth_transition,
-#     test_pgp_lj_cutoff_continuity
-# )
-# from energyPGP.pgp_lj_diagnosis import (
-#     test_pgp_lj_only_system,
-#     test_pgp_mixed_system,
-#     test_pgp_lj_distance_scan
-# )
+from energyPGP.pgp_cutoff_continuity import (
+    test_pgp_cutoff_continuity,
+    test_pgp_smooth_transition,
+    test_pgp_lj_cutoff_continuity
+)
+from energyPGP.pgp_lj_diagnosis import (
+    test_pgp_lj_only_system,
+    test_pgp_mixed_system,
+    test_pgp_lj_distance_scan
+)
 # from energyPGP.pgp_pme_debug_electrostatic import (
 #     test_simple_two_particle_system,
 #     test_pgp_self_consistency
