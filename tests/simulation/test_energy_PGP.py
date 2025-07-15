@@ -182,11 +182,11 @@ from energyPGP.pgp_complete import (
 # from energyPGP.pgp_simple_test import (
 #     test_pgp_simple
 # )
-# from energyPGP.pgp_consistency_tests import (
-#     test_pgp_energy_symmetry,
-#     test_pgp_energy_scaling,
-#     test_pgp_grid_independence
-# )
+from energyPGP.pgp_consistency_tests import (
+    test_pgp_energy_symmetry,
+    test_pgp_energy_scaling,
+    test_pgp_grid_independence
+)
 from energyPGP.pgp_grid_convergence import (
     test_pgp_grid_convergence,
     test_pgp_alpha_convergence,
