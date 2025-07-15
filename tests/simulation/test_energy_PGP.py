@@ -187,11 +187,11 @@ from energyPGP.pgp_complete import (
 #     test_pgp_energy_scaling,
 #     test_pgp_grid_independence
 # )
-# from energyPGP.pgp_grid_convergence import (
-#     test_pgp_grid_convergence,
-#     test_pgp_alpha_convergence,
-#     test_pgp_convergence_trend
-# )
+from energyPGP.pgp_grid_convergence import (
+    test_pgp_grid_convergence,
+    test_pgp_alpha_convergence,
+    test_pgp_convergence_trend
+)
 # from energyPGP.pgp_cutoff_continuity import (
 #     test_pgp_cutoff_continuity,
 #     test_pgp_smooth_transition,
