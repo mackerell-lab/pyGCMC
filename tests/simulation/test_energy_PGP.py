@@ -179,9 +179,9 @@ from energyPGP.pgp_complete import (
 
 # Additional PGP tests that were missing
 # TEMPORARILY COMMENTED OUT - These are the most recently added tests
-# from energyPGP.pgp_simple_test import (
-#     test_pgp_simple
-# )
+from energyPGP.pgp_simple_test import (
+    test_pgp_simple
+)
 # from energyPGP.pgp_consistency_tests import (
 #     test_pgp_energy_symmetry,
 #     test_pgp_energy_scaling,
