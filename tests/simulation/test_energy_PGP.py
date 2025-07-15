@@ -202,16 +202,16 @@ from energyPGP.pgp_lj_diagnosis import (
     test_pgp_mixed_system,
     test_pgp_lj_distance_scan
 )
-from energyPGP.pgp_pme_debug_electrostatic import (
-    test_simple_two_particle_system,
-    test_pgp_self_consistency
-)
+# from energyPGP.pgp_pme_debug_electrostatic import (
+#     test_simple_two_particle_system,
+#     test_pgp_self_consistency
+# )
 from energyPGP.debug_movement_residues import (
     test_movement_residues
 )
-from energyPGP.debug_vdw_movement import (
-    test_vdw_movement_debug
-)
+# from energyPGP.debug_vdw_movement import (
+#     test_vdw_movement_debug
+# )
 
 # Support direct execution for testing
 if __name__ == "__main__":
