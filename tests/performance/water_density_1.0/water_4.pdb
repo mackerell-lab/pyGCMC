@@ -1,0 +1,24 @@
+CRYST1    4.928    4.928    4.928  90.00  90.00  90.00 P 1           1
+REMARK   Density = 1.000000 g/cm³
+REMARK   SWM4-NDP water model with 5 sites per molecule
+ATOM      1  O   WAT A   1       1.201   1.343   1.289  1.00  0.00           O
+REMARK  Drude particle 1 at (1.201, 1.343, 1.289)
+ATOM      2  H1  WAT A   1       1.039   0.455   1.608  1.00  0.00           H
+ATOM      3  H2  WAT A   1       0.914   1.911   2.004  1.00  0.00           H
+REMARK  M-site 1 at (1.293, 1.409, 1.077)
+ATOM      4  O   WAT A   2       1.123   1.322   3.721  1.00  0.00           O
+REMARK  Drude particle 2 at (1.123, 1.322, 3.721)
+ATOM      5  H1  WAT A   2       0.783   0.606   4.257  1.00  0.00           H
+ATOM      6  H2  WAT A   2       1.444   1.965   4.353  1.00  0.00           H
+REMARK  M-site 2 at (1.127, 1.337, 3.481)
+ATOM      7  O   WAT A   3       1.314   3.625   1.154  1.00  0.00           O
+REMARK  Drude particle 3 at (1.314, 3.625, 1.154)
+ATOM      8  H1  WAT A   3       1.440   3.620   2.102  1.00  0.00           H
+ATOM      9  H2  WAT A   3       1.576   4.504   0.881  1.00  0.00           H
+REMARK  M-site 3 at (1.234, 3.446, 1.015)
+ATOM     10  O   WAT A   4       1.215   3.644   3.723  1.00  0.00           O
+REMARK  Drude particle 4 at (1.215, 3.644, 3.723)
+ATOM     11  H1  WAT A   4       0.883   4.127   4.481  1.00  0.00           H
+ATOM     12  H2  WAT A   4       2.142   3.877   3.678  1.00  0.00           H
+REMARK  M-site 4 at (1.093, 3.498, 3.577)
+END

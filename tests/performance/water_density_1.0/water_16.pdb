@@ -1,0 +1,84 @@
+CRYST1    7.822    7.822    7.822  90.00  90.00  90.00 P 1           1
+REMARK   Density = 1.000000 g/cm³
+REMARK   SWM4-NDP water model with 5 sites per molecule
+ATOM      1  O   WAT A   1       1.271   1.421   1.364  1.00  0.00           O
+REMARK  Drude particle 1 at (1.271, 1.421, 1.364)
+ATOM      2  H1  WAT A   1       1.109   0.533   1.683  1.00  0.00           H
+ATOM      3  H2  WAT A   1       0.984   1.989   2.080  1.00  0.00           H
+REMARK  M-site 1 at (1.363, 1.487, 1.152)
+ATOM      4  O   WAT A   2       1.188   1.399   3.938  1.00  0.00           O
+REMARK  Drude particle 2 at (1.188, 1.399, 3.938)
+ATOM      5  H1  WAT A   2       0.848   0.683   4.474  1.00  0.00           H
+ATOM      6  H2  WAT A   2       1.509   2.042   4.570  1.00  0.00           H
+REMARK  M-site 2 at (1.193, 1.414, 3.698)
+ATOM      7  O   WAT A   3       1.390   1.229   6.436  1.00  0.00           O
+REMARK  Drude particle 3 at (1.390, 1.229, 6.436)
+ATOM      8  H1  WAT A   3       1.517   1.224   7.384  1.00  0.00           H
+ATOM      9  H2  WAT A   3       1.653   2.108   6.163  1.00  0.00           H
+REMARK  M-site 3 at (1.311, 1.049, 6.297)
+ATOM     10  O   WAT A   4       1.286   3.857   1.333  1.00  0.00           O
+REMARK  Drude particle 4 at (1.286, 3.857, 1.333)
+ATOM     11  H1  WAT A   4       0.954   4.339   2.090  1.00  0.00           H
+ATOM     12  H2  WAT A   4       2.213   4.090   1.287  1.00  0.00           H
+REMARK  M-site 4 at (1.164, 3.710, 1.187)
+ATOM     13  O   WAT A   5       1.292   3.986   3.833  1.00  0.00           O
+REMARK  Drude particle 5 at (1.292, 3.986, 3.833)
+ATOM     14  H1  WAT A   5       0.959   3.737   2.971  1.00  0.00           H
+ATOM     15  H2  WAT A   5       0.507   4.134   4.360  1.00  0.00           H
+REMARK  M-site 5 at (1.522, 4.006, 3.902)
+ATOM     16  O   WAT A   6       1.332   3.825   6.405  1.00  0.00           O
+REMARK  Drude particle 6 at (1.332, 3.825, 6.405)
+ATOM     17  H1  WAT A   6       0.912   3.220   5.793  1.00  0.00           H
+ATOM     18  H2  WAT A   6       1.871   4.391   5.852  1.00  0.00           H
+REMARK  M-site 6 at (1.307, 3.833, 6.644)
+ATOM     19  O   WAT A   7       1.253   6.414   1.352  1.00  0.00           O
+REMARK  Drude particle 7 at (1.253, 6.414, 1.352)
+ATOM     20  H1  WAT A   7       1.693   6.215   2.178  1.00  0.00           H
+ATOM     21  H2  WAT A   7       0.405   6.773   1.612  1.00  0.00           H
+REMARK  M-site 7 at (1.336, 6.381, 1.129)
+ATOM     22  O   WAT A   8       1.182   6.625   3.848  1.00  0.00           O
+REMARK  Drude particle 8 at (1.182, 6.625, 3.848)
+ATOM     23  H1  WAT A   8       1.066   6.617   4.798  1.00  0.00           H
+ATOM     24  H2  WAT A   8       0.791   5.804   3.552  1.00  0.00           H
+REMARK  M-site 8 at (1.287, 6.795, 3.714)
+ATOM     25  O   WAT A   9       1.316   6.436   6.641  1.00  0.00           O
+REMARK  Drude particle 9 at (1.316, 6.436, 6.641)
+ATOM     26  H1  WAT A   9       0.782   6.834   5.953  1.00  0.00           H
+ATOM     27  H2  WAT A   9       1.884   5.821   6.179  1.00  0.00           H
+REMARK  M-site 9 at (1.309, 6.481, 6.877)
+ATOM     28  O   WAT A  10       3.937   1.414   1.196  1.00  0.00           O
+REMARK  Drude particle 10 at (3.937, 1.414, 1.196)
+ATOM     29  H1  WAT A  10       3.215   1.394   1.825  1.00  0.00           H
+ATOM     30  H2  WAT A  10       4.713   1.590   1.728  1.00  0.00           H
+REMARK  M-site 10 at (3.925, 1.382, 0.959)
+ATOM     31  O   WAT A  11       3.882   1.244   3.997  1.00  0.00           O
+REMARK  Drude particle 11 at (3.882, 1.244, 3.997)
+ATOM     32  H1  WAT A  11       4.046   1.360   4.933  1.00  0.00           H
+ATOM     33  H2  WAT A  11       3.156   1.837   3.805  1.00  0.00           H
+REMARK  M-site 11 at (3.998, 1.099, 3.844)
+ATOM     34  O   WAT A  12       3.818   1.383   6.408  1.00  0.00           O
+REMARK  Drude particle 12 at (3.818, 1.383, 6.408)
+ATOM     35  H1  WAT A  12       4.079   2.081   5.808  1.00  0.00           H
+ATOM     36  H2  WAT A  12       4.322   0.620   6.123  1.00  0.00           H
+REMARK  M-site 12 at (3.660, 1.395, 6.589)
+ATOM     37  O   WAT A  13       3.782   3.993   1.358  1.00  0.00           O
+REMARK  Drude particle 13 at (3.782, 3.993, 1.358)
+ATOM     38  H1  WAT A  13       4.135   4.071   0.471  1.00  0.00           H
+ATOM     39  H2  WAT A  13       3.328   3.151   1.362  1.00  0.00           H
+REMARK  M-site 13 at (3.803, 4.150, 1.539)
+ATOM     40  O   WAT A  14       3.874   3.811   4.006  1.00  0.00           O
+REMARK  Drude particle 14 at (3.874, 3.811, 4.006)
+ATOM     41  H1  WAT A  14       3.467   3.000   3.701  1.00  0.00           H
+ATOM     42  H2  WAT A  14       3.560   3.915   4.904  1.00  0.00           H
+REMARK  M-site 14 at (4.022, 3.956, 3.884)
+ATOM     43  O   WAT A  15       3.862   3.866   6.578  1.00  0.00           O
+REMARK  Drude particle 15 at (3.862, 3.866, 6.578)
+ATOM     44  H1  WAT A  15       3.376   3.094   6.288  1.00  0.00           H
+ATOM     45  H2  WAT A  15       4.084   4.328   5.770  1.00  0.00           H
+REMARK  M-site 15 at (3.916, 3.929, 6.804)
+ATOM     46  O   WAT A  16       3.812   6.574   1.372  1.00  0.00           O
+REMARK  Drude particle 16 at (3.812, 6.574, 1.372)
+ATOM     47  H1  WAT A  16       2.938   6.188   1.430  1.00  0.00           H
+ATOM     48  H2  WAT A  16       3.970   6.670   0.433  1.00  0.00           H
+REMARK  M-site 16 at (3.959, 6.634, 1.552)
+END
