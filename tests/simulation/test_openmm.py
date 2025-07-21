@@ -258,6 +258,19 @@ from energyOpenmm.pme_with_openmm_params import (
     test_simple_two_charge_system
 )
 
+# Drude-OpenMM comparison tests (8 functions)
+from energyOpenmm.openmm_comparison_tests import (
+    test_single_water_energy,
+    # test_water_dimer_interaction,  # Commented out in original file
+    test_scf_convergence_tolerance,
+    test_polarization_response,
+    test_multiple_water_box,
+    test_openmm_spring_constant_consistency,
+    test_openmm_thole_screening_values,
+    test_openmm_water_dipole_moment,
+    test_openmm_scf_convergence_behavior
+)
+
 # Support direct execution for testing
 if __name__ == "__main__":
     import pytest

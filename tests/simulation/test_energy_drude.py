@@ -45,17 +45,7 @@ from energyDrude.hardwall_tests import (
     test_hardwall_anisotropic_force
 )
 
-from energyDrude.openmm_comparison_tests import (
-    test_single_water_energy,
-    # test_water_dimer_interaction,  # TODO: SCF convergence issues - needs better algorithm
-    test_scf_convergence_tolerance,
-    test_polarization_response,
-    test_multiple_water_box,
-    test_openmm_spring_constant_consistency,
-    test_openmm_thole_screening_values,
-    test_openmm_water_dipole_moment,
-    test_openmm_scf_convergence_behavior
-)
+# OpenMM comparison tests moved to test_openmm.py
 
 from energyDrude.scf_convergence_tests import (
     test_scf_basic_convergence,
