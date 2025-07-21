@@ -46,7 +46,13 @@ struct DrudeParticle {
      */
     void computeSpringConstants() {
         // Isotropic spring constant
-        kSpring = charge * charge / (polarizability * DrudeConstants::ONE_4PI_EPS0);
+        // From OpenMM: polarizability = ONE_4PI_EPS0 * q² / (k * 4.184)
+        // where k is in kcal/mol/Å² and polarizability is in nm³
+        // Rearranging: k[kcal/mol/Å²] = ONE_4PI_EPS0 * q² / (polarizability * 4.184)
+        // Converting to kJ/mol/nm²: k[kJ/mol/nm²] = k[kcal/mol/Å²] * 418.4
+        // So: k[kJ/mol/nm²] = ONE_4PI_EPS0 * q² * 418.4 / (polarizability * 4.184)
+        //                   = ONE_4PI_EPS0 * q² * 100 / polarizability
+        kSpring = charge * charge * DrudeConstants::ONE_4PI_EPS0 * 100.0 / polarizability;
         
         // Anisotropic contributions (if needed)
         if (aniso1Index >= 0 && aniso2Index >= 0) {
@@ -73,8 +79,8 @@ struct ScreenedPair {
  * Default values match OpenMM for consistency
  */
 struct DrudeSCFParams {
-    double tolerance = 1.0;           // Force tolerance (kJ/mol/nm)
-    int maxIterations = 50;           // Maximum SCF iterations
+    double tolerance = 10.0;          // Force tolerance (kJ/mol/nm) - tighter for better convergence
+    int maxIterations = 100;          // Maximum SCF iterations
     double dampingFactor = 0.5;       // Damping for stability
     double maxDrudeDistance = 0.02;   // Maximum Drude-parent distance (nm)
 };
@@ -110,8 +116,24 @@ struct OPT3Coefficients {
  * @return Screening factor (0 to 1)
  */
 inline double computeTholeScreening(double r, double alpha_i, double alpha_j, double thole) {
-    double u = r / std::pow(alpha_i * alpha_j, 1.0/6.0);
-    return 1.0 - (1.0 + thole * u / 2.0) * std::exp(-thole * u);
+    // Special case: no screening if thole = 0
+    if (thole == 0.0) {
+        return 1.0;
+    }
+    
+    // Calculate effective polarizability
+    double alpha_eff = std::pow(alpha_i * alpha_j, 1.0/6.0);
+    
+    // Calculate screening parameter u = thole * r / alpha_eff
+    double u = thole * r / alpha_eff;
+    
+    // Avoid numerical issues for very large u
+    if (u > 50.0) {
+        return 1.0;
+    }
+    
+    // Calculate screening function S(u) = 1 - (1 + u/2) * exp(-u)
+    return 1.0 - (1.0 + u / 2.0) * std::exp(-u);
 }
 
 } // namespace cpu

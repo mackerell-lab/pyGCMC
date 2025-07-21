@@ -16,7 +16,7 @@ import pygcmc
 from pygcmc import MCState, MCAtom, MCResidue, MCForceField
 from pygcmc import initializePMEParameters, computeSystemEnergyPMEComplete
 
-from simulation.energyOpenmm.pme_medium_complexity_helpers import create_medium_complexity_system, calculate_openmm_energy_components
+from energyOpenmm.pme_medium_complexity_helpers import create_medium_complexity_system, calculate_openmm_energy_components
 
 try:
     from openmm import *

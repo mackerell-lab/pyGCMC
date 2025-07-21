@@ -65,15 +65,21 @@ bool DrudeSCF::optimize(
             return true;  // Converged
         }
         
+        // Debug output - disabled for now
+        // if (iter < 5 || iter % 10 == 0) {
+        //     std::cerr << "SCF iter " << iter << ": maxForce = " << maxForce 
+        //               << ", tolerance = " << params.tolerance << std::endl;
+        // }
+        
         // Update Drude positions
-        double maxDisplacement = updateDrudePositions(
+        updateDrudePositions(
             state, particles, electricField, dampingFactor, params.maxDrudeDistance
         );
         
-        // Adaptive damping
-        if (iter > 5 && maxDisplacement > 0.001) {
-            dampingFactor = std::max(0.1, dampingFactor * 0.95);
-        }
+        // Adaptive damping - disabled for now to debug
+        // if (iter > 5 && maxDisplacement > 0.001) {
+        //     dampingFactor = std::max(0.1, dampingFactor * 0.95);
+        // }
     }
     
     return false;  // Did not converge
@@ -109,15 +115,20 @@ void DrudeSCF::calculateExternalField(
             // Skip the Drude particle itself
             if (j == particle.drudeIndex) continue;
             
-            // Skip if in the same molecule (intramolecular exclusion)
+            // Skip the parent atom (Drude-parent interaction is handled by spring)
+            if (j == particle.parentIndex) continue;
+            
+            // Skip atoms in same molecule (intramolecular exclusion)
+            // This matches OpenMM's approach where all intramolecular
+            // electrostatic interactions are excluded
             if (inSameMolecule(particle.drudeIndex, j, state)) continue;
             
             const auto& atom = state.atoms[j];
             
             // Calculate distance
-            double dx = atom.x - drudeAtom.x;
-            double dy = atom.y - drudeAtom.y;
-            double dz = atom.z - drudeAtom.z;
+            double dx = drudeAtom.x - atom.x;  // Fixed: vector from source to field point
+            double dy = drudeAtom.y - atom.y;
+            double dz = drudeAtom.z - atom.z;
             std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
         applyPBC(dx, dy, dz, box);
             
@@ -128,6 +139,7 @@ void DrudeSCF::calculateExternalField(
             double r3 = r2 * r;
             
             // Electric field: E = k * q / r^2 * r_hat
+            // r_hat points from source to field point
             double factor = DrudeConstants::ONE_4PI_EPS0 * atom.charge / r3;
             
             field[0] += factor * dx;
@@ -175,26 +187,28 @@ void DrudeSCF::calculateInducedField(
         
         // Calculate Thole screening and its derivative
         double alpha_ij = std::pow(particle1.polarizability * particle2.polarizability, 1.0/6.0);
-        double u = r / alpha_ij;
-        double thu = pair.thole * u;
-        double exp_thu = std::exp(-thu);
+        double u = pair.thole * r / alpha_ij;  // u = thole * r / alpha_eff
+        double exp_u = std::exp(-u);
         
         // Thole damping function for dipole field
-        double damping = 1.0 - exp_thu * (1.0 + thu);
+        // For dipole field: damping = 1 - exp(-u) * (1 + u)
+        double damping = 1.0 - exp_u * (1.0 + u);
         
         // Electric field from dipole 2 at dipole 1
+        // dx points from drude1 to drude2, but field should point from drude2 to drude1
         double factor = DrudeConstants::ONE_4PI_EPS0 * particle2.charge * damping / (r2 * r);
         
-        electricField[pair.dipole1][0] += factor * dx;
-        electricField[pair.dipole1][1] += factor * dy;
-        electricField[pair.dipole1][2] += factor * dz;
+        electricField[pair.dipole1][0] -= factor * dx;
+        electricField[pair.dipole1][1] -= factor * dy;
+        electricField[pair.dipole1][2] -= factor * dz;
         
-        // Electric field from dipole 1 at dipole 2 (Newton's third law)
+        // Electric field from dipole 1 at dipole 2
+        // Field should point from drude1 to drude2, which is the direction of dx
         factor = DrudeConstants::ONE_4PI_EPS0 * particle1.charge * damping / (r2 * r);
         
-        electricField[pair.dipole2][0] -= factor * dx;
-        electricField[pair.dipole2][1] -= factor * dy;
-        electricField[pair.dipole2][2] -= factor * dz;
+        electricField[pair.dipole2][0] += factor * dx;
+        electricField[pair.dipole2][1] += factor * dy;
+        electricField[pair.dipole2][2] += factor * dz;
     }
 }
 
@@ -213,6 +227,7 @@ double DrudeSCF::updateDrudePositions(
         const auto& parent = state.atoms[particle.parentIndex];
         
         // New equilibrium position: r_drude = r_parent + q * E / k
+        // For negative charge Drude, this gives displacement opposite to E field
         double dx_new = particle.charge * electricField[i][0] / particle.kSpring;
         double dy_new = particle.charge * electricField[i][1] / particle.kSpring;
         double dz_new = particle.charge * electricField[i][2] / particle.kSpring;

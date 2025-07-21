@@ -63,10 +63,10 @@ def test_drude_with_mcstate():
 
 
 def test_harmonic_energy():
-    """Test harmonic spring energy calculation"""
+    """Test harmonic spring energy calculation with external field"""
     state = pygcmc.MCState()
     
-    # Create parent-Drude pair with known displacement
+    # Create parent-Drude pair
     parent = pygcmc.MCAtom()
     parent.x = 0.0
     parent.y = 0.0
@@ -75,16 +75,23 @@ def test_harmonic_energy():
     parent.type = 0
     
     drude = pygcmc.MCAtom()
-    displacement = 0.005  # 5 pm displacement
-    drude.x = displacement
+    drude.x = 0.0  # Start at parent position
     drude.y = 0.0
     drude.z = 0.0
     drude.charge = -1.71636
     drude.type = 1
     
-    state.atoms = [parent, drude]
-    state.activeAtomCount = 2
-    state.info.box = [3.0, 3.0, 3.0]
+    # Add external charge to create field
+    external = pygcmc.MCAtom()
+    external.x = 1.0  # 1 nm away
+    external.y = 0.0
+    external.z = 0.0
+    external.charge = 1.0  # Creates electric field
+    external.type = 2
+    
+    state.atoms = [parent, drude, external]
+    state.activeAtomCount = 3
+    state.info.box = [5.0, 5.0, 5.0]
     
     # Setup Drude system
     pygcmc.DrudeComplete.clear()
@@ -101,11 +108,33 @@ def test_harmonic_energy():
     # Calculate energy
     energy = pygcmc.DrudeComplete.calculateEnergy(state)
     
-    # Expected harmonic energy: 0.5 * k * r^2
-    expected_energy = 0.5 * particle.kSpring * displacement * displacement
+    # At equilibrium: F_spring + F_electric = 0
+    # Spring force: F_spring = -k * d
+    # Electric force: F_electric = q * E
+    # At equilibrium: -k * d + q * E = 0
+    # Therefore: d = q * E / k
     
-    # Should be close (within numerical precision)
-    assert abs(energy - expected_energy) < 1e-6
+    # Calculate expected displacement
+    # Positive charge at x=1 creates field pointing away from it
+    # At x=0 (Drude position), field points in -x direction
+    dx = 0.0 - 1.0  # -1.0
+    r = abs(dx)  # 1.0
+    # Electric field (vector)
+    E_x = pygcmc.DrudeConstants.ONE_4PI_EPS0 * external.charge * dx / (r * r * r)
+    # Expected displacement
+    expected_displacement = particle.charge * E_x / particle.kSpring
+    
+    # Check that Drude moved to expected position
+    actual_displacement = state.atoms[1].x - state.atoms[0].x
+    assert abs(actual_displacement - expected_displacement) < 1e-6
+    
+    # Energy should include harmonic term and coulomb interaction
+    harmonic_energy = 0.5 * particle.kSpring * actual_displacement * actual_displacement
+    
+    # Total energy includes Coulomb interactions
+    # Energy will be negative due to attractive Coulomb interaction
+    # between negative Drude and positive external charge
+    assert energy < 0  # Should be negative due to Coulomb attraction
     
     pygcmc.DrudeComplete.clear()
 

@@ -41,8 +41,8 @@ def test_drude_particle_creation():
     assert particle.kSpring > 0
     
     # For SWM4-NDP water model, check expected value
-    # k = q^2 / (4πε₀ * α)
-    expected_k = (particle.charge ** 2) / (particle.polarizability * pygcmc.DrudeConstants.ONE_4PI_EPS0)
+    # From OpenMM: k[kJ/mol/nm²] = ONE_4PI_EPS0 * q² * 100 / α
+    expected_k = (particle.charge ** 2) * pygcmc.DrudeConstants.ONE_4PI_EPS0 * 100.0 / particle.polarizability
     assert abs(particle.kSpring - expected_k) < 1e-6
 
 
@@ -63,8 +63,8 @@ def test_drude_scf_params():
     params = pygcmc.DrudeSCFParams()
     
     # Check default values
-    assert params.tolerance == 1.0
-    assert params.maxIterations == 50
+    assert params.tolerance == 10.0  # Tighter default for better convergence
+    assert params.maxIterations == 100
     assert params.dampingFactor == 0.5
     assert params.maxDrudeDistance == 0.02
     

@@ -45,6 +45,7 @@ private:
     // Energy calculation components
     double calculateHarmonicEnergy(const model::MCState& state) const;
     double calculateScreenedCoulombEnergy(const model::MCState& state) const;
+    double calculateCoulombEnergy(const model::MCState& state) const;
     
     // Force calculation components
     void calculateHarmonicForces(const model::MCState& state, 
@@ -54,6 +55,7 @@ private:
     
     // Utility functions
     void applyPBC(double& dx, double& dy, double& dz, const std::array<double, 3>& box) const;
+    bool inSameMolecule(int atom1, int atom2, const model::MCState& state) const;
     
     // Data members
     std::vector<DrudeParticle> m_particles;

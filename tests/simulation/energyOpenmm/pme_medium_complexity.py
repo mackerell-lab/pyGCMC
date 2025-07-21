@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pygcmc
 from pygcmc import initializePMEParameters, computeSystemEnergyPME
 
-from simulation.energyOpenmm.pme_medium_complexity_helpers import (
+from energyOpenmm.pme_medium_complexity_helpers import (
     create_medium_complexity_system,
     calculate_openmm_energy_medium,
     OPENMM_AVAILABLE
