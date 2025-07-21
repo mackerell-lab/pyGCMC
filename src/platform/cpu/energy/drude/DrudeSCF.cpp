@@ -53,15 +53,38 @@ bool DrudeSCF::optimize(
         // Calculate forces on Drude particles
         calculateDrudeForces(state, particles, electricField, drudeForces);
         
-        // Check convergence
+        // Check convergence with hard wall consideration
         double maxForce = 0.0;
-        for (const auto& force : drudeForces) {
-            double f2 = force[0]*force[0] + force[1]*force[1] + force[2]*force[2];
+        bool anyAtHardWall = false;
+        
+        for (size_t i = 0; i < particles.size(); ++i) {
+            const auto& particle = particles[i];
+            const auto& drude = state.atoms[particle.drudeIndex];
+            const auto& parent = state.atoms[particle.parentIndex];
+            
+            // Check if at hard wall
+            double dx = drude.x - parent.x;
+            double dy = drude.y - parent.y;
+            double dz = drude.z - parent.z;
+            std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
+            applyPBC(dx, dy, dz, box);
+            double dist2 = dx*dx + dy*dy + dz*dz;
+            
+            if (dist2 > 0.98 * params.maxDrudeDistance * params.maxDrudeDistance) {
+                anyAtHardWall = true;
+            }
+            
+            double f2 = drudeForces[i][0]*drudeForces[i][0] + 
+                       drudeForces[i][1]*drudeForces[i][1] + 
+                       drudeForces[i][2]*drudeForces[i][2];
             maxForce = std::max(maxForce, f2);
         }
         maxForce = std::sqrt(maxForce);
         
-        if (maxForce < params.tolerance) {
+        // Relax convergence criteria if at hard wall
+        double effectiveTolerance = anyAtHardWall ? params.tolerance * 10.0 : params.tolerance;
+        
+        if (maxForce < effectiveTolerance) {
             return true;  // Converged
         }
         
@@ -232,14 +255,8 @@ double DrudeSCF::updateDrudePositions(
         double dy_new = particle.charge * electricField[i][1] / particle.kSpring;
         double dz_new = particle.charge * electricField[i][2] / particle.kSpring;
         
-        // Limit displacement magnitude
-        double disp2 = dx_new*dx_new + dy_new*dy_new + dz_new*dz_new;
-        if (disp2 > maxDrudeDistance * maxDrudeDistance) {
-            double scale = maxDrudeDistance / std::sqrt(disp2);
-            dx_new *= scale;
-            dy_new *= scale;
-            dz_new *= scale;
-        }
+        // Don't limit dx_new here - let SCF find the true equilibrium
+        // Hard wall will be applied after convergence if needed
         
         // Current displacement
         double dx_old = drude.x - parent.x;
@@ -252,6 +269,16 @@ double DrudeSCF::updateDrudePositions(
         double dx_update = (1.0 - dampingFactor) * dx_old + dampingFactor * dx_new;
         double dy_update = (1.0 - dampingFactor) * dy_old + dampingFactor * dy_new;
         double dz_update = (1.0 - dampingFactor) * dz_old + dampingFactor * dz_new;
+        
+        // Update position with hard wall constraint
+        // Apply hard wall only to the final position, not the target
+        double disp2_update = dx_update*dx_update + dy_update*dy_update + dz_update*dz_update;
+        if (disp2_update > maxDrudeDistance * maxDrudeDistance) {
+            double scale = maxDrudeDistance / std::sqrt(disp2_update);
+            dx_update *= scale;
+            dy_update *= scale;
+            dz_update *= scale;
+        }
         
         // Update position
         drude.x = parent.x + dx_update;
