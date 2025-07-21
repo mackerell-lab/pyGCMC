@@ -50,7 +50,11 @@ from energyDrude.openmm_comparison_tests import (
     # test_water_dimer_interaction,  # TODO: SCF convergence issues - needs better algorithm
     test_scf_convergence_tolerance,
     test_polarization_response,
-    test_multiple_water_box
+    test_multiple_water_box,
+    test_openmm_spring_constant_consistency,
+    test_openmm_thole_screening_values,
+    test_openmm_water_dipole_moment,
+    test_openmm_scf_convergence_behavior
 )
 
 from energyDrude.scf_convergence_tests import (

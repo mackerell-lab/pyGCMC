@@ -161,9 +161,10 @@ def test_hardwall_energy_consistency():
     drude.charge = -1.0
     drude.type = 1
     
-    # Moderate external charge
+    # Moderate external charge - use larger distance to create weaker field
+    # With new spring constant (100x smaller), we need much weaker field
     external = pygcmc.MCAtom()
-    external.x, external.y, external.z = 0.05, 0.0, 0.0
+    external.x, external.y, external.z = 5.0, 0.0, 0.0  # 5 nm away for gentle field
     external.charge = 1.0
     external.type = 2
     

@@ -41,8 +41,8 @@ def test_drude_particle_creation():
     assert particle.kSpring > 0
     
     # For SWM4-NDP water model, check expected value
-    # From OpenMM: k[kJ/mol/nm²] = ONE_4PI_EPS0 * q² * 100 / α
-    expected_k = (particle.charge ** 2) * pygcmc.DrudeConstants.ONE_4PI_EPS0 * 100.0 / particle.polarizability
+    # From OpenMM and first principles: k[kJ/mol/nm²] = ONE_4PI_EPS0 * q² / α
+    expected_k = (particle.charge ** 2) * pygcmc.DrudeConstants.ONE_4PI_EPS0 / particle.polarizability
     assert abs(particle.kSpring - expected_k) < 1e-6
 
 

@@ -46,13 +46,15 @@ struct DrudeParticle {
      */
     void computeSpringConstants() {
         // Isotropic spring constant
-        // From OpenMM: polarizability = ONE_4PI_EPS0 * q² / (k * 4.184)
-        // where k is in kcal/mol/Å² and polarizability is in nm³
-        // Rearranging: k[kcal/mol/Å²] = ONE_4PI_EPS0 * q² / (polarizability * 4.184)
-        // Converting to kJ/mol/nm²: k[kJ/mol/nm²] = k[kcal/mol/Å²] * 418.4
-        // So: k[kJ/mol/nm²] = ONE_4PI_EPS0 * q² * 418.4 / (polarizability * 4.184)
-        //                   = ONE_4PI_EPS0 * q² * 100 / polarizability
-        kSpring = charge * charge * DrudeConstants::ONE_4PI_EPS0 * 100.0 / polarizability;
+        // From first principles and OpenMM implementation:
+        // The induced dipole moment μ = α × E
+        // For Drude model: μ = -q_drude × d (where d is displacement)
+        // Force balance: q_drude × E = k × d
+        // Therefore: d = q_drude × E / k
+        // Combining: α × E = -q_drude × (q_drude × E / k) = q_drude² × E / k
+        // Thus: k = q_drude² / α
+        // In MD units: k[kJ/mol/nm²] = q²[e²] × ONE_4PI_EPS0[kJ·nm/mol/e²] / α[nm³]
+        kSpring = charge * charge * DrudeConstants::ONE_4PI_EPS0 / polarizability;
         
         // Anisotropic contributions (if needed)
         if (aniso1Index >= 0 && aniso2Index >= 0) {
