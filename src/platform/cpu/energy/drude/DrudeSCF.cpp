@@ -152,6 +152,12 @@ void DrudeSCF::calculateInducedField(
         const auto& particle1 = particles[pair.dipole1];
         const auto& particle2 = particles[pair.dipole2];
         
+        // Bounds check
+        if (particle1.drudeIndex < 0 || particle1.drudeIndex >= state.activeAtomCount ||
+            particle2.drudeIndex < 0 || particle2.drudeIndex >= state.activeAtomCount) {
+            continue;
+        }
+        
         const auto& drude1 = state.atoms[particle1.drudeIndex];
         const auto& drude2 = state.atoms[particle2.drudeIndex];
         
@@ -288,8 +294,18 @@ void DrudeSCF::applyPBC(double& dx, double& dy, double& dz, const std::array<dou
 }
 
 bool DrudeSCF::inSameMolecule(int atom1, int atom2, const model::MCState& state) const {
+    // Check if we have residues defined
+    if (state.activeResidueCount <= 0 || state.residues.empty()) {
+        return false;  // No residues defined, assume all atoms are in different molecules
+    }
+    
     // Find which residue each atom belongs to
     for (int i = 0; i < state.activeResidueCount; ++i) {
+        // Bounds check
+        if (i >= static_cast<int>(state.residues.size())) {
+            break;
+        }
+        
         const auto& res = state.residues[i];
         int start = res.atomStart;
         int end = start + res.atomCount;
