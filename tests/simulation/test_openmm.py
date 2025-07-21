@@ -271,6 +271,43 @@ from energyOpenmm.openmm_comparison_tests import (
     test_openmm_scf_convergence_behavior
 )
 
+# Drude numerical comparison tests (5 functions)
+from energyOpenmm.drude_numerical_comparison import (
+    test_single_water_vacuum_exact,
+    test_water_external_field_exact,
+    test_water_dimer_exact,
+    test_spring_constant_exact_values,
+    test_thole_screening_exact
+)
+
+# Drude anisotropic polarizability tests (5 functions)
+# Note: Anisotropic polarizability not yet implemented in PyGCMC
+# from energyOpenmm.drude_anisotropic_tests import (
+#     test_anisotropic_polarizability_setup,
+#     test_anisotropic_response_to_field,
+#     test_anisotropic_thole_screening,
+#     test_anisotropic_energy_calculation,
+#     test_anisotropic_water_model
+# )
+
+# Drude force verification tests (5 functions)
+from energyOpenmm.drude_force_verification import (
+    test_harmonic_spring_force,
+    test_coulomb_force_consistency,
+    test_drude_scf_force_balance,
+    test_thole_screened_force,
+    test_force_energy_consistency_complex
+)
+
+# Drude extreme condition tests (5 functions)
+from energyOpenmm.drude_extreme_conditions import (
+    test_scf_convergence_failure,
+    test_hardwall_constraint_extreme,
+    test_zero_polarizability,
+    test_many_body_polarization,
+    test_pathological_geometry
+)
+
 # Support direct execution for testing
 if __name__ == "__main__":
     import pytest
