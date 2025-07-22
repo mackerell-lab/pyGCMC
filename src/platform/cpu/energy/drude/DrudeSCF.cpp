@@ -24,6 +24,12 @@ bool DrudeSCF::optimize(
     
     // Initialize Drude positions near parents if needed
     for (const auto& particle : particles) {
+        // Bounds check
+        if (particle.parentIndex < 0 || particle.parentIndex >= state.activeAtomCount ||
+            particle.drudeIndex < 0 || particle.drudeIndex >= state.activeAtomCount) {
+            continue;
+        }
+        
         const auto& parent = state.atoms[particle.parentIndex];
         auto& drude = state.atoms[particle.drudeIndex];
         

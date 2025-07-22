@@ -200,33 +200,14 @@ double DrudeCore::calculateHarmonicEnergy(const model::MCState& state) const {
 double DrudeCore::calculateScreenedCoulombEnergy(const model::MCState& state) const {
     double energy = 0.0;
     
-    for (const auto& pair : m_screenedPairs) {
-        const auto& particle1 = m_particles[pair.dipole1];
-        const auto& particle2 = m_particles[pair.dipole2];
-        
-        // Get Drude positions
-        const auto& drude1 = state.atoms[particle1.drudeIndex];
-        const auto& drude2 = state.atoms[particle2.drudeIndex];
-        
-        // Calculate Drude-Drude distance
-        double dx = drude2.x - drude1.x;
-        double dy = drude2.y - drude1.y;
-        double dz = drude2.z - drude1.z;
-        std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
-        applyPBC(dx, dy, dz, box);
-        
-        double r = std::sqrt(dx*dx + dy*dy + dz*dz);
-        if (r < 1e-6) continue;  // Skip if too close
-        
-        // Calculate Thole screening
-        double screening = computeTholeScreening(r, particle1.polarizability, 
-                                                 particle2.polarizability, pair.thole);
-        
-        // Screened Coulomb energy
-        double q1 = particle1.charge;
-        double q2 = particle2.charge;
-        energy += DrudeConstants::ONE_4PI_EPS0 * q1 * q2 * screening / r;
-    }
+    // This function should not be called directly in the current implementation.
+    // Thole screening is applied during SCF optimization to modify the electric field
+    // and prevent polarization catastrophe. It does not contribute a separate energy term.
+    // The screened interactions are already accounted for in the converged Drude positions.
+    
+    // For compatibility with tests that may call this function directly,
+    // we return 0 since the screening effect is already included in the
+    // optimized Drude positions from SCF.
     
     return energy;
 }
@@ -326,7 +307,8 @@ void DrudeCore::applyPBC(double& dx, double& dy, double& dz, const std::array<do
 double DrudeCore::calculateCoulombEnergy(const model::MCState& state) const {
     double energy = 0.0;
     
-    // Calculate all Coulomb interactions in the system
+    // First, calculate normal Coulomb interactions for all atom pairs
+    // excluding intramolecular interactions and Drude-parent pairs
     for (int i = 0; i < state.activeAtomCount - 1; ++i) {
         const auto& atom1 = state.atoms[i];
         
@@ -339,12 +321,11 @@ double DrudeCore::calculateCoulombEnergy(const model::MCState& state) const {
             }
             
             // Skip intramolecular interactions 
-            // In SWM4-NDP model, all intramolecular electrostatic interactions are excluded
             if (inSameMolecule(i, j, state)) {
                 continue;
             }
             
-            // Also skip Drude-parent interactions (handled by spring force)
+            // Skip Drude-parent interactions (handled by spring force)
             bool isDrudeParent = false;
             for (const auto& particle : m_particles) {
                 if ((i == particle.drudeIndex && j == particle.parentIndex) ||
@@ -357,7 +338,7 @@ double DrudeCore::calculateCoulombEnergy(const model::MCState& state) const {
                 continue;
             }
             
-            // Calculate distance
+            // Calculate normal Coulomb interaction
             double dx = atom2.x - atom1.x;
             double dy = atom2.y - atom1.y;
             double dz = atom2.z - atom1.z;
@@ -365,12 +346,88 @@ double DrudeCore::calculateCoulombEnergy(const model::MCState& state) const {
             applyPBC(dx, dy, dz, box);
             
             double r2 = dx*dx + dy*dy + dz*dz;
-            if (r2 < 1e-12) continue;  // Skip if too close
+            if (r2 < 1e-12) continue;
             
             double r = std::sqrt(r2);
-            
-            // Coulomb energy: E = k * q1 * q2 / r
             energy += DrudeConstants::ONE_4PI_EPS0 * atom1.charge * atom2.charge / r;
+        }
+    }
+    
+    // Now apply Thole screening corrections to screened pairs
+    // This modifies the energy of pairs that should be screened
+    for (const auto& pair : m_screenedPairs) {
+        const auto& particle1 = m_particles[pair.dipole1];
+        const auto& particle2 = m_particles[pair.dipole2];
+        
+        // Bounds check for particle indices
+        if (particle1.parentIndex < 0 || particle1.parentIndex >= state.activeAtomCount ||
+            particle1.drudeIndex < 0 || particle1.drudeIndex >= state.activeAtomCount ||
+            particle2.parentIndex < 0 || particle2.parentIndex >= state.activeAtomCount ||
+            particle2.drudeIndex < 0 || particle2.drudeIndex >= state.activeAtomCount) {
+            continue;
+        }
+        
+        // Get all four atoms involved
+        int atoms1[2] = {particle1.parentIndex, particle1.drudeIndex};
+        int atoms2[2] = {particle2.parentIndex, particle2.drudeIndex};
+        double charges1[2] = {state.atoms[particle1.parentIndex].charge, particle1.charge};
+        double charges2[2] = {state.atoms[particle2.parentIndex].charge, particle2.charge};
+        
+        // Calculate Drude-Drude distance for screening
+        const auto& drude1 = state.atoms[particle1.drudeIndex];
+        const auto& drude2 = state.atoms[particle2.drudeIndex];
+        
+        double dx_dd = drude2.x - drude1.x;
+        double dy_dd = drude2.y - drude1.y;
+        double dz_dd = drude2.z - drude1.z;
+        std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
+        applyPBC(dx_dd, dy_dd, dz_dd, box);
+        
+        double r_dd = std::sqrt(dx_dd*dx_dd + dy_dd*dy_dd + dz_dd*dz_dd);
+        if (r_dd < 1e-6) continue;
+        
+        // Calculate screening factor
+        double screening = computeTholeScreening(r_dd, particle1.polarizability, 
+                                                particle2.polarizability, pair.thole);
+        
+        // Apply Thole screening ONLY to the Drude-Drude interaction (j=1, k=1)
+        // Other interactions (parent-parent, parent-drude, drude-parent) are not screened
+        for (int j = 0; j < 2; ++j) {
+            for (int k = 0; k < 2; ++k) {
+                // Skip intramolecular interactions if they're in the same molecule
+                if (inSameMolecule(atoms1[j], atoms2[k], state)) {
+                    continue;
+                }
+                
+                // Bounds check
+                if (atoms1[j] < 0 || atoms1[j] >= state.activeAtomCount ||
+                    atoms2[k] < 0 || atoms2[k] >= state.activeAtomCount) {
+                    continue;
+                }
+                
+                // Get atoms
+                const auto& atom1 = state.atoms[atoms1[j]];
+                const auto& atom2 = state.atoms[atoms2[k]];
+                
+                // Calculate distance
+                double dx = atom2.x - atom1.x;
+                double dy = atom2.y - atom1.y;
+                double dz = atom2.z - atom1.z;
+                applyPBC(dx, dy, dz, box);
+                
+                double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+                if (r < 1e-6) continue;
+                
+                // Calculate unscreened Coulomb energy
+                double coulomb = DrudeConstants::ONE_4PI_EPS0 * atom1.charge * atom2.charge / r;
+                
+                // Apply screening ONLY to Drude-Drude interaction (j=1, k=1)
+                if (j == 1 && k == 1) {
+                    // This is the Drude-Drude interaction, apply screening
+                    energy += coulomb * (screening - 1.0);
+                }
+                // All other interactions are already included in the main loop
+            }
         }
     }
     

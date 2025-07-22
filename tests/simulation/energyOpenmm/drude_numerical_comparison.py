@@ -158,14 +158,17 @@ def test_water_external_field_exact():
     state = pygcmc.MCState()
     
     # Water at origin
-    state.atoms = create_swm4_water()
+    atoms = create_swm4_water()
     
     # Add external charge
     external = pygcmc.MCAtom()
     external.x, external.y, external.z = ref['external_position']
     external.charge = ref['external_charge']
     external.type = 4
-    state.atoms.append(external)
+    atoms.append(external)
+    
+    # Now assign all atoms to state
+    state.atoms = atoms
     
     state.activeAtomCount = 6
     state.info.box = [5.0, 5.0, 5.0]
