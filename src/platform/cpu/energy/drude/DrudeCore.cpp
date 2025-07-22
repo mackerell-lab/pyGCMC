@@ -197,7 +197,7 @@ double DrudeCore::calculateHarmonicEnergy(const model::MCState& state) const {
     return energy;
 }
 
-double DrudeCore::calculateScreenedCoulombEnergy(const model::MCState& state) const {
+double DrudeCore::calculateScreenedCoulombEnergy(const model::MCState& /*state*/) const {
     double energy = 0.0;
     
     // This function should not be called directly in the current implementation.
@@ -370,8 +370,6 @@ double DrudeCore::calculateCoulombEnergy(const model::MCState& state) const {
         // Get all four atoms involved
         int atoms1[2] = {particle1.parentIndex, particle1.drudeIndex};
         int atoms2[2] = {particle2.parentIndex, particle2.drudeIndex};
-        double charges1[2] = {state.atoms[particle1.parentIndex].charge, particle1.charge};
-        double charges2[2] = {state.atoms[particle2.parentIndex].charge, particle2.charge};
         
         // Calculate Drude-Drude distance for screening
         const auto& drude1 = state.atoms[particle1.drudeIndex];
