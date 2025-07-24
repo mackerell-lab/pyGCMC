@@ -175,9 +175,11 @@ from energyPGP.pgp_complete_comparison import (
     test_pgp_complete_vs_pme_complete,
     test_pgp_complete_movement_energy
 )
-from energyPGP.pgp_complete_special_cases import (
-    test_pgp_complete_pure_lj,
-    test_pgp_complete_multi_atom_residue
+from energyPGP.pgp_complete_pure_lj import (
+    test_pgp_complete_pure_lj
+)
+from energyPGP.pgp_complete_intramolecular import (
+    test_pgp_complete_intramolecular_lj
 )
 from energyPGP.pgp_complete_boundary import (
     test_pgp_complete_extreme_distances,
