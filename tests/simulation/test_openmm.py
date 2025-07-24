@@ -248,11 +248,18 @@ from energyOpenmm.drude_numerical_comparison import (
 # )
 
 # Drude force verification tests
-from energyOpenmm.drude_force_verification import (
+# Basic force tests
+from energyOpenmm.drude_basic_force_tests import (
     test_harmonic_spring_force,
-    test_coulomb_force_consistency,
+    test_coulomb_force_consistency
+)
+# SCF and Thole screening tests
+from energyOpenmm.drude_scf_thole_tests import (
     test_drude_scf_force_balance,
-    test_thole_screened_force,
+    test_thole_screened_force
+)
+# Force-energy consistency tests
+from energyOpenmm.drude_force_consistency_tests import (
     test_force_energy_consistency_complex
 )
 
