@@ -210,16 +210,23 @@ from energyOpenmm.pme_with_openmm_params import (
 )
 
 # Drude-OpenMM comparison tests
-from energyOpenmm.openmm_comparison_tests import (
+# Water energy tests
+from energyOpenmm.openmm_water_energy_tests import (
     test_single_water_energy,
-    # test_water_dimer_interaction,  # Skip: causes issues
+    # test_water_dimer_interaction  # Commented out in original file
+)
+# SCF and polarization tests
+from energyOpenmm.openmm_scf_polarization_tests import (
     test_scf_convergence_tolerance,
-    test_polarization_response,
-    test_multiple_water_box,
+    test_polarization_response
+)
+# Parameter consistency tests
+from energyOpenmm.openmm_parameter_consistency_tests import (
     test_openmm_spring_constant_consistency,
     test_openmm_thole_screening_values,
     test_openmm_water_dipole_moment,
-    test_openmm_scf_convergence_behavior
+    test_openmm_scf_convergence_behavior,
+    test_multiple_water_box
 )
 
 # Drude numerical comparison tests
