@@ -257,9 +257,13 @@ from energyOpenmm.drude_force_verification import (
 )
 
 # Drude extreme condition tests
-from energyOpenmm.drude_extreme_conditions import (
+# SCF convergence and constraint tests
+from energyOpenmm.drude_convergence_constraint_tests import (
     test_scf_convergence_failure,
-    test_hardwall_constraint_extreme,
+    test_hardwall_constraint_extreme
+)
+# Special cases tests
+from energyOpenmm.drude_special_cases_tests import (
     test_zero_polarizability,
     test_many_body_polarization,
     test_pathological_geometry
