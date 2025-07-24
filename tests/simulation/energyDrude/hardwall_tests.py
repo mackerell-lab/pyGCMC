@@ -52,6 +52,7 @@ def test_hardwall_constraint_basic():
     params.tolerance = 1e-6
     params.maxIterations = 100
     params.maxDrudeDistance = 0.02  # Default hard wall at 0.2 Å
+    params.enableHardWall = True  # Explicitly enable hard wall
     pygcmc.DrudeComplete.setParameters(params)
     
     # Calculate energy (this will optimize Drude position)
@@ -118,6 +119,7 @@ def test_hardwall_different_limits():
         params.tolerance = 1e-6
         params.maxIterations = 100
         params.maxDrudeDistance = max_dist
+        params.enableHardWall = True  # Explicitly enable hard wall
         pygcmc.DrudeComplete.setParameters(params)
         
         # Reset Drude position
@@ -191,6 +193,7 @@ def test_hardwall_energy_consistency():
         params.tolerance = 1e-6
         params.maxIterations = 100
         params.maxDrudeDistance = max_dist
+        params.enableHardWall = True  # Explicitly enable hard wall
         pygcmc.DrudeComplete.setParameters(params)
         
         # Reset Drude
@@ -272,6 +275,7 @@ def test_hardwall_with_multiple_drudes():
     params.tolerance = 1e-6
     params.maxIterations = 100
     params.maxDrudeDistance = 0.02
+    params.enableHardWall = True  # Explicitly enable hard wall
     pygcmc.DrudeComplete.setParameters(params)
     
     # Calculate energy
@@ -336,6 +340,7 @@ def test_hardwall_anisotropic_force():
     params.tolerance = 1e-6
     params.maxIterations = 100
     params.maxDrudeDistance = 0.015  # 0.15 Å
+    params.enableHardWall = True  # Explicitly enable hard wall
     pygcmc.DrudeComplete.setParameters(params)
     
     energy = pygcmc.DrudeComplete.calculateEnergy(state)

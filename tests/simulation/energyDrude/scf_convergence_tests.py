@@ -58,6 +58,7 @@ def test_scf_basic_convergence():
         params.tolerance = 1e-6
         params.maxIterations = 100
         params.maxDrudeDistance = 0.02
+        params.enableHardWall = True  # Explicitly enable hard wall
         pygcmc.DrudeComplete.setParameters(params)
         
         # Should converge regardless of starting position
@@ -130,6 +131,7 @@ def test_scf_damping_factor_effect():
         params.maxIterations = 200
         params.dampingFactor = damping
         params.maxDrudeDistance = 0.02
+        params.enableHardWall = True  # Explicitly enable hard wall
         pygcmc.DrudeComplete.setParameters(params)
         
         # Reset positions
@@ -209,6 +211,7 @@ def test_scf_iteration_limit():
     params.tolerance = 1e-8
     params.maxIterations = 5  # Too few for convergence
     params.maxDrudeDistance = 0.02
+    params.enableHardWall = True  # Explicitly enable hard wall
     pygcmc.DrudeComplete.setParameters(params)
     
     # Should still give an energy (with warning)
@@ -296,6 +299,7 @@ def test_scf_tolerance_scaling():
         params.tolerance = tol
         params.maxIterations = 200
         params.maxDrudeDistance = 0.02
+        params.enableHardWall = True  # Explicitly enable hard wall
         pygcmc.DrudeComplete.setParameters(params)
         
         # Reset positions
@@ -388,6 +392,7 @@ def test_scf_adaptive_damping():
     params.maxIterations = 100
     params.dampingFactor = 0.7  # Starting value
     params.maxDrudeDistance = 0.02
+    params.enableHardWall = True  # Explicitly enable hard wall
     pygcmc.DrudeComplete.setParameters(params)
     
     # Displace all Drudes significantly

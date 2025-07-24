@@ -114,6 +114,7 @@ def test_single_water_energy():
     params.tolerance = 1e-5  # 0.01 kJ/mol/nm as in OpenMM
     params.maxIterations = 100
     params.maxDrudeDistance = 0.02
+    params.enableHardWall = True  # Explicitly enable hard wall
     pygcmc.DrudeComplete.setParameters(params)
     
     # Calculate energy
@@ -188,6 +189,7 @@ def test_water_dimer_interaction():
     params.tolerance = 1e-5
     params.maxIterations = 100
     params.maxDrudeDistance = 0.02
+    params.enableHardWall = True  # Explicitly enable hard wall
     pygcmc.DrudeComplete.setParameters(params)
     
     # Calculate total energy
@@ -278,6 +280,7 @@ def test_scf_convergence_tolerance():
         params.tolerance = tol
         params.maxIterations = 200
         params.maxDrudeDistance = 0.02
+        params.enableHardWall = True  # Explicitly enable hard wall
         pygcmc.DrudeComplete.setParameters(params)
         
         # Reset Drude positions
@@ -335,6 +338,7 @@ def test_polarization_response():
     params.tolerance = 1e-6
     params.maxIterations = 100
     params.maxDrudeDistance = 0.03  # Larger to accommodate intramolecular fields
+    params.enableHardWall = True  # Explicitly enable hard wall
     pygcmc.DrudeComplete.setParameters(params)
     
     # Calculate energy
@@ -352,6 +356,7 @@ def test_polarization_response():
     # The displacement should be small but non-zero
     assert displacement > 1e-6, "No induced dipole"
     assert displacement <= params.maxDrudeDistance * 1.01, f"Displacement {displacement} exceeds hard wall"
+    params.enableHardWall = True  # Explicitly enable hard wall
     
     # The actual displacement direction and magnitude depends on:
     # 1. External field from the test charge
@@ -466,6 +471,7 @@ def test_openmm_water_dipole_moment():
     params.tolerance = 10.0  # Looser tolerance
     params.maxIterations = 200
     params.maxDrudeDistance = 0.025
+    params.enableHardWall = True  # Explicitly enable hard wall
     pygcmc.DrudeComplete.setParameters(params)
     
     # Calculate energy
@@ -555,6 +561,7 @@ def test_openmm_scf_convergence_behavior():
         params.maxIterations = max_iter
         params.dampingFactor = damping
         params.maxDrudeDistance = 0.02
+        params.enableHardWall = True  # Explicitly enable hard wall
         pygcmc.DrudeComplete.setParameters(params)
         
         # Calculate energy
@@ -630,6 +637,7 @@ def test_multiple_water_box():
     params.tolerance = 0.1  # Looser for many-body system
     params.maxIterations = 200
     params.maxDrudeDistance = 0.02
+    params.enableHardWall = True  # Explicitly enable hard wall
     params.dampingFactor = 0.5
     pygcmc.DrudeComplete.setParameters(params)
     

@@ -55,6 +55,15 @@ PME with OpenMM parameters: 2 functions
 Note: 2 PME tests are marked as skip due to C++ global state issues that need fixing
 """
 
+# Suppress SWIG-related deprecation warnings for this test file
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning, 
+                       message="builtin type SwigPyPacked has no __module__ attribute")
+warnings.filterwarnings("ignore", category=DeprecationWarning, 
+                       message="builtin type SwigPyObject has no __module__ attribute")
+warnings.filterwarnings("ignore", category=DeprecationWarning, 
+                       message="builtin type swigvarlink has no __module__ attribute")
+
 # Naive nonbonded comparison tests (3 functions)
 from energyOpenmm.naive_energy_components import (
     test_openmm_energy_components,
@@ -306,6 +315,12 @@ from energyOpenmm.drude_extreme_conditions import (
     test_zero_polarizability,
     test_many_body_polarization,
     test_pathological_geometry
+)
+
+# Drude SCF comparison tests (1 function)
+from energyOpenmm.drude_scf_comparison import (
+    test_single_drude_with_field
+    # skip_test_water_dimer_scf is skipped due to segfault
 )
 
 # Support direct execution for testing

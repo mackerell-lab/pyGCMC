@@ -85,6 +85,7 @@ struct DrudeSCFParams {
     int maxIterations = 100;          // Maximum SCF iterations
     double dampingFactor = 0.5;       // Damping for stability
     double maxDrudeDistance = 0.02;   // Maximum Drude-parent distance (nm)
+    bool enableHardWall = false;      // Enable hard wall constraint (default: off, matching OpenMM/CHARMM)
 };
 
 /**

@@ -58,7 +58,9 @@ void init_drude_bindings(py::module& m) {
         .def_readwrite("dampingFactor", &DrudeSCFParams::dampingFactor,
                        "Damping factor for stability (0-1)")
         .def_readwrite("maxDrudeDistance", &DrudeSCFParams::maxDrudeDistance,
-                       "Maximum allowed Drude-parent distance (nm)");
+                       "Maximum allowed Drude-parent distance (nm)")
+        .def_readwrite("enableHardWall", &DrudeSCFParams::enableHardWall,
+                       "Enable hard wall constraint (default: False, matching OpenMM/CHARMM)");
     
     // DrudeAlgorithm enum
     py::enum_<DrudeAlgorithm>(m, "DrudeAlgorithm", "Available Drude optimization algorithms")

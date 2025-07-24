@@ -40,7 +40,7 @@ bool DrudeSCF::optimize(
         applyPBC(dx, dy, dz, box);
         
         double dist2 = dx*dx + dy*dy + dz*dz;
-        if (dist2 > params.maxDrudeDistance * params.maxDrudeDistance) {
+        if (params.enableHardWall && dist2 > params.maxDrudeDistance * params.maxDrudeDistance) {
             // Reset Drude to parent position
             drude.x = parent.x;
             drude.y = parent.y;
@@ -76,7 +76,7 @@ bool DrudeSCF::optimize(
             applyPBC(dx, dy, dz, box);
             double dist2 = dx*dx + dy*dy + dz*dz;
             
-            if (dist2 > 0.98 * params.maxDrudeDistance * params.maxDrudeDistance) {
+            if (params.enableHardWall && dist2 > 0.98 * params.maxDrudeDistance * params.maxDrudeDistance) {
                 anyAtHardWall = true;
             }
             
@@ -102,7 +102,8 @@ bool DrudeSCF::optimize(
         
         // Update Drude positions
         updateDrudePositions(
-            state, particles, electricField, dampingFactor, params.maxDrudeDistance
+            state, particles, electricField, dampingFactor, 
+            params.enableHardWall ? params.maxDrudeDistance : 1e10  // Large value when hard wall disabled
         );
         
         // Adaptive damping - disabled for now to debug
@@ -276,10 +277,10 @@ double DrudeSCF::updateDrudePositions(
         double dy_update = (1.0 - dampingFactor) * dy_old + dampingFactor * dy_new;
         double dz_update = (1.0 - dampingFactor) * dz_old + dampingFactor * dz_new;
         
-        // Update position with hard wall constraint
+        // Update position with hard wall constraint (if enabled)
         // Apply hard wall only to the final position, not the target
         double disp2_update = dx_update*dx_update + dy_update*dy_update + dz_update*dz_update;
-        if (disp2_update > maxDrudeDistance * maxDrudeDistance) {
+        if (maxDrudeDistance < 1.0 && disp2_update > maxDrudeDistance * maxDrudeDistance) {
             double scale = maxDrudeDistance / std::sqrt(disp2_update);
             dx_update *= scale;
             dy_update *= scale;
