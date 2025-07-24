@@ -55,11 +55,14 @@ from energyDrude.scf_convergence_tests import (
     test_scf_adaptive_damping
 )
 
-from energyDrude.charmm_validation_tests import (
+from energyDrude.charmm_basic_validation_tests import (
     test_drude_charge_relationship,
     # test_induced_dipole_in_uniform_field,  # TODO: SCF convergence issues - field too strong for current algorithm
     test_thole_screening_values,
-    test_swm4_ndp_geometry,
+    test_swm4_ndp_geometry
+)
+
+from energyDrude.charmm_advanced_validation_tests import (
     test_drude_mass_redistribution,
     test_polarization_catastrophe_prevention,
     test_anisotropic_polarizability
