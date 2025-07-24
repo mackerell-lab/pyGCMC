@@ -32,7 +32,9 @@ Modular structure (all modules under 300 lines):
 - pgp_pme_cutoff.py: PGP PME cutoff test (1 function)
 - pgp_cutoff_issue.py: PGP cutoff issue tests (2 functions)
 - pgp_erfc_debug.py: PGP erfc table debug tests (2 functions)
-- pgp_complete.py: PGP Complete tests including LJ interactions (6 functions)
+- pgp_complete_comparison.py: PGP vs PME Complete comparison tests (2 functions)
+- pgp_complete_special_cases.py: PGP Complete special scenarios tests (2 functions)
+- pgp_complete_boundary.py: PGP Complete boundary condition tests (2 functions)
 
 Total: 40 test functions across 28 modules.
 - Basic PGP tests (3): basic_operations
@@ -168,11 +170,16 @@ from energyPGP.pgp_erfc_debug import (
 # PGP Complete tests - including LJ interactions
 # These tests use resetPGPState() to clear global state between runs
 # See energyPGP/README_PGP_COMPLETE_TESTS.md for details
-from energyPGP.pgp_complete import (
+# PGP Complete tests
+from energyPGP.pgp_complete_comparison import (
     test_pgp_complete_vs_pme_complete,
-    test_pgp_complete_movement_energy,
+    test_pgp_complete_movement_energy
+)
+from energyPGP.pgp_complete_special_cases import (
     test_pgp_complete_pure_lj,
-    test_pgp_complete_multi_atom_residue,
+    test_pgp_complete_multi_atom_residue
+)
+from energyPGP.pgp_complete_boundary import (
     test_pgp_complete_extreme_distances,
     test_pgp_complete_direct_movement_test
 )
