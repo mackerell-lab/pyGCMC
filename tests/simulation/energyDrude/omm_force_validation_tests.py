@@ -9,6 +9,227 @@ import math
 from .omm_test_helpers import calculate_numerical_force_simple
 
 
+def test_drude_spring_energy_formula():
+    """Test exact spring energy formula E = 0.5 * k * |r|^2"""
+    
+    # Simple system: parent + Drude
+    state = pygcmc.MCState()
+    state.info.box = [5.0, 5.0, 5.0]
+    
+    # Force field
+    ff = pygcmc.MCForceField()
+    ff.numTotalTypes = 2
+    ff.numMovementTypes = 2
+    ff.ljEps = [0.0, 0.0]
+    ff.ljSigma = [0.1, 0.1]
+    state.forcefield = ff
+    
+    # Parent atom
+    parent = pygcmc.MCAtom()
+    parent.x, parent.y, parent.z = 0.0, 0.0, 0.0
+    parent.charge = 1.0
+    parent.type = 0
+    
+    # Drude atom (displaced)
+    drude = pygcmc.MCAtom()
+    displacement = 0.01  # nm
+    drude.x, drude.y, drude.z = displacement, 0.0, 0.0
+    drude.charge = -1.0
+    drude.type = 1
+    
+    state.atoms = [parent, drude]
+    state.activeAtomCount = 2
+    
+    # Residue
+    res = pygcmc.MCResidue()
+    res.atomStart = 0
+    res.atomCount = 2
+    res.active = True
+    res.type = 0
+    state.residues = [res]
+    state.activeResidueCount = 1
+    
+    # Setup Drude
+    pygcmc.DrudeComplete.clear()
+    
+    # Use simple values for clear testing
+    alpha = 0.001  # nm^3
+    particle = pygcmc.DrudeParticle()
+    particle.drudeIndex = 1
+    particle.parentIndex = 0
+    particle.charge = -1.0
+    particle.polarizability = alpha
+    particle.computeSpringConstants()
+    
+    k_spring = particle.kSpring
+    pygcmc.DrudeComplete.addParticle(particle)
+    
+    # Direct energy calculation (no SCF)
+    params = pygcmc.DrudeSCFParams()
+    params.tolerance = 1e10  # Very high tolerance to avoid SCF
+    params.maxIterations = 0  # No iterations
+    params.enableHardWall = False
+    pygcmc.DrudeComplete.setParameters(params)
+    
+    energy = pygcmc.DrudeComplete.calculateEnergy(state)
+    
+    # Expected energy: E = 0.5 * k * |r|^2
+    expected_energy = 0.5 * k_spring * displacement * displacement
+    
+    print(f"Spring constant k: {k_spring:.6f} kJ/mol/nm^2")
+    print(f"Displacement: {displacement:.6f} nm")
+    print(f"Calculated energy: {energy:.10f} kJ/mol")
+    print(f"Expected energy: {expected_energy:.10f} kJ/mol")
+    
+    # Tight tolerance as in OpenMM (1e-5 kJ/mol)
+    assert abs(energy - expected_energy) < 1e-5, \
+        f"Energy mismatch: {energy} vs {expected_energy}, diff = {abs(energy - expected_energy)}"
+    
+    pygcmc.DrudeComplete.clear()
+
+
+def test_anisotropic_spring_energy():
+    """Test anisotropic spring with a1=0.8, a2=1.1 (from OpenMM TestDrudeForce)"""
+    
+    # System with 4 atoms defining anisotropy axes
+    state = pygcmc.MCState()
+    state.info.box = [5.0, 5.0, 5.0]
+    
+    # Force field
+    ff = pygcmc.MCForceField()
+    ff.numTotalTypes = 3  # parent, drude, axis atoms
+    ff.numMovementTypes = 3
+    ff.ljEps = [0.0, 0.0, 0.0]
+    ff.ljSigma = [0.1, 0.1, 0.1]
+    state.forcefield = ff
+    
+    # Parent atom at origin
+    parent = pygcmc.MCAtom()
+    parent.x, parent.y, parent.z = 0.0, 0.0, 0.0
+    parent.charge = 1.0
+    parent.type = 0
+    
+    # Drude atom (will be displaced)
+    drude = pygcmc.MCAtom()
+    drude.x, drude.y, drude.z = 0.0, 0.0, 0.0
+    drude.charge = -1.0
+    drude.type = 1
+    
+    # Axis atoms for defining anisotropy directions
+    # Axis 1-2: along x direction
+    axis1 = pygcmc.MCAtom()
+    axis1.x, axis1.y, axis1.z = -1.0, 0.0, 0.0
+    axis1.charge = 0.0
+    axis1.type = 2
+    
+    axis2 = pygcmc.MCAtom()
+    axis2.x, axis2.y, axis2.z = 1.0, 0.0, 0.0
+    axis2.charge = 0.0
+    axis2.type = 2
+    
+    # Axis 3-4: along y direction
+    axis3 = pygcmc.MCAtom()
+    axis3.x, axis3.y, axis3.z = 0.0, -1.0, 0.0
+    axis3.charge = 0.0
+    axis3.type = 2
+    
+    axis4 = pygcmc.MCAtom()
+    axis4.x, axis4.y, axis4.z = 0.0, 1.0, 0.0
+    axis4.charge = 0.0
+    axis4.type = 2
+    
+    state.atoms = [parent, drude, axis1, axis2, axis3, axis4]
+    state.activeAtomCount = 6
+    
+    # Single residue
+    res = pygcmc.MCResidue()
+    res.atomStart = 0
+    res.atomCount = 6
+    res.active = True
+    res.type = 0
+    state.residues = [res]
+    state.activeResidueCount = 1
+    
+    # Setup anisotropic Drude
+    pygcmc.DrudeComplete.clear()
+    
+    alpha = 0.001  # nm^3
+    a1 = 0.8  # OpenMM test value
+    a2 = 1.1  # OpenMM test value
+    
+    particle = pygcmc.DrudeParticle()
+    particle.drudeIndex = 1
+    particle.parentIndex = 0
+    particle.charge = -1.0
+    particle.polarizability = alpha
+    particle.aniso1Index = 2  # axis1
+    particle.aniso2Index = 3  # axis2
+    particle.aniso3Index = 4  # axis3
+    particle.aniso4Index = 5  # axis4
+    particle.aniso12 = a1
+    particle.aniso34 = a2
+    particle.computeSpringConstants()
+    
+    pygcmc.DrudeComplete.addParticle(particle)
+    
+    # No SCF for direct energy test
+    params = pygcmc.DrudeSCFParams()
+    params.tolerance = 1e10
+    params.maxIterations = 0
+    params.enableHardWall = False
+    pygcmc.DrudeComplete.setParameters(params)
+    
+    # Test 1: Displacement along x (axis 1-2 direction)
+    dx = 0.01  # nm
+    state.atoms[1].x = dx
+    energy_x = pygcmc.DrudeComplete.calculateEnergy(state)
+    
+    # Expected: E = 0.5 * k * a1 * dx^2
+    k_base = particle.charge * particle.charge * 138.935456 / alpha
+    expected_x = 0.5 * k_base * a1 * dx * dx
+    
+    print(f"X-displacement test:")
+    print(f"  a1 = {a1}")
+    print(f"  Energy = {energy_x:.10f} kJ/mol")
+    print(f"  Expected = {expected_x:.10f} kJ/mol")
+    
+    assert abs(energy_x - expected_x) < 1e-5, \
+        f"X energy mismatch: {energy_x} vs {expected_x}"
+    
+    # Test 2: Displacement along y (axis 3-4 direction)
+    state.atoms[1].x = 0.0
+    state.atoms[1].y = dx
+    energy_y = pygcmc.DrudeComplete.calculateEnergy(state)
+    
+    # Expected: E = 0.5 * k * a2 * dy^2
+    expected_y = 0.5 * k_base * a2 * dx * dx
+    
+    print(f"\nY-displacement test:")
+    print(f"  a2 = {a2}")
+    print(f"  Energy = {energy_y:.10f} kJ/mol")
+    print(f"  Expected = {expected_y:.10f} kJ/mol")
+    
+    assert abs(energy_y - expected_y) < 1e-5, \
+        f"Y energy mismatch: {energy_y} vs {expected_y}"
+    
+    # Test 3: Displacement along z (no anisotropy)
+    state.atoms[1].y = 0.0
+    state.atoms[1].z = dx
+    energy_z = pygcmc.DrudeComplete.calculateEnergy(state)
+    
+    # Expected: E = 0.5 * k * dz^2 (isotropic)
+    expected_z = 0.5 * k_base * dx * dx
+    
+    print(f"\nZ-displacement test (isotropic):")
+    print(f"  Energy = {energy_z:.10f} kJ/mol")
+    print(f"  Expected = {expected_z:.10f} kJ/mol")
+    
+    assert abs(energy_z - expected_z) < 1e-5, \
+        f"Z energy mismatch: {energy_z} vs {expected_z}"
+    
+    pygcmc.DrudeComplete.clear()
+
+
 def test_numerical_force_validation():
     """Validate forces using numerical differentiation (inspired by OpenMM's validateForce)"""
     

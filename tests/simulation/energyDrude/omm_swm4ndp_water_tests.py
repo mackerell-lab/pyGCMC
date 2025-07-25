@@ -114,3 +114,145 @@ def test_swm4_ndp_water_system():
     assert abs(energy) < 0.1, f"Single water energy too large: {energy} kJ/mol (threshold: 0.1)"
     
     pygcmc.DrudeComplete.clear()
+
+
+def test_swm4_ndp_water_cluster():
+    """Test small cluster of 3 SWM4-NDP water molecules"""
+    
+    # Create a system with 3 water molecules
+    state = pygcmc.MCState()
+    state.info.box = [3.0, 3.0, 3.0]
+    state.info.cutoff = 1.5
+    
+    # Force field for SWM4-NDP
+    ff = pygcmc.MCForceField()
+    ff.numTotalTypes = 4  # O, D, H, M
+    ff.numMovementTypes = 4
+    ff.ljEps = [0.21094*4.184, 0.0, 0.0, 0.0]  # Only O has LJ
+    ff.ljSigma = [0.318395, 0.1, 0.1, 0.1]
+    state.forcefield = ff
+    
+    atoms = []
+    
+    # Water molecule positions (simple arrangement)
+    water_positions = [
+        [0.0, 0.0, 0.0],    # Water 1
+        [0.3, 0.0, 0.0],    # Water 2
+        [0.15, 0.26, 0.0]   # Water 3 (roughly triangular)
+    ]
+    
+    angle = 104.52 * math.pi / 180.0
+    bisector_angle = angle / 2.0
+    
+    # Create each water molecule
+    for i, pos in enumerate(water_positions):
+        x0, y0, z0 = pos
+        
+        # Oxygen
+        oxygen = pygcmc.MCAtom()
+        oxygen.x, oxygen.y, oxygen.z = x0, y0, z0
+        oxygen.charge = 1.71636
+        oxygen.type = 0
+        atoms.append(oxygen)
+        
+        # Drude
+        drude = pygcmc.MCAtom()
+        drude.x, drude.y, drude.z = x0, y0, z0
+        drude.charge = -1.71636
+        drude.type = 1
+        atoms.append(drude)
+        
+        # Hydrogen 1
+        h1 = pygcmc.MCAtom()
+        h1.x = x0 + 0.09572
+        h1.y = y0
+        h1.z = z0
+        h1.charge = 0.55733
+        h1.type = 2
+        atoms.append(h1)
+        
+        # Hydrogen 2
+        h2 = pygcmc.MCAtom()
+        h2.x = x0 + 0.09572 * math.cos(angle)
+        h2.y = y0 + 0.09572 * math.sin(angle)
+        h2.z = z0
+        h2.charge = 0.55733
+        h2.type = 2
+        atoms.append(h2)
+        
+        # Virtual site M
+        m_site = pygcmc.MCAtom()
+        m_site.x = x0 + 0.024034 * math.cos(bisector_angle)
+        m_site.y = y0 + 0.024034 * math.sin(bisector_angle)
+        m_site.z = z0
+        m_site.charge = -1.11466
+        m_site.type = 3
+        atoms.append(m_site)
+    
+    state.atoms = atoms
+    state.activeAtomCount = 15  # 3 waters × 5 atoms each
+    
+    # Create residues for each water
+    residues = []
+    for i in range(3):
+        res = pygcmc.MCResidue()
+        res.atomStart = i * 5
+        res.atomCount = 5
+        res.active = True
+        res.type = i
+        residues.append(res)
+    
+    state.residues = residues
+    state.activeResidueCount = 3
+    
+    # Setup Drude particles
+    pygcmc.DrudeComplete.clear()
+    
+    polarizability = 138.935456 * 1.71636 * 1.71636 / (100000 * 4.184)
+    
+    for i in range(3):
+        particle = pygcmc.DrudeParticle()
+        particle.drudeIndex = i * 5 + 1  # Drude indices: 1, 6, 11
+        particle.parentIndex = i * 5      # Oxygen indices: 0, 5, 10
+        particle.charge = -1.71636
+        particle.polarizability = polarizability
+        particle.computeSpringConstants()
+        pygcmc.DrudeComplete.addParticle(particle)
+    
+    # SCF parameters
+    params = pygcmc.DrudeSCFParams()
+    params.tolerance = 0.1
+    params.maxIterations = 100
+    params.enableHardWall = False
+    pygcmc.DrudeComplete.setParameters(params)
+    
+    # Calculate energy
+    total_energy = pygcmc.DrudeComplete.calculateEnergy(state)
+    energy_per_molecule = total_energy / 3.0
+    
+    print(f"3-water cluster total energy: {total_energy:.6f} kJ/mol")
+    print(f"Energy per molecule: {energy_per_molecule:.6f} kJ/mol")
+    
+    # Check that all Drude particles have reasonable displacements
+    max_displacement = 0.0
+    for i in range(3):
+        oxygen_idx = i * 5
+        drude_idx = i * 5 + 1
+        
+        dx = state.atoms[drude_idx].x - state.atoms[oxygen_idx].x
+        dy = state.atoms[drude_idx].y - state.atoms[oxygen_idx].y
+        dz = state.atoms[drude_idx].z - state.atoms[oxygen_idx].z
+        displacement = math.sqrt(dx*dx + dy*dy + dz*dz)
+        
+        max_displacement = max(max_displacement, displacement)
+        print(f"Water {i+1} Drude displacement: {displacement:.6f} nm")
+    
+    # Verify displacement is reasonable (< 0.02 nm as per hard wall limit)
+    assert max_displacement < 0.02, \
+        f"Drude displacement too large: {max_displacement} nm"
+    
+    # Energy per molecule should be negative (attraction) but reasonable
+    assert -10.0 < energy_per_molecule < 0.0, \
+        f"Energy per molecule out of range: {energy_per_molecule} kJ/mol"
+    
+    pygcmc.DrudeComplete.clear()

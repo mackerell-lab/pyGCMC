@@ -76,9 +76,13 @@ from energyDrude.charmm_advanced_validation_tests import (
 )
 
 from energyDrude.omm_scf_consistency_tests import test_scf_repeat_consistency
-from energyDrude.omm_force_validation_tests import test_numerical_force_validation
-from energyDrude.omm_thole_validation_tests import test_thole_screening_validation
-from energyDrude.omm_swm4ndp_water_tests import test_swm4_ndp_water_system
+from energyDrude.omm_force_validation_tests import (
+    test_numerical_force_validation, 
+    test_drude_spring_energy_formula,
+    test_anisotropic_spring_energy
+)
+from energyDrude.omm_thole_validation_tests import test_thole_screening_validation, test_thole_screening_periodic
+from energyDrude.omm_swm4ndp_water_tests import test_swm4_ndp_water_system, test_swm4_ndp_water_cluster
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
