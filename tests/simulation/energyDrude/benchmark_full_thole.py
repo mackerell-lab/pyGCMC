@@ -6,7 +6,7 @@ Benchmark with full Thole screening to check energy consistency
 import time
 import numpy as np
 import pygcmc
-from helpers import setup_water_system
+from drude_molecule_helpers import setup_water_system
 
 def benchmark_with_full_thole(algorithm_type, n_waters=27):
     """Benchmark with complete Thole screening"""

@@ -8,11 +8,11 @@ import pygcmc
 import math
 
 # Import helpers
-from energyDrude.helpers import (
+from energyDrude.drude_molecule_helpers import (
     create_water_molecule,
-    setup_water_system,
-    setup_drude_system
+    setup_water_system
 )
+from energyDrude.drude_analysis_helpers import setup_drude_system
 
 def test_scf_tolerance_scaling():
     """Test how tolerance affects final energy accuracy"""

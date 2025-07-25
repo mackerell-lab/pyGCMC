@@ -8,12 +8,12 @@ import pygcmc
 import math
 
 # Import helpers
-from energyDrude.helpers import (
+from energyDrude.drude_molecule_helpers import (
     create_drude_particle,
     create_water_molecule,
-    setup_water_system,
-    setup_drude_system
+    setup_water_system
 )
+from energyDrude.drude_analysis_helpers import setup_drude_system
 
 def test_drude_mass_redistribution():
     """Test Drude mass redistribution as in CHARMM

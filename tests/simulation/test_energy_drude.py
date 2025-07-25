@@ -37,10 +37,13 @@ from energyDrude.thole_tests import (
     test_multiple_thole_pairs
 )
 
-from energyDrude.hardwall_tests import (
+from energyDrude.hardwall_basic_tests import (
     test_hardwall_constraint_basic,
     test_hardwall_different_limits,
-    test_hardwall_energy_consistency,
+    test_hardwall_energy_consistency
+)
+
+from energyDrude.hardwall_advanced_tests import (
     test_hardwall_with_multiple_drudes,
     test_hardwall_anisotropic_force
 )
@@ -71,12 +74,10 @@ from energyDrude.charmm_advanced_validation_tests import (
     test_anisotropic_polarizability
 )
 
-from energyDrude.openmm_style_tests import (
-    test_energy_conservation_scf,
-    test_numerical_force_validation,
-    test_thole_screening_validation,
-    test_swm4_ndp_water_system
-)
+from energyDrude.openmm_energy_conservation import test_energy_conservation_scf
+from energyDrude.openmm_force_validation import test_numerical_force_validation
+from energyDrude.openmm_thole_test import test_thole_screening_validation
+from energyDrude.openmm_water_test import test_swm4_ndp_water_system
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

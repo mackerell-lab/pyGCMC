@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
 Benchmark comparison of three Drude algorithms on 256 water molecules
+This version uses minimal Thole screening pairs (only 10 waters with nearest neighbors)
+for faster benchmarking. For more realistic benchmarks, see benchmark_256water_fixed.py
 """
 
 import time
 import numpy as np
 import pygcmc
-from helpers import create_water_molecule, setup_water_system, setup_drude_system
+from drude_molecule_helpers import create_water_molecule, setup_water_system
+from drude_analysis_helpers import setup_drude_system
 
 def benchmark_algorithm(algorithm_type, n_iterations=50):
     """Benchmark a specific algorithm"""
