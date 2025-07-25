@@ -87,6 +87,15 @@ from energyOpenmm.pme_total_fix import (
 # PGP strict tolerance test
 from energyOpenmm.pgp_strict_tolerance import test_pgp_with_strict_tolerance
 
+# PGP-PME delta comparison test
+from energyOpenmm.pgp_pme_delta_comparison import test_pgp_pme_delta_comparison
+
+# PGP complex movements test
+from energyOpenmm.pgp_complex_movements import (
+    test_pgp_complex_movements,
+    test_pgp_multiple_movement_groups
+)
+
 # PME-Ewald consistency test
 from energyOpenmm.pme_ewald_consistency import test_pme_ewald_consistency
 
