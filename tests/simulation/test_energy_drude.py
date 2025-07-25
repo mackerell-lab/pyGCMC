@@ -71,5 +71,12 @@ from energyDrude.charmm_advanced_validation_tests import (
     test_anisotropic_polarizability
 )
 
+from energyDrude.openmm_style_tests import (
+    test_energy_conservation_scf,
+    test_numerical_force_validation,
+    test_thole_screening_validation,
+    test_swm4_ndp_water_system
+)
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
