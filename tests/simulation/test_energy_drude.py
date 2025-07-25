@@ -47,10 +47,13 @@ from energyDrude.hardwall_tests import (
 
 # OpenMM comparison tests moved to test_openmm.py
 
-from energyDrude.scf_convergence_tests import (
+from energyDrude.scf_basic_convergence_tests import (
     test_scf_basic_convergence,
     test_scf_damping_factor_effect,
-    test_scf_iteration_limit,
+    test_scf_iteration_limit
+)
+
+from energyDrude.scf_advanced_convergence_tests import (
     test_scf_tolerance_scaling,
     test_scf_adaptive_damping
 )
