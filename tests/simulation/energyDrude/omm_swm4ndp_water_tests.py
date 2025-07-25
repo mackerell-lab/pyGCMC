@@ -110,6 +110,7 @@ def test_swm4_ndp_water_system():
     
     # For a single water molecule with no external field,
     # the energy should be close to zero (only self-polarization)
-    assert abs(energy) < 1.0, f"Single water energy too large: {energy}"
+    # OpenMM test uses 0.1 kJ/mol tolerance
+    assert abs(energy) < 0.1, f"Single water energy too large: {energy} kJ/mol (threshold: 0.1)"
     
     pygcmc.DrudeComplete.clear()

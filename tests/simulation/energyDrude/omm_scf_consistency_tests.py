@@ -1,5 +1,6 @@
 """
-Energy conservation tests inspired by OpenMM's TestDrudeSCFIntegrator
+SCF consistency tests inspired by OpenMM's TestDrudeSCFIntegrator
+Note: This tests SCF repeat consistency, not true energy conservation in MD
 """
 
 import pytest
@@ -8,8 +9,13 @@ import pygcmc
 import math
 
 
-def test_energy_conservation_scf():
-    """Test energy conservation during SCF optimization (inspired by OpenMM's testWater)"""
+def test_scf_repeat_consistency():
+    """Test SCF repeat consistency (inspired by OpenMM's energy conservation test)
+    
+    Note: OpenMM's actual test runs dynamics with DrudeSCFIntegrator for thousands
+    of steps and checks total energy conservation. Here we only test that repeated
+    SCF calculations give consistent results.
+    """
     
     # Create a simple system with 2 Drude oscillators
     state = pygcmc.MCState()

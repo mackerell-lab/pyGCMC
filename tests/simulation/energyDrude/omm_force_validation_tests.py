@@ -51,9 +51,9 @@ def test_numerical_force_validation():
     # Setup Drude
     pygcmc.DrudeComplete.clear()
     
-    k = 138.935456 * 1.5  # ONE_4PI_EPS0 * 1.5
-    charge = 1.5
-    alpha = 138.935456 * charge * charge / k
+    # Note: k = ONE_4PI_EPS0 * 1.5, so alpha = ONE_4PI_EPS0 * q^2 / k = q^2 / 1.5
+    # For q = 1.5, alpha = 1.5^2 / 1.5 = 1.5 nm^3
+    alpha = 1.5  # nm^3
     
     particle = pygcmc.DrudeParticle()
     particle.drudeIndex = 1
@@ -145,6 +145,7 @@ def test_numerical_force_validation():
     print(f"\nDrude force magnitude at equilibrium: {drude_force_norm:.6f} kJ/mol/nm")
     
     # Force should be small but might not be exactly zero due to SCF tolerance
-    assert drude_force_norm < 10.0, f"Drude force not converged: {drude_force_norm}"
+    # OpenMM uses ~5e-3 kJ/mol/nm tolerance for force validation
+    assert drude_force_norm < 5e-3, f"Drude force not converged: {drude_force_norm} kJ/mol/nm (threshold: 5e-3)"
     
     pygcmc.DrudeComplete.clear()

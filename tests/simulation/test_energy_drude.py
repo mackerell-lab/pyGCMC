@@ -75,7 +75,7 @@ from energyDrude.charmm_advanced_validation_tests import (
     test_anisotropic_polarizability
 )
 
-from energyDrude.omm_energy_conservation_tests import test_energy_conservation_scf
+from energyDrude.omm_scf_consistency_tests import test_scf_repeat_consistency
 from energyDrude.omm_force_validation_tests import test_numerical_force_validation
 from energyDrude.omm_thole_validation_tests import test_thole_screening_validation
 from energyDrude.omm_swm4ndp_water_tests import test_swm4_ndp_water_system

@@ -15,9 +15,11 @@ def create_atom(x, y, z, charge, atom_type):
 
 
 def calculate_numerical_force_simple(state, particle_index, direction, delta=1e-6):
-    """Calculate force using finite difference (simplified version)"""
-    # For Drude particles, we should NOT move them directly as SCF will re-optimize
-    # Instead, we should calculate the force at the converged position
+    """Calculate force using finite difference (simplified version)
+    
+    Note: For Drude particles, SCF will re-optimize their positions after each
+    energy calculation, so their analytical force should always be ~0 at 
+    equilibrium (within SCF tolerance)."""
     
     # Save original position
     original_pos = [state.atoms[particle_index].x,
@@ -58,8 +60,9 @@ def calculate_numerical_force_simple(state, particle_index, direction, delta=1e-
         # Force = -dE/dx
         force = -(energy_plus - energy_minus) / (2 * delta)
     else:
-        # For Drude particles, force should be near zero after SCF
-        # Return a small value to indicate convergence
+        # For Drude particles, SCF will re-minimize them after each perturbation
+        # So their analytical force is always ~0 (within SCF tolerance)
+        # This is expected behavior - Drude particles are always at equilibrium
         force = 0.0
     
     return force
