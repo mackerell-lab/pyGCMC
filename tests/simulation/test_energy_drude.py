@@ -14,7 +14,8 @@ from energyDrude.basic_tests import (
     test_drude_scf_params,
     test_drude_algorithm_enum,
     test_thole_screening_function,
-    test_drude_complete_basic
+    test_drude_complete_basic,
+    test_simple_drude_force
 )
 
 from energyDrude.energy_tests import (
@@ -63,7 +64,7 @@ from energyDrude.scf_advanced_convergence_tests import (
 
 from energyDrude.charmm_basic_validation_tests import (
     test_drude_charge_relationship,
-    # test_induced_dipole_in_uniform_field,  # TODO: SCF convergence issues - field too strong for current algorithm
+    test_induced_dipole_in_uniform_field,
     test_thole_screening_values,
     test_swm4_ndp_geometry
 )
@@ -74,10 +75,10 @@ from energyDrude.charmm_advanced_validation_tests import (
     test_anisotropic_polarizability
 )
 
-from energyDrude.openmm_energy_conservation import test_energy_conservation_scf
-from energyDrude.openmm_force_validation import test_numerical_force_validation
-from energyDrude.openmm_thole_test import test_thole_screening_validation
-from energyDrude.openmm_water_test import test_swm4_ndp_water_system
+from energyDrude.omm_energy_conservation_tests import test_energy_conservation_scf
+from energyDrude.omm_force_validation_tests import test_numerical_force_validation
+from energyDrude.omm_thole_validation_tests import test_thole_screening_validation
+from energyDrude.omm_swm4ndp_water_tests import test_swm4_ndp_water_system
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

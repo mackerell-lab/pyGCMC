@@ -6,7 +6,7 @@ import pytest
 import numpy as np
 import pygcmc
 import math
-from .openmm_test_helpers import calculate_numerical_force_simple
+from .omm_test_helpers import calculate_numerical_force_simple
 
 
 def test_numerical_force_validation():

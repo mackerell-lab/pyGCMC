@@ -6,7 +6,7 @@ import pytest
 import numpy as np
 import pygcmc
 import math
-from .openmm_test_helpers import create_atom
+from .omm_test_helpers import create_atom
 
 
 def test_thole_screening_validation():
