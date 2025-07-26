@@ -38,6 +38,19 @@ void computeSystemEnergyPGPComplete(model::MCState& state);
  */
 void computeMovementEnergyPGPComplete(model::MCState& state);
 
+/**
+ * @brief Corrected implementation of movement energy using PGP Complete
+ * 
+ * This properly calculates energy for movement residues:
+ * 1. Grid interpolation for movement atoms in fixed potential
+ * 2. Real space interactions of movement atoms with ALL atoms
+ * 3. LJ interactions of movement atoms with ALL atoms
+ * 4. Self energy of movement atoms only
+ * 
+ * @param state MC state containing system information
+ */
+void computeMovementEnergyPGPCompleteCorrect(model::MCState& state);
+
 } // namespace cpu
 } // namespace platform
 } // namespace pygcmc

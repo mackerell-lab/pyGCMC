@@ -291,6 +291,19 @@ public:
      * @param state MC state
      */
     static void computeMovementEnergyPGPComplete(model::MCState& state);
+    
+    /**
+     * @brief Corrected implementation of movement energy using PGP Complete
+     * 
+     * Properly calculates energy for movement residues:
+     * - Grid interpolation for movement atoms
+     * - Real space interactions with ALL atoms  
+     * - LJ interactions with ALL atoms
+     * - Self energy of movement atoms only
+     * 
+     * @param state MC state
+     */
+    static void computeMovementEnergyPGPCompleteCorrect(model::MCState& state);
 
     /**
      * @brief Compute complete system energy using PME with all interactions

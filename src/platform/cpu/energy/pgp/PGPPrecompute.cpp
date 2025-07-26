@@ -147,7 +147,7 @@ void precomputeGridPotentialImpl(model::MCState& state, bool fixed_only) {
     double constantFactor = 4.0 * M_PI / volume;
     double ONE_4PI_EPS0 = 138.935456; // kJ·mol^-1·nm·e^-2
     double physicalUnitFactor = ONE_4PI_EPS0 / pgp_params.epsilon_r;
-    double totalFactor = totalFFTPoints * constantFactor * physicalUnitFactor * 0.5;
+    double totalFactor = totalFFTPoints * constantFactor * physicalUnitFactor;
     
     // Apply total correction factor to each grid point
     for (int i = 0; i < totalGridSize; i++) {

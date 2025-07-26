@@ -5,6 +5,7 @@
 #include "../platform/cpu/energy/pgp/PGPCore.hpp"
 #include "../platform/cpu/energy/pgp/PGPComplete.hpp"
 #include <cmath>
+#include <cstdio>
 
 namespace pygcmc {
 namespace simulation {
@@ -331,6 +332,14 @@ void Simulation::computeMovementEnergyPGPComplete(model::MCState& state) {
         log(LogLevel::DEBUG, "Computing PGP Complete energy for movement residues");
     }
     platform::cpu::computeMovementEnergyPGPComplete(state);
+}
+
+void Simulation::computeMovementEnergyPGPCompleteCorrect(model::MCState& state) {
+    fprintf(stderr, "=== Simulation::computeMovementEnergyPGPCompleteCorrect called ===\n");
+    if (is_debug_enabled()) {
+        log(LogLevel::DEBUG, "Computing corrected PGP Complete energy for movement residues");
+    }
+    platform::cpu::computeMovementEnergyPGPCompleteCorrect(state);
 }
 
 } // namespace simulation
