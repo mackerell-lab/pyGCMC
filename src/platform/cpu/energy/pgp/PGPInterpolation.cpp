@@ -181,6 +181,14 @@ void interpolateMoleculeEnergyImpl(model::MCState& state, double& energy) {
  * @brief Calculate moving molecule energy through interpolation and return calculation result
  */
 double calculateMoleculeEnergyImpl(model::MCState& state) {
+    // Reset residue energies to avoid carry-over between moves
+    for (int r = 0; r < state.activeResidueCount; ++r) {
+        if (state.residues[r].active) {
+            state.residues[r].energy_elec = 0.0f;
+            state.residues[r].energy_vdw = 0.0f;
+        }
+    }
+    
     double energy = 0.0;
     interpolateMoleculeEnergyImpl(state, energy);
     

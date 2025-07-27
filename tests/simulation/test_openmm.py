@@ -291,6 +291,16 @@ from energyOpenmm.drude_scf_comparison import (
     # skip_test_water_dimer_scf  # Skip: segfault
 )
 
+# PGP Complete tests from old250726
+from energyOpenmm.pgp_complete_vs_openmm import (
+    test_pgp_complete_delta_e_accuracy,
+    test_pgp_complete_intramolecular_vdw
+)
+from energyOpenmm.pgp_complete_reasonable_distances import (
+    test_pgp_complete_nacl_reasonable,
+    test_pgp_complete_water_system
+)
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__])
