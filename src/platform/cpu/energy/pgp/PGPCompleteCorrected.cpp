@@ -100,15 +100,15 @@ static void calculateRealSpacePGPComplete(model::MCState& state, bool movement_o
                     applyPBC(dx_f, dy_f, dz_f, box);
                     dx = dx_f; dy = dy_f; dz = dz_f;
                     
-                    const double r2 = dx*dx + dy*dy + dz*dz;
+                    const double r2_dist = dx*dx + dy*dy + dz*dz;
                     
                     // Apply cutoff
-                    if (r2 > cutoff2) continue;
+                    if (r2_dist > cutoff2) continue;
                     
                     // Skip extremely close atoms
-                    if (r2 < 1e-12) continue;
+                    if (r2_dist < 1e-12) continue;
                     
-                    const double r = std::sqrt(r2);
+                    const double r = std::sqrt(r2_dist);
                     
                     // Calculate erfc(alpha*r)/r
                     const double alphar = alpha * r;
@@ -241,25 +241,25 @@ static void calculateLJPGPComplete(model::MCState& state, bool movement_only) {
                     applyPBC(dx_f, dy_f, dz_f, box);
                     dx = dx_f; dy = dy_f; dz = dz_f;
                     
-                    const double r2 = dx*dx + dy*dy + dz*dz;
+                    const double r2_dist = dx*dx + dy*dy + dz*dz;
                     
                     // Apply cutoff
-                    if (r2 > cutoff2) continue;
+                    if (r2_dist > cutoff2) continue;
                     
                     // Skip extremely close atoms
-                    if (r2 < 1e-12) continue;
+                    if (r2_dist < 1e-12) continue;
                     
                     // Calculate LJ energy
                     const double sigma2 = sigma * sigma;
                     const double sigma6 = sigma2 * sigma2 * sigma2;
                     const double sigma12 = sigma6 * sigma6;
-                    const double r6 = r2 * r2 * r2;
+                    const double r6 = r2_dist * r2_dist * r2_dist;
                     const double r12 = r6 * r6;
                     
                     const double lj_energy = 4.0 * epsilon * (sigma12/r12 - sigma6/r6);
                     
-                    platform::log(LogLevel::DEBUG, "LJ pair i=", i, " j=", j, " r=", std::sqrt(r2), " energy=", lj_energy);
-                    printf("      Calculated LJ energy = %f kJ/mol (r = %f nm)\n", lj_energy, std::sqrt(r2));
+                    platform::log(LogLevel::DEBUG, "LJ pair i=", i, " j=", j, " r=", std::sqrt(r2_dist), " energy=", lj_energy);
+                    printf("      Calculated LJ energy = %f kJ/mol (r = %f nm)\n", lj_energy, std::sqrt(r2_dist));
                     
                     // Store in residues
                     if (r1 == r2) {

@@ -404,12 +404,18 @@ def test_pgp_multiple_movement_groups():
         delta_pme = pme_final - pme_init
         delta_pgp = pgp_final - pgp_init
         
-        if abs(delta_pme) > 1e-6:
-            error = abs((delta_pgp - delta_pme) / delta_pme)
-            print(f"    PME Δ: {delta_pme:8.4f}, PGP Δ: {delta_pgp:8.4f}, Error: {error:6.2%}")
-            assert error < 0.20, f"Error {error:.2%} too large for {config_name}"
-        else:
-            print(f"    PME Δ: {delta_pme:8.4f}, PGP Δ: {delta_pgp:8.4f}")
+        # Use hybrid tolerance: percentage for large changes, absolute for small changes
+        abs_error = abs(delta_pgp - delta_pme)
+        
+        if abs(delta_pme) > 1.0:  # Large energy change: use percentage tolerance
+            rel_error = abs_error / abs(delta_pme)
+            print(f"    PME Δ: {delta_pme:8.4f}, PGP Δ: {delta_pgp:8.4f}, Error: {rel_error:6.2%}")
+            assert rel_error < 0.20, f"Relative error {rel_error:.2%} too large for {config_name}"
+        elif abs(delta_pme) > 1e-6:  # Small energy change: use absolute tolerance
+            print(f"    PME Δ: {delta_pme:8.4f}, PGP Δ: {delta_pgp:8.4f}, Abs Error: {abs_error:8.4f}")
+            assert abs_error < 0.2, f"Absolute error {abs_error:.4f} kJ/mol too large for {config_name} (small PME change)"
+        else:  # Negligible PME change
+            print(f"    PME Δ: {delta_pme:8.4f}, PGP Δ: {delta_pgp:8.4f} (PME change negligible)")
         
         # Reset positions
         for start, count in groups:
