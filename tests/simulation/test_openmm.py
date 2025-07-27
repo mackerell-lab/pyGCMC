@@ -3,7 +3,7 @@
 OpenMM Tests - Main Entry Point
 
 Imports all OpenMM comparison tests from energyOpenmm/ subdirectory.
-Total: 109 test functions including Drude tests.
+Total: 115 test functions including Drude tests.
 """
 
 # Suppress SWIG-related deprecation warnings
@@ -303,6 +303,20 @@ from energyOpenmm.pgp_complete_reasonable_distances import (
 
 # PGP reciprocal ratio test
 from energyOpenmm.pgp_openmm_reciprocal_ratio import test_pgp_openmm_reciprocal_ratio
+
+# PGP MC production tests
+from energyOpenmm.pgp_mc_production_tests import (
+    test_pgp_single_residue_mc_moves,
+    test_pgp_grid_recomputation_stability,
+    test_pgp_parameter_sensitivity,
+    test_pgp_metropolis_acceptance_consistency
+)
+
+# PGP multi-residue limitation tests
+from energyOpenmm.pgp_multi_residue_limitations import (
+    test_pgp_multi_residue_limitation,
+    test_pgp_sequential_vs_simultaneous_moves
+)
 
 if __name__ == "__main__":
     import pytest
