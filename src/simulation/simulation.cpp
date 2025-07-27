@@ -335,7 +335,6 @@ void Simulation::computeMovementEnergyPGPComplete(model::MCState& state) {
 }
 
 void Simulation::computeMovementEnergyPGPCompleteCorrect(model::MCState& state) {
-    fprintf(stderr, "=== Simulation::computeMovementEnergyPGPCompleteCorrect called ===\n");
     if (is_debug_enabled()) {
         log(LogLevel::DEBUG, "Computing corrected PGP Complete energy for movement residues");
     }

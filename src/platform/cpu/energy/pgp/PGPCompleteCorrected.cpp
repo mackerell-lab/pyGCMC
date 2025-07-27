@@ -146,15 +146,6 @@ static void calculateLJPGPComplete(model::MCState& state, bool movement_only) {
     platform::log(LogLevel::DEBUG, "calculateLJPGPComplete: movement_only=", movement_only);
     platform::log(LogLevel::DEBUG, "Active residue count: ", state.activeResidueCount);
     
-    // Debug force field
-    fprintf(stderr, "DEBUG: calculateLJPGPComplete called\n");
-    fprintf(stderr, "  movement_only = %d\n", movement_only);
-    fprintf(stderr, "  activeResidueCount = %d\n", state.activeResidueCount);
-    fprintf(stderr, "  activeAtomCount = %d\n", state.activeAtomCount);
-    fprintf(stderr, "  numTotalTypes = %d\n", forcefield.numTotalTypes);
-    fprintf(stderr, "  ljSigma size = %zu\n", forcefield.ljSigma.size());
-    fprintf(stderr, "  ljEps size = %zu\n", forcefield.ljEps.size());
-    fprintf(stderr, "  cutoff = %f, cutoff2 = %f\n", state.info.cutoff, cutoff2);
     
     // Reset VDW energies
     for (auto& res : residues) {
@@ -168,18 +159,14 @@ static void calculateLJPGPComplete(model::MCState& state, bool movement_only) {
         if (!residues[r1].active) continue;
         
         bool r1_is_movement = isMovementResidue(r1, state);
-        printf("  Residue %d: active=%d, fixed=%d, is_movement=%d\n", 
-               r1, residues[r1].active, residues[r1].fixed, r1_is_movement);
         
         // For movement_only mode, skip if r1 is not movement
         if (movement_only && !r1_is_movement) {
             platform::log(LogLevel::DEBUG, "Skipping residue ", r1, " - not movement");
-            printf("  Skipping residue %d (not movement)\n", r1);
             continue;
         }
         
         platform::log(LogLevel::DEBUG, "Processing residue r1=", r1);
-        printf("  Processing residue r1=%d\n", r1);
         
         // Start from r1 to include intra-residue interactions
         for (int r2 = r1; r2 < state.activeResidueCount; r2++) {
@@ -191,7 +178,6 @@ static void calculateLJPGPComplete(model::MCState& state, bool movement_only) {
             }
             
             platform::log(LogLevel::DEBUG, "Processing residue pair r1=", r1, " r2=", r2);
-            printf("    Processing residue pair r1=%d, r2=%d\n", r1, r2);
             
             // Loop over atom pairs
             for (int i = residues[r1].atomStart; 
@@ -210,22 +196,16 @@ static void calculateLJPGPComplete(model::MCState& state, bool movement_only) {
                     // Get LJ parameters
                     int param_idx = type_i * forcefield.numTotalTypes + type_j;
                     
-                    printf("      Atom pair i=%d (type %d), j=%d (type %d), param_idx=%d\n", 
-                           i, type_i, j, type_j, param_idx);
                     
                     if (param_idx >= static_cast<int>(forcefield.ljSigma.size())) {
-                        printf("      ERROR: param_idx %d >= ljSigma size %zu\n", 
-                               param_idx, forcefield.ljSigma.size());
                         continue;
                     }
                     
                     const double sigma = forcefield.ljSigma[param_idx];
                     const double epsilon = forcefield.ljEps[param_idx];
                     
-                    printf("      LJ params: sigma=%f, epsilon=%f\n", sigma, epsilon);
                     
                     if (epsilon == 0.0 || sigma == 0.0) {
-                        printf("      Skipping: epsilon or sigma is 0\n");
                         continue;
                     }
                     
@@ -259,19 +239,15 @@ static void calculateLJPGPComplete(model::MCState& state, bool movement_only) {
                     const double lj_energy = 4.0 * epsilon * (sigma12/r12 - sigma6/r6);
                     
                     platform::log(LogLevel::DEBUG, "LJ pair i=", i, " j=", j, " r=", std::sqrt(r2_dist), " energy=", lj_energy);
-                    printf("      Calculated LJ energy = %f kJ/mol (r = %f nm)\n", lj_energy, std::sqrt(r2_dist));
                     
                     // Store in residues
                     if (r1 == r2) {
                         // Intra-residue: all energy to this residue
                         residues[r1].energy_vdw += lj_energy;
-                        printf("      Added to residue %d (intra): total vdw = %f\n", 
-                               r1, residues[r1].energy_vdw);
                     } else {
                         // Inter-residue: split energy
                         residues[r1].energy_vdw += lj_energy * 0.5;
                         residues[r2].energy_vdw += lj_energy * 0.5;
-                        printf("      Split between residues %d and %d (inter)\n", r1, r2);
                     }
                 }
             }
@@ -285,7 +261,6 @@ void computeMovementEnergyPGPCompleteCorrect(model::MCState& state) {
         throw std::runtime_error("PGP parameters not initialized. Call setPGPParameters() first.");
     }
     
-    fprintf(stderr, "\n=== computeMovementEnergyPGPCompleteCorrect called ===\n");
     
     platform::log(LogLevel::DEBUG, "Computing movement energy using corrected PGP Complete method");
     platform::log(LogLevel::DEBUG, "Number of movement residue blocks: ", state.movementResidues.size());
@@ -321,23 +296,15 @@ void computeMovementEnergyPGPCompleteCorrect(model::MCState& state) {
     
     // Calculate total VDW from movement residues only
     double vdw_total = 0.0;
-    printf("\nDEBUG: Calculating total VDW\n");
-    printf("  movementResidues.size() = %zu\n", state.movementResidues.size());
     
     if (state.movementResidues.empty()) {
-        printf("  No movement residues specified, summing VDW from all non-fixed\n");
         // If no movement residues specified, sum VDW from all non-fixed residues
         for (int i = 0; i < state.activeResidueCount; i++) {
-            printf("    Residue %d: active=%d, fixed=%d, energy_vdw=%f\n",
-                   i, state.residues[i].active, state.residues[i].fixed, 
-                   state.residues[i].energy_vdw);
             if (state.residues[i].active && !state.residues[i].fixed) {
                 vdw_total += state.residues[i].energy_vdw;
-                printf("      Added to total, now vdw_total = %f\n", vdw_total);
             }
         }
     } else {
-        printf("  Using movement residues list\n");
         for (const auto& movementInfo : state.movementResidues) {
             for (int i = movementInfo.startIndex;
                  i < movementInfo.startIndex + movementInfo.activeCount; i++) {
@@ -348,7 +315,6 @@ void computeMovementEnergyPGPCompleteCorrect(model::MCState& state) {
         }
     }
     
-    printf("  Final vdw_total = %f\n", vdw_total);
     
     // Set reciprocal (grid) and calculate total
     state.ewald_energy.reciprocal = grid_energy;
