@@ -1,8 +1,11 @@
 #include "PGPInterpolation.hpp"
 #include "PGPPrecompute.hpp"
 #include "platform/platform.hpp"
+#include "../common/EnergyUtils.hpp"      // applyPBC
+#include "../common/EnergyConstants.hpp"  // COULOMB
 #include <cmath>
 #include <iostream>
+#include <vector>
 
 namespace pygcmc {
 namespace platform {
@@ -191,6 +194,74 @@ double calculateMoleculeEnergyImpl(model::MCState& state) {
     
     double energy = 0.0;
     interpolateMoleculeEnergyImpl(state, energy);
+    
+    /* ---------------- add mov-mov reciprocal correction ---------------- */
+    // Collect atom indices of movement residues with residue info
+    struct AtomInfo {
+        int atomIdx;
+        int resIdx;
+    };
+    std::vector<AtomInfo> movAtoms;
+    
+    auto isMovementResidue = [&](int resIdx) {
+        if (state.movementResidues.empty())          // treat all non-fixed as movement
+            return !state.residues[resIdx].fixed;
+        for (const auto& m : state.movementResidues)
+            if (resIdx >= m.startIndex && resIdx < m.startIndex + m.activeCount) return true;
+        return false;
+    };
+
+    for (int r = 0; r < state.activeResidueCount; ++r) {
+        if (!isMovementResidue(r) || !state.residues[r].active) continue;
+        for (int i = 0; i < state.residues[r].atomCount; ++i) {
+            AtomInfo info;
+            info.atomIdx = state.residues[r].atomStart + i;
+            info.resIdx = r;
+            movAtoms.push_back(info);
+        }
+    }
+
+    const double alpha = pgp_params.alpha;
+    const float* box   = state.info.box;
+    const auto& atoms  = state.atoms;
+
+    double movMovRecip = 0.0;
+    for (size_t a = 0; a + 1 < movAtoms.size(); ++a) {
+        int i = movAtoms[a].atomIdx;
+        int resI = movAtoms[a].resIdx;
+        const double qi = atoms[i].charge;
+        if (qi == 0.0) continue;
+
+        for (size_t b = a + 1; b < movAtoms.size(); ++b) {
+            int j = movAtoms[b].atomIdx;
+            int resJ = movAtoms[b].resIdx;
+            
+            // Skip intramolecular interactions
+            if (resI == resJ) continue;
+            
+            const double qj = atoms[j].charge;
+            if (qj == 0.0) continue;
+
+            double dx = atoms[i].x - atoms[j].x;
+            double dy = atoms[i].y - atoms[j].y;
+            double dz = atoms[i].z - atoms[j].z;
+
+            float dx_f = static_cast<float>(dx);
+            float dy_f = static_cast<float>(dy);
+            float dz_f = static_cast<float>(dz);
+            applyPBC(dx_f, dy_f, dz_f, box);
+            dx = dx_f; dy = dy_f; dz = dz_f;
+
+            const double r2 = dx*dx + dy*dy + dz*dz;
+            if (r2 < 1e-12) continue;
+
+            const double r      = std::sqrt(r2);
+            const double energy_pair = qi * qj * std::erf(alpha * r) / r;
+            movMovRecip += energy_pair;
+        }
+    }
+    energy += COULOMB * movMovRecip;
+    /* ------------------------------------------------------------------- */
     
     // If no fixed residues, potential grid may need to be recomputed
     if (std::abs(energy) < 1e-10) {
