@@ -17,9 +17,11 @@ Consolidated modular structure (all modules under 300 lines):
 - grid_operations.py: PME grid operations diagnostic test (192 lines, 1 function)
 - pme_parameters.py: PME parameters influence test (195 lines, 1 function)
 - cutoff_dependence.py: PME cutoff dependence test (177 lines, 1 function)
+- movement_energy_tests.py: Movement energy validation tests (213 lines, 3 functions)
+- pme_components_tests.py: PME component and function tests (245 lines, 3 functions)
 
-Total: 15 test functions across 11 modules (reduced from 17 modules).
-Original file: 2050 lines → New consolidated structure: 1,856 lines total (-9% reduction)
+Total: 21 test functions across 13 modules (expanded from 15 functions).
+Original file: 2050 lines → New consolidated structure: ~2,300 lines total
 All functions maintain complete compatibility with original implementation.
 
 Consolidated grouping:
@@ -28,6 +30,8 @@ Consolidated grouping:
 - Advanced Parameters (2): Alpha dependency, LJ energy calculation
 - Comparison Tests (2): Ewald vs PME with random and amorphous systems
 - Specialized Tests (5): Small mesh, Exact Ewald, Grid operations, PME parameters, Cutoff dependence
+- Movement Energy Tests (3): Real-space fix validation, Delta E conservation, Correct formula
+- PME Component Tests (3): Component breakdown, Function differences, Energy relationships
 """
 
 # Basic PME tests (3 functions)
@@ -79,6 +83,20 @@ from energyPME.pme_parameters import (
 # PME cutoff dependence test
 from energyPME.cutoff_dependence import (
     test_cutoff_dependence
+)
+
+# Movement energy tests (3 functions)
+from energyPME.movement_energy_tests import (
+    test_movement_energy_real_space_fix,
+    test_movement_energy_delta_e_conservation,
+    test_correct_movement_energy_formula
+)
+
+# PME component tests (3 functions)
+from energyPME.pme_components_tests import (
+    test_pme_component_breakdown,
+    test_pme_function_differences,
+    test_pme_energy_relationships
 )
 
 # Support direct execution for testing

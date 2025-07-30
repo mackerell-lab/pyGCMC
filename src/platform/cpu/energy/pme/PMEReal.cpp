@@ -69,24 +69,30 @@ void computeRealSpacePME(model::MCState& state, bool movement_only, bool store_i
     const int max_debug_pairs = 5;
     const bool enable_debug = false; // Disable debug output for now
 
+    // For movement_only mode, we need to check if at least one residue is in movement
+    auto isInMovement = [&state](int residueIdx) -> bool {
+        for(const auto& movementInfo : state.movementResidues) {
+            if(residueIdx >= movementInfo.startIndex && 
+               residueIdx < movementInfo.startIndex + movementInfo.activeCount) {
+                return true;
+            }
+        }
+        return false;
+    };
+
     // Loop over all residue pairs
     for(int r1 = 0; r1 < state.activeResidueCount; r1++) {
         if(!residues[r1].active) continue;
-        if(movement_only) {
-            bool in_movement = false;
-            for(const auto& movementInfo : state.movementResidues) {
-                if(r1 >= movementInfo.startIndex && 
-                   r1 < movementInfo.startIndex + movementInfo.activeCount) {
-                    in_movement = true;
-                    break;
-                }
-            }
-            if(!in_movement) continue;
-        }
+        
+        // For movement_only mode, we still need to process ALL residues
+        // to catch fixed-moving interactions
         
         // First handle intra-residue pairs (atoms within the same residue)
-        for(int i = residues[r1].atomStart; 
-            i < residues[r1].atomStart + residues[r1].atomCount - 1; i++) {
+        // Only calculate if this residue is moving (for movement_only mode)
+        bool r1_is_moving = isInMovement(r1);
+        if(!movement_only || r1_is_moving) {
+            for(int i = residues[r1].atomStart; 
+                i < residues[r1].atomStart + residues[r1].atomCount - 1; i++) {
             if(i >= state.activeAtomCount) continue;
             
             for(int j = i + 1; j < residues[r1].atomStart + residues[r1].atomCount; j++) {
@@ -139,10 +145,18 @@ void computeRealSpacePME(model::MCState& state, bool movement_only, bool store_i
                 }
             }
         }
+        }
         
         // Then handle inter-residue pairs
         for(int r2 = r1 + 1; r2 < state.activeResidueCount; r2++) {
             if(!residues[r2].active) continue;
+            
+            // For movement_only mode, only calculate if at least one residue is moving
+            bool r2_is_moving = isInMovement(r2);
+            if(movement_only && !r1_is_moving && !r2_is_moving) {
+                // Skip fixed-fixed interactions
+                continue;
+            }
             
             // Loop over atoms in each residue
             for(int i = residues[r1].atomStart; 
