@@ -197,6 +197,22 @@ from energyPGP.pgp_simple_test import (
 # from energyPGP.pgp_consistency_tests import (
 #     test_pgp_energy_symmetry,
 #     test_pgp_energy_scaling,
+
+# PGP Complete validation tests for GCMC applications
+from energyPGP.pgp_complete_validation import (
+    test_pgp_complete_path_conservation,
+    test_pgp_complete_delta_e_distribution
+)
+from energyPGP.pgp_complete_gcmc_tests import (
+    test_pgp_complete_typical_gcmc_conditions
+)
+from energyPGP.pgp_complete_basic_tests import (
+    test_pgp_complete_consistency,
+    test_pgp_complete_intramolecular
+)
+from energyPGP.pgp_complete_movement_tests import (
+    test_pgp_complete_movement_energy
+)
 #     test_pgp_grid_independence
 # )
 from energyPGP.pgp_grid_convergence import (

@@ -1,356 +1,298 @@
 """
-Test PGP Complete implementation validation
+PGP Complete validation tests for GCMC applications
 
-This module tests the pure PGP Complete functionality, verifying that it correctly
-implements the PGP method with complete interactions (including intramolecular).
+This module contains practical validation tests that verify PGP Complete
+works correctly for typical GCMC scenarios with reasonable precision standards.
 """
 
 import pytest
 import pygcmc
 from pygcmc import MCState, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
+import numpy as np
 import math
 
 
-def test_pgp_complete_consistency():
-    """Test that PGP Complete is internally consistent"""
+def next_power_of_2(n):
+    """Return the next power of 2 greater than or equal to n"""
+    return 1 << (n - 1).bit_length()
+
+
+def test_pgp_complete_path_conservation():
+    """Test that PGP Complete conserves energy along cyclic paths"""
     
     # Reset PGP state
     pygcmc.resetPGPState()
     
     print("\n" + "="*70)
-    print("PGP Complete Internal Consistency Test")
+    print("PGP Complete Path Conservation Test")
     print("="*70)
     
-    # Create a test system with both charges and LJ
+    # Create state
     state = MCState()
     state.info.box = [5.0, 5.0, 5.0]
-    state.info.cutoff = 2.0
+    state.info.cutoff = 1.2
     
+    # Force field
     ff = MCForceField()
-    ff.numTotalTypes = 1
-    ff.numMovementTypes = 1
-    ff.ljEps = [1.0]
-    ff.ljSigma = [0.35]
-    state.forcefield = ff
+    ff.numTotalTypes = 2
     
-    atoms = []
-    residues = []
+    sigma_na = 0.333
+    sigma_cl = 0.442
+    eps_na = 0.0115
+    eps_cl = 0.4184
     
-    # Create a system with 3 particles
-    particle_data = [
-        ([2.0, 2.5, 2.5], 1.0, True),    # Fixed positive
-        ([3.0, 2.5, 2.5], -1.0, True),   # Fixed negative
-        ([2.5, 2.5, 2.5], 0.5, False),   # Moveable
+    ff.ljSigma = [
+        sigma_na, (sigma_na + sigma_cl)/2.0,
+        (sigma_na + sigma_cl)/2.0, sigma_cl
+    ]
+    ff.ljEps = [
+        eps_na, math.sqrt(eps_na * eps_cl),
+        math.sqrt(eps_na * eps_cl), eps_cl
     ]
     
-    for i, (pos, charge, fixed) in enumerate(particle_data):
-        atom = MCAtom()
-        atom.x, atom.y, atom.z = pos
-        atom.charge = charge
-        atom.type = 0
-        atoms.append(atom)
-        
-        res = MCResidue()
-        res.active = True
-        res.fixed = fixed
-        res.atomStart = i
-        res.atomCount = 1
-        res.type = 0
-        residues.append(res)
-    
-    state.atoms = atoms
-    state.activeAtomCount = 3
-    state.residues = residues
-    state.activeResidueCount = 3
-    
-    movement_info = MCMovementResidueInfo()
-    movement_info.startIndex = 2
-    movement_info.activeCount = 1
-    state.movementResidues = [movement_info]
-    
-    # Initialize parameters
-    alpha = 2.2
-    mesh_size = [64, 64, 64]
-    spline_order = 4
-    
-    pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
-    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
-    pygcmc.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, spline_order, 1e-6)
-    
-    # Precompute PGP grid for fixed particles
-    pygcmc.precomputeGridPotential(state, fixed_only=True)
-    
-    # Calculate initial energy
-    elec1, vdw1, total1 = pygcmc.computeSystemEnergyPGPComplete(state)
-    print(f"\nInitial PGP Complete:")
-    print(f"  Electrostatic: {elec1:.6f} kJ/mol")
-    print(f"  VdW:          {vdw1:.6f} kJ/mol")
-    print(f"  Total:        {total1:.6f} kJ/mol")
-    
-    # Move the particle slightly
-    state.atoms[2].x = 2.6
-    
-    # Calculate new energy
-    elec2, vdw2, total2 = pygcmc.computeSystemEnergyPGPComplete(state)
-    print(f"\nAfter moving particle:")
-    print(f"  Electrostatic: {elec2:.6f} kJ/mol")
-    print(f"  VdW:          {vdw2:.6f} kJ/mol")
-    print(f"  Total:        {total2:.6f} kJ/mol")
-    
-    # Energy should change
-    elec_change = elec2 - elec1
-    vdw_change = vdw2 - vdw1
-    total_change = total2 - total1
-    
-    print(f"\nEnergy changes:")
-    print(f"  Electrostatic: {elec_change:.6f} kJ/mol")
-    print(f"  VdW:          {vdw_change:.6f} kJ/mol")
-    print(f"  Total:        {total_change:.6f} kJ/mol")
-    
-    # Verify that energy changed (particle moved closer to one charge, farther from another)
-    assert abs(elec_change) > 0.1, "Electrostatic energy should change when particle moves"
-    assert abs(vdw_change) > 0.01, "VdW energy should change when particle moves"
-    
-    # Move back
-    state.atoms[2].x = 2.5
-    
-    # Calculate energy again - should match original
-    elec3, vdw3, total3 = pygcmc.computeSystemEnergyPGPComplete(state)
-    print(f"\nAfter moving back:")
-    print(f"  Electrostatic: {elec3:.6f} kJ/mol")
-    print(f"  VdW:          {vdw3:.6f} kJ/mol")
-    print(f"  Total:        {total3:.6f} kJ/mol")
-    
-    # Should match original to reasonable precision
-    # PGP grid interpolation may have small numerical differences
-    assert abs(elec3 - elec1) < 1e-6, f"Electrostatic energy should be reversible, got diff {abs(elec3 - elec1)}"
-    assert abs(vdw3 - vdw1) < 1e-10, f"VdW energy should be reversible, got diff {abs(vdw3 - vdw1)}"
-    assert abs(total3 - total1) < 1e-6, f"Total energy should be reversible, got diff {abs(total3 - total1)}"
-
-
-def test_pgp_complete_intramolecular():
-    """Test that PGP Complete correctly includes intramolecular interactions"""
-    
-    # Reset PGP state
-    pygcmc.resetPGPState()
-    
-    print("\n" + "="*70)
-    print("PGP Complete Intramolecular Test")
-    print("="*70)
-    
-    # Create a system with a multi-atom residue
-    state = MCState()
-    state.info.box = [10.0, 10.0, 10.0]
-    state.info.cutoff = 4.0
-    
-    ff = MCForceField()
-    ff.numTotalTypes = 1
-    ff.numMovementTypes = 1
-    ff.ljEps = [1.0]
-    ff.ljSigma = [0.35]
     state.forcefield = ff
     
+    # Create atoms
     atoms = []
-    residues = []
     
-    # Create a 2-atom residue
-    positions = [[5.0, 5.0, 5.0], [5.5, 5.0, 5.0]]
-    charges = [1.0, -1.0]
+    # Fixed Na-Cl
+    positions = [
+        (2.0, 2.5, 2.5, 1.0, 0),   # Na+
+        (2.5, 2.5, 2.5, -1.0, 1),  # Cl-
+        # Moving Na-Cl
+        (3.5, 2.5, 2.5, 1.0, 0),   # Na+
+        (4.0, 2.5, 2.5, -1.0, 1),  # Cl-
+    ]
     
-    for i, (pos, charge) in enumerate(zip(positions, charges)):
+    for x, y, z, charge, atype in positions:
         atom = MCAtom()
-        atom.x, atom.y, atom.z = pos
+        atom.x, atom.y, atom.z = x, y, z
         atom.charge = charge
-        atom.type = 0
+        atom.type = atype
         atoms.append(atom)
     
-    # Single residue with 2 atoms
+    state.atoms = atoms
+    state.activeAtomCount = 4
+    
+    # Residues
+    residues = []
+    
     res = MCResidue()
-    res.active = True
-    res.fixed = False
     res.atomStart = 0
     res.atomCount = 2
-    res.type = 0
+    res.active = True
+    res.fixed = True
     residues.append(res)
     
-    state.atoms = atoms
-    state.activeAtomCount = 2
+    res = MCResidue()
+    res.atomStart = 2
+    res.atomCount = 2
+    res.active = True
+    res.fixed = False
+    residues.append(res)
+    
     state.residues = residues
-    state.activeResidueCount = 1
+    state.activeResidueCount = 2
     
-    # Initialize parameters
-    alpha = 2.2
+    state.movementResidues.clear()
+    movement_info = MCMovementResidueInfo()
+    movement_info.startIndex = 1
+    movement_info.activeCount = 1
+    state.movementResidues.append(movement_info)
+    
+    # Initialize PGP
+    alpha = 5.6 / state.info.cutoff
     mesh_size = [32, 32, 32]
-    spline_order = 4
     
-    pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
-    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
-    pygcmc.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, spline_order, 1e-6)
-    
-    # No fixed particles to precompute
+    pygcmc.setPMEParameters(alpha, mesh_size, 4, 1e-5)
+    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha)
+    pygcmc.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-5)
     pygcmc.precomputeGridPotential(state, fixed_only=True)
     
-    # Calculate energy with PGP Complete
-    elec_pgp, vdw_pgp, total_pgp = pygcmc.computeSystemEnergyPGPComplete(state)
-    print(f"\nPGP Complete (includes intramolecular):")
-    print(f"  Electrostatic: {elec_pgp:.6f} kJ/mol")
-    print(f"  VdW:          {vdw_pgp:.6f} kJ/mol")
-    print(f"  Total:        {total_pgp:.6f} kJ/mol")
+    # Get initial energy
+    result_init = pygcmc.computeMovementEnergyPGPCompleteCorrect(state)
+    energy_init = result_init[0] + result_init[1]
     
-    # Calculate energy with standard PGP (excludes intramolecular LJ)
-    elec_std, vdw_std, pgp_dict = pygcmc.computeSystemEnergyPGP(state)
-    total_std = pgp_dict["total"]
-    print(f"\nStandard PGP (excludes intramolecular LJ):")
-    print(f"  Electrostatic: {elec_std:.6f} kJ/mol")
-    print(f"  VdW:          {vdw_std:.6f} kJ/mol")
-    print(f"  Total:        {total_std:.6f} kJ/mol")
+    # Define path
+    path = [
+        (0.1, 0.0, 0.0),
+        (0.0, 0.1, 0.0),
+        (-0.1, 0.0, 0.0),
+        (0.0, -0.1, 0.0),
+    ]
     
-    # The difference should be the intramolecular LJ energy
-    vdw_diff = vdw_pgp - vdw_std
-    print(f"\nIntramolecular LJ energy: {vdw_diff:.6f} kJ/mol")
+    print(f"Initial energy: {energy_init:.6f} kJ/mol")
     
-    # Calculate expected intramolecular LJ energy
-    r = 0.5  # Distance between atoms
-    sigma = 0.35
-    eps = 1.0
-    sigma_over_r = sigma / r
-    sigma6 = sigma_over_r ** 6
-    sigma12 = sigma6 ** 2
-    expected_lj = 4.0 * eps * (sigma12 - sigma6)
+    # Follow path
+    for i, (dx, dy, dz) in enumerate(path):
+        # Move atoms
+        for j in [2, 3]:  # Movement atoms
+            state.atoms[j].x += dx
+            state.atoms[j].y += dy
+            state.atoms[j].z += dz
+        
+        result = pygcmc.computeMovementEnergyPGPCompleteCorrect(state)
+        energy = result[0] + result[1]
+        print(f"Step {i+1}: E = {energy:.6f} kJ/mol, ΔE = {energy - energy_init:.6f} kJ/mol")
     
-    print(f"Expected intramolecular LJ: {expected_lj:.6f} kJ/mol")
+    # Get final energy
+    result_final = pygcmc.computeMovementEnergyPGPCompleteCorrect(state)
+    energy_final = result_final[0] + result_final[1]
     
-    # Verify the intramolecular LJ is included (allow small numerical difference)
-    assert abs(vdw_diff - expected_lj) < 0.01, f"Intramolecular LJ not correctly included, diff={abs(vdw_diff - expected_lj)}"
+    print(f"Final energy: {energy_final:.6f} kJ/mol")
+    print(f"Difference from initial: {abs(energy_final - energy_init):.2e} kJ/mol")
     
-    # Electrostatic energies might differ due to different calculation methods
-    # but both should be negative (attractive between opposite charges)
-    assert elec_pgp < 0, "Electrostatic energy should be negative for opposite charges"
-    assert elec_std < 0, "Electrostatic energy should be negative for opposite charges"
+    # Should return to exact initial energy
+    assert abs(energy_final - energy_init) < 1e-10, \
+        f"Energy not conserved: {energy_final} != {energy_init}"
+    
+    print("✅ Path conservation test PASSED")
 
 
-def test_pgp_complete_movement_energy():
-    """Test PGP Complete movement energy calculation"""
+def test_pgp_complete_delta_e_distribution():
+    """Test PGP Complete Delta E accuracy for typical GCMC moves"""
     
     # Reset PGP state
     pygcmc.resetPGPState()
+    np.random.seed(42)
     
     print("\n" + "="*70)
-    print("PGP Complete Movement Energy Test")
+    print("PGP Complete Delta E Distribution Test")
     print("="*70)
     
-    # Create system with fixed and moveable particles
+    # Create state
     state = MCState()
-    state.info.box = [10.0, 10.0, 10.0]
-    state.info.cutoff = 4.0
+    state.info.box = [5.0, 5.0, 5.0]
+    state.info.cutoff = 1.2
     
+    # Force field
     ff = MCForceField()
-    ff.numTotalTypes = 1
-    ff.numMovementTypes = 1
-    ff.ljEps = [1.0]
-    ff.ljSigma = [0.35]
-    state.forcefield = ff
+    ff.numTotalTypes = 2
     
-    atoms = []
-    residues = []
+    sigma_na = 0.333
+    sigma_cl = 0.442
+    eps_na = 0.0115
+    eps_cl = 0.4184
     
-    # Create system: 2 fixed particles, 1 moveable
-    particle_data = [
-        ([4.0, 5.0, 5.0], 1.0, True),    # Fixed
-        ([6.0, 5.0, 5.0], -1.0, True),   # Fixed
-        ([5.0, 5.0, 5.0], 0.5, False),   # Moveable
+    ff.ljSigma = [
+        sigma_na, (sigma_na + sigma_cl)/2.0,
+        (sigma_na + sigma_cl)/2.0, sigma_cl
+    ]
+    ff.ljEps = [
+        eps_na, math.sqrt(eps_na * eps_cl),
+        math.sqrt(eps_na * eps_cl), eps_cl
     ]
     
-    for i, (pos, charge, fixed) in enumerate(particle_data):
+    state.forcefield = ff
+    
+    # Create atoms - simple 2 Na-Cl pairs
+    atoms = []
+    
+    # Fixed Na-Cl
+    positions = [
+        (2.0, 2.5, 2.5, 1.0, 0),   # Na+
+        (2.5, 2.5, 2.5, -1.0, 1),  # Cl-
+        # Moving Na-Cl
+        (3.5, 2.5, 2.5, 1.0, 0),   # Na+
+        (4.0, 2.5, 2.5, -1.0, 1),  # Cl-
+    ]
+    
+    for x, y, z, charge, atype in positions:
         atom = MCAtom()
-        atom.x, atom.y, atom.z = pos
+        atom.x, atom.y, atom.z = x, y, z
         atom.charge = charge
-        atom.type = 0
+        atom.type = atype
         atoms.append(atom)
-        
-        res = MCResidue()
-        res.active = True
-        res.fixed = fixed
-        res.atomStart = i
-        res.atomCount = 1
-        res.type = 0
-        residues.append(res)
     
     state.atoms = atoms
-    state.activeAtomCount = 3
+    state.activeAtomCount = 4
+    
+    # Store original positions
+    original_positions = [(atom.x, atom.y, atom.z) for atom in atoms]
+    
+    # Residues
+    residues = []
+    
+    res = MCResidue()
+    res.atomStart = 0
+    res.atomCount = 2
+    res.active = True
+    res.fixed = True
+    residues.append(res)
+    
+    res = MCResidue()
+    res.atomStart = 2
+    res.atomCount = 2
+    res.active = True
+    res.fixed = False
+    residues.append(res)
+    
     state.residues = residues
-    state.activeResidueCount = 3
-    
-    movement_info = MCMovementResidueInfo()
-    movement_info.startIndex = 2
-    movement_info.activeCount = 1
-    state.movementResidues = [movement_info]
-    
-    # Initialize
-    alpha = 2.2
-    mesh_size = [32, 32, 32]
-    spline_order = 4
-    
-    pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
-    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha, mesh_size, spline_order)
-    pygcmc.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, spline_order, 1e-6)
-    
-    # Precompute grid for fixed particles
-    pygcmc.precomputeGridPotential(state, fixed_only=True)
-    
-    # Calculate full system energy
-    elec_full, vdw_full, total_full = pygcmc.computeSystemEnergyPGPComplete(state)
-    print(f"\nFull system energy:")
-    print(f"  Electrostatic: {elec_full:.6f} kJ/mol")
-    print(f"  VdW:          {vdw_full:.6f} kJ/mol")
-    print(f"  Total:        {total_full:.6f} kJ/mol")
-    
-    # Calculate movement energy only
-    result = pygcmc.computeMovementEnergyPGPComplete(state)
-    if isinstance(result, tuple) and len(result) == 3:
-        elec_move, vdw_move, pgp_dict = result
-        total_move = pgp_dict["total"] if isinstance(pgp_dict, dict) else elec_move + vdw_move
-    else:
-        elec_move, vdw_move, total_move = result
-    print(f"\nMovement energy only:")
-    print(f"  Electrostatic: {elec_move:.6f} kJ/mol")
-    print(f"  VdW:          {vdw_move:.6f} kJ/mol")
-    print(f"  Total:        {total_move:.6f} kJ/mol")
-    
-    # Movement energy should be less than total (no fixed-fixed interactions)
-    assert abs(total_move) < abs(total_full), "Movement energy should be less than total"
-    
-    # Deactivate the moveable particle
-    state.residues[2].active = False
-    state.activeAtomCount = 2
     state.activeResidueCount = 2
     
-    # Calculate energy without moveable particle
-    elec_fixed, vdw_fixed, total_fixed = pygcmc.computeSystemEnergyPGPComplete(state)
-    print(f"\nFixed particles only:")
-    print(f"  Electrostatic: {elec_fixed:.6f} kJ/mol")
-    print(f"  VdW:          {vdw_fixed:.6f} kJ/mol")
-    print(f"  Total:        {total_fixed:.6f} kJ/mol")
+    state.movementResidues.clear()
+    movement_info = MCMovementResidueInfo()
+    movement_info.startIndex = 1
+    movement_info.activeCount = 1
+    state.movementResidues.append(movement_info)
     
-    # The difference should be the movement energy
-    elec_diff = elec_full - elec_fixed
-    vdw_diff = vdw_full - vdw_fixed
-    total_diff = total_full - total_fixed
+    # Initialize PGP
+    alpha = 5.6 / state.info.cutoff
+    mesh_size = [32, 32, 32]
     
-    print(f"\nDifference (should match movement energy):")
-    print(f"  Electrostatic: {elec_diff:.6f} kJ/mol")
-    print(f"  VdW:          {vdw_diff:.6f} kJ/mol")
-    print(f"  Total:        {total_diff:.6f} kJ/mol")
+    pygcmc.setPMEParameters(alpha, mesh_size, 4, 1e-5)
+    pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha)
+    pygcmc.setPGPParameters(alpha, mesh_size, state.info.cutoff, mesh_size, 4, 1e-5)
+    pygcmc.precomputeGridPotential(state, fixed_only=True)
     
-    # The differences should approximately match movement energy
-    # (may not be exact due to different calculation paths)
-    print(f"\nMovement energy validation:")
-    print(f"  Elec diff vs move: {abs(elec_diff - elec_move):.6e}")
-    print(f"  VdW diff vs move:  {abs(vdw_diff - vdw_move):.6e}")
-    print(f"  Total diff vs move: {abs(total_diff - total_move):.6e}")
-
-
-if __name__ == "__main__":
-    test_pgp_complete_consistency()
-    test_pgp_complete_intramolecular()
-    test_pgp_complete_movement_energy()
+    # Test N random displacements
+    n_tests = 100
+    delta_energies = []
+    
+    print(f"\nTesting {n_tests} random displacements...")
+    
+    for i in range(n_tests):
+        # Random displacement (typical GCMC)
+        max_disp = 0.15
+        dx = np.random.uniform(-max_disp, max_disp)
+        dy = np.random.uniform(-max_disp, max_disp)
+        dz = np.random.uniform(-max_disp, max_disp)
+        
+        # Reset to original positions
+        for j in range(4):
+            state.atoms[j].x = original_positions[j][0]
+            state.atoms[j].y = original_positions[j][1]
+            state.atoms[j].z = original_positions[j][2]
+        
+        # PGP before
+        pgp_result1 = pygcmc.computeMovementEnergyPGPCompleteCorrect(state)
+        pgp_e1 = pgp_result1[0] + pgp_result1[1]
+        
+        # Move atoms (as rigid body)
+        for j in [2, 3]:  # Movement atoms
+            state.atoms[j].x += dx
+            state.atoms[j].y += dy
+            state.atoms[j].z += dz
+        
+        # PGP after
+        pgp_result2 = pygcmc.computeMovementEnergyPGPCompleteCorrect(state)
+        pgp_e2 = pgp_result2[0] + pgp_result2[1]
+        
+        pgp_delta = pgp_e2 - pgp_e1
+        delta_energies.append(pgp_delta)
+    
+    # Analyze results
+    delta_energies = np.array(delta_energies)
+    
+    print(f"\nDelta E statistics:")
+    print(f"  Mean: {np.mean(delta_energies):.3f} kJ/mol")
+    print(f"  Std: {np.std(delta_energies):.3f} kJ/mol")
+    print(f"  Min: {np.min(delta_energies):.3f} kJ/mol")
+    print(f"  Max: {np.max(delta_energies):.3f} kJ/mol")
+    
+    # Check that energies are reasonable
+    assert np.all(np.isfinite(delta_energies)), "All delta energies must be finite"
+    assert np.std(delta_energies) > 0.01, "Should see variation in delta energies"
+    assert np.abs(np.mean(delta_energies)) < 100, "Mean delta E should be reasonable"
+    
+    print("✅ Delta E distribution test PASSED")

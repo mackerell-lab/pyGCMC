@@ -159,6 +159,14 @@ from energyOpenmm.pme_lj_only_analysis import (
     test_lj_mixing_rules
 )
 
+# PGP Complete vs OpenMM validation tests
+from energyOpenmm.pgp_openmm_delta_e_tests import (
+    test_pgp_vs_openmm_delta_e_correct_method
+)
+from energyOpenmm.pgp_openmm_statistical_tests import (
+    test_pgp_vs_openmm_multiple_displacements
+)
+
 # Debug distance tests
 from energyOpenmm.debug_distances import (
     test_system_from_test_full_nonbonded,
