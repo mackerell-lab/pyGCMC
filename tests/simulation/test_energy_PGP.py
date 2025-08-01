@@ -35,8 +35,10 @@ Modular structure (all modules under 300 lines):
 - pgp_complete_comparison.py: PGP vs PME Complete comparison tests (2 functions)
 - pgp_complete_special_cases.py: PGP Complete special scenarios tests (2 functions)
 - pgp_complete_boundary.py: PGP Complete boundary condition tests (2 functions)
+- pgp_distance_dependency.py: PGP distance-dependent accuracy tests (2 functions)
+- pgp_accuracy_analysis.py: PGP accuracy analysis vs PME (2 functions)
 
-Total: 40 test functions across 28 modules.
+Total: 44 test functions across 30 modules.
 - Basic PGP tests (3): basic_operations
 - PGP comparison tests (8): method_comparison, complex_systems, planar_systems, 
   asymmetric_water_complete, asymmetric_nacl, pgp_lj_neutral_systems, pgp_lj_minimum_energy
@@ -45,6 +47,7 @@ Total: 40 test functions across 28 modules.
 - PGP debug/fix tests (12): pgp_real_space (2), pgp_real_space_debug (2), pgp_real_minimal (1),
   pgp_real_fixed (1), pgp_initialization_order (2), pgp_pme_cutoff (1), pgp_cutoff_issue (2),
   pgp_erfc_debug (2)
+- PGP accuracy tests (4): pgp_distance_dependency (2), pgp_accuracy_analysis (2)
 """
 
 # Basic PGP operations tests
@@ -220,6 +223,16 @@ from energyPGP.debug_movement_residues import (
 )
 from energyPGP.debug_vdw_movement import (
     test_vdw_movement_debug
+)
+
+# PGP distance dependency and accuracy analysis tests
+from energyPGP.pgp_distance_dependency import (
+    test_pgp_distance_dependency_short_range,
+    test_pgp_distance_dependency_mesh_convergence
+)
+from energyPGP.pgp_accuracy_analysis import (
+    test_pgp_accuracy_vs_pme_basic,
+    test_pgp_mesh_convergence
 )
 
 # Support direct execution for testing
