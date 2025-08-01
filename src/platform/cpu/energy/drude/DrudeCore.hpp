@@ -10,6 +10,7 @@
 #include "DrudeSCF.hpp"
 #include "DrudeOPT3.hpp"
 #include "DrudeFBP.hpp"
+#include "DrudeLBFGS.hpp"
 #include <memory>
 #include <vector>
 
@@ -67,6 +68,7 @@ private:
     std::unique_ptr<DrudeSCF> m_scfOptimizer;
     std::unique_ptr<DrudeOPT3> m_opt3Optimizer;
     std::unique_ptr<DrudeFBP> m_fbpOptimizer;
+    std::unique_ptr<DrudeLBFGS> m_lbfgsOptimizer;
     DrudeOptimizer* m_currentOptimizer;
 };
 

@@ -94,7 +94,8 @@ struct DrudeSCFParams {
 enum class DrudeAlgorithm {
     SCF,      // Self-Consistent Field iteration
     OPT3,     // 3rd order perturbation theory
-    FBP       // Force Balance Predictor
+    FBP,      // Force Balance Predictor
+    LBFGS     // L-BFGS optimization (matches OpenMM precision)
 };
 
 /**

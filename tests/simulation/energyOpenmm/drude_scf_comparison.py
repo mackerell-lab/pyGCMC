@@ -276,7 +276,7 @@ def skip_test_water_dimer_scf():
     pair = pygcmc.ScreenedPair()
     pair.dipole1 = 0
     pair.dipole2 = 1
-    pair.thole = 1.3  # PyGCMC uses different convention
+    pair.thole = 2.6  # Use OpenMM default value (NOT 1.3 - that was incorrect)
     pygcmc.DrudeComplete.addScreenedPair(pair)
     
     # SCF parameters

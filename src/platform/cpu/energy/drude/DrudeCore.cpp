@@ -111,6 +111,13 @@ void DrudeCore::setAlgorithm(DrudeAlgorithm algorithm) {
             }
             m_currentOptimizer = m_fbpOptimizer.get();
             break;
+            
+        case DrudeAlgorithm::LBFGS:
+            if (!m_lbfgsOptimizer) {
+                m_lbfgsOptimizer = std::make_unique<DrudeLBFGS>();
+            }
+            m_currentOptimizer = m_lbfgsOptimizer.get();
+            break;
     }
 }
 

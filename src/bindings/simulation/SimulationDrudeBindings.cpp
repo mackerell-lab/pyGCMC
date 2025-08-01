@@ -66,7 +66,8 @@ void init_drude_bindings(py::module& m) {
     py::enum_<DrudeAlgorithm>(m, "DrudeAlgorithm", "Available Drude optimization algorithms")
         .value("SCF", DrudeAlgorithm::SCF, "Self-Consistent Field iteration")
         .value("OPT3", DrudeAlgorithm::OPT3, "3rd order perturbation theory")
-        .value("FBP", DrudeAlgorithm::FBP, "Force Balance Predictor");
+        .value("FBP", DrudeAlgorithm::FBP, "Force Balance Predictor")
+        .value("LBFGS", DrudeAlgorithm::LBFGS, "L-BFGS optimization (matches OpenMM precision)");
     
     // OPT3Coefficients
     py::class_<OPT3Coefficients>(m, "OPT3Coefficients", "OPT3 expansion coefficients")
