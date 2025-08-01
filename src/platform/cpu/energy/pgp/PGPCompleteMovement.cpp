@@ -2,6 +2,7 @@
 // Correct implementation of PGP Complete for movement energy calculation
 
 #include "PGPComplete.hpp"
+#include "PGPGlobal.hpp"
 #include "PGPCore.hpp"
 #include "PGPInterpolation.hpp"
 #include "../common/EnergyUtils.hpp"
@@ -31,7 +32,7 @@ static bool isMovementAtom(int atomIndex, const model::MCState& state) {
 static void calculateMovementRealSpace(model::MCState& state) {
     const auto& atoms = state.atoms;
     const double cutoff2 = state.info.cutoff * state.info.cutoff;
-    const double alpha = pgp_params.alpha;
+    const double alpha = getPGPParams().alpha;
     
     // Reset real space energy
     state.ewald_energy.real_space = 0.0;
@@ -176,7 +177,7 @@ static void calculateMovementLJ(model::MCState& state) {
 
 // Calculate self energy for movement atoms only
 static double calculateMovementSelfEnergy(const model::MCState& state) {
-    const double alpha = pgp_params.alpha;
+    const double alpha = getPGPParams().alpha;
     const double self_factor = -alpha / std::sqrt(M_PI) * COULOMB;
     
     double self_energy = 0.0;
@@ -193,7 +194,7 @@ static double calculateMovementSelfEnergy(const model::MCState& state) {
 
 // Corrected implementation of computeMovementEnergyPGPComplete
 void computeMovementEnergyPGPCompleteCorrect(model::MCState& state) {
-    if (!pgp_params.initialized) {
+    if (!getPGPParams().initialized) {
         throw std::runtime_error("PGP parameters not initialized. Call setPGPParameters() first.");
     }
     

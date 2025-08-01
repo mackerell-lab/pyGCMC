@@ -1,4 +1,5 @@
 #include "PMEBSpline.hpp"
+#include "PMEGlobal.hpp"
 #include "PMECore.hpp"
 #include "PMEConfig.hpp"
 #include "platform/platform.hpp"

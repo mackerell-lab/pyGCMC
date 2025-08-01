@@ -2,6 +2,7 @@
 // Correct implementation of PGP Complete based on PGP principles
 
 #include "PGPComplete.hpp"
+#include "PGPGlobal.hpp"
 #include "PGPCore.hpp"
 #include "PGPInterpolation.hpp"
 #include "PGPSelf.hpp"
@@ -36,7 +37,7 @@ static void calculateRealSpacePGPComplete(model::MCState& state, bool movement_o
     auto& residues = state.residues;
     const float* box = state.info.box;
     const double cutoff2 = state.info.cutoff * state.info.cutoff;
-    const double alpha = pgp_params.alpha;
+    const double alpha = getPGPParams().alpha;
     
     // Reset real space energy
     state.ewald_energy.real_space = 0.0;
@@ -257,7 +258,7 @@ static void calculateLJPGPComplete(model::MCState& state, bool movement_only) {
 
 // Corrected implementation of movement energy using PGP Complete
 void computeMovementEnergyPGPCompleteCorrect(model::MCState& state) {
-    if (!pgp_params.initialized) {
+    if (!getPGPParams().initialized) {
         throw std::runtime_error("PGP parameters not initialized. Call setPGPParameters() first.");
     }
     

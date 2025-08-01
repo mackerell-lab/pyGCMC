@@ -1,4 +1,5 @@
 #include "PGPSystem.hpp"
+#include "PGPGlobal.hpp"
 #include "PGPCore.hpp"
 #include "PGPReal.hpp"
 #include "PGPSelf.hpp"
@@ -15,7 +16,7 @@ namespace cpu {
 
 /**
  * @brief Calculate real-space PGP energy with correct erfc implementation
- * This fixes the bug where pgp_params.erfcApprox uses pme_params tables
+ * This fixes the bug where getPGPParams().erfcApprox uses pme_params tables
  */
 static void computeRealSpacePGPFixed(model::MCState& state, bool movement_only, bool store_in_residues) {
     const auto& atoms = state.atoms;
@@ -77,8 +78,8 @@ static void computeRealSpacePGPFixed(model::MCState& state, bool movement_only, 
                     // Skip neutral atoms
                     if(std::abs(qi) < 1e-6 || std::abs(qj) < 1e-6) continue;
                     
-                    // FIXED: Calculate erfc directly using pgp_params
-                    double alphaR = pgp_params.alpha * r;
+                    // FIXED: Calculate erfc directly using getPGPParams()
+                    double alphaR = getPGPParams().alpha * r;
                     double erfc_val = std::erfc(alphaR);
                     double pair_energy = qi * qj * erfc_val / r;
                     
@@ -122,7 +123,7 @@ static void computeRealSpacePGPFixed(model::MCState& state, bool movement_only, 
  * Uses correct erfc calculation and includes intra-residue interactions
  */
 void computeSystemEnergyPGPFixed(model::MCState& state) {
-    if (!pgp_params.initialized) {
+    if (!getPGPParams().initialized) {
         throw std::runtime_error("PGP parameters not initialized. Call setPGPParameters() first.");
     }
     
@@ -173,7 +174,7 @@ void computeSystemEnergyPGPFixed(model::MCState& state) {
  * @brief Fixed version of PGP movement energy calculation
  */
 void computeMovementEnergyPGPFixed(model::MCState& state) {
-    if (!pgp_params.initialized) {
+    if (!getPGPParams().initialized) {
         throw std::runtime_error("PGP parameters not initialized. Call setPGPParameters() first.");
     }
     

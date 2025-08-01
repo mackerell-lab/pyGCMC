@@ -1,4 +1,5 @@
 #include "PMEGridCharge.hpp"
+#include "PMEGlobal.hpp"
 #include "PMEGridPrep.hpp"
 #include "PMEGridMap.hpp"
 #include "PMECore.hpp"
@@ -20,7 +21,7 @@ void spreadChargesOntoGrid(model::MCState& state, bool fixed_only) {
     platform::log(LogLevel::DEBUG, "Spreading charges onto PME grid", (fixed_only ? " (fixed only)" : ""));
     
     // Reset grid - ensure all points are initialized to 0
-    std::fill(pme_params.pmeGrid.begin(), pme_params.pmeGrid.end(), std::complex<double>(0.0, 0.0));
+    std::fill(getPMEParams().pmeGrid.begin(), getPMEParams().pmeGrid.end(), std::complex<double>(0.0, 0.0));
     
     // Step 1: Select atoms to process and calculate total charge
     std::vector<int> atomsToProcess;

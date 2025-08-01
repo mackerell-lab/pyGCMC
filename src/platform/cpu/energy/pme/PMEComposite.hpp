@@ -2,6 +2,7 @@
 
 #include "model/ModelModule.hpp"
 #include "PMECore.hpp"
+#include "PMEGlobal.hpp"
 #include "PMESetup.hpp"
 #include "PMEInterface.hpp"
 #include "PMESpline.hpp"

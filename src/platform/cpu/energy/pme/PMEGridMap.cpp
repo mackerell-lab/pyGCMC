@@ -1,4 +1,5 @@
 #include "PMEGridMap.hpp"
+#include "PMEGlobal.hpp"
 #include "PMESpline.hpp"
 #include "PMECore.hpp"
 #include "platform/platform.hpp"
@@ -43,7 +44,7 @@ void calculateGridIndicesAndFractions(const model::MCState& state,
             // Ensure in [0,1) range, handle periodic boundary conditions
             fractional[d] -= floor(fractional[d]);
             // Scale fractional coordinates to grid
-            fractional[d] *= pme_params.meshSize[d];
+            fractional[d] *= getPMEParams().meshSize[d];
         }
         
         // Calculate grid indices and fractional parts - fix: remove incorrect offset
@@ -53,7 +54,7 @@ void calculateGridIndicesAndFractions(const model::MCState& state,
             gridIndices[i][d] = static_cast<int>(floor(fractional[d]));
             // Ensure grid indices are within correct range
             if (gridIndices[i][d] < 0) 
-                gridIndices[i][d] += pme_params.meshSize[d];
+                gridIndices[i][d] += getPMEParams().meshSize[d];
         }
     }
     
@@ -77,7 +78,7 @@ void calculateBSplineCoefficients(const std::vector<int>& atomsToProcess,
                                  const std::vector<std::vector<double>>& gridFractions,
                                  std::vector<std::vector<double>>& bsplines_theta) {
     int processedAtoms = atomsToProcess.size();
-    int order = pme_params.splineOrder;
+    int order = getPMEParams().splineOrder;
     
     // Initialize B-spline arrays
     bsplines_theta.resize(3);
@@ -125,10 +126,10 @@ double distributeChargesToGrid(const model::MCState& state,
     int processedAtoms = atomsToProcess.size();
     
     // Get grid dimensions
-    int nx = pme_params.meshSize[0];
-    int ny = pme_params.meshSize[1];
-    int nz = pme_params.meshSize[2];
-    int order = pme_params.splineOrder;
+    int nx = getPMEParams().meshSize[0];
+    int ny = getPMEParams().meshSize[1];
+    int nz = getPMEParams().meshSize[2];
+    int order = getPMEParams().splineOrder;
     
     // Distribute charges to grid
     double totalGridCharge = 0.0;
@@ -170,7 +171,7 @@ double distributeChargesToGrid(const model::MCState& state,
                     int index = xindex * ny * nz + yindex * nz + zindex;
                     
                     // Ensure index doesn't go out of bounds
-                    if (index >= 0 && static_cast<size_t>(index) < pme_params.pmeGrid.size()) {
+                    if (index >= 0 && static_cast<size_t>(index) < getPMEParams().pmeGrid.size()) {
                         // Calculate B-spline weight (product of three directions)
                         double weight = thetax[ix] * thetay[iy] * thetaz[iz];
                         
@@ -180,7 +181,7 @@ double distributeChargesToGrid(const model::MCState& state,
                         // Key fix: add contribution directly to grid point, consistent with pme.cpp
                         // In pme.cpp: pme->grid[index] += chargeContribution;
                         // This only affects the real part, as chargeContribution is real
-                        pme_params.pmeGrid[index] += chargeContribution;
+                        getPMEParams().pmeGrid[index] += chargeContribution;
                         
                         // Update statistics - only execute in debug mode
                         if (platform::is_debug_mode()) {

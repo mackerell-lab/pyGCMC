@@ -1,4 +1,5 @@
 #include "PMEComposite.hpp"
+#include "PMEGlobal.hpp"
 #include "PMEGrid.hpp"
 #include "PMERecip.hpp"
 #include "PMEReal.hpp"

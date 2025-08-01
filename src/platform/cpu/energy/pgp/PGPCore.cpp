@@ -1,14 +1,16 @@
 #include "PGPCore.hpp"
+#include "PGPGlobal.hpp"
 #include "platform/cpu/energy/pme/PMEComposite.hpp"
+#include "platform/cpu/energy/pme/PMEGlobal.hpp"
 #include "platform/cpu/energy/pme/PMESetup.hpp"
+#include "platform/cpu/energy/common/MemorySafetyChecks.hpp"
 #include "platform/platform.hpp"
 
 namespace pygcmc {
 namespace platform {
 namespace cpu {
 
-// Global PGP parameters instance
-PGPParams pgp_params;
+// Note: getPGPParams() is now defined via macro in PGPGlobal.hpp
 
 // Mathematical constants
 const double TWO_PI = 2.0 * M_PI;
@@ -16,48 +18,72 @@ const double SQRT_PI = sqrt(M_PI);
 
 void setPGPParameters(double alpha, const int meshSize[3], double potential_cutoff, 
                         const int potentialGridSize[3], int splineOrder, double tolerance) {
+    platform::log(LogLevel::DEBUG, "setPGPParameters called");
+    
+    // Mark as initialized
+    SafetyChecks::markInitialized();
+    
+    // Lock for thread safety
+    platform::log(LogLevel::DEBUG, "Acquiring lock...");
+    std::lock_guard<std::mutex> lock(pgp_global_mutex);
+    platform::log(LogLevel::DEBUG, "Lock acquired");
+    
+    // Ensure pgp_params_ptr exists before using it
+    if (!pgp_params_ptr) {
+        pgp_params_ptr = std::make_unique<PGPParams>();
+    }
+    
+    // Now we can safely use the pointer directly (we already have the lock)
+    // Note: We use getPGPParams() throughout for consistency
+    
+    // Clear existing potential grid before setting new parameters
+    if (!getPGPParams().potentialGrid.empty()) {
+        platform::log(LogLevel::DEBUG, "Clearing existing potential grid");
+        std::vector<std::complex<double>>().swap(getPGPParams().potentialGrid);
+    }
+    
     // First set standard PME parameters (this will set all inherited fields)
     setPMEParameters(alpha, meshSize, splineOrder, tolerance);
     
     // Copy PME parameters to PGP instance (since they are separate global instances)
-    pgp_params.alpha = pme_params.alpha;
-    pgp_params.tolerance = pme_params.tolerance;
-    pgp_params.epsilon_r = pme_params.epsilon_r;
-    pgp_params.splineOrder = pme_params.splineOrder;
+    getPGPParams().alpha = getPMEParams().alpha;
+    getPGPParams().tolerance = getPMEParams().tolerance;
+    getPGPParams().epsilon_r = getPMEParams().epsilon_r;
+    getPGPParams().splineOrder = getPMEParams().splineOrder;
     
     // Copy arrays
     for (int i = 0; i < 3; i++) {
-        pgp_params.box[i] = pme_params.box[i];
-        pgp_params.meshSize[i] = pme_params.meshSize[i];
+        getPGPParams().box[i] = getPMEParams().box[i];
+        getPGPParams().meshSize[i] = getPMEParams().meshSize[i];
     }
     
     // Copy lookup tables and grid data
-    pgp_params.erfcTable = pme_params.erfcTable;
-    pgp_params.ewaldScaleTable = pme_params.ewaldScaleTable;
-    pgp_params.ewaldDX = pme_params.ewaldDX;
-    pgp_params.ewaldDXInv = pme_params.ewaldDXInv;
-    pgp_params.erfcDXInv = pme_params.erfcDXInv;
+    getPGPParams().erfcTable = getPMEParams().erfcTable;
+    getPGPParams().ewaldScaleTable = getPMEParams().ewaldScaleTable;
+    getPGPParams().ewaldDX = getPMEParams().ewaldDX;
+    getPGPParams().ewaldDXInv = getPMEParams().ewaldDXInv;
+    getPGPParams().erfcDXInv = getPMEParams().erfcDXInv;
     
     // Copy B-spline moduli
     for (int i = 0; i < 3; i++) {
-        pgp_params.bsplineModuli[i] = pme_params.bsplineModuli[i];
+        getPGPParams().bsplineModuli[i] = getPMEParams().bsplineModuli[i];
     }
     
     // Copy PME grids
-    pgp_params.pmeGrid = pme_params.pmeGrid;
-    pgp_params.pmeCharge = pme_params.pmeCharge;
+    getPGPParams().pmeGrid = getPMEParams().pmeGrid;
+    getPGPParams().pmeCharge = getPMEParams().pmeCharge;
     
     // Set PGP-specific parameters
-    pgp_params.potential_cutoff = potential_cutoff;
+    getPGPParams().potential_cutoff = potential_cutoff;
     for (int i = 0; i < 3; i++) {
-        pgp_params.potential_grid_size[i] = potentialGridSize[i];
+        getPGPParams().potential_grid_size[i] = potentialGridSize[i];
     }
     
     // Initialize grid for precomputed potential
-    pgp_params.initializePotentialGrid();
+    getPGPParams().initializePotentialGrid();
     
     // Mark PGP as initialized
-    pgp_params.initialized = true;
+    getPGPParams().initialized = true;
     
     // Output parameter setting information
     if (platform::is_debug_mode()) {
@@ -78,10 +104,11 @@ void initializePGPParameters(double cutoff, const double box[3],
     setPGPParameters(alpha, meshSize, potentialCutoff, potentialGridSize, splineOrder, tolerance);
     
     // Initialize PME parameters (PGP inherits from PME)
-    pgp_params.setBox(box);
-    pgp_params.cutoff = cutoff;
-    pgp_params.initializeTables(cutoff);
-    pgp_params.initializeBsplines();
+    // Use getPGPParams() here since we're not holding the lock
+    getPGPParams().setBox(box);
+    getPGPParams().cutoff = cutoff;
+    getPGPParams().initializeTables(cutoff);
+    getPGPParams().initializeBsplines();
     
     platform::log(LogLevel::INFO, "PGP parameters initialized successfully");
 }

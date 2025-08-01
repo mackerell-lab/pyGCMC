@@ -1,4 +1,5 @@
 #include "PGPGrid.hpp"
+#include "PGPGlobal.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -6,7 +7,7 @@ namespace pygcmc {
 namespace platform {
 namespace cpu {
 
-// Note: pgp_params is defined in PGPCore.cpp
+// Note: getPGPParams() is defined in PGPCore.cpp
 
 /**
  * @brief Initialize the three-dimensional grid for precomputed potential
@@ -38,7 +39,7 @@ void PGPParams::initializePotentialGrid() {
 
 void initializePotentialGridImpl() {
     // Implementation wrapper for external access
-    pgp_params.initializePotentialGrid();
+    getPGPParams().initializePotentialGrid();
 }
 
 // <agent-hook:pgp_grid_impl>

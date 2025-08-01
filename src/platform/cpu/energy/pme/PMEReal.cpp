@@ -1,4 +1,5 @@
 #include "PMEReal.hpp"
+#include "PMEGlobal.hpp"
 #include "PMECore.hpp"
 #include "platform/platform.hpp"
 #include "../lj/LJMain.hpp"
@@ -27,13 +28,13 @@ std::pair<double, double> calcPairEnergyPME(
     lj_energy = lj::calculateLJEnergyWithSwitching(r2, sigma, eps, info);
     
     // Electrostatic energy - use PME approximation
-    if (!is_excluded && r < pme_params.cutoff) {
+    if (!is_excluded && r < getPMEParams().cutoff) {
         // Normal pairs get erfc(αr)/r
-        double erfc_term = pme_params.erfcApprox(r) / r;
+        double erfc_term = getPMEParams().erfcApprox(r) / r;
         elec_energy = q1 * q2 * erfc_term;
     } else if (is_excluded) {
         // For excluded pairs, we need to subtract erf(αr)/r to compensate for reciprocal space
-        double erfc_term = pme_params.erfcApprox(r);
+        double erfc_term = getPMEParams().erfcApprox(r);
         double erf_term = 1.0 - erfc_term;  // erf(x) = 1 - erfc(x)
         elec_energy = -q1 * q2 * erf_term / r;  // Note the negative sign
     }
@@ -52,7 +53,7 @@ void computeRealSpacePME(model::MCState& state, bool movement_only, bool store_i
     const auto& box = state.info.box;
     auto& atoms = state.atoms;
     auto& residues = state.residues;
-    const float cutoff2 = pme_params.cutoff * pme_params.cutoff;
+    const float cutoff2 = getPMEParams().cutoff * getPMEParams().cutoff;
 
     // Reset electrostatic energy
     for(auto& residue : residues) {
@@ -121,7 +122,7 @@ void computeRealSpacePME(model::MCState& state, bool movement_only, bool store_i
                 if(std::abs(qi) < 1e-6 || std::abs(qj) < 1e-6) continue;
                 
                 // Calculate real space contribution for PME - only erfc part
-                double term = pme_params.erfcApprox(r);
+                double term = getPMEParams().erfcApprox(r);
                 double pair_energy = qi * qj * term / r;
                 
                 // Print debug information
@@ -192,7 +193,7 @@ void computeRealSpacePME(model::MCState& state, bool movement_only, bool store_i
                     if(std::abs(qi) < 1e-6 || std::abs(qj) < 1e-6) continue;
                     
                     // Calculate real space contribution for PME - only erfc part
-                    double term = pme_params.erfcApprox(r);
+                    double term = getPMEParams().erfcApprox(r);
                     double pair_energy = qi * qj * term / r;
                     
                     // Print debug information
@@ -258,7 +259,7 @@ double calculateAtomPairEnergyRealSpace(const model::MCAtom& atom1, const model:
     if (std::abs(atom1.charge) < 1e-6 || std::abs(atom2.charge) < 1e-6) return 0.0;
     
     // Calculate real space contribution - only erfc part
-    double term = pme_params.erfcApprox(r);
+    double term = getPMEParams().erfcApprox(r);
     double energy = atom1.charge * atom2.charge * term / r;
     
     return energy;

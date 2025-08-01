@@ -96,8 +96,9 @@ struct PMEParams {
     }
 };
 
-// Global PME parameters instance
-extern PMEParams pme_params;
+// Global PME parameters instance - now managed by smart pointer
+// See PMEGlobal.hpp for access functions
+// extern PMEParams pme_params; // DEPRECATED - use getPMEParams() instead
 
 // Clear all PME state - used for testing to prevent cross-test contamination
 void clearPMEState();

@@ -112,17 +112,16 @@ void init_montecarlo_bindings(py::module& m, py::module&) {
             return new_state;
         }, "Create a deep copy of the MCState object")
         .def_property("atoms",
-            [](pygcmc::model::MCState& state) -> std::vector<std::reference_wrapper<pygcmc::model::MCAtom>> {
-                std::vector<std::reference_wrapper<pygcmc::model::MCAtom>> refs;
-                refs.reserve(state.activeAtomCount);
-                for (int i = 0; i < state.activeAtomCount; ++i) {
-                    refs.push_back(std::ref(state.atoms[i]));
-                }
-                return refs;
+            [](pygcmc::model::MCState& state) -> std::vector<pygcmc::model::MCAtom>& {
+                // Return direct reference to the vector for compatibility
+                // This allows direct modification like state.atoms[i].x = ...
+                return state.atoms;
             },
             [](pygcmc::model::MCState& state, const std::vector<pygcmc::model::MCAtom>& atoms) {
                 state.atoms = atoms;
-            })
+            },
+            py::return_value_policy::reference_internal,
+            py::keep_alive<0, 1>())  // Keep MCState alive as long as the returned reference is used
         .def_property("residues",
             [](const pygcmc::model::MCState& state) {
                 return std::vector<pygcmc::model::MCResidue>(state.residues.begin(), 

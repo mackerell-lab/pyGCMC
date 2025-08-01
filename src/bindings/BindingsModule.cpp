@@ -2,6 +2,7 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include "platform/cpu/energy/common/MemoryGlobalCleanup.hpp"
 
 namespace py = pybind11;
 
@@ -92,6 +93,11 @@ void init_io_bindings(py::module& m) {
 } // namespace bindings
 } // namespace pygcmc
 
+// Cleanup function to be called before Python exits
+static void cleanup_global_state() {
+    pygcmc::platform::cpu::cleanupAllGlobalState();
+}
+
 // Main pybind11 module definition
 PYBIND11_MODULE(pygcmc, m) {
     m.doc() = "Python bindings for GCMC simulation library";
@@ -101,4 +107,11 @@ PYBIND11_MODULE(pygcmc, m) {
     pygcmc::bindings::model::init_model(m);
     pygcmc::bindings::system::init_system(m);
     pygcmc::bindings::simulation::init_simulation_bindings(m);
+    
+    // Register cleanup function - can be called manually if needed
+    // NOTE: We do NOT automatically register with atexit to avoid 
+    // pybind11 deallocation issues during Python shutdown
+    m.def("_cleanup", &cleanup_global_state, 
+          "Internal cleanup function - call manually before exit if needed",
+          py::call_guard<py::gil_scoped_release>());
 }

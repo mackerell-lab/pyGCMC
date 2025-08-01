@@ -1,4 +1,5 @@
 #include "PGPInterpolation.hpp"
+#include "PGPGlobal.hpp"
 #include "PGPPrecompute.hpp"
 #include "platform/platform.hpp"
 #include "../common/EnergyUtils.hpp"      // applyPBC
@@ -19,7 +20,7 @@ namespace cpu {
  */
 void interpolateMoleculeEnergyImpl(model::MCState& state, double& energy) {
     // Check if parameters are initialized
-    if (!pgp_params.initialized) {
+    if (!getPGPParams().initialized) {
         throw std::runtime_error("PGP parameters not initialized");
     }
     
@@ -36,7 +37,7 @@ void interpolateMoleculeEnergyImpl(model::MCState& state, double& energy) {
     // Check if precomputed grid is empty - only perform full check in debug mode
     if (platform::is_debug_mode()) {
         bool gridEmpty = true;
-        for (const auto& val : pgp_params.potentialGrid) {
+        for (const auto& val : getPGPParams().potentialGrid) {
             if (std::abs(val.real()) > 1e-10 || std::abs(val.imag()) > 1e-10) {
                 gridEmpty = false;
                 break;
@@ -90,9 +91,9 @@ void interpolateMoleculeEnergyImpl(model::MCState& state, double& energy) {
             // Calculate fractional coordinates
             double fractional[3];
             for (int d = 0; d < 3; d++) {
-                fractional[d] = pos[d] / pgp_params.box[d];
+                fractional[d] = pos[d] / getPGPParams().box[d];
                 fractional[d] -= floor(fractional[d]);  // Ensure in [0,1) range
-                fractional[d] *= pgp_params.potential_grid_size[d]; // Scale to grid
+                fractional[d] *= getPGPParams().potential_grid_size[d]; // Scale to grid
             }
             
             // Calculate grid index and fractional part
@@ -103,14 +104,14 @@ void interpolateMoleculeEnergyImpl(model::MCState& state, double& energy) {
                 gridIndices[d] = static_cast<int>(floor(fractional[d]));
                 // Ensure grid index within correct range
                 if (gridIndices[d] < 0) 
-                    gridIndices[d] += pgp_params.potential_grid_size[d];
+                    gridIndices[d] += getPGPParams().potential_grid_size[d];
             }
             
             // Calculate B-spline coefficients
-            int nx = pgp_params.potential_grid_size[0];
-            int ny = pgp_params.potential_grid_size[1];
-            int nz = pgp_params.potential_grid_size[2];
-            int order = pgp_params.splineOrder;
+            int nx = getPGPParams().potential_grid_size[0];
+            int ny = getPGPParams().potential_grid_size[1];
+            int nz = getPGPParams().potential_grid_size[2];
+            int order = getPGPParams().splineOrder;
             
             std::vector<double> thetaX(order);
             std::vector<double> thetaY(order);
@@ -154,7 +155,7 @@ void interpolateMoleculeEnergyImpl(model::MCState& state, double& energy) {
                         int index = xindex * ny * nz + yindex * nz + zindex;
                         
                         // Use B-spline weights to accumulate potential
-                        double grid_value = pgp_params.potentialGrid[index].real();
+                        double grid_value = getPGPParams().potentialGrid[index].real();
                         double weight = thetaX[ix] * thetaY[iy] * thetaZ[iz];
                         potential += grid_value * weight;
                     }
@@ -221,7 +222,7 @@ double calculateMoleculeEnergyImpl(model::MCState& state) {
         }
     }
 
-    const double alpha = pgp_params.alpha;
+    const double alpha = getPGPParams().alpha;
     const float* box   = state.info.box;
     const auto& atoms  = state.atoms;
 
@@ -274,7 +275,8 @@ double calculateMoleculeEnergyImpl(model::MCState& state) {
         
         if (fixed_count == 0) {
             platform::log(LogLevel::WARNING, "No fixed residues found, energy near zero!");
-            precomputeGridPotentialImpl(state, false);
+            // Call the public interface instead of the impl to avoid lock issues
+            precomputeGridPotential(state, false);
             interpolateMoleculeEnergyImpl(state, energy);
         }
     }
@@ -289,7 +291,7 @@ double computeMoleculeEnergyGlobalImpl(model::MCState& state, const std::vector<
     (void)threadIndex;
     
     // If parameters are not initialized, return 0
-    if (!pgp_params.initialized) {
+    if (!getPGPParams().initialized) {
         platform::log(LogLevel::WARNING, "PGP parameters not initialized, returning 0 energy");
         return 0.0;
     }

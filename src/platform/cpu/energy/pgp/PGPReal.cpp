@@ -1,4 +1,5 @@
 #include "PGPReal.hpp"
+#include "PGPGlobal.hpp"
 #include "PGPCore.hpp"
 #include "platform/platform.hpp"
 #include <cmath>
@@ -14,7 +15,7 @@ void computeRealSpacePGPImpl(model::MCState& state, bool movement_only, bool sto
     const auto& box = state.info.box;
     auto& atoms = state.atoms;
     auto& residues = state.residues;
-    const float cutoff2 = pgp_params.cutoff * pgp_params.cutoff;
+    const float cutoff2 = getPGPParams().cutoff * getPGPParams().cutoff;
 
     // Reset electrostatic energy
     for(auto& residue : residues) {
@@ -85,7 +86,7 @@ void computeRealSpacePGPImpl(model::MCState& state, bool movement_only, bool sto
                     if(std::abs(qi) < 1e-6 || std::abs(qj) < 1e-6) continue;
                     
                     // Calculate real space contribution for PGP - only erfc part
-                    double term = pgp_params.erfcApprox(r);
+                    double term = getPGPParams().erfcApprox(r);
                     double pair_energy = qi * qj * term / r;
                     
                     // Print debug information

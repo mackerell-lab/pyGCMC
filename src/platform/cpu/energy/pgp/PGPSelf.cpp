@@ -1,4 +1,5 @@
 #include "PGPSelf.hpp"
+#include "PGPGlobal.hpp"
 #include "PGPCore.hpp"
 #include "platform/platform.hpp"
 #include <cmath>
@@ -50,7 +51,7 @@ double computeSelfEnergyPGPImpl(model::MCState& state, bool movement_only) {
     }
     
     // Self-energy formula: -ONE_4PI_EPS0 * alpha / sqrt(PI) * sum_q2
-    double prefactor = -COULOMB * pgp_params.alpha / sqrt(M_PI);
+    double prefactor = -COULOMB * getPGPParams().alpha / sqrt(M_PI);
     self_energy = prefactor * sum_q2;
     
     if (platform::is_debug_mode()) {

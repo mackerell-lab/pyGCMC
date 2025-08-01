@@ -39,6 +39,7 @@
 
 // Aggregate all sub-functions of the PME module
 #include "PMECore.hpp"
+#include "PMEGlobal.hpp"
 #include "PMEConfig.hpp"
 #include "PMESetup.hpp"
 #include "PMEInterface.hpp"

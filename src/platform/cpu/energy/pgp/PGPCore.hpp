@@ -36,11 +36,8 @@ struct PGPParams : public PMEParams {
     void initializePotentialGrid();
 };
 
-// Global PGP parameters
-extern PGPParams pgp_params;
-
-// Global mutex for thread safety
-extern std::mutex pgp_mutex;
+// Note: Global PGP parameters are now managed by PGPGlobal.hpp
+// Use getPGPParams() to access the parameters
 
 // Core function declarations
 void setPGPParameters(double alpha, const int meshSize[3], double potential_cutoff, 

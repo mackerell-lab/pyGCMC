@@ -1,4 +1,5 @@
 #include "PMESystemCore.hpp"
+#include "PMEGlobal.hpp"
 #include "PMECore.hpp"
 #include "PMEGridCharge.hpp"
 #include "PMERecip.hpp"
@@ -22,23 +23,23 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
     // Use exactly the same calculation method as pme.cpp
     double volume = box[0] * box[1] * box[2];
     // Use exactly the same constants as pme.cpp
-    double one_4pi_eps = 138.935456/pme_params.epsilon_r; // Ensure using the same Coulomb constant as pme.cpp
-    double factor = M_PI*M_PI/(pme_params.alpha*pme_params.alpha);
+    double one_4pi_eps = 138.935456/getPMEParams().epsilon_r; // Ensure using the same Coulomb constant as pme.cpp
+    double factor = M_PI*M_PI/(getPMEParams().alpha*getPMEParams().alpha);
     // Calculate boxfactor: exactly like pme.cpp
     double boxfactor = M_PI * volume;
     
     platform::log(LogLevel::DEBUG, "Computing energy from grid with box = [" + std::to_string(box[0]) + "," + 
                  std::to_string(box[1]) + "," + std::to_string(box[2]) + "], alpha = " + 
-                 std::to_string(pme_params.alpha) + ", volume = " + std::to_string(volume));
+                 std::to_string(getPMEParams().alpha) + ", volume = " + std::to_string(volume));
     
     platform::log(LogLevel::DEBUG, "Energy parameters: one_4pi_eps = " + std::to_string(one_4pi_eps) + 
                  ", factor = " + std::to_string(factor) + ", boxfactor = " + 
                  std::to_string(boxfactor));
     
     // Get grid dimensions
-    int nx = pme_params.meshSize[0];
-    int ny = pme_params.meshSize[1];
-    int nz = pme_params.meshSize[2];
+    int nx = getPMEParams().meshSize[0];
+    int ny = getPMEParams().meshSize[1];
+    int nz = getPMEParams().meshSize[2];
     
     // Calculate reciprocal lattice vectors
     double recipBoxVectors[3][3] = {{0}};
@@ -93,7 +94,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
         
         // Key modification: ensure completely consistent calculation with pme.cpp
         // Exactly reproduce the B-spline moduli application method from pme.cpp
-        double bx = boxfactor * pme_params.bsplineModuli[0][kx];
+        double bx = boxfactor * getPMEParams().bsplineModuli[0][kx];
         
         for (int ky = 0; ky < ny; ky++) {
             double my = (ky < maxky) ? ky : (ky-ny);
@@ -101,7 +102,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
             double mhy = mx*recipBoxVectors[1][0] + my*recipBoxVectors[1][1];
             
             // Note: Don't apply boxfactor to by, consistent with pme.cpp
-            double by = pme_params.bsplineModuli[1][ky];
+            double by = getPMEParams().bsplineModuli[1][ky];
             
             for (int kz = 0; kz < nz; kz++) {
                 // Skip zero frequency term - for neutral systems
@@ -115,14 +116,14 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                 
                 // Get grid data
                 int index = kx * ny * nz + ky * nz + kz;
-                double d1 = pme_params.pmeGrid[index].real();
-                double d2 = pme_params.pmeGrid[index].imag();
+                double d1 = getPMEParams().pmeGrid[index].real();
+                double d2 = getPMEParams().pmeGrid[index].imag();
                 
                 // Calculate convolution
                 double m2 = mhx * mhx + mhy * mhy + mhz * mhz;
                 
                 // Don't apply boxfactor to bz, consistent with pme.cpp
-                double bz = pme_params.bsplineModuli[2][kz];
+                double bz = getPMEParams().bsplineModuli[2][kz];
                 
                 // Calculate denom exactly as in pme.cpp
                 double denom = m2 * bx * by * bz;
@@ -139,7 +140,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]) {
                 
                 // Update grid value - exactly reproduce pme.cpp method
                 std::complex<double> updatedValue(d1 * eterm, d2 * eterm);
-                pme_params.pmeGrid[index] = updatedValue;
+                getPMEParams().pmeGrid[index] = updatedValue;
                 
                 // Accumulate energy
                 energy += energyContrib;
@@ -162,7 +163,7 @@ double computeReciprocalPME(model::MCState& state) {
     
     // Simplified system information output
     platform::log(LogLevel::INFO, "Box: [", state.info.box[0], ", ", 
-                 state.info.box[1], ", ", state.info.box[2], "], Alpha: ", pme_params.alpha);
+                 state.info.box[1], ", ", state.info.box[2], "], Alpha: ", getPMEParams().alpha);
     
     // Simplified system charge check
     double totalCharge = 0.0;
@@ -175,21 +176,21 @@ double computeReciprocalPME(model::MCState& state) {
     }
     
     // PME grid check
-    if (pme_params.pmeGrid.empty()) {
+    if (getPMEParams().pmeGrid.empty()) {
         platform::log(LogLevel::ERROR, "PME grid not initialized!");
         return 0.0;
     }
     
     // Initialize B-spline functions
-    if (pme_params.bsplineModuli[0].empty() || 
-        pme_params.bsplineModuli[1].empty() || 
-        pme_params.bsplineModuli[2].empty()) {
+    if (getPMEParams().bsplineModuli[0].empty() || 
+        getPMEParams().bsplineModuli[1].empty() || 
+        getPMEParams().bsplineModuli[2].empty()) {
         platform::log(LogLevel::INFO, "Initializing B-splines for PME calculation...");
-        pme_params.initializeBsplines();
+        getPMEParams().initializeBsplines();
     }
     
     // Reset grid
-    std::fill(pme_params.pmeGrid.begin(), pme_params.pmeGrid.end(), std::complex<double>(0.0, 0.0));
+    std::fill(getPMEParams().pmeGrid.begin(), getPMEParams().pmeGrid.end(), std::complex<double>(0.0, 0.0));
     
     // Execute PME calculation steps
     spreadChargesOntoGrid(state, false);
@@ -202,7 +203,7 @@ double computeReciprocalPME(model::MCState& state) {
     }
     
     // Update box size in PME parameters, ensure B-splines and energy calculation use the same volume
-    pme_params.setBox(box);
+    getPMEParams().setBox(box);
     
     // Calculate energy
     double energy = 0.0;

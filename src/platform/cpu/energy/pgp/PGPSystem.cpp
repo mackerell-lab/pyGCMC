@@ -1,4 +1,5 @@
 #include "PGPSystem.hpp"
+#include "PGPGlobal.hpp"
 #include "PGPCore.hpp"
 #include "PGPReal.hpp"
 #include "PGPSelf.hpp"
@@ -16,7 +17,7 @@ namespace cpu {
  * @brief Use PGP method to calculate system energy
  */
 void computeSystemEnergyPGPImpl(model::MCState& state) {
-    if (!pgp_params.initialized) {
+    if (!getPGPParams().initialized) {
         throw std::runtime_error("PGP parameters not initialized. Call setPGPParameters() first.");
     }
     
@@ -67,7 +68,7 @@ void computeSystemEnergyPGPImpl(model::MCState& state) {
  * @brief Use PGP method to calculate energy of moving residues
  */
 void computeMovementEnergyPGPImpl(model::MCState& state) {
-    if (!pgp_params.initialized) {
+    if (!getPGPParams().initialized) {
         throw std::runtime_error("PGP parameters not initialized. Call setPGPParameters() first.");
     }
     

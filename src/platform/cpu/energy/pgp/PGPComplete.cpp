@@ -1,4 +1,5 @@
 #include "PGPComplete.hpp"
+#include "PGPGlobal.hpp"
 #include "PGPSystem.hpp"
 #include "PGPCore.hpp"
 #include "PGPReal.hpp"
@@ -23,7 +24,7 @@ void computeSystemEnergyPGPComplete(model::MCState& state) {
     // PGP Complete uses pure PGP method for electrostatics
     // but includes ALL interactions (including intramolecular)
     
-    if (!pgp_params.initialized) {
+    if (!getPGPParams().initialized) {
         throw std::runtime_error("PGP parameters not initialized. Call setPGPParameters() first.");
     }
     
@@ -62,7 +63,7 @@ void computeSystemEnergyPGPComplete(model::MCState& state) {
 void computeMovementEnergyPGPComplete(model::MCState& state) {
     // For movement residues, calculate complete interactions
     
-    if (!pgp_params.initialized) {
+    if (!getPGPParams().initialized) {
         throw std::runtime_error("PGP parameters not initialized. Call setPGPParameters() first.");
     }
     
@@ -113,7 +114,7 @@ void computeMovementEnergyPGPComplete(model::MCState& state) {
 static void calculateCompleteRealSpaceElectrostatics(model::MCState& state) {
     const auto& atoms = state.atoms;
     const double cutoff2 = state.info.cutoff * state.info.cutoff;
-    const double alpha = pgp_params.alpha;
+    const double alpha = getPGPParams().alpha;
     
     // Reset real space energy
     state.ewald_energy.real_space = 0.0;

@@ -1,4 +1,5 @@
 #include "PMERecip.hpp"
+#include "PMEGlobal.hpp"
 #include "PMECore.hpp"
 #include "PMEFFT3D.hpp"
 #include "PMESystemCore.hpp"

@@ -1,4 +1,5 @@
 #include "PMECore.hpp"
+#include "PMEGlobal.hpp"
 #include "PMEConfig.hpp"
 #include "PMEBSpline.hpp"
 #include "PMEFFTCore.hpp"
@@ -7,15 +8,15 @@ namespace pygcmc {
 namespace platform {
 namespace cpu {
 
-// Global PME parameters instance
-PMEParams pme_params;
+// Global PME parameters instance - moved to PMEGlobal.cpp
+// PMEParams pme_params; // REMOVED - now using smart pointer
 
 // Implementation moved to PMEParams.cpp and PMEBSpline.cpp
 // This file now only contains the global PME parameters instance
 
 void clearPMEState() {
-    // Reset to default-constructed state
-    pme_params = PMEParams{};
+    // Reset PME parameters using smart pointer
+    resetPMEParamsPtr();
     
     // Clear FFT static weights to force regeneration on next use
     CustomFFT::clearFFTWeights();

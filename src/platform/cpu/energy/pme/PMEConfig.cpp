@@ -1,4 +1,5 @@
 #include "PMEConfig.hpp"
+#include "PMEGlobal.hpp"
 #include "platform/platform.hpp"
 #include <cmath>
 
