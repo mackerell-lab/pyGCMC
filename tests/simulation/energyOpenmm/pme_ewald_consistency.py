@@ -1,7 +1,7 @@
 """
-测试 PME 和 Ewald 的一致性
+Test PME and Ewald consistency
 
-理论上 PME 是 Ewald 的快速实现，结果应该高度一致
+Theoretically PME is a fast implementation of Ewald, results should be highly consistent
 """
 
 import sys
@@ -16,23 +16,23 @@ from pygcmc import (initializePMEParameters, initializeEwaldParameters,
 
 
 def test_pme_ewald_consistency():
-    """测试 PME 和 Ewald 的一致性"""
+    """Test PME and Ewald consistency"""
     
     print("\n" + "="*80)
-    print("PME vs Ewald 一致性测试")
+    print("PME vs Ewald Consistency Test")
     print("="*80)
     
-    # 测试不同的系统配置
+    # Test different system configurations
     test_cases = [
         {
-            'name': '两个带电粒子',
+            'name': 'Two charged particles',
             'positions': [[2.0, 2.0, 2.0], [3.0, 2.0, 2.0]],
             'charges': [1.0, -1.0],
             'box_size': 5.0,
             'cutoff': 1.8
         },
         {
-            'name': '四个带电粒子（正方形）',
+            'name': 'Four charged particles (square)',
             'positions': [[2.0, 2.0, 2.5], [3.0, 2.0, 2.5], 
                          [3.0, 3.0, 2.5], [2.0, 3.0, 2.5]],
             'charges': [1.0, -1.0, 1.0, -1.0],
@@ -40,7 +40,7 @@ def test_pme_ewald_consistency():
             'cutoff': 1.8
         },
         {
-            'name': '六个带电粒子（随机）',
+            'name': 'Six charged particles (random)',
             'positions': [[1.5, 1.5, 2.5], [3.5, 1.5, 2.5],
                          [3.5, 3.5, 2.5], [1.5, 3.5, 2.5],
                          [2.5, 2.5, 1.5], [2.5, 2.5, 3.5]],
@@ -51,7 +51,7 @@ def test_pme_ewald_consistency():
     ]
     
     for test_case in test_cases:
-        print(f"\n测试案例：{test_case['name']}")
+        print(f"\nTest case: {test_case['name']}")
         print("-" * 60)
         
         # 创建系统

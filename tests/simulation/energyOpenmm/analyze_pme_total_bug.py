@@ -1,7 +1,7 @@
 """
-深入分析 PME Total 字段的 bug
+In-depth analysis of PME Total field bug
 
-找出偏移量的规律和来源
+Find the pattern and source of the offset
 """
 
 import sys
@@ -14,13 +14,13 @@ import pygcmc
 from pygcmc import MCState, MCAtom, MCResidue, MCForceField
 
 def test_pme_total_configurations():
-    """测试 PME Total 在不同配置下的正确性（回归测试）
+    """Test PME Total correctness under different configurations (regression test)
     
-    验证修复后的 PME total 在各种原子/残基配置下都正确计算
-    为每个测试案例创建新的 MCState 实例以避免状态污染
+    Verify that the fixed PME total is calculated correctly under various atom/residue configurations
+    Create new MCState instances for each test case to avoid state pollution
     """
     
-    # 固定参数
+    # Fixed parameters
     box_size = 5.0
     cutoff = 2.0
     alpha = 2.5
@@ -28,9 +28,9 @@ def test_pme_total_configurations():
     spline_order = 4
     
     # ------------------------------------------------------------
-    # 只在函数开头初始化一次 PME（设好 α / 网格 / 样条阶数）
-    # 后续针对不同 MCState 直接调用 computeSystemEnergyPME 即可复用同一组
-    # 全局参数，避免重复释放/重建网格带来的内存问题
+    # Initialize PME only once at the beginning of function (set α / mesh / spline order)
+    # For different MCState instances, directly call computeSystemEnergyPME to reuse the same set of
+    # global parameters, avoiding memory issues from repeatedly freeing/rebuilding grids
     # ------------------------------------------------------------
     try:
         pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
@@ -42,14 +42,14 @@ def test_pme_total_configurations():
             spline_order
         )
     except Exception as e:
-        # 如果初始化失败，可能是因为已经初始化过
+        # If initialization fails, it might be because it's already initialized
         print(f"PME initialization warning: {e}")
         pass
     
-    # 测试案例1：2个原子（电中性对）
-    print("测试案例1：2个原子（电中性对）")
+    # Test case 1: 2 atoms (electroneutral pair)
+    print("Test case 1: 2 atoms (electroneutral pair)")
     
-    # 创建新的 state
+    # Create new state
     state1 = MCState()
     state1.info.box = [box_size, box_size, box_size]
     state1.info.cutoff = cutoff
@@ -61,7 +61,7 @@ def test_pme_total_configurations():
     ff1.ljSigma = [0.3]
     state1.forcefield = ff1
     
-    # 创建2个原子
+    # Create 2 atoms
     atom1 = MCAtom()
     atom1.x, atom1.y, atom1.z = 2.0, 2.0, 2.5
     atom1.charge = 1.0
@@ -75,7 +75,7 @@ def test_pme_total_configurations():
     state1.atoms = [atom1, atom2]
     state1.activeAtomCount = 2
     
-    # 2个残基
+    # 2 residues
     res1_1 = MCResidue()
     res1_1.active = True
     res1_1.fixed = False
@@ -93,7 +93,7 @@ def test_pme_total_configurations():
     state1.residues = [res1_1, res1_2]
     state1.activeResidueCount = 2
     
-    # 直接计算能量（PME 已在函数开头初始化）
+    # Calculate energy directly (PME already initialized at function start)
     pygcmc.computeSystemEnergyPME(state1)
     
     pme_total1 = state1.ewald_energy.get('total', 0.0)
@@ -103,12 +103,12 @@ def test_pme_total_configurations():
     offset1 = pme_total1 - pme_sum1
     
     print(f"  Total: {pme_total1:.6f}, Sum: {pme_sum1:.6f}, Offset: {offset1:.6f}")
-    assert abs(offset1) < 1e-6, f"2原子系统的偏移量应该为 0，实际为 {offset1}"
+    assert abs(offset1) < 1e-6, f"2-atom system offset should be 0, actual: {offset1}"
     
-    # 测试案例2：3个原子
-    print("\n测试案例2：3个原子")
+    # Test case 2: 3 atoms
+    print("\nTest case 2: 3 atoms")
     
-    # 创建新的 state
+    # Create new state
     state2 = MCState()
     state2.info.box = [box_size, box_size, box_size]
     state2.info.cutoff = cutoff
@@ -120,7 +120,7 @@ def test_pme_total_configurations():
     ff2.ljSigma = [0.3]
     state2.forcefield = ff2
     
-    # 创建3个原子
+    # Create 3 atoms
     positions2 = [[2.0, 2.0, 2.5], [3.0, 2.0, 2.5], [2.5, 3.0, 2.5]]
     charges2 = [1.0, -1.0, 0.5]
     
@@ -135,7 +135,7 @@ def test_pme_total_configurations():
     state2.atoms = atoms2
     state2.activeAtomCount = 3
     
-    # 3个残基
+    # 3 residues
     residues2 = []
     for i in range(3):
         res = MCResidue()
@@ -159,12 +159,12 @@ def test_pme_total_configurations():
     offset2 = pme_total2 - pme_sum2
     
     print(f"  Total: {pme_total2:.6f}, Sum: {pme_sum2:.6f}, Offset: {offset2:.6f}")
-    assert abs(offset2) < 1e-6, f"3原子系统的偏移量应该为 0，实际为 {offset2}"
+    assert abs(offset2) < 1e-6, f"3-atom system offset should be 0, actual: {offset2}"
     
-    # 测试案例3：4原子系统（1个4原子残基）
-    print("\n测试案例3：4原子系统（1个4原子残基）")
+    # Test case 3: 4-atom system (1 residue with 4 atoms)
+    print("\nTest case 3: 4-atom system (1 residue with 4 atoms)")
     
-    # 创建新的 state
+    # Create new state
     state3 = MCState()
     state3.info.box = [box_size, box_size, box_size]
     state3.info.cutoff = cutoff
@@ -176,7 +176,7 @@ def test_pme_total_configurations():
     ff3.ljSigma = [0.3]
     state3.forcefield = ff3
     
-    # 创建4个原子
+    # Create 4 atoms
     positions3 = [[2.0, 2.0, 2.5], [3.0, 2.0, 2.5], [3.0, 3.0, 2.5], [2.0, 3.0, 2.5]]
     charges3 = [1.0, -1.0, 1.0, -1.0]
     
@@ -191,7 +191,7 @@ def test_pme_total_configurations():
     state3.atoms = atoms3
     state3.activeAtomCount = 4
     
-    # 1个4原子残基
+    # 1 residue with 4 atoms
     res3 = MCResidue()
     res3.active = True
     res3.fixed = False
@@ -212,12 +212,12 @@ def test_pme_total_configurations():
     offset3 = pme_total3 - pme_sum3
     
     print(f"  Total: {pme_total3:.6f}, Sum: {pme_sum3:.6f}, Offset: {offset3:.6f}")
-    assert abs(offset3) < 1e-6, f"1个4原子残基的偏移量应该为 0，实际为 {offset3}"
+    assert abs(offset3) < 1e-6, f"1 residue with 4 atoms offset should be 0, actual: {offset3}"
     
-    # 验证所有偏移量都为 0
-    print(f"\n所有测试通过！偏移量: {offset1:.6f}, {offset2:.6f}, {offset3:.6f}")
+    # Verify all offsets are 0
+    print(f"\nAll tests passed! Offsets: {offset1:.6f}, {offset2:.6f}, {offset3:.6f}")
     assert abs(offset1) < 1e-6 and abs(offset2) < 1e-6 and abs(offset3) < 1e-6, \
-        "PME Total 偏移量应该在所有配置下都为 0"
+        "PME Total offset should be 0 under all configurations"
 
 
 if __name__ == "__main__":

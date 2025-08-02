@@ -2,24 +2,24 @@
 """
 Test documenting the fundamental difference between PyGCMC and OpenMM Drude optimization.
 
-重要发现记录 (Important Discovery Documentation):
+Important Discovery Documentation:
 ===========================================
 
-PyGCMC和OpenMM在Drude优化上有0.47%的位移差异，原因是：
+PyGCMC and OpenMM have a 0.47% displacement difference in Drude optimization because:
 
-1. PyGCMC: 直接求解力平衡方程 F = 0
-   - 使用SCF迭代找到 F_spring + F_electric = 0 的位置
-   - 这是经典力学的平衡条件
+1. PyGCMC: Directly solves force equilibrium equation F = 0
+   - Uses SCF iteration to find position where F_spring + F_electric = 0
+   - This is the classical mechanics equilibrium condition
    
-2. OpenMM: 能量最小化，但使用力作为收敛判据
-   - DrudeSCFIntegrator执行能量最小化
-   - 使用|F| < tolerance作为收敛条件
-   - 但优化过程是沿着能量梯度下降
+2. OpenMM: Energy minimization with force-based convergence criterion
+   - DrudeSCFIntegrator performs energy minimization
+   - Uses |F| < tolerance as convergence condition
+   - But optimization process follows energy gradient descent
    
-虽然理论上 F = -dE/dx，所以力为零和能量最小应该等价，
-但在数值实现中，不同的优化策略会导致微小差异。
+Although theoretically F = -dE/dx, so zero force and minimum energy should be equivalent,
+in numerical implementation, different optimization strategies lead to small differences.
 
-这个差异对GCMC模拟的影响可以忽略，但记录下来很重要。
+This difference is negligible for GCMC simulations, but important to document.
 """
 
 import pytest
@@ -38,7 +38,7 @@ def test_drude_optimization_difference_documentation():
     """
     Document and verify the difference between PyGCMC and OpenMM Drude optimization.
     
-    关键测试：记录PyGCMC和OpenMM之间0.47%的Drude位移差异原因
+    Key test: Document the reason for 0.47% Drude displacement difference between PyGCMC and OpenMM
     """
     if not HAS_OPENMM:
         pytest.skip("OpenMM not available")
@@ -166,17 +166,17 @@ def test_drude_optimization_difference_documentation():
     
     # Document the key insight
     print(f"\n" + "="*70)
-    print("KEY INSIGHT (关键发现):")
+    print("KEY INSIGHT:")
     print("="*70)
     print("\nThe 0.47% difference is because:")
     print("- PyGCMC: Solves F = 0 directly (force equilibrium)")
     print("- OpenMM: Minimizes energy with force-based convergence criterion")
     print("\nBoth are correct, just different numerical approaches!")
     print("This small difference (< 0.5%) is acceptable for GCMC simulations.")
-    print("\n这个差异的原因是优化目标不同：")
-    print("- PyGCMC：直接求解力平衡 F = 0")
-    print("- OpenMM：能量最小化，但用力作收敛判据")
-    print("两种方法都正确，只是数值方法不同！")
+    print("\nThe reason for this difference is different optimization objectives:")
+    print("- PyGCMC: Directly solves force equilibrium F = 0")
+    print("- OpenMM: Energy minimization with force-based convergence criterion")
+    print("Both methods are correct, just different numerical approaches!")
     
     # Verify PyGCMC finds force equilibrium
     assert abs(F_total) < 0.001, "PyGCMC should find force equilibrium"
@@ -193,7 +193,7 @@ def test_numerical_precision_effects():
     """
     Test showing that numerical precision and algorithm details affect results.
     
-    测试数值精度和算法细节对结果的影响
+    Test showing that numerical precision and algorithm details affect results.
     """
     # Parameters
     k_coulomb = 138.935456
@@ -281,8 +281,7 @@ def test_numerical_precision_effects():
     # Verify convergence
     assert abs(results[-1] - results[-2]) < 1e-9, "Should converge with tight tolerance"
     
-    print("\n结论：更严格的收敛容差给出更精确的结果")
-    print("Conclusion: Tighter convergence tolerance gives more precise results")
+    print("\nConclusion: Tighter convergence tolerance gives more precise results")
     
     pygcmc.DrudeComplete.clear()
 

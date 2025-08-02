@@ -4,7 +4,7 @@ namespace pygcmc {
 namespace platform {
 namespace cpu {
 
-// 定义全局变量
+// Define global variables
 std::unique_ptr<PGPParams> pgp_params_ptr;
 std::mutex pgp_global_mutex;
 
