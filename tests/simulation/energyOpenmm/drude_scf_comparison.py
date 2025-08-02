@@ -169,9 +169,19 @@ def test_single_drude_with_field():
     print(f"\nDisplacement ratio (PyGCMC/OpenMM): {ratio:.3f}")
     
     # Without hard wall, displacements should be similar
-    assert 0.7 < ratio < 1.3, f"Displacement ratio {ratio} suggests different implementations"
+    # NOTE: We expect ~0.995 ratio (0.5% difference) due to different optimization approaches:
+    # - PyGCMC: Direct force equilibrium (F = 0)
+    # - OpenMM: Energy minimization with force-based convergence
+    # This small difference is well-documented and acceptable
+    assert 0.990 < ratio < 1.010, f"Displacement ratio {ratio} outside expected 0.5% difference"
     
-    print("\n✓ SCF optimization produces consistent results")
+    # Document the expected difference
+    print(f"\nExpected ~0.5% difference due to:")
+    print("  - PyGCMC: Solves F = 0 directly (force equilibrium)")
+    print("  - OpenMM: Minimizes energy with force convergence criterion")
+    print("  Both approaches are correct, just numerically different")
+    
+    print("\n✓ SCF optimization produces consistent results within expected tolerance")
     
     pygcmc.DrudeComplete.clear()
 

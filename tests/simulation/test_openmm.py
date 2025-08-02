@@ -299,6 +299,12 @@ from energyOpenmm.drude_scf_comparison import (
     # skip_test_water_dimer_scf  # Skip: segfault
 )
 
+# Drude optimization difference documentation test
+from energyOpenmm.drude_optimization_difference import (
+    test_drude_optimization_difference_documentation,
+    test_numerical_precision_effects
+)
+
 # PGP Complete tests from old250726
 from energyOpenmm.pgp_complete_vs_openmm import (
     test_pgp_complete_delta_e_accuracy,
