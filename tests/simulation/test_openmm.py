@@ -305,6 +305,13 @@ from energyOpenmm.drude_optimization_difference import (
     test_numerical_precision_effects
 )
 
+# Drude comprehensive comparison tests
+from energyOpenmm.drude_comprehensive_comparison import (
+    test_single_drude_external_field,
+    test_water_dimer_thole_screening,
+    test_convergence_tolerance_effect
+)
+
 # PGP Complete tests from old250726
 from energyOpenmm.pgp_complete_vs_openmm import (
     test_pgp_complete_delta_e_accuracy,

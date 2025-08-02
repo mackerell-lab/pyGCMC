@@ -84,5 +84,20 @@ from energyDrude.omm_force_validation_tests import (
 from energyDrude.omm_thole_validation_tests import test_thole_screening_validation, test_thole_screening_periodic
 from energyDrude.omm_swm4ndp_water_tests import test_swm4_ndp_water_system, test_swm4_ndp_water_cluster
 
+# Field response and polarization tests
+from energyDrude.field_response_tests import (
+    test_single_drude_uniform_field,
+    test_drude_spring_energy,
+    test_induced_dipole_magnitude,
+    test_multiple_drudes_mutual_polarization
+)
+
+# Thole screening functionality tests
+from energyDrude.thole_screening_tests import (
+    test_thole_screening_effect,
+    test_thole_parameter_range,
+    test_thole_distance_dependence
+)
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
