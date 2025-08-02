@@ -67,6 +67,7 @@ void init_drude_bindings(py::module& m) {
         .value("SCF", DrudeAlgorithm::SCF, "Self-Consistent Field iteration")
         .value("OPT3", DrudeAlgorithm::OPT3, "3rd order perturbation theory")
         .value("FBP", DrudeAlgorithm::FBP, "Force Balance Predictor")
+        .value("FastFBP", DrudeAlgorithm::FastFBP, "Fast Force Balance Predictor (5% accuracy for GCMC)")
         .value("LBFGS", DrudeAlgorithm::LBFGS, "L-BFGS optimization (matches OpenMM precision)");
     
     // OPT3Coefficients

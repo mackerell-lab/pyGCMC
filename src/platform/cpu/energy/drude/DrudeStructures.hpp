@@ -95,6 +95,7 @@ enum class DrudeAlgorithm {
     SCF,      // Self-Consistent Field iteration
     OPT3,     // 3rd order perturbation theory
     FBP,      // Force Balance Predictor
+    FastFBP,  // Fast Force Balance Predictor (5% accuracy for GCMC)
     LBFGS     // L-BFGS optimization (matches OpenMM precision)
 };
 
