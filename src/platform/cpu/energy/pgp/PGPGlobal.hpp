@@ -8,11 +8,11 @@ namespace pygcmc {
 namespace platform {
 namespace cpu {
 
-// 使用智能指针管理全局PGP参数
+// Use smart pointer to manage global PGP parameters
 extern std::unique_ptr<PGPParams> pgp_params_ptr;
 extern std::mutex pgp_global_mutex;
 
-// 获取PGP参数的线程安全函数
+// Thread-safe function to get PGP parameters
 inline PGPParams& getPGPParams() {
     if (!pgp_params_ptr) {
         std::lock_guard<std::mutex> lock(pgp_global_mutex);
@@ -23,14 +23,14 @@ inline PGPParams& getPGPParams() {
     return *pgp_params_ptr;
 }
 
-// 重置PGP参数
+// Reset PGP parameters
 inline void resetPGPParamsPtr() {
     std::lock_guard<std::mutex> lock(pgp_global_mutex);
     pgp_params_ptr.reset();
-    // 下次调用getPGPParams()时会自动创建新实例
+    // New instance will be created on next call to getPGPParams()
 }
 
-// 不使用宏，避免递归调用问题
+// Not using macro to avoid recursive call issues
 
 } // namespace cpu
 } // namespace platform
