@@ -11,6 +11,8 @@
 #include "DrudeOPT3.hpp"
 #include "DrudeFBP.hpp"
 #include "DrudeFastFBP.hpp"
+#include "DrudeTCG.hpp"
+#include "DrudeTCGv2.hpp"
 #include "DrudeLBFGS.hpp"
 #include <memory>
 #include <vector>
@@ -43,6 +45,11 @@ public:
     // Static instance access for global interface
     static DrudeCore& getInstance();
     
+    // ASPC history management
+    void enableASPC(bool enable) { m_useASPC = enable; }
+    bool isASPCEnabled() const { return m_useASPC; }
+    void clearHistory() { m_hasHistory = false; }
+    
 private:
     // Energy calculation components
     double calculateHarmonicEnergy(const model::MCState& state) const;
@@ -70,8 +77,20 @@ private:
     std::unique_ptr<DrudeOPT3> m_opt3Optimizer;
     std::unique_ptr<DrudeFBP> m_fbpOptimizer;
     std::unique_ptr<DrudeFastFBP> m_fastFbpOptimizer;
+    std::unique_ptr<DrudeTCG> m_tcgOptimizer;
+    std::unique_ptr<DrudeTCGv2> m_tcgv2Optimizer;
     std::unique_ptr<DrudeLBFGS> m_lbfgsOptimizer;
+    std::unique_ptr<DrudeOptimizer> m_directOptimizer;  // Forward declaration
     DrudeOptimizer* m_currentOptimizer;
+    
+    // ASPC history for prediction
+    bool m_useASPC = false;
+    bool m_hasHistory = false;
+    std::vector<Vec3> m_lastDrudePositions;
+    
+    // ASPC helper methods
+    void saveCurrentPositions(const model::MCState& state);
+    void applyHistoryPositions(model::MCState& state);
 };
 
 } // namespace cpu

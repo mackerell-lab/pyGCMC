@@ -5,6 +5,7 @@
 
 #include "DrudeCore.hpp"
 #include "DrudeStructures.hpp"
+#include "DrudeDirectPolarization.hpp"
 #include <cmath>
 #include <iostream>
 
@@ -26,6 +27,11 @@ double DrudeCore::calculateEnergy(model::MCState& state) {
         throw std::runtime_error("No Drude optimizer available");
     }
     
+    // ASPC: Apply history positions if available
+    if (m_useASPC && m_hasHistory) {
+        applyHistoryPositions(state);
+    }
+    
     // First optimize Drude positions
     bool converged = m_currentOptimizer->optimize(state, m_particles, m_screenedPairs, m_params);
     
@@ -33,6 +39,11 @@ double DrudeCore::calculateEnergy(model::MCState& state) {
         // SCF did not converge - this can happen in edge cases
         // but is handled appropriately by the hard wall constraint
         // std::cerr << "Warning: Drude SCF did not converge\n";
+    }
+    
+    // ASPC: Save current positions for next step
+    if (m_useASPC) {
+        saveCurrentPositions(state);
     }
     
     // Calculate total energy
@@ -58,8 +69,18 @@ void DrudeCore::calculateForces(model::MCState& state, std::vector<Vec3>& forces
         forces.resize(static_cast<size_t>(state.activeAtomCount), {0.0, 0.0, 0.0});
     }
     
+    // ASPC: Apply history positions if available
+    if (m_useASPC && m_hasHistory) {
+        applyHistoryPositions(state);
+    }
+    
     // First optimize Drude positions
     m_currentOptimizer->optimize(state, m_particles, m_screenedPairs, m_params);
+    
+    // ASPC: Save current positions for next step
+    if (m_useASPC) {
+        saveCurrentPositions(state);
+    }
     
     // Calculate forces from harmonic springs only
     // Coulomb forces are handled by the main nonbonded calculation
@@ -119,11 +140,32 @@ void DrudeCore::setAlgorithm(DrudeAlgorithm algorithm) {
             m_currentOptimizer = m_fastFbpOptimizer.get();
             break;
             
+        case DrudeAlgorithm::TCG:
+            if (!m_tcgOptimizer) {
+                m_tcgOptimizer = std::make_unique<DrudeTCG>();
+            }
+            m_currentOptimizer = m_tcgOptimizer.get();
+            break;
+            
+        case DrudeAlgorithm::TCGv2:
+            if (!m_tcgv2Optimizer) {
+                m_tcgv2Optimizer = std::make_unique<DrudeTCGv2>();
+            }
+            m_currentOptimizer = m_tcgv2Optimizer.get();
+            break;
+            
         case DrudeAlgorithm::LBFGS:
             if (!m_lbfgsOptimizer) {
                 m_lbfgsOptimizer = std::make_unique<DrudeLBFGS>();
             }
             m_currentOptimizer = m_lbfgsOptimizer.get();
+            break;
+            
+        case DrudeAlgorithm::Direct:
+            if (!m_directOptimizer) {
+                m_directOptimizer = std::make_unique<DrudeDirectPolarization>();
+            }
+            m_currentOptimizer = m_directOptimizer.get();
             break;
     }
 }
@@ -135,6 +177,8 @@ void DrudeCore::setParameters(const DrudeSCFParams& params) {
 void DrudeCore::clear() {
     m_particles.clear();
     m_screenedPairs.clear();
+    m_hasHistory = false;
+    m_lastDrudePositions.clear();
 }
 
 size_t DrudeCore::getNumParticles() const {
@@ -472,6 +516,45 @@ bool DrudeCore::inSameMolecule(int atom1, int atom2, const model::MCState& state
     }
     
     return false;  // Atoms in different residues
+}
+
+// ASPC helper methods
+void DrudeCore::saveCurrentPositions(const model::MCState& state) {
+    // Resize if needed
+    if (m_lastDrudePositions.size() != m_particles.size()) {
+        m_lastDrudePositions.resize(m_particles.size());
+    }
+    
+    // Save current Drude positions relative to parent
+    for (size_t i = 0; i < m_particles.size(); ++i) {
+        const auto& particle = m_particles[i];
+        const auto& drude = state.atoms[particle.drudeIndex];
+        const auto& parent = state.atoms[particle.parentIndex];
+        
+        m_lastDrudePositions[i][0] = drude.x - parent.x;
+        m_lastDrudePositions[i][1] = drude.y - parent.y;
+        m_lastDrudePositions[i][2] = drude.z - parent.z;
+    }
+    
+    m_hasHistory = true;
+}
+
+void DrudeCore::applyHistoryPositions(model::MCState& state) {
+    if (!m_hasHistory || m_lastDrudePositions.size() != m_particles.size()) {
+        return;  // No valid history
+    }
+    
+    // Apply saved displacements to current parent positions
+    for (size_t i = 0; i < m_particles.size(); ++i) {
+        const auto& particle = m_particles[i];
+        const auto& parent = state.atoms[particle.parentIndex];
+        auto& drude = state.atoms[particle.drudeIndex];
+        
+        // Apply displacement from parent
+        drude.x = parent.x + m_lastDrudePositions[i][0];
+        drude.y = parent.y + m_lastDrudePositions[i][1];
+        drude.z = parent.z + m_lastDrudePositions[i][2];
+    }
 }
 
 // Static interface implementation

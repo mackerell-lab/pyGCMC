@@ -68,7 +68,10 @@ void init_drude_bindings(py::module& m) {
         .value("OPT3", DrudeAlgorithm::OPT3, "3rd order perturbation theory")
         .value("FBP", DrudeAlgorithm::FBP, "Force Balance Predictor")
         .value("FastFBP", DrudeAlgorithm::FastFBP, "Fast Force Balance Predictor (5% accuracy for GCMC)")
-        .value("LBFGS", DrudeAlgorithm::LBFGS, "L-BFGS optimization (matches OpenMM precision)");
+        .value("TCG", DrudeAlgorithm::TCG, "Truncated Conjugate Gradient (fixed iterations)")
+        .value("TCGv2", DrudeAlgorithm::TCGv2, "Improved TCG with preconditioning")
+        .value("LBFGS", DrudeAlgorithm::LBFGS, "L-BFGS optimization (matches OpenMM precision)")
+        .value("Direct", DrudeAlgorithm::Direct, "Direct polarization (ignores induced-induced)");
     
     // OPT3Coefficients
     py::class_<OPT3Coefficients>(m, "OPT3Coefficients", "OPT3 expansion coefficients")
@@ -100,7 +103,14 @@ void init_drude_bindings(py::module& m) {
         .def_static("clear", &DrudeComplete::clear,
                     "Clear all Drude particles and pairs")
         .def_static("getNumParticles", &DrudeComplete::getNumParticles,
-                    "Get the number of Drude particles");
+                    "Get the number of Drude particles")
+        .def_static("enableASPC", &DrudeComplete::enableASPC,
+                    py::arg("enable"),
+                    "Enable/disable ASPC history prediction for faster SCF convergence")
+        .def_static("isASPCEnabled", &DrudeComplete::isASPCEnabled,
+                    "Check if ASPC history prediction is enabled")
+        .def_static("clearHistory", &DrudeComplete::clearHistory,
+                    "Clear ASPC history (useful when system changes significantly)");
     
     // Free function for Thole screening
     m.def("computeTholeScreening", &computeTholeScreening,

@@ -40,6 +40,18 @@ size_t DrudeComplete::getNumParticles() {
     return DrudeCore::getInstance().getNumParticles();
 }
 
+void DrudeComplete::enableASPC(bool enable) {
+    DrudeCore::getInstance().enableASPC(enable);
+}
+
+bool DrudeComplete::isASPCEnabled() {
+    return DrudeCore::getInstance().isASPCEnabled();
+}
+
+void DrudeComplete::clearHistory() {
+    DrudeCore::getInstance().clearHistory();
+}
+
 } // namespace cpu
 } // namespace platform
 } // namespace pygcmc

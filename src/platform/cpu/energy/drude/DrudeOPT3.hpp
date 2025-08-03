@@ -7,6 +7,7 @@
 
 #include "DrudeInterface.hpp"
 #include "DrudeStructures.hpp"
+#include <vector>
 
 namespace pygcmc {
 namespace platform {
@@ -42,7 +43,26 @@ public:
 private:
     OPT3Coefficients m_coefficients;
     
-    // TODO: Implement OPT3 algorithm following old code structure
+    /**
+     * @brief Calculate electric field at atom positions
+     * @param state MCState containing atom positions and charges
+     * @param fields Output array for electric fields
+     * @param particles Drude particles
+     * @param screenedPairs Pairs with Thole screening
+     * @param includeDrudes Whether to include fields from Drude particles
+     */
+    void calculateElectricField(
+        const model::MCState& state,
+        std::vector<Vec3>& fields,
+        const std::vector<DrudeParticle>& particles,
+        const std::vector<ScreenedPair>& screenedPairs,
+        bool includeDrudes
+    ) const;
+    
+    /**
+     * @brief Check if two atoms are in the same molecule/residue
+     */
+    bool inSameMolecule(int atom1, int atom2, const model::MCState& state) const;
 };
 
 } // namespace cpu

@@ -67,6 +67,23 @@ public:
      * @return Number of Drude particles
      */
     static size_t getNumParticles();
+    
+    /**
+     * @brief Enable/disable ASPC history prediction
+     * @param enable True to enable ASPC
+     */
+    static void enableASPC(bool enable);
+    
+    /**
+     * @brief Check if ASPC is enabled
+     * @return True if ASPC is enabled
+     */
+    static bool isASPCEnabled();
+    
+    /**
+     * @brief Clear ASPC history
+     */
+    static void clearHistory();
 };
 
 } // namespace cpu

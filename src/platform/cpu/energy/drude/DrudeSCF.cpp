@@ -148,9 +148,8 @@ void DrudeSCF::calculateExternalField(
             // Skip the parent atom (Drude-parent interaction is handled by spring)
             if (j == particle.parentIndex) continue;
             
-            // Skip atoms in same molecule (intramolecular exclusion)
-            // This matches OpenMM's approach where all intramolecular
-            // electrostatic interactions are excluded
+            // Skip intramolecular interactions
+            // Drude particles should NOT interact with other atoms in the same molecule
             if (inSameMolecule(particle.drudeIndex, j, state)) continue;
             
             const auto& atom = state.atoms[j];

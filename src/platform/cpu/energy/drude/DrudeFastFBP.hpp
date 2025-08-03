@@ -56,9 +56,10 @@ public:
     void setIncludeDrudeDrude(bool include) { includeDrudeDrude_ = include; }
     
 private:
-    int fbpIterations_ = 5;           // Number of FBP iterations (increased for better accuracy)
-    double drudeCutoff_ = 1.0;        // Cutoff for Drude-Drude interactions (nm)
+    int fbpIterations_ = 3;           // Number of FBP iterations (optimized for speed)
+    double drudeCutoff_ = 0.8;        // Cutoff for Drude-Drude interactions (nm)
     bool includeDrudeDrude_ = true;   // Include Drude-Drude interactions
+    double dampingFactor_ = 0.7;      // Damping for stability
     
     /**
      * @brief Compute electric field at Drude position from fixed charges

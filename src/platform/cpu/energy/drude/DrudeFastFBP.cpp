@@ -21,7 +21,6 @@ bool DrudeFastFBP::optimize(
     // Mark screenedPairs as unused for now (can be implemented later)
     (void)screenedPairs;
     
-    const double cutoff2 = drudeCutoff_ * drudeCutoff_;
     const auto& box = state.info.box;
     const double halfBox[3] = {box[0] * 0.5, box[1] * 0.5, box[2] * 0.5};
     
@@ -76,18 +75,20 @@ bool DrudeFastFBP::optimize(
                 dispFactor * fieldTotal[2]
             };
             
-            // Apply damping for stability
-            const double damping = 0.5;
+            // Apply damping for stability (use class member)
             Vec3 currentDisp = {
                 drudePos[0] - parentPos[0],
                 drudePos[1] - parentPos[1],
                 drudePos[2] - parentPos[2]
             };
             
+            // First iteration: direct placement, later: damped update
+            double effectiveDamping = (iter == 0) ? 1.0 : dampingFactor_;
+            
             Vec3 newDisp = {
-                damping * displacement[0] + (1 - damping) * currentDisp[0],
-                damping * displacement[1] + (1 - damping) * currentDisp[1],
-                damping * displacement[2] + (1 - damping) * currentDisp[2]
+                effectiveDamping * displacement[0] + (1 - effectiveDamping) * currentDisp[0],
+                effectiveDamping * displacement[1] + (1 - effectiveDamping) * currentDisp[1],
+                effectiveDamping * displacement[2] + (1 - effectiveDamping) * currentDisp[2]
             };
             
             Vec3 newDrudePos = {
@@ -162,7 +163,11 @@ Vec3 DrudeFastFBP::computeFixedField(
         // Skip if no charge
         if (std::abs(atom.charge) < 1e-6) continue;
         
+        // Skip parent-Drude interaction (handled by spring)
+        if (i == parentIdx) continue;
+        
         // Skip intramolecular interactions
+        // Drude particles should NOT interact with other atoms in the same molecule
         if (inSameMolecule(drudeIdx, i, state)) continue;
         
         // Compute distance with PBC

@@ -96,7 +96,10 @@ enum class DrudeAlgorithm {
     OPT3,     // 3rd order perturbation theory
     FBP,      // Force Balance Predictor
     FastFBP,  // Fast Force Balance Predictor (5% accuracy for GCMC)
-    LBFGS     // L-BFGS optimization (matches OpenMM precision)
+    TCG,      // Truncated Conjugate Gradient (fixed iterations)
+    TCGv2,    // Improved TCG with preconditioning
+    LBFGS,    // L-BFGS optimization (matches OpenMM precision)
+    Direct    // Direct polarization (no induced-induced)
 };
 
 /**
