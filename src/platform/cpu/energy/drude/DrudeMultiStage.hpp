@@ -2,15 +2,17 @@
 
 /**
  * @file DrudeMultiStage.hpp
- * @brief Multi-stage optimization strategy: Direct → FastFBP → SCF
+ * @brief Multi-stage optimization strategy: Direct → FastFBP → TCG → SCF
  * 
  * This implements the optimal hybrid strategy identified through analysis
+ * Enhanced based on literature review showing TCG-3 achieves <1% error with ~15x speedup
  */
 
 #include "DrudeInterface.hpp"
 #include "DrudeStructures.hpp"
 #include "DrudeDirectPolarization.hpp"
 #include "DrudeFastFBP.hpp"
+#include "DrudeTCG.hpp"
 #include "DrudeSCF.hpp"
 #include <memory>
 #include <chrono>
@@ -20,14 +22,17 @@ namespace platform {
 namespace cpu {
 
 /**
- * @brief Multi-stage optimizer combining Direct, FastFBP, and SCF
+ * @brief Multi-stage optimizer combining Direct, FastFBP, TCG and SCF
  * 
  * Optimization stages:
  * 1. Direct polarization - instant physical guess (0 iterations)
- * 2. FastFBP - rapid improvement (3-10 iterations)
- * 3. SCF - fine convergence (adaptive iterations)
+ * 2. FastFBP - rapid improvement (3-10 iterations) 
+ * 3. TCG - efficient refinement (3-5 iterations, <1% error)
+ * 4. SCF - fine convergence (adaptive iterations, optional)
  * 
- * This combination provides optimal speed-accuracy tradeoff
+ * Based on literature:
+ * - TCG-3 achieves <1% error with ~15x speedup (Aviat et al. 2017)
+ * - Direct polarization effective for GCMC (Drew & Gilson 2025)
  */
 class DrudeMultiStage : public DrudeOptimizer {
 public:
@@ -40,13 +45,19 @@ public:
         int maxFBPIterations = 10;
         double fbpCutoffFactor = 0.8;  // Fraction of full cutoff
         
+        // TCG stage
+        int tcgIterations = 3;           // TCG-3 recommended by literature
+        bool enableTCG = true;           // Enable TCG stage
+        double tcgErrorThreshold = 0.01; // Switch to TCG when error < this
+        
         // Switching criteria
-        double switchToSCFError = 0.01;  // Switch when error < this
-        double switchToSCFRate = 0.1;    // Switch when convergence rate < this
+        double switchToSCFError = 0.001;  // Switch when error < this (tighter)
+        double switchToSCFRate = 0.05;    // Switch when convergence rate < this
         
         // SCF stage
-        double scfTolerance = 0.01;      // Final tolerance
-        int maxSCFIterations = 50;
+        double scfTolerance = 0.001;      // Final tolerance (tighter)
+        int maxSCFIterations = 20;        // Fewer needed after TCG
+        bool requireSCF = false;          // SCF optional after TCG
         
         // Adaptive parameters
         bool adaptiveMode = true;
@@ -61,15 +72,18 @@ public:
         // Timing
         double directTime = 0.0;
         double fbpTime = 0.0;
+        double tcgTime = 0.0;
         double scfTime = 0.0;
         
         // Iterations
         int fbpIterations = 0;
+        int tcgIterations = 0;
         int scfIterations = 0;
         
         // Errors at each stage
         double errorAfterDirect = 0.0;
         double errorAfterFBP = 0.0;
+        double errorAfterTCG = 0.0;
         double finalError = 0.0;
         
         // System characteristics
@@ -89,7 +103,7 @@ public:
         const DrudeSCFParams& params
     ) override;
     
-    const char* getName() const override { return "MultiStage-Direct+FastFBP+SCF"; }
+    const char* getName() const override { return "MultiStage-Direct+FastFBP+TCG+SCF"; }
     
     // Configuration
     void setConfig(const MultiStageConfig& config) { config_ = config; }
@@ -101,11 +115,14 @@ public:
     // Enable/disable stages
     void enableDirectStage(bool enable) { useDirectStage_ = enable; }
     void enableFBPStage(bool enable) { useFBPStage_ = enable; }
+    void enableTCGStage(bool enable) { useTCGStage_ = enable; }
+    void enableSCFStage(bool enable) { useSCFStage_ = enable; }
     
 private:
     // Sub-optimizers
     std::unique_ptr<DrudeDirectPolarization> direct_;
     std::unique_ptr<DrudeFastFBP> fastFBP_;
+    std::unique_ptr<DrudeTCG> tcg_;
     std::unique_ptr<DrudeSCF> scf_;
     
     // Configuration
@@ -115,6 +132,8 @@ private:
     // Stage control
     bool useDirectStage_ = true;
     bool useFBPStage_ = true;
+    bool useTCGStage_ = true;
+    bool useSCFStage_ = true;
     
     // Helper methods
     void analyzeSystem(

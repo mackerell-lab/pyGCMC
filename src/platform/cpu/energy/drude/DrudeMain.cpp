@@ -56,6 +56,14 @@ DrudeFastFBP* DrudeComplete::getFastFBPOptimizer() {
     return DrudeCore::getInstance().getFastFBPOptimizer();
 }
 
+DrudeHybrid* DrudeComplete::getHybridOptimizer() {
+    return DrudeCore::getInstance().getHybridOptimizer();
+}
+
+DrudeMultiStage* DrudeComplete::getMultiStageOptimizer() {
+    return DrudeCore::getInstance().getMultiStageOptimizer();
+}
+
 DrudeCore& DrudeComplete::getDrudeCore() {
     return DrudeCore::getInstance();
 }

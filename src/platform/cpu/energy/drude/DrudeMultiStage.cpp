@@ -1,6 +1,6 @@
 /**
  * @file DrudeMultiStage.cpp
- * @brief Implementation of multi-stage optimization: Direct → FastFBP → SCF
+ * @brief Implementation of multi-stage optimization: Direct → FastFBP → TCG → SCF
  */
 
 #include "DrudeMultiStage.hpp"
@@ -17,7 +17,12 @@ namespace cpu {
 DrudeMultiStage::DrudeMultiStage() {
     direct_ = std::make_unique<DrudeDirectPolarization>();
     fastFBP_ = std::make_unique<DrudeFastFBP>();
+    tcg_ = std::make_unique<DrudeTCG>();
     scf_ = std::make_unique<DrudeSCF>();
+    
+    // Configure TCG based on literature recommendations
+    tcg_->setIterations(3);  // TCG-3 optimal for speed/accuracy
+    tcg_->setUseChebyshev(true);
 }
 
 bool DrudeMultiStage::optimize(
@@ -26,7 +31,7 @@ bool DrudeMultiStage::optimize(
     const std::vector<ScreenedPair>& screenedPairs,
     const DrudeSCFParams& params
 ) {
-    auto start_total = std::chrono::high_resolution_clock::now();
+    // auto start_total = std::chrono::high_resolution_clock::now();
     
     // Initialize statistics
     stats_ = MultiStageStats{};
@@ -74,7 +79,6 @@ bool DrudeMultiStage::optimize(
         
         // For dynamic convergence checking
         double previousError = stats_.errorAfterDirect;
-        bool shouldSwitch = false;
         
         // Run FastFBP iterations with monitoring
         for (int iter = 0; iter < fbpIterations; ++iter) {
@@ -88,7 +92,6 @@ bool DrudeMultiStage::optimize(
             
             // Check if we should switch to SCF early
             if (shouldSwitchToSCF(currentError, convergenceRate, iter + 1)) {
-                shouldSwitch = true;
                 break;
             }
             
@@ -99,23 +102,65 @@ bool DrudeMultiStage::optimize(
         stats_.fbpTime = std::chrono::duration<double>(end_fbp - start_fbp).count();
         stats_.errorAfterFBP = previousError;
         
-        // Check if FastFBP alone is sufficient
-        if (stats_.errorAfterFBP < params.tolerance && !shouldSwitch) {
-            stats_.converged = true;
-            return true;
+        // Check if we should skip TCG and go directly to SCF
+        if (!config_.enableTCG || stats_.errorAfterFBP > config_.tcgErrorThreshold) {
+            // Skip TCG if error is still too large or TCG disabled
+            useTCGStage_ = false;
         }
     }
     
-    // Stage 3: SCF Fine-tuning
+    // Stage 3: TCG Refinement (if enabled and appropriate)
+    auto start_tcg = std::chrono::high_resolution_clock::now();
+    
+    if (useTCGStage_ && config_.enableTCG) {
+        // Configure TCG iterations
+        tcg_->setIterations(config_.tcgIterations);
+        
+        // Run TCG
+        DrudeSCFParams tcgParams = params;
+        tcgParams.maxIterations = config_.tcgIterations;  // Fixed iterations
+        
+        tcg_->optimize(state, particles, screenedPairs, tcgParams);
+        
+        auto end_tcg = std::chrono::high_resolution_clock::now();
+        stats_.tcgTime = std::chrono::duration<double>(end_tcg - start_tcg).count();
+        stats_.tcgIterations = config_.tcgIterations;
+        
+        // Calculate error after TCG
+        stats_.errorAfterTCG = calculateError(state, particles);
+        
+        // Check if TCG is sufficient
+        if (stats_.errorAfterTCG < params.tolerance && !config_.requireSCF) {
+            stats_.finalError = stats_.errorAfterTCG;
+            stats_.converged = true;
+            return true;
+        }
+    } else {
+        stats_.errorAfterTCG = stats_.errorAfterFBP;
+        stats_.tcgTime = 0.0;
+        stats_.tcgIterations = 0;
+    }
+    
+    // Stage 4: SCF Fine-tuning (if required)
     auto start_scf = std::chrono::high_resolution_clock::now();
+    
+    if (!useSCFStage_ || (!config_.requireSCF && stats_.errorAfterTCG < params.tolerance)) {
+        // Skip SCF if not required
+        stats_.finalError = stats_.errorAfterTCG;
+        stats_.converged = true;
+        stats_.scfTime = 0.0;
+        stats_.scfIterations = 0;
+        return true;
+    }
     
     // Create modified SCF parameters
     DrudeSCFParams scfParams = params;
     scfParams.maxIterations = config_.maxSCFIterations;
     
     // If we're already close, can use looser tolerance
-    if (stats_.errorAfterFBP < 0.05) {
-        scfParams.tolerance = std::max(config_.scfTolerance, stats_.errorAfterFBP * 0.1);
+    double currentError = useTCGStage_ ? stats_.errorAfterTCG : stats_.errorAfterFBP;
+    if (currentError < 0.01) {
+        scfParams.tolerance = std::max(config_.scfTolerance, currentError * 0.1);
     }
     
     // Run SCF
@@ -136,8 +181,11 @@ bool DrudeMultiStage::optimize(
         std::cout << "  Avg polarizability: " << stats_.avgPolarizability << " nm³" << std::endl;
         std::cout << "  Direct: " << stats_.directTime*1000 << " ms, error: " << stats_.errorAfterDirect << std::endl;
         std::cout << "  FastFBP: " << stats_.fbpTime*1000 << " ms (" << stats_.fbpIterations << " iter), error: " << stats_.errorAfterFBP << std::endl;
+        if (stats_.tcgIterations > 0) {
+            std::cout << "  TCG: " << stats_.tcgTime*1000 << " ms (" << stats_.tcgIterations << " iter), error: " << stats_.errorAfterTCG << std::endl;
+        }
         std::cout << "  SCF: " << stats_.scfTime*1000 << " ms (" << stats_.scfIterations << " iter), error: " << stats_.finalError << std::endl;
-        std::cout << "  Total time: " << (stats_.directTime + stats_.fbpTime + stats_.scfTime)*1000 << " ms" << std::endl;
+        std::cout << "  Total time: " << (stats_.directTime + stats_.fbpTime + stats_.tcgTime + stats_.scfTime)*1000 << " ms" << std::endl;
     }
     
     return converged;
@@ -168,7 +216,7 @@ void DrudeMultiStage::analyzeSystem(
 }
 
 void DrudeMultiStage::adaptConfiguration(
-    const model::MCState& state,
+    const model::MCState& /*state*/,
     const std::vector<DrudeParticle>& particles
 ) {
     // Adapt based on density
@@ -177,23 +225,31 @@ void DrudeMultiStage::adaptConfiguration(
         config_.minFBPIterations = 2;
         config_.maxFBPIterations = 5;
         config_.fbpCutoffFactor = 0.6;
+        config_.tcgIterations = 2;  // Fewer TCG iterations needed
+        config_.requireSCF = false;  // Often don't need SCF
     } else if (stats_.systemDensity < 1.0) {
         // Medium density: Standard configuration
         config_.minFBPIterations = 3;
         config_.maxFBPIterations = 7;
         config_.fbpCutoffFactor = 0.8;
+        config_.tcgIterations = 3;  // TCG-3 optimal
+        config_.requireSCF = false;  // TCG usually sufficient
     } else {
-        // High density: Need more FastFBP iterations
+        // High density: Need more iterations
         config_.minFBPIterations = 5;
         config_.maxFBPIterations = 10;
         config_.fbpCutoffFactor = 1.0;
+        config_.tcgIterations = 4;  // More TCG iterations
+        config_.requireSCF = true;   // May need SCF refinement
     }
     
     // Adapt based on polarizability
     if (stats_.avgPolarizability > 0.002) {
         // High polarizability: Need more iterations
         config_.maxFBPIterations += 2;
+        config_.tcgIterations += 1;  // Extra TCG iteration
         config_.switchToSCFError *= 0.5;  // Switch earlier
+        config_.requireSCF = true;  // Likely need SCF
     }
     
     // Adapt based on system size
@@ -201,6 +257,8 @@ void DrudeMultiStage::adaptConfiguration(
         // Large system: Relax tolerances slightly
         config_.scfTolerance *= 2;
         config_.switchToSCFError *= 2;
+        config_.tcgErrorThreshold *= 2;  // Relax TCG threshold
+        config_.tcgIterations = std::min(config_.tcgIterations, 3);  // Limit TCG
     }
 }
 
@@ -271,8 +329,8 @@ bool DrudeMultiStage::shouldSwitchToSCF(
     double convergenceRate,
     int fbpIterations
 ) const {
-    // Switch if error is already small
-    if (currentError < config_.switchToSCFError) {
+    // Switch if error is already small enough for TCG
+    if (currentError < config_.tcgErrorThreshold) {
         return true;
     }
     

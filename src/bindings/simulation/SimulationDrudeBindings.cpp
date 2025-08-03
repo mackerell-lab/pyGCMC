@@ -10,6 +10,8 @@
 #include "platform/cpu/energy/drude/DrudeStructures.hpp"
 #include "platform/cpu/energy/drude/DrudeFastFBP.hpp"
 #include "platform/cpu/energy/drude/DrudeHybrid.hpp"
+#include "platform/cpu/energy/drude/DrudeMultiStage.hpp"
+#include "platform/cpu/energy/drude/DrudeSequentialOptimizer.hpp"
 
 namespace py = pybind11;
 
@@ -74,7 +76,8 @@ void init_drude_bindings(py::module& m) {
         .value("TCGv2", DrudeAlgorithm::TCGv2, "Improved TCG with preconditioning")
         .value("LBFGS", DrudeAlgorithm::LBFGS, "L-BFGS optimization (matches OpenMM precision)")
         .value("Direct", DrudeAlgorithm::Direct, "Direct polarization (ignores induced-induced)")
-        .value("Hybrid", DrudeAlgorithm::Hybrid, "Hybrid FastFBP+SCF strategy");
+        .value("Hybrid", DrudeAlgorithm::Hybrid, "Hybrid FastFBP+SCF strategy")
+        .value("MultiStage", DrudeAlgorithm::MultiStage, "Multi-stage Direct→FastFBP→TCG→SCF optimization");
     
     // OPT3Coefficients
     py::class_<OPT3Coefficients>(m, "OPT3Coefficients", "OPT3 expansion coefficients")
@@ -187,6 +190,200 @@ void init_drude_bindings(py::module& m) {
         .def("getStats", &DrudeHybrid::getStats,
              py::return_value_policy::reference_internal,
              "Get statistics from last optimization");
+    
+    // MultiStageConfig class
+    py::class_<DrudeMultiStage::MultiStageConfig>(m, "MultiStageConfig", "Configuration for multi-stage optimization")
+        .def(py::init<>())
+        // FastFBP stage
+        .def_readwrite("minFBPIterations", &DrudeMultiStage::MultiStageConfig::minFBPIterations,
+                      "Minimum FastFBP iterations before switching")
+        .def_readwrite("maxFBPIterations", &DrudeMultiStage::MultiStageConfig::maxFBPIterations,
+                      "Maximum FastFBP iterations")
+        .def_readwrite("fbpCutoffFactor", &DrudeMultiStage::MultiStageConfig::fbpCutoffFactor,
+                      "Fraction of full cutoff for FastFBP")
+        // TCG stage
+        .def_readwrite("tcgIterations", &DrudeMultiStage::MultiStageConfig::tcgIterations,
+                      "Number of TCG iterations (3 recommended)")
+        .def_readwrite("enableTCG", &DrudeMultiStage::MultiStageConfig::enableTCG,
+                      "Enable TCG stage")
+        .def_readwrite("tcgErrorThreshold", &DrudeMultiStage::MultiStageConfig::tcgErrorThreshold,
+                      "Error threshold to switch to TCG")
+        // Switching criteria
+        .def_readwrite("switchToSCFError", &DrudeMultiStage::MultiStageConfig::switchToSCFError,
+                      "Error threshold to switch to SCF")
+        .def_readwrite("switchToSCFRate", &DrudeMultiStage::MultiStageConfig::switchToSCFRate,
+                      "Convergence rate threshold to switch to SCF")
+        // SCF stage
+        .def_readwrite("scfTolerance", &DrudeMultiStage::MultiStageConfig::scfTolerance,
+                      "Final SCF tolerance")
+        .def_readwrite("maxSCFIterations", &DrudeMultiStage::MultiStageConfig::maxSCFIterations,
+                      "Maximum SCF iterations")
+        .def_readwrite("requireSCF", &DrudeMultiStage::MultiStageConfig::requireSCF,
+                      "Require SCF stage (False allows stopping after TCG)")
+        // Adaptive parameters
+        .def_readwrite("adaptiveMode", &DrudeMultiStage::MultiStageConfig::adaptiveMode,
+                      "Enable adaptive parameter adjustment")
+        .def_readwrite("densityThreshold", &DrudeMultiStage::MultiStageConfig::densityThreshold,
+                      "Density threshold for adaptation (g/cm³)")
+        .def_readwrite("polarizabilityThreshold", &DrudeMultiStage::MultiStageConfig::polarizabilityThreshold,
+                      "Polarizability threshold for adaptation (nm³)");
+    
+    // MultiStageStats class
+    py::class_<DrudeMultiStage::MultiStageStats>(m, "MultiStageStats", "Statistics from multi-stage optimization")
+        // Timing
+        .def_readonly("directTime", &DrudeMultiStage::MultiStageStats::directTime, "Direct polarization time (s)")
+        .def_readonly("fbpTime", &DrudeMultiStage::MultiStageStats::fbpTime, "FastFBP time (s)")
+        .def_readonly("tcgTime", &DrudeMultiStage::MultiStageStats::tcgTime, "TCG time (s)")
+        .def_readonly("scfTime", &DrudeMultiStage::MultiStageStats::scfTime, "SCF time (s)")
+        // Iterations
+        .def_readonly("fbpIterations", &DrudeMultiStage::MultiStageStats::fbpIterations, "FastFBP iterations performed")
+        .def_readonly("tcgIterations", &DrudeMultiStage::MultiStageStats::tcgIterations, "TCG iterations performed")
+        .def_readonly("scfIterations", &DrudeMultiStage::MultiStageStats::scfIterations, "SCF iterations performed")
+        // Errors
+        .def_readonly("errorAfterDirect", &DrudeMultiStage::MultiStageStats::errorAfterDirect, "Error after Direct (nm)")
+        .def_readonly("errorAfterFBP", &DrudeMultiStage::MultiStageStats::errorAfterFBP, "Error after FastFBP (nm)")
+        .def_readonly("errorAfterTCG", &DrudeMultiStage::MultiStageStats::errorAfterTCG, "Error after TCG (nm)")
+        .def_readonly("finalError", &DrudeMultiStage::MultiStageStats::finalError, "Final error (nm)")
+        // System info
+        .def_readonly("systemDensity", &DrudeMultiStage::MultiStageStats::systemDensity, "System density (g/cm³)")
+        .def_readonly("avgPolarizability", &DrudeMultiStage::MultiStageStats::avgPolarizability, "Average polarizability (nm³)")
+        .def_readonly("converged", &DrudeMultiStage::MultiStageStats::converged, "Final convergence status");
+    
+    // MultiStage class for configuration
+    py::class_<DrudeMultiStage>(m, "MultiStageOptimizer", "Multi-stage Direct→FastFBP→TCG→SCF optimizer")
+        .def_static("getInstance", []() -> DrudeMultiStage* {
+            return DrudeComplete::getMultiStageOptimizer();
+        }, py::return_value_policy::reference,
+           "Get the MultiStage optimizer instance")
+        .def("setConfig", &DrudeMultiStage::setConfig,
+             py::arg("config"), "Set configuration parameters")
+        .def("getConfig", &DrudeMultiStage::getConfig,
+             py::return_value_policy::reference_internal,
+             "Get current configuration")
+        .def("getStats", &DrudeMultiStage::getStats,
+             py::return_value_policy::reference_internal,
+             "Get statistics from last optimization")
+        .def("enableDirectStage", &DrudeMultiStage::enableDirectStage,
+             py::arg("enable"), "Enable/disable Direct polarization stage")
+        .def("enableFBPStage", &DrudeMultiStage::enableFBPStage,
+             py::arg("enable"), "Enable/disable FastFBP stage")
+        .def("enableTCGStage", &DrudeMultiStage::enableTCGStage,
+             py::arg("enable"), "Enable/disable TCG stage")
+        .def("enableSCFStage", &DrudeMultiStage::enableSCFStage,
+             py::arg("enable"), "Enable/disable SCF stage");
+    
+    // DrudeSequentialOptimizer - Order-sensitive optimizer
+    py::class_<drude::DrudeSequentialOptimizer>(m, "DrudeOptimizer")
+        .def(py::init<>(), "Create an empty optimizer")
+        .def(py::init([](py::kwargs kwargs) {
+            // Capture kwargs in order (Python 3.7+ guarantees order)
+            std::vector<std::pair<std::string, double>> sequence;
+            
+            for (auto item : kwargs) {
+                std::string key = py::str(item.first);
+                double value = 0.0;
+                
+                // Handle different parameter types
+                if (py::isinstance<py::int_>(item.second)) {
+                    value = item.second.cast<int>();
+                } else if (py::isinstance<py::float_>(item.second)) {
+                    value = item.second.cast<double>();
+                } else {
+                    throw py::type_error("Parameter value must be numeric");
+                }
+                
+                // Only add if value > 0 (0 means disabled)
+                if (value > 0) {
+                    sequence.push_back({key, value});
+                }
+            }
+            
+            return drude::DrudeSequentialOptimizer::fromPythonKwargs(sequence);
+        }), R"pbdoc(
+            Create a sequential Drude optimizer with ordered algorithm steps.
+            
+            Parameters are specified as keyword arguments where the order matters:
+            - direct: Number of iterations for direct polarization (usually 1)
+            - fast_fbp: Number of iterations for Fast Force Balance Predictor
+            - tcg: Number of iterations for Truncated Conjugate Gradient
+            - scf: Convergence tolerance for Self-Consistent Field (in nm)
+            
+            Example:
+                # Different orders produce different optimization sequences
+                opt1 = DrudeOptimizer(direct=1, fast_fbp=5, tcg=3)
+                opt2 = DrudeOptimizer(fast_fbp=5, direct=1, tcg=3)
+                
+                # For GCMC insertion (fast)
+                opt_insert = DrudeOptimizer(direct=1, fast_fbp=3)
+                
+                # For GCMC deletion (accurate)
+                opt_delete = DrudeOptimizer(fast_fbp=5, tcg=3)
+        )pbdoc")
+        
+        .def("optimize", &drude::DrudeSequentialOptimizer::optimize,
+             py::arg("state"),
+             R"pbdoc(
+             Execute the optimization sequence on the given state.
+             
+             Args:
+                 state: MCState object to optimize
+                 
+             Returns:
+                 float: Final energy after optimization (kJ/mol)
+         )pbdoc")
+        
+        .def("add_step", &drude::DrudeSequentialOptimizer::addStep,
+             py::arg("algorithm"), py::arg("parameter"),
+             R"pbdoc(
+             Add an algorithm step to the sequence.
+             
+             Args:
+                 algorithm: Algorithm name ('direct', 'fast_fbp', 'tcg', 'scf', etc.)
+                 parameter: Algorithm-specific parameter (iterations or tolerance)
+         )pbdoc")
+        
+        .def("clear_sequence", &drude::DrudeSequentialOptimizer::clearSequence,
+             "Clear all steps from the optimization sequence")
+        
+        .def("get_sequence", &drude::DrudeSequentialOptimizer::getSequence,
+             "Get the current optimization sequence as a list of (algorithm, parameter) tuples")
+        
+        .def("__str__", &drude::DrudeSequentialOptimizer::toString)
+        
+        .def("__repr__", &drude::DrudeSequentialOptimizer::toString)
+        
+        .def("__len__", [](const drude::DrudeSequentialOptimizer& self) {
+            return self.getSequence().size();
+        })
+        
+        .def("__getitem__", [](const drude::DrudeSequentialOptimizer& self, size_t i) {
+            const auto& seq = self.getSequence();
+            if (i >= seq.size()) {
+                throw py::index_error("Index out of range");
+            }
+            return seq[i];
+        });
+    
+    // DrudeOptimizerBuilder class (optional, for fluent API)
+    py::class_<drude::DrudeOptimizerBuilder>(m, "DrudeOptimizerBuilder")
+        .def(py::init<>())
+        .def("direct", &drude::DrudeOptimizerBuilder::direct,
+             py::arg("iterations") = 1,
+             "Add Direct polarization step")
+        .def("fast_fbp", &drude::DrudeOptimizerBuilder::fastFBP,
+             py::arg("iterations") = 5,
+             "Add Fast Force Balance Predictor step")
+        .def("tcg", &drude::DrudeOptimizerBuilder::tcg,
+             py::arg("iterations") = 3,
+             "Add Truncated Conjugate Gradient step")
+        .def("scf", &drude::DrudeOptimizerBuilder::scf,
+             py::arg("tolerance") = 0.01,
+             "Add Self-Consistent Field step")
+        .def("add", &drude::DrudeOptimizerBuilder::add,
+             py::arg("algorithm"), py::arg("parameter"),
+             "Add custom algorithm step")
+        .def("build", &drude::DrudeOptimizerBuilder::build,
+             "Build the final optimizer");
 }
 
 } // namespace simulation

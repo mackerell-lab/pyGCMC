@@ -14,6 +14,7 @@
 #include "DrudeInterface.hpp"
 #include "DrudeStructures.hpp"
 #include <vector>
+#include <unordered_map>
 
 namespace pygcmc {
 namespace platform {
@@ -73,6 +74,9 @@ private:
     std::vector<Vec3> directions_;  // Search directions (p)
     std::vector<Vec3> Ap_;         // Matrix-vector product
     std::vector<Vec3> oldResiduals_; // Previous residuals
+    
+    // Screening map for current optimization
+    std::unordered_map<uint64_t, double> screeningMap_;
     
     // Chebyshev extrapolation history
     std::vector<std::vector<Vec3>> dipoleHistory_;

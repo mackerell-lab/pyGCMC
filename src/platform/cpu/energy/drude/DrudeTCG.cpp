@@ -7,6 +7,7 @@
 #include "../common/EnergyConstants.hpp"
 #include <cmath>
 #include <iostream>
+#include <unordered_map>
 
 namespace pygcmc {
 namespace platform {
@@ -18,9 +19,14 @@ bool DrudeTCG::optimize(
     const std::vector<ScreenedPair>& screenedPairs,
     const DrudeSCFParams& params
 ) {
-    // Mark screenedPairs as unused for now
-    (void)screenedPairs;
-    (void)params;
+    // Build fast lookup map for screened pairs
+    screeningMap_.clear();
+    for (const auto& pair : screenedPairs) {
+        uint64_t key = (static_cast<uint64_t>(pair.dipole1) << 32) | pair.dipole2;
+        uint64_t reverseKey = (static_cast<uint64_t>(pair.dipole2) << 32) | pair.dipole1;
+        screeningMap_[key] = pair.thole;
+        screeningMap_[reverseKey] = pair.thole;
+    }
     
     const size_t nParticles = particles.size();
     if (nParticles == 0) return true;
@@ -67,7 +73,10 @@ bool DrudeTCG::optimize(
                  residuals_[i][2] * residuals_[i][2];
     }
     
-    for (int iter = 0; iter < tcgIterations_; ++iter) {
+    // Use iteration count from params if available, otherwise use default
+    int maxIterations = (params.maxIterations > 0) ? params.maxIterations : tcgIterations_;
+    
+    for (int iter = 0; iter < maxIterations; ++iter) {
         // Update Drude positions for field calculation
         updateDrudePositions(state, particles, displacements);
         
@@ -98,7 +107,10 @@ bool DrudeTCG::optimize(
                    directions_[i][2] * Ap_[i][2];
         }
         
-        if (std::abs(pAp) < 1e-10) break;
+        // Use relative threshold to avoid premature termination
+        // Make threshold less aggressive to avoid zero displacements
+        // Also ensure minimum iterations to avoid premature convergence
+        if (iter >= 2 && pAp < 1e-16 && rsOld < 1e-10) break;  // Only break after min iterations
         
         double alpha = rsOld / pAp;
         
@@ -166,6 +178,9 @@ void DrudeTCG::computeFieldsAtParents(
             
             // Skip Drude (will be at parent initially)
             if (j == particle.drudeIndex) continue;
+            
+            // Check if atoms are excluded (same residue)
+            if (isExcluded(particle.parentIndex, j, state)) continue;
             
             const auto& atom = state.atoms[j];
             
@@ -269,9 +284,22 @@ void DrudeTCG::computeInducedFieldsFromDisplacements(
             double r2 = dx*dx + dy*dy + dz*dz;
             if (r2 > cutoff2 || r2 < 1e-10) continue;
             
-            // E = k*q/r^2 * r_hat
             double r = std::sqrt(r2);
-            double fieldMag = DrudeConstants::ONE_4PI_EPS0 * particle_j.charge / (r2 * r);
+            
+            // Apply Thole screening for Drude-Drude interactions
+            double tholeFactor = 1.0;
+            if (particle_i.polarizability > 0 && particle_j.polarizability > 0) {
+                // Look up Thole parameter from screening map
+                uint64_t key = (static_cast<uint64_t>(i) << 32) | j;
+                auto it = screeningMap_.find(key);
+                double thole = (it != screeningMap_.end()) ? it->second : 1.3; // Default to 1.3 if not found
+                
+                tholeFactor = computeTholeScreening(r, particle_i.polarizability, 
+                                                   particle_j.polarizability, thole);
+            }
+            
+            // E = k*q/r^2 * r_hat * tholeFactor
+            double fieldMag = tholeFactor * DrudeConstants::ONE_4PI_EPS0 * particle_j.charge / (r2 * r);
             
             fields[i][0] += fieldMag * dx;
             fields[i][1] += fieldMag * dy;
@@ -311,6 +339,9 @@ void DrudeTCG::computeFields(
             
             // Skip parent-Drude interaction
             if (j == particle.parentIndex) continue;
+            
+            // Check if atoms are excluded (same residue)
+            if (isExcluded(particle.drudeIndex, j, state)) continue;
             
             // Compute distance with PBC
             double dx = drude.x - atom.x;

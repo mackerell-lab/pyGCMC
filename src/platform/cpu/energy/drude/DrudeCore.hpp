@@ -15,6 +15,7 @@
 #include "DrudeTCGv2.hpp"
 #include "DrudeLBFGS.hpp"
 #include "DrudeHybrid.hpp"
+#include "DrudeMultiStage.hpp"
 #include <memory>
 #include <vector>
 
@@ -57,6 +58,9 @@ public:
     // Hybrid access for configuration
     DrudeHybrid* getHybridOptimizer() { return m_hybridOptimizer.get(); }
     
+    // MultiStage access for configuration
+    DrudeMultiStage* getMultiStageOptimizer() { return m_multiStageOptimizer.get(); }
+    
 private:
     // Energy calculation components
     double calculateHarmonicEnergy(const model::MCState& state) const;
@@ -89,6 +93,7 @@ private:
     std::unique_ptr<DrudeLBFGS> m_lbfgsOptimizer;
     std::unique_ptr<DrudeOptimizer> m_directOptimizer;  // Forward declaration
     std::unique_ptr<DrudeHybrid> m_hybridOptimizer;
+    std::unique_ptr<DrudeMultiStage> m_multiStageOptimizer;
     DrudeOptimizer* m_currentOptimizer;
     
     // ASPC history for prediction

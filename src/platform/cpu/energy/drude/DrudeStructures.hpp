@@ -100,7 +100,8 @@ enum class DrudeAlgorithm {
     TCGv2,    // Improved TCG with preconditioning
     LBFGS,    // L-BFGS optimization (matches OpenMM precision)
     Direct,   // Direct polarization (no induced-induced)
-    Hybrid    // Hybrid FastFBP+SCF strategy
+    Hybrid,   // Hybrid FastFBP+SCF strategy
+    MultiStage // Multi-stage Direct→FastFBP→SCF optimization
 };
 
 /**

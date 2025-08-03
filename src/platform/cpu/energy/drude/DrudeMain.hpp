@@ -92,6 +92,18 @@ public:
     static DrudeFastFBP* getFastFBPOptimizer();
     
     /**
+     * @brief Get Hybrid optimizer instance for configuration
+     * @return Pointer to Hybrid optimizer (nullptr if not available)
+     */
+    static DrudeHybrid* getHybridOptimizer();
+    
+    /**
+     * @brief Get MultiStage optimizer instance for configuration
+     * @return Pointer to MultiStage optimizer (nullptr if not available)
+     */
+    static DrudeMultiStage* getMultiStageOptimizer();
+    
+    /**
      * @brief Get the DrudeCore instance
      * @return Reference to DrudeCore
      */
