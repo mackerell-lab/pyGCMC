@@ -8,6 +8,7 @@
 #include <pybind11/stl_bind.h>
 #include "platform/cpu/energy/drude/DrudeMain.hpp"
 #include "platform/cpu/energy/drude/DrudeStructures.hpp"
+#include "platform/cpu/energy/drude/DrudeFastFBP.hpp"
 
 namespace py = pybind11;
 
@@ -116,6 +117,40 @@ void init_drude_bindings(py::module& m) {
     m.def("computeTholeScreening", &computeTholeScreening,
           py::arg("r"), py::arg("alpha_i"), py::arg("alpha_j"), py::arg("thole"),
           "Compute Thole screening function value");
+    
+    // FastFBP IterationMode enum
+    py::enum_<DrudeFastFBP::IterationMode>(m, "FastFBPIterationMode", "Iteration modes for FastFBP")
+        .value("Fixed", DrudeFastFBP::IterationMode::Fixed, "Use fixed number of iterations")
+        .value("Dynamic", DrudeFastFBP::IterationMode::Dynamic, "Dynamic iterations based on convergence")
+        .value("Adaptive", DrudeFastFBP::IterationMode::Adaptive, "Adaptive with parameter adjustment");
+    
+    // FastFBP ConvergenceStats
+    py::class_<DrudeFastFBP::ConvergenceStats>(m, "FastFBPConvergenceStats", "Convergence statistics for FastFBP")
+        .def_readonly("actualIterations", &DrudeFastFBP::ConvergenceStats::actualIterations)
+        .def_readonly("finalError", &DrudeFastFBP::ConvergenceStats::finalError)
+        .def_readonly("convergenceRate", &DrudeFastFBP::ConvergenceStats::convergenceRate)
+        .def_readonly("converged", &DrudeFastFBP::ConvergenceStats::converged);
+    
+    // FastFBPConfig class for configuration
+    py::class_<DrudeFastFBP>(m, "FastFBPConfig", "Configuration for FastFBP algorithm")
+        .def_static("getInstance", []() -> DrudeFastFBP* {
+            return DrudeComplete::getFastFBPOptimizer();
+        }, py::return_value_policy::reference, "Get FastFBP optimizer instance")
+        .def("setIterations", &DrudeFastFBP::setIterations,
+             py::arg("iterations"), "Set number of FBP iterations for fixed mode")
+        .def("setCutoff", &DrudeFastFBP::setCutoff,
+             py::arg("cutoff"), "Set interaction cutoff for Drude-Drude (nm)")
+        .def("setIterationMode", &DrudeFastFBP::setIterationMode,
+             py::arg("mode"), "Set iteration mode (Fixed, Dynamic, or Adaptive)")
+        .def("setConvergenceTolerance", &DrudeFastFBP::setConvergenceTolerance,
+             py::arg("tolerance"), "Set convergence tolerance for dynamic mode (nm)")
+        .def("setMaxIterations", &DrudeFastFBP::setMaxIterations,
+             py::arg("max_iterations"), "Set maximum iterations for dynamic mode")
+        .def("setAdaptiveMode", &DrudeFastFBP::setAdaptiveMode,
+             py::arg("enable"), "Enable/disable adaptive parameter adjustment")
+        .def("getStats", &DrudeFastFBP::getStats,
+             py::return_value_policy::reference_internal,
+             "Get convergence statistics from last optimization");
 }
 
 } // namespace simulation

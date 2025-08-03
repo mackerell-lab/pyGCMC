@@ -24,17 +24,26 @@ bool DrudeFastFBP::optimize(
     const auto& box = state.info.box;
     const double halfBox[3] = {box[0] * 0.5, box[1] * 0.5, box[2] * 0.5};
     
-    // Store initial positions for convergence check
-    std::vector<Vec3> oldPositions(particles.size());
+    // Initialize statistics
+    stats_ = {0, 0.0, 0.0, false};
+    
+    // Configure for system if adaptive mode enabled
+    if (adaptiveMode_) {
+        configureForSystem(state, particles.size());
+    }
+    
+    // Store positions for convergence check
+    std::vector<Vec3> previousPositions(particles.size());
+    std::vector<double> errorHistory;
+    
+    // Determine number of iterations based on mode
+    int maxIter = (iterMode_ == IterationMode::Fixed) ? fbpIterations_ : maxIterations_;
     
     // Main FBP iterations
-    for (int iter = 0; iter < fbpIterations_; ++iter) {
+    for (int iter = 0; iter < maxIter; ++iter) {
         
-        // Save old positions
-        for (size_t i = 0; i < particles.size(); ++i) {
-            const auto& drude = state.atoms[particles[i].drudeIndex];
-            oldPositions[i] = {drude.x, drude.y, drude.z};
-        }
+        // Save previous positions
+        saveDrudePositions(state, particles, previousPositions);
         
         // Update each Drude position
         for (size_t i = 0; i < particles.size(); ++i) {
@@ -75,15 +84,16 @@ bool DrudeFastFBP::optimize(
                 dispFactor * fieldTotal[2]
             };
             
-            // Apply damping for stability (use class member)
+            // Apply damping for stability
             Vec3 currentDisp = {
                 drudePos[0] - parentPos[0],
                 drudePos[1] - parentPos[1],
                 drudePos[2] - parentPos[2]
             };
             
-            // First iteration: direct placement, later: damped update
-            double effectiveDamping = (iter == 0) ? 1.0 : dampingFactor_;
+            // Use adaptive damping if enabled
+            double effectiveDamping = (iter == 0) ? 1.0 : 
+                (adaptiveMode_ ? adaptiveParams_.dampingFactor : dampingFactor_);
             
             Vec3 newDisp = {
                 effectiveDamping * displacement[0] + (1 - effectiveDamping) * currentDisp[0],
@@ -108,38 +118,60 @@ bool DrudeFastFBP::optimize(
             drude.z = newDrudePos[2];
         }
         
-        // Check convergence (only on last iteration for speed)
-        if (iter == fbpIterations_ - 1) {
-            double maxDisp = 0.0;
-            for (size_t i = 0; i < particles.size(); ++i) {
-                const auto& drude = state.atoms[particles[i].drudeIndex];
-                Vec3 newPos = {drude.x, drude.y, drude.z};
-                
-                double dx = newPos[0] - oldPositions[i][0];
-                double dy = newPos[1] - oldPositions[i][1];
-                double dz = newPos[2] - oldPositions[i][2];
-                
-                // Apply PBC to displacement
-                if (dx > halfBox[0]) dx -= box[0];
-                if (dx < -halfBox[0]) dx += box[0];
-                if (dy > halfBox[1]) dy -= box[1];
-                if (dy < -halfBox[1]) dy += box[1];
-                if (dz > halfBox[2]) dz -= box[2];
-                if (dz < -halfBox[2]) dz += box[2];
-                
-                double disp2 = dx*dx + dy*dy + dz*dz;
-                maxDisp = std::max(maxDisp, std::sqrt(disp2));
+        // Check convergence for dynamic mode
+        if (iterMode_ != IterationMode::Fixed && iter >= minIterations_) {
+            double forceTolerance = 0.1; // kJ/mol/nm
+            bool converged = checkConvergence(state, particles, previousPositions, 
+                                            convTolerance_, forceTolerance);
+            
+            if (converged) {
+                stats_.actualIterations = iter + 1;
+                stats_.converged = true;
+                stats_.finalError = convTolerance_;
+                return true;
             }
             
-            // Very loose convergence for speed (5% accuracy target)
-            const double looseTol = 0.001; // 0.001 nm = 0.01 Å
-            if (maxDisp < looseTol) {
-                return true; // Converged
+            // Calculate convergence rate for adaptive mode
+            if (iterMode_ == IterationMode::Adaptive && iter > minIterations_) {
+                double maxDisp = 0.0;
+                for (size_t i = 0; i < particles.size(); ++i) {
+                    const auto& drude = state.atoms[particles[i].drudeIndex];
+                    Vec3 newPos = {drude.x, drude.y, drude.z};
+                    
+                    double dx = newPos[0] - previousPositions[i][0];
+                    double dy = newPos[1] - previousPositions[i][1];
+                    double dz = newPos[2] - previousPositions[i][2];
+                    
+                    // Apply PBC to displacement
+                    if (dx > halfBox[0]) dx -= box[0];
+                    if (dx < -halfBox[0]) dx += box[0];
+                    if (dy > halfBox[1]) dy -= box[1];
+                    if (dy < -halfBox[1]) dy += box[1];
+                    if (dz > halfBox[2]) dz -= box[2];
+                    if (dz < -halfBox[2]) dz += box[2];
+                    
+                    double disp2 = dx*dx + dy*dy + dz*dz;
+                    maxDisp = std::max(maxDisp, std::sqrt(disp2));
+                }
+                
+                errorHistory.push_back(maxDisp);
+                
+                // Adjust adaptive parameters
+                if (errorHistory.size() >= 3) {
+                    double convergenceRate = calculateConvergenceRate(errorHistory);
+                    adjustAdaptiveParameters(convergenceRate);
+                    stats_.convergenceRate = convergenceRate;
+                }
             }
         }
+        
+        // Update statistics
+        stats_.actualIterations = iter + 1;
     }
     
-    return true; // Always return true for FastFBP (best effort)
+    // Final statistics
+    stats_.converged = (iterMode_ == IterationMode::Fixed); // Fixed mode always "converges"
+    return true;
 }
 
 Vec3 DrudeFastFBP::computeFixedField(
@@ -293,6 +325,186 @@ bool DrudeFastFBP::inSameMolecule(
     }
     
     return (res1 >= 0 && res1 == res2);
+}
+
+bool DrudeFastFBP::checkConvergence(
+    const model::MCState& state,
+    const std::vector<DrudeParticle>& particles,
+    const std::vector<Vec3>& previousPositions,
+    double dispTolerance,
+    double forceTolerance
+) {
+    double maxDisplacement = 0.0;
+    double maxForceImbalance = 0.0;
+    
+    const auto& box = state.info.box;
+    const double halfBox[3] = {box[0] * 0.5, box[1] * 0.5, box[2] * 0.5};
+    
+    for (size_t i = 0; i < particles.size(); ++i) {
+        const auto& particle = particles[i];
+        const auto& drude = state.atoms[particle.drudeIndex];
+        
+        // Check displacement change
+        double dx = drude.x - previousPositions[i][0];
+        double dy = drude.y - previousPositions[i][1];
+        double dz = drude.z - previousPositions[i][2];
+        
+        // Apply PBC to displacement
+        if (dx > halfBox[0]) dx -= box[0];
+        if (dx < -halfBox[0]) dx += box[0];
+        if (dy > halfBox[1]) dy -= box[1];
+        if (dy < -halfBox[1]) dy += box[1];
+        if (dz > halfBox[2]) dz -= box[2];
+        if (dz < -halfBox[2]) dz += box[2];
+        
+        double displacement = std::sqrt(dx*dx + dy*dy + dz*dz);
+        maxDisplacement = std::max(maxDisplacement, displacement);
+        
+        // Check force balance
+        Vec3 netForce = calculateNetForce(state, particle, i, particles);
+        double forceMag = std::sqrt(
+            netForce[0]*netForce[0] + 
+            netForce[1]*netForce[1] + 
+            netForce[2]*netForce[2]
+        );
+        maxForceImbalance = std::max(maxForceImbalance, forceMag);
+    }
+    
+    // Double convergence criteria
+    bool dispConverged = maxDisplacement < dispTolerance;
+    bool forceConverged = maxForceImbalance < forceTolerance;
+    
+    return dispConverged && forceConverged;
+}
+
+void DrudeFastFBP::saveDrudePositions(
+    const model::MCState& state,
+    const std::vector<DrudeParticle>& particles,
+    std::vector<Vec3>& positions
+) {
+    for (size_t i = 0; i < particles.size(); ++i) {
+        const auto& drude = state.atoms[particles[i].drudeIndex];
+        positions[i] = {drude.x, drude.y, drude.z};
+    }
+}
+
+Vec3 DrudeFastFBP::calculateNetForce(
+    const model::MCState& state,
+    const DrudeParticle& particle,
+    size_t particleIndex,
+    const std::vector<DrudeParticle>& allParticles
+) {
+    const auto& drude = state.atoms[particle.drudeIndex];
+    const auto& parent = state.atoms[particle.parentIndex];
+    
+    Vec3 drudePos = {drude.x, drude.y, drude.z};
+    Vec3 parentPos = {parent.x, parent.y, parent.z};
+    
+    // Spring force
+    Vec3 springForce = {
+        particle.kSpring * (parentPos[0] - drudePos[0]),
+        particle.kSpring * (parentPos[1] - drudePos[1]),
+        particle.kSpring * (parentPos[2] - drudePos[2])
+    };
+    
+    // Electric field at Drude position
+    Vec3 fieldFixed = computeFixedField(state, drudePos, 
+                                      particle.drudeIndex, 
+                                      particle.parentIndex);
+    
+    Vec3 fieldDrude = computeDrudeField(state, allParticles, drudePos, particleIndex);
+    
+    // Electric force
+    Vec3 electricForce = {
+        particle.charge * (fieldFixed[0] + fieldDrude[0]),
+        particle.charge * (fieldFixed[1] + fieldDrude[1]),
+        particle.charge * (fieldFixed[2] + fieldDrude[2])
+    };
+    
+    // Net force
+    return {
+        springForce[0] + electricForce[0],
+        springForce[1] + electricForce[1],
+        springForce[2] + electricForce[2]
+    };
+}
+
+void DrudeFastFBP::configureForSystem(
+    const model::MCState& state,
+    size_t nParticles
+) {
+    // Calculate system density
+    double volume = state.info.box[0] * state.info.box[1] * state.info.box[2];
+    double density = nParticles / volume;
+    
+    // Adjust parameters based on system size and density
+    if (nParticles < 10) {
+        // Small system: use fast settings
+        fbpIterations_ = 3;
+        drudeCutoff_ = 0.8;
+        dampingFactor_ = 0.7;
+        adaptiveParams_.dampingFactor = 0.7;
+        adaptiveParams_.cutoff = 0.8;
+    } else if (nParticles < 50) {
+        // Medium system: balanced settings
+        fbpIterations_ = 5;
+        drudeCutoff_ = 1.0;
+        dampingFactor_ = 0.75;
+        adaptiveParams_.dampingFactor = 0.75;
+        adaptiveParams_.cutoff = 1.0;
+    } else {
+        // Large system: use system cutoff
+        fbpIterations_ = 7;
+        drudeCutoff_ = std::min(static_cast<double>(state.info.cutoff), 1.4);
+        dampingFactor_ = 0.8;
+        adaptiveParams_.dampingFactor = 0.8;
+        adaptiveParams_.cutoff = drudeCutoff_;
+    }
+    
+    // Adjust for high density
+    if (density > 30.0) { // High density threshold
+        fbpIterations_ += 2;
+        dampingFactor_ = std::min(dampingFactor_ + 0.05, 0.9);
+    }
+}
+
+void DrudeFastFBP::adjustAdaptiveParameters(
+    double convergenceRate
+) {
+    adaptiveParams_.convergenceRate = convergenceRate;
+    
+    if (convergenceRate < 0.1) {
+        // Convergence too slow, reduce damping
+        adaptiveParams_.dampingFactor *= 0.9;
+        adaptiveParams_.stagnationCount++;
+        
+        // If stagnating, increase cutoff
+        if (adaptiveParams_.stagnationCount > 3) {
+            adaptiveParams_.cutoff = std::min(adaptiveParams_.cutoff + 0.1, 1.4);
+            adaptiveParams_.stagnationCount = 0;
+        }
+    } else if (convergenceRate > 0.5) {
+        // Convergence possibly oscillating, increase damping
+        adaptiveParams_.dampingFactor *= 1.1;
+        adaptiveParams_.dampingFactor = std::min(adaptiveParams_.dampingFactor, 0.95);
+        adaptiveParams_.stagnationCount = 0;
+    } else {
+        // Good convergence rate
+        adaptiveParams_.stagnationCount = 0;
+    }
+}
+
+double DrudeFastFBP::calculateConvergenceRate(
+    const std::vector<double>& errorHistory
+) {
+    int n = errorHistory.size();
+    if (n < 3) return 1.0;
+    
+    // Calculate improvement rate from recent iterations
+    double improvement1 = (errorHistory[n-2] - errorHistory[n-1]) / errorHistory[n-2];
+    double improvement2 = (errorHistory[n-3] - errorHistory[n-2]) / errorHistory[n-3];
+    
+    return (improvement1 + improvement2) / 2.0;
 }
 
 } // namespace cpu

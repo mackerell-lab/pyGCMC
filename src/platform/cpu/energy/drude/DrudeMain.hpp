@@ -84,6 +84,12 @@ public:
      * @brief Clear ASPC history
      */
     static void clearHistory();
+    
+    /**
+     * @brief Get FastFBP optimizer instance for configuration
+     * @return Pointer to FastFBP optimizer (nullptr if not available)
+     */
+    static DrudeFastFBP* getFastFBPOptimizer();
 };
 
 } // namespace cpu

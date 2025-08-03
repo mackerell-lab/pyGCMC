@@ -50,6 +50,9 @@ public:
     bool isASPCEnabled() const { return m_useASPC; }
     void clearHistory() { m_hasHistory = false; }
     
+    // FastFBP access for configuration
+    DrudeFastFBP* getFastFBPOptimizer() { return m_fastFbpOptimizer.get(); }
+    
 private:
     // Energy calculation components
     double calculateHarmonicEnergy(const model::MCState& state) const;

@@ -52,6 +52,10 @@ void DrudeComplete::clearHistory() {
     DrudeCore::getInstance().clearHistory();
 }
 
+DrudeFastFBP* DrudeComplete::getFastFBPOptimizer() {
+    return DrudeCore::getInstance().getFastFBPOptimizer();
+}
+
 } // namespace cpu
 } // namespace platform
 } // namespace pygcmc
