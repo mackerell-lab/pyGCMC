@@ -50,8 +50,10 @@ bool DrudeSCF::optimize(
     
     // SCF iteration
     double dampingFactor = params.dampingFactor;
+    m_lastIterationCount = 0;
     
     for (int iter = 0; iter < params.maxIterations; ++iter) {
+        m_lastIterationCount = iter + 1;
         // Calculate electric field at each Drude particle
         std::fill(electricField.begin(), electricField.end(), Vec3{0.0, 0.0, 0.0});
         calculateElectricField(state, particles, screenedPairs, electricField);

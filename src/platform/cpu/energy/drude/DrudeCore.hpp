@@ -14,6 +14,7 @@
 #include "DrudeTCG.hpp"
 #include "DrudeTCGv2.hpp"
 #include "DrudeLBFGS.hpp"
+#include "DrudeHybrid.hpp"
 #include <memory>
 #include <vector>
 
@@ -53,6 +54,9 @@ public:
     // FastFBP access for configuration
     DrudeFastFBP* getFastFBPOptimizer() { return m_fastFbpOptimizer.get(); }
     
+    // Hybrid access for configuration
+    DrudeHybrid* getHybridOptimizer() { return m_hybridOptimizer.get(); }
+    
 private:
     // Energy calculation components
     double calculateHarmonicEnergy(const model::MCState& state) const;
@@ -84,6 +88,7 @@ private:
     std::unique_ptr<DrudeTCGv2> m_tcgv2Optimizer;
     std::unique_ptr<DrudeLBFGS> m_lbfgsOptimizer;
     std::unique_ptr<DrudeOptimizer> m_directOptimizer;  // Forward declaration
+    std::unique_ptr<DrudeHybrid> m_hybridOptimizer;
     DrudeOptimizer* m_currentOptimizer;
     
     // ASPC history for prediction

@@ -90,6 +90,12 @@ public:
      * @return Pointer to FastFBP optimizer (nullptr if not available)
      */
     static DrudeFastFBP* getFastFBPOptimizer();
+    
+    /**
+     * @brief Get the DrudeCore instance
+     * @return Reference to DrudeCore
+     */
+    static DrudeCore& getDrudeCore();
 };
 
 } // namespace cpu

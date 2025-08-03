@@ -9,6 +9,7 @@
 #include "platform/cpu/energy/drude/DrudeMain.hpp"
 #include "platform/cpu/energy/drude/DrudeStructures.hpp"
 #include "platform/cpu/energy/drude/DrudeFastFBP.hpp"
+#include "platform/cpu/energy/drude/DrudeHybrid.hpp"
 
 namespace py = pybind11;
 
@@ -72,7 +73,8 @@ void init_drude_bindings(py::module& m) {
         .value("TCG", DrudeAlgorithm::TCG, "Truncated Conjugate Gradient (fixed iterations)")
         .value("TCGv2", DrudeAlgorithm::TCGv2, "Improved TCG with preconditioning")
         .value("LBFGS", DrudeAlgorithm::LBFGS, "L-BFGS optimization (matches OpenMM precision)")
-        .value("Direct", DrudeAlgorithm::Direct, "Direct polarization (ignores induced-induced)");
+        .value("Direct", DrudeAlgorithm::Direct, "Direct polarization (ignores induced-induced)")
+        .value("Hybrid", DrudeAlgorithm::Hybrid, "Hybrid FastFBP+SCF strategy");
     
     // OPT3Coefficients
     py::class_<OPT3Coefficients>(m, "OPT3Coefficients", "OPT3 expansion coefficients")
@@ -151,6 +153,40 @@ void init_drude_bindings(py::module& m) {
         .def("getStats", &DrudeFastFBP::getStats,
              py::return_value_policy::reference_internal,
              "Get convergence statistics from last optimization");
+    
+    // DrudeHybrid.HybridMode enum
+    py::enum_<DrudeHybrid::HybridMode>(m, "HybridMode", "Hybrid optimization strategy modes")
+        .value("Fixed", DrudeHybrid::HybridMode::Fixed, "Fixed FastFBP iterations before SCF")
+        .value("Dynamic", DrudeHybrid::HybridMode::Dynamic, "Dynamic switching based on convergence")
+        .value("Adaptive", DrudeHybrid::HybridMode::Adaptive, "Adaptive with learning");
+    
+    // DrudeHybrid.HybridStats
+    py::class_<DrudeHybrid::HybridStats>(m, "HybridStats", "Statistics from hybrid optimization")
+        .def_readonly("fbpIterations", &DrudeHybrid::HybridStats::fbpIterations, "Actual FastFBP iterations used")
+        .def_readonly("scfIterations", &DrudeHybrid::HybridStats::scfIterations, "SCF iterations after switching")
+        .def_readonly("fbpTime", &DrudeHybrid::HybridStats::fbpTime, "Time spent in FastFBP (seconds)")
+        .def_readonly("scfTime", &DrudeHybrid::HybridStats::scfTime, "Time spent in SCF (seconds)")
+        .def_readonly("switchError", &DrudeHybrid::HybridStats::switchError, "Error when switching to SCF")
+        .def_readonly("converged", &DrudeHybrid::HybridStats::converged, "Final convergence status");
+    
+    // HybridConfig class for configuration
+    py::class_<DrudeHybrid>(m, "HybridConfig", "Configuration for Hybrid FastFBP+SCF algorithm")
+        .def_static("getInstance", []() -> DrudeHybrid* {
+            auto& drudeCore = DrudeComplete::getDrudeCore();
+            return drudeCore.getHybridOptimizer();
+        }, py::return_value_policy::reference_internal,
+           "Get the Hybrid configuration instance")
+        .def("setHybridMode", &DrudeHybrid::setHybridMode,
+             py::arg("mode"), "Set hybrid strategy mode")
+        .def("setFastFBPIterations", &DrudeHybrid::setFastFBPIterations,
+             py::arg("iter"), "Set number of FastFBP iterations before switching")
+        .def("setSwitchingThreshold", &DrudeHybrid::setSwitchingThreshold,
+             py::arg("threshold"), "Set error threshold for switching to SCF")
+        .def("setMaxSCFIterations", &DrudeHybrid::setMaxSCFIterations,
+             py::arg("iter"), "Set maximum SCF iterations after switching")
+        .def("getStats", &DrudeHybrid::getStats,
+             py::return_value_policy::reference_internal,
+             "Get statistics from last optimization");
 }
 
 } // namespace simulation

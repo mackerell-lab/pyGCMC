@@ -32,7 +32,14 @@ public:
     
     const char* getName() const override { return "SCF"; }
     
+    /**
+     * @brief Get the number of iterations from last optimization
+     * @return Number of iterations used
+     */
+    int getIterationCount() const { return m_lastIterationCount; }
+    
 private:
+    mutable int m_lastIterationCount = 0;
     /**
      * @brief Calculate electric field at Drude particles
      * 

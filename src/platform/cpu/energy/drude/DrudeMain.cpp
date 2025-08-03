@@ -56,6 +56,10 @@ DrudeFastFBP* DrudeComplete::getFastFBPOptimizer() {
     return DrudeCore::getInstance().getFastFBPOptimizer();
 }
 
+DrudeCore& DrudeComplete::getDrudeCore() {
+    return DrudeCore::getInstance();
+}
+
 } // namespace cpu
 } // namespace platform
 } // namespace pygcmc

@@ -167,6 +167,13 @@ void DrudeCore::setAlgorithm(DrudeAlgorithm algorithm) {
             }
             m_currentOptimizer = m_directOptimizer.get();
             break;
+            
+        case DrudeAlgorithm::Hybrid:
+            if (!m_hybridOptimizer) {
+                m_hybridOptimizer = std::make_unique<DrudeHybrid>();
+            }
+            m_currentOptimizer = m_hybridOptimizer.get();
+            break;
     }
 }
 
