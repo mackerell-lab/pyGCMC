@@ -1,0 +1,385 @@
+# =============================================================================
+# PyGCMC C++ Project .gitignore
+# =============================================================================
+
+# Specifically requested directories
+tmp/
+build/
+
+# =============================================================================
+# Build System - CMake
+# =============================================================================
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# CMake build directories (common patterns)
+*build*/
+*Build*/
+*BUILD*/
+
+# =============================================================================
+# C++ Build Artifacts
+# =============================================================================
+# Object files
+*.o
+*.obj
+*.ko
+*.elf
+
+# Linker output
+*.ilk
+*.map
+*.exp
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# =============================================================================
+# Python-related
+# =============================================================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# =============================================================================
+# IDE and Editor Files
+# =============================================================================
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# CLion
+.idea/
+cmake-build-*/
+
+# Visual Studio
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+.vs/
+
+# Qt Creator
+CMakeLists.txt.user
+CMakeLists.txt.user.*
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+
+# Eclipse CDT
+.autotools
+.cproject
+.metadata
+.project
+.settings/
+
+# NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# =============================================================================
+# Operating System Files
+# =============================================================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.tmp
+*.temp
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# =============================================================================
+# Temporary and Log Files
+# =============================================================================
+*.log
+*.tmp
+*.temp
+*.cache
+*.pid
+*.seed
+*.pid.lock
+*.tgz
+*.tar.gz
+
+# Core dumps
+core
+core.*
+
+# =============================================================================
+# Scientific Computing and Data Files
+# =============================================================================
+# Large data files (uncomment if needed)
+# *.dat
+# *.csv
+# *.h5
+# *.hdf5
+# *.nc
+# *.cdf
+
+# Molecular simulation outputs
+*.dcd
+*.xtc
+*.trr
+*.gro
+*.ndx
+*.edr
+*.tpr
+*.mdp
+*.top~
+*.itp~
+
+# =============================================================================
+# Documentation Build
+# =============================================================================
+doc/_build/
+docs/_build/
+doc/build/
+docs/build/
+
+# Sphinx documentation
+docs/_build/
+.doctrees/
+
+# =============================================================================
+# Version Control
+# =============================================================================
+# Git
+.git/
+.gitattributes
+
+# Mercurial
+.hg/
+.hgignore
+.hgtags
+
+# SVN
+.svn/
+
+# =============================================================================
+# Package Managers
+# =============================================================================
+# npm
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Conda
+.conda/
+
+# =============================================================================
+# Profiling and Performance
+# =============================================================================
+*.prof
+*.lprof
+gmon.out
+callgrind.out.*
+massif.out.*
+perf.data*
+
+# =============================================================================
+# Custom Project-Specific Ignores
+# =============================================================================
+# Add any project-specific files or patterns here
+
+# Test outputs
+test_output/
+test_results/
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Generated files
+*_generated.*
+auto_*
+
+# Configuration files with sensitive data (uncomment if needed)
+# config.ini
+# secrets.json
+# .env.local
+
+# =============================================================================
+# END OF .gitignore
+# =============================================================================
