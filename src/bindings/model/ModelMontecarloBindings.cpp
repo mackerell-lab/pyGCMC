@@ -122,14 +122,7 @@ void init_montecarlo_bindings(py::module& m, py::module&) {
             },
             py::return_value_policy::reference_internal,
             py::keep_alive<0, 1>())  // Keep MCState alive as long as the returned reference is used
-        .def_property("residues",
-            [](const pygcmc::model::MCState& state) {
-                return std::vector<pygcmc::model::MCResidue>(state.residues.begin(), 
-                    state.residues.begin() + state.activeResidueCount);
-            },
-            [](pygcmc::model::MCState& state, const std::vector<pygcmc::model::MCResidue>& residues) {
-                state.residues = residues;
-            })
+        .def_readwrite("residues", &pygcmc::model::MCState::residues)
         .def_readwrite("residueTypes", &pygcmc::model::MCState::residueTypes)
         .def_readwrite("atomTypes", &pygcmc::model::MCState::atomTypes)
         .def_readwrite("activeAtomCount", &pygcmc::model::MCState::activeAtomCount)

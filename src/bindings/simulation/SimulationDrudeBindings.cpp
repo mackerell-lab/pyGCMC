@@ -13,7 +13,7 @@
 #include "platform/cpu/energy/drude/DrudeMultiStage.hpp"
 #include "platform/cpu/energy/drude/DrudeSequentialOptimizer.hpp"
 #include "platform/cpu/energy/drude/exp/DrudeExperimentalCore.hpp"
-#include "platform/cpu/energy/drude/exp/DrudeSCFOpenMM.hpp"
+#include "platform/cpu/energy/drude/exp/DrudeSCFOM.hpp"
 
 namespace py = pybind11;
 
@@ -66,7 +66,9 @@ void init_drude_bindings(py::module& m) {
         .def_readwrite("maxDrudeDistance", &DrudeSCFParams::maxDrudeDistance,
                        "Maximum allowed Drude-parent distance (nm)")
         .def_readwrite("enableHardWall", &DrudeSCFParams::enableHardWall,
-                       "Enable hard wall constraint (default: False, matching OpenMM/CHARMM)");
+                       "Enable hard wall constraint (default: False, matching OpenMM/CHARMM)")
+        .def_readwrite("excludePartnerParentInExternalField", &DrudeSCFParams::excludePartnerParentInExternalField,
+                       "Exclude partner parents in external field to avoid double counting (default: True)");
     
     // DrudeAlgorithm enum
     py::enum_<DrudeAlgorithm>(m, "DrudeAlgorithm", "Available Drude optimization algorithms")

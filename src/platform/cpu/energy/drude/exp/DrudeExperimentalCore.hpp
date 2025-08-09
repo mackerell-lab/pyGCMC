@@ -9,7 +9,7 @@ namespace platform {
 namespace cpu {
 namespace exp {
 
-class DrudeSCFOpenMM; // forward declaration
+class DrudeSCFOM; // forward declaration
 
 class DrudeExperimentalCore final : public DrudeInterface {
 public:
@@ -39,7 +39,7 @@ public:
     bool getIncludeCoulomb() const { return m_includeCoulomb; }
 
 private:
-    friend class DrudeSCFOpenMM;
+    friend class DrudeSCFOM;
 
     std::vector<DrudeParticle> m_particles;
     std::vector<ScreenedPair>  m_screenedPairs;
@@ -47,7 +47,7 @@ private:
     bool m_includeCoulomb;
 
     // New SCF optimizer only
-    std::unique_ptr<DrudeSCFOpenMM> m_scf;
+    std::unique_ptr<DrudeSCFOM> m_scf;
 
     // Helper to check if atoms are in same molecule
     bool inSameMolecule(int atom1, int atom2, const model::MCState& state) const;

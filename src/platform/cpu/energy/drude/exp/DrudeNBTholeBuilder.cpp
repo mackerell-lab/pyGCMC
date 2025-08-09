@@ -1,5 +1,5 @@
 #include "DrudeNBTholeBuilder.hpp"
-#include "DrudeSCFOpenMM.hpp"
+#include "DrudeSCFOM.hpp"
 #include <cmath>
 #include <array>
 
@@ -10,7 +10,7 @@ namespace exp {
 
 void buildNBTholePairs(const std::vector<DrudeParticle>& particles,
                        double thole,
-                       double cutoff_nm,
+                       double /* cutoff_nm */,
                        std::vector<ScreenedPair>& outPairs) {
     // Simple version: add all pairs without distance checking
     // This is suitable when we don't have access to state/positions
@@ -62,7 +62,7 @@ void buildNBTholePairsWithCutoff(const std::vector<DrudeParticle>& particles,
             double dz = parent2.z - parent1.z;
             
             // Apply PBC
-            DrudeSCFOpenMM::applyPBC(dx, dy, dz, box);
+            DrudeSCFOM::applyPBC(dx, dy, dz, box);
             
             double r2 = dx*dx + dy*dy + dz*dz;
             

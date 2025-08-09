@@ -1,5 +1,5 @@
 #include "DrudeExperimentalCore.hpp"
-#include "DrudeSCFOpenMM.hpp"
+#include "DrudeSCFOM.hpp"
 #include "DrudeNBTholeBuilder.hpp"
 #include <algorithm>
 #include <cmath>
@@ -11,7 +11,7 @@ namespace exp {
 
 DrudeExperimentalCore::DrudeExperimentalCore() 
     : m_includeCoulomb(false) {
-    m_scf = std::make_unique<DrudeSCFOpenMM>();
+    m_scf = std::make_unique<DrudeSCFOM>();
     
     // Set reasonable defaults
     m_params.tolerance = 1e-5;
@@ -52,7 +52,7 @@ double DrudeExperimentalCore::calculateEnergy(model::MCState& state) {
         
         // Apply PBC
         std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
-        DrudeSCFOpenMM::applyPBC(dx, dy, dz, box);
+        DrudeSCFOM::applyPBC(dx, dy, dz, box);
         
         double r2 = dx*dx + dy*dy + dz*dz;
         energy += 0.5 * p.kSpring * r2;
@@ -100,7 +100,7 @@ void DrudeExperimentalCore::calculateForces(model::MCState& state, std::vector<V
         double dz = d.z - o.z;
         
         std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
-        DrudeSCFOpenMM::applyPBC(dx, dy, dz, box);
+        DrudeSCFOM::applyPBC(dx, dy, dz, box);
         
         Vec3 f = {-p.kSpring * dx, -p.kSpring * dy, -p.kSpring * dz};
         

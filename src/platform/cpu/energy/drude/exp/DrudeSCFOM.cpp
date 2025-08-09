@@ -1,4 +1,4 @@
-#include "DrudeSCFOpenMM.hpp"
+#include "DrudeSCFOM.hpp"
 #include "../DrudeStructures.hpp"  // Contains DrudeConstants
 #include <cmath>
 #include <algorithm>
@@ -9,14 +9,14 @@ namespace platform {
 namespace cpu {
 namespace exp {
 
-void DrudeSCFOpenMM::applyPBC(double& dx, double& dy, double& dz, 
+void DrudeSCFOM::applyPBC(double& dx, double& dy, double& dz, 
                                const std::array<double, 3>& box) {
     if (box[0] > 0) dx -= box[0] * std::round(dx / box[0]);
     if (box[1] > 0) dy -= box[1] * std::round(dy / box[1]);
     if (box[2] > 0) dz -= box[2] * std::round(dz / box[2]);
 }
 
-double DrudeSCFOpenMM::tholeS3(double r, double alpha_i, double alpha_j, double thole) const {
+double DrudeSCFOM::tholeS3(double r, double alpha_i, double alpha_j, double thole) const {
     if (thole <= 1e-14 || alpha_i <= 1e-14 || alpha_j <= 1e-14) {
         return 1.0;  // No screening
     }
@@ -34,7 +34,7 @@ double DrudeSCFOpenMM::tholeS3(double r, double alpha_i, double alpha_j, double 
     return 1.0 - exp_u * (1.0 + u + 0.5 * u * u);
 }
 
-bool DrudeSCFOpenMM::optimize(model::MCState& state,
+bool DrudeSCFOM::optimize(model::MCState& state,
                               const std::vector<DrudeParticle>& particles,
                               const std::vector<ScreenedPair>& pairs,
                               const DrudeSCFParams& params) {
@@ -60,40 +60,58 @@ bool DrudeSCFOpenMM::optimize(model::MCState& state,
         std::fill(electricField.begin(), electricField.end(), Vec3{0.0, 0.0, 0.0});
         
         // Calculate total electric field
-        calculateElectricField(state, particles, pairs, electricField);
+        calculateElectricField(state, particles, pairs, electricField, params);
         
-        // Check convergence based on forces
-        double maxForce = 0.0;
-        for (size_t i = 0; i < particles.size(); ++i) {
-            const auto& p = particles[i];
-            if (p.polarizability < 1e-14) continue;  // Skip frozen particles
-            
-            const auto& drude = state.atoms[p.drudeIndex];
-            const auto& parent = state.atoms[p.parentIndex];
-            
-            double dx = drude.x - parent.x;
-            double dy = drude.y - parent.y;
-            double dz = drude.z - parent.z;
-            
-            std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
-            applyPBC(dx, dy, dz, box);
-            
-            // Force = q*E - k*d
-            double fx = p.charge * electricField[i][0] - p.kSpring * dx;
-            double fy = p.charge * electricField[i][1] - p.kSpring * dy;
-            double fz = p.charge * electricField[i][2] - p.kSpring * dz;
-            
-            double force2 = fx*fx + fy*fy + fz*fz;
-            maxForce = std::max(maxForce, std::sqrt(force2));
+        // Debug output for first few iterations
+        if (iter < 5 || iter == params.maxIterations - 1) {
+            double totalFieldMag = 0.0;
+            for (const auto& field : electricField) {
+                totalFieldMag += std::sqrt(field[0]*field[0] + field[1]*field[1] + field[2]*field[2]);
+            }
+            std::cout << "SCF iter " << iter << ": avg field magnitude = " << totalFieldMag/electricField.size() << std::endl;
         }
         
-        // Check convergence
-        if (maxForce < params.tolerance) {
-            return true;  // Converged
+        // Check convergence based on forces (skip first few iterations to ensure proper convergence)
+        if (iter > 2) {
+            double maxForce = 0.0;
+            for (size_t i = 0; i < particles.size(); ++i) {
+                const auto& p = particles[i];
+                if (p.polarizability < 1e-14) continue;  // Skip frozen particles
+                
+                const auto& drude = state.atoms[p.drudeIndex];
+                const auto& parent = state.atoms[p.parentIndex];
+                
+                double dx = drude.x - parent.x;
+                double dy = drude.y - parent.y;
+                double dz = drude.z - parent.z;
+                
+                std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
+                applyPBC(dx, dy, dz, box);
+                
+                // Force = q*E - k*d
+                double fx = p.charge * electricField[i][0] - p.kSpring * dx;
+                double fy = p.charge * electricField[i][1] - p.kSpring * dy;
+                double fz = p.charge * electricField[i][2] - p.kSpring * dz;
+                
+                double force2 = fx*fx + fy*fy + fz*fz;
+                maxForce = std::max(maxForce, std::sqrt(force2));
+            }
+            
+            // Debug output
+            if (iter < 5) {
+                std::cout << "  iter " << iter << ": maxForce = " << maxForce 
+                          << " (tolerance = " << params.tolerance << ")" << std::endl;
+            }
+            
+            // Check convergence
+            if (maxForce < params.tolerance) {
+                std::cout << "SCF converged at iteration " << iter << " with maxForce = " << maxForce << std::endl;
+                return true;  // Converged
+            }
         }
         
         // Update positions
-        double maxStep = 0.002;  // 0.002 nm max step per iteration
+        double maxStep = 0.1;  // 0.1 nm max step per iteration (allow larger steps)
         double hardWall = params.enableHardWall ? params.maxDrudeDistance : 1e9;
         updateDrudePositions(state, particles, electricField, damping, maxStep, hardWall);
         
@@ -129,45 +147,60 @@ bool DrudeSCFOpenMM::optimize(model::MCState& state,
         previousEnergy = currentEnergy;
     }
     
-    // Revert to best-so-far positions
-    for (size_t i = 0; i < particles.size(); ++i) {
-        const auto& p = particles[i];
-        auto& drude = state.atoms[p.drudeIndex];
-        const auto& parent = state.atoms[p.parentIndex];
-        drude.x = parent.x + bestPositions[i].dx;
-        drude.y = parent.y + bestPositions[i].dy;
-        drude.z = parent.z + bestPositions[i].dz;
+    // Only revert to best-so-far if we had instability
+    // Otherwise keep the last positions (which should be closer to self-consistency)
+    if (bestEnergy < 1e100) {  // We found at least one good configuration
+        // Check if current configuration is reasonable
+        double finalEnergy = calculateSpringEnergy(state, particles);
+        if (finalEnergy > bestEnergy * 2.0) {  // Current is much worse than best
+            // Revert to best-so-far
+            for (size_t i = 0; i < particles.size(); ++i) {
+                const auto& p = particles[i];
+                auto& drude = state.atoms[p.drudeIndex];
+                const auto& parent = state.atoms[p.parentIndex];
+                drude.x = parent.x + bestPositions[i].dx;
+                drude.y = parent.y + bestPositions[i].dy;
+                drude.z = parent.z + bestPositions[i].dz;
+            }
+        }
+        // Otherwise keep current positions
     }
     
-    return false;  // Did not converge but returned best found
+    return false;  // Did not converge
 }
 
-void DrudeSCFOpenMM::calculateElectricField(const model::MCState& state,
+void DrudeSCFOM::calculateElectricField(const model::MCState& state,
                                             const std::vector<DrudeParticle>& particles,
                                             const std::vector<ScreenedPair>& pairs,
-                                            std::vector<Vec3>& electricField) const {
-    calculateExternalField(state, particles, pairs, electricField);
+                                            std::vector<Vec3>& electricField,
+                                            const DrudeSCFParams& params) const {
+    calculateExternalField(state, particles, pairs, electricField, params);
     calculateInducedField(state, particles, pairs, electricField);
 }
 
-void DrudeSCFOpenMM::calculateExternalField(const model::MCState& state,
+void DrudeSCFOM::calculateExternalField(const model::MCState& state,
                                             const std::vector<DrudeParticle>& particles,
                                             const std::vector<ScreenedPair>& pairs,
-                                            std::vector<Vec3>& electricField) const {
-    // Build exclusion list: for each Drude, list of parent atoms from screened pairs
+                                            std::vector<Vec3>& electricField,
+                                            const DrudeSCFParams& params) const {
+    // Build exclusion list if excludePartnerParentInExternalField is enabled
     std::vector<std::vector<int>> excludeParents(particles.size());
-    for (const auto& pair : pairs) {
-        if (static_cast<size_t>(pair.dipole1) < particles.size() && 
-            static_cast<size_t>(pair.dipole2) < particles.size()) {
-            excludeParents[pair.dipole1].push_back(particles[pair.dipole2].parentIndex);
-            excludeParents[pair.dipole2].push_back(particles[pair.dipole1].parentIndex);
+    if (params.excludePartnerParentInExternalField) {
+        for (const auto& pair : pairs) {
+            if (static_cast<size_t>(pair.dipole1) < particles.size() && 
+                static_cast<size_t>(pair.dipole2) < particles.size()) {
+                // For each Drude, exclude the parent of its partner to avoid double counting
+                excludeParents[pair.dipole1].push_back(particles[pair.dipole2].parentIndex);
+                excludeParents[pair.dipole2].push_back(particles[pair.dipole1].parentIndex);
+            }
         }
     }
     
     // Calculate external field from non-Drude charges
+    // IMPORTANT: Field should be calculated at parent position, not Drude position!
     for (size_t i = 0; i < particles.size(); ++i) {
         const auto& particle = particles[i];
-        const auto& drudeAtom = state.atoms[particle.drudeIndex];
+        const auto& parentAtom = state.atoms[particle.parentIndex];  // Use parent position!
         
         Vec3 field = {0.0, 0.0, 0.0};
         
@@ -175,36 +208,27 @@ void DrudeSCFOpenMM::calculateExternalField(const model::MCState& state,
             // Skip self and parent
             if (j == particle.drudeIndex || j == particle.parentIndex) continue;
             
-            // Skip all other Drude particles
-            bool isDrude = false;
-            for (const auto& otherParticle : particles) {
-                if (j == otherParticle.drudeIndex) {
-                    isDrude = true;
-                    break;
+            // CRITICAL: Skip all atoms in the same molecule (intramolecular exclusion)
+            // This prevents self-polarization in water and other molecules
+            if (inSameMolecule(particle.parentIndex, j, state)) {
+                continue;
+            }
+            
+            // If excludePartnerParentInExternalField is enabled, skip partner parents
+            if (params.excludePartnerParentInExternalField) {
+                if (std::find(excludeParents[i].begin(), excludeParents[i].end(), j) 
+                    != excludeParents[i].end()) {
+                    continue;
                 }
-            }
-            if (isDrude) continue;
-            
-            // Skip partner parents (to avoid double counting with induced field)
-            if (std::find(excludeParents[i].begin(), excludeParents[i].end(), j) 
-                != excludeParents[i].end()) {
-                continue;
-            }
-            
-            // Skip intramolecular interactions if needed
-            if (inSameMolecule(particle.drudeIndex, j, state)) {
-                // For same molecule, might want to skip certain atoms
-                // For now, skip if in same molecule
-                continue;
             }
             
             const auto& atom = state.atoms[j];
             if (std::abs(atom.charge) < 1e-10) continue;
             
-            // Calculate distance
-            double dx = drudeAtom.x - atom.x;
-            double dy = drudeAtom.y - atom.y;
-            double dz = drudeAtom.z - atom.z;
+            // Calculate distance from parent position
+            double dx = parentAtom.x - atom.x;
+            double dy = parentAtom.y - atom.y;
+            double dz = parentAtom.z - atom.z;
             
             std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
             applyPBC(dx, dy, dz, box);
@@ -226,10 +250,11 @@ void DrudeSCFOpenMM::calculateExternalField(const model::MCState& state,
         electricField[i][0] += field[0];
         electricField[i][1] += field[1];
         electricField[i][2] += field[2];
+        
     }
 }
 
-void DrudeSCFOpenMM::calculateInducedField(const model::MCState& state,
+void DrudeSCFOM::calculateInducedField(const model::MCState& state,
                                            const std::vector<DrudeParticle>& particles,
                                            const std::vector<ScreenedPair>& pairs,
                                            std::vector<Vec3>& electricField) const {
@@ -285,11 +310,25 @@ void DrudeSCFOpenMM::calculateInducedField(const model::MCState& state,
         // Calculate Thole screening S3
         double s = tholeS3(r, particle1.polarizability, particle2.polarizability, pair.thole);
         
+        // Debug: Print Thole details for validation
+        static int debugCount = 0;
+        if (debugCount < 5 && (pair.dipole1 == 0 || pair.dipole2 == 0)) {
+            // double alpha_eff = std::pow(particle1.polarizability * particle2.polarizability, 1.0/6.0);
+            // double u = pair.thole * r / alpha_eff;
+            std::cout << "INDUCED_FIELD: dipole(" << pair.dipole1 << "," << pair.dipole2 << ")"
+                      << " r=" << r 
+                      << " S3=" << s
+                      << " μ1_mag=" << std::sqrt(mu1[0]*mu1[0] + mu1[1]*mu1[1] + mu1[2]*mu1[2])
+                      << " μ2_mag=" << std::sqrt(mu2[0]*mu2[0] + mu2[1]*mu2[1] + mu2[2]*mu2[2])
+                      << std::endl;
+            debugCount++;
+        }
+        
         // Prefactor with screening
         double prefactor = DrudeConstants::ONE_4PI_EPS0 * s * invr3;
         
         // Dipole tensor field calculation
-        // E1 from μ2: E = k * S3/r^3 * [3(μ2·n)n - μ2]
+        // Field on dipole1 from dipole2: E = k * S3/r^3 * [3(μ2·n)n - μ2]
         double dot2 = mu2[0]*nx + mu2[1]*ny + mu2[2]*nz;
         Vec3 E1 = {
             prefactor * (3.0 * dot2 * nx - mu2[0]),
@@ -297,9 +336,9 @@ void DrudeSCFOpenMM::calculateInducedField(const model::MCState& state,
             prefactor * (3.0 * dot2 * nz - mu2[2])
         };
         
-        // E2 from μ1: E = k * S3/r^3 * [3(μ1·n)n - μ1]
-        // Note: n points from 1 to 2, so for field at 2 from 1, we use -n
-        double dot1 = mu1[0]*(-nx) + mu1[1]*(-ny) + mu1[2]*(-nz);
+        // Field on dipole2 from dipole1: E = k * S3/r^3 * [3(μ1·(-n))(-n) - μ1]
+        // where -n points from parent2 to parent1
+        double dot1 = -(mu1[0]*nx + mu1[1]*ny + mu1[2]*nz);  // dot with -n
         Vec3 E2 = {
             prefactor * (3.0 * dot1 * (-nx) - mu1[0]),
             prefactor * (3.0 * dot1 * (-ny) - mu1[1]),
@@ -317,7 +356,7 @@ void DrudeSCFOpenMM::calculateInducedField(const model::MCState& state,
     }
 }
 
-double DrudeSCFOpenMM::updateDrudePositions(model::MCState& state,
+double DrudeSCFOM::updateDrudePositions(model::MCState& state,
                                             const std::vector<DrudeParticle>& particles,
                                             const std::vector<Vec3>& electricField,
                                             double damping,
@@ -342,6 +381,19 @@ double DrudeSCFOpenMM::updateDrudePositions(model::MCState& state,
         double targetX = particle.charge * electricField[i][0] / particle.kSpring;
         double targetY = particle.charge * electricField[i][1] / particle.kSpring;
         double targetZ = particle.charge * electricField[i][2] / particle.kSpring;
+        
+        // Debug first particle
+        static int debugIter = 0;
+        if (i == 0 && debugIter < 5) {
+            double fieldMag = std::sqrt(electricField[i][0]*electricField[i][0] + 
+                                       electricField[i][1]*electricField[i][1] + 
+                                       electricField[i][2]*electricField[i][2]);
+            double targetMag = std::sqrt(targetX*targetX + targetY*targetY + targetZ*targetZ);
+            std::cout << "  Drude[0] iter " << debugIter << ": field=" << fieldMag 
+                      << " target_disp=" << targetMag << " (charge=" << particle.charge 
+                      << " k=" << particle.kSpring << ")" << std::endl;
+            debugIter++;
+        }
         
         // Current displacement
         double oldX = drude.x - parent.x;
@@ -393,7 +445,7 @@ double DrudeSCFOpenMM::updateDrudePositions(model::MCState& state,
     return maxDisplacement;
 }
 
-double DrudeSCFOpenMM::calculateSpringEnergy(const model::MCState& state,
+double DrudeSCFOM::calculateSpringEnergy(const model::MCState& state,
                                              const std::vector<DrudeParticle>& particles) const {
     double energy = 0.0;
     
@@ -415,17 +467,31 @@ double DrudeSCFOpenMM::calculateSpringEnergy(const model::MCState& state,
     return energy;
 }
 
-bool DrudeSCFOpenMM::inSameMolecule(int atom1, int atom2, const model::MCState& state) const {
-    // Simple implementation - check if atoms belong to same residue
+bool DrudeSCFOM::inSameMolecule(int atom1, int atom2, const model::MCState& state) const {
+    // Check if atoms belong to same residue (molecule)
+    // First check if we have residues at all
+    if (state.residues.empty() || state.activeResidueCount == 0) {
+        // No residue info means no intramolecular exclusions
+        return false;
+    }
+    
+    // Iterate through active residues
     for (int i = 0; i < state.activeResidueCount; ++i) {
         if (i >= static_cast<int>(state.residues.size())) {
             break;
         }
         
         const auto& res = state.residues[i];
+        
+        // Skip inactive residues (check both active flag and valid atomStart)
+        if (!res.active && res.atomStart < 0) {
+            continue;
+        }
+        
         int start = res.atomStart;
         int end = start + res.atomCount;
         
+        // Check if both atoms are in this residue
         bool atom1InRes = (atom1 >= start && atom1 < end);
         bool atom2InRes = (atom2 >= start && atom2 < end);
         

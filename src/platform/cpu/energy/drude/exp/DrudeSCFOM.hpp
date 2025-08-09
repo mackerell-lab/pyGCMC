@@ -9,7 +9,7 @@ namespace platform {
 namespace cpu {
 namespace exp {
 
-class DrudeSCFOpenMM {
+class DrudeSCFOM {
 public:
     // Main optimization function
     bool optimize(model::MCState& state,
@@ -26,13 +26,15 @@ private:
     void calculateElectricField(const model::MCState& state,
                                 const std::vector<DrudeParticle>& particles,
                                 const std::vector<ScreenedPair>& pairs,
-                                std::vector<Vec3>& electricField) const;
+                                std::vector<Vec3>& electricField,
+                                const DrudeSCFParams& params) const;
 
     // Calculate external field from non-Drude charges
     void calculateExternalField(const model::MCState& state,
                                 const std::vector<DrudeParticle>& particles,
                                 const std::vector<ScreenedPair>& pairs,
-                                std::vector<Vec3>& electricField) const;
+                                std::vector<Vec3>& electricField,
+                                const DrudeSCFParams& params) const;
 
     // Calculate induced field using dipole tensor with Thole screening
     void calculateInducedField(const model::MCState& state,
