@@ -12,6 +12,8 @@
 #include "platform/cpu/energy/drude/DrudeHybrid.hpp"
 #include "platform/cpu/energy/drude/DrudeMultiStage.hpp"
 #include "platform/cpu/energy/drude/DrudeSequentialOptimizer.hpp"
+#include "platform/cpu/energy/drude/exp/DrudeExperimentalCore.hpp"
+#include "platform/cpu/energy/drude/exp/DrudeSCFOpenMM.hpp"
 
 namespace py = pybind11;
 
@@ -384,6 +386,53 @@ void init_drude_bindings(py::module& m) {
              "Add custom algorithm step")
         .def("build", &drude::DrudeOptimizerBuilder::build,
              "Build the final optimizer");
+    
+    // ============================================================================
+    // EXPERIMENTAL DRUDE IMPLEMENTATION (OpenMM-style)
+    // ============================================================================
+    // This is a parallel implementation for testing that doesn't affect the main code
+    // Once validated, it can replace or be merged with the main implementation
+    
+    using namespace pygcmc::platform::cpu::exp;
+    
+    // Static instance for experimental version
+    static DrudeExperimentalCore g_experimentalDrude;
+    
+    py::class_<DrudeExperimentalCore>(m, "DrudeExperimental", 
+                                      "Experimental Drude implementation with OpenMM-style algorithm")
+        .def_static("instance", []() -> DrudeExperimentalCore& {
+            return g_experimentalDrude;
+        }, py::return_value_policy::reference,
+           "Get singleton instance of experimental Drude")
+        .def("clear", &DrudeExperimentalCore::clear,
+             "Clear all particles and screened pairs")
+        .def("addParticle", &DrudeExperimentalCore::addParticle,
+             py::arg("particle"),
+             "Add a Drude particle")
+        .def("addScreenedPair", &DrudeExperimentalCore::addScreenedPair,
+             py::arg("pair"),
+             "Add a Thole-screened dipole-dipole pair")
+        .def("autoScreenPairs", &DrudeExperimentalCore::autoScreenPairs,
+             py::arg("thole"), py::arg("cutoff_nm"),
+             "Automatically generate all NBTHOLE pairs within cutoff")
+        .def("setParameters", &DrudeExperimentalCore::setParameters,
+             py::arg("params"),
+             "Set SCF parameters")
+        .def("calculateEnergy", &DrudeExperimentalCore::calculateEnergy,
+             py::arg("state"),
+             "Calculate polarization energy (spring energy only)")
+        .def("calculateForces", &DrudeExperimentalCore::calculateForces,
+             py::arg("state"), py::arg("forces"),
+             "Calculate spring forces")
+        .def("getNumParticles", &DrudeExperimentalCore::getNumParticles,
+             "Get number of Drude particles")
+        .def("getNumScreenedPairs", &DrudeExperimentalCore::getNumScreenedPairs,
+             "Get number of screened pairs")
+        .def("setIncludeCoulomb", &DrudeExperimentalCore::setIncludeCoulomb,
+             py::arg("include"),
+             "Enable/disable Coulomb energy (for testing only)")
+        .def("getIncludeCoulomb", &DrudeExperimentalCore::getIncludeCoulomb,
+             "Check if Coulomb energy is included");
 }
 
 } // namespace simulation
