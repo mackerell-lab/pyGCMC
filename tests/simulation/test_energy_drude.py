@@ -99,5 +99,22 @@ from energyDrude.thole_screening_tests import (
     test_thole_distance_dependence
 )
 
+# CI tests - Fast
+from energyDrude.ci_fast_tests import (
+    test_ci_fast_single_drude_external_field,
+    test_ci_fast_double_drude_with_thole,
+    test_ci_fast_water_dimer_scan_minimal,
+    test_ci_fast_regression_golden_values
+)
+
+# CI tests - Nightly  
+from energyDrude.ci_nightly_tests import (
+    test_ci_nightly_anisotropic_polarizability,
+    test_ci_nightly_numerical_force_validation,
+    test_ci_nightly_water_box_8_molecules,
+    test_ci_nightly_thole_sensitivity_scan,
+    test_ci_nightly_performance_scaling
+)
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
