@@ -143,7 +143,7 @@ def test_pgp_single_residue_mc_moves():
     
     for i, atom in enumerate(state.atoms):
         atom_type = atom.type
-        sigma = ff.ljSigma[atom_type * 3 + atom_type] * 10
+        sigma = ff.ljSigma[atom_type * 3 + atom_type]  # Already in nm, no conversion needed
         epsilon = ff.ljEps[atom_type * 3 + atom_type]
         nonbonded.addParticle(atom.charge, sigma, epsilon)
     
