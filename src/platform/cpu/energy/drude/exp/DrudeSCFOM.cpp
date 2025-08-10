@@ -311,17 +311,18 @@ void DrudeSCFOM::calculateInducedField(const model::MCState& state,
         double s = tholeS3(r, particle1.polarizability, particle2.polarizability, pair.thole);
         
         // Debug: Print Thole details for validation
-        static int debugCount = 0;
-        if (debugCount < 5 && (pair.dipole1 == 0 || pair.dipole2 == 0)) {
-            // double alpha_eff = std::pow(particle1.polarizability * particle2.polarizability, 1.0/6.0);
-            // double u = pair.thole * r / alpha_eff;
-            std::cout << "INDUCED_FIELD: dipole(" << pair.dipole1 << "," << pair.dipole2 << ")"
+        // Note: removed static to ensure counter resets between calls
+        if (pairs.size() > 0) {
+            double mu1_mag = std::sqrt(mu1[0]*mu1[0] + mu1[1]*mu1[1] + mu1[2]*mu1[2]);
+            double mu2_mag = std::sqrt(mu2[0]*mu2[0] + mu2[1]*mu2[1] + mu2[2]*mu2[2]);
+            std::cout << "THOLE_DEBUG: pair(" << pair.dipole1 << "," << pair.dipole2 << ")"
                       << " r=" << r 
+                      << " thole=" << pair.thole
                       << " S3=" << s
-                      << " μ1_mag=" << std::sqrt(mu1[0]*mu1[0] + mu1[1]*mu1[1] + mu1[2]*mu1[2])
-                      << " μ2_mag=" << std::sqrt(mu2[0]*mu2[0] + mu2[1]*mu2[1] + mu2[2]*mu2[2])
+                      << " μ1=" << mu1_mag
+                      << " μ2=" << mu2_mag
+                      << " pairs.size=" << pairs.size()
                       << std::endl;
-            debugCount++;
         }
         
         // Prefactor with screening
@@ -336,13 +337,13 @@ void DrudeSCFOM::calculateInducedField(const model::MCState& state,
             prefactor * (3.0 * dot2 * nz - mu2[2])
         };
         
-        // Field on dipole2 from dipole1: E = k * S3/r^3 * [3(μ1·(-n))(-n) - μ1]
-        // where -n points from parent2 to parent1
-        double dot1 = -(mu1[0]*nx + mu1[1]*ny + mu1[2]*nz);  // dot with -n
+        // Field on dipole2 from dipole1: E = k * S3/r^3 * [3(μ1·n)n - μ1]
+        // where n points from parent1 to parent2 (same direction as for E1)
+        double dot1 = mu1[0]*nx + mu1[1]*ny + mu1[2]*nz;  // dot with n
         Vec3 E2 = {
-            prefactor * (3.0 * dot1 * (-nx) - mu1[0]),
-            prefactor * (3.0 * dot1 * (-ny) - mu1[1]),
-            prefactor * (3.0 * dot1 * (-nz) - mu1[2])
+            prefactor * (3.0 * dot1 * nx - mu1[0]),
+            prefactor * (3.0 * dot1 * ny - mu1[1]),
+            prefactor * (3.0 * dot1 * nz - mu1[2])
         };
         
         // Add to electric field

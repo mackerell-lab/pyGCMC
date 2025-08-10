@@ -394,18 +394,17 @@ void init_drude_bindings(py::module& m) {
     // ============================================================================
     // EXPERIMENTAL DRUDE IMPLEMENTATION (OpenMM-style)
     // ============================================================================
-    // TEMPORARILY DISABLED: DrudeExperimental causes segmentation faults
-    // Use DrudeComplete instead, which is stable and production-ready
-    // TODO: Debug and fix segfault issues before re-enabling
+    // WARNING: DrudeExperimental may cause segmentation faults
+    // Use DrudeComplete for production. This is for testing/comparison only.
+    // Re-enabled temporarily for OpenMM alignment testing
     
-    /* Commented out to prevent segfaults
     using namespace pygcmc::platform::cpu::exp;
     
     // Static instance for experimental version
     static DrudeExperimentalCore g_experimentalDrude;
     
     py::class_<DrudeExperimentalCore>(m, "DrudeExperimental", 
-                                      "Experimental Drude implementation with OpenMM-style algorithm")
+                                      "Experimental Drude implementation with OpenMM-style algorithm (WARNING: May segfault)")
         .def_static("instance", []() -> DrudeExperimentalCore& {
             return g_experimentalDrude;
         }, py::return_value_policy::reference,
@@ -439,7 +438,6 @@ void init_drude_bindings(py::module& m) {
              "Enable/disable Coulomb energy (for testing only)")
         .def("getIncludeCoulomb", &DrudeExperimentalCore::getIncludeCoulomb,
              "Check if Coulomb energy is included");
-    */
 }
 
 } // namespace simulation

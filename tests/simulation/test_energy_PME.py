@@ -19,9 +19,10 @@ Consolidated modular structure (all modules under 300 lines):
 - cutoff_dependence.py: PME cutoff dependence test (177 lines, 1 function)
 - movement_energy_tests.py: Movement energy validation tests (213 lines, 3 functions)
 - pme_components_tests.py: PME component and function tests (245 lines, 3 functions)
+- debug_state_creation.py: MCState creation and atom manipulation tests (95 lines, 3 functions)
 
-Total: 21 test functions across 13 modules (expanded from 15 functions).
-Original file: 2050 lines → New consolidated structure: ~2,300 lines total
+Total: 24 test functions across 14 modules (expanded from 15 functions).
+Original file: 2050 lines → New consolidated structure: ~2,400 lines total
 All functions maintain complete compatibility with original implementation.
 
 Consolidated grouping:
@@ -32,6 +33,7 @@ Consolidated grouping:
 - Specialized Tests (5): Small mesh, Exact Ewald, Grid operations, PME parameters, Cutoff dependence
 - Movement Energy Tests (3): Real-space fix validation, Delta E conservation, Correct formula
 - PME Component Tests (3): Component breakdown, Function differences, Energy relationships
+- State Creation Tests (3): MCState creation, Atom addition methods, State with residues
 """
 
 # Basic PME tests (3 functions)
@@ -97,6 +99,13 @@ from energyPME.pme_components_tests import (
     test_pme_component_breakdown,
     test_pme_function_differences,
     test_pme_energy_relationships
+)
+
+# Debug/State creation tests (3 functions)
+from energyPME.debug_state_creation import (
+    test_state_creation,
+    test_atom_addition_methods,
+    test_state_with_residues
 )
 
 # Support direct execution for testing
