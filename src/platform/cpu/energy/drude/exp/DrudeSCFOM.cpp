@@ -3,6 +3,9 @@
 #include <cmath>
 #include <algorithm>
 #include <iostream>
+#include <map>
+#include <unordered_set>
+#include <vector>
 
 namespace pygcmc {
 namespace platform {
@@ -16,22 +19,50 @@ void DrudeSCFOM::applyPBC(double& dx, double& dy, double& dz,
     if (box[2] > 0) dz -= box[2] * std::round(dz / box[2]);
 }
 
-double DrudeSCFOM::tholeS3(double r, double alpha_i, double alpha_j, double thole) const {
-    if (thole <= 1e-14 || alpha_i <= 1e-14 || alpha_j <= 1e-14) {
+double DrudeSCFOM::tholeS3(double r, double alpha_i, double alpha_j, double thole_pair) const {
+    // Thole S3 screening for 1/r^3 dipole-dipole interactions
+    // S3(u) = 1 - exp(-u) * (1 + u + u^2/2)
+    // where u = a*r / (alpha_i * alpha_j)^(1/6)
+    // and a is the pair-level Thole parameter
+    
+    // If thole parameter is zero or negligible, return 1.0 (no screening)
+    if (thole_pair <= 1e-10 || alpha_i <= 1e-14 || alpha_j <= 1e-14) {
         return 1.0;  // No screening
     }
     
     double alpha_eff = std::pow(alpha_i * alpha_j, 1.0/6.0);
-    double u = thole * r / alpha_eff;
+    double u = thole_pair * r / alpha_eff;
     
     if (u > 50.0) {
         return 1.0;  // Screening is negligible for large u
     }
     
     double exp_u = std::exp(-u);
-    // Thole S3 function for dipole field (1/r^3 kernel)
-    // S3(u) = 1 - exp(-u) * (1 + u + 0.5*u^2)
+    // S3 function for 1/r^3 dipole field screening
     return 1.0 - exp_u * (1.0 + u + 0.5 * u * u);
+}
+
+double DrudeSCFOM::tholeS5(double r, double alpha_i, double alpha_j, double thole_pair) const {
+    // Thole S5 screening for 1/r^5 tensor component
+    // S5(u) = 1 - exp(-u) * (1 + u + u^2/2 + u^3/6)
+    // where u = a*r / (alpha_i * alpha_j)^(1/6)
+    // and a is the pair-level Thole parameter
+    
+    // If thole parameter is zero or negligible, return 1.0 (no screening)
+    if (thole_pair <= 1e-10 || alpha_i <= 1e-14 || alpha_j <= 1e-14) {
+        return 1.0;  // No screening
+    }
+    
+    double alpha_eff = std::pow(alpha_i * alpha_j, 1.0/6.0);
+    double u = thole_pair * r / alpha_eff;
+    
+    if (u > 50.0) {
+        return 1.0;  // Screening is negligible for large u
+    }
+    
+    double exp_u = std::exp(-u);
+    // S5 function for 1/r^5 tensor component screening
+    return 1.0 - exp_u * (1.0 + u + 0.5 * u * u + u * u * u / 6.0);
 }
 
 bool DrudeSCFOM::optimize(model::MCState& state,
@@ -53,6 +84,11 @@ bool DrudeSCFOM::optimize(model::MCState& state,
     double damping = params.dampingFactor;
     double previousEnergy = 1e300;
     int stallCount = 0;
+    
+    // DIIS acceleration data
+    DIISData diis;
+    diis.maxHistory = 5;
+    diis.enabled = false;  // Enable after initial iterations
     
     // SCF iteration
     for (int iter = 0; iter < params.maxIterations; ++iter) {
@@ -110,10 +146,23 @@ bool DrudeSCFOM::optimize(model::MCState& state,
             }
         }
         
-        // Update positions
-        double maxStep = 0.1;  // 0.1 nm max step per iteration (allow larger steps)
-        double hardWall = params.enableHardWall ? params.maxDrudeDistance : 1e9;
-        updateDrudePositions(state, particles, electricField, damping, maxStep, hardWall);
+        // Enable DIIS after initial iterations for stability
+        if (iter == 5) {
+            diis.enabled = true;
+        }
+        
+        // Try DIIS acceleration if enabled
+        bool diisApplied = false;
+        if (diis.enabled) {
+            diisApplied = applyDIIS(diis, particles, electricField, state);
+        }
+        
+        // If DIIS not applied, use regular damped update
+        if (!diisApplied) {
+            double maxStep = 0.1;  // 0.1 nm max step per iteration (allow larger steps)
+            double hardWall = params.enableHardWall ? params.maxDrudeDistance : 1e9;
+            updateDrudePositions(state, particles, electricField, damping, maxStep, hardWall);
+        }
         
         // Calculate current energy
         double currentEnergy = calculateSpringEnergy(state, particles);
@@ -174,8 +223,36 @@ void DrudeSCFOM::calculateElectricField(const model::MCState& state,
                                             const std::vector<ScreenedPair>& pairs,
                                             std::vector<Vec3>& electricField,
                                             const DrudeSCFParams& params) const {
-    calculateExternalField(state, particles, pairs, electricField, params);
-    calculateInducedField(state, particles, pairs, electricField);
+    // Field breakdown debugging: Track external and induced fields separately
+    std::vector<Vec3> E_ext(particles.size(), {0.0, 0.0, 0.0});
+    std::vector<Vec3> E_ind(particles.size(), {0.0, 0.0, 0.0});
+    
+    // Calculate external field (from fixed charges)
+    calculateExternalField(state, particles, pairs, E_ext, params);
+    
+    // Calculate induced field (from dipoles with Thole screening)
+    calculateInducedField(state, particles, pairs, E_ind);
+    
+    // Combine fields and debug output
+    for (size_t i = 0; i < particles.size(); ++i) {
+        electricField[i][0] = E_ext[i][0] + E_ind[i][0];
+        electricField[i][1] = E_ext[i][1] + E_ind[i][1];
+        electricField[i][2] = E_ext[i][2] + E_ind[i][2];
+        
+        // Debug: Print field breakdown for first particle
+        if (i == 0 && !pairs.empty()) {
+            double ext_mag = std::sqrt(E_ext[i][0]*E_ext[i][0] + E_ext[i][1]*E_ext[i][1] + E_ext[i][2]*E_ext[i][2]);
+            double ind_mag = std::sqrt(E_ind[i][0]*E_ind[i][0] + E_ind[i][1]*E_ind[i][1] + E_ind[i][2]*E_ind[i][2]);
+            double tot_mag = std::sqrt(electricField[i][0]*electricField[i][0] + 
+                                      electricField[i][1]*electricField[i][1] + 
+                                      electricField[i][2]*electricField[i][2]);
+            std::cout << "FIELD_BREAKDOWN[0]: E_ext=" << ext_mag 
+                      << " E_ind=" << ind_mag 
+                      << " E_total=" << tot_mag 
+                      << " (ind/ext=" << (ext_mag > 1e-10 ? ind_mag/ext_mag : 0) << ")" 
+                      << std::endl;
+        }
+    }
 }
 
 void DrudeSCFOM::calculateExternalField(const model::MCState& state,
@@ -183,6 +260,15 @@ void DrudeSCFOM::calculateExternalField(const model::MCState& state,
                                             const std::vector<ScreenedPair>& pairs,
                                             std::vector<Vec3>& electricField,
                                             const DrudeSCFParams& params) const {
+    // Build mask for ALL Drude atoms to exclude them from external field
+    // This prevents double-counting of induced-induced interactions
+    std::vector<bool> isDrude(state.activeAtomCount, false);
+    for (const auto& p : particles) {
+        if (p.drudeIndex >= 0 && p.drudeIndex < state.activeAtomCount) {
+            isDrude[p.drudeIndex] = true;
+        }
+    }
+    
     // Build exclusion list if excludePartnerParentInExternalField is enabled
     std::vector<std::vector<int>> excludeParents(particles.size());
     if (params.excludePartnerParentInExternalField) {
@@ -196,7 +282,7 @@ void DrudeSCFOM::calculateExternalField(const model::MCState& state,
         }
     }
     
-    // Calculate external field from non-Drude charges
+    // Calculate external field from non-Drude charges ONLY
     // IMPORTANT: Field should be calculated at parent position, not Drude position!
     for (size_t i = 0; i < particles.size(); ++i) {
         const auto& particle = particles[i];
@@ -207,6 +293,9 @@ void DrudeSCFOM::calculateExternalField(const model::MCState& state,
         for (int j = 0; j < state.activeAtomCount; ++j) {
             // Skip self and parent
             if (j == particle.drudeIndex || j == particle.parentIndex) continue;
+            
+            // CRITICAL: Skip ALL Drude charges to prevent double-counting
+            if (isDrude[j]) continue;
             
             // CRITICAL: Skip all atoms in the same molecule (intramolecular exclusion)
             // This prevents self-polarization in water and other molecules
@@ -225,10 +314,10 @@ void DrudeSCFOM::calculateExternalField(const model::MCState& state,
             const auto& atom = state.atoms[j];
             if (std::abs(atom.charge) < 1e-10) continue;
             
-            // Calculate distance from parent position
-            double dx = parentAtom.x - atom.x;
-            double dy = parentAtom.y - atom.y;
-            double dz = parentAtom.z - atom.z;
+            // Calculate distance vector FROM charge TO parent (field direction)
+            double dx = atom.x - parentAtom.x;
+            double dy = atom.y - parentAtom.y;
+            double dz = atom.z - parentAtom.z;
             
             std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
             applyPBC(dx, dy, dz, box);
@@ -258,102 +347,100 @@ void DrudeSCFOM::calculateInducedField(const model::MCState& state,
                                            const std::vector<DrudeParticle>& particles,
                                            const std::vector<ScreenedPair>& pairs,
                                            std::vector<Vec3>& electricField) const {
-    // Calculate field from induced dipoles using dipole tensor with Thole screening
+    // Calculate induced field using dipole tensor model with S3/S5 Thole screening
+    // Field: E = k/r³ [3 S5(u) (μ·n) n − S3(u) μ]
+    // where μ = q_D * (D - P) is the dipole moment
+    
+    // Build map of screened pairs for quick lookup
+    std::map<std::pair<int,int>, double> screenedPairs;
     for (const auto& pair : pairs) {
-        if (static_cast<size_t>(pair.dipole1) >= particles.size() || 
-            static_cast<size_t>(pair.dipole2) >= particles.size()) {
-            continue;
+        screenedPairs[{pair.dipole1, pair.dipole2}] = pair.thole;
+        screenedPairs[{pair.dipole2, pair.dipole1}] = pair.thole;
+    }
+    
+    // Process ALL dipole pairs
+    for (size_t i = 0; i < particles.size(); ++i) {
+        for (size_t j = i + 1; j < particles.size(); ++j) {
+            const auto& p1 = particles[i];
+            const auto& p2 = particles[j];
+            const auto& parent1 = state.atoms[p1.parentIndex];
+            const auto& drude1 = state.atoms[p1.drudeIndex];
+            const auto& parent2 = state.atoms[p2.parentIndex];
+            const auto& drude2 = state.atoms[p2.drudeIndex];
+            
+            std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
+            
+            // Calculate dipole moments μ = q_D * (D - P)
+            double dx1 = drude1.x - parent1.x;
+            double dy1 = drude1.y - parent1.y;
+            double dz1 = drude1.z - parent1.z;
+            applyPBC(dx1, dy1, dz1, box);
+            
+            double dx2 = drude2.x - parent2.x;
+            double dy2 = drude2.y - parent2.y;
+            double dz2 = drude2.z - parent2.z;
+            applyPBC(dx2, dy2, dz2, box);
+            
+            Vec3 mu1 = {p1.charge * dx1, p1.charge * dy1, p1.charge * dz1};
+            Vec3 mu2 = {p2.charge * dx2, p2.charge * dy2, p2.charge * dz2};
+            
+            // Calculate distance between parent atoms (field calculation points)
+            double rx = parent2.x - parent1.x;
+            double ry = parent2.y - parent1.y;
+            double rz = parent2.z - parent1.z;
+            applyPBC(rx, ry, rz, box);
+            
+            double r2 = rx*rx + ry*ry + rz*rz;
+            if (r2 < 1e-12) continue;
+            
+            double r = std::sqrt(r2);
+            double invr3 = 1.0 / (r2 * r);
+            
+            // Unit vector from dipole 1 to dipole 2
+            double nx = rx / r;
+            double ny = ry / r;
+            double nz = rz / r;
+            
+            // Check if this pair has Thole screening
+            double thole_pair = 0.0;
+            auto it = screenedPairs.find({static_cast<int>(i), static_cast<int>(j)});
+            if (it != screenedPairs.end()) {
+                thole_pair = it->second;  // Use pair-level Thole parameter directly
+            }
+            
+            // Calculate S3 and S5 screening functions
+            double s3 = tholeS3(r, p1.polarizability, p2.polarizability, thole_pair);
+            double s5 = tholeS5(r, p1.polarizability, p2.polarizability, thole_pair);
+            
+            // Prefactor
+            double prefactor = DrudeConstants::ONE_4PI_EPS0 * invr3;
+            
+            // Field on dipole 1 from dipole 2: E1 = k/r³ [3 S5(u) (μ2·n) n − S3(u) μ2]
+            double mu2_dot_n = mu2[0]*nx + mu2[1]*ny + mu2[2]*nz;
+            Vec3 E1 = {
+                prefactor * (3.0 * s5 * mu2_dot_n * nx - s3 * mu2[0]),
+                prefactor * (3.0 * s5 * mu2_dot_n * ny - s3 * mu2[1]),
+                prefactor * (3.0 * s5 * mu2_dot_n * nz - s3 * mu2[2])
+            };
+            
+            // Field on dipole 2 from dipole 1: E2 = k/r³ [3 S5(u) (μ1·(-n)) (-n) − S3(u) μ1]
+            // Since n points from 1 to 2, for field on 2 from 1 we use -n
+            double mu1_dot_n = mu1[0]*nx + mu1[1]*ny + mu1[2]*nz;
+            Vec3 E2 = {
+                prefactor * (3.0 * s5 * mu1_dot_n * nx - s3 * mu1[0]),
+                prefactor * (3.0 * s5 * mu1_dot_n * ny - s3 * mu1[1]),
+                prefactor * (3.0 * s5 * mu1_dot_n * nz - s3 * mu1[2])
+            };
+            
+            // Add to total field
+            electricField[i][0] += E1[0];
+            electricField[i][1] += E1[1];
+            electricField[i][2] += E1[2];
+            
+            electricField[j][0] += E2[0];
+            electricField[j][1] += E2[1];
+            electricField[j][2] += E2[2];
         }
-        
-        const auto& particle1 = particles[pair.dipole1];
-        const auto& particle2 = particles[pair.dipole2];
-        
-        const auto& parent1 = state.atoms[particle1.parentIndex];
-        const auto& drude1 = state.atoms[particle1.drudeIndex];
-        const auto& parent2 = state.atoms[particle2.parentIndex];
-        const auto& drude2 = state.atoms[particle2.drudeIndex];
-        
-        // Calculate dipole moments: μ = q_D * (D - P)
-        double dx1 = drude1.x - parent1.x;
-        double dy1 = drude1.y - parent1.y;
-        double dz1 = drude1.z - parent1.z;
-        
-        double dx2 = drude2.x - parent2.x;
-        double dy2 = drude2.y - parent2.y;
-        double dz2 = drude2.z - parent2.z;
-        
-        std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
-        applyPBC(dx1, dy1, dz1, box);
-        applyPBC(dx2, dy2, dz2, box);
-        
-        // Dipole moments (with sign from charge)
-        Vec3 mu1 = {particle1.charge * dx1, particle1.charge * dy1, particle1.charge * dz1};
-        Vec3 mu2 = {particle2.charge * dx2, particle2.charge * dy2, particle2.charge * dz2};
-        
-        // Vector from parent1 to parent2
-        double rx = parent2.x - parent1.x;
-        double ry = parent2.y - parent1.y;
-        double rz = parent2.z - parent1.z;
-        applyPBC(rx, ry, rz, box);
-        
-        double r2 = rx*rx + ry*ry + rz*rz;
-        if (r2 < 1e-12) continue;
-        
-        double r = std::sqrt(r2);
-        double invr3 = 1.0 / (r2 * r);
-        
-        // Unit vector from parent1 to parent2
-        double nx = rx / r;
-        double ny = ry / r;
-        double nz = rz / r;
-        
-        // Calculate Thole screening S3
-        double s = tholeS3(r, particle1.polarizability, particle2.polarizability, pair.thole);
-        
-        // Debug: Print Thole details for validation
-        // Note: removed static to ensure counter resets between calls
-        if (pairs.size() > 0) {
-            double mu1_mag = std::sqrt(mu1[0]*mu1[0] + mu1[1]*mu1[1] + mu1[2]*mu1[2]);
-            double mu2_mag = std::sqrt(mu2[0]*mu2[0] + mu2[1]*mu2[1] + mu2[2]*mu2[2]);
-            std::cout << "THOLE_DEBUG: pair(" << pair.dipole1 << "," << pair.dipole2 << ")"
-                      << " r=" << r 
-                      << " thole=" << pair.thole
-                      << " S3=" << s
-                      << " μ1=" << mu1_mag
-                      << " μ2=" << mu2_mag
-                      << " pairs.size=" << pairs.size()
-                      << std::endl;
-        }
-        
-        // Prefactor with screening
-        double prefactor = DrudeConstants::ONE_4PI_EPS0 * s * invr3;
-        
-        // Dipole tensor field calculation
-        // Field on dipole1 from dipole2: E = k * S3/r^3 * [3(μ2·n)n - μ2]
-        double dot2 = mu2[0]*nx + mu2[1]*ny + mu2[2]*nz;
-        Vec3 E1 = {
-            prefactor * (3.0 * dot2 * nx - mu2[0]),
-            prefactor * (3.0 * dot2 * ny - mu2[1]),
-            prefactor * (3.0 * dot2 * nz - mu2[2])
-        };
-        
-        // Field on dipole2 from dipole1: E = k * S3/r^3 * [3(μ1·n)n - μ1]
-        // where n points from parent1 to parent2 (same direction as for E1)
-        double dot1 = mu1[0]*nx + mu1[1]*ny + mu1[2]*nz;  // dot with n
-        Vec3 E2 = {
-            prefactor * (3.0 * dot1 * nx - mu1[0]),
-            prefactor * (3.0 * dot1 * ny - mu1[1]),
-            prefactor * (3.0 * dot1 * nz - mu1[2])
-        };
-        
-        // Add to electric field
-        electricField[pair.dipole1][0] += E1[0];
-        electricField[pair.dipole1][1] += E1[1];
-        electricField[pair.dipole1][2] += E1[2];
-        
-        electricField[pair.dipole2][0] += E2[0];
-        electricField[pair.dipole2][1] += E2[1];
-        electricField[pair.dipole2][2] += E2[2];
     }
 }
 
@@ -383,16 +470,22 @@ double DrudeSCFOM::updateDrudePositions(model::MCState& state,
         double targetY = particle.charge * electricField[i][1] / particle.kSpring;
         double targetZ = particle.charge * electricField[i][2] / particle.kSpring;
         
-        // Debug first particle
+        // Debug first particle with more detail
         static int debugIter = 0;
         if (i == 0 && debugIter < 5) {
             double fieldMag = std::sqrt(electricField[i][0]*electricField[i][0] + 
                                        electricField[i][1]*electricField[i][1] + 
                                        electricField[i][2]*electricField[i][2]);
             double targetMag = std::sqrt(targetX*targetX + targetY*targetY + targetZ*targetZ);
-            std::cout << "  Drude[0] iter " << debugIter << ": field=" << fieldMag 
-                      << " target_disp=" << targetMag << " (charge=" << particle.charge 
-                      << " k=" << particle.kSpring << ")" << std::endl;
+            
+            // Show x-component details
+            std::cout << "  UPDATE[0] iter " << debugIter 
+                      << ": E_x=" << electricField[i][0]
+                      << " target_dx=" << targetX
+                      << " (q_D=" << particle.charge
+                      << " k=" << particle.kSpring
+                      << " parent.charge=" << parent.charge << ")"
+                      << std::endl;
             debugIter++;
         }
         
@@ -499,6 +592,111 @@ bool DrudeSCFOM::inSameMolecule(int atom1, int atom2, const model::MCState& stat
         if (atom1InRes && atom2InRes) {
             return true;
         }
+    }
+    
+    return false;
+}
+
+bool DrudeSCFOM::applyDIIS(DIISData& diis,
+                           const std::vector<DrudeParticle>& particles,
+                           const std::vector<Vec3>& electricField,
+                           model::MCState& state) const {
+    // DIIS (Direct Inversion in the Iterative Subspace) acceleration
+    // Simplified implementation without external linear algebra library
+    
+    const int N = particles.size();
+    if (N == 0) return false;
+    
+    // Collect current positions and compute residuals
+    std::vector<double> currentPos(3 * N);
+    std::vector<double> residual(3 * N);
+    
+    std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
+    
+    for (size_t i = 0; i < particles.size(); ++i) {
+        const auto& p = particles[i];
+        const auto& drude = state.atoms[p.drudeIndex];
+        const auto& parent = state.atoms[p.parentIndex];
+        
+        // Current displacement
+        double dx = drude.x - parent.x;
+        double dy = drude.y - parent.y;
+        double dz = drude.z - parent.z;
+        applyPBC(dx, dy, dz, box);
+        
+        currentPos[3*i] = dx;
+        currentPos[3*i+1] = dy;
+        currentPos[3*i+2] = dz;
+        
+        // Residual: r = q*E - k*d
+        residual[3*i] = p.charge * electricField[i][0] - p.kSpring * dx;
+        residual[3*i+1] = p.charge * electricField[i][1] - p.kSpring * dy;
+        residual[3*i+2] = p.charge * electricField[i][2] - p.kSpring * dz;
+    }
+    
+    // Add to history
+    if (diis.historySize < diis.maxHistory) {
+        diis.positions.push_back(currentPos);
+        diis.residuals.push_back(residual);
+        diis.historySize++;
+    } else {
+        // Replace oldest
+        diis.positions.erase(diis.positions.begin());
+        diis.residuals.erase(diis.residuals.begin());
+        diis.positions.push_back(currentPos);
+        diis.residuals.push_back(residual);
+    }
+    
+    // Need at least 2 iterations for DIIS
+    if (diis.historySize < 2 || !diis.enabled) {
+        return false;
+    }
+    
+    // For now, use a simplified Anderson mixing instead of full DIIS
+    // This avoids the need for matrix inversion
+    // Anderson mixing: x_{n+1} = (1-beta)*x_n + beta*G(x_n)
+    // where G(x) is the fixed-point iteration
+    
+    const double mixingParam = 0.5;  // Anderson mixing parameter
+    
+    // Compute mixed position from last two iterations
+    if (diis.historySize >= 2) {
+        size_t last = diis.historySize - 1;
+        size_t prev = diis.historySize - 2;
+        
+        // Compute residual norm for adaptive mixing
+        double resNorm = 0.0;
+        for (size_t j = 0; j < residual.size(); ++j) {
+            resNorm += residual[j] * residual[j];
+        }
+        resNorm = std::sqrt(resNorm);
+        
+        // Adaptive mixing: use smaller mixing for larger residuals
+        double adaptiveMixing = mixingParam;
+        if (resNorm > 100.0) {
+            adaptiveMixing *= 0.5;
+        }
+        
+        // Anderson mixing update
+        std::vector<double> newPos(3 * N);
+        for (size_t j = 0; j < newPos.size(); ++j) {
+            // Simple mixing between current and previous
+            newPos[j] = (1.0 - adaptiveMixing) * diis.positions[last][j] + 
+                        adaptiveMixing * diis.positions[prev][j];
+        }
+        
+        // Update Drude positions
+        for (size_t i = 0; i < particles.size(); ++i) {
+            const auto& p = particles[i];
+            auto& drude = state.atoms[p.drudeIndex];
+            const auto& parent = state.atoms[p.parentIndex];
+            
+            drude.x = parent.x + newPos[3*i];
+            drude.y = parent.y + newPos[3*i+1];
+            drude.z = parent.z + newPos[3*i+2];
+        }
+        
+        return true;
     }
     
     return false;

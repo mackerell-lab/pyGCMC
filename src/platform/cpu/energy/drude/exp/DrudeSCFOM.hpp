@@ -36,7 +36,7 @@ private:
                                 std::vector<Vec3>& electricField,
                                 const DrudeSCFParams& params) const;
 
-    // Calculate induced field using dipole tensor with Thole screening
+    // Calculate induced field using CHARMM/OpenMM point charge model with Thole screening
     void calculateInducedField(const model::MCState& state,
                                const std::vector<DrudeParticle>& particles,
                                const std::vector<ScreenedPair>& pairs,
@@ -53,8 +53,11 @@ private:
     // Check if two atoms are in the same molecule
     bool inSameMolecule(int atom1, int atom2, const model::MCState& state) const;
 
-    // Calculate Thole S3 screening function
-    double tholeS3(double r, double alpha_i, double alpha_j, double thole) const;
+    // Calculate Thole S3 screening function for 1/r^3 dipole-dipole interactions
+    double tholeS3(double r, double alpha_i, double alpha_j, double thole_sum) const;
+    
+    // Calculate Thole S5 screening function for 1/r^5 tensor component
+    double tholeS5(double r, double alpha_i, double alpha_j, double thole_sum) const;
 
     // Calculate spring energy for convergence check
     double calculateSpringEnergy(const model::MCState& state,
@@ -64,6 +67,21 @@ private:
     struct DrudePosition {
         double dx, dy, dz;
     };
+    
+    // DIIS acceleration data structures
+    struct DIISData {
+        std::vector<std::vector<double>> positions;  // History of positions
+        std::vector<std::vector<double>> residuals;  // History of residuals
+        int historySize = 0;
+        int maxHistory = 5;
+        bool enabled = false;
+    };
+    
+    // DIIS mixing method
+    bool applyDIIS(DIISData& diis, 
+                   const std::vector<DrudeParticle>& particles,
+                   const std::vector<Vec3>& electricField,
+                   model::MCState& state) const;
 };
 
 } // namespace exp

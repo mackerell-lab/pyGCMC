@@ -16,8 +16,8 @@ DrudeExperimentalCore::DrudeExperimentalCore()
     // Set reasonable defaults
     m_params.tolerance = 1e-5;
     m_params.maxIterations = 200;
-    m_params.dampingFactor = 0.2;
-    m_params.enableHardWall = true;
+    m_params.dampingFactor = 0.1;  // Lower damping for better convergence
+    m_params.enableHardWall = false;  // Changed to false to align with OpenMM/CHARMM defaults
     m_params.maxDrudeDistance = 0.02; // 0.2 Å
 }
 

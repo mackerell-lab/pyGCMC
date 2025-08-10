@@ -68,7 +68,7 @@ void init_drude_bindings(py::module& m) {
         .def_readwrite("enableHardWall", &DrudeSCFParams::enableHardWall,
                        "Enable hard wall constraint (default: False, matching OpenMM/CHARMM)")
         .def_readwrite("excludePartnerParentInExternalField", &DrudeSCFParams::excludePartnerParentInExternalField,
-                       "Exclude partner parents in external field to avoid double counting (default: True)")
+                       "Exclude partner parents in external field to avoid double counting (default: False)")
         .def_readwrite("includeCoulombEnergy", &DrudeSCFParams::includeCoulombEnergy,
                        "Include Coulomb energy in calculateEnergy (default: False, spring-only for production)");
     
