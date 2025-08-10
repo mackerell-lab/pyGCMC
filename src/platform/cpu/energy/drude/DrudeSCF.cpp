@@ -138,6 +138,13 @@ void DrudeSCF::calculateExternalField(
     // Loop over all Drude particles
     for (size_t i = 0; i < particles.size(); ++i) {
         const auto& particle = particles[i];
+        
+        // Bounds check for drude index
+        if (particle.drudeIndex < 0 || particle.drudeIndex >= state.activeAtomCount ||
+            particle.parentIndex < 0 || particle.parentIndex >= state.activeAtomCount) {
+            continue;
+        }
+        
         const auto& drudeAtom = state.atoms[particle.drudeIndex];
         
         Vec3 field = {0.0, 0.0, 0.0};
@@ -192,6 +199,12 @@ void DrudeSCF::calculateInducedField(
 ) const {
     // Field from Drude-Drude interactions with Thole screening
     for (const auto& pair : screenedPairs) {
+        // Check pair indices are valid
+        if (pair.dipole1 < 0 || static_cast<size_t>(pair.dipole1) >= particles.size() ||
+            pair.dipole2 < 0 || static_cast<size_t>(pair.dipole2) >= particles.size()) {
+            continue;
+        }
+        
         const auto& particle1 = particles[pair.dipole1];
         const auto& particle2 = particles[pair.dipole2];
         
@@ -254,6 +267,13 @@ double DrudeSCF::updateDrudePositions(
     
     for (size_t i = 0; i < particles.size(); ++i) {
         const auto& particle = particles[i];
+        
+        // Bounds check
+        if (particle.drudeIndex < 0 || particle.drudeIndex >= state.activeAtomCount ||
+            particle.parentIndex < 0 || particle.parentIndex >= state.activeAtomCount) {
+            continue;
+        }
+        
         auto& drude = state.atoms[particle.drudeIndex];
         const auto& parent = state.atoms[particle.parentIndex];
         
@@ -338,9 +358,9 @@ void DrudeSCF::calculateDrudeForces(
 }
 
 void DrudeSCF::applyPBC(double& dx, double& dy, double& dz, const std::array<double, 3>& box) const {
-    dx -= box[0] * std::round(dx / box[0]);
-    dy -= box[1] * std::round(dy / box[1]);
-    dz -= box[2] * std::round(dz / box[2]);
+    if (box[0] > 0) dx -= box[0] * std::round(dx / box[0]);
+    if (box[1] > 0) dy -= box[1] * std::round(dy / box[1]);
+    if (box[2] > 0) dz -= box[2] * std::round(dz / box[2]);
 }
 
 bool DrudeSCF::inSameMolecule(int atom1, int atom2, const model::MCState& state) const {

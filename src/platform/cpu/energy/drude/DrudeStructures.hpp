@@ -87,6 +87,7 @@ struct DrudeSCFParams {
     double maxDrudeDistance = 0.02;   // Maximum Drude-parent distance (nm)
     bool enableHardWall = false;      // Enable hard wall constraint (default: off, matching OpenMM/CHARMM)
     bool excludePartnerParentInExternalField = false;  // OpenMM does NOT exclude partner parents (default: false)
+    bool includeCoulombEnergy = true;  // Include Coulomb in energy (default: true for backward compatibility)
 };
 
 /**

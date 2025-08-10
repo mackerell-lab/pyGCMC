@@ -52,10 +52,12 @@ double energy = 0.0;
 // Harmonic spring energy
 energy += calculateHarmonicEnergy(state);
 
-// Add Coulomb energy for complete energy calculation
-// This is needed for standalone testing and validation
-// In production, this may be handled by the main nonbonded module
-energy += calculateCoulombEnergy(state);
+// Coulomb energy: optional (avoid double counting with main nonbonded)
+// Default: false (spring-only) for production use
+// Set true only for standalone testing without main nonbonded module
+if (m_params.includeCoulombEnergy) {
+    energy += calculateCoulombEnergy(state);
+}
 
 // Note: Thole screening is applied during SCF optimization to prevent
 // polarization catastrophe, but does not contribute a separate energy term
@@ -371,9 +373,9 @@ for (const auto& pair : m_screenedPairs) {
 }
 
 void DrudeCore::applyPBC(double& dx, double& dy, double& dz, const std::array<double, 3>& box) const {
-dx -= box[0] * std::round(dx / box[0]);
-dy -= box[1] * std::round(dy / box[1]);
-dz -= box[2] * std::round(dz / box[2]);
+if (box[0] > 0) dx -= box[0] * std::round(dx / box[0]);
+if (box[1] > 0) dy -= box[1] * std::round(dy / box[1]);
+if (box[2] > 0) dz -= box[2] * std::round(dz / box[2]);
 }
 
 double DrudeCore::calculateCoulombEnergy(const model::MCState& state) const {

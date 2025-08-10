@@ -68,7 +68,9 @@ void init_drude_bindings(py::module& m) {
         .def_readwrite("enableHardWall", &DrudeSCFParams::enableHardWall,
                        "Enable hard wall constraint (default: False, matching OpenMM/CHARMM)")
         .def_readwrite("excludePartnerParentInExternalField", &DrudeSCFParams::excludePartnerParentInExternalField,
-                       "Exclude partner parents in external field to avoid double counting (default: True)");
+                       "Exclude partner parents in external field to avoid double counting (default: True)")
+        .def_readwrite("includeCoulombEnergy", &DrudeSCFParams::includeCoulombEnergy,
+                       "Include Coulomb energy in calculateEnergy (default: False, spring-only for production)");
     
     // DrudeAlgorithm enum
     py::enum_<DrudeAlgorithm>(m, "DrudeAlgorithm", "Available Drude optimization algorithms")
@@ -392,9 +394,11 @@ void init_drude_bindings(py::module& m) {
     // ============================================================================
     // EXPERIMENTAL DRUDE IMPLEMENTATION (OpenMM-style)
     // ============================================================================
-    // This is a parallel implementation for testing that doesn't affect the main code
-    // Once validated, it can replace or be merged with the main implementation
+    // TEMPORARILY DISABLED: DrudeExperimental causes segmentation faults
+    // Use DrudeComplete instead, which is stable and production-ready
+    // TODO: Debug and fix segfault issues before re-enabling
     
+    /* Commented out to prevent segfaults
     using namespace pygcmc::platform::cpu::exp;
     
     // Static instance for experimental version
@@ -435,6 +439,7 @@ void init_drude_bindings(py::module& m) {
              "Enable/disable Coulomb energy (for testing only)")
         .def("getIncludeCoulomb", &DrudeExperimentalCore::getIncludeCoulomb,
              "Check if Coulomb energy is included");
+    */
 }
 
 } // namespace simulation
