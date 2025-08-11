@@ -13,16 +13,16 @@ DrudeExperimentalCore::DrudeExperimentalCore()
     : m_includeCoulomb(false) {
     m_scf = std::make_unique<DrudeSCFOM>();
     
-    // Default to S3S5_DIPOLE_TENSOR algorithm as per production requirements
-    m_scf->setAlgorithm(DrudeAlgorithm::S3S5_DIPOLE_TENSOR);
+    // Default to S1_POINT_CHARGE algorithm - the standard CHARMM/OpenMM model
+    m_scf->setAlgorithm(DrudeAlgorithm::S1_POINT_CHARGE);
     
-    // Set parameters optimized for S3/S5 dipole tensor model
+    // Set parameters optimized for standard S1 point charge model
     m_params.tolerance = 1e-5;
     m_params.maxIterations = 300;  // More iterations for better convergence
-    m_params.dampingFactor = 0.5;  // Higher damping for S3/S5 stability
+    m_params.dampingFactor = 0.9;  // Higher value = less damping, better convergence
     m_params.enableHardWall = false;  // Production default
     m_params.maxDrudeDistance = 0.02; // 0.2 Å
-    m_params.excludePartnerParentInExternalField = false;  // Critical for S3/S5 model
+    m_params.excludePartnerParentInExternalField = false;  // Standard setting
 }
 
 double DrudeExperimentalCore::calculateEnergy(model::MCState& state) {
@@ -155,10 +155,12 @@ void DrudeExperimentalCore::setDrudeAlgorithm(int algo) {
             expAlgo = exp::DrudeAlgorithm::S1_POINT_CHARGE;
             break;
         case 1:
-            expAlgo = exp::DrudeAlgorithm::S3S5_DIPOLE_TENSOR;
+            // DEPRECATED: S3S5_DIPOLE_TENSOR - use standard S1 instead
+            expAlgo = exp::DrudeAlgorithm::S1_POINT_CHARGE;
             break;
         case 2:
-            expAlgo = exp::DrudeAlgorithm::S1_DIPOLE_FIELD;
+            // DEPRECATED: S1_DIPOLE_FIELD - use standard S1 instead
+            expAlgo = exp::DrudeAlgorithm::S1_POINT_CHARGE;
             break;
         case 3:
             expAlgo = exp::DrudeAlgorithm::DIRECT_COULOMB;
@@ -175,10 +177,12 @@ int DrudeExperimentalCore::getDrudeAlgorithm() const {
     switch (expAlgo) {
         case exp::DrudeAlgorithm::S1_POINT_CHARGE:
             return 0;
+        /* DEPRECATED: S3S5 and S1_DIPOLE_FIELD no longer exist
         case exp::DrudeAlgorithm::S3S5_DIPOLE_TENSOR:
             return 1;
         case exp::DrudeAlgorithm::S1_DIPOLE_FIELD:
             return 2;
+        */
         case exp::DrudeAlgorithm::DIRECT_COULOMB:
             return 3;
         default:

@@ -41,6 +41,11 @@ double DrudeSCFOM::tholeS1(double r, double alpha_i, double alpha_j, double thol
     return 1.0 - (1.0 + 0.5 * u) * exp_u;
 }
 
+/* DEPRECATED: Non-standard S3 screening function
+ * The S3 function is not part of the standard CHARMM/OpenMM Drude model.
+ * Use S1 screening with point charges instead.
+ */
+/*
 double DrudeSCFOM::tholeS3(double r, double alpha_i, double alpha_j, double thole_pair) const {
     // Thole S3 screening for 1/r^3 dipole-dipole interactions
     // S3(u) = 1 - exp(-u) * (1 + u + u^2/2)
@@ -63,7 +68,13 @@ double DrudeSCFOM::tholeS3(double r, double alpha_i, double alpha_j, double thol
     // S3 function for 1/r^3 dipole field screening
     return 1.0 - exp_u * (1.0 + u + 0.5 * u * u);
 }
+*/
 
+/* DEPRECATED: Non-standard S5 screening function  
+ * The S5 function is not part of the standard CHARMM/OpenMM Drude model.
+ * Use S1 screening with point charges instead.
+ */
+/*
 double DrudeSCFOM::tholeS5(double r, double alpha_i, double alpha_j, double thole_pair) const {
     // Thole S5 screening for 1/r^5 tensor component
     // S5(u) = 1 - exp(-u) * (1 + u + u^2/2 + u^3/6)
@@ -86,6 +97,7 @@ double DrudeSCFOM::tholeS5(double r, double alpha_i, double alpha_j, double thol
     // S5 function for 1/r^5 tensor component screening
     return 1.0 - exp_u * (1.0 + u + 0.5 * u * u + u * u * u / 6.0);
 }
+*/
 
 bool DrudeSCFOM::optimize(model::MCState& state,
                               const std::vector<DrudeParticle>& particles,
@@ -386,6 +398,7 @@ void DrudeSCFOM::calculateInducedField(const model::MCState& state,
         case DrudeAlgorithm::S1_POINT_CHARGE:
             calculateInducedFieldS1(state, particles, pairs, electricField);
             break;
+        /* DEPRECATED: Non-standard S3/S5 model
         case DrudeAlgorithm::S3S5_DIPOLE_TENSOR:
             calculateInducedFieldS3S5(state, particles, pairs, electricField);
             break;
@@ -393,8 +406,13 @@ void DrudeSCFOM::calculateInducedField(const model::MCState& state,
             // TODO: Implement hybrid approach
             calculateInducedFieldS1(state, particles, pairs, electricField);
             break;
+        */
         case DrudeAlgorithm::DIRECT_COULOMB:
             // No induced field for direct Coulomb (testing only)
+            break;
+        default:
+            // Default to standard S1 model
+            calculateInducedFieldS1(state, particles, pairs, electricField);
             break;
     }
 }
@@ -420,10 +438,13 @@ void DrudeSCFOM::calculateInducedFieldS1(const model::MCState& state,
             const auto& p1 = particles[i];
             const auto& p2 = particles[j];
             
-            // Skip if not a screened pair
+            // Get Thole parameter (0 if not a screened pair)
+            double a_pair = 0.0;
             auto it = screenedPairs.find({static_cast<int>(i), static_cast<int>(j)});
-            if (it == screenedPairs.end()) continue;
-            double a_pair = it->second;
+            if (it != screenedPairs.end()) {
+                a_pair = it->second;
+            }
+            // ✅ Key fix: Process ALL dipole pairs, even when a_pair=0 (S(u)=1)
             
             const auto& parent1 = state.atoms[p1.parentIndex];
             const auto& drude1 = state.atoms[p1.drudeIndex];
@@ -431,6 +452,13 @@ void DrudeSCFOM::calculateInducedFieldS1(const model::MCState& state,
             const auto& drude2 = state.atoms[p2.drudeIndex];
             
             std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
+            
+            // Calculate parent-parent distance for u calculation (OpenMM standard)
+            double dx_pp = parent2.x - parent1.x;
+            double dy_pp = parent2.y - parent1.y;
+            double dz_pp = parent2.z - parent1.z;
+            applyPBC(dx_pp, dy_pp, dz_pp, box);
+            double r_pp = std::sqrt(dx_pp*dx_pp + dy_pp*dy_pp + dz_pp*dz_pp);
             
             // Four charge-charge interactions with S1 screening:
             // 1. Parent1 - Parent2
@@ -450,7 +478,8 @@ void DrudeSCFOM::calculateInducedFieldS1(const model::MCState& state,
                 if (r2 < 1e-12) return;
                 
                 double r = std::sqrt(r2);
-                double s1 = tholeS1(r, p1.polarizability, p2.polarizability, a_pair);
+                // Use parent-parent distance for u calculation (OpenMM standard)
+                double s1 = tholeS1(r_pp, p1.polarizability, p2.polarizability, a_pair);
                 
                 // Field = k * q * S(r) / r^3 * r_vec
                 double factor = DrudeConstants::ONE_4PI_EPS0 * q2 * s1 / (r2 * r);
@@ -491,6 +520,12 @@ void DrudeSCFOM::calculateInducedFieldS1(const model::MCState& state,
     }
 }
 
+/* DEPRECATED: Non-standard S3/S5 dipole tensor model
+ * This implementation uses a non-standard dipole tensor field approach
+ * that is not consistent with CHARMM/OpenMM standards.
+ * Use S1_POINT_CHARGE algorithm instead.
+ */
+/*
 void DrudeSCFOM::calculateInducedFieldS3S5(const model::MCState& state,
                                            const std::vector<DrudeParticle>& particles,
                                            const std::vector<ScreenedPair>& pairs,
@@ -604,6 +639,7 @@ void DrudeSCFOM::calculateInducedFieldS3S5(const model::MCState& state,
         }
     }
 }
+*/  // End of DEPRECATED calculateInducedFieldS3S5
 
 double DrudeSCFOM::updateDrudePositions(model::MCState& state,
                                             const std::vector<DrudeParticle>& particles,
@@ -627,7 +663,13 @@ double DrudeSCFOM::updateDrudePositions(model::MCState& state,
         }
         
         // Target displacement from force balance: F_electric = F_spring
-        // q_D * E = k * d, so d = q_D * E / k
+        // The relationship μ = α * E_physical gives us the dipole moment
+        // Since μ = |q_D| * d, we have d = α * E_physical / |q_D|
+        // Our electric field includes ONE_4PI_EPS0, so E_physical = E_code / ONE_4PI_EPS0
+        // Therefore: d = α * E_code / (|q_D| * ONE_4PI_EPS0)
+        // But we also have k = q_D² * ONE_4PI_EPS0 / α
+        // So: d = q_D * E_code / k gives the same result
+        // This is correct! The issue must be elsewhere.
         double targetX = particle.charge * electricField[i][0] / particle.kSpring;
         double targetY = particle.charge * electricField[i][1] / particle.kSpring;
         double targetZ = particle.charge * electricField[i][2] / particle.kSpring;

@@ -12,9 +12,9 @@ namespace exp {
 // Algorithm selection for Drude model
 enum class DrudeAlgorithm {
     S1_POINT_CHARGE,     // CHARMM/OpenMM standard: 4-point charge with S1 screening
-    S3S5_DIPOLE_TENSOR,  // Dipole tensor with S3/S5 screening
-    S1_DIPOLE_FIELD,     // Hybrid: dipole field with S1 screening
-    DIRECT_COULOMB       // No screening (for testing)
+    // S3S5_DIPOLE_TENSOR,  // DEPRECATED: Non-standard dipole tensor model with S3/S5 screening
+    // S1_DIPOLE_FIELD,     // DEPRECATED: Hybrid approach
+    DIRECT_COULOMB       // No screening (for testing only)
 };
 
 class DrudeSCFOM {
