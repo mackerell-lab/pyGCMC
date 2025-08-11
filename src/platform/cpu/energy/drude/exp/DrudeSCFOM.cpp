@@ -626,7 +626,8 @@ double DrudeSCFOM::updateDrudePositions(model::MCState& state,
             continue;
         }
         
-        // Target displacement: d = q*E/k
+        // Target displacement from force balance: F_electric = F_spring
+        // q_D * E = k * d, so d = q_D * E / k
         double targetX = particle.charge * electricField[i][0] / particle.kSpring;
         double targetY = particle.charge * electricField[i][1] / particle.kSpring;
         double targetZ = particle.charge * electricField[i][2] / particle.kSpring;
