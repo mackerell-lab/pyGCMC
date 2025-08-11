@@ -28,7 +28,9 @@ public:
     void autoScreenPairs(double thole, double cutoff_nm);
     
     // Configuration
-    void setAlgorithm(DrudeAlgorithm algorithm) override; // kept for interface
+    void setAlgorithm(platform::cpu::DrudeAlgorithm algorithm) override; // kept for interface
+    void setDrudeAlgorithm(int algo); // Set experimental algorithm (0=S1, 1=S3S5, 2=S1_dipole, 3=direct)
+    int getDrudeAlgorithm() const; // Get current algorithm
     void setParameters(const DrudeSCFParams& params) override;
     void clear() override;
     size_t getNumParticles() const override { return m_particles.size(); }

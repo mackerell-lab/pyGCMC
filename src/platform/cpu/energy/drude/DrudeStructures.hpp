@@ -46,7 +46,7 @@ struct DrudeParticle {
      */
     void computeSpringConstants() {
         // Isotropic spring constant
-        // From first principles and OpenMM implementation:
+        // From OpenMM and CHARMM implementation:
         // The induced dipole moment μ = α × E
         // For Drude model: μ = -q_drude × d (where d is displacement)
         // Force balance: q_drude × E = k × d
@@ -54,6 +54,7 @@ struct DrudeParticle {
         // Combining: α × E = -q_drude × (q_drude × E / k) = q_drude² × E / k
         // Thus: k = q_drude² / α
         // In MD units: k[kJ/mol/nm²] = q²[e²] × ONE_4PI_EPS0[kJ·nm/mol/e²] / α[nm³]
+        // This matches OpenMM's DrudeForce implementation exactly
         kSpring = charge * charge * DrudeConstants::ONE_4PI_EPS0 / polarizability;
         
         // Anisotropic contributions (if needed)

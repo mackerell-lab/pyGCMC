@@ -13,12 +13,16 @@ DrudeExperimentalCore::DrudeExperimentalCore()
     : m_includeCoulomb(false) {
     m_scf = std::make_unique<DrudeSCFOM>();
     
-    // Set reasonable defaults
+    // Default to S3S5_DIPOLE_TENSOR algorithm as per production requirements
+    m_scf->setAlgorithm(DrudeAlgorithm::S3S5_DIPOLE_TENSOR);
+    
+    // Set parameters optimized for S3/S5 dipole tensor model
     m_params.tolerance = 1e-5;
-    m_params.maxIterations = 200;
-    m_params.dampingFactor = 0.1;  // Lower damping for better convergence
-    m_params.enableHardWall = false;  // Changed to false to align with OpenMM/CHARMM defaults
+    m_params.maxIterations = 300;  // More iterations for better convergence
+    m_params.dampingFactor = 0.5;  // Higher damping for S3/S5 stability
+    m_params.enableHardWall = false;  // Production default
     m_params.maxDrudeDistance = 0.02; // 0.2 Å
+    m_params.excludePartnerParentInExternalField = false;  // Critical for S3/S5 model
 }
 
 double DrudeExperimentalCore::calculateEnergy(model::MCState& state) {
@@ -135,8 +139,51 @@ void DrudeExperimentalCore::autoScreenPairs(double thole, double cutoff_nm) {
     buildNBTholePairs(m_particles, thole, cutoff_nm, m_screenedPairs);
 }
 
-void DrudeExperimentalCore::setAlgorithm(DrudeAlgorithm /*algorithm*/) {
+void DrudeExperimentalCore::setAlgorithm(platform::cpu::DrudeAlgorithm /*algorithm*/) {
     // Fixed to OpenMM-style SCF for experimental version
+}
+
+void DrudeExperimentalCore::setDrudeAlgorithm(int algo) {
+    // Set the experimental algorithm
+    // 0 = S1_POINT_CHARGE (CHARMM standard)
+    // 1 = S3S5_DIPOLE_TENSOR
+    // 2 = S1_DIPOLE_FIELD (hybrid)
+    // 3 = DIRECT_COULOMB (no screening)
+    exp::DrudeAlgorithm expAlgo;
+    switch (algo) {
+        case 0:
+            expAlgo = exp::DrudeAlgorithm::S1_POINT_CHARGE;
+            break;
+        case 1:
+            expAlgo = exp::DrudeAlgorithm::S3S5_DIPOLE_TENSOR;
+            break;
+        case 2:
+            expAlgo = exp::DrudeAlgorithm::S1_DIPOLE_FIELD;
+            break;
+        case 3:
+            expAlgo = exp::DrudeAlgorithm::DIRECT_COULOMB;
+            break;
+        default:
+            expAlgo = exp::DrudeAlgorithm::S1_POINT_CHARGE;
+            break;
+    }
+    m_scf->setAlgorithm(expAlgo);
+}
+
+int DrudeExperimentalCore::getDrudeAlgorithm() const {
+    exp::DrudeAlgorithm expAlgo = m_scf->getAlgorithm();
+    switch (expAlgo) {
+        case exp::DrudeAlgorithm::S1_POINT_CHARGE:
+            return 0;
+        case exp::DrudeAlgorithm::S3S5_DIPOLE_TENSOR:
+            return 1;
+        case exp::DrudeAlgorithm::S1_DIPOLE_FIELD:
+            return 2;
+        case exp::DrudeAlgorithm::DIRECT_COULOMB:
+            return 3;
+        default:
+            return 0;
+    }
 }
 
 void DrudeExperimentalCore::setParameters(const DrudeSCFParams& params) {

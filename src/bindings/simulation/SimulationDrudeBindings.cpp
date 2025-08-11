@@ -437,7 +437,12 @@ void init_drude_bindings(py::module& m) {
              py::arg("include"),
              "Enable/disable Coulomb energy (for testing only)")
         .def("getIncludeCoulomb", &DrudeExperimentalCore::getIncludeCoulomb,
-             "Check if Coulomb energy is included");
+             "Check if Coulomb energy is included")
+        .def("setDrudeAlgorithm", &DrudeExperimentalCore::setDrudeAlgorithm,
+             py::arg("algo"),
+             "Set algorithm: 0=S1_POINT_CHARGE (CHARMM), 1=S3S5_DIPOLE_TENSOR, 2=S1_DIPOLE_FIELD, 3=DIRECT_COULOMB")
+        .def("getDrudeAlgorithm", &DrudeExperimentalCore::getDrudeAlgorithm,
+             "Get current algorithm setting");
 }
 
 } // namespace simulation
