@@ -1,0 +1,304 @@
+name: Drude Implementation CI
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'src/platform/cpu/energy/drude/**'
+      - 'tests/simulation/energyDrude/**'
+      - '.github/workflows/drude_ci.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/platform/cpu/energy/drude/**'
+      - 'tests/simulation/energyDrude/**'
+  schedule:
+    # Nightly run at 2AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  fast-tests:
+    name: Fast Drude Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install numpy pytest
+    
+    - name: Build PyGCMC
+      run: |
+        mkdir build
+        cd build
+        cmake .. -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
+        make -j$(nproc)
+    
+    - name: Run fast Drude tests
+      run: |
+        cd build
+        # Fast unit tests
+        ctest -R "drude_unit" --output-on-failure --timeout 60
+        
+        # Spectral radius validation (fast subset)
+        cd ../tests/simulation/energyDrude
+        python -m pytest spectral_radius_tests.py::TestSpectralRadius::test_spectral_radius_accuracy -v --tb=short
+        python -m pytest spectral_radius_tests.py::TestSpectralRadius::test_stability_boundaries -v --tb=short
+    
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: fast-test-results
+        path: |
+          build/Testing/Temporary/
+          tests/simulation/energyDrude/*.json
+
+  comprehensive-tests:
+    name: Comprehensive Drude Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install numpy pytest matplotlib scipy
+    
+    - name: Build PyGCMC with full debug
+      run: |
+        mkdir build
+        cd build
+        cmake .. -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Debug -DENABLE_DRUDE_DEBUG=ON
+        make -j$(nproc)
+    
+    - name: Run comprehensive tests
+      run: |
+        cd build
+        # All Drude tests
+        ctest -R "drude" --output-on-failure --timeout 300
+        
+        # Full spectral radius validation
+        cd ../tests/simulation/energyDrude
+        python spectral_radius_tests.py
+        
+        # Stability boundary tests
+        python stability_boundary_tests.py
+        
+        # Generate reports
+        python -c "
+import spectral_radius_tests
+import stability_boundary_tests
+spectral_radius_tests.generate_report('ci_spectral_report.json')
+stability_boundary_tests.generate_stability_report('ci_stability_report.json')
+"
+    
+    - name: Check production criteria
+      run: |
+        cd tests/simulation/energyDrude
+        python -c "
+import json
+with open('ci_spectral_report.json') as f:
+    spectral = json.load(f)
+with open('ci_stability_report.json') as f:
+    stability = json.load(f)
+
+# Production criteria checks
+failures = []
+
+# Spectral radius accuracy
+if spectral['summary']['median_error'] > 0.02:
+    failures.append(f\"Median spectral error {spectral['summary']['median_error']*100:.2f}% > 2%\")
+if spectral['summary']['p95_error'] > 0.05:
+    failures.append(f\"P95 spectral error {spectral['summary']['p95_error']*100:.2f}% > 5%\")
+
+# Stability bands
+if 'stable' in stability['summary']:
+    stable = stability['summary']['stable']
+    if stable['convergence_rate'] < 0.95:
+        failures.append(f\"Stable convergence rate {stable['convergence_rate']*100:.1f}% < 95%\")
+
+if 'marginal' in stability['summary']:
+    marginal = stability['summary']['marginal']
+    handled = marginal['convergence_rate'] + marginal['fallback_rate']
+    if handled < 0.90:
+        failures.append(f\"Marginal handling rate {handled*100:.1f}% < 90%\")
+
+if 'unstable' in stability['summary']:
+    unstable = stability['summary']['unstable']
+    if unstable['hard_wall_rate'] > 0.20:
+        failures.append(f\"Unstable hard wall rate {unstable['hard_wall_rate']*100:.1f}% > 20%\")
+
+if failures:
+    print('PRODUCTION CRITERIA FAILURES:')
+    for f in failures:
+        print(f'  ❌ {f}')
+    exit(1)
+else:
+    print('✅ ALL PRODUCTION CRITERIA PASSED')
+"
+    
+    - name: Upload comprehensive results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: comprehensive-test-results
+        path: |
+          build/Testing/Temporary/
+          tests/simulation/energyDrude/*.json
+          tests/simulation/energyDrude/*.png
+
+  nightly-stress-tests:
+    name: Nightly Stress Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.event.schedule == '0 2 * * *'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install numpy pytest matplotlib scipy pandas
+    
+    - name: Build PyGCMC optimized
+      run: |
+        mkdir build
+        cd build
+        cmake .. -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release -DMARCH_NATIVE=ON
+        make -j$(nproc)
+    
+    - name: Run parameter space scan
+      run: |
+        cd tests/simulation/energyDrude
+        python -c "
+import numpy as np
+import json
+from spectral_radius_tests import SpectralRadiusValidator
+
+# Extensive parameter scan
+validator = SpectralRadiusValidator()
+R_values = np.linspace(0.2, 3.0, 50).tolist()
+alpha_values = np.logspace(-4, -2, 20).tolist()
+a_values = [0.8, 1.0, 1.3, 1.6, 2.0]
+
+print(f'Testing {len(R_values)*len(alpha_values)*len(a_values)} configurations...')
+
+results = []
+for a in a_values:
+    stats = validator.validate_spectral_radius(R_values, alpha_values, a)
+    results.append({
+        'a_thole': a,
+        'stats': stats,
+        'details': validator.results[-len(R_values)*len(alpha_values):]
+    })
+
+# Save results
+with open('nightly_scan_results.json', 'w') as f:
+    json.dump(results, f, indent=2)
+
+# Summary
+print('\\nNightly Scan Summary:')
+for r in results:
+    print(f\"  a={r['a_thole']}: median_error={r['stats']['median_error']*100:.2f}%, p95={r['stats']['p95_error']*100:.2f}%\")
+"
+    
+    - name: Run stress convergence tests
+      run: |
+        cd tests/simulation/energyDrude
+        python -c "
+from stability_boundary_tests import StabilityBoundaryValidator
+import numpy as np
+
+validator = StabilityBoundaryValidator()
+
+# Stress test: very unstable configurations
+stress_configs = [
+    (0.2, 0.003),  # Very close, high polarizability
+    (0.3, 0.002),  # Close, medium polarizability
+    (0.4, 0.0015), # Near critical
+]
+
+print('Stress Test Configurations:')
+for R, alpha in stress_configs:
+    result = validator.test_convergence_rate(R, alpha)
+    print(f'  R={R}nm, α={alpha*1000}pm³: ρ={result[\"rho\"]:.2f}, outcome={result[\"outcome\"]}')
+    
+    # Test should handle even unstable cases
+    assert result['outcome'] in ['convergence', 'fallback', 'hard_wall'], \
+        f'Unexpected outcome: {result[\"outcome\"]}'
+"
+    
+    - name: Performance benchmarks
+      run: |
+        cd build
+        # Run performance benchmarks
+        ctest -R "drude_performance" --output-on-failure
+    
+    - name: Upload nightly results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: nightly-test-results
+        path: |
+          tests/simulation/energyDrude/nightly_*.json
+          build/Testing/Temporary/
+
+  openmm-comparison:
+    name: OpenMM Comparison Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install OpenMM
+      run: |
+        conda install -c conda-forge openmm
+    
+    - name: Build PyGCMC
+      run: |
+        mkdir build
+        cd build
+        cmake .. -DBUILD_TESTING=ON
+        make -j$(nproc)
+    
+    - name: Run OpenMM comparison
+      run: |
+        cd tests/simulation/energyDrude
+        python drude_openmm_comparison.py --tolerance 0.02
+    
+    - name: Upload comparison results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: openmm-comparison-results
+        path: tests/simulation/energyDrude/comparison_*.json
