@@ -3,7 +3,11 @@ Test real/reciprocal space separation in PME
 """
 
 import numpy as np
-from scipy.special import erfc, erf
+import math
+
+# Use math.erfc and math.erf instead of scipy
+erfc = math.erfc
+erf = math.erf
 
 # Test parameters
 alpha = 3.5  # nm^-1

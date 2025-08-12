@@ -47,18 +47,28 @@ r = 0.5
 # erfc(α*r) = 1/139 = 0.00719
 # Need to find α such that erfc(α*0.5) = 0.00719
 
-import scipy.special
-from scipy.optimize import fsolve
+# Simple bisection method to replace scipy.optimize.fsolve
+def bisect_find_alpha(r, target_factor, tol=1e-6):
+    """Find alpha such that erfc(alpha * r) = 1/target_factor"""
+    # Initial bounds
+    a, b = 0.1, 10.0
+    target = 1.0 / target_factor
+    
+    while b - a > tol:
+        mid = (a + b) / 2
+        val = math.erfc(mid * r)
+        if val > target:
+            a = mid
+        else:
+            b = mid
+    return (a + b) / 2
 
-def find_alpha(alpha):
-    return scipy.special.erfc(alpha * r) - (1.0/target_factor)
-
-alpha_139 = fsolve(find_alpha, 3.0)[0]
+alpha_139 = bisect_find_alpha(r, target_factor)
 print(f"\nTo get 139x factor at r=0.5nm, α would need to be: {alpha_139:.2f}")
 print(f"Verification: erfc({alpha_139:.2f} * 0.5) = {math.erfc(alpha_139 * 0.5):.5f}")
 
 # Check for 247x
 target_factor = 247
-alpha_247 = fsolve(find_alpha, 3.0)[0]
+alpha_247 = bisect_find_alpha(r, target_factor)
 print(f"\nTo get 247x factor at r=0.5nm, α would need to be: {alpha_247:.2f}")
 print(f"Verification: erfc({alpha_247:.2f} * 0.5) = {math.erfc(alpha_247 * 0.5):.5f}")
