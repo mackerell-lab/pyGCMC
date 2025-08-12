@@ -18,7 +18,7 @@ jobs:
         openmm-version: ['8.1', '8.2']
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
@@ -26,7 +26,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
     
     - name: Cache conda packages
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/conda_pkgs_dir
         key: ${{ runner.os }}-conda-${{ hashFiles('**/requirements.txt') }}
@@ -108,7 +108,7 @@ jobs:
     
     - name: Upload validation reports
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: validation-reports-${{ matrix.python-version }}-openmm${{ matrix.openmm-version }}
         path: |
@@ -150,7 +150,7 @@ jobs:
     
     - name: Upload error histogram
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: error-histogram-${{ matrix.python-version }}-openmm${{ matrix.openmm-version }}
         path: error_histogram.png
