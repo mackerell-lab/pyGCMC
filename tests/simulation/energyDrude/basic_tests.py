@@ -62,11 +62,15 @@ def test_drude_scf_params():
     """Test SCF parameter configuration"""
     params = pygcmc.DrudeSCFParams()
     
-    # Check default values
-    assert params.tolerance == 10.0  # Tighter default for better convergence
-    assert params.maxIterations == 100
+    # Check default values (optimized for GCMC)
+    assert params.tolerance == 10.0  # Balanced for GCMC performance
+    assert params.maxIterations == 50  # Reduced for speed
     assert params.dampingFactor == 0.5
     assert params.maxDrudeDistance == 0.02
+    assert params.maxStep == 0.02  # New parameter
+    assert params.diisStartIter == 3  # New parameter
+    assert params.diisMaxHistory == 8  # New parameter
+    assert params.logLevel == 0  # New parameter
     
     # Modify parameters
     params.tolerance = 0.1

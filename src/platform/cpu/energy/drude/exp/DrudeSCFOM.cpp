@@ -104,157 +104,262 @@ bool DrudeSCFOM::optimize(model::MCState& state,
                               const std::vector<ScreenedPair>& pairs,
                               const DrudeSCFParams& params) {
     if (particles.empty()) {
+        m_lastIterationCount = 0;
         return true;
     }
+    
+    // Reset iteration counter
+    m_lastIterationCount = 0;
     
     // Initialize electric field vectors
     std::vector<Vec3> electricField(particles.size(), {0.0, 0.0, 0.0});
     
-    // Best-so-far tracking
-    double bestEnergy = 1e300;
-    std::vector<DrudePosition> bestPositions(particles.size());
-    
-    // Adaptive damping
-    double damping = params.dampingFactor;
-    double previousEnergy = 1e300;
-    int stallCount = 0;
-    
     // DIIS acceleration data
     DIISData diis;
-    diis.maxHistory = 5;
-    diis.enabled = false;  // Enable after initial iterations
+    diis.maxHistory = 8;  // Default max history
+    
+    // History for residuals and displacements
+    std::vector<double> lastDisp(3*particles.size(), 0.0);
+    double prevMaxRes = 1e300;
+    
+    // Estimate spectral radius for adaptive damping
+    double rho = estimateSpectralRadius(state, particles, pairs);
+    
+    // Adaptive damping parameter
+    double dampingFactor = params.dampingFactor;
+    if (params.enableAdaptiveDamping) {
+        dampingFactor = computeAdaptiveDamping(rho);
+        if (params.logLevel >= 1) {
+            std::cout << "Spectral radius ρ = " << rho 
+                     << ", using adaptive damping = " << dampingFactor << std::endl;
+        }
+    }
+    
+    // Get initial positions
+    for (size_t i = 0; i < particles.size(); ++i) {
+        const auto& p = particles[i];
+        const auto& drude = state.atoms[p.drudeIndex];
+        const auto& parent = state.atoms[p.parentIndex];
+        double dx = drude.x - parent.x;
+        double dy = drude.y - parent.y;
+        double dz = drude.z - parent.z;
+        std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
+        applyPBC(dx, dy, dz, box);
+        lastDisp[3*i] = dx;
+        lastDisp[3*i+1] = dy;
+        lastDisp[3*i+2] = dz;
+    }
     
     // SCF iteration
     for (int iter = 0; iter < params.maxIterations; ++iter) {
-        // Clear electric field
-        std::fill(electricField.begin(), electricField.end(), Vec3{0.0, 0.0, 0.0});
+        m_lastIterationCount = iter + 1;  // Update iteration count
         
-        // Calculate total electric field
+        // 1. Calculate total electric field (unified field including all contributions)
+        std::fill(electricField.begin(), electricField.end(), Vec3{0.0, 0.0, 0.0});
         calculateElectricField(state, particles, pairs, electricField, params);
         
-        // Debug output for first few iterations
-        if (iter < 5 || iter == params.maxIterations - 1) {
-            double totalFieldMag = 0.0;
-            for (const auto& field : electricField) {
-                totalFieldMag += std::sqrt(field[0]*field[0] + field[1]*field[1] + field[2]*field[2]);
-            }
-            std::cout << "SCF iter " << iter << ": avg field magnitude = " << totalFieldMag/electricField.size() << std::endl;
-        }
+        // 2. Calculate residuals and displacement changes
+        double maxRes = 0.0, maxDelta = 0.0;
+        std::vector<double> currentDisp(3*particles.size());
+        std::vector<double> currentRes(3*particles.size());
         
-        // Check convergence based on forces (skip first few iterations to ensure proper convergence)
-        if (iter > 2) {
-            double maxForce = 0.0;
-            for (size_t i = 0; i < particles.size(); ++i) {
-                const auto& p = particles[i];
-                if (p.polarizability < 1e-14) continue;  // Skip frozen particles
-                
-                const auto& drude = state.atoms[p.drudeIndex];
-                const auto& parent = state.atoms[p.parentIndex];
-                
-                double dx = drude.x - parent.x;
-                double dy = drude.y - parent.y;
-                double dz = drude.z - parent.z;
-                
-                std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
-                applyPBC(dx, dy, dz, box);
-                
-                // Force = q*E - k*d
-                double fx = p.charge * electricField[i][0] - p.kSpring * dx;
-                double fy = p.charge * electricField[i][1] - p.kSpring * dy;
-                double fz = p.charge * electricField[i][2] - p.kSpring * dz;
-                
-                double force2 = fx*fx + fy*fy + fz*fz;
-                maxForce = std::max(maxForce, std::sqrt(force2));
+        for (size_t i = 0; i < particles.size(); ++i) {
+            const auto& p = particles[i];
+            if (p.polarizability < 1e-14) {
+                // Frozen particle
+                currentDisp[3*i] = 0.0;
+                currentDisp[3*i+1] = 0.0;
+                currentDisp[3*i+2] = 0.0;
+                currentRes[3*i] = 0.0;
+                currentRes[3*i+1] = 0.0;
+                currentRes[3*i+2] = 0.0;
+                continue;
             }
             
-            // Debug output
-            if (iter < 5) {
-                std::cout << "  iter " << iter << ": maxForce = " << maxForce 
-                          << " (tolerance = " << params.tolerance << ")" << std::endl;
-            }
+            const auto& drude = state.atoms[p.drudeIndex];
+            const auto& parent = state.atoms[p.parentIndex];
             
-            // Check convergence
-            if (maxForce < params.tolerance) {
-                std::cout << "SCF converged at iteration " << iter << " with maxForce = " << maxForce << std::endl;
-                return true;  // Converged
-            }
+            double dx = drude.x - parent.x;
+            double dy = drude.y - parent.y;
+            double dz = drude.z - parent.z;
             
-            // Debug warning if approaching max iterations
-            if (iter == params.maxIterations - 1) {
-                std::cout << "WARNING: SCF did not converge! Final maxForce = " << maxForce 
-                          << " (tolerance = " << params.tolerance << ")" << std::endl;
-            }
+            std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
+            applyPBC(dx, dy, dz, box);
+            
+            // Residual: r = qE - kd
+            double rx = p.charge * electricField[i][0] - p.kSpring * dx;
+            double ry = p.charge * electricField[i][1] - p.kSpring * dy;
+            double rz = p.charge * electricField[i][2] - p.kSpring * dz;
+            double resNorm = std::sqrt(rx*rx + ry*ry + rz*rz);
+            maxRes = std::max(maxRes, resNorm);
+            
+            // Displacement change
+            double ddx = dx - lastDisp[3*i];
+            double ddy = dy - lastDisp[3*i+1];
+            double ddz = dz - lastDisp[3*i+2];
+            double deltaNorm = std::sqrt(ddx*ddx + ddy*ddy + ddz*ddz);
+            maxDelta = std::max(maxDelta, deltaNorm);
+            
+            currentDisp[3*i] = dx;
+            currentDisp[3*i+1] = dy;
+            currentDisp[3*i+2] = dz;
+            currentRes[3*i] = rx;
+            currentRes[3*i+1] = ry;
+            currentRes[3*i+2] = rz;
         }
         
-        // Enable DIIS after initial iterations for stability
-        if (iter == 5) {
-            diis.enabled = true;
+        // 3. Check convergence (residual-based)
+        if (maxRes < params.tolerance) {
+            if (params.logLevel > 0) {
+                std::cout << "SCF converged at iter " << iter 
+                         << ", maxRes = " << maxRes << std::endl;
+            }
+            return true;
         }
         
-        // Try DIIS acceleration if enabled
+        // Alternative convergence: displacement change
+        if (maxDelta < params.displacementTolerance && iter > 5) {
+            if (params.logLevel > 0) {
+                std::cout << "SCF converged (displacement) at iter " << iter 
+                         << ", maxDelta = " << maxDelta << std::endl;
+            }
+            return true;
+        }
+        
+        // 4. DIIS acceleration (if conditions are met)
         bool diisApplied = false;
-        if (diis.enabled) {
-            diisApplied = applyDIIS(diis, particles, electricField, state);
+        if (iter >= params.diisStartIter && maxRes < prevMaxRes) {
+            diis.positions.push_back(currentDisp);
+            diis.residuals.push_back(currentRes);
+            if (diis.positions.size() > (size_t)params.diisMaxHistory) {
+                diis.positions.erase(diis.positions.begin());
+                diis.residuals.erase(diis.residuals.begin());
+            }
+            diisApplied = applyDIIS(diis, particles, state);
         }
         
-        // If DIIS not applied, use regular damped update
+        // 5. If DIIS not applied, use adaptive damping with backtracking
         if (!diisApplied) {
-            double maxStep = 0.1;  // 0.1 nm max step per iteration (allow larger steps)
-            double hardWall = params.enableHardWall ? params.maxDrudeDistance : 1e9;
-            updateDrudePositions(state, particles, electricField, damping, maxStep, hardWall);
-        }
-        
-        // Calculate current energy
-        double currentEnergy = calculateSpringEnergy(state, particles);
-        
-        // Track best-so-far
-        if (currentEnergy < bestEnergy) {
-            bestEnergy = currentEnergy;
+            double lambda = dampingFactor;
+            
+            // Save current positions
+            std::vector<Vec3> savedPos(particles.size());
             for (size_t i = 0; i < particles.size(); ++i) {
                 const auto& p = particles[i];
                 const auto& drude = state.atoms[p.drudeIndex];
-                const auto& parent = state.atoms[p.parentIndex];
-                bestPositions[i].dx = drude.x - parent.x;
-                bestPositions[i].dy = drude.y - parent.y;
-                bestPositions[i].dz = drude.z - parent.z;
+                savedPos[i] = {drude.x, drude.y, drude.z};
             }
-            stallCount = 0;
-        } else {
-            stallCount++;
+            
+            // Backtracking line search
+            for (int ls = 0; ls < 6; ++ls) {
+                // Update positions
+                for (size_t i = 0; i < particles.size(); ++i) {
+                    const auto& p = particles[i];
+                    if (p.polarizability < 1e-14) continue;
+                    
+                    auto& drude = state.atoms[p.drudeIndex];
+                    const auto& parent = state.atoms[p.parentIndex];
+                    
+                    // Target displacement
+                    // k already contains ONE_4PI_EPS0, so we don't need to multiply it again
+                    // d = q_D * E / k
+                    double targetX = p.charge * electricField[i][0] / p.kSpring;
+                    double targetY = p.charge * electricField[i][1] / p.kSpring;
+                    double targetZ = p.charge * electricField[i][2] / p.kSpring;
+                    
+                    // Mixed update
+                    double newX = (1.0 - lambda) * currentDisp[3*i] + lambda * targetX;
+                    double newY = (1.0 - lambda) * currentDisp[3*i+1] + lambda * targetY;
+                    double newZ = (1.0 - lambda) * currentDisp[3*i+2] + lambda * targetZ;
+                    
+                    // Limit step size
+                    double step2 = (newX-currentDisp[3*i])*(newX-currentDisp[3*i]) +
+                                  (newY-currentDisp[3*i+1])*(newY-currentDisp[3*i+1]) +
+                                  (newZ-currentDisp[3*i+2])*(newZ-currentDisp[3*i+2]);
+                    if (step2 > params.maxStep * params.maxStep) {
+                        double scale = params.maxStep / std::sqrt(step2);
+                        newX = currentDisp[3*i] + scale * (newX - currentDisp[3*i]);
+                        newY = currentDisp[3*i+1] + scale * (newY - currentDisp[3*i+1]);
+                        newZ = currentDisp[3*i+2] + scale * (newZ - currentDisp[3*i+2]);
+                    }
+                    
+                    // Apply hard wall if enabled
+                    if (params.enableHardWall) {
+                        double r2 = newX*newX + newY*newY + newZ*newZ;
+                        if (r2 > params.maxDrudeDistance * params.maxDrudeDistance) {
+                            double scale = params.maxDrudeDistance / std::sqrt(r2);
+                            newX *= scale;
+                            newY *= scale;
+                            newZ *= scale;
+                        }
+                    }
+                    
+                    drude.x = parent.x + newX;
+                    drude.y = parent.y + newY;
+                    drude.z = parent.z + newZ;
+                }
+                
+                // Recalculate field and residual
+                std::fill(electricField.begin(), electricField.end(), Vec3{0.0, 0.0, 0.0});
+                calculateElectricField(state, particles, pairs, electricField, params);
+                
+                double newMaxRes = 0.0;
+                for (size_t i = 0; i < particles.size(); ++i) {
+                    const auto& p = particles[i];
+                    if (p.polarizability < 1e-14) continue;
+                    
+                    const auto& drude = state.atoms[p.drudeIndex];
+                    const auto& parent = state.atoms[p.parentIndex];
+                    
+                    double dx = drude.x - parent.x;
+                    double dy = drude.y - parent.y;
+                    double dz = drude.z - parent.z;
+                    
+                    std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
+                    applyPBC(dx, dy, dz, box);
+                    
+                    double rx = p.charge * electricField[i][0] - p.kSpring * dx;
+                    double ry = p.charge * electricField[i][1] - p.kSpring * dy;
+                    double rz = p.charge * electricField[i][2] - p.kSpring * dz;
+                    double resNorm = std::sqrt(rx*rx + ry*ry + rz*rz);
+                    newMaxRes = std::max(newMaxRes, resNorm);
+                }
+                
+                if (newMaxRes < 0.98 * maxRes || ls == 5) {
+                    maxRes = newMaxRes;
+                    if (ls == 0 && newMaxRes < 0.5 * maxRes) {
+                        dampingFactor = std::min(0.8, lambda * 1.1);
+                    }
+                    break;
+                } else {
+                    lambda *= 0.5;
+                    // Restore positions
+                    for (size_t i = 0; i < particles.size(); ++i) {
+                        const auto& p = particles[i];
+                        auto& drude = state.atoms[p.drudeIndex];
+                        drude.x = savedPos[i][0];
+                        drude.y = savedPos[i][1];
+                        drude.z = savedPos[i][2];
+                    }
+                }
+            }
         }
         
-        // Adaptive damping
-        if (currentEnergy < previousEnergy) {
-            damping *= 0.95;  // Reduce damping if improving
-            damping = std::max(damping, 0.05);
-        } else if (stallCount > 5) {
-            damping *= 1.1;  // Increase damping if stalled
-            damping = std::min(damping, 0.5);
-            stallCount = 0;
-        }
+        // 6. Update history
+        lastDisp = currentDisp;
+        prevMaxRes = maxRes;
         
-        previousEnergy = currentEnergy;
-    }
-    
-    // Only revert to best-so-far if we had instability
-    // Otherwise keep the last positions (which should be closer to self-consistency)
-    if (bestEnergy < 1e100) {  // We found at least one good configuration
-        // Check if current configuration is reasonable
-        double finalEnergy = calculateSpringEnergy(state, particles);
-        if (finalEnergy > bestEnergy * 2.0) {  // Current is much worse than best
-            // Revert to best-so-far
-            for (size_t i = 0; i < particles.size(); ++i) {
-                const auto& p = particles[i];
-                auto& drude = state.atoms[p.drudeIndex];
-                const auto& parent = state.atoms[p.parentIndex];
-                drude.x = parent.x + bestPositions[i].dx;
-                drude.y = parent.y + bestPositions[i].dy;
-                drude.z = parent.z + bestPositions[i].dz;
-            }
+        // 7. Logging
+        if (params.logLevel >= 2) {
+            std::cout << "Iter " << iter << ": maxRes = " << maxRes 
+                     << ", maxDelta = " << maxDelta << std::endl;
         }
-        // Otherwise keep current positions
     }
     
+    if (params.logLevel > 0) {
+        std::cout << "SCF did not converge after " << params.maxIterations 
+                 << " iterations, final maxRes = " << prevMaxRes << std::endl;
+    }
     return false;  // Did not converge
 }
 
@@ -263,34 +368,170 @@ void DrudeSCFOM::calculateElectricField(const model::MCState& state,
                                             const std::vector<ScreenedPair>& pairs,
                                             std::vector<Vec3>& electricField,
                                             const DrudeSCFParams& params) const {
-    // Field breakdown debugging: Track external and induced fields separately
-    std::vector<Vec3> E_ext(particles.size(), {0.0, 0.0, 0.0});
-    std::vector<Vec3> E_ind(particles.size(), {0.0, 0.0, 0.0});
+    // Calculate total electric field at each Drude particle
+    // Field = External field (from non-Drude charges) + Induced field (from other dipoles)
     
-    // Calculate external field (from fixed charges)
-    calculateExternalField(state, particles, pairs, E_ext, params);
+    // Clear field
+    for (auto& field : electricField) {
+        field[0] = field[1] = field[2] = 0.0;
+    }
     
-    // Calculate induced field (from dipoles with Thole screening)
-    calculateInducedField(state, particles, pairs, E_ind);
+    // Build maps for quick lookup
+    std::map<std::pair<int,int>, double> screenedPairs;
+    std::vector<bool> isDrude(state.activeAtomCount, false);
+    std::vector<int> atomToDipole(state.activeAtomCount, -1);
     
-    // Combine fields and debug output
+    // Mark Drude atoms and build mapping
     for (size_t i = 0; i < particles.size(); ++i) {
-        electricField[i][0] = E_ext[i][0] + E_ind[i][0];
-        electricField[i][1] = E_ext[i][1] + E_ind[i][1];
-        electricField[i][2] = E_ext[i][2] + E_ind[i][2];
+        isDrude[particles[i].drudeIndex] = true;
+        atomToDipole[particles[i].parentIndex] = i;
+        atomToDipole[particles[i].drudeIndex] = i;
+    }
+    
+    // Build screened pairs map
+    for (const auto& pair : pairs) {
+        screenedPairs[{pair.dipole1, pair.dipole2}] = pair.thole;
+        screenedPairs[{pair.dipole2, pair.dipole1}] = pair.thole;
+    }
+    
+    std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
+    
+    // Calculate field at each PARENT position (not Drude position!)
+    // This is critical for correct SCF convergence
+    for (size_t i = 0; i < particles.size(); ++i) {
+        const auto& pi = particles[i];
+        const auto& fieldPoint = state.atoms[pi.parentIndex];  // Field at PARENT position
+        const auto& parentI = state.atoms[pi.parentIndex];
         
-        // Debug: Print field breakdown for first particle
-        if (i == 0 && !pairs.empty()) {
-            double ext_mag = std::sqrt(E_ext[i][0]*E_ext[i][0] + E_ext[i][1]*E_ext[i][1] + E_ext[i][2]*E_ext[i][2]);
-            double ind_mag = std::sqrt(E_ind[i][0]*E_ind[i][0] + E_ind[i][1]*E_ind[i][1] + E_ind[i][2]*E_ind[i][2]);
-            double tot_mag = std::sqrt(electricField[i][0]*electricField[i][0] + 
-                                      electricField[i][1]*electricField[i][1] + 
-                                      electricField[i][2]*electricField[i][2]);
-            std::cout << "FIELD_BREAKDOWN[0]: E_ext=" << ext_mag 
-                      << " E_ind=" << ind_mag 
-                      << " E_total=" << tot_mag 
-                      << " (ind/ext=" << (ext_mag > 1e-10 ? ind_mag/ext_mag : 0) << ")" 
-                      << std::endl;
+        Vec3 field = {0.0, 0.0, 0.0};
+        
+        // 1. External field from non-Drude charges
+        double extFieldX = 0, extFieldY = 0, extFieldZ = 0;
+        for (int j = 0; j < state.activeAtomCount; ++j) {
+            // Skip self and Drude charges
+            if (j == pi.parentIndex || j == pi.drudeIndex || isDrude[j]) continue;
+            
+            const auto& atomJ = state.atoms[j];
+            if (std::abs(atomJ.charge) < 1e-14) continue;
+            
+            if (i == 0 && params.logLevel >= 3) {
+                std::cout << "  External source j=" << j 
+                         << " charge=" << atomJ.charge 
+                         << " isDrude=" << isDrude[j] << std::endl;
+            }
+            
+            // Determine screening factor
+            double S1 = 1.0;  // Default: no screening
+            
+            // Check if j belongs to a dipole that has screening with dipole i
+            int dipoleK = atomToDipole[j];
+            if (dipoleK >= 0 && dipoleK < static_cast<int>(particles.size())) {
+                auto it = screenedPairs.find({static_cast<int>(i), dipoleK});
+                if (it != screenedPairs.end()) {
+                    // Compute S1 using parent-parent distance
+                    const auto& parentK = state.atoms[particles[dipoleK].parentIndex];
+                    
+                    double dx_pp = parentK.x - parentI.x;
+                    double dy_pp = parentK.y - parentI.y;
+                    double dz_pp = parentK.z - parentI.z;
+                    applyPBC(dx_pp, dy_pp, dz_pp, box);
+                    double r_pp = std::sqrt(dx_pp*dx_pp + dy_pp*dy_pp + dz_pp*dz_pp);
+                    
+                    if (r_pp > 1e-12) {
+                        S1 = tholeS1(r_pp, pi.polarizability, 
+                                    particles[dipoleK].polarizability, it->second);
+                    }
+                }
+            }
+            
+            // Calculate field contribution (field_point - source)
+            double dx = fieldPoint.x - atomJ.x;
+            double dy = fieldPoint.y - atomJ.y;
+            double dz = fieldPoint.z - atomJ.z;
+            applyPBC(dx, dy, dz, box);
+            
+            double r2 = dx*dx + dy*dy + dz*dz;
+            if (r2 < 1e-12) continue;
+            
+            double r = std::sqrt(r2);
+            double r3 = r2 * r;
+            
+            // E = k * q * S(u) / r^2 * r_hat
+            double factor = DrudeConstants::ONE_4PI_EPS0 * atomJ.charge * S1 / r3;
+            
+            extFieldX += factor * dx;
+            extFieldY += factor * dy;
+            extFieldZ += factor * dz;
+        }
+        
+        field[0] += extFieldX;
+        field[1] += extFieldY;
+        field[2] += extFieldZ;
+        
+        if (i == 0 && params.logLevel >= 3) {
+            std::cout << "  External field: (" << extFieldX << ", " 
+                     << extFieldY << ", " << extFieldZ << ")" << std::endl;
+        }
+        
+        // 2. Induced field from OTHER dipoles (using S1 point charge model)
+        for (size_t j = 0; j < particles.size(); ++j) {
+            if (i == j) continue;  // Skip self
+            
+            const auto& pj = particles[j];
+            const auto& drudeJ = state.atoms[pj.drudeIndex];
+            const auto& parentJ = state.atoms[pj.parentIndex];
+            
+            // Get screening parameter if this is a screened pair
+            double thole = 0.0;
+            auto it = screenedPairs.find({static_cast<int>(i), static_cast<int>(j)});
+            if (it != screenedPairs.end()) {
+                thole = it->second;
+            }
+            
+            // Calculate parent-parent distance for screening
+            double dx_pp = parentJ.x - parentI.x;
+            double dy_pp = parentJ.y - parentI.y;
+            double dz_pp = parentJ.z - parentI.z;
+            applyPBC(dx_pp, dy_pp, dz_pp, box);
+            double r_pp = std::sqrt(dx_pp*dx_pp + dy_pp*dy_pp + dz_pp*dz_pp);
+            
+            if (r_pp < 1e-12) continue;
+            
+            // Calculate S1 screening for all 4 interactions
+            double S1 = 1.0;
+            if (thole > 1e-10) {
+                S1 = tholeS1(r_pp, pi.polarizability, pj.polarizability, thole);
+            }
+            
+            // Field from Drude charge of dipole j
+            double dx_dj = fieldPoint.x - drudeJ.x;
+            double dy_dj = fieldPoint.y - drudeJ.y;
+            double dz_dj = fieldPoint.z - drudeJ.z;
+            applyPBC(dx_dj, dy_dj, dz_dj, box);
+            
+            double r2_dj = dx_dj*dx_dj + dy_dj*dy_dj + dz_dj*dz_dj;
+            if (r2_dj > 1e-12) {
+                double r_dj = std::sqrt(r2_dj);
+                double r3_dj = r2_dj * r_dj;
+                double factor_dj = DrudeConstants::ONE_4PI_EPS0 * pj.charge * S1 / r3_dj;
+                field[0] += factor_dj * dx_dj;
+                field[1] += factor_dj * dy_dj;
+                field[2] += factor_dj * dz_dj;
+            }
+            
+            // Parent charges are already included in external field, don't double count!
+            // Only include Drude charges in induced field
+        }
+        
+        electricField[i] = field;
+        
+        // Debug output
+        if (i == 0 && params.logLevel >= 2) {
+            double mag = std::sqrt(field[0]*field[0] + field[1]*field[1] + field[2]*field[2]);
+            std::cout << "TOTAL_FIELD[0]: E_x=" << field[0] 
+                     << " E_y=" << field[1] 
+                     << " E_z=" << field[2]
+                     << " |E|=" << mag << std::endl;
         }
     }
 }
@@ -663,13 +904,10 @@ double DrudeSCFOM::updateDrudePositions(model::MCState& state,
         }
         
         // Target displacement from force balance: F_electric = F_spring
-        // The relationship μ = α * E_physical gives us the dipole moment
-        // Since μ = |q_D| * d, we have d = α * E_physical / |q_D|
-        // Our electric field includes ONE_4PI_EPS0, so E_physical = E_code / ONE_4PI_EPS0
-        // Therefore: d = α * E_code / (|q_D| * ONE_4PI_EPS0)
-        // But we also have k = q_D² * ONE_4PI_EPS0 / α
-        // So: d = q_D * E_code / k gives the same result
-        // This is correct! The issue must be elsewhere.
+        // The physical relationship: μ = α * E gives the dipole moment
+        // Since μ = |q_D| * d, we have d = α * E / |q_D|
+        // In MD units with k = q_D² * ONE_4PI_EPS0 / α:
+        // k already contains ONE_4PI_EPS0, so d = q_D * E / k
         double targetX = particle.charge * electricField[i][0] / particle.kSpring;
         double targetY = particle.charge * electricField[i][1] / particle.kSpring;
         double targetZ = particle.charge * electricField[i][2] / particle.kSpring;
@@ -804,107 +1042,191 @@ bool DrudeSCFOM::inSameMolecule(int atom1, int atom2, const model::MCState& stat
 
 bool DrudeSCFOM::applyDIIS(DIISData& diis,
                            const std::vector<DrudeParticle>& particles,
-                           const std::vector<Vec3>& electricField,
                            model::MCState& state) const {
-    // DIIS (Direct Inversion in the Iterative Subspace) acceleration
-    // Simplified implementation without external linear algebra library
+    // Real DIIS (Direct Inversion in the Iterative Subspace) acceleration
+    // Based on Pulay's method using residual dot products
     
     const int N = particles.size();
-    if (N == 0) return false;
+    if (N == 0 || diis.positions.size() < 3) return false;
     
-    // Collect current positions and compute residuals
-    std::vector<double> currentPos(3 * N);
-    std::vector<double> residual(3 * N);
+    int m = diis.positions.size();
     
-    std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
+    // Construct B matrix: B_ij = <r_i, r_j>
+    std::vector<double> B((m+1)*(m+1), 0.0);
+    std::vector<double> rhs(m+1, 0.0);
     
+    for (int i = 0; i < m; ++i) {
+        for (int j = 0; j < m; ++j) {
+            double dotProduct = 0.0;
+            for (size_t k = 0; k < diis.residuals[i].size(); ++k) {
+                dotProduct += diis.residuals[i][k] * diis.residuals[j][k];
+            }
+            B[i*(m+1)+j] = dotProduct;
+        }
+        B[i*(m+1)+m] = -1.0;
+        B[m*(m+1)+i] = -1.0;
+    }
+    rhs[m] = -1.0;
+    
+    // Solve linear system using Gaussian elimination
+    std::vector<double> c(m+1);
+    
+    // Simple Gaussian elimination (without pivoting for simplicity)
+    for (int i = 0; i < m+1; ++i) {
+        // Find pivot
+        double pivot = B[i*(m+1)+i];
+        if (std::abs(pivot) < 1e-10) {
+            // Matrix is singular, fall back to no DIIS
+            return false;
+        }
+        
+        // Scale row
+        for (int j = i; j < m+1; ++j) {
+            B[i*(m+1)+j] /= pivot;
+        }
+        rhs[i] /= pivot;
+        
+        // Eliminate column
+        for (int k = i+1; k < m+1; ++k) {
+            double factor = B[k*(m+1)+i];
+            for (int j = i; j < m+1; ++j) {
+                B[k*(m+1)+j] -= factor * B[i*(m+1)+j];
+            }
+            rhs[k] -= factor * rhs[i];
+        }
+    }
+    
+    // Back substitution
+    for (int i = m; i >= 0; --i) {
+        c[i] = rhs[i];
+        for (int j = i+1; j < m+1; ++j) {
+            c[i] -= B[i*(m+1)+j] * c[j];
+        }
+    }
+    
+    // Mix positions: x_new = Σ c_i * x_i
+    std::vector<double> newPos(3*N, 0.0);
+    for (int i = 0; i < m; ++i) {
+        for (size_t k = 0; k < newPos.size(); ++k) {
+            newPos[k] += c[i] * diis.positions[i][k];
+        }
+    }
+    
+    // Update Drude positions
     for (size_t i = 0; i < particles.size(); ++i) {
         const auto& p = particles[i];
-        const auto& drude = state.atoms[p.drudeIndex];
+        if (p.polarizability < 1e-14) continue;
+        
+        auto& drude = state.atoms[p.drudeIndex];
         const auto& parent = state.atoms[p.parentIndex];
         
-        // Current displacement
-        double dx = drude.x - parent.x;
-        double dy = drude.y - parent.y;
-        double dz = drude.z - parent.z;
-        applyPBC(dx, dy, dz, box);
+        // Apply max step constraint
+        double dx = newPos[3*i];
+        double dy = newPos[3*i+1];
+        double dz = newPos[3*i+2];
         
-        currentPos[3*i] = dx;
-        currentPos[3*i+1] = dy;
-        currentPos[3*i+2] = dz;
-        
-        // Residual: r = q*E - k*d
-        residual[3*i] = p.charge * electricField[i][0] - p.kSpring * dx;
-        residual[3*i+1] = p.charge * electricField[i][1] - p.kSpring * dy;
-        residual[3*i+2] = p.charge * electricField[i][2] - p.kSpring * dz;
-    }
-    
-    // Add to history
-    if (diis.historySize < diis.maxHistory) {
-        diis.positions.push_back(currentPos);
-        diis.residuals.push_back(residual);
-        diis.historySize++;
-    } else {
-        // Replace oldest
-        diis.positions.erase(diis.positions.begin());
-        diis.residuals.erase(diis.residuals.begin());
-        diis.positions.push_back(currentPos);
-        diis.residuals.push_back(residual);
-    }
-    
-    // Need at least 2 iterations for DIIS
-    if (diis.historySize < 2 || !diis.enabled) {
-        return false;
-    }
-    
-    // For now, use a simplified Anderson mixing instead of full DIIS
-    // This avoids the need for matrix inversion
-    // Anderson mixing: x_{n+1} = (1-beta)*x_n + beta*G(x_n)
-    // where G(x) is the fixed-point iteration
-    
-    const double mixingParam = 0.5;  // Anderson mixing parameter
-    
-    // Compute mixed position from last two iterations
-    if (diis.historySize >= 2) {
-        size_t last = diis.historySize - 1;
-        size_t prev = diis.historySize - 2;
-        
-        // Compute residual norm for adaptive mixing
-        double resNorm = 0.0;
-        for (size_t j = 0; j < residual.size(); ++j) {
-            resNorm += residual[j] * residual[j];
-        }
-        resNorm = std::sqrt(resNorm);
-        
-        // Adaptive mixing: use smaller mixing for larger residuals
-        double adaptiveMixing = mixingParam;
-        if (resNorm > 100.0) {
-            adaptiveMixing *= 0.5;
+        double r2 = dx*dx + dy*dy + dz*dz;
+        if (r2 > 0.04) {  // Max 0.2 nm
+            double scale = 0.2 / std::sqrt(r2);
+            dx *= scale;
+            dy *= scale;
+            dz *= scale;
         }
         
-        // Anderson mixing update
-        std::vector<double> newPos(3 * N);
-        for (size_t j = 0; j < newPos.size(); ++j) {
-            // Simple mixing between current and previous
-            newPos[j] = (1.0 - adaptiveMixing) * diis.positions[last][j] + 
-                        adaptiveMixing * diis.positions[prev][j];
-        }
+        drude.x = parent.x + dx;
+        drude.y = parent.y + dy;
+        drude.z = parent.z + dz;
+    }
+    
+    return true;
+}
+
+double DrudeSCFOM::estimateSpectralRadius(const model::MCState& state,
+                                          const std::vector<DrudeParticle>& particles,
+                                          const std::vector<ScreenedPair>& pairs) const {
+    // Estimate spectral radius ρ(αT) for the system
+    // For simplicity, use pairwise approximation: ρ ≈ max(α_i * T_ij)
+    
+    if (particles.size() < 2) {
+        return 0.0;  // Single dipole has no mutual polarization
+    }
+    
+    double maxRho = 0.0;
+    std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
+    
+    // Build screened pairs map
+    std::map<std::pair<int,int>, double> screenedPairs;
+    for (const auto& pair : pairs) {
+        screenedPairs[{pair.dipole1, pair.dipole2}] = pair.thole;
+        screenedPairs[{pair.dipole2, pair.dipole1}] = pair.thole;
+    }
+    
+    // Check all dipole pairs
+    for (size_t i = 0; i < particles.size(); ++i) {
+        const auto& pi = particles[i];
+        if (pi.polarizability < 1e-14) continue;
         
-        // Update Drude positions
-        for (size_t i = 0; i < particles.size(); ++i) {
-            const auto& p = particles[i];
-            auto& drude = state.atoms[p.drudeIndex];
-            const auto& parent = state.atoms[p.parentIndex];
+        const auto& parent1 = state.atoms[pi.parentIndex];
+        
+        for (size_t j = 0; j < particles.size(); ++j) {
+            if (i == j) continue;
             
-            drude.x = parent.x + newPos[3*i];
-            drude.y = parent.y + newPos[3*i+1];
-            drude.z = parent.z + newPos[3*i+2];
+            const auto& pj = particles[j];
+            if (pj.polarizability < 1e-14) continue;
+            
+            const auto& parent2 = state.atoms[pj.parentIndex];
+            
+            // Calculate distance between parents
+            double dx = parent2.x - parent1.x;
+            double dy = parent2.y - parent1.y;
+            double dz = parent2.z - parent1.z;
+            applyPBC(dx, dy, dz, box);
+            
+            double r2 = dx*dx + dy*dy + dz*dz;
+            if (r2 < 1e-12) continue;
+            
+            double r = std::sqrt(r2);
+            
+            // Get screening parameter
+            double a_pair = 0.0;
+            auto it = screenedPairs.find({static_cast<int>(i), static_cast<int>(j)});
+            if (it != screenedPairs.end()) {
+                a_pair = it->second;
+            }
+            
+            // Calculate screening
+            double s = tholeS1(r, pi.polarizability, pj.polarizability, a_pair);
+            
+            // Dipole-dipole interaction strength
+            double T = DrudeConstants::ONE_4PI_EPS0 * s / (r*r*r);
+            
+            // Spectral radius contribution
+            double rho_ij = std::sqrt(pi.polarizability * pj.polarizability) * T;
+            maxRho = std::max(maxRho, rho_ij);
         }
-        
-        return true;
     }
     
-    return false;
+    return maxRho;
+}
+
+double DrudeSCFOM::computeAdaptiveDamping(double rho) const {
+    // Compute adaptive damping factor based on spectral radius
+    // Ensures stable convergence even near instability
+    
+    if (rho < 0.9) {
+        // Stable region: standard damping
+        return 0.5;
+    } else if (rho < 1.0) {
+        // Near instability: scale damping to maintain stability
+        // damping = 0.9 / rho ensures effective ρ < 0.9
+        return std::min(0.5, 0.9 / rho);
+    } else if (rho < 2.0) {
+        // Unstable but tractable: strong damping
+        return std::min(0.3, 0.9 / rho);
+    } else {
+        // Highly unstable: very strong damping
+        return std::min(0.1, 0.5 / rho);
+    }
 }
 
 } // namespace exp

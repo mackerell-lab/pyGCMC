@@ -58,19 +58,33 @@ void init_drude_bindings(py::module& m) {
     py::class_<DrudeSCFParams>(m, "DrudeSCFParams", "SCF convergence parameters")
         .def(py::init<>())
         .def_readwrite("tolerance", &DrudeSCFParams::tolerance,
-                       "Force tolerance for convergence (kJ/mol/nm)")
+                       "Residual tolerance for convergence (kJ/mol/nm)")
+        .def_readwrite("displacementTolerance", &DrudeSCFParams::displacementTolerance,
+                       "Displacement tolerance for convergence (nm)")
         .def_readwrite("maxIterations", &DrudeSCFParams::maxIterations,
                        "Maximum number of SCF iterations")
         .def_readwrite("dampingFactor", &DrudeSCFParams::dampingFactor,
-                       "Damping factor for stability (0-1)")
+                       "Initial damping factor for stability (0-1)")
+        .def_readwrite("maxStep", &DrudeSCFParams::maxStep,
+                       "Maximum step size per iteration (nm)")
         .def_readwrite("maxDrudeDistance", &DrudeSCFParams::maxDrudeDistance,
                        "Maximum allowed Drude-parent distance (nm)")
+        .def_readwrite("diisStartIter", &DrudeSCFParams::diisStartIter,
+                       "Iteration to start DIIS acceleration")
+        .def_readwrite("diisMaxHistory", &DrudeSCFParams::diisMaxHistory,
+                       "Maximum DIIS history size")
         .def_readwrite("enableHardWall", &DrudeSCFParams::enableHardWall,
                        "Enable hard wall constraint (default: False, matching OpenMM/CHARMM)")
         .def_readwrite("excludePartnerParentInExternalField", &DrudeSCFParams::excludePartnerParentInExternalField,
-                       "Exclude partner parents in external field to avoid double counting (default: False)")
+                       "Exclude partner partners in external field to avoid double counting (default: False)")
         .def_readwrite("includeCoulombEnergy", &DrudeSCFParams::includeCoulombEnergy,
-                       "Include Coulomb energy in calculateEnergy (default: False, spring-only for production)");
+                       "Include Coulomb energy in calculateEnergy (default: False, spring-only for production)")
+        .def_readwrite("enableAdaptiveDamping", &DrudeSCFParams::enableAdaptiveDamping,
+                       "Enable adaptive damping based on spectral radius (default: False)")
+        .def_readwrite("requireConvergence", &DrudeSCFParams::requireConvergence,
+                       "Throw exception if SCF does not converge (default: False)")
+        .def_readwrite("logLevel", &DrudeSCFParams::logLevel,
+                       "Logging level: 0=silent, 1=brief, 2=verbose");
     
     // DrudeAlgorithm enum
     py::enum_<DrudeAlgorithm>(m, "DrudeAlgorithm", "Available Drude optimization algorithms")
@@ -442,7 +456,12 @@ void init_drude_bindings(py::module& m) {
              py::arg("algo"),
              "Set algorithm: 0=S1_POINT_CHARGE (CHARMM), 1=S3S5_DIPOLE_TENSOR, 2=S1_DIPOLE_FIELD, 3=DIRECT_COULOMB")
         .def("getDrudeAlgorithm", &DrudeExperimentalCore::getDrudeAlgorithm,
-             "Get current algorithm setting");
+             "Get current algorithm setting")
+        .def("getSpectralRadius", &DrudeExperimentalCore::getSpectralRadius,
+             py::arg("state"),
+             "Get spectral radius of the polarization system for stability analysis")
+        .def("getSCFIterationCount", &DrudeExperimentalCore::getSCFIterationCount,
+             "Get last SCF iteration count");
 }
 
 } // namespace simulation

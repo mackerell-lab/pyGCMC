@@ -39,6 +39,12 @@ public:
     // Enable/disable Coulomb energy (for testing)
     void setIncludeCoulomb(bool include) { m_includeCoulomb = include; }
     bool getIncludeCoulomb() const { return m_includeCoulomb; }
+    
+    // Get spectral radius for monitoring
+    double getSpectralRadius(const model::MCState& state) const;
+    
+    // Get last SCF iteration count
+    int getSCFIterationCount() const;
 
 private:
     friend class DrudeSCFOM;

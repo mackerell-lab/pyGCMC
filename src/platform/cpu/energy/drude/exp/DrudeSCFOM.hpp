@@ -23,6 +23,9 @@ public:
     void setAlgorithm(DrudeAlgorithm algo) { algorithm = algo; }
     DrudeAlgorithm getAlgorithm() const { return algorithm; }
     
+    // Get last iteration count (for monitoring)
+    int getIterationCount() const { return m_lastIterationCount; }
+    
     // Main optimization function
     bool optimize(model::MCState& state,
                   const std::vector<DrudeParticle>& particles,
@@ -32,6 +35,11 @@ public:
     // Utility function for PBC
     static void applyPBC(double& dx, double& dy, double& dz, 
                          const std::array<double, 3>& box);
+    
+    // Estimate spectral radius for adaptive damping (public for monitoring)
+    double estimateSpectralRadius(const model::MCState& state,
+                                  const std::vector<DrudeParticle>& particles,
+                                  const std::vector<ScreenedPair>& pairs) const;
 
 private:
     // Calculate total electric field at each Drude particle
@@ -99,20 +107,21 @@ private:
     struct DIISData {
         std::vector<std::vector<double>> positions;  // History of positions
         std::vector<std::vector<double>> residuals;  // History of residuals
-        int historySize = 0;
-        int maxHistory = 5;
-        bool enabled = false;
+        int maxHistory = 8;
     };
     
     // DIIS mixing method
     bool applyDIIS(DIISData& diis, 
                    const std::vector<DrudeParticle>& particles,
-                   const std::vector<Vec3>& electricField,
                    model::MCState& state) const;
+    
+    // Compute adaptive damping factor based on spectral radius
+    double computeAdaptiveDamping(double rho) const;
                    
 private:
     // Current algorithm selection
     DrudeAlgorithm algorithm = DrudeAlgorithm::S1_POINT_CHARGE;  // Default to CHARMM standard
+    mutable int m_lastIterationCount = 0;  // Track last SCF iteration count
 };
 
 } // namespace exp

@@ -78,16 +78,23 @@ struct ScreenedPair {
 /**
  * @brief SCF convergence parameters
  * 
- * Default values match OpenMM for consistency
+ * Default values optimized for GCMC simulations
  */
 struct DrudeSCFParams {
-    double tolerance = 10.0;          // Force tolerance (kJ/mol/nm) - tighter for better convergence
-    int maxIterations = 100;          // Maximum SCF iterations
-    double dampingFactor = 0.5;       // Damping for stability
-    double maxDrudeDistance = 0.02;   // Maximum Drude-parent distance (nm)
-    bool enableHardWall = false;      // Enable hard wall constraint (default: off, matching OpenMM/CHARMM)
+    double tolerance = 10.0;              // Force tolerance (kJ/mol/nm) - balanced for GCMC
+    double displacementTolerance = 1e-4;  // Displacement tolerance (nm) for convergence - 0.1 pm
+    int maxIterations = 50;               // Maximum SCF iterations - reduced for speed
+    double dampingFactor = 0.5;           // Initial damping factor for stability
+    double maxStep = 0.02;                // Maximum step size per iteration (nm)
+    double maxDrudeDistance = 0.02;       // Maximum Drude-parent distance (nm)
+    int diisStartIter = 3;                // Iteration to start DIIS acceleration
+    int diisMaxHistory = 8;               // Maximum DIIS history size
+    bool enableHardWall = false;          // Enable hard wall constraint (default: off, matching OpenMM/CHARMM)
     bool excludePartnerParentInExternalField = false;  // OpenMM does NOT exclude partner parents (default: false)
-    bool includeCoulombEnergy = true;  // Include Coulomb in energy (default: true for backward compatibility)
+    bool includeCoulombEnergy = true;     // Include Coulomb in energy (default: true for backward compatibility)
+    bool enableAdaptiveDamping = false;   // Enable adaptive damping based on spectral radius
+    bool requireConvergence = false;      // If true, throw exception on SCF non-convergence
+    int logLevel = 0;                     // Logging level: 0=silent, 1=brief, 2=verbose
 };
 
 /**

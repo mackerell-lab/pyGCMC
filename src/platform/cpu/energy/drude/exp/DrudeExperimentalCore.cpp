@@ -34,8 +34,12 @@ double DrudeExperimentalCore::calculateEnergy(model::MCState& state) {
     bool converged = m_scf->optimize(state, m_particles, m_screenedPairs, m_params);
     
     if (!converged) {
-        // SCF did not converge - this can happen but is handled by hard wall
-        // std::cerr << "Warning: Drude SCF did not converge\n";
+        if (m_params.requireConvergence) {
+            throw std::runtime_error("Experimental Drude SCF did not converge in calculateEnergy");
+        }
+        if (m_params.logLevel > 0) {
+            std::cerr << "Warning: Experimental Drude SCF did not converge in calculateEnergy\n";
+        }
     }
 
     // Return polarization (spring) energy only to avoid double counting
@@ -87,7 +91,15 @@ void DrudeExperimentalCore::calculateForces(model::MCState& state, std::vector<V
     }
     
     // Ensure positions are at SCF minimum
-    m_scf->optimize(state, m_particles, m_screenedPairs, m_params);
+    bool converged = m_scf->optimize(state, m_particles, m_screenedPairs, m_params);
+    if (!converged) {
+        if (m_params.requireConvergence) {
+            throw std::runtime_error("Experimental Drude SCF did not converge in calculateForces");
+        }
+        if (m_params.logLevel > 0) {
+            std::cerr << "Warning: Experimental Drude SCF did not converge in calculateForces\n";
+        }
+    }
     
     // Spring forces only; Coulomb handled by main nonbonded module
     for (const auto& p : m_particles) {
@@ -219,6 +231,18 @@ bool DrudeExperimentalCore::inSameMolecule(int atom1, int atom2, const model::MC
     }
     
     return false;  // Atoms in different residues
+}
+
+double DrudeExperimentalCore::getSpectralRadius(const model::MCState& state) const {
+    // Get spectral radius from the SCF optimizer
+    if (m_scf) {
+        return m_scf->estimateSpectralRadius(state, m_particles, m_screenedPairs);
+    }
+    return 0.0;
+}
+
+int DrudeExperimentalCore::getSCFIterationCount() const {
+    return m_scf ? m_scf->getIterationCount() : 0;
 }
 
 } // namespace exp

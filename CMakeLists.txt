@@ -1,5 +1,8 @@
 # Minimum CMake version
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.14)
+
+# Suppress developer warnings from dependencies
+set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON CACHE BOOL "" FORCE)
 
 # Project name and version
 project(pygcmc VERSION 0.1.0 LANGUAGES CXX)
@@ -73,6 +76,11 @@ endfunction()
 
 # Function to setup pybind11 with version control
 function(setup_pybind11)
+    # Set policy for new Python finding method to suppress warnings
+    if(POLICY CMP0148)
+        cmake_policy(SET CMP0148 NEW)
+    endif()
+    
     # Try to find system-installed pybind11 first
     find_package(pybind11 CONFIG)
     
@@ -82,7 +90,7 @@ function(setup_pybind11)
         FetchContent_Declare(
             pybind11
             GIT_REPOSITORY https://github.com/pybind/pybind11.git
-            GIT_TAG        v2.11.1  # Lock to stable version
+            GIT_TAG        v2.13.6  # Updated to latest stable version
         )
         FetchContent_MakeAvailable(pybind11)
     else()
