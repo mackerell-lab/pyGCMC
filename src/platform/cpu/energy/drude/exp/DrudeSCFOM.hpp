@@ -73,8 +73,14 @@ private:
     // Check if two atoms are in the same molecule
     bool inSameMolecule(int atom1, int atom2, const model::MCState& state) const;
 
-    // Calculate Thole S1 screening function (CHARMM/OpenMM standard)
+    // Calculate Thole S1 screening function (dispatches based on params.tholeMode)
     double tholeS1(double r, double alpha_i, double alpha_j, double thole_sum) const;
+    
+    // Standard theoretical S1 function
+    double tholeS1_standard(double r, double alpha_i, double alpha_j, double thole_sum) const;
+    
+    // OpenMM-compatible S1 function
+    double tholeS1_openmm(double r, double alpha_i, double alpha_j, double thole_sum) const;
     
     // Calculate Thole S3 screening function for 1/r^3 dipole-dipole interactions
     double tholeS3(double r, double alpha_i, double alpha_j, double thole_sum) const;
@@ -122,6 +128,7 @@ private:
     // Current algorithm selection
     DrudeAlgorithm algorithm = DrudeAlgorithm::S1_POINT_CHARGE;  // Default to CHARMM standard
     mutable int m_lastIterationCount = 0;  // Track last SCF iteration count
+    mutable DrudeSCFParams m_currentParams;  // Store current params for S1 dispatch
 };
 
 } // namespace exp

@@ -20,6 +20,14 @@ namespace DrudeConstants {
 }
 
 /**
+ * @brief Thole screening mode for compatibility
+ */
+enum class TholeMode {
+    StandardS1,     // Pure S1 function (theoretical standard)
+    OpenMMCompat    // OpenMM-compatible implementation with four-pair screening
+};
+
+/**
  * @brief Drude oscillator parameters for a single particle
  * 
  * Following OpenMM's parameter convention for compatibility
@@ -95,6 +103,7 @@ struct DrudeSCFParams {
     bool enableAdaptiveDamping = false;   // Enable adaptive damping based on spectral radius
     bool requireConvergence = false;      // If true, throw exception on SCF non-convergence
     int logLevel = 0;                     // Logging level: 0=silent, 1=brief, 2=verbose
+    TholeMode tholeMode = TholeMode::StandardS1;  // Thole screening mode (default: standard)
 };
 
 /**

@@ -20,12 +20,20 @@ void DrudeSCFOM::applyPBC(double& dx, double& dy, double& dz,
 }
 
 double DrudeSCFOM::tholeS1(double r, double alpha_i, double alpha_j, double thole_pair) const {
-    // CHARMM/OpenMM standard S1 screening function
-    // S1(u) = 1 - (1 + u/2)exp(-u)
-    // where u = a*r / (alpha_i * alpha_j)^(1/6)
+    // Dispatch based on current TholeMode
+    if (m_currentParams.tholeMode == TholeMode::OpenMMCompat) {
+        return tholeS1_openmm(r, alpha_i, alpha_j, thole_pair);
+    } else {
+        return tholeS1_standard(r, alpha_i, alpha_j, thole_pair);
+    }
+}
+
+double DrudeSCFOM::tholeS1_standard(double r, double alpha_i, double alpha_j, double thole_pair) const {
+    // Standard theoretical S1 screening function
+    // S1(u) = 1 - (1 + u/2)exp(-u) where u = a*r/(alpha_i*alpha_j)^(1/6)
     
-    // If thole parameter is zero or negligible, return 1.0 (no screening)
-    if (thole_pair <= 1e-10 || alpha_i <= 1e-14 || alpha_j <= 1e-14) {
+    // Special cases
+    if (thole_pair == 0.0 || alpha_i <= 1e-14 || alpha_j <= 1e-14) {
         return 1.0;  // No screening
     }
     
@@ -37,8 +45,15 @@ double DrudeSCFOM::tholeS1(double r, double alpha_i, double alpha_j, double thol
     }
     
     double exp_u = std::exp(-u);
-    // S1 function for point charge screening (CHARMM standard)
     return 1.0 - (1.0 + 0.5 * u) * exp_u;
+}
+
+double DrudeSCFOM::tholeS1_openmm(double r, double alpha_i, double alpha_j, double thole_pair) const {
+    // OpenMM-compatible S1 function
+    // For now, identical to standard S1 - the difference is in how it's applied
+    // (four-pair screening vs single-pair)
+    // Future refinements can be added here based on further testing
+    return tholeS1_standard(r, alpha_i, alpha_j, thole_pair);
 }
 
 /* DEPRECATED: Non-standard S3 screening function
@@ -103,6 +118,9 @@ bool DrudeSCFOM::optimize(model::MCState& state,
                               const std::vector<DrudeParticle>& particles,
                               const std::vector<ScreenedPair>& pairs,
                               const DrudeSCFParams& params) {
+    // Store params for S1 dispatch
+    m_currentParams = params;
+    
     if (particles.empty()) {
         m_lastIterationCount = 0;
         return true;
@@ -401,7 +419,6 @@ void DrudeSCFOM::calculateElectricField(const model::MCState& state,
     for (size_t i = 0; i < particles.size(); ++i) {
         const auto& pi = particles[i];
         const auto& fieldPoint = state.atoms[pi.parentIndex];  // Field at PARENT position
-        const auto& parentI = state.atoms[pi.parentIndex];
         
         Vec3 field = {0.0, 0.0, 0.0};
         
@@ -420,31 +437,7 @@ void DrudeSCFOM::calculateElectricField(const model::MCState& state,
                          << " isDrude=" << isDrude[j] << std::endl;
             }
             
-            // Determine screening factor
-            double S1 = 1.0;  // Default: no screening
-            
-            // Check if j belongs to a dipole that has screening with dipole i
-            int dipoleK = atomToDipole[j];
-            if (dipoleK >= 0 && dipoleK < static_cast<int>(particles.size())) {
-                auto it = screenedPairs.find({static_cast<int>(i), dipoleK});
-                if (it != screenedPairs.end()) {
-                    // Compute S1 using parent-parent distance
-                    const auto& parentK = state.atoms[particles[dipoleK].parentIndex];
-                    
-                    double dx_pp = parentK.x - parentI.x;
-                    double dy_pp = parentK.y - parentI.y;
-                    double dz_pp = parentK.z - parentI.z;
-                    applyPBC(dx_pp, dy_pp, dz_pp, box);
-                    double r_pp = std::sqrt(dx_pp*dx_pp + dy_pp*dy_pp + dz_pp*dz_pp);
-                    
-                    if (r_pp > 1e-12) {
-                        S1 = tholeS1(r_pp, pi.polarizability, 
-                                    particles[dipoleK].polarizability, it->second);
-                    }
-                }
-            }
-            
-            // Calculate field contribution (field_point - source)
+            // Calculate field contribution geometry first (field_point - source)
             double dx = fieldPoint.x - atomJ.x;
             double dy = fieldPoint.y - atomJ.y;
             double dz = fieldPoint.z - atomJ.z;
@@ -455,6 +448,18 @@ void DrudeSCFOM::calculateElectricField(const model::MCState& state,
             
             double r = std::sqrt(r2);
             double r3 = r2 * r;
+            
+            // Determine screening factor using actual r_ij (drude_i to atomJ)
+            double S1 = 1.0;  // Default: no screening
+            int dipoleK = atomToDipole[j];
+            if (dipoleK >= 0 && dipoleK < static_cast<int>(particles.size())) {
+                auto it = screenedPairs.find({static_cast<int>(i), dipoleK});
+                if (it != screenedPairs.end()) {
+                    // Use actual distance r_ij for S1(u_ij) calculation
+                    S1 = tholeS1(r, pi.polarizability, 
+                                particles[dipoleK].polarizability, it->second);
+                }
+            }
             
             // E = k * q * S(u) / r^2 * r_hat
             double factor = DrudeConstants::ONE_4PI_EPS0 * atomJ.charge * S1 / r3;
@@ -479,7 +484,6 @@ void DrudeSCFOM::calculateElectricField(const model::MCState& state,
             
             const auto& pj = particles[j];
             const auto& drudeJ = state.atoms[pj.drudeIndex];
-            const auto& parentJ = state.atoms[pj.parentIndex];
             
             // Get screening parameter if this is a screened pair
             double thole = 0.0;
@@ -488,22 +492,7 @@ void DrudeSCFOM::calculateElectricField(const model::MCState& state,
                 thole = it->second;
             }
             
-            // Calculate parent-parent distance for screening
-            double dx_pp = parentJ.x - parentI.x;
-            double dy_pp = parentJ.y - parentI.y;
-            double dz_pp = parentJ.z - parentI.z;
-            applyPBC(dx_pp, dy_pp, dz_pp, box);
-            double r_pp = std::sqrt(dx_pp*dx_pp + dy_pp*dy_pp + dz_pp*dz_pp);
-            
-            if (r_pp < 1e-12) continue;
-            
-            // Calculate S1 screening for all 4 interactions
-            double S1 = 1.0;
-            if (thole > 1e-10) {
-                S1 = tholeS1(r_pp, pi.polarizability, pj.polarizability, thole);
-            }
-            
-            // Field from Drude charge of dipole j
+            // Field from Drude charge of dipole j (use r_{di,dj} for S1)
             double dx_dj = fieldPoint.x - drudeJ.x;
             double dy_dj = fieldPoint.y - drudeJ.y;
             double dz_dj = fieldPoint.z - drudeJ.z;
@@ -513,7 +502,14 @@ void DrudeSCFOM::calculateElectricField(const model::MCState& state,
             if (r2_dj > 1e-12) {
                 double r_dj = std::sqrt(r2_dj);
                 double r3_dj = r2_dj * r_dj;
-                double factor_dj = DrudeConstants::ONE_4PI_EPS0 * pj.charge * S1 / r3_dj;
+                
+                // Calculate S1 using actual distance r_{di,dj}
+                double S1_dj = 1.0;
+                if (thole > 1e-10) {
+                    S1_dj = tholeS1(r_dj, pi.polarizability, pj.polarizability, thole);
+                }
+                
+                double factor_dj = DrudeConstants::ONE_4PI_EPS0 * pj.charge * S1_dj / r3_dj;
                 field[0] += factor_dj * dx_dj;
                 field[1] += factor_dj * dy_dj;
                 field[2] += factor_dj * dz_dj;
@@ -635,6 +631,9 @@ void DrudeSCFOM::calculateInducedField(const model::MCState& state,
                                            const std::vector<ScreenedPair>& pairs,
                                            std::vector<Vec3>& electricField) const {
     // Dispatch to appropriate algorithm
+    if (m_currentParams.logLevel > 1) {
+        std::cout << "calculateInducedField: algorithm=" << static_cast<int>(algorithm) << std::endl;
+    }
     switch (algorithm) {
         case DrudeAlgorithm::S1_POINT_CHARGE:
             calculateInducedFieldS1(state, particles, pairs, electricField);
@@ -665,6 +664,13 @@ void DrudeSCFOM::calculateInducedFieldS1(const model::MCState& state,
     // CHARMM/OpenMM standard: 4-point charge model with S1 screening
     // Each dipole is represented by parent(+q) and Drude(-q) charges
     // All 4 charge-charge interactions are computed with S1 screening
+    
+    if (m_currentParams.logLevel > 1) {
+        std::cout << "calculateInducedFieldS1: TholeMode=" 
+                  << (m_currentParams.tholeMode == TholeMode::OpenMMCompat ? "OpenMMCompat" : "StandardS1")
+                  << ", particles=" << particles.size() 
+                  << ", pairs=" << pairs.size() << std::endl;
+    }
     
     // Build map of screened pairs for quick lookup
     std::map<std::pair<int,int>, double> screenedPairs;
@@ -709,7 +715,8 @@ void DrudeSCFOM::calculateInducedFieldS1(const model::MCState& state,
             
             // Helper lambda for screened Coulomb field calculation
             auto computeScreenedField = [&](const auto& atom1, const auto& atom2, 
-                                           double q2, Vec3& field) {
+                                           double q2, Vec3& field,
+                                           bool isDrudeInteraction) {
                 double dx = atom1.x - atom2.x;
                 double dy = atom1.y - atom2.y;
                 double dz = atom1.z - atom2.z;
@@ -719,8 +726,25 @@ void DrudeSCFOM::calculateInducedFieldS1(const model::MCState& state,
                 if (r2 < 1e-12) return;
                 
                 double r = std::sqrt(r2);
-                // Use parent-parent distance for u calculation (OpenMM standard)
-                double s1 = tholeS1(r_pp, p1.polarizability, p2.polarizability, a_pair);
+                
+                // Determine screening based on mode
+                double s1 = 1.0;
+                if (m_currentParams.tholeMode == TholeMode::OpenMMCompat) {
+                    // OpenMM-compatible: only screen interactions involving Drude particles
+                    if (isDrudeInteraction && a_pair > 0) {
+                        // Use actual interaction distance for screening
+                        s1 = tholeS1(r, p1.polarizability, p2.polarizability, a_pair);
+                        if (m_currentParams.logLevel > 1) {
+                            std::cout << "OpenMMCompat: Screening with r=" << r << ", S1=" << s1 << std::endl;
+                        }
+                    }
+                } else {
+                    // Standard mode: use parent-parent distance for all interactions
+                    s1 = tholeS1(r_pp, p1.polarizability, p2.polarizability, a_pair);
+                    if (m_currentParams.logLevel > 1) {
+                        std::cout << "StandardS1: Screening with r_pp=" << r_pp << ", S1=" << s1 << std::endl;
+                    }
+                }
                 
                 // Field = k * q * S(r) / r^3 * r_vec
                 double factor = DrudeConstants::ONE_4PI_EPS0 * q2 * s1 / (r2 * r);
@@ -737,17 +761,17 @@ void DrudeSCFOM::calculateInducedFieldS1(const model::MCState& state,
             
             // Field on dipole 1
             Vec3 field1 = {0, 0, 0};
-            computeScreenedField(parent1, parent2, qPolP2, field1);  // P1 from P2
-            computeScreenedField(parent1, drude2, qPolD2, field1);   // P1 from D2
-            computeScreenedField(drude1, parent2, qPolP2, field1);   // D1 from P2
-            computeScreenedField(drude1, drude2, qPolD2, field1);    // D1 from D2
+            computeScreenedField(parent1, parent2, qPolP2, field1, false);  // P1 from P2 (no Drude)
+            computeScreenedField(parent1, drude2, qPolD2, field1, true);   // P1 from D2 (has Drude)
+            computeScreenedField(drude1, parent2, qPolP2, field1, true);   // D1 from P2 (has Drude)
+            computeScreenedField(drude1, drude2, qPolD2, field1, true);    // D1 from D2 (has Drude)
             
             // Field on dipole 2
             Vec3 field2 = {0, 0, 0};
-            computeScreenedField(parent2, parent1, qPolP1, field2);  // P2 from P1
-            computeScreenedField(parent2, drude1, qPolD1, field2);   // P2 from D1
-            computeScreenedField(drude2, parent1, qPolP1, field2);   // D2 from P1
-            computeScreenedField(drude2, drude1, qPolD1, field2);    // D2 from D1
+            computeScreenedField(parent2, parent1, qPolP1, field2, false);  // P2 from P1 (no Drude)
+            computeScreenedField(parent2, drude1, qPolD1, field2, true);   // P2 from D1 (has Drude)
+            computeScreenedField(drude2, parent1, qPolP1, field2, true);   // D2 from P1 (has Drude)
+            computeScreenedField(drude2, drude1, qPolD1, field2, true);    // D2 from D1 (has Drude)
             
             // Add to total field (field acts on Drude particles)
             electricField[i][0] += field1[0];

@@ -84,7 +84,14 @@ void init_drude_bindings(py::module& m) {
         .def_readwrite("requireConvergence", &DrudeSCFParams::requireConvergence,
                        "Throw exception if SCF does not converge (default: False)")
         .def_readwrite("logLevel", &DrudeSCFParams::logLevel,
-                       "Logging level: 0=silent, 1=brief, 2=verbose");
+                       "Logging level: 0=silent, 1=brief, 2=verbose")
+        .def_readwrite("tholeMode", &DrudeSCFParams::tholeMode,
+                       "Thole screening mode: StandardS1 or OpenMMCompat (default: StandardS1)");
+    
+    // TholeMode enum
+    py::enum_<TholeMode>(m, "TholeMode", "Thole screening modes")
+        .value("StandardS1", TholeMode::StandardS1, "Standard theoretical S1 function")
+        .value("OpenMMCompat", TholeMode::OpenMMCompat, "OpenMM-compatible implementation");
     
     // DrudeAlgorithm enum
     py::enum_<DrudeAlgorithm>(m, "DrudeAlgorithm", "Available Drude optimization algorithms")
