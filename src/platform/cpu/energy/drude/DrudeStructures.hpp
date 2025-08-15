@@ -104,6 +104,11 @@ struct DrudeSCFParams {
     bool requireConvergence = false;      // If true, throw exception on SCF non-convergence
     int logLevel = 0;                     // Logging level: 0=silent, 1=brief, 2=verbose
     TholeMode tholeMode = TholeMode::StandardS1;  // Thole screening mode (default: standard)
+    
+    // Small-u softening parameters (OpenMMCompat mode only)
+    bool compatSmallUSoftening = false;   // Enable small-u softening for P-D interactions
+    double compatUSoftenStart = 0.2;      // u0: below this, S1 approaches 1
+    double compatUSoftenEnd = 0.9;        // u1: above this, use standard S1
 };
 
 /**

@@ -86,7 +86,13 @@ void init_drude_bindings(py::module& m) {
         .def_readwrite("logLevel", &DrudeSCFParams::logLevel,
                        "Logging level: 0=silent, 1=brief, 2=verbose")
         .def_readwrite("tholeMode", &DrudeSCFParams::tholeMode,
-                       "Thole screening mode: StandardS1 or OpenMMCompat (default: StandardS1)");
+                       "Thole screening mode: StandardS1 or OpenMMCompat (default: StandardS1)")
+        .def_readwrite("compatSmallUSoftening", &DrudeSCFParams::compatSmallUSoftening,
+                       "Enable small-u softening for P-D interactions (OpenMMCompat only)")
+        .def_readwrite("compatUSoftenStart", &DrudeSCFParams::compatUSoftenStart,
+                       "u0: below this, S1 approaches 1 (default: 0.2)")
+        .def_readwrite("compatUSoftenEnd", &DrudeSCFParams::compatUSoftenEnd,
+                       "u1: above this, use standard S1 (default: 0.9)");
     
     // TholeMode enum
     py::enum_<TholeMode>(m, "TholeMode", "Thole screening modes")

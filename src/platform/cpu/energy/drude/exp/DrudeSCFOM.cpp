@@ -414,30 +414,38 @@ void DrudeSCFOM::calculateElectricField(const model::MCState& state,
     
     std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
     
-    // Calculate field at each PARENT position (not Drude position!)
-    // This is critical for correct SCF convergence
+    // Calculate field at each DRUDE position (not parent position!)
+    // This is essential for correct Drude oscillator physics
     for (size_t i = 0; i < particles.size(); ++i) {
         const auto& pi = particles[i];
-        const auto& fieldPoint = state.atoms[pi.parentIndex];  // Field at PARENT position
+        const auto& fieldPoint = state.atoms[pi.drudeIndex];  // Field at DRUDE position
         
         Vec3 field = {0.0, 0.0, 0.0};
         
-        // 1. External field from non-Drude charges
+        // 1. External field from non-dipole charges only
+        // Parents of other dipoles are handled in induced field section
         double extFieldX = 0, extFieldY = 0, extFieldZ = 0;
         for (int j = 0; j < state.activeAtomCount; ++j) {
-            // Skip self and Drude charges
+            // Skip self, parent, and all Drude charges
             if (j == pi.parentIndex || j == pi.drudeIndex || isDrude[j]) continue;
+            
+            // Skip parents of other dipoles (they are handled as P-D in induced field)
+            if (atomToDipole[j] >= 0) continue;
             
             const auto& atomJ = state.atoms[j];
             if (std::abs(atomJ.charge) < 1e-14) continue;
             
-            if (i == 0 && params.logLevel >= 3) {
-                std::cout << "  External source j=" << j 
-                         << " charge=" << atomJ.charge 
-                         << " isDrude=" << isDrude[j] << std::endl;
+            // Skip same-molecule atoms (intramolecular exclusion)
+            if (inSameMolecule(pi.parentIndex, j, state)) {
+                continue;
             }
             
-            // Calculate field contribution geometry first (field_point - source)
+            if (i == 0 && params.logLevel >= 3) {
+                std::cout << "  External source j=" << j 
+                         << " charge=" << atomJ.charge << std::endl;
+            }
+            
+            // Calculate field contribution (field_point - source)
             double dx = fieldPoint.x - atomJ.x;
             double dy = fieldPoint.y - atomJ.y;
             double dz = fieldPoint.z - atomJ.z;
@@ -449,19 +457,10 @@ void DrudeSCFOM::calculateElectricField(const model::MCState& state,
             double r = std::sqrt(r2);
             double r3 = r2 * r;
             
-            // Determine screening factor using actual r_ij (drude_i to atomJ)
-            double S1 = 1.0;  // Default: no screening
-            int dipoleK = atomToDipole[j];
-            if (dipoleK >= 0 && dipoleK < static_cast<int>(particles.size())) {
-                auto it = screenedPairs.find({static_cast<int>(i), dipoleK});
-                if (it != screenedPairs.end()) {
-                    // Use actual distance r_ij for S1(u_ij) calculation
-                    S1 = tholeS1(r, pi.polarizability, 
-                                particles[dipoleK].polarizability, it->second);
-                }
-            }
+            // No screening for true external charges (they are not dipoles)
+            double S1 = 1.0;
             
-            // E = k * q * S(u) / r^2 * r_hat
+            // E = k * q / r^2 * r_hat
             double factor = DrudeConstants::ONE_4PI_EPS0 * atomJ.charge * S1 / r3;
             
             extFieldX += factor * dx;
@@ -478,11 +477,13 @@ void DrudeSCFOM::calculateElectricField(const model::MCState& state,
                      << extFieldY << ", " << extFieldZ << ")" << std::endl;
         }
         
-        // 2. Induced field from OTHER dipoles (using S1 point charge model)
+        // 2. Induced field from OTHER dipoles
+        // We need both P-D and D-D contributions with proper screening
         for (size_t j = 0; j < particles.size(); ++j) {
             if (i == j) continue;  // Skip self
             
             const auto& pj = particles[j];
+            const auto& parentJ = state.atoms[pj.parentIndex];
             const auto& drudeJ = state.atoms[pj.drudeIndex];
             
             // Get screening parameter if this is a screened pair
@@ -492,7 +493,76 @@ void DrudeSCFOM::calculateElectricField(const model::MCState& state,
                 thole = it->second;
             }
             
-            // Field from Drude charge of dipole j (use r_{di,dj} for S1)
+            // P-D: Field from parent j to drude i
+            double dx_pj = fieldPoint.x - parentJ.x;
+            double dy_pj = fieldPoint.y - parentJ.y;
+            double dz_pj = fieldPoint.z - parentJ.z;
+            applyPBC(dx_pj, dy_pj, dz_pj, box);
+            
+            double r2_pj = dx_pj*dx_pj + dy_pj*dy_pj + dz_pj*dz_pj;
+            if (r2_pj > 1e-12) {
+                double r_pj = std::sqrt(r2_pj);
+                double r3_pj = r2_pj * r_pj;
+                
+                // Calculate S1 for P-D with softening
+                double S1_pj = 1.0;
+                if (params.tholeMode == TholeMode::OpenMMCompat && thole > 1e-10) {
+                    // For P-D: use α_eff = α_i^(1/3)
+                    double alpha_eff_pd = std::cbrt(pi.polarizability);
+                    double u_pd = thole * r_pj / alpha_eff_pd;
+                    
+                    if (u_pd <= 50.0) {
+                        double exp_u = std::exp(-u_pd);
+                        double S1_std = 1.0 - (1.0 + 0.5*u_pd) * exp_u;
+                        S1_pj = S1_std;
+                        
+                        // Apply softening if enabled
+                        if (params.compatSmallUSoftening) {
+                            double w = 1.0;
+                            if (u_pd <= params.compatUSoftenStart) {
+                                w = 0.0;
+                            } else if (u_pd < params.compatUSoftenEnd) {
+                                w = (u_pd - params.compatUSoftenStart) / 
+                                    (params.compatUSoftenEnd - params.compatUSoftenStart);
+                            }
+                            double S1_soft = 1.0 - w * (1.0 - S1_std);
+                            
+                            // Assertion: softening should increase S1 (weaken screening)
+                            if (S1_soft < S1_std - 1e-10) {
+                                std::cerr << "ERROR: Softening decreased S1! u=" << u_pd 
+                                         << " S1_std=" << S1_std << " S1_soft=" << S1_soft << std::endl;
+                            }
+                            S1_pj = S1_soft;
+                            
+                            // Debug logging for P-D corrections
+                            if (params.logLevel >= 4 && i == 0) {
+                                std::cout << "P-D[" << j << "->" << i << "]: u=" << u_pd 
+                                         << " S1_std=" << S1_std << " S1_eff=" << S1_pj 
+                                         << " r=" << r_pj << std::endl;
+                            }
+                        }
+                    }
+                }
+                
+                // SCREENED-ONLY CALIBER: use S1/r³ directly (baseline has no P-D)
+                double factor_pj = DrudeConstants::ONE_4PI_EPS0 * parentJ.charge * S1_pj / r3_pj;
+                field[0] += factor_pj * dx_pj;
+                field[1] += factor_pj * dy_pj;
+                field[2] += factor_pj * dz_pj;
+                
+                // Self-consistency check for screened-only caliber
+                if (params.logLevel >= 5) {
+                    // For screened-only: E_total = 0 (baseline) + S1*E_unscreened (correction) = S1*E_unscreened
+                    double E_unscreened = DrudeConstants::ONE_4PI_EPS0 * parentJ.charge / r3_pj;
+                    double E_screened = E_unscreened * S1_pj;
+                    if (std::abs(factor_pj - E_screened) > 1e-10 * std::abs(E_screened)) {
+                        std::cerr << "CALIBER ERROR: factor_pj=" << factor_pj 
+                                 << " != E_screened=" << E_screened << std::endl;
+                    }
+                }
+            }
+            
+            // D-D: Field from drude j to drude i
             double dx_dj = fieldPoint.x - drudeJ.x;
             double dy_dj = fieldPoint.y - drudeJ.y;
             double dz_dj = fieldPoint.z - drudeJ.z;
@@ -503,31 +573,67 @@ void DrudeSCFOM::calculateElectricField(const model::MCState& state,
                 double r_dj = std::sqrt(r2_dj);
                 double r3_dj = r2_dj * r_dj;
                 
-                // Calculate S1 using actual distance r_{di,dj}
+                // Calculate S1 for D-D (no softening)
                 double S1_dj = 1.0;
-                if (thole > 1e-10) {
-                    S1_dj = tholeS1(r_dj, pi.polarizability, pj.polarizability, thole);
+                if (params.tholeMode == TholeMode::OpenMMCompat && thole > 1e-10) {
+                    // For D-D: use α_eff = (α_i * α_j)^(1/6)
+                    double alpha_eff_dd = std::pow(pi.polarizability * pj.polarizability, 1.0/6.0);
+                    double u_dd = thole * r_dj / alpha_eff_dd;
+                    
+                    if (u_dd <= 50.0) {
+                        double exp_u = std::exp(-u_dd);
+                        S1_dj = 1.0 - (1.0 + 0.5*u_dd) * exp_u;
+                    }
+                    
+                    // Debug logging for D-D
+                    if (params.logLevel >= 4 && i == 0) {
+                        std::cout << "D-D[" << j << "->" << i << "]: u=" << u_dd 
+                                 << " S1=" << S1_dj << " r=" << r_dj << std::endl;
+                    }
                 }
                 
+                // SCREENED-ONLY CALIBER: use S1/r³ directly (baseline has no D-D)
                 double factor_dj = DrudeConstants::ONE_4PI_EPS0 * pj.charge * S1_dj / r3_dj;
                 field[0] += factor_dj * dx_dj;
                 field[1] += factor_dj * dy_dj;
                 field[2] += factor_dj * dz_dj;
+                
+                // Self-consistency check
+                if (params.logLevel >= 5) {
+                    double E_unscreened = DrudeConstants::ONE_4PI_EPS0 * pj.charge / r3_dj;
+                    double E_screened = E_unscreened * S1_dj;
+                    if (std::abs(factor_dj - E_screened) > 1e-10 * std::abs(E_screened)) {
+                        std::cerr << "CALIBER ERROR: factor_dj=" << factor_dj 
+                                 << " != E_screened=" << E_screened << std::endl;
+                    }
+                }
             }
-            
-            // Parent charges are already included in external field, don't double count!
-            // Only include Drude charges in induced field
         }
         
         electricField[i] = field;
         
-        // Debug output
+        // Debug output with field decomposition
         if (i == 0 && params.logLevel >= 2) {
             double mag = std::sqrt(field[0]*field[0] + field[1]*field[1] + field[2]*field[2]);
-            std::cout << "TOTAL_FIELD[0]: E_x=" << field[0] 
-                     << " E_y=" << field[1] 
-                     << " E_z=" << field[2]
-                     << " |E|=" << mag << std::endl;
+            double ext_mag = std::sqrt(extFieldX*extFieldX + extFieldY*extFieldY + extFieldZ*extFieldZ);
+            double ind_x = field[0] - extFieldX;
+            double ind_y = field[1] - extFieldY;
+            double ind_z = field[2] - extFieldZ;
+            double ind_mag = std::sqrt(ind_x*ind_x + ind_y*ind_y + ind_z*ind_z);
+            
+            std::cout << "FIELD[0]: Total|E|=" << mag 
+                     << " (Ext|E|=" << ext_mag 
+                     << " Ind|E|=" << ind_mag << ")";
+            
+            if (params.logLevel >= 3) {
+                std::cout << " E=(" << field[0] << "," << field[1] << "," << field[2] << ")";
+            }
+            std::cout << std::endl;
+            
+            // Caliber consistency check for screened-only
+            if (params.logLevel >= 5) {
+                std::cout << "  CALIBER CHECK: Using screened-only (baseline excludes P-D/D-D, corrections use S1/r³)" << std::endl;
+            }
         }
     }
 }

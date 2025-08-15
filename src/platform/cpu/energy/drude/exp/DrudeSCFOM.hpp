@@ -123,6 +123,16 @@ private:
     
     // Compute adaptive damping factor based on spectral radius
     double computeAdaptiveDamping(double rho) const;
+    
+    // Thole S1 screening function for charge-dipole interaction (P-D)
+    double tholeS1_chargeDipole(double r, double alpha_dipole, double thole) const;
+    
+    // Calculate screening correction for delta approach (OpenMMCompat mode)
+    void calculateScreeningCorrections(const model::MCState& state,
+                                       const std::vector<DrudeParticle>& particles,
+                                       const std::vector<ScreenedPair>& pairs,
+                                       std::vector<Vec3>& electricField,
+                                       const DrudeSCFParams& params) const;
                    
 private:
     // Current algorithm selection
