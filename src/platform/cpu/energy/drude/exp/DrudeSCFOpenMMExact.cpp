@@ -345,10 +345,10 @@ DrudeSCFOpenMMExact::Vec3 DrudeSCFOpenMMExact::calculateScreenedForce(const Vec3
     double du_dr = thole / alpha_eff;
     
     // Complete force expression with dS/dr term
-    // F = q_i * q_j * [S1/r³ + (dS1/du)(du/dr)/r²] * r_vec
+    // F = q_i * q_j * [S1/r³ - (dS1/du)(du/dr)/r²] * r_vec (OpenMM convention)
     double factor = DrudeSCFOpenMMExactParams::ONE_4PI_EPS0 * q_i * q_j;
     double term1 = s1d.S1 / r3;                    // S1/r³
-    double term2 = s1d.dS1_du * du_dr / r2;       // (dS1/du)(du/dr)/r²
+    double term2 = -s1d.dS1_du * du_dr / r2;      // -(dS1/du)(du/dr)/r² [negative sign for OpenMM match]
     
     double total_factor = factor * (term1 + term2);
     
