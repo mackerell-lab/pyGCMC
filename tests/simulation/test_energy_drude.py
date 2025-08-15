@@ -116,5 +116,15 @@ from energyDrude.ci_nightly_tests import (
     test_ci_nightly_performance_scaling
 )
 
+# Exact mode tests
+from energyDrude.drude_exact_mode import (
+    TestDrudeExactMode
+)
+
+# Analytical validation tests
+from energyDrude.drude_analytical_validation import (
+    TestDrudeAnalyticalValidation
+)
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

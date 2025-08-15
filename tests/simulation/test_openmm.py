@@ -351,6 +351,16 @@ from energyOpenmm.pgp_advanced_validation_tests import (
     test_pgp_long_mc_sampling_consistency
 )
 
+# OpenMM SCF comparison tests
+from energyOpenmm.openmm_scf_comparison import (
+    TestOpenMMSCFComparison
+)
+
+# OpenMM comprehensive validation tests
+from energyOpenmm.openmm_comprehensive_validation import (
+    TestOpenMMComprehensiveValidation
+)
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__])
