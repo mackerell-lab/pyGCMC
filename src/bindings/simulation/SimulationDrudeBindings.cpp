@@ -92,7 +92,9 @@ void init_drude_bindings(py::module& m) {
         .def_readwrite("compatUSoftenStart", &DrudeSCFParams::compatUSoftenStart,
                        "u0: below this, S1 approaches 1 (default: 0.2)")
         .def_readwrite("compatUSoftenEnd", &DrudeSCFParams::compatUSoftenEnd,
-                       "u1: above this, use standard S1 (default: 0.9)");
+                       "u1: above this, use standard S1 (default: 0.9)")
+        .def_readwrite("requireExactMatch", &DrudeSCFParams::requireExactMatch,
+                       "Enable OpenMM-exact optimizer (default: False)");
     
     // TholeMode enum
     py::enum_<TholeMode>(m, "TholeMode", "Thole screening modes")

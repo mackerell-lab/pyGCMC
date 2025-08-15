@@ -1,5 +1,6 @@
 #include "DrudeExperimentalCore.hpp"
 #include "DrudeSCFOM.hpp"
+#include "DrudeSCFOpenMMExact.hpp"
 #include "DrudeNBTholeBuilder.hpp"
 #include <algorithm>
 #include <cmath>
@@ -30,8 +31,21 @@ double DrudeExperimentalCore::calculateEnergy(model::MCState& state) {
         return 0.0;
     }
 
-    // Optimize positions with OpenMM-style SCF
-    bool converged = m_scf->optimize(state, m_particles, m_screenedPairs, m_params);
+    // Route to appropriate optimizer based on requireExactMatch flag
+    bool converged = false;
+    if (m_params.requireExactMatch) {
+        // Use OpenMM-exact optimizer with dS/dr term
+        DrudeSCFOpenMMExact exact;
+        DrudeSCFOpenMMExactParams exactParams;
+        exactParams.minimizationErrorTolerance = m_params.tolerance;
+        exactParams.maxDrudeDistance = m_params.maxDrudeDistance;
+        exactParams.maxIterations = m_params.maxIterations;
+        exactParams.logLevel = m_params.logLevel;
+        converged = exact.optimize(state, m_particles, m_screenedPairs, exactParams);
+    } else {
+        // Use fast SCF optimizer
+        converged = m_scf->optimize(state, m_particles, m_screenedPairs, m_params);
+    }
     
     if (!converged) {
         if (m_params.requireConvergence) {

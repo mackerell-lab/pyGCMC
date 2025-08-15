@@ -109,6 +109,9 @@ struct DrudeSCFParams {
     bool compatSmallUSoftening = false;   // Enable small-u softening for P-D interactions
     double compatUSoftenStart = 0.2;      // u0: below this, S1 approaches 1
     double compatUSoftenEnd = 0.9;        // u1: above this, use standard S1
+    
+    // OpenMM-exact mode
+    bool requireExactMatch = false;       // Enable OpenMM-exact optimizer (default: false)
 };
 
 /**
