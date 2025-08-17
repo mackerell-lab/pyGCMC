@@ -16,6 +16,7 @@ void init_ewald_bindings(py::module& m);
 void init_pme_bindings(py::module& m);
 void init_pgp_bindings(py::module& m);
 void init_drude_bindings(py::module& m);
+void init_movement_bindings(py::module& m);
 
 void init_simulation_bindings(py::module& m) {
     // Initialize all Simulation binding groups
@@ -24,6 +25,7 @@ void init_simulation_bindings(py::module& m) {
     init_pme_bindings(m);
     init_pgp_bindings(m);
     init_drude_bindings(m);
+    init_movement_bindings(m);
 }
 }
 
