@@ -1,9 +1,9 @@
-# tests/simulation/test_movement_insert.py
+# tests/simulation/test_movement_python.py
 """
 Movement-based insertion tests - Main Entry Point
 
 This file imports all movement insertion tests from modular sub-files.
-Run: pytest tests/simulation/test_movement_insert.py
+Run: pytest tests/simulation/test_movement_python.py
 
 Test categories:
 1. Basic insertion tests - fundamental molecule insertion operations
@@ -15,7 +15,7 @@ Test categories:
 """
 
 # Basic insertion tests (4 functions) - test_insert_with_existing_molecules moved to tmp/skipped_tests
-from movementInsert.basic_insertion_tests import (
+from movementPython.basic_insertion_tests import (
     test_insert_single_molecule,
     test_insert_multiple_water_molecules,
     test_insert_ion_pair,
@@ -23,21 +23,21 @@ from movementInsert.basic_insertion_tests import (
 )
 
 # Advanced insertion tests (6 functions)
-from movementInsert.advanced_insertion_basic_tests import (
+from movementPython.advanced_insertion_basic_tests import (
     test_simple_two_particle_insertion,
     test_cavity_detection
 )
-from movementInsert.advanced_insertion_biased_tests import (
+from movementPython.advanced_insertion_biased_tests import (
     test_biased_cavity_insertion,
     test_energy_guided_insertion
 )
-from movementInsert.advanced_insertion_sequential_tests import (
+from movementPython.advanced_insertion_sequential_tests import (
     test_sequential_cavity_filling,
     test_water_cluster_formation
 )
 
 # Residue activation tests (4 functions) - moved from energyGCMC
-from movementInsert.residue_activation_tests import (
+from movementPython.residue_activation_tests import (
     test_residue_addition_energy,
     test_movement_energy_calculation,
     test_residue_activation_deactivation,
@@ -45,7 +45,7 @@ from movementInsert.residue_activation_tests import (
 )
 
 # GCMC insertion/deletion tests (6 functions) - moved from energyGCMC
-from movementInsert.insertion_deletion_tests import (
+from movementPython.insertion_deletion_tests import (
     test_single_molecule_insertion,
     test_molecule_insertion_with_interactions,
     test_molecule_deletion,
@@ -55,19 +55,19 @@ from movementInsert.insertion_deletion_tests import (
 )
 
 # GCMC algorithm tests (3 functions)
-from movementInsert.gcmc_insertion_test_functions import (
+from movementPython.gcmc_insertion_test_functions import (
     test_gcmc_benzene_insertion_in_protein,
     test_gcmc_water_insertion_simple,
     test_verify_detailed_balance
 )
 
 # Practical GCMC tests (3 functions)
-from movementInsert.practical_gcmc_benzene_test import test_practical_benzene_insertion
-from movementInsert.practical_gcmc_water_test import test_water_insertion_with_real_energy
-from movementInsert.practical_gcmc_cavity_bias_test import test_cavity_bias_effect
+from movementPython.practical_gcmc_benzene_test import test_practical_benzene_insertion
+from movementPython.practical_gcmc_water_test import test_water_insertion_with_real_energy
+from movementPython.practical_gcmc_cavity_bias_test import test_cavity_bias_effect
 
 # Numerical stability tests (7 functions) - NEW
-from movementInsert.numerical_stability_tests import (
+from movementPython.numerical_stability_tests import (
     test_extreme_energy_numerical_stability,
     test_configurational_bias_numerical_stability,
     test_temperature_extremes,
@@ -77,27 +77,27 @@ from movementInsert.numerical_stability_tests import (
 )
 
 # Cavity bias tests (7 functions) - NEW (split into two files)
-from movementInsert.cavity_bias_basic_tests import (
+from movementPython.cavity_bias_basic_tests import (
     test_cavity_grid_creation,
     test_cavity_detection_with_molecules,
     test_biased_insertion_acceptance,
     test_cavity_bias_with_different_grid_spacings
 )
-from movementInsert.cavity_bias_advanced_tests import (
+from movementPython.cavity_bias_advanced_tests import (
     test_cavity_bias_energy_calculation,
     test_adaptive_cavity_grid,
     test_cavity_bias_detailed_balance
 )
 
 # Log-space stability tests (9 functions) - NEW (split into two files)
-from movementInsert.logspace_basic_tests import (
+from movementPython.logspace_basic_tests import (
     test_logsumexp_extreme_values,
     test_prob_from_log_saturation,
     test_insertion_acceptance_extreme_parameters,
     test_deletion_acceptance_extreme_parameters,
     test_rosenbluth_weight_extreme_energies
 )
-from movementInsert.logspace_advanced_tests import (
+from movementPython.logspace_advanced_tests import (
     test_configurational_bias_logspace,
     test_detailed_balance_logspace,
     test_extreme_temperature_logspace,
@@ -105,30 +105,30 @@ from movementInsert.logspace_advanced_tests import (
 )
 
 # Integrated GCMC patterns tests (6 functions) - NEW (split into two files)
-from movementInsert.integrated_gcmc_basic import (
+from movementPython.integrated_gcmc_basic import (
     test_config_driven_gcmc,
     test_gcmc_md_integration_pattern,
     test_multiple_fragment_types
 )
-from movementInsert.integrated_gcmc_advanced import (
+from movementPython.integrated_gcmc_advanced import (
     test_convergence_monitoring,
     test_acceptance_rate_adaptation,
     test_realistic_waterbox_setup
 )
 
 # Translation and Rotation tests (5 functions) - NEW (split into two files)
-from movementInsert.translation_tests import (
+from movementPython.translation_tests import (
     test_translation_move,
     test_rotation_move
 )
-from movementInsert.rotation_tests import (
+from movementPython.rotation_tests import (
     test_combined_translation_rotation,
     test_translation_with_pbc,
     test_rotation_preserves_bond_lengths
 )
 
 # Pool memory management tests (8 functions) - NEW
-from movementInsert.pool_memory_management_tests import (
+from movementPython.pool_memory_management_tests import (
     test_active_pool_basic_operations,
     test_active_pool_energy_conservation,
     test_batched_operations,
@@ -141,7 +141,7 @@ from movementInsert.pool_memory_management_tests import (
 # Pool simple test
 def test_pool_simple():
     """Test simple pool operations"""
-    from movementInsert.active_pool import ActivePool
+    from movementPython.active_pool import ActivePool
     import pygcmc
     
     # Simple water molecule 
