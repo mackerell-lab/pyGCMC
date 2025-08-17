@@ -76,40 +76,59 @@ from movementInsert.numerical_stability_tests import (
     test_insertion_with_pbc_wrapping
 )
 
-# Cavity bias tests (8 functions) - NEW
-from movementInsert.cavity_bias_tests import (
+# Cavity bias tests (7 functions) - NEW (split into two files)
+from movementInsert.cavity_bias_basic_tests import (
     test_cavity_grid_creation,
     test_cavity_detection_with_molecules,
     test_biased_insertion_acceptance,
-    test_cavity_bias_with_different_grid_spacings,
+    test_cavity_bias_with_different_grid_spacings
+)
+from movementInsert.cavity_bias_advanced_tests import (
     test_cavity_bias_energy_calculation,
     test_adaptive_cavity_grid,
     test_cavity_bias_detailed_balance
 )
 
-# Log-space stability tests (10 functions) - NEW
-from movementInsert.logspace_stability_tests import (
+# Log-space stability tests (9 functions) - NEW (split into two files)
+from movementInsert.logspace_basic_tests import (
     test_logsumexp_extreme_values,
     test_prob_from_log_saturation,
     test_insertion_acceptance_extreme_parameters,
     test_deletion_acceptance_extreme_parameters,
-    test_rosenbluth_weight_extreme_energies,
+    test_rosenbluth_weight_extreme_energies
+)
+from movementInsert.logspace_advanced_tests import (
     test_configurational_bias_logspace,
     test_detailed_balance_logspace,
     test_extreme_temperature_logspace,
     test_parallel_logspace_calculations
 )
 
-# Translation and Rotation tests (6 functions) - NEW
-from movementInsert.test_translation_rotation import (
+# Integrated GCMC patterns tests (6 functions) - NEW (split into two files)
+from movementInsert.integrated_gcmc_basic import (
+    test_config_driven_gcmc,
+    test_gcmc_md_integration_pattern,
+    test_multiple_fragment_types
+)
+from movementInsert.integrated_gcmc_advanced import (
+    test_convergence_monitoring,
+    test_acceptance_rate_adaptation,
+    test_realistic_waterbox_setup
+)
+
+# Translation and Rotation tests (5 functions) - NEW (split into two files)
+from movementInsert.translation_tests import (
     test_translation_move,
-    test_rotation_move,
+    test_rotation_move
+)
+from movementInsert.rotation_tests import (
     test_combined_translation_rotation,
     test_translation_with_pbc,
     test_rotation_preserves_bond_lengths
 )
 
-# Total: 56 test functions covering comprehensive GCMC insertion operations (including translation/rotation)
+# Total: 62 test functions covering comprehensive GCMC insertion operations 
+# (including integrated patterns, translation/rotation, cavity bias, and log-space stability)
 
 # Support direct execution
 if __name__ == "__main__":
