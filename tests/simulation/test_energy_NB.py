@@ -23,7 +23,10 @@ Switching function tests (9 functions from test_switching_function.py):
 - Diagnostic tests: print values, energy comparison, internal function validation
 - Energy calculation tests: MCS energy calculation with switching
 
-Total: 26 test functions across modular files (all modules under 300 lines each).
+Energy components tests (3 functions):
+- getTotalEnergyComponents function tests for simple systems, VdW interactions, and multiple residues
+
+Total: 29 test functions across modular files (all modules under 300 lines each).
 """
 
 # Non-bonded basic interaction tests
@@ -98,6 +101,13 @@ from energyNB.switching_internal import (
     test_internal_switching_function,
     test_internal_switching_function_ewald,
     test_mcs_energy_calculation_with_switching
+)
+
+# Energy components tests (getTotalEnergyComponents function)
+from energyNB.energy_components_tests import (
+    test_get_total_energy_components_simple,
+    test_get_total_energy_components_with_vdw,
+    test_get_total_energy_components_multiple_residues
 )
 
 # Support direct execution for testing
