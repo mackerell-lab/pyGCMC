@@ -159,6 +159,33 @@ public:
             return std::min(1.0, prob);
         }
     }
+    
+    /**
+     * Calculate CBMC insertion acceptance probability
+     * Uses Rosenbluth weight instead of direct energy change
+     */
+    static double calculateInsertionProbabilityCBMC(
+        int n,                      // Current number of molecules (before insertion)
+        double beta,                // 1/kT
+        double chemPotential,       // Chemical potential in kJ/mol
+        double volumeNm3,           // System volume in nm^3
+        double logWnew,             // log(sum(exp(-beta*deltaE_i)))
+        int Keff,                   // Effective number of valid trials
+        double cavityBias) {        // Cavity bias factor (f_n)
+        
+        // Calculate ideal gas concentration
+        const double nBar = volumeNm3 * 55.5 * 6.022e23 / 1e27;
+        
+        // B factor (same as regular insertion)
+        const double B = beta * chemPotential + std::log(nBar);
+        
+        // CBMC acceptance formula in log-space
+        const double logA = std::log(cavityBias) - std::log(n + 1.0) 
+                          + B + logWnew - std::log(static_cast<double>(Keff));
+        
+        // Return probability (not log)
+        return std::min(1.0, std::exp(logA));
+    }
 };
 
 /**

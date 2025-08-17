@@ -98,6 +98,23 @@ protected:
     // Select insertion position
     Vector3 selectInsertionPosition(MCState& state, const MovementParams& params, double& cavityBias);
     
+    // CBMC helper functions
+    std::vector<std::vector<MCAtom>> generateTrialConfigurations(
+        int moleculeType,
+        const Vector3& position,
+        const MovementParams& params);
+    
+    std::pair<std::vector<double>, int> evaluateTrialEnergies(
+        MCState& state,
+        const std::vector<std::vector<MCAtom>>& trials,
+        int moleculeType,
+        double energyBefore);
+    
+    int selectByBoltzmannWeight(
+        const std::vector<double>& deltaEnergies,
+        double beta,
+        double& logWnew);
+    
 private:
     ActivePool* activePool_;
     CavityManager* cavityManager_;

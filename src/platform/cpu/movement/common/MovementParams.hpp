@@ -2,6 +2,7 @@
 #define PYGCMC_PLATFORM_CPU_MOVEMENT_PARAMS_HPP
 
 #include <cmath>
+#include <cstdint>
 
 namespace pygcmc {
 namespace platform {
@@ -25,6 +26,7 @@ struct MovementParams {
     
     // Configurational bias parameters
     bool useConfigBias = true;             // Enable configurational bias
+    bool useConfigBiasForInsertion = false;// Enable CBMC for insertion (two-step method)
     int numConfigTrials = 10;              // Number of trial configurations (reduced for speed)
     bool includeTranslationInConfig = true;// Also vary position in config bias
     double configTranslationRange = 0.05;  // Translation range for config bias in nm (was 0.5 Å)
@@ -51,6 +53,9 @@ struct MovementParams {
     // System parameters
     double volumeNm3 = 0.0;                // System volume in nm^3 (computed from box)
     double idealGasConcentration = 0.0;    // Ideal gas concentration (computed)
+    
+    // Random number generator seed
+    uint64_t seed = 0;                     // RNG seed (0 = use time-based seed)
     
     // Movement probabilities (should sum to 1.0)
     double insertionProbability = 0.25;

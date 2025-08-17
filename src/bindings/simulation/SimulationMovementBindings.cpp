@@ -41,15 +41,17 @@ void init_movement_bindings(py::module& m) {
         .def_readwrite("useCavityBias", &MovementParams::useCavityBias,
                       "Enable cavity bias for insertion")
         .def_readwrite("cavityGridSpacing", &MovementParams::cavityGridSpacing,
-                      "Grid spacing for cavity detection in Angstroms")
+                      "Grid spacing for cavity detection in nm")
         .def_readwrite("probeRadius", &MovementParams::probeRadius,
-                      "Probe radius for cavity detection in Angstroms")
+                      "Probe radius for cavity detection in nm")
         .def_readwrite("useConfigBias", &MovementParams::useConfigBias,
                       "Enable configurational bias")
+        .def_readwrite("useConfigBiasForInsertion", &MovementParams::useConfigBiasForInsertion,
+                      "Enable CBMC for insertion moves (two-step method)")
         .def_readwrite("numConfigTrials", &MovementParams::numConfigTrials,
                       "Number of trial configurations")
         .def_readwrite("maxTranslation", &MovementParams::maxTranslation,
-                      "Maximum translation distance in Angstroms")
+                      "Maximum translation distance in nm")
         .def_readwrite("maxRotation", &MovementParams::maxRotation,
                       "Maximum rotation angle in radians")
         .def_readwrite("useLogSpace", &MovementParams::useLogSpace,
@@ -58,6 +60,8 @@ void init_movement_bindings(py::module& m) {
                       "Maximum atoms in active pool")
         .def_readwrite("maxResidues", &MovementParams::maxResidues,
                       "Maximum residues in active pool")
+        .def_readwrite("seed", &MovementParams::seed,
+                      "Random number generator seed (0 = use time-based seed)")
         .def("updateDerivedParameters", &MovementParams::updateDerivedParameters,
                       "Update derived parameters after changing temperature")
         .def("__repr__", [](const MovementParams& p) {

@@ -162,6 +162,119 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         }
     }
     
+    // Check if CBMC is enabled for insertion
+    if (params.useConfigBiasForInsertion) {
+        // === CBMC Two-step Method ===
+        
+        // Generate K trial configurations
+        std::vector<std::vector<MCAtom>> trials = generateTrialConfigurations(
+            moleculeType, position, params);
+        
+        // Calculate energy before any insertion
+        simulation::Simulation::computeSystemEnergyCutoff(state);
+        double energyBefore = 0.0;
+        for (int i = 0; i < state.activeResidueCount; ++i) {
+            energyBefore += state.residues[i].energy_vdw;
+            energyBefore += state.residues[i].energy_elec;
+        }
+        energyBefore *= 0.5;
+        
+        // Evaluate trial energies
+        auto [deltaEnergies, Keff] = evaluateTrialEnergies(state, trials, moleculeType, energyBefore);
+        
+        // Handle case where no valid trials
+        if (Keff == 0) {
+            result.accepted = false;
+            result.acceptanceProbability = 0.0;
+            result.rejectReason = "No valid CBMC trials";
+            stats_.totalAttempts++;
+            return result;
+        }
+        
+        // Select configuration by Boltzmann weight
+        double logWnew;
+        int selectedIdx = selectByBoltzmannWeight(deltaEnergies, params.beta, logWnew);
+        
+        // Actually insert the selected configuration
+        int tempResIdx = state.addResidue(MCResidue());
+        MCResidue& newRes = state.residues[tempResIdx];
+        newRes.atomStart = state.activeAtomCount;
+        newRes.atomCount = static_cast<int>(trials[selectedIdx].size());
+        newRes.type = moleculeType;
+        newRes.active = true;
+        
+        for (const auto& atom : trials[selectedIdx]) {
+            state.addAtom(atom);
+        }
+        
+        // Calculate system volume from box dimensions
+        MovementParams paramsWithVolume = params;
+        if (paramsWithVolume.volumeNm3 <= 0.0) {
+            paramsWithVolume.volumeNm3 = state.info.box[0] * state.info.box[1] * state.info.box[2];
+        }
+        
+        // CBMC Metropolis acceptance (no deltaE!)
+        double acceptProb = utils::LogSpaceCalculator::calculateInsertionProbabilityCBMC(
+            state.activeResidueCount - 1,  // N before insertion
+            params.beta,
+            params.chemicalPotential,
+            paramsWithVolume.volumeNm3,
+            logWnew,
+            Keff,
+            result.cavityBiasFactor
+        );
+        
+        result.acceptanceProbability = acceptProb;
+        result.configBiasFactor = std::exp(logWnew) / Keff;
+        result.numConfigTrials = Keff;
+        result.energyChange = deltaEnergies[selectedIdx];  // For statistics only
+        
+        // Final decision
+        bool accepted = utils::RandomUtils::metropolisAccept(acceptProb);
+        result.accepted = accepted;
+        
+        if (accepted) {
+            // Keep the insertion
+            int poolResIdx = activePool_->insertMolecule(trials[selectedIdx], moleculeType);
+            if (poolResIdx >= 0) {
+                activePool_->syncToState(state);
+                result.residueIndex = tempResIdx;
+                stats_.acceptedInsertions++;
+                
+                // Invalidate cavity cache since system changed
+                if (cavityManager_) {
+                    cavityManager_->invalidateCache();
+                }
+            } else {
+                // Pool insertion failed
+                state.removeResidue(tempResIdx);
+                for (int j = 0; j < newRes.atomCount; ++j) {
+                    state.removeAtom(state.activeAtomCount - 1);
+                }
+                result.accepted = false;
+                result.rejectReason = "Active pool insertion failed";
+            }
+        } else {
+            // Reject - remove from state
+            state.removeResidue(tempResIdx);
+            for (int j = 0; j < newRes.atomCount; ++j) {
+                state.removeAtom(state.activeAtomCount - 1);
+            }
+        }
+        
+        // Update statistics
+        stats_.totalAttempts++;
+        if (usedCavity) {
+            stats_.cavityInsertions++;
+        } else {
+            stats_.randomInsertions++;
+        }
+        updateStatistics(accepted, usedCavity, deltaEnergies[selectedIdx], result.cavityBiasFactor);
+        
+        return result;  // Return early for CBMC path
+    }
+    
+    // === Original non-CBMC path ===
     // Create molecule at position
     std::vector<MCAtom> atoms = createMolecule(moleculeType, position);
     if (atoms.empty()) {
