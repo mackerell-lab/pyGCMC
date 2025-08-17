@@ -138,7 +138,66 @@ from movementInsert.pool_memory_management_tests import (
     test_concurrent_insert_delete_pattern
 )
 
-# Total: 69 test functions covering comprehensive GCMC insertion operations 
+# Pool simple test
+def test_pool_simple():
+    """Test simple pool operations"""
+    from movementInsert.active_pool import ActivePool
+    import pygcmc
+    
+    # Simple water molecule 
+    def create_water():
+        atoms = []
+        # O
+        o = pygcmc.MCAtom()
+        o.x, o.y, o.z = 0, 0, 0
+        o.charge = -0.834
+        o.type = 0
+        atoms.append(o)
+        # H1
+        h1 = pygcmc.MCAtom()
+        h1.x, h1.y, h1.z = 0.1, 0, 0
+        h1.charge = 0.417
+        h1.type = 1
+        atoms.append(h1)
+        # H2
+        h2 = pygcmc.MCAtom()
+        h2.x, h2.y, h2.z = 0, 0.1, 0
+        h2.charge = 0.417
+        h2.type = 1
+        atoms.append(h2)
+        return atoms
+    
+    ff = pygcmc.MCForceField()
+    ff.numTotalTypes = 2
+    ff.ljSigma = [0.315, 0.0]
+    ff.ljEps = [0.636, 0.0]
+    
+    pool = ActivePool(box=[5.0, 5.0, 5.0], cutoff=1.2, forcefield=ff)
+    
+    # Insert 3 waters
+    res0 = pool.insert_molecule(create_water())
+    assert len(pool.state.atoms) == 3
+    assert len(pool.residue_metadata) == 1
+    
+    res1 = pool.insert_molecule(create_water())
+    assert len(pool.state.atoms) == 6
+    assert len(pool.residue_metadata) == 2
+    
+    res2 = pool.insert_molecule(create_water())
+    assert len(pool.state.atoms) == 9
+    assert len(pool.residue_metadata) == 3
+    
+    # Delete res1
+    pool.delete_residue(res1)
+    assert pool.residue_metadata[res1].active == False
+    
+    # Compact
+    compacted = pool.compact(force=True)
+    assert compacted == 1
+    assert len(pool.residue_metadata) == 2
+    assert len(pool.state.atoms) == 6
+
+# Total: 70 test functions covering comprehensive GCMC insertion operations 
 # (including integrated patterns, translation/rotation, cavity bias, log-space stability, and pool management)
 
 # Support direct execution
