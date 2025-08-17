@@ -127,8 +127,19 @@ from movementInsert.rotation_tests import (
     test_rotation_preserves_bond_lengths
 )
 
-# Total: 62 test functions covering comprehensive GCMC insertion operations 
-# (including integrated patterns, translation/rotation, cavity bias, and log-space stability)
+# Pool memory management tests (8 functions) - NEW
+from movementInsert.pool_memory_management_tests import (
+    test_active_pool_basic_operations,
+    test_active_pool_energy_conservation,
+    test_batched_operations,
+    test_fragmentation_management,
+    test_gpu_ready_capacity_limits,
+    test_energy_component_separation,
+    test_concurrent_insert_delete_pattern
+)
+
+# Total: 69 test functions covering comprehensive GCMC insertion operations 
+# (including integrated patterns, translation/rotation, cavity bias, log-space stability, and pool management)
 
 # Support direct execution
 if __name__ == "__main__":
