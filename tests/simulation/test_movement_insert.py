@@ -66,7 +66,50 @@ from movementInsert.practical_gcmc_benzene_test import test_practical_benzene_in
 from movementInsert.practical_gcmc_water_test import test_water_insertion_with_real_energy
 from movementInsert.practical_gcmc_cavity_bias_test import test_cavity_bias_effect
 
-# Total: 26 test functions covering comprehensive GCMC insertion operations
+# Numerical stability tests (7 functions) - NEW
+from movementInsert.numerical_stability_tests import (
+    test_extreme_energy_numerical_stability,
+    test_configurational_bias_numerical_stability,
+    test_temperature_extremes,
+    test_gcmc_insertion_acceptance_stability,
+    test_parallel_rosenbluth_calculation,
+    test_insertion_with_pbc_wrapping
+)
+
+# Cavity bias tests (8 functions) - NEW
+from movementInsert.cavity_bias_tests import (
+    test_cavity_grid_creation,
+    test_cavity_detection_with_molecules,
+    test_biased_insertion_acceptance,
+    test_cavity_bias_with_different_grid_spacings,
+    test_cavity_bias_energy_calculation,
+    test_adaptive_cavity_grid,
+    test_cavity_bias_detailed_balance
+)
+
+# Log-space stability tests (10 functions) - NEW
+from movementInsert.logspace_stability_tests import (
+    test_logsumexp_extreme_values,
+    test_prob_from_log_saturation,
+    test_insertion_acceptance_extreme_parameters,
+    test_deletion_acceptance_extreme_parameters,
+    test_rosenbluth_weight_extreme_energies,
+    test_configurational_bias_logspace,
+    test_detailed_balance_logspace,
+    test_extreme_temperature_logspace,
+    test_parallel_logspace_calculations
+)
+
+# Translation and Rotation tests (6 functions) - NEW
+from movementInsert.test_translation_rotation import (
+    test_translation_move,
+    test_rotation_move,
+    test_combined_translation_rotation,
+    test_translation_with_pbc,
+    test_rotation_preserves_bond_lengths
+)
+
+# Total: 56 test functions covering comprehensive GCMC insertion operations (including translation/rotation)
 
 # Support direct execution
 if __name__ == "__main__":
