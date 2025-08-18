@@ -50,6 +50,8 @@ void init_movement_bindings(py::module& m) {
                       "Enable CBMC for insertion moves (two-step method)")
         .def_readwrite("numConfigTrials", &MovementParams::numConfigTrials,
                       "Number of trial configurations")
+        .def_readwrite("configTranslationRange", &MovementParams::configTranslationRange,
+                      "Translation range for trial configurations in nm")
         .def_readwrite("maxTranslation", &MovementParams::maxTranslation,
                       "Maximum translation distance in nm")
         .def_readwrite("maxRotation", &MovementParams::maxRotation,

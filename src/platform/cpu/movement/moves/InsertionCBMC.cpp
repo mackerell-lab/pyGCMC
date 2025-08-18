@@ -26,9 +26,6 @@ std::vector<std::vector<MCAtom>> InsertionMove::generateTrialConfigurations(
     const Vector3& position,
     const MovementParams& params) 
 {
-    static std::mt19937 rng(params.seed != 0 ? params.seed : 
-                            std::chrono::steady_clock::now().time_since_epoch().count());
-    
     std::vector<std::vector<MCAtom>> trials;
     trials.reserve(params.numConfigTrials);
     
@@ -62,13 +59,25 @@ std::vector<std::vector<MCAtom>> InsertionMove::generateTrialConfigurations(
                 atom.z = center.z + rotated.z;
             }
             
-            // Optional: add small translation
+            // Optional: add small translation with PBC
             if (params.configTranslationRange > 0) {
                 Vector3 delta = RandomUtils::randomVector(params.configTranslationRange);
+                
+                // Apply translation and PBC to ensure atoms stay in box
                 for (auto& atom : atoms) {
                     atom.x += delta.x;
                     atom.y += delta.y;
                     atom.z += delta.z;
+                    
+                    // Apply PBC using state box dimensions (passed via params)
+                    // Note: Caller should set params.boxDimensions before calling
+                    if (params.volumeNm3 > 0) {
+                        // Estimate box from volume (assume cubic for now)
+                        float boxSize = std::cbrt(params.volumeNm3);
+                        atom.x = atom.x - boxSize * std::floor(atom.x / boxSize);
+                        atom.y = atom.y - boxSize * std::floor(atom.y / boxSize);
+                        atom.z = atom.z - boxSize * std::floor(atom.z / boxSize);
+                    }
                 }
             }
         }
@@ -102,13 +111,16 @@ std::pair<std::vector<double>, int> InsertionMove::evaluateTrialEnergies(
             state.addAtom(atom);
         }
         
-        // Calculate energy after insertion
-        simulation::Simulation::computeSystemEnergyCutoff(state);
-        double energyAfter = 0.0;
+        // Calculate energy of the new molecule with existing system
+        // This computes interaction energy without double counting
+        simulation::Simulation::computeMovementEnergyCutoff(state);
         
-        // Only calculate energy for the new residue (last one)
-        energyAfter = state.residues[tempResIdx].energy_vdw;
-        energyAfter += state.residues[tempResIdx].energy_elec;
+        // Get energy of new residue (interaction with existing atoms only)
+        double energyAfter = state.residues[tempResIdx].energy_vdw 
+                           + state.residues[tempResIdx].energy_elec;
+        
+        // Note: This should be the interaction energy of new molecule with existing system
+        // No division by 2 needed as we're only computing new residue's energy
         
         deltaEnergies[i] = energyAfter;  // Since energyBefore should be 0 for new residue
         
@@ -129,39 +141,39 @@ std::pair<std::vector<double>, int> InsertionMove::evaluateTrialEnergies(
     return {deltaEnergies, Keff};
 }
 
-// Helper function to select configuration by Boltzmann weights
+// Helper function to select configuration by Boltzmann weights using Gumbel-max trick
 int InsertionMove::selectByBoltzmannWeight(
     const std::vector<double>& deltaEnergies,
     double beta,
     double& logWnew) 
 {
-    static std::random_device rd;
-    static std::mt19937 rng(rd());
-    static std::uniform_real_distribution<> uniform(0.0, 1.0);
-    
-    // Calculate logWnew = log(sum(exp(-beta*deltaE_i)))
+    // Calculate log weights: log(exp(-beta*deltaE_i))
     std::vector<double> logWeights(deltaEnergies.size());
     for (size_t i = 0; i < deltaEnergies.size(); ++i) {
         logWeights[i] = -beta * deltaEnergies[i];
     }
+    
+    // Calculate logWnew for acceptance probability
     logWnew = LogSpaceCalculator::logSumExp(logWeights);
     
-    // Calculate cumulative probabilities for selection
-    std::vector<double> cumProb(deltaEnergies.size());
-    double cumSum = 0.0;
-    for (size_t i = 0; i < deltaEnergies.size(); ++i) {
-        double logP = -beta * deltaEnergies[i] - logWnew;
-        cumSum += std::exp(logP);
-        cumProb[i] = cumSum;
-    }
+    // Use Gumbel-max trick for numerically stable selection
+    // Sample Gumbel noise and add to log weights
+    std::vector<double> gumbelScores(deltaEnergies.size());
+    double maxScore = -std::numeric_limits<double>::infinity();
+    int selectedIdx = 0;
     
-    // Select configuration
-    double r = uniform(rng);
-    int selectedIdx = static_cast<int>(deltaEnergies.size()) - 1;
-    for (size_t i = 0; i < deltaEnergies.size() - 1; ++i) {
-        if (r < cumProb[i]) {
+    for (size_t i = 0; i < deltaEnergies.size(); ++i) {
+        // Sample Gumbel(0) noise: -log(-log(U)) where U ~ Uniform(0,1)
+        double u = RandomUtils::uniform(1e-10, 1.0);  // Avoid log(0)
+        double gumbelNoise = -std::log(-std::log(u));
+        
+        // Score = log_weight + Gumbel noise
+        gumbelScores[i] = logWeights[i] + gumbelNoise;
+        
+        // Track maximum
+        if (gumbelScores[i] > maxScore) {
+            maxScore = gumbelScores[i];
             selectedIdx = static_cast<int>(i);
-            break;
         }
     }
     

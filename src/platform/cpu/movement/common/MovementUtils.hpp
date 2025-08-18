@@ -5,6 +5,8 @@
 #include <cmath>
 #include <algorithm>
 #include <random>
+#include <chrono>
+#include <cstdint>
 #include "MovementParams.hpp"
 
 namespace pygcmc {
@@ -264,19 +266,42 @@ public:
  * Random number utilities
  */
 class RandomUtils {
+private:
+    static std::mt19937& getGenerator() {
+        static std::mt19937 gen;
+        static bool initialized = false;
+        if (!initialized) {
+            // Default initialization with random device
+            std::random_device rd;
+            gen.seed(rd());
+            initialized = true;
+        }
+        return gen;
+    }
+    
 public:
+    /**
+     * Set the seed for reproducible random numbers
+     * @param seed The seed value (0 = use time-based seed)
+     */
+    static void setSeed(uint64_t seed) {
+        if (seed == 0) {
+            // Use time-based seed
+            auto now = std::chrono::steady_clock::now().time_since_epoch().count();
+            getGenerator().seed(static_cast<unsigned int>(now));
+        } else {
+            getGenerator().seed(static_cast<unsigned int>(seed));
+        }
+    }
+    
     static double uniform(double min = 0.0, double max = 1.0) {
-        static std::random_device rd;
-        static std::mt19937 gen(rd());
         std::uniform_real_distribution<> dis(min, max);
-        return dis(gen);
+        return dis(getGenerator());
     }
     
     static int uniformInt(int min, int max) {
-        static std::random_device rd;
-        static std::mt19937 gen(rd());
         std::uniform_int_distribution<> dis(min, max);
-        return dis(gen);
+        return dis(getGenerator());
     }
     
     static bool metropolisAccept(double probability) {

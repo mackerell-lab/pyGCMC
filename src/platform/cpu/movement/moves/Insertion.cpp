@@ -182,11 +182,18 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         // Evaluate trial energies
         auto [deltaEnergies, Keff] = evaluateTrialEnergies(state, trials, moleculeType, energyBefore);
         
-        // Handle case where no valid trials
-        if (Keff == 0) {
+        // Handle case where no valid trials or too few effective trials
+        if (Keff == 0 || (Keff < params.numConfigTrials / 4 && params.numConfigTrials < 20)) {
+            // Adaptive strategy: fallback to regular insertion or increase K
+            if (stats_.cbmcLowKeffCount++ > 5) {
+                // After multiple low Keff, suggest increasing K or translation range
+                result.rejectReason = "Low Keff - consider increasing numConfigTrials or configTranslationRange";
+            }
+            
+            // Fallback to simple insertion for this attempt
             result.accepted = false;
             result.acceptanceProbability = 0.0;
-            result.rejectReason = "No valid CBMC trials";
+            result.rejectReason = "No valid CBMC trials - fallback needed";
             stats_.totalAttempts++;
             return result;
         }
@@ -264,11 +271,22 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         
         // Update statistics
         stats_.totalAttempts++;
+        stats_.cbmcAttempts++;
+        if (accepted) {
+            stats_.cbmcAccepted++;
+        }
         if (usedCavity) {
             stats_.cavityInsertions++;
         } else {
             stats_.randomInsertions++;
         }
+        
+        // Update CBMC-specific statistics
+        stats_.averageLogWnew = (stats_.averageLogWnew * (stats_.cbmcAttempts - 1) + logWnew) / stats_.cbmcAttempts;
+        stats_.averageKeff = (stats_.averageKeff * (stats_.cbmcAttempts - 1) + Keff) / stats_.cbmcAttempts;
+        stats_.minKeff = std::min(stats_.minKeff, static_cast<double>(Keff));
+        stats_.maxKeff = std::max(stats_.maxKeff, static_cast<double>(Keff));
+        
         updateStatistics(accepted, usedCavity, deltaEnergies[selectedIdx], result.cavityBiasFactor);
         
         return result;  // Return early for CBMC path

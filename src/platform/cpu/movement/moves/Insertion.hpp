@@ -75,8 +75,19 @@ public:
         int acceptedInsertions = 0;
         double averageEnergyChange = 0.0;
         double averageCavityBias = 0.0;
+        // CBMC-specific statistics
+        int cbmcAttempts = 0;
+        int cbmcAccepted = 0;
+        int cbmcLowKeffCount = 0;  // Track low effective trial counts
+        double averageLogWnew = 0.0;
+        double averageKeff = 0.0;
+        double minKeff = 1e10;
+        double maxKeff = 0.0;
         double acceptanceRate() const {
             return totalAttempts > 0 ? static_cast<double>(acceptedInsertions) / totalAttempts : 0.0;
+        }
+        double cbmcAcceptanceRate() const {
+            return cbmcAttempts > 0 ? static_cast<double>(cbmcAccepted) / cbmcAttempts : 0.0;
         }
     };
     
