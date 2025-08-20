@@ -113,7 +113,8 @@ protected:
     std::vector<std::vector<MCAtom>> generateTrialConfigurations(
         int moleculeType,
         const Vector3& position,
-        const MovementParams& params);
+        const MovementParams& params,
+        const MCState& state);
     
     std::pair<std::vector<double>, int> evaluateTrialEnergies(
         MCState& state,

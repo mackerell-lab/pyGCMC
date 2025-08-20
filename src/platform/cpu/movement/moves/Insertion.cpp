@@ -168,7 +168,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         
         // Generate K trial configurations
         std::vector<std::vector<MCAtom>> trials = generateTrialConfigurations(
-            moleculeType, position, params);
+            moleculeType, position, params, state);
         
         // Calculate energy before any insertion
         simulation::Simulation::computeSystemEnergyCutoff(state);

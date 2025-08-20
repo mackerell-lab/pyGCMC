@@ -24,7 +24,8 @@ using namespace utils;
 std::vector<std::vector<MCAtom>> InsertionMove::generateTrialConfigurations(
     int moleculeType,
     const Vector3& position,
-    const MovementParams& params) 
+    const MovementParams& params,
+    const MCState& state) 
 {
     std::vector<std::vector<MCAtom>> trials;
     trials.reserve(params.numConfigTrials);
@@ -63,26 +64,20 @@ std::vector<std::vector<MCAtom>> InsertionMove::generateTrialConfigurations(
             if (params.configTranslationRange > 0) {
                 Vector3 delta = RandomUtils::randomVector(params.configTranslationRange);
                 
-                // Apply translation and PBC to ensure atoms stay in box
+                // Apply translation and PBC using real box dimensions
                 for (auto& atom : atoms) {
                     atom.x += delta.x;
                     atom.y += delta.y;
                     atom.z += delta.z;
                     
-                    // Apply PBC using state box dimensions (passed via params)
-                    // Note: Caller should set params.boxDimensions before calling
-                    if (params.volumeNm3 > 0) {
-                        // Estimate box from volume (assume cubic for now)
-                        float boxSize = std::cbrt(params.volumeNm3);
-                        atom.x = atom.x - boxSize * std::floor(atom.x / boxSize);
-                        atom.y = atom.y - boxSize * std::floor(atom.y / boxSize);
-                        atom.z = atom.z - boxSize * std::floor(atom.z / boxSize);
-                    }
+                    // Apply PBC with real box from state
+                    utils::PBCUtils::applyPBC(atom.x, atom.y, atom.z, 
+                                            const_cast<float*>(state.info.box));
                 }
             }
         }
         
-        trials.push_back(atoms);
+        trials.push_back(std::move(atoms));
     }
     
     return trials;

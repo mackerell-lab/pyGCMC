@@ -64,11 +64,18 @@ void init_movement_bindings(py::module& m) {
                       "Maximum residues in active pool")
         .def_readwrite("seed", &MovementParams::seed,
                       "Random number generator seed (0 = use time-based seed)")
+        .def_readwrite("useMultiInsertionCBMC", &MovementParams::useMultiInsertionCBMC,
+                      "Enable multi-insertion CBMC")
+        .def_readwrite("maxParallelInsertions", &MovementParams::maxParallelInsertions,
+                      "Maximum number of parallel insertions")
+        .def_readwrite("minRegionSeparationNm", &MovementParams::minRegionSeparationNm,
+                      "Minimum separation between insertion regions in nm")
         .def("updateDerivedParameters", &MovementParams::updateDerivedParameters,
                       "Update derived parameters after changing temperature")
         .def("__repr__", [](const MovementParams& p) {
             return "<MovementParams T=" + std::to_string(p.temperature) + 
-                   " μ=" + std::to_string(p.chemicalPotential) + ">";
+                   " μ=" + std::to_string(p.chemicalPotential) + 
+                   " multiInsert=" + (p.useMultiInsertionCBMC ? "ON" : "OFF") + ">";
         });
     
     // Bind MovementResult
@@ -129,6 +136,9 @@ void init_movement_bindings(py::module& m) {
         .def("attemptConfigBiasRotation", &MovementModule::attemptConfigBiasRotation,
              py::arg("state"), py::arg("residueIndex") = -1,
              "Attempt rotation with configurational bias")
+        .def("attemptMultiInsertionCBMC", &MovementModule::attemptMultiInsertionCBMC,
+             py::arg("state"), py::arg("moleculeType") = 0,
+             "Attempt multiple parallel insertions using CBMC")
         
         // Utilities
         .def("findCavities", &MovementModule::findCavities,

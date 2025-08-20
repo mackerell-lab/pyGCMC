@@ -63,6 +63,11 @@ struct MovementParams {
     double translationProbability = 0.25;
     double rotationProbability = 0.25;
     
+    // Multi-insertion CBMC parameters
+    bool useMultiInsertionCBMC = false;    // Enable multi-insertion mode
+    int maxParallelInsertions = 0;         // 0 disables, >0 enables
+    double minRegionSeparationNm = 1.5;    // Region spacing (nm), must be >= cutoff
+    
     // Update derived parameters
     void updateDerivedParameters() {
         beta = 1.0 / (8.314e-3 * temperature);  // Update beta when temperature changes

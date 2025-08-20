@@ -116,12 +116,9 @@ public:
         double volumeNm3,           // System volume in nm^3
         bool useLogSpace = true) {
         
-        // Calculate ideal gas concentration
-        // For water: ~55.5 mol/L = 55.5 * 6.022e23 / 1e27 molecules/nm^3
-        double nBar = volumeNm3 * 55.5 * 6.022e23 / 1e27;
-        
-        // B factor
-        double B = beta * chemPotential + std::log(nBar);
+        // Calculate ideal gas concentration using thermodynamic relationship
+        // B factor = β*μ + ln(V) where V is volume in appropriate units
+        double B = beta * chemPotential + std::log(volumeNm3);
         
         if (useLogSpace) {
             // Log-space calculation
@@ -145,11 +142,9 @@ public:
         double volumeNm3,           // System volume in nm^3
         bool useLogSpace = true) {
         
-        // Calculate ideal gas concentration
-        double nBar = volumeNm3 * 55.5 * 6.022e23 / 1e27;
-        
-        // B factor
-        double B = beta * chemPotential + std::log(nBar);
+        // Calculate ideal gas concentration using thermodynamic relationship
+        // B factor = β*μ + ln(V) where V is volume in appropriate units
+        double B = beta * chemPotential + std::log(volumeNm3);
         
         if (useLogSpace) {
             // Log-space calculation
@@ -175,11 +170,9 @@ public:
         int Keff,                   // Effective number of valid trials
         double cavityBias) {        // Cavity bias factor (f_n)
         
-        // Calculate ideal gas concentration
-        const double nBar = volumeNm3 * 55.5 * 6.022e23 / 1e27;
-        
-        // B factor (same as regular insertion)
-        const double B = beta * chemPotential + std::log(nBar);
+        // Calculate ideal gas concentration using thermodynamic relationship
+        // B factor = β*μ + ln(V) where V is volume in appropriate units
+        const double B = beta * chemPotential + std::log(volumeNm3);
         
         // CBMC acceptance formula in log-space
         const double logA = std::log(cavityBias) - std::log(n + 1.0) 
