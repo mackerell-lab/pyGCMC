@@ -74,6 +74,9 @@ void init_movement_bindings(py::module& m) {
                       "Sampling radius fraction in region (0..1]")
         .def_readwrite("multiUseRegionVolume", &MovementParams::multiUseRegionVolume,
                       "Use region volume for Veff when true; otherwise box volume")
+        .def_readwrite("proposalMode", &MovementParams::proposalMode,
+                      "Proposal sampling mode: 0=Uniform, 1=Cavity, 2=Color, 3=Cluster, 4=Adaptive "
+                      "(requires USE_PROPOSAL_LAYER compile flag)")
         .def("updateDerivedParameters", &MovementParams::updateDerivedParameters,
                       "Update derived parameters after changing temperature")
         .def("__repr__", [](const MovementParams& p) {
@@ -102,6 +105,12 @@ void init_movement_bindings(py::module& m) {
                      "Cavity bias correction factor")
         .def_readonly("configBiasFactor", &MovementResult::configBiasFactor,
                      "Configurational bias correction factor")
+        .def_readonly("usedCavity", &MovementResult::usedCavity,
+                     "Whether cavity was used in proposal")
+        .def_readonly("mproposal", &MovementResult::mproposal,
+                     "Number of proposal positions (-1 if not applicable)")
+        .def_readonly("vregion", &MovementResult::vregion,
+                     "Region volume in nm³ (-1 if not applicable)")
         .def_readonly("computeTimeMs", &MovementResult::computeTimeMs,
                      "Time taken for the move in milliseconds")
         .def("isSuccessful", &MovementResult::isSuccessful,

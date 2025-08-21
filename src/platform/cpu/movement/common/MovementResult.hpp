@@ -27,6 +27,11 @@ struct MovementResult {
     double configBiasFactor = 1.0;        // Configurational bias correction factor
     int numConfigTrials = 1;              // Number of configuration trials used
     
+    // Proposal layer fields (filled when USE_PROPOSAL_LAYER is enabled)
+    bool usedCavity = false;              // Whether cavity was used in proposal
+    int mproposal = -1;                   // Number of proposal positions (-1 if not applicable)
+    double vregion = -1.0;                 // Region volume in nm³ (-1 if not applicable)
+    
     // Performance metrics
     double computeTimeMs = 0.0;           // Time taken for the move in milliseconds
     

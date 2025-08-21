@@ -70,6 +70,9 @@ struct MovementParams {
     double multiDisplacementFraction = 0.5;// Sampling radius fraction in region (0..1]
     bool multiUseRegionVolume = true;      // Veff uses region volume when true; otherwise box volume
     
+    // Proposal layer parameters (requires USE_PROPOSAL_LAYER compile flag)
+    int proposalMode = 0;                  // 0=Uniform, 1=Cavity, 2=Color, 3=Cluster, 4=Adaptive
+    
     // Update derived parameters
     void updateDerivedParameters() {
         beta = 1.0 / (8.314e-3 * temperature);  // Update beta when temperature changes
