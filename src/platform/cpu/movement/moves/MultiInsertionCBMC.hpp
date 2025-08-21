@@ -10,6 +10,14 @@
 #include <random>
 #include <memory>
 
+// Forward declare CavityManager
+namespace pygcmc {
+namespace platform {
+namespace cpu {
+namespace movement {
+class CavityManager;
+}}}}
+
 namespace pygcmc {
 namespace platform {
 namespace cpu {
@@ -20,9 +28,19 @@ struct MultiInsertionConfig {
     int numTrialsPerRegion = 10;      // CBMC trials per region
     int maxParallelInsertions = 100;  // Max regions to attempt
     double minSeparation = 15.0;      // Min distance between regions (Angstrom)
-    bool useCavityBias = false;       // Enable cavity bias (phase 2)
+    bool useCavityBias = false;       // Enable cavity bias integration
     bool useGPUBatch = false;         // GPU acceleration (phase 3)
     double chemicalPotential = -15.7; // Chemical potential in kJ/mol
+    
+    // Parameters for fine control
+    double displacementFraction = 0.5; // Fraction of region.radius used for sampling (0..1]
+    bool useRegionVolume = true;       // Use region sampling volume for Veff; otherwise box volume
+    
+    // Independence control parameters (new)
+    double cutoffNm = 1.2;            // Energy cutoff in nm
+    double moleculeExtentNm = 0.15;   // Maximum molecular radius in nm (e.g., 0.15 for water)
+    bool enforceIndependence = true;  // When true, enforce minimum separation for independence
+    bool recomputeAfterAccept = false;// Fallback: recompute energies after each accept (expensive)
 };
 
 // Insertion region data
@@ -43,7 +61,8 @@ struct InsertionRegion {
 
 class MultiInsertionCBMC {
 public:
-    explicit MultiInsertionCBMC(const MultiInsertionConfig& config);
+    explicit MultiInsertionCBMC(const MultiInsertionConfig& config,
+                                CavityManager* cavityManager = nullptr);
     ~MultiInsertionCBMC() = default;
     
     // Main interface
@@ -64,6 +83,9 @@ private:
     // Random number generation
     std::mt19937 rng_;
     std::uniform_real_distribution<> uniform_;
+    
+    // Cavity bias support
+    CavityManager* cavityManager_;  // Non-owning pointer
     
     // Statistics tracking
     struct Statistics {

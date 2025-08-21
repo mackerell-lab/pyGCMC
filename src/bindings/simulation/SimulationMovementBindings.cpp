@@ -70,6 +70,10 @@ void init_movement_bindings(py::module& m) {
                       "Maximum number of parallel insertions")
         .def_readwrite("minRegionSeparationNm", &MovementParams::minRegionSeparationNm,
                       "Minimum separation between insertion regions in nm")
+        .def_readwrite("multiDisplacementFraction", &MovementParams::multiDisplacementFraction,
+                      "Sampling radius fraction in region (0..1]")
+        .def_readwrite("multiUseRegionVolume", &MovementParams::multiUseRegionVolume,
+                      "Use region volume for Veff when true; otherwise box volume")
         .def("updateDerivedParameters", &MovementParams::updateDerivedParameters,
                       "Update derived parameters after changing temperature")
         .def("__repr__", [](const MovementParams& p) {

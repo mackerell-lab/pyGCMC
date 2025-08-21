@@ -67,6 +67,8 @@ struct MovementParams {
     bool useMultiInsertionCBMC = false;    // Enable multi-insertion mode
     int maxParallelInsertions = 0;         // 0 disables, >0 enables
     double minRegionSeparationNm = 1.5;    // Region spacing (nm), must be >= cutoff
+    double multiDisplacementFraction = 0.5;// Sampling radius fraction in region (0..1]
+    bool multiUseRegionVolume = true;      // Veff uses region volume when true; otherwise box volume
     
     // Update derived parameters
     void updateDerivedParameters() {
