@@ -4,6 +4,8 @@
 #include <cmath>
 #include <algorithm>
 #include <queue>
+#include <unordered_set>
+#include <iostream>
 
 namespace pygcmc {
 namespace platform {
@@ -17,8 +19,8 @@ static constexpr double ANGSTROM_TO_NM = 0.1;
 static constexpr double NM_TO_ANGSTROM = 10.0;
 
 CavityManager::CavityManager(double gridSpacing, double probeRadius)
-    : gridSpacing_(gridSpacing),      // in nm
-      probeRadius_(probeRadius),      // in nm
+    : gridSpacing_(gridSpacing),      // in Angstroms
+      probeRadius_(probeRadius),      // in Angstroms
       cacheValid_(false) {
     resetStatistics();
 }
@@ -26,19 +28,30 @@ CavityManager::CavityManager(double gridSpacing, double probeRadius)
 CavityManager::~CavityManager() = default;
 
 std::vector<Vector3> CavityManager::findCavities(const MCState& state) {
-    // Use cache if valid
-    if (cacheValid_ && !cavityCache_.empty()) {
+    // Get box dimensions from MCState (in Angstroms!)
+    Vector3 boxSizeAng(state.info.box[0], 
+                       state.info.box[1], 
+                       state.info.box[2]);
+    
+    // Convert to nm for grid calculation
+    Vector3 boxSizeNm = boxSizeAng * ANGSTROM_TO_NM;
+    
+    // Check if cache is valid (also check if box size changed)
+    static Vector3 lastBoxSize(-1, -1, -1);
+    bool boxChanged = (std::abs(boxSizeNm.x - lastBoxSize.x) > 1e-6 ||
+                      std::abs(boxSizeNm.y - lastBoxSize.y) > 1e-6 ||
+                      std::abs(boxSizeNm.z - lastBoxSize.z) > 1e-6);
+    lastBoxSize = boxSizeNm;
+    
+    if (cacheValid_ && !cavityCache_.empty() && !boxChanged) {
         stats_.cacheHits++;
         return cavityCache_;
     }
     
     stats_.cacheMisses++;
     
-    // Get box dimensions (in nm from MCState)
-    Vector3 boxSize(state.info.box[0], state.info.box[1], state.info.box[2]);
-    
-    // Initialize grid
-    initializeGrid(boxSize);
+    // Initialize grid (expects nm)
+    initializeGrid(boxSizeNm);
     
     // Mark occupied regions
     markOccupiedRegions(state);
@@ -52,11 +65,9 @@ std::vector<Vector3> CavityManager::findCavities(const MCState& state) {
             for (int k = 0; k < grid_.nz; ++k) {
                 int idx = grid_.getIndex(i, j, k);
                 if (!grid_.occupied[idx]) {
-                    Vector3 pos = gridToPosition(i, j, k);
-                    // Check if it's truly a cavity (not just unoccupied)
-                    if (checkCavity(pos, state)) {
-                        cavityCache_.push_back(pos);
-                    }
+                    // store cavity position in nm (convert from Å)
+                    Vector3 posNm = gridToPosition(i, j, k) * ANGSTROM_TO_NM;
+                    cavityCache_.push_back(posNm);
                 }
             }
         }
@@ -166,6 +177,7 @@ void CavityManager::initializeGrid(const Vector3& boxSize) {
     grid_.ny = std::max(1, static_cast<int>(std::ceil(boxSize.y / spacingNm)));
     grid_.nz = std::max(1, static_cast<int>(std::ceil(boxSize.z / spacingNm)));
     
+    
     // Set grid properties (store in Angstroms for consistency)
     grid_.origin = Vector3(0.0, 0.0, 0.0);
     grid_.spacing = Vector3(gridSpacing_, gridSpacing_, gridSpacing_);
@@ -187,14 +199,25 @@ void CavityManager::markOccupiedRegions(const MCState& state) {
             int atomIdx = residue.atomStart + i;
             if (atomIdx < state.activeAtomCount) {
                 const MCAtom& atom = state.atoms[atomIdx];
-                // Position is in nm, convert to Angstroms
-                Vector3 posAngstrom(atom.x * NM_TO_ANGSTROM, 
-                                   atom.y * NM_TO_ANGSTROM, 
-                                   atom.z * NM_TO_ANGSTROM);
+                // Position is already in Angstroms
+                Vector3 posAngstrom(atom.x, atom.y, atom.z);
                 
-                // Use default VDW radius if not specified (1.5 Å for simplicity)
-                double radius = 1.5 + probeRadius_;  // in Angstroms
-                markOccupiedRegion(posAngstrom, radius);
+                // Use sigma from force field if available
+                double radiusAng = 1.5;  // Default fallback in Angstroms
+                
+                if (atom.type >= 0 && 
+                    atom.type < static_cast<int>(state.forcefield.ljSigma.size())) {
+                    // LJ sigma is typically in Angstroms
+                    // Use sigma/2 as atomic radius
+                    double sigma = state.forcefield.ljSigma[atom.type];
+                    if (sigma > 0) {
+                        radiusAng = 0.5 * sigma;
+                    }
+                }
+                
+                // Add probe radius (which is in Angstroms)
+                double totalRadius = radiusAng + probeRadius_;
+                markOccupiedRegion(posAngstrom, totalRadius);
             }
         }
     }
@@ -202,22 +225,36 @@ void CavityManager::markOccupiedRegions(const MCState& state) {
 
 void CavityManager::markOccupiedRegion(const Vector3& center, double radius) {
     // Center and radius are in Angstroms
-    int iMin = std::max(0, static_cast<int>((center.x - radius - grid_.origin.x) / grid_.spacing.x));
-    int iMax = std::min(grid_.nx - 1, static_cast<int>((center.x + radius - grid_.origin.x) / grid_.spacing.x));
-    int jMin = std::max(0, static_cast<int>((center.y - radius - grid_.origin.y) / grid_.spacing.y));
-    int jMax = std::min(grid_.ny - 1, static_cast<int>((center.y + radius - grid_.origin.y) / grid_.spacing.y));
-    int kMin = std::max(0, static_cast<int>((center.z - radius - grid_.origin.z) / grid_.spacing.z));
-    int kMax = std::min(grid_.nz - 1, static_cast<int>((center.z + radius - grid_.origin.z) / grid_.spacing.z));
-    
-    double radiusSq = radius * radius;
-    
-    for (int i = iMin; i <= iMax; ++i) {
-        for (int j = jMin; j <= jMax; ++j) {
-            for (int k = kMin; k <= kMax; ++k) {
-                Vector3 gridPos = gridToPosition(i, j, k);  // Already in nm
-                Vector3 diff = gridPos - center;
-                double distSq = diff.x * diff.x + diff.y * diff.y + diff.z * diff.z;
-                
+    int iMin = static_cast<int>(std::floor((center.x - radius - grid_.origin.x) / grid_.spacing.x));
+    int iMax = static_cast<int>(std::floor((center.x + radius - grid_.origin.x) / grid_.spacing.x));
+    int jMin = static_cast<int>(std::floor((center.y - radius - grid_.origin.y) / grid_.spacing.y));
+    int jMax = static_cast<int>(std::floor((center.y + radius - grid_.origin.y) / grid_.spacing.y));
+    int kMin = static_cast<int>(std::floor((center.z - radius - grid_.origin.z) / grid_.spacing.z));
+    int kMax = static_cast<int>(std::floor((center.z + radius - grid_.origin.z) / grid_.spacing.z));
+
+    const int nx = grid_.nx, ny = grid_.ny, nz = grid_.nz;
+    const Vector3 boxAng = grid_.boxSize; // Angstroms
+    const double radiusSq = radius * radius;
+
+    for (int ii = iMin; ii <= iMax; ++ii) {
+        int i = (ii % nx + nx) % nx;
+        for (int jj = jMin; jj <= jMax; ++jj) {
+            int j = (jj % ny + ny) % ny;
+            for (int kk = kMin; kk <= kMax; ++kk) {
+                int k = (kk % nz + nz) % nz;
+
+                Vector3 gridPos = gridToPosition(i, j, k); // Å
+
+                // minimum-image displacement in Å
+                double dx = gridPos.x - center.x;
+                double dy = gridPos.y - center.y;
+                double dz = gridPos.z - center.z;
+                dx -= std::round(dx / boxAng.x) * boxAng.x;
+                dy -= std::round(dy / boxAng.y) * boxAng.y;
+                dz -= std::round(dz / boxAng.z) * boxAng.z;
+
+                double distSq = dx*dx + dy*dy + dz*dz;
+
                 if (distSq <= radiusSq) {
                     grid_.occupied[grid_.getIndex(i, j, k)] = true;
                 }
@@ -227,7 +264,7 @@ void CavityManager::markOccupiedRegion(const Vector3& center, double radius) {
 }
 
 Vector3 CavityManager::gridToPosition(int i, int j, int k) const {
-    // Return position in nm
+    // Return position in Angstroms
     return Vector3(
         grid_.origin.x + i * grid_.spacing.x,
         grid_.origin.y + j * grid_.spacing.y,
@@ -249,7 +286,7 @@ bool CavityManager::checkCavity(const Vector3& position, const MCState& state) c
             int atomIdx = residue.atomStart + i;
             if (atomIdx < state.activeAtomCount) {
                 const MCAtom& atom = state.atoms[atomIdx];
-                // Calculate distance squared with PBC
+                // Calculate distance squared with PBC (box in Angstroms)
                 Vector3 atomPos(atom.x, atom.y, atom.z);
                 double dist = utils::PBCUtils::minimumImageDistance(
                     position,
@@ -305,9 +342,11 @@ Vector3 CavityBiasInsertion::selectInsertionPosition(const MCState& state, bool&
         }
     }
     
-    // Fall back to random position
+    // Fall back to random position (box already in Angstroms, convert to nm)
     stats_.randomInsertions++;
-    return selectRandomPosition(Vector3(state.info.box[0], state.info.box[1], state.info.box[2]));
+    return selectRandomPosition(Vector3(state.info.box[0] * ANGSTROM_TO_NM, 
+                                       state.info.box[1] * ANGSTROM_TO_NM, 
+                                       state.info.box[2] * ANGSTROM_TO_NM));
 }
 
 double CavityBiasInsertion::calculateAcceptanceProbability(
@@ -371,6 +410,310 @@ void CavityBiasInsertion::updateStatistics(bool usedCavity, double cavityBias, d
                                stats_.totalInsertions;
     stats_.averageAcceptance = (stats_.averageAcceptance * (stats_.totalInsertions - 1) + acceptance) / 
                               stats_.totalInsertions;
+}
+
+// Clustering Implementation
+
+// Helper struct for flood-fill
+struct GridPoint {
+    int i, j, k;
+    
+    GridPoint(int ii, int jj, int kk) : i(ii), j(jj), k(kk) {}
+    
+    bool operator==(const GridPoint& other) const {
+        return i == other.i && j == other.j && k == other.k;
+    }
+};
+
+// Hash function for GridPoint
+struct GridPointHash {
+    std::size_t operator()(const GridPoint& p) const {
+        return std::hash<int>()(p.i) ^ 
+               (std::hash<int>()(p.j) << 1) ^ 
+               (std::hash<int>()(p.k) << 2);
+    }
+};
+
+std::vector<CavityManager::CavityCluster> CavityManager::findCavityClustersFloodFill(const MCState& state) {
+    // First, build cavity grid if needed
+    if (!cacheValid_) {
+        findCavities(state);
+    }
+    
+    std::vector<CavityCluster> clusters;
+    
+    // Create visited grid
+    std::vector<bool> visited(grid_.nx * grid_.ny * grid_.nz, false);
+    
+    // Flood-fill to find connected components
+    for (int i = 0; i < grid_.nx; ++i) {
+        for (int j = 0; j < grid_.ny; ++j) {
+            for (int k = 0; k < grid_.nz; ++k) {
+                int idx = grid_.getIndex(i, j, k);
+                
+                // Skip if occupied or already visited
+                if (grid_.occupied[idx] || visited[idx]) {
+                    continue;
+                }
+                
+                // Start new cluster
+                CavityCluster cluster;
+                cluster.id = static_cast<int>(clusters.size());
+                
+                // Flood-fill using BFS
+                std::queue<GridPoint> queue;
+                queue.push(GridPoint(i, j, k));
+                visited[idx] = true;
+                
+                Vector3 centerSum(0, 0, 0);
+                int count = 0;
+                
+                while (!queue.empty()) {
+                    GridPoint current = queue.front();
+                    queue.pop();
+                    
+                    // Add to cluster
+                    Vector3 posNm = gridToPosition(current.i, current.j, current.k) * ANGSTROM_TO_NM;
+                    cluster.positions.push_back(posNm);
+                    centerSum = centerSum + posNm;
+                    count++;
+                    
+                    // Check 6-connected neighbors
+                    const int di[] = {1, -1, 0, 0, 0, 0};
+                    const int dj[] = {0, 0, 1, -1, 0, 0};
+                    const int dk[] = {0, 0, 0, 0, 1, -1};
+                    
+                    for (int n = 0; n < 6; ++n) {
+                        int ni = current.i + di[n];
+                        int nj = current.j + dj[n];
+                        int nk = current.k + dk[n];
+                        
+                        // Apply PBC
+                        ni = (ni + grid_.nx) % grid_.nx;
+                        nj = (nj + grid_.ny) % grid_.ny;
+                        nk = (nk + grid_.nz) % grid_.nz;
+                        
+                        int nidx = grid_.getIndex(ni, nj, nk);
+                        
+                        // Add to queue if cavity and not visited
+                        if (!grid_.occupied[nidx] && !visited[nidx]) {
+                            queue.push(GridPoint(ni, nj, nk));
+                            visited[nidx] = true;
+                        }
+                    }
+                }
+                
+                // Calculate cluster properties
+                if (count > 0) {
+                    cluster.center = centerSum * (1.0 / count);
+                    double spacingNm = gridSpacing_ * ANGSTROM_TO_NM;
+                    cluster.volume = count * spacingNm * spacingNm * spacingNm;
+                    
+                    // Only keep clusters with significant volume
+                    if (count >= 5) {  // At least 5 connected cells
+                        clusters.push_back(cluster);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Sort clusters by volume (largest first)
+    std::sort(clusters.begin(), clusters.end(), 
+              [](const CavityCluster& a, const CavityCluster& b) {
+                  return a.volume > b.volume;
+              });
+    
+    // Log statistics
+    stats_.clusterCount = static_cast<int>(clusters.size());
+    if (!clusters.empty()) {
+        stats_.largestClusterSize = static_cast<int>(clusters[0].positions.size());
+        stats_.averageClusterSize = stats_.cavityPoints / std::max(1, stats_.clusterCount);
+    }
+    
+    return clusters;
+}
+
+Vector3 CavityManager::selectFromCluster(const CavityCluster& cluster) {
+    // Select random position from cluster
+    if (cluster.positions.empty()) {
+        return cluster.center;
+    }
+    
+    int idx = utils::RandomUtils::uniformInt(0, static_cast<int>(cluster.positions.size()) - 1);
+    return cluster.positions[idx];
+}
+
+std::vector<Vector3> CavityManager::getClusterCenters(const MCState& state, int maxClusters) {
+    auto clusters = findCavityClustersFloodFill(state);
+    
+    if (clusters.empty()) {
+        return std::vector<Vector3>();
+    }
+    
+    std::vector<Vector3> centers;
+    
+    // Build cumulative distribution for size-weighted sampling
+    std::vector<int> cumulative;
+    cumulative.reserve(clusters.size() + 1);
+    cumulative.push_back(0);
+    
+    for (const auto& cluster : clusters) {
+        cumulative.push_back(cumulative.back() + static_cast<int>(cluster.positions.size()));
+    }
+    
+    int totalPoints = cumulative.back();
+    if (totalPoints == 0) {
+        return centers;
+    }
+    
+    // Select clusters with size-weighted probability
+    std::unordered_set<int> selectedIndices;
+    int numToSelect = std::min(maxClusters, static_cast<int>(clusters.size()));
+    
+    while (static_cast<int>(selectedIndices.size()) < numToSelect) {
+        // Sample from weighted distribution
+        int randomPoint = utils::RandomUtils::uniformInt(0, totalPoints - 1);
+        
+        // Find which cluster was selected
+        int selectedCluster = 0;
+        for (size_t i = 1; i < cumulative.size(); ++i) {
+            if (randomPoint < cumulative[i]) {
+                selectedCluster = i - 1;
+                break;
+            }
+        }
+        
+        // Add to selected set (may already be selected, which is fine)
+        selectedIndices.insert(selectedCluster);
+    }
+    
+    // Extract centers from selected clusters
+    for (int idx : selectedIndices) {
+        centers.push_back(clusters[idx].center);
+    }
+    
+    return centers;
+}
+
+// Color-based independent selection with size-weighted selection
+std::vector<Vector3> CavityManager::selectIndependentCavities(
+    const MCState& state, 
+    double minSeparationNm,
+    int maxPoints) {
+    
+    // Ensure cavities are up to date
+    findCavities(state);
+    
+    // Calculate color grid size
+    double spacingNm = gridSpacing_ * ANGSTROM_TO_NM;
+    int colorSize = std::max(1, static_cast<int>(std::ceil(minSeparationNm / spacingNm)));
+    
+    // First, count cavities in each color class to enable weighted selection
+    std::vector<int> colorClassSizes(colorSize * colorSize * colorSize, 0);
+    std::vector<std::tuple<int, int, int>> colorIndices;
+    
+    // Count cavities in each color class
+    for (int ci = 0; ci < colorSize; ++ci) {
+        for (int cj = 0; cj < colorSize; ++cj) {
+            for (int ck = 0; ck < colorSize; ++ck) {
+                int count = 0;
+                for (int i = ci; i < grid_.nx; i += colorSize) {
+                    for (int j = cj; j < grid_.ny; j += colorSize) {
+                        for (int k = ck; k < grid_.nz; k += colorSize) {
+                            int idx = grid_.getIndex(i, j, k);
+                            if (!grid_.occupied[idx]) {
+                                count++;
+                            }
+                        }
+                    }
+                }
+                int colorIdx = ci * colorSize * colorSize + cj * colorSize + ck;
+                colorClassSizes[colorIdx] = count;
+                if (count > 0) {
+                    colorIndices.push_back(std::make_tuple(ci, cj, ck));
+                }
+            }
+        }
+    }
+    
+    // Select color class weighted by size (preserves uniform sampling over all cavities)
+    if (colorIndices.empty()) {
+        return std::vector<Vector3>();
+    }
+    
+    // Build cumulative distribution for weighted sampling
+    std::vector<int> cumulative;
+    cumulative.reserve(colorIndices.size() + 1);
+    cumulative.push_back(0);
+    
+    for (const auto& colorIdx : colorIndices) {
+        int ci = std::get<0>(colorIdx);
+        int cj = std::get<1>(colorIdx);
+        int ck = std::get<2>(colorIdx);
+        int idx = ci * colorSize * colorSize + cj * colorSize + ck;
+        cumulative.push_back(cumulative.back() + colorClassSizes[idx]);
+    }
+    
+    // Sample from weighted distribution
+    int totalCavities = cumulative.back();
+    if (totalCavities == 0) {
+        return std::vector<Vector3>();
+    }
+    
+    int randomCavity = utils::RandomUtils::uniformInt(0, totalCavities - 1);
+    
+    // Find which color class was selected
+    int selectedClass = 0;
+    for (size_t i = 1; i < cumulative.size(); ++i) {
+        if (randomCavity < cumulative[i]) {
+            selectedClass = i - 1;
+            break;
+        }
+    }
+    
+    // Get the selected color indices
+    int colorI = std::get<0>(colorIndices[selectedClass]);
+    int colorJ = std::get<1>(colorIndices[selectedClass]);
+    int colorK = std::get<2>(colorIndices[selectedClass]);
+    
+    std::vector<Vector3> selectedCavities;
+    
+    // Select all cavities in this color class
+    for (int i = colorI; i < grid_.nx; i += colorSize) {
+        for (int j = colorJ; j < grid_.ny; j += colorSize) {
+            for (int k = colorK; k < grid_.nz; k += colorSize) {
+                int idx = grid_.getIndex(i, j, k);
+                
+                if (!grid_.occupied[idx]) {
+                    Vector3 posNm = gridToPosition(i, j, k) * ANGSTROM_TO_NM;
+                    selectedCavities.push_back(posNm);
+                    
+                    if (static_cast<int>(selectedCavities.size()) >= maxPoints) {
+                        return selectedCavities;
+                    }
+                }
+            }
+        }
+    }
+    
+    return selectedCavities;
+}
+
+// Automatic mode selection based on system density
+bool CavityManager::shouldUseClustering(const MCState& state) {
+    // Use clustering if:
+    // 1. Too many cavity points (>1000)
+    // 2. Occupancy is moderate (30-70%)
+    
+    if (!cacheValid_) {
+        findCavities(state);
+    }
+    
+    bool tooManyCavities = stats_.cavityPoints > 1000;
+    bool moderateOccupancy = stats_.occupancyRatio > 0.3 && stats_.occupancyRatio < 0.7;
+    
+    return tooManyCavities || moderateOccupancy;
 }
 
 } // namespace movement

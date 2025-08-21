@@ -125,15 +125,21 @@ std::vector<InsertionRegion> MultiInsertionCBMC::divideBoxIntoRegions(const MCSt
     }
     
     // Fallback: uniform grid division (original implementation)
+    // Note: state.info.box is in Angstroms
     double boxX = state.info.box[0];
     double boxY = state.info.box[1];
     double boxZ = state.info.box[2];
     
+    // Convert box to nm for consistent units
+    double boxXnm = boxX * 0.1;  // Angstrom to nm
+    double boxYnm = boxY * 0.1;  // Angstrom to nm
+    double boxZnm = boxZ * 0.1;  // Angstrom to nm
+    
     double cellSize = config_.minSeparation * 0.1;  // Convert Angstrom to nm
     
-    int nx = std::max(1, static_cast<int>(boxX / cellSize));
-    int ny = std::max(1, static_cast<int>(boxY / cellSize));
-    int nz = std::max(1, static_cast<int>(boxZ / cellSize));
+    int nx = std::max(1, static_cast<int>(boxXnm / cellSize));
+    int ny = std::max(1, static_cast<int>(boxYnm / cellSize));
+    int nz = std::max(1, static_cast<int>(boxZnm / cellSize));
     
     double actualCellX = boxX / nx;
     double actualCellY = boxY / ny;
@@ -178,10 +184,13 @@ std::vector<InsertionRegion> MultiInsertionCBMC::selectNonAdjacentRegions(
     double minSepNm = config_.minSeparation * 0.1;  // Convert Angstrom to nm
     
     if (config_.enforceIndependence) {
+        // Use cutoff from config (should be set from MCState when initialized)
+        double cutoffNm = config_.cutoffNm;
+        
         // Calculate required separation for true independence
         // Need: separation > cutoff + sqrt(3)*disp + 2*molExtent
         double disp = (minSepNm * 0.5) * config_.displacementFraction;  // Upper bound estimate
-        double requiredNm = config_.cutoffNm + std::sqrt(3.0) * disp + 2.0 * config_.moleculeExtentNm;
+        double requiredNm = cutoffNm + std::sqrt(3.0) * disp + 2.0 * config_.moleculeExtentNm;
         
         // Use the larger of user-specified and required separation
         double effectiveMinSep = std::max(minSepNm, requiredNm);
@@ -346,18 +355,18 @@ std::vector<InsertionRegion> MultiInsertionCBMC::acceptInsertions(
     // Full CBMC acceptance with sequential updates of N
     int currentN = state.activeResidueCount;
     
-    // Calculate Mproposal: total number of candidate regions
-    // This is the normalization factor for the proposal distribution
+    // Calculate Mproposal BEFORE any selection filtering
+    // This is the total number of candidate regions in the proposal distribution
     int Mproposal = 0;
     if (config_.useCavityBias && cavityManager_) {
-        // In cavity mode: M = number of cavity points
+        // In cavity mode: M = number of cavity points (before non-adjacent filtering)
         Mproposal = std::max(1, cavityManager_->getCavityCount());
     } else {
-        // In uniform grid mode: M = nx * ny * nz
-        double cellSize = config_.minSeparation * 0.1; // Angstrom to nm
-        int nx = std::max(1, static_cast<int>(std::ceil(state.info.box[0] / cellSize)));
-        int ny = std::max(1, static_cast<int>(std::ceil(state.info.box[1] / cellSize)));
-        int nz = std::max(1, static_cast<int>(std::ceil(state.info.box[2] / cellSize)));
+        // In uniform grid mode: M = nx * ny * nz (total grid cells)
+        double cellSize = config_.minSeparation * 0.1; // Convert Angstrom to nm
+        int nx = std::max(1, static_cast<int>(std::ceil(state.info.box[0] / (cellSize * 10.0))));
+        int ny = std::max(1, static_cast<int>(std::ceil(state.info.box[1] / (cellSize * 10.0))));
+        int nz = std::max(1, static_cast<int>(std::ceil(state.info.box[2] / (cellSize * 10.0))));
         Mproposal = nx * ny * nz;
     }
     

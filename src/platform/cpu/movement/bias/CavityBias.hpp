@@ -95,6 +95,9 @@ public:
         double cavityRatio = 0.0;
         int cacheHits = 0;
         int cacheMisses = 0;
+        int clusterCount = 0;
+        int largestClusterSize = 0;
+        int averageClusterSize = 0;
     };
     
     const Statistics& getStatistics() const { return stats_; }
@@ -109,6 +112,19 @@ public:
     };
     
     std::vector<CavityCluster> findCavityClusters(const MCState& state);
+    
+    // New clustering methods
+    std::vector<CavityCluster> findCavityClustersFloodFill(const MCState& state);
+    Vector3 selectFromCluster(const CavityCluster& cluster);
+    std::vector<Vector3> getClusterCenters(const MCState& state, int maxClusters = 100);
+    
+    // Color-based independent selection
+    std::vector<Vector3> selectIndependentCavities(const MCState& state, 
+                                                   double minSeparationNm,
+                                                   int maxPoints = 100);
+    
+    // Automatic mode selection
+    bool shouldUseClustering(const MCState& state);
     
 private:
     // Configuration
