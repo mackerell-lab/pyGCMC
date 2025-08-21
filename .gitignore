@@ -281,9 +281,9 @@ $RECYCLE.BIN/
 *.tgz
 *.tar.gz
 
-# Core dumps
-core
-core.*
+# # Core dumps
+# core
+# core.*
 
 # =============================================================================
 # Scientific Computing and Data Files
