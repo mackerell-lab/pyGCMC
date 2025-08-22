@@ -7,9 +7,11 @@
 
 #include "ProposalInterface.hpp"
 #include "ProposalTypes.hpp"
+#include "ProposalStatistics.hpp"
 #include "../common/MovementParams.hpp"
 #include "../bias/CavityBias.hpp"
 #include <memory>
+#include <chrono>
 
 namespace pygcmc {
 namespace platform {
@@ -26,26 +28,12 @@ private:
     const MovementParams& params_;
     std::shared_ptr<CavityManager> cavityManager_;
     
-    // Statistics
-    struct Statistics {
-        int totalAttempts = 0;
-        int acceptedMoves = 0;
-        double acceptanceRate = 0.0;
-        
-        void update(bool accepted) {
-            totalAttempts++;
-            if (accepted) acceptedMoves++;
-            acceptanceRate = (totalAttempts > 0) ? 
-                           static_cast<double>(acceptedMoves) / totalAttempts : 0.0;
-        }
-        
-        void reset() {
-            totalAttempts = 0;
-            acceptedMoves = 0;
-            acceptanceRate = 0.0;
-        }
-    };
-    Statistics stats_;
+    // P2: Enhanced statistics
+    ProposalStatistics stats_;
+    
+    // Timing helpers
+    using Clock = std::chrono::high_resolution_clock;
+    using TimePoint = std::chrono::time_point<Clock>;
     
 public:
     ProposalMain(const MovementParams& params,
@@ -72,9 +60,24 @@ public:
     ProposalType getCurrentType() const { return currentType_; }
     
     /**
-     * Get statistics
+     * Get statistics (P2 enhanced)
      */
-    const Statistics& getStatistics() const { return stats_; }
+    const ProposalStatistics& getStatistics() const { return stats_; }
+    
+    /**
+     * Get cavity manager statistics (if available)
+     */
+    CavityManager::Statistics getCavityStatistics() const {
+        if (cavityManager_) {
+            return cavityManager_->getStatistics();
+        }
+        return CavityManager::Statistics();
+    }
+    
+    /**
+     * Check if should switch mode (adaptive)
+     */
+    bool shouldSwitchMode(const MCState& state) const;
     
     /**
      * Reset all

@@ -32,6 +32,19 @@ struct MovementResult {
     int mproposal = -1;                   // Number of proposal positions (-1 if not applicable)
     double vregion = -1.0;                 // Region volume in nm³ (-1 if not applicable)
     
+    // Enhanced diagnostics (P2 strengthening)
+    int proposalMode = -1;                // Current proposal mode (0-4, -1 if not set)
+    int selectedType = -1;                // ProposalType enum value actually used
+    double proposalTimeMs = -1.0;         // Time for proposal generation (ms)
+    double findCavTimeMs = -1.0;          // Time for cavity finding (ms)
+    
+    // Latest proposal info (optional, filled when fillProposalInfo=true)
+    double proposalNorm = -1.0;           // q_norm for detailed balance diagnostics
+    double proposalPosX = 0.0;            // Proposed position X (nm) - same unit as ProposalInfo
+    double proposalPosY = 0.0;            // Proposed position Y (nm) - same unit as ProposalInfo
+    double proposalPosZ = 0.0;            // Proposed position Z (nm) - same unit as ProposalInfo
+    bool proposalInfoFilled = false;      // Whether proposal info was filled
+    
     // Performance metrics
     double computeTimeMs = 0.0;           // Time taken for the move in milliseconds
     

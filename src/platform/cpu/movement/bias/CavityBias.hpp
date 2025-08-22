@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include <set>
+#include <mutex>
 #include "../common/MovementUtils.hpp"
 
 // Forward declarations
@@ -86,18 +87,41 @@ public:
     int getTotalGridPoints() const { return grid_.nx * grid_.ny * grid_.nz; }
     int getCavityCount() const { return static_cast<int>(cavityCache_.size()); }
     
-    // Statistics
+    // Statistics (P2 enhanced)
     struct Statistics {
+        // Basic grid statistics
         int totalGridPoints = 0;
         int occupiedPoints = 0;
         int cavityPoints = 0;
         double occupancyRatio = 0.0;
         double cavityRatio = 0.0;
+        
+        // Cache performance
         int cacheHits = 0;
         int cacheMisses = 0;
+        
+        // Cluster analysis
         int clusterCount = 0;
         int largestClusterSize = 0;
         int averageClusterSize = 0;
+        
+        // P2: Enhanced metrics
+        double buildTimeMs = 0.0;           // Time to build cavity grid (ms)
+        double lastFindTimeMs = 0.0;        // Last cavity finding time (ms)
+        int colorClassCount = 0;            // Number of color classes
+        
+        // Cavity distribution per color class
+        struct ColorClassStats {
+            int minCavities = 0;
+            int medianCavities = 0;
+            int p95Cavities = 0;
+            double avgCavities = 0.0;
+        } colorClassStats;
+        
+        // Incremental update stats (P3 prep)
+        int incrementalUpdates = 0;
+        int fullRebuilds = 0;
+        double dirtyRatio = 0.0;            // Fraction of grid marked dirty
     };
     
     const Statistics& getStatistics() const { return stats_; }
@@ -137,9 +161,13 @@ private:
     // Cache
     std::vector<Vector3> cavityCache_;     // Cached cavity positions
     bool cacheValid_;                      // Whether cache is valid
+    Vector3 lastBoxSize_;                  // Last box size for cache invalidation (per-instance)
     
     // Statistics
     mutable Statistics stats_;
+    
+    // Thread safety
+    mutable std::mutex cacheMutex_;        // Protects cache and lastBoxSize
     
     // Helper functions
     void initializeGrid(const Vector3& boxSize);

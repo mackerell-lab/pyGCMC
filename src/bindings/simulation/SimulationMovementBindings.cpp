@@ -76,7 +76,25 @@ void init_movement_bindings(py::module& m) {
                       "Use region volume for Veff when true; otherwise box volume")
         .def_readwrite("proposalMode", &MovementParams::proposalMode,
                       "Proposal sampling mode: 0=Uniform, 1=Cavity, 2=Color, 3=Cluster, 4=Adaptive "
-                      "(requires USE_PROPOSAL_LAYER compile flag)")
+                      "(requires PYGCMC_USE_PROPOSAL_LAYER compile flag)")
+        // P2: Adaptive mode thresholds
+        .def_readwrite("autoOccupancySparse", &MovementParams::autoOccupancySparse,
+                      "Switch to Uniform below this occupancy (default 0.3)")
+        .def_readwrite("autoOccupancyDense", &MovementParams::autoOccupancyDense,
+                      "Switch to Cluster above this occupancy (default 0.7)")
+        .def_readwrite("autoNcavMin", &MovementParams::autoNcavMin,
+                      "Minimum cavities for Cavity mode (default 100)")
+        .def_readwrite("autoFindCavMaxMs", &MovementParams::autoFindCavMaxMs,
+                      "Max time (ms) before switching modes (default 10.0)")
+        // P3: Optional performance features
+        .def_readwrite("useIncrementalCavityUpdate", &MovementParams::useIncrementalCavityUpdate,
+                      "Enable incremental cavity update on accept (default false)")
+        .def_readwrite("useStencilOptimization", &MovementParams::useStencilOptimization,
+                      "Use precomputed sphere stencils (default true)")
+        .def_readwrite("useColorClassFastPath", &MovementParams::useColorClassFastPath,
+                      "Use color class index tables (default false)")
+        .def_readwrite("fillProposalInfo", &MovementParams::fillProposalInfo,
+                      "Fill detailed proposal info in result (default false)")
         .def("updateDerivedParameters", &MovementParams::updateDerivedParameters,
                       "Update derived parameters after changing temperature")
         .def("__repr__", [](const MovementParams& p) {
@@ -111,6 +129,26 @@ void init_movement_bindings(py::module& m) {
                      "Number of proposal positions (-1 if not applicable)")
         .def_readonly("vregion", &MovementResult::vregion,
                      "Region volume in nm³ (-1 if not applicable)")
+        // P2: Enhanced diagnostics
+        .def_readonly("proposalMode", &MovementResult::proposalMode,
+                     "Current proposal mode (0-4, -1 if not set)")
+        .def_readonly("selectedType", &MovementResult::selectedType,
+                     "ProposalType enum value actually used")
+        .def_readonly("proposalTimeMs", &MovementResult::proposalTimeMs,
+                     "Time for proposal generation (ms)")
+        .def_readonly("findCavTimeMs", &MovementResult::findCavTimeMs,
+                     "Time for cavity finding (ms)")
+        // Latest proposal info
+        .def_readonly("proposalNorm", &MovementResult::proposalNorm,
+                     "q_norm for detailed balance diagnostics")
+        .def_readonly("proposalPosX", &MovementResult::proposalPosX,
+                     "Proposed position X (nm)")
+        .def_readonly("proposalPosY", &MovementResult::proposalPosY,
+                     "Proposed position Y (nm)")
+        .def_readonly("proposalPosZ", &MovementResult::proposalPosZ,
+                     "Proposed position Z (nm)")
+        .def_readonly("proposalInfoFilled", &MovementResult::proposalInfoFilled,
+                     "Whether proposal info was filled")
         .def_readonly("computeTimeMs", &MovementResult::computeTimeMs,
                      "Time taken for the move in milliseconds")
         .def("isSuccessful", &MovementResult::isSuccessful,
@@ -175,6 +213,91 @@ void init_movement_bindings(py::module& m) {
         .def("getStatistics", &MovementModule::getStatistics,
              py::return_value_policy::reference_internal,
              "Get movement statistics")
+        
+        // P2: Enhanced statistics access with structured export
+        .def("getProposalStats", [](const MovementModule& m) {
+#ifdef PYGCMC_USE_PROPOSAL_LAYER
+            // When proposal layer is enabled, return structured dict
+            auto statsMap = m.getProposalStatsMap();
+            py::dict result;
+            
+            // Basic stats
+            result["total_attempts"] = statsMap["total_attempts"];
+            result["total_accepts"] = statsMap["total_accepts"];
+            result["acceptance_rate"] = statsMap["acceptance_rate"];
+            result["current_mode"] = statsMap["current_mode"];
+            result["mode_transitions"] = statsMap["mode_transitions"];
+            result["auto_switches"] = statsMap["auto_switches"];
+            
+            // Per-mode stats in nested dict
+            py::dict modes;
+            for (const auto& mode : {"uniform", "cavity", "color", "cluster", "adaptive"}) {
+                py::dict modeStats;
+                std::string prefix = std::string(mode) + "_";
+                modeStats["attempts"] = statsMap[prefix + "attempts"];
+                modeStats["accepts"] = statsMap[prefix + "accepts"]; 
+                modeStats["accept_rate"] = statsMap[prefix + "accept_rate"];
+                modes[mode] = modeStats;
+            }
+            result["modes"] = modes;
+            
+            // Timing stats in nested dict
+            py::dict timings;
+            py::dict proposalTime;
+            proposalTime["p50"] = statsMap["proposal_time_p50_ms"];
+            proposalTime["p90"] = statsMap["proposal_time_p90_ms"];
+            proposalTime["p95"] = statsMap.count("proposal_time_p95_ms") ? 
+                statsMap.at("proposal_time_p95_ms") : -1.0;
+            proposalTime["p99"] = statsMap.count("proposal_time_p99_ms") ? 
+                statsMap.at("proposal_time_p99_ms") : -1.0;
+            timings["proposal_ms"] = proposalTime;
+            
+            py::dict findcavTime;
+            findcavTime["p50"] = statsMap["findcav_time_p50_ms"];
+            findcavTime["p90"] = statsMap["findcav_time_p90_ms"];
+            findcavTime["p95"] = statsMap.count("findcav_time_p95_ms") ? 
+                statsMap.at("findcav_time_p95_ms") : -1.0;
+            findcavTime["p99"] = statsMap.count("findcav_time_p99_ms") ? 
+                statsMap.at("findcav_time_p99_ms") : -1.0;
+            timings["findcav_ms"] = findcavTime;
+            result["timings"] = timings;
+            
+            // Fallback stats
+            py::dict fallbacks;
+            fallbacks["no_cavities"] = statsMap["fallback_no_cavities"];
+            fallbacks["timeout"] = statsMap["fallback_timeout"];
+            fallbacks["invalid_mode"] = statsMap["fallback_invalid_mode"];
+            result["fallbacks"] = fallbacks;
+            
+            // Cavity info
+            if (statsMap.count("cavity_count")) {
+                result["cavity_count"] = statsMap["cavity_count"];
+            }
+            if (statsMap.count("last_ncav")) {
+                result["last_ncav"] = statsMap["last_ncav"];
+                result["last_occupancy"] = statsMap["last_occupancy"];
+            }
+            
+            return result;
+#else
+            // Fallback to simple map conversion when proposal layer not enabled
+            auto statsMap = m.getProposalStatsMap();
+            py::dict result;
+            for (const auto& [key, value] : statsMap) {
+                result[key.c_str()] = value;
+            }
+            return result;
+#endif
+        }, "Get proposal layer statistics as structured dict (with PYGCMC_USE_PROPOSAL_LAYER) or flat dict")
+        .def("getCavityStats", [](const MovementModule& m) {
+            // Convert map to Python dict
+            auto statsMap = m.getCavityStatsMap();
+            py::dict result;
+            for (const auto& [key, value] : statsMap) {
+                result[key.c_str()] = value;
+            }
+            return result;
+        }, "Get cavity manager statistics as dict")
         
         // String representation
         .def("__repr__", [](const MovementModule& m) {
