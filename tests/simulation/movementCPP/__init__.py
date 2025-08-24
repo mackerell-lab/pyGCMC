@@ -1,6 +1,15 @@
-"""
-Movement C++ Bindings Test Modules
+# tests/simulation/movementCPP/__init__.py
+"""C++ Movement module tests."""
 
-This package contains modular test functions for the C++ movement module bindings.
-Tests are organized by functionality and imported by the main test_movement_cpp.py file.
-"""
+# Import all test classes for easy access
+from .cavity_bias_basic import TestCavityBiasBasic
+from .cavity_bias_advanced import TestCavityBiasAdvanced
+from .cavity_cache_basic import TestCavityCacheBasic
+from .cavity_cache_performance import TestCavityCachePerformance
+
+__all__ = [
+    'TestCavityBiasBasic',
+    'TestCavityBiasAdvanced',
+    'TestCavityCacheBasic', 
+    'TestCavityCachePerformance'
+]
