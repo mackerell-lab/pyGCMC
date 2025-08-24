@@ -28,10 +28,8 @@ def create_mock_state():
     if not MOVEMENT_AVAILABLE:
         return None
     state = pygcmc.MCState()
-    # Set box dimensions (in nm)
-    state.info.box[0] = 3.0
-    state.info.box[1] = 3.0 
-    state.info.box[2] = 3.0
+    # Set box dimensions (in nm) - must set as array
+    state.info.box = [3.0, 3.0, 3.0]
     # Set molecule type info
     state.info.max_types = 1  # We have one molecule type
     state.forcefield.numTotalTypes = 1
@@ -93,9 +91,8 @@ def create_gcmc_system():
     
     movement = pygcmc.movement.MovementModule(params)
     state = pygcmc.MCState()
-    state.info.box[0] = 3.0  # nm
-    state.info.box[1] = 3.0
-    state.info.box[2] = 3.0
+    # Set box dimensions (in nm) - must set as array
+    state.info.box = [3.0, 3.0, 3.0]
     # Set molecule type info
     state.info.max_types = 1  # We have one molecule type
     state.forcefield.numTotalTypes = 1

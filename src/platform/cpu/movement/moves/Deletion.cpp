@@ -27,6 +27,16 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     MovementResult result;
     result.moveType = "delete";
     
+    // Check for valid box dimensions
+    if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
+        result.accepted = false;
+        result.rejectReason = "Invalid box dimensions";
+        result.energyChange = 0.0;
+        result.acceptanceProbability = 0.0;
+        stats_.totalAttempts++;
+        return result;
+    }
+    
     // Check if there are any molecules to delete
     if (state.activeResidueCount == 0) {
         result.accepted = false;
@@ -52,7 +62,8 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     result.residueIndex = targetResIdx;
     
     // Calculate energy before deletion
-    simulation::Simulation::computeSystemEnergyCutoff(state);
+    int n_before = state.activeResidueCount;  // Store n before deletion
+    simulation::Simulation::computeSystemEnergyPBCCutoff(state);
     double energyBefore = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         energyBefore += state.residues[i].energy_vdw;
@@ -74,7 +85,7 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     state.residues[targetResIdx].active = false;
     
     // Calculate energy after deletion (with residue marked inactive)
-    simulation::Simulation::computeSystemEnergyCutoff(state);
+    simulation::Simulation::computeSystemEnergyPBCCutoff(state);
     double energyAfter = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         if (i != targetResIdx && state.residues[i].active) {
@@ -87,15 +98,18 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     double deltaE = energyAfter - energyBefore;
     result.energyChange = deltaE;
     
+    // Restore active flag before acceptance decision
+    state.residues[targetResIdx].active = true;
+    
     // Calculate system volume from box dimensions
     MovementParams paramsWithVolume = params;
     if (paramsWithVolume.volumeNm3 <= 0.0) {
         paramsWithVolume.volumeNm3 = state.info.box[0] * state.info.box[1] * state.info.box[2];
     }
     
-    // Calculate deletion acceptance probability
+    // Calculate deletion acceptance probability (use n_before)
     double acceptProb = calculateDeletionProbability(
-        state.activeResidueCount,  // n before deletion
+        n_before,  // n before deletion
         deltaE,
         paramsWithVolume
     );
@@ -107,6 +121,9 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     
     if (accepted) {
         // Permanently delete the residue
+        // Mark as inactive again for deletion
+        state.residues[targetResIdx].active = false;
+        
         // First, update active pool
         auto activeIndices = activePool_->getActiveResidueIndices();
         if (targetResIdx < static_cast<int>(activeIndices.size())) {
@@ -126,10 +143,8 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
             state.removeResidue(targetResIdx);
             stats_.acceptedDeletions++;
         }
-    } else {
-        // Restore residue active status
-        state.residues[targetResIdx].active = true;
     }
+    // else: residue is already active from restoration before acceptance decision
     
     // Update statistics
     stats_.totalAttempts++;

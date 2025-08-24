@@ -91,6 +91,12 @@ struct MovementParams {
     
     // Parameter validation
     void validateParameters() {
+        // Temperature validation
+        if (temperature <= 0.0) {
+            throw std::invalid_argument(
+                "temperature must be positive, got " + std::to_string(temperature) + " K");
+        }
+        
         // Validate cavity parameters
         if (useCavityBias) {
             if (cavityGridSpacing <= 0.0) {

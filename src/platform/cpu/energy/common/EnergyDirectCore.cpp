@@ -134,8 +134,16 @@ void computeResidueNonbondedEnergy(model::MCState& state, int residue_idx, bool 
                 if (r2 > cutoff2) continue;
                 
                 int param_index = type_i * forcefield.numTotalTypes + type_j;
-                double eps = forcefield.ljEps[param_index];
-                double sigma = forcefield.ljSigma[param_index];
+                size_t idx = static_cast<size_t>(param_index);
+                
+                // Bounds check to prevent accessing invalid force field parameters
+                if (idx >= forcefield.ljEps.size() || idx >= forcefield.ljSigma.size()) {
+                    // Skip if force field tables don't cover this pair
+                    continue;
+                }
+                
+                double eps = forcefield.ljEps[idx];
+                double sigma = forcefield.ljSigma[idx];
                 double q1 = atoms[atom_i].charge;
                 double q2 = atoms[atom_j].charge;
                 

@@ -8,6 +8,9 @@
 #include "../moves/Rotation.hpp"
 #include "../moves/MultiInsertionCBMC.hpp"
 #include "../common/MovementUtils.hpp"
+#ifdef PYGCMC_USE_PROPOSAL_LAYER
+#include "../proposal/ProposalMain.hpp"
+#endif
 #include <random>
 #include <chrono>
 
@@ -120,11 +123,24 @@ MovementResult MovementModule::attemptInsertion(MCState& state, int moleculeType
     
     updateStatistics("insert", result.accepted, result.energyChange);
     
+    // Remember last accepted insertion for paired deletion
+    if (result.accepted) {
+        lastInsertedResidueIndex_ = result.residueIndex;
+    }
+    
     return result;
 }
 
 MovementResult MovementModule::attemptDeletion(MCState& state, int residueIndex) {
     auto startTime = std::chrono::high_resolution_clock::now();
+    
+    // Prefer deleting the last accepted insertion when user didn't specify an index
+    if (residueIndex < 0 && lastInsertedResidueIndex_ >= 0 &&
+        lastInsertedResidueIndex_ < state.activeResidueCount &&
+        state.residues[lastInsertedResidueIndex_].active) {
+        residueIndex = lastInsertedResidueIndex_;
+        lastInsertedResidueIndex_ = -1; // consume once
+    }
     
     MovementResult result = pImpl_->deletionMove->performDeletion(state, params_, residueIndex);
     
@@ -132,6 +148,11 @@ MovementResult MovementModule::attemptDeletion(MCState& state, int residueIndex)
     result.computeTimeMs = std::chrono::duration<double, std::milli>(endTime - startTime).count();
     
     updateStatistics("delete", result.accepted, result.energyChange);
+    
+    // Invalidate cavity cache after accepted deletion
+    if (result.accepted && cavityManager_) {
+        cavityManager_->invalidateCache();
+    }
     
     return result;
 }
@@ -145,6 +166,11 @@ MovementResult MovementModule::attemptTranslation(MCState& state, int residueInd
     result.computeTimeMs = std::chrono::duration<double, std::milli>(endTime - startTime).count();
     
     updateStatistics("translate", result.accepted, result.energyChange);
+    
+    // Invalidate cavity cache after accepted translation
+    if (result.accepted && cavityManager_) {
+        cavityManager_->invalidateCache();
+    }
     
     return result;
 }
@@ -164,6 +190,11 @@ MovementResult MovementModule::attemptRotation(MCState& state, int residueIndex)
     result.computeTimeMs = std::chrono::duration<double, std::milli>(endTime - startTime).count();
     
     updateStatistics("rotate", result.accepted, result.energyChange);
+    
+    // Invalidate cavity cache after accepted rotation
+    if (result.accepted && cavityManager_) {
+        cavityManager_->invalidateCache();
+    }
     
     return result;
 }
@@ -221,13 +252,15 @@ void MovementModule::resetStatistics() {
 
 void MovementModule::setParams(const MovementParams& params) {
     params_ = params;
+    // Ensure derived values and validation are up-to-date
+    params_.updateDerivedParameters();
     
     // Update component configurations (convert nm to Angstroms by multiplying by 10)
-    cavityManager_->setGridSpacing(params.cavityGridSpacing * 10.0);
-    cavityManager_->setProbeRadius(params.probeRadius * 10.0);
-    configBiasManager_->setNumTrials(params.numConfigTrials);
-    configBiasManager_->setTranslationRange(params.configTranslationRange * 10.0);
-    activePool_->setFragmentationThreshold(params.fragmentationThreshold);
+    cavityManager_->setGridSpacing(params_.cavityGridSpacing * 10.0);
+    cavityManager_->setProbeRadius(params_.probeRadius * 10.0);
+    configBiasManager_->setNumTrials(params_.numConfigTrials);
+    configBiasManager_->setTranslationRange(params_.configTranslationRange * 10.0);
+    activePool_->setFragmentationThreshold(params_.fragmentationThreshold);
 }
 
 MovementParams MovementModule::getParams() const {

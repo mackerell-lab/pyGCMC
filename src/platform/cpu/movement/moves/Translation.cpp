@@ -28,6 +28,16 @@ MovementResult TranslationMove::performTranslation(MCState& state, const Movemen
     MovementResult result;
     result.moveType = "translate";
     
+    // Check for valid box dimensions
+    if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
+        result.accepted = false;
+        result.rejectReason = "Invalid box dimensions";
+        result.energyChange = 0.0;
+        result.acceptanceProbability = 0.0;
+        stats_.totalAttempts++;
+        return result;
+    }
+    
     // Check if there are any molecules to translate
     if (state.activeResidueCount == 0) {
         result.accepted = false;
@@ -60,7 +70,7 @@ MovementResult TranslationMove::performTranslation(MCState& state, const Movemen
     Vector3 displacement = generateDisplacement(params.maxTranslation);
     
     // Calculate energy before translation
-    simulation::Simulation::computeSystemEnergyCutoff(state);
+    simulation::Simulation::computeSystemEnergyPBCCutoff(state);
     double energyBefore = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         energyBefore += state.residues[i].energy_vdw;
@@ -86,7 +96,7 @@ MovementResult TranslationMove::performTranslation(MCState& state, const Movemen
     }
     
     // Calculate energy after translation
-    simulation::Simulation::computeSystemEnergyCutoff(state);
+    simulation::Simulation::computeSystemEnergyPBCCutoff(state);
     double energyAfter = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         energyAfter += state.residues[i].energy_vdw;
@@ -225,7 +235,7 @@ std::pair<double, double> TranslationMove::calculateEnergyChange(
     auto originalPos = saveAtomPositions(state, residueIndex);
     
     // Calculate energy before
-    simulation::Simulation::computeSystemEnergyCutoff(state);
+    simulation::Simulation::computeSystemEnergyPBCCutoff(state);
     double energyBefore = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         energyBefore += state.residues[i].energy_vdw;
@@ -237,7 +247,7 @@ std::pair<double, double> TranslationMove::calculateEnergyChange(
     translateResidue(state, residueIndex, displacement);
     
     // Calculate energy after
-    simulation::Simulation::computeSystemEnergyCutoff(state);
+    simulation::Simulation::computeSystemEnergyPBCCutoff(state);
     double energyAfter = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         energyAfter += state.residues[i].energy_vdw;

@@ -314,6 +314,9 @@ void init_movement_bindings(py::module& m) {
         .def_readonly("totalEnergyChange", &MovementModule::Statistics::totalEnergyChange)
         .def("acceptanceRate", &MovementModule::Statistics::acceptanceRate,
              "Calculate acceptance rate")
+        .def_property_readonly("rate", [](const MovementModule::Statistics& s) {
+            return s.acceptanceRate();
+        }, "Acceptance rate as a property (alias for acceptanceRate())")
         .def("__repr__", [](const MovementModule::Statistics& s) {
             return "<Statistics attempts=" + std::to_string(s.attempts) + 
                    " accepts=" + std::to_string(s.accepts) + 

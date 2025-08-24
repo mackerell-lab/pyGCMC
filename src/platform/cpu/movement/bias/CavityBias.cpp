@@ -21,27 +21,27 @@ static constexpr double NM_TO_ANGSTROM = 10.0;
 CavityManager::CavityManager(double gridSpacing, double probeRadius)
     : gridSpacing_(gridSpacing),      // in Angstroms
       probeRadius_(probeRadius),      // in Angstroms
-      cacheValid_(false) {
+      cacheValid_(false),
+      lastBoxSize_(-1, -1, -1) {      // Initialize to invalid size
     resetStatistics();
 }
 
 CavityManager::~CavityManager() = default;
 
 std::vector<Vector3> CavityManager::findCavities(const MCState& state) {
-    // Get box dimensions from MCState (in Angstroms!)
-    Vector3 boxSizeAng(state.info.box[0], 
-                       state.info.box[1], 
-                       state.info.box[2]);
+    // Note: Thread safety issue if called concurrently - would need mutex
+    // std::lock_guard<std::mutex> guard(cacheMutex_);
     
-    // Convert to nm for grid calculation
-    Vector3 boxSizeNm = boxSizeAng * ANGSTROM_TO_NM;
+    // Get box dimensions from MCState (already in nm!)
+    Vector3 boxSizeNm(state.info.box[0], 
+                      state.info.box[1], 
+                      state.info.box[2]);
     
     // Check if cache is valid (also check if box size changed)
-    static Vector3 lastBoxSize(-1, -1, -1);
-    bool boxChanged = (std::abs(boxSizeNm.x - lastBoxSize.x) > 1e-6 ||
-                      std::abs(boxSizeNm.y - lastBoxSize.y) > 1e-6 ||
-                      std::abs(boxSizeNm.z - lastBoxSize.z) > 1e-6);
-    lastBoxSize = boxSizeNm;
+    bool boxChanged = (std::abs(boxSizeNm.x - lastBoxSize_.x) > 1e-6 ||
+                      std::abs(boxSizeNm.y - lastBoxSize_.y) > 1e-6 ||
+                      std::abs(boxSizeNm.z - lastBoxSize_.z) > 1e-6);
+    lastBoxSize_ = boxSizeNm;
     
     if (cacheValid_ && !cavityCache_.empty() && !boxChanged) {
         stats_.cacheHits++;
@@ -65,8 +65,8 @@ std::vector<Vector3> CavityManager::findCavities(const MCState& state) {
             for (int k = 0; k < grid_.nz; ++k) {
                 int idx = grid_.getIndex(i, j, k);
                 if (!grid_.occupied[idx]) {
-                    // store cavity position in nm (convert from Å)
-                    Vector3 posNm = gridToPosition(i, j, k) * ANGSTROM_TO_NM;
+                    // store cavity position in nm
+                    Vector3 posNm = gridToPosition(i, j, k);
                     cavityCache_.push_back(posNm);
                 }
             }
@@ -103,12 +103,11 @@ double CavityManager::calculateCavityBiasFactor(const MCState& state) {
 }
 
 bool CavityManager::isInCavity(const Vector3& position, const MCState& /*state*/) {
-    // Convert position from nm to grid coordinates
-    Vector3 posAngstrom = position * NM_TO_ANGSTROM;
+    // Position is already in nm, same as grid
     
-    int i = static_cast<int>((posAngstrom.x - grid_.origin.x) / grid_.spacing.x);
-    int j = static_cast<int>((posAngstrom.y - grid_.origin.y) / grid_.spacing.y);
-    int k = static_cast<int>((posAngstrom.z - grid_.origin.z) / grid_.spacing.z);
+    int i = static_cast<int>((position.x - grid_.origin.x) / grid_.spacing.x);
+    int j = static_cast<int>((position.y - grid_.origin.y) / grid_.spacing.y);
+    int k = static_cast<int>((position.z - grid_.origin.z) / grid_.spacing.z);
     
     if (!grid_.isValid(i, j, k)) {
         return false;
@@ -118,6 +117,8 @@ bool CavityManager::isInCavity(const Vector3& position, const MCState& /*state*/
 }
 
 void CavityManager::invalidateCache() {
+    // Note: Thread safety issue if called concurrently - would need mutex  
+    // std::lock_guard<std::mutex> guard(cacheMutex_);
     cacheValid_ = false;
     cavityCache_.clear();
 }
@@ -135,7 +136,7 @@ std::vector<CavityManager::CavityCluster> CavityManager::findCavityClusters(cons
     }
     
     // Simple clustering based on distance threshold
-    double clusterThreshold = gridSpacing_ * 1.5 * ANGSTROM_TO_NM;  // Convert to nm
+    double clusterThreshold = grid_.spacing.x * 1.5;  // Already in nm
     
     for (const auto& cavity : cavities) {
         int clusterIdx = findCluster(cavity, clusters, clusterThreshold);
@@ -153,14 +154,14 @@ std::vector<CavityManager::CavityCluster> CavityManager::findCavityClusters(cons
             newCluster.id = static_cast<int>(clusters.size());
             newCluster.positions.push_back(cavity);
             newCluster.center = cavity;
-            newCluster.volume = std::pow(gridSpacing_ * ANGSTROM_TO_NM, 3);  // Initial volume
+            newCluster.volume = std::pow(grid_.spacing.x, 3);  // Initial volume in nm^3
             clusters.push_back(newCluster);
         }
     }
     
     // Calculate cluster volumes
     for (auto& cluster : clusters) {
-        cluster.volume = cluster.positions.size() * std::pow(gridSpacing_ * ANGSTROM_TO_NM, 3);
+        cluster.volume = cluster.positions.size() * std::pow(grid_.spacing.x, 3);
     }
     
     return clusters;
@@ -169,7 +170,7 @@ std::vector<CavityManager::CavityCluster> CavityManager::findCavityClusters(cons
 // Private helper functions
 
 void CavityManager::initializeGrid(const Vector3& boxSize) {
-    // Box size is in nm, convert grid spacing to nm for calculation
+    // Box size is in nm, grid spacing is in Angstroms, convert to nm
     double spacingNm = gridSpacing_ * ANGSTROM_TO_NM;
     
     // Calculate grid dimensions
@@ -178,10 +179,10 @@ void CavityManager::initializeGrid(const Vector3& boxSize) {
     grid_.nz = std::max(1, static_cast<int>(std::ceil(boxSize.z / spacingNm)));
     
     
-    // Set grid properties (store in Angstroms for consistency)
+    // Set grid properties (store in nm for consistency with MCState)
     grid_.origin = Vector3(0.0, 0.0, 0.0);
-    grid_.spacing = Vector3(gridSpacing_, gridSpacing_, gridSpacing_);
-    grid_.boxSize = boxSize * NM_TO_ANGSTROM;  // Convert to Angstroms
+    grid_.spacing = Vector3(spacingNm, spacingNm, spacingNm);
+    grid_.boxSize = boxSize;  // Already in nm
     
     // Initialize occupancy grid
     int totalPoints = grid_.nx * grid_.ny * grid_.nz;
@@ -199,32 +200,32 @@ void CavityManager::markOccupiedRegions(const MCState& state) {
             int atomIdx = residue.atomStart + i;
             if (atomIdx < state.activeAtomCount) {
                 const MCAtom& atom = state.atoms[atomIdx];
-                // Position is already in Angstroms
-                Vector3 posAngstrom(atom.x, atom.y, atom.z);
+                // Position is in nm (same as box dimensions)
+                Vector3 posNm(atom.x, atom.y, atom.z);
                 
                 // Use sigma from force field if available
-                double radiusAng = 1.5;  // Default fallback in Angstroms
+                double radiusNm = 0.15;  // Default fallback in nm (1.5 Angstroms)
                 
                 if (atom.type >= 0 && 
                     atom.type < static_cast<int>(state.forcefield.ljSigma.size())) {
-                    // LJ sigma is typically in Angstroms
+                    // LJ sigma is in nm (check forcefield units)
                     // Use sigma/2 as atomic radius
                     double sigma = state.forcefield.ljSigma[atom.type];
                     if (sigma > 0) {
-                        radiusAng = 0.5 * sigma;
+                        radiusNm = 0.5 * sigma;
                     }
                 }
                 
-                // Add probe radius (which is in Angstroms)
-                double totalRadius = radiusAng + probeRadius_;
-                markOccupiedRegion(posAngstrom, totalRadius);
+                // Add probe radius (convert from Angstroms to nm)
+                double totalRadius = radiusNm + probeRadius_ * ANGSTROM_TO_NM;
+                markOccupiedRegion(posNm, totalRadius);
             }
         }
     }
 }
 
 void CavityManager::markOccupiedRegion(const Vector3& center, double radius) {
-    // Center and radius are in Angstroms
+    // Center and radius are in nm
     int iMin = static_cast<int>(std::floor((center.x - radius - grid_.origin.x) / grid_.spacing.x));
     int iMax = static_cast<int>(std::floor((center.x + radius - grid_.origin.x) / grid_.spacing.x));
     int jMin = static_cast<int>(std::floor((center.y - radius - grid_.origin.y) / grid_.spacing.y));
@@ -264,7 +265,7 @@ void CavityManager::markOccupiedRegion(const Vector3& center, double radius) {
 }
 
 Vector3 CavityManager::gridToPosition(int i, int j, int k) const {
-    // Return position in Angstroms
+    // Return position in nm
     return Vector3(
         grid_.origin.x + i * grid_.spacing.x,
         grid_.origin.y + j * grid_.spacing.y,
@@ -275,7 +276,7 @@ Vector3 CavityManager::gridToPosition(int i, int j, int k) const {
 bool CavityManager::checkCavity(const Vector3& position, const MCState& state) const {
     // Position is in nm
     // Simple check: ensure minimum distance from all atoms
-    double minDist = probeRadius_ * ANGSTROM_TO_NM;  // Convert to nm
+    double minDist = probeRadius_ * ANGSTROM_TO_NM;  // Convert probe radius to nm
     double minDistSq = minDist * minDist;
     
     for (int resIdx = 0; resIdx < state.activeResidueCount; ++resIdx) {
@@ -342,11 +343,11 @@ Vector3 CavityBiasInsertion::selectInsertionPosition(const MCState& state, bool&
         }
     }
     
-    // Fall back to random position (box already in Angstroms, convert to nm)
+    // Fall back to random position (box already in nm)
     stats_.randomInsertions++;
-    return selectRandomPosition(Vector3(state.info.box[0] * ANGSTROM_TO_NM, 
-                                       state.info.box[1] * ANGSTROM_TO_NM, 
-                                       state.info.box[2] * ANGSTROM_TO_NM));
+    return selectRandomPosition(Vector3(state.info.box[0], 
+                                       state.info.box[1], 
+                                       state.info.box[2]));
 }
 
 double CavityBiasInsertion::calculateAcceptanceProbability(

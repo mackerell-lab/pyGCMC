@@ -36,6 +36,16 @@ MovementResult RotationMove::performSimpleRotation(MCState& state, const Movemen
     MovementResult result;
     result.moveType = "rotate";
     
+    // Check for valid box dimensions
+    if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
+        result.accepted = false;
+        result.rejectReason = "Invalid box dimensions";
+        result.energyChange = 0.0;
+        result.acceptanceProbability = 0.0;
+        stats_.totalAttempts++;
+        return result;
+    }
+    
     // Check if there are any molecules to rotate
     if (state.activeResidueCount == 0) {
         result.accepted = false;
@@ -67,7 +77,7 @@ MovementResult RotationMove::performSimpleRotation(MCState& state, const Movemen
     Quaternion rotation = generateRandomRotation(params.maxRotation);
     
     // Calculate energy before rotation
-    simulation::Simulation::computeSystemEnergyCutoff(state);
+    simulation::Simulation::computeSystemEnergyPBCCutoff(state);
     double energyBefore = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         energyBefore += state.residues[i].energy_vdw;
@@ -79,7 +89,7 @@ MovementResult RotationMove::performSimpleRotation(MCState& state, const Movemen
     rotateResidue(state, targetResIdx, rotation);
     
     // Calculate energy after rotation
-    simulation::Simulation::computeSystemEnergyCutoff(state);
+    simulation::Simulation::computeSystemEnergyPBCCutoff(state);
     double energyAfter = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         energyAfter += state.residues[i].energy_vdw;
@@ -188,7 +198,7 @@ RotationMove::ConfigBiasRotationResult RotationMove::performConfigBiasRotationIn
         rotateResidue(state, residueIndex, config.rotation);
         
         // Calculate energy
-        simulation::Simulation::computeSystemEnergyCutoff(state);
+        simulation::Simulation::computeSystemEnergyPBCCutoff(state);
         config.energy = 0.0;
         for (int j = 0; j < state.activeResidueCount; ++j) {
             config.energy += state.residues[j].energy_vdw;
@@ -292,7 +302,7 @@ RotationMove::RotationConfig RotationMove::saveConfiguration(const MCState& stat
         config.center = calculateCenterOfMass(state, residueIndex);
         
         // Calculate original energy
-        simulation::Simulation::computeSystemEnergyCutoff(const_cast<MCState&>(state));
+        simulation::Simulation::computeSystemEnergyPBCCutoff(const_cast<MCState&>(state));
         config.originalEnergy = 0.0;
         for (int i = 0; i < state.activeResidueCount; ++i) {
             config.originalEnergy += state.residues[i].energy_vdw;

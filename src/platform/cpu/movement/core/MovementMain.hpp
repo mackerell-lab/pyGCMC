@@ -100,6 +100,9 @@ private:
     // Statistics tracking
     std::map<std::string, Statistics> stats_;
     
+    // Track last inserted residue for paired deletion
+    int lastInsertedResidueIndex_ = -1;
+    
     // Helper functions
     void initializeComponents();
     void updateStatistics(const std::string& moveType, bool accepted, double energyChange);

@@ -155,6 +155,7 @@ struct ProposalStatistics {
     
     // Record mode switch
     void recordModeSwitch(ProposalType from, ProposalType to, const std::string& reason) {
+        (void)from;  // Suppress unused parameter warning (could be used for logging)
         modeTransitions++;
         if (reason.find("auto") != std::string::npos) {
             autoSwitches++;
