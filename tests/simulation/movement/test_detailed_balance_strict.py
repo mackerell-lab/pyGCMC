@@ -1,10 +1,15 @@
 # tests/simulation/movement/test_detailed_balance_strict.py
 """Strict detailed balance verification for GCMC moves based on theoretical formulas."""
 
+import warnings
 import pytest
 import pygcmc
 import numpy as np
 import math
+
+# Suppress pytest unknown mark warnings
+warnings.filterwarnings("ignore", message="Unknown pytest.mark.*")
+
 from .test_statistical_utils import (
     poisson_diff_ok, ratio_CI_ok, no_drift, 
     run_until_stable, calibrate_mu, effective_sample_size
