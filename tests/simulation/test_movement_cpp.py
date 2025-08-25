@@ -138,5 +138,27 @@ from movementCPP.cavity_cache_performance_funcs import (
     test_cache_clear_operation
 )
 
-# Note: Detailed balance tests remain in tests/simulation/movement/test_detailed_balance.py
-# They have not been moved here to avoid duplication
+# Import detailed balance test functions directly (10 + 8 = 18 functions)
+from movementCPP.detailed_balance_funcs import (
+    test_insertion_deletion_balance,
+    test_translation_reversibility,
+    test_metropolis_criterion,
+    test_cavity_bias_detailed_balance,
+    test_config_bias_detailed_balance,
+    test_multi_insertion_detailed_balance,
+    test_temperature_scaling,
+    test_chemical_potential_balance,
+    test_ensemble_averages,
+    test_rosenbluth_weight_consistency
+)
+
+from movementCPP.detailed_balance_strict_funcs import (
+    test_metropolis_criterion_exact,
+    test_insertion_deletion_pairwise_balance,
+    test_insertion_deletion_flux_balance,
+    test_cavity_bias_probability_consistency,
+    test_chemical_potential_controls_density,
+    test_translation_reversibility_exact,
+    test_config_bias_fields_present,
+    test_ensemble_convergence
+)
