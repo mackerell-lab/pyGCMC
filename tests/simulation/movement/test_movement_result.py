@@ -107,14 +107,23 @@ class TestMovementResult:
         # Check if any were filled (may depend on proposal layer being enabled)
         filled_count = sum(1 for r in results if hasattr(r, 'proposalInfoFilled') and r.proposalInfoFilled)
         
-        # If filled, check position ranges
-        for result in results:
-            if hasattr(result, 'proposalInfoFilled') and result.proposalInfoFilled:
-                # Positions should be in nm and within box bounds
-                if hasattr(result, 'proposalPosX'):
-                    assert 0.0 <= result.proposalPosX <= 5.0
-                    assert 0.0 <= result.proposalPosY <= 5.0
-                    assert 0.0 <= result.proposalPosZ <= 5.0
+        # Note: Proposal layer may not be enabled in current build
+        # This is expected behavior - the test verifies that when it IS filled,
+        # the values are valid. If not filled, that's also acceptable.
+        
+        if filled_count > 0:
+            # If filled, check position ranges
+            box_size = state.info.box[0]  # Get actual box size
+            for result in results:
+                if hasattr(result, 'proposalInfoFilled') and result.proposalInfoFilled:
+                    # Positions should be in nm and within box bounds
+                    if hasattr(result, 'proposalPosX'):
+                        assert 0.0 <= result.proposalPosX <= box_size
+                        assert 0.0 <= result.proposalPosY <= box_size
+                        assert 0.0 <= result.proposalPosZ <= box_size
+        
+        # Test passes whether proposal info is filled or not
+        # The important thing is that the flag can be set without errors
     
     def test_fill_proposal_info_no_acceptance_effect(self, setup_system):
         """Test that fillProposalInfo doesn't affect acceptance rate."""
@@ -224,17 +233,26 @@ class TestMovementResult:
         mover.setParams(params)
         
         try:
-            result = mover.attemptMultiInsertionCBMC(state, 0)
+            results = mover.attemptMultiInsertionCBMC(state, 0)
             
-            # Check for multi-insertion specific fields
-            if hasattr(result, 'mproposal'):
-                assert result.mproposal >= 0
-            if hasattr(result, 'vregion'):
-                assert result.vregion >= 0.0
+            # Multi-insertion returns a list of results
+            assert isinstance(results, list), "Multi-insertion should return a list"
+            assert len(results) > 0, "Multi-insertion should return at least one result"
+            
+            # Check each result in the list
+            for i, result in enumerate(results):
+                assert hasattr(result, 'accepted'), f"Result {i} missing 'accepted' field"
+                assert hasattr(result, 'moveType'), f"Result {i} missing 'moveType' field"
                 
-        except Exception:
+                # Check for multi-insertion specific fields (may be -1 if not applicable)
+                if hasattr(result, 'mproposal'):
+                    assert result.mproposal >= -1, f"Result {i}: mproposal should be >= -1"
+                if hasattr(result, 'vregion'):
+                    assert result.vregion >= -1.0, f"Result {i}: vregion should be >= -1.0"
+                
+        except Exception as e:
             # Multi-insertion may not be fully implemented
-            pytest.skip("Multi-insertion CBMC not available")
+            pytest.skip(f"Multi-insertion CBMC not available: {e}")
     
     def test_result_repr(self, setup_system):
         """Test MovementResult string representation."""

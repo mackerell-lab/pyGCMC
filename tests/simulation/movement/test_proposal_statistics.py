@@ -60,7 +60,7 @@ class TestProposalStatistics:
         if total_attempts > 0:
             expected_rate = total_accepts / total_attempts
             # Check individual move type rates
-            assert stats["insert"].rate >= 0
+            assert stats["insert"].acceptanceRate() >= 0
     
     def test_mode_statistics(self, setup_system):
         """Test mode-specific statistics when available."""

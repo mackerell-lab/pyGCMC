@@ -280,17 +280,17 @@ class TestMovementModule:
         """Test effect of chemical potential on insertion."""
         state, params, mover = setup_system
         
-        # Test at different chemical potentials
+        # Test at different chemical potentials (ordered from low to high)
         chem_potentials = [-30.0, -15.7, -5.0]
         acceptance_rates = []
         
+        attempts = 200  # Reasonable number for statistics
         for mu in chem_potentials:
             params.chemicalPotential = mu
             mover.setParams(params)
             mover.resetStatistics()
             
             accepts = 0
-            attempts = 100
             for _ in range(attempts):
                 result = mover.attemptInsertion(state)
                 if result.accepted:
@@ -299,8 +299,16 @@ class TestMovementModule:
             acceptance_rates.append(accepts / attempts)
         
         # Higher chemical potential should favor insertion
-        # Check there's some variation (may be small for this system)
-        assert max(acceptance_rates) >= min(acceptance_rates)
+        # Due to statistical fluctuations and possible system saturation,
+        # we check for overall trend rather than strict monotonicity
+        
+        # At minimum, highest mu should have higher rate than lowest mu
+        assert acceptance_rates[2] >= acceptance_rates[0], \
+            f"Highest mu=-5 rate ({acceptance_rates[2]:.3f}) should be >= lowest mu=-30 rate ({acceptance_rates[0]:.3f})"
+        
+        # Also check that rates are not all identical (should see some effect)
+        assert len(set(acceptance_rates)) > 1, \
+            f"All rates identical: {acceptance_rates} - chemical potential has no effect"
     
     def test_module_repr(self):
         """Test MovementModule string representation."""
