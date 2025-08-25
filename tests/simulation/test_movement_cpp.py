@@ -162,3 +162,20 @@ from movementCPP.detailed_balance_strict_funcs import (
     test_config_bias_fields_present,
     test_ensemble_convergence
 )
+
+# Import error handling test functions (13 functions)
+from movementCPP.error_handling_funcs import (
+    test_invalid_temperature,
+    test_invalid_cavity_parameters,
+    test_invalid_proposal_mode,
+    test_null_state_handling,
+    test_uninitialized_forcefield,
+    test_invalid_box_dimensions,
+    test_overflow_protection,
+    test_multi_insertion_parameter_conflicts,
+    test_recovery_from_failed_insertion,
+    test_concurrent_access_errors,
+    test_warning_for_suboptimal_parameters,
+    test_graceful_degradation,
+    test_parameter_validation_messages
+)
