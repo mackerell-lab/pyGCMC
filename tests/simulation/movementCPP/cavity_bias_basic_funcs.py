@@ -3,29 +3,8 @@
 
 import pytest
 import pygcmc
-import numpy as np
 
-
-@pytest.fixture
-def create_state():
-    """Create a test MCState with given box size."""
-    def _create(box_nm=5.0):
-        state = pygcmc.MCState()
-        if isinstance(box_nm, (list, tuple)):
-            state.info.box = np.array(box_nm)
-        else:
-            state.info.box = np.array([box_nm, box_nm, box_nm])
-        
-        # Setup force field
-        ff = pygcmc.MCForceField()
-        ff.numTotalTypes = 1
-        ff.numMovementTypes = 1
-        ff.ljEps = [0.5]
-        ff.ljSigma = [0.3]
-        state.forcefield = ff
-        
-        return state
-    return _create
+# Note: create_state fixture is provided by conftest.py
 
 
 def test_cavity_finding_basic(create_state):

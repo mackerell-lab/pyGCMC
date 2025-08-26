@@ -4,25 +4,7 @@
 import pytest
 import pygcmc
 
-@pytest.fixture
-def setup_system():
-    """Setup a basic test system."""
-    state = pygcmc.MCState()
-    state.info.box = [5.0, 5.0, 5.0]
-    
-    # Setup force field
-    ff = pygcmc.MCForceField()
-    ff.numTotalTypes = 1
-    ff.numMovementTypes = 1
-    ff.ljEps = [0.5]
-    ff.ljSigma = [0.3]
-    state.forcefield = ff
-    
-    params = pygcmc.movement.MovementParams()
-    params.temperature = 298.15
-    params.chemicalPotential = -15.7
-    
-    return state, params
+# Note: setup_system fixture is provided by conftest.py
 
 def test_module_creation_basic():
         """Test MovementModule creation with different constructors."""

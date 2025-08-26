@@ -18,6 +18,9 @@ Test categories:
 import pytest
 import pygcmc
 
+# Import fixtures from movementCPP/conftest.py for all tests in this file
+from movementCPP.conftest import setup_system, create_state
+
 # Parameter configuration tests (3 functions)
 from movementCPP.params_tests import (
     test_default_params,
@@ -56,50 +59,6 @@ from movementCPP.integration_tests import (
     test_gcmc_equilibration,
     test_acceptance_rates
 )
-
-# Common fixtures for all tests
-@pytest.fixture
-def setup_system():
-    """Setup test system with known parameters for detailed balance tests."""
-    state = pygcmc.MCState()
-    state.info.box = [4.0, 4.0, 4.0]
-    
-    # Setup force field with known interactions
-    ff = pygcmc.MCForceField()
-    ff.numTotalTypes = 1
-    ff.numMovementTypes = 1
-    ff.ljEps = [1.0]  # kJ/mol
-    ff.ljSigma = [0.3]  # nm
-    state.forcefield = ff
-    
-    params = pygcmc.movement.MovementParams()
-    params.temperature = 300.0  # K
-    params.chemicalPotential = -15.0  # kJ/mol - higher for better insertion rate
-    params.seed = 42
-    
-    return state, params
-
-@pytest.fixture
-def create_state():
-    """Create a test MCState with given box size."""
-    def _create(box_nm=5.0):
-        state = pygcmc.MCState()
-        if isinstance(box_nm, (list, tuple)):
-            state.info.box = list(box_nm)
-        else:
-            state.info.box = [box_nm, box_nm, box_nm]
-        
-        # Setup force field
-        ff = pygcmc.MCForceField()
-        ff.numTotalTypes = 1
-        ff.numMovementTypes = 1
-        ff.ljEps = [0.5]
-        ff.ljSigma = [0.3]
-        state.forcefield = ff
-        
-        return state
-    return _create
-
 
 # Cavity bias tests - Basic (5 functions)
 from movementCPP.cavity_bias_basic_funcs import (
