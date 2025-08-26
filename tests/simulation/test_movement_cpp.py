@@ -17,7 +17,6 @@ Test categories:
 
 import pytest
 import pygcmc
-import numpy as np
 
 # Parameter configuration tests (3 functions)
 from movementCPP.params_tests import (
@@ -63,7 +62,7 @@ from movementCPP.integration_tests import (
 def setup_system():
     """Setup test system with known parameters for detailed balance tests."""
     state = pygcmc.MCState()
-    state.info.box = np.array([4.0, 4.0, 4.0])
+    state.info.box = [4.0, 4.0, 4.0]
     
     # Setup force field with known interactions
     ff = pygcmc.MCForceField()
@@ -86,9 +85,9 @@ def create_state():
     def _create(box_nm=5.0):
         state = pygcmc.MCState()
         if isinstance(box_nm, (list, tuple)):
-            state.info.box = np.array(box_nm)
+            state.info.box = list(box_nm)
         else:
-            state.info.box = np.array([box_nm, box_nm, box_nm])
+            state.info.box = [box_nm, box_nm, box_nm]
         
         # Setup force field
         ff = pygcmc.MCForceField()

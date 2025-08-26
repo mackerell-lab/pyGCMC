@@ -69,9 +69,14 @@ def test_multi_insertion_cbmc_basic(setup_system):
                 # Single result
                 assert hasattr(result, 'accepted')
                 
-        except Exception:
-            # Multi-insertion may not be implemented
-            pytest.skip("Multi-insertion CBMC not available")
+        except Exception as e:
+            # Only skip for known "not available" errors
+            msg = str(e).lower()
+            if any(x in msg for x in ("not available", "not implemented", "unsupported", "not compiled")):
+                pytest.skip(f"Multi-insertion CBMC not available: {e}")
+            else:
+                # Re-raise unexpected errors for debugging
+                raise
     
 def test_temperature_effect(setup_system):
         """Test effect of temperature on acceptance."""

@@ -135,14 +135,23 @@ def test_constructor_seed_reproducibility(setup_system):
             # Use existing state from setup_system
             state, params_orig = setup_system
             
-            # Make simple test without state copies
-            # Just check if same mover gives consistent results
-            seq1 = [mover1.attemptInsertion(state).energyChange for _ in range(5)]
-            seq2 = [mover2.attemptInsertion(state).energyChange for _ in range(5)]
+            # Verify movers were created successfully
+            assert mover1 is not None, "First mover should be created"
+            assert mover2 is not None, "Second mover should be created"
             
-            # With proper seeding, energy calculations should be deterministic
-            # But state changes between calls, so sequences may differ
-            # This test mainly verifies constructor accepts params
+            # Smoke test - movers should be functional
+            result1 = mover1.attemptInsertion(state)
+            assert result1 is not None, "First mover should return a result"
+            assert hasattr(result1, 'accepted'), "Result should have accepted field"
+            assert hasattr(result1, 'energyChange'), "Result should have energyChange field"
+            
+            result2 = mover2.attemptInsertion(state)
+            assert result2 is not None, "Second mover should return a result"
+            assert hasattr(result2, 'accepted'), "Result should have accepted field"
+            
+            # With proper seeding, results would be identical, but state changes
+            # between calls make this impossible. This test mainly verifies
+            # that constructor accepts params and creates functional movers
             
         except TypeError:
             # Constructor may not accept params

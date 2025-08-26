@@ -206,3 +206,8 @@ def test_find_cavities_integration(setup_system):
             assert hasattr(cavity, 'z')
             
             # Should be within box
+            Lx, Ly, Lz = state.info.box
+            for cavity in cavities:
+                assert 0.0 <= cavity.x <= Lx, f"Cavity x={cavity.x} outside box [0, {Lx}]"
+                assert 0.0 <= cavity.y <= Ly, f"Cavity y={cavity.y} outside box [0, {Ly}]"
+                assert 0.0 <= cavity.z <= Lz, f"Cavity z={cavity.z} outside box [0, {Lz}]"
