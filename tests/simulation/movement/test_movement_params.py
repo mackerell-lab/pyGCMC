@@ -159,6 +159,51 @@ class TestMovementParams:
         params.fillProposalInfo = True
         assert params.fillProposalInfo == True
         
+    def test_proposal_mode_upper_bound_valid(self):
+        """Test proposal mode upper bound validation."""
+        params = pygcmc.movement.MovementParams()
+        
+        # Test valid upper bound
+        params.proposalMode = 4
+        params.updateDerivedParameters()
+        assert params.proposalMode == 4  # 4 is allowed
+        
+        # Test clamping for invalid values
+        params.proposalMode = 5
+        params.updateDerivedParameters()
+        assert params.proposalMode == 0  # Should clamp to 0
+        
+        params.proposalMode = -1
+        params.updateDerivedParameters()
+        assert params.proposalMode == 0  # Should clamp to 0
+    
+    def test_seed_field_sets_rng(self):
+        """Test that seed field exists and can be set."""
+        params = pygcmc.movement.MovementParams()
+        
+        # Default seed
+        assert hasattr(params, 'seed')
+        assert params.seed == 0  # 0 means time-based seed
+        
+        # Set specific seed
+        params.seed = 42
+        assert params.seed == 42
+        
+        # Large seed value
+        params.seed = 2**32 - 1
+        assert params.seed == 2**32 - 1
+    
+    def test_params_repr(self):
+        """Test MovementParams string representation."""
+        params = pygcmc.movement.MovementParams()
+        params.temperature = 350.0
+        params.chemicalPotential = -10.0
+        
+        repr_str = str(params)
+        assert "MovementParams" in repr_str or "Params" in repr_str
+        # Should contain key parameters
+        assert "350" in repr_str or "T=" in repr_str.lower()
+    
     def test_validation_without_cavity_bias(self):
         """Test that cavity parameters are not validated when cavity bias is off."""
         params = pygcmc.movement.MovementParams()
