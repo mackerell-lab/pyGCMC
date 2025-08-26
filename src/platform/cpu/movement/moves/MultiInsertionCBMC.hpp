@@ -71,6 +71,9 @@ public:
         int moleculeType,
         const MovementParams& params);
     
+    // RNG control for reproducibility
+    void setSeed(uint64_t seed);
+    
     // Statistics
     double getAcceptanceRate() const;
     double getParallelEfficiency() const;

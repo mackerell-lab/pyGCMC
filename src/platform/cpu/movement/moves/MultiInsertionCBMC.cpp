@@ -5,6 +5,7 @@
 #include "../common/MovementUtils.hpp"
 #include "../bias/CavityBias.hpp"
 #include "../../../../simulation/simulation.hpp"
+#include "../../energy/common/EnergyDirectCore.hpp"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -43,10 +44,24 @@ MultiInsertionCBMC::MultiInsertionCBMC(const MultiInsertionConfig& config,
     resetStatistics();
 }
 
+void MultiInsertionCBMC::setSeed(uint64_t seed) {
+    if (seed == 0) {
+        rng_.seed(static_cast<unsigned>(
+            std::chrono::steady_clock::now().time_since_epoch().count()));
+    } else {
+        rng_.seed(static_cast<unsigned>(seed));
+    }
+}
+
 std::pair<int, std::vector<InsertionRegion>> MultiInsertionCBMC::performMultiInsertion(
     MCState& state,
     int moleculeType,
     const MovementParams& params) {
+    
+    // Guard seeding: ensure RNG is seeded on first use
+    if (stats_.totalAttempts == 0 && params.seed != 0) {
+        setSeed(params.seed);
+    }
     
     stats_.totalAttempts++;
     
@@ -104,8 +119,8 @@ std::vector<InsertionRegion> MultiInsertionCBMC::divideBoxIntoRegions(const MCSt
     if (config_.useCavityBias && cavityManager_) {
         auto cavities = cavityManager_->findCavities(state);
         if (!cavities.empty()) {
-            double minSepNm = config_.minSeparation * 0.1; // Angstrom to nm
-            double regionRadius = 0.5 * minSepNm;          // Consistent with non-adjacent rules
+            double minSepNm = config_.minSeparation; // Already in nm
+            double regionRadius = 0.5 * minSepNm;     // Consistent with non-adjacent rules
             regions.reserve(cavities.size());
             
             for (const auto& pos : cavities) {
@@ -125,25 +140,20 @@ std::vector<InsertionRegion> MultiInsertionCBMC::divideBoxIntoRegions(const MCSt
     }
     
     // Fallback: uniform grid division (original implementation)
-    // Note: state.info.box is in Angstroms
-    double boxX = state.info.box[0];
-    double boxY = state.info.box[1];
-    double boxZ = state.info.box[2];
+    // Note: state.info.box is in nm
+    double boxX = state.info.box[0];  // nm
+    double boxY = state.info.box[1];  // nm
+    double boxZ = state.info.box[2];  // nm
     
-    // Convert box to nm for consistent units
-    double boxXnm = boxX * 0.1;  // Angstrom to nm
-    double boxYnm = boxY * 0.1;  // Angstrom to nm
-    double boxZnm = boxZ * 0.1;  // Angstrom to nm
+    double cellSize = config_.minSeparation;  // nm
     
-    double cellSize = config_.minSeparation * 0.1;  // Convert Angstrom to nm
+    int nx = std::max(1, static_cast<int>(boxX / cellSize));
+    int ny = std::max(1, static_cast<int>(boxY / cellSize));
+    int nz = std::max(1, static_cast<int>(boxZ / cellSize));
     
-    int nx = std::max(1, static_cast<int>(boxXnm / cellSize));
-    int ny = std::max(1, static_cast<int>(boxYnm / cellSize));
-    int nz = std::max(1, static_cast<int>(boxZnm / cellSize));
-    
-    double actualCellX = boxX / nx;
-    double actualCellY = boxY / ny;
-    double actualCellZ = boxZ / nz;
+    double actualCellX = boxX / nx;  // nm
+    double actualCellY = boxY / ny;  // nm
+    double actualCellZ = boxZ / nz;  // nm
     
     for (int ix = 0; ix < nx; ++ix) {
         for (int iy = 0; iy < ny; ++iy) {
@@ -181,7 +191,7 @@ std::vector<InsertionRegion> MultiInsertionCBMC::selectNonAdjacentRegions(
     std::shuffle(indices.begin(), indices.end(), rng_);
     
     // Calculate effective minimum separation for independence
-    double minSepNm = config_.minSeparation * 0.1;  // Convert Angstrom to nm
+    double minSepNm = config_.minSeparation;  // Already in nm
     
     if (config_.enforceIndependence) {
         // Use cutoff from config (should be set from MCState when initialized)
@@ -299,7 +309,8 @@ static void calculateEnergiesForRegionImpl(InsertionRegion& region, MCState& sta
         tempRes.active = true;
         int resIdx = state.addResidue(tempRes);
         
-        simulation::Simulation::computeMovementEnergyCutoff(state);
+        // Compute only the interaction energy for the new residue
+        platform::cpu::computeResidueEnergyCutoffPBC(state, resIdx);
         region.trialEnergies[t] = state.residues[resIdx].energy_vdw + 
                                   state.residues[resIdx].energy_elec;
         
@@ -352,43 +363,33 @@ std::vector<InsertionRegion> MultiInsertionCBMC::acceptInsertions(
     double beta,
     double chemicalPotential) {
     
-    // Full CBMC acceptance with sequential updates of N
+    // Count current molecules
     int currentN = state.activeResidueCount;
     
-    // Calculate Mproposal BEFORE any selection filtering
-    // This is the total number of candidate regions in the proposal distribution
-    int Mproposal = 0;
-    if (config_.useCavityBias && cavityManager_) {
-        // In cavity mode: M = number of cavity points (before non-adjacent filtering)
-        Mproposal = std::max(1, cavityManager_->getCavityCount());
-    } else {
-        // In uniform grid mode: M = nx * ny * nz (total grid cells)
-        double cellSize = config_.minSeparation * 0.1; // Convert Angstrom to nm
-        int nx = std::max(1, static_cast<int>(std::ceil(state.info.box[0] / (cellSize * 10.0))));
-        int ny = std::max(1, static_cast<int>(std::ceil(state.info.box[1] / (cellSize * 10.0))));
-        int nz = std::max(1, static_cast<int>(std::ceil(state.info.box[2] / (cellSize * 10.0))));
-        Mproposal = nx * ny * nz;
-    }
+    // Precompute box volume in nm^3
+    double Vbox = state.info.box[0] * state.info.box[1] * state.info.box[2];
     
+    // Process each region independently
     for (auto& region : regions) {
-        // Compute Keff and logW (numerically stable)
-        int Keff = 0;
+        // Find max log weight for numerical stability
         double maxLogW = -std::numeric_limits<double>::infinity();
+        int Keff = 0;
         
-        // First pass: find max for numerical stability
         for (double e : region.trialEnergies) {
             double lw = -beta * e;
             if (!std::isfinite(lw)) continue;
             if (lw > maxLogW) maxLogW = lw;
         }
         
+        // If all energies are infinite, reject
         if (!std::isfinite(maxLogW)) {
             region.accepted = false;
             continue;
         }
         
-        // Second pass: compute sum using log-sum-exp trick
+        // Compute Rosenbluth weight
         double sumExp = 0.0;
+        
         for (double e : region.trialEnergies) {
             double lw = -beta * e;
             if (!std::isfinite(lw)) continue;
@@ -402,25 +403,21 @@ std::vector<InsertionRegion> MultiInsertionCBMC::acceptInsertions(
         }
         
         double logW = maxLogW + std::log(sumExp);
-        region.rosenbluthWeight = std::exp(logW);  // Store for analysis
         
-        // Calculate Vregion consistent with actual sampling shape (cube)
-        // Sampling: dx,dy,dz ~ U[-disp/2, +disp/2], so Vregion = disp^3
-        double disp = region.radius * config_.displacementFraction;
-        double Vregion = disp * disp * disp;  // Cubic volume to match generateTrialConfigurations
-        
-        // Correct CBMC acceptance with proper proposal normalization
-        // acc = min(1, (M*Vregion/(N+1)) * exp(βμ) * W / Keff)
-        // where 1/qnorm = M*Vregion (proposal distribution normalization)
-        double lnA = std::log(Vregion) + std::log(static_cast<double>(Mproposal)) 
-                   - std::log(currentN + 1.0) 
-                   + beta * chemicalPotential 
-                   + logW 
+        // Use standard CBMC insertion acceptance with uniform-in-box proposal
+        // lnA = ln(Vbox) - ln(N+1) + beta*mu + lnW - ln(Keff)
+        double lnA = std::log(std::max(1e-30, Vbox))
+                   - std::log(currentN + 1.0)
+                   + beta * chemicalPotential
+                   + logW
                    - std::log(std::max(1, Keff));
         
         double acceptProb = lnA >= 0.0 ? 1.0 : std::exp(lnA);
+        
+        // Accept or reject
         region.accepted = (uniform_(rng_) < acceptProb);
         
+        // Update molecule count if accepted
         if (region.accepted) {
             currentN++;
         }

@@ -83,7 +83,7 @@ void MovementModule::initializeComponents() {
         MultiInsertionConfig config;
         config.numTrialsPerRegion = params_.numConfigTrials;
         config.maxParallelInsertions = params_.maxParallelInsertions;
-        config.minSeparation = params_.minRegionSeparationNm * 10.0;  // Convert nm to Angstrom
+        config.minSeparation = params_.minRegionSeparationNm;  // Keep in nm
         config.chemicalPotential = params_.chemicalPotential;
         config.displacementFraction = params_.multiDisplacementFraction;
         config.useRegionVolume = params_.multiUseRegionVolume;
@@ -97,6 +97,9 @@ void MovementModule::initializeComponents() {
         config.recomputeAfterAccept = false; // Expensive fallback, off by default
         
         pImpl_->multiInsertionCBMC = std::make_unique<MultiInsertionCBMC>(config, cavityManager_.get());
+        if (params_.seed != 0) {
+            pImpl_->multiInsertionCBMC->setSeed(params_.seed);
+        }
     }
     
     // Initialize statistics
@@ -254,6 +257,14 @@ void MovementModule::setParams(const MovementParams& params) {
     params_ = params;
     // Ensure derived values and validation are up-to-date
     params_.updateDerivedParameters();
+    
+    // Reseed RNGs when a non-zero seed is provided
+    if (params_.seed != 0) {
+        utils::RandomUtils::setSeed(params_.seed);
+        if (pImpl_ && pImpl_->multiInsertionCBMC) {
+            pImpl_->multiInsertionCBMC->setSeed(params_.seed);
+        }
+    }
     
     // Update component configurations (convert nm to Angstroms by multiplying by 10)
     cavityManager_->setGridSpacing(params_.cavityGridSpacing * 10.0);

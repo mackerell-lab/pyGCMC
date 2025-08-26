@@ -36,6 +36,14 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
 void computeResidueNonbondedEnergy(model::MCState& state, int residue_idx, bool use_cutoff, bool use_pbc, bool vdw_only = false);
 
 /**
+ * @brief Compute nonbonded energy (vdw+elec) for a single residue vs the rest, with cutoff and PBC
+ * 
+ * @param state MC state
+ * @param residue_idx Index of the residue to calculate
+ */
+void computeResidueEnergyCutoffPBC(model::MCState& state, int residue_idx);
+
+/**
  * @brief Basic direct calculation functions (following existing naming pattern)
  */
 void computeMovementEnergy(model::MCState& state);

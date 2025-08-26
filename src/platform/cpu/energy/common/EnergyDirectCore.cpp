@@ -229,6 +229,11 @@ void computeMovementVdwEnergyDirect(model::MCState& state, bool use_cutoff, bool
     computeNonbondedEnergy(state, use_cutoff, true, use_pbc, true);
 }
 
+void computeResidueEnergyCutoffPBC(model::MCState& state, int residue_idx) {
+    // Wrapper for multi-insertion optimization: single residue energy with PBC and cutoff
+    computeResidueNonbondedEnergy(state, residue_idx, true, true, false);
+}
+
 } // namespace cpu
 } // namespace platform
 } // namespace pygcmc 

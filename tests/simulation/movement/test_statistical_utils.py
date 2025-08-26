@@ -79,20 +79,22 @@ def effective_sample_size(x):
     if n < 10:
         return n
     
-    x = np.array(x) - np.mean(x)
+    x = np.array(x, dtype=float) - np.mean(x)
     c0 = np.dot(x, x) / n
     if c0 == 0:
-        return n
+        return 1  # Constant data has ESS = 1
     
-    # Calculate autocorrelations up to lag where it becomes small
-    ess = n
+    # Sum positive autocorrelations; negative correlations increase ESS
+    sum_rho = 0.0
     for k in range(1, min(n//4, 100)):
         ck = np.dot(x[:-k], x[k:]) / (n - k)
         rho_k = ck / c0
-        if abs(rho_k) < 0.05:  # Cutoff for small correlation
+        if abs(rho_k) < 0.05:
             break
-        ess = n / (1 + 2*k*abs(rho_k))
+        if rho_k > 0:
+            sum_rho += rho_k
     
+    ess = n / (1.0 + 2.0 * sum_rho)
     return max(1, int(ess))
 
 
@@ -104,11 +106,13 @@ def batch_means_variance(x, batch_size=None):
     
     n_batches = n // batch_size
     if n_batches < 2:
-        return np.var(x, ddof=1)
+        # Exactly one full batch -> undefined for batch-means; return 0
+        return 0.0 if n == batch_size else float(np.var(x, ddof=1))
     
     batch_means = []
     for i in range(n_batches):
         batch = x[i*batch_size:(i+1)*batch_size]
-        batch_means.append(np.mean(batch))
+        batch_means.append(float(np.mean(batch)))
     
-    return np.var(batch_means, ddof=1)
+    # Scale by batch_size to estimate per-sample variance
+    return float(np.var(batch_means, ddof=1) * batch_size)
