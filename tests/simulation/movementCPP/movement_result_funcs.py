@@ -1,36 +1,30 @@
-# tests/simulation/movement/test_movement_result.py
-"""Movement result diagnostics and field consistency tests."""
+# tests/simulation/movementCPP/movement_result_funcs.py
+"""Movement result diagnostics and field consistency tests - extracted functions."""
 
 import pytest
 import pygcmc
-import numpy as np
 
+@pytest.fixture
+def setup_system():
+    """Setup a basic test system."""
+    state = pygcmc.MCState()
+    state.info.box = [5.0, 5.0, 5.0]
+    
+    # Setup force field
+    ff = pygcmc.MCForceField()
+    ff.numTotalTypes = 1
+    ff.numMovementTypes = 1
+    ff.ljEps = [0.5]
+    ff.ljSigma = [0.3]
+    state.forcefield = ff
+    
+    params = pygcmc.movement.MovementParams()
+    params.temperature = 298.15
+    params.chemicalPotential = -15.7
+    
+    return state, params
 
-class TestMovementResult:
-    """Test MovementResult diagnostic fields and behavior."""
-    
-    @pytest.fixture
-    def setup_system(self):
-        """Setup a basic test system."""
-        state = pygcmc.MCState()
-        state.info.box = np.array([5.0, 5.0, 5.0])
-        
-        # Setup force field
-        ff = pygcmc.MCForceField()
-        ff.numTotalTypes = 1
-        ff.numMovementTypes = 1
-        ff.ljEps = [0.5]
-        ff.ljSigma = [0.3]
-        state.forcefield = ff
-        
-        params = pygcmc.movement.MovementParams()
-        params.temperature = 298.15
-        params.chemicalPotential = -15.7
-        params.seed = 42  # For reproducibility
-        
-        return state, params
-    
-    def test_result_basic_fields(self, setup_system):
+def test_result_basic_fields(setup_system):
         """Test that MovementResult has all basic fields."""
         state, params = setup_system
         
@@ -53,7 +47,7 @@ class TestMovementResult:
         assert isinstance(result.moveType, str)  # moveType is string in Python bindings
         assert isinstance(result.residueIndex, int)
     
-    def test_result_diagnostic_fields(self, setup_system):
+def test_result_diagnostic_fields(setup_system):
         """Test that MovementResult has all diagnostic fields."""
         state, params = setup_system
         
@@ -72,7 +66,7 @@ class TestMovementResult:
         for field in available_fields:
             assert hasattr(result, field), f"Missing field: {field}"
     
-    def test_fill_proposal_info_disabled(self, setup_system):
+def test_fill_proposal_info_disabled(setup_system):
         """Test behavior when fillProposalInfo is disabled."""
         state, params = setup_system
         params.fillProposalInfo = False
@@ -90,7 +84,7 @@ class TestMovementResult:
         # Should not fill when disabled
         assert filled_count == 0
     
-    def test_fill_proposal_info_enabled(self, setup_system):
+def test_fill_proposal_info_enabled(setup_system):
         """Test behavior when fillProposalInfo is enabled."""
         state, params = setup_system
         params.fillProposalInfo = True
@@ -125,7 +119,7 @@ class TestMovementResult:
         # Test passes whether proposal info is filled or not
         # The important thing is that the flag can be set without errors
     
-    def test_fill_proposal_info_no_acceptance_effect(self, setup_system):
+def test_fill_proposal_info_no_acceptance_effect(setup_system):
         """Test that fillProposalInfo doesn't affect acceptance rate."""
         state, params = setup_system
         
@@ -159,14 +153,14 @@ class TestMovementResult:
         rate_on = accepts_on / attempts
         assert abs(rate_off - rate_on) < 0.15  # Allow 15% difference
     
-    def test_proposal_position_units(self, setup_system):
+def test_proposal_position_units(setup_system):
         """Test that proposal positions are in nanometers."""
         state, params = setup_system
         params.fillProposalInfo = True
         
         # Test with different box sizes
         for box_size in [3.0, 5.0, 10.0]:
-            state.info.box = np.array([box_size, box_size, box_size])
+            state.info.box = [box_size, box_size, box_size]
             
             mover = pygcmc.movement.MovementModule()
             mover.setParams(params)
@@ -185,12 +179,12 @@ class TestMovementResult:
             
             # If we got any filled results, check ranges
             if positions:
-                positions = np.array(positions)
                 # All coordinates should be within [0, box_size] nm
-                assert np.all(positions >= 0.0)
-                assert np.all(positions <= box_size)
+                for pos in positions:
+                    assert all(p >= 0.0 for p in pos)
+                    assert all(p <= box_size for p in pos)
     
-    def test_default_diagnostic_values(self, setup_system):
+def test_default_diagnostic_values(setup_system):
         """Test default values for diagnostic fields when not filled."""
         state, params = setup_system
         params.fillProposalInfo = False
@@ -206,7 +200,7 @@ class TestMovementResult:
         assert isinstance(result.computeTimeMs, float)
         assert result.computeTimeMs >= 0
     
-    def test_move_type_consistency(self, setup_system):
+def test_move_type_consistency(setup_system):
         """Test that moveType field correctly identifies the operation."""
         state, params = setup_system
         
@@ -223,7 +217,7 @@ class TestMovementResult:
             result_del = mover.attemptDeletion(state)
             assert result_del.moveType == "delete"  # Deletion type
     
-    def test_multi_insertion_result_fields(self, setup_system):
+def test_multi_insertion_result_fields(setup_system):
         """Test result fields for multi-insertion CBMC if available."""
         state, params = setup_system
         params.useMultiInsertionCBMC = True
@@ -258,7 +252,7 @@ class TestMovementResult:
                 if hasattr(result, 'vregion'):
                     assert result.vregion >= -1.0, f"Result {i}: vregion should be >= -1.0"
     
-    def test_reproducibility_with_seed(self, setup_system):
+def test_reproducibility_with_seed(setup_system):
         """Test RNG reproducibility with same seed."""
         state, params = setup_system
         
@@ -290,7 +284,7 @@ class TestMovementResult:
         # This test documents current behavior rather than enforcing determinism
         # Future improvement: Use constructor to pass seed for true determinism
     
-    def test_result_repr(self, setup_system):
+def test_result_repr(setup_system):
         """Test MovementResult string representation."""
         state, params = setup_system
         

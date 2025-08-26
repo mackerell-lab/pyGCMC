@@ -179,3 +179,74 @@ from movementCPP.error_handling_funcs import (
     test_graceful_degradation,
     test_parameter_validation_messages
 )
+
+# Import new movement module test functions (51 functions total)
+# Basic module tests (10 functions)
+from movementCPP.movement_module_basic_funcs import (
+    test_module_creation_basic,
+    test_parameter_setting_and_getting,
+    test_insertion_basic,
+    test_deletion_basic,
+    test_translation_basic,
+    test_rotation_basic,
+    test_cavity_bias_insertion,
+    test_config_bias_rotation_basic,
+    test_acceptance_rate_calculation,
+    test_find_cavities_integration
+)
+
+# Statistics and effects tests (8 functions)
+from movementCPP.movement_module_stats_funcs import (
+    test_statistics_retrieval,
+    test_multi_insertion_cbmc_basic,
+    test_temperature_effect,
+    test_chemical_potential_effect_insertion,
+    test_statistics_counts_and_reset,
+    test_deletion_prefers_last_inserted,
+    test_find_cavities_bounds_all,
+    test_probability_bounds_all_moves
+)
+
+# Advanced module tests (8 functions)
+from movementCPP.movement_module_advanced_funcs import (
+    test_config_bias_rotation_movetype,
+    test_get_proposal_stats_shape,
+    test_get_cavity_stats_shape,
+    test_statistics_keys_after_moves,
+    test_constructor_seed_reproducibility,
+    test_params_not_modified_by_methods,
+    test_deletion_explicit_index_overrides_preference,
+    test_module_repr
+)
+
+# Movement params tests (13 functions)
+from movementCPP.movement_params_funcs import (
+    test_basic_parameter_creation,
+    test_temperature_constructor,
+    test_cavity_grid_spacing_validation,
+    test_probe_radius_validation,
+    test_proposal_mode_clamping,
+    test_multi_insertion_params_validation,
+    test_adaptive_thresholds,
+    test_performance_flags,
+    test_fill_proposal_info_flag,
+    test_proposal_mode_upper_bound_valid,
+    test_seed_field_sets_rng,
+    test_params_repr,
+    test_validation_without_cavity_bias
+)
+
+# Movement result tests (11 functions)
+from movementCPP.movement_result_funcs import (
+    test_result_basic_fields,
+    test_result_diagnostic_fields,
+    test_fill_proposal_info_disabled,
+    test_fill_proposal_info_enabled,
+    test_fill_proposal_info_no_acceptance_effect,
+    test_proposal_position_units,
+    test_default_diagnostic_values,
+    test_move_type_consistency,
+    test_multi_insertion_result_fields,
+    test_reproducibility_with_seed,
+    test_result_repr
+)

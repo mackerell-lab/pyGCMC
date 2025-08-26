@@ -1,14 +1,10 @@
-# tests/simulation/movement/test_movement_params.py
-"""Movement parameters validation and behavior tests."""
+# tests/simulation/movementCPP/movement_params_funcs.py
+"""Movement parameters validation and behavior tests - extracted functions."""
 
 import pytest
 import pygcmc
 
-
-class TestMovementParams:
-    """Test MovementParams validation and parameter handling."""
-    
-    def test_basic_parameter_creation(self):
+def test_basic_parameter_creation():
         """Test basic MovementParams creation and defaults."""
         params = pygcmc.movement.MovementParams()
         
@@ -20,7 +16,7 @@ class TestMovementParams:
         assert params.probeRadius == pytest.approx(0.14)  # nm
         assert params.proposalMode == 0  # Uniform by default
         
-    def test_temperature_constructor(self):
+def test_temperature_constructor():
         """Test MovementParams construction with temperature."""
         params = pygcmc.movement.MovementParams()
         params.temperature = 300.0
@@ -30,7 +26,7 @@ class TestMovementParams:
         expected_beta = 1.0 / (8.314e-3 * 300.0)
         assert params.beta == pytest.approx(expected_beta)
         
-    def test_cavity_grid_spacing_validation(self):
+def test_cavity_grid_spacing_validation():
         """Test validation of cavityGridSpacing parameter."""
         params = pygcmc.movement.MovementParams()
         params.useCavityBias = True
@@ -49,7 +45,7 @@ class TestMovementParams:
         assert "cavityGridSpacing" in str(exc_info.value)
         assert "0.0" in str(exc_info.value) or "0.000000" in str(exc_info.value)
         
-    def test_probe_radius_validation(self):
+def test_probe_radius_validation():
         """Test validation of probeRadius parameter."""
         params = pygcmc.movement.MovementParams()
         params.useCavityBias = True
@@ -68,7 +64,7 @@ class TestMovementParams:
         assert "probeRadius" in str(exc_info.value)
         assert "0.0" in str(exc_info.value) or "0.000000" in str(exc_info.value)
         
-    def test_proposal_mode_clamping(self):
+def test_proposal_mode_clamping():
         """Test proposalMode clamping to valid range."""
         params = pygcmc.movement.MovementParams()
         
@@ -90,7 +86,7 @@ class TestMovementParams:
         params.updateDerivedParameters()
         assert params.proposalMode == 0
         
-    def test_multi_insertion_params_validation(self):
+def test_multi_insertion_params_validation():
         """Test validation of multi-insertion parameters."""
         params = pygcmc.movement.MovementParams()
         params.useMultiInsertionCBMC = True
@@ -109,7 +105,7 @@ class TestMovementParams:
             params.updateDerivedParameters()
         assert "maxParallelInsertions" in str(exc_info.value)
         
-    def test_adaptive_thresholds(self):
+def test_adaptive_thresholds():
         """Test adaptive mode threshold parameters."""
         params = pygcmc.movement.MovementParams()
         
@@ -130,7 +126,7 @@ class TestMovementParams:
         assert params.autoNcavMin == 50
         assert params.autoFindCavMaxMs == pytest.approx(5.0)
         
-    def test_performance_flags(self):
+def test_performance_flags():
         """Test performance optimization flags."""
         params = pygcmc.movement.MovementParams()
         
@@ -148,7 +144,7 @@ class TestMovementParams:
         assert params.useStencilOptimization == False
         assert params.useColorClassFastPath == True
         
-    def test_fill_proposal_info_flag(self):
+def test_fill_proposal_info_flag():
         """Test fillProposalInfo diagnostic flag."""
         params = pygcmc.movement.MovementParams()
         
@@ -159,7 +155,7 @@ class TestMovementParams:
         params.fillProposalInfo = True
         assert params.fillProposalInfo == True
         
-    def test_proposal_mode_upper_bound_valid(self):
+def test_proposal_mode_upper_bound_valid():
         """Test proposal mode upper bound validation."""
         params = pygcmc.movement.MovementParams()
         
@@ -177,7 +173,7 @@ class TestMovementParams:
         params.updateDerivedParameters()
         assert params.proposalMode == 0  # Should clamp to 0
     
-    def test_seed_field_sets_rng(self):
+def test_seed_field_sets_rng():
         """Test that seed field exists and can be set."""
         params = pygcmc.movement.MovementParams()
         
@@ -193,7 +189,7 @@ class TestMovementParams:
         params.seed = 2**32 - 1
         assert params.seed == 2**32 - 1
     
-    def test_params_repr(self):
+def test_params_repr():
         """Test MovementParams string representation."""
         params = pygcmc.movement.MovementParams()
         params.temperature = 350.0
@@ -204,7 +200,7 @@ class TestMovementParams:
         # Should contain key parameters
         assert "350" in repr_str or "T=" in repr_str.lower()
     
-    def test_validation_without_cavity_bias(self):
+def test_validation_without_cavity_bias():
         """Test that cavity parameters are not validated when cavity bias is off."""
         params = pygcmc.movement.MovementParams()
         params.useCavityBias = False
