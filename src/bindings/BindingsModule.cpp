@@ -73,6 +73,11 @@ void init_model(py::module& m) {
 }
 }
 
+// Forward declarations for Platform binding init functions
+namespace platform {
+void init_energy_bindings(py::module& m);
+}
+
 // Forward declarations for IO binding init functions from separate files
 namespace io {
 void init_structure_bindings(py::module& m, py::module& io_module);
@@ -109,6 +114,7 @@ PYBIND11_MODULE(pygcmc, m) {
     pygcmc::bindings::model::init_model(m);
     pygcmc::bindings::system::init_system(m);
     pygcmc::bindings::simulation::init_simulation_bindings(m);
+    pygcmc::bindings::platform::init_energy_bindings(m);
     
     // Register cleanup function - can be called manually if needed
     // NOTE: We do NOT automatically register with atexit to avoid 
@@ -116,4 +122,11 @@ PYBIND11_MODULE(pygcmc, m) {
     m.def("_cleanup", &cleanup_global_state, 
           "Internal cleanup function - call manually before exit if needed",
           py::call_guard<py::gil_scoped_release>());
+    
+    // Export OpenMP capability flag
+#ifdef PYGCMC_USE_OPENMP
+    m.attr("PYGCMC_USE_OPENMP") = py::bool_(true);
+#else
+    m.attr("PYGCMC_USE_OPENMP") = py::bool_(false);
+#endif
 }

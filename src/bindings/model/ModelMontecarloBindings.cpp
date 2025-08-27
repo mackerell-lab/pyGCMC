@@ -111,6 +111,18 @@ void init_montecarlo_bindings(py::module& m, py::module&) {
             new_state.numMovementAtomTypes = state.numMovementAtomTypes;
             return new_state;
         }, "Create a deep copy of the MCState object")
+        .def("addAtom", &pygcmc::model::MCState::addAtom, 
+             py::arg("atom"),
+             "Add an atom and update activeAtomCount")
+        .def("removeAtom", &pygcmc::model::MCState::removeAtom, 
+             py::arg("index"),
+             "Remove an atom by index")
+        .def("addResidue", &pygcmc::model::MCState::addResidue, 
+             py::arg("residue"),
+             "Add a residue and update activeResidueCount")
+        .def("removeResidue", &pygcmc::model::MCState::removeResidue, 
+             py::arg("index"),
+             "Remove a residue by index")
         .def_property("atoms",
             [](pygcmc::model::MCState& state) -> std::vector<pygcmc::model::MCAtom>& {
                 // Return direct reference to the vector for compatibility

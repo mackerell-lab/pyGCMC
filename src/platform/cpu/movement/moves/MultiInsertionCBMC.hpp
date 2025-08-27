@@ -27,7 +27,7 @@ namespace movement {
 struct MultiInsertionConfig {
     int numTrialsPerRegion = 10;      // CBMC trials per region
     int maxParallelInsertions = 100;  // Max regions to attempt
-    double minSeparation = 15.0;      // Min distance between regions (Angstrom)
+    double minSeparation = 1.5;       // Min distance between regions (nm)
     bool useCavityBias = false;       // Enable cavity bias integration
     bool useGPUBatch = false;         // GPU acceleration (phase 3)
     double chemicalPotential = -15.7; // Chemical potential in kJ/mol

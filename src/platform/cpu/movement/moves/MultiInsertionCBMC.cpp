@@ -326,7 +326,8 @@ void MultiInsertionCBMC::batchCalculateEnergies(
     MCState& state) {
     
 #ifdef PYGCMC_USE_OPENMP
-    #pragma omp parallel for schedule(dynamic)
+    // Use static schedule for deterministic ordering
+    #pragma omp parallel for schedule(static)
     for (int i = 0; i < static_cast<int>(regions.size()); ++i) {
         MCState localState = state; // Thread-local copy
         calculateEnergiesForRegionImpl(regions[i], localState);

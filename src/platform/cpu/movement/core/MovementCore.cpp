@@ -288,22 +288,28 @@ std::vector<MovementResult> MovementModule::attemptMultiInsertionCBMC(MCState& s
     if (!pImpl_->multiInsertionCBMC) {
         // Initialize if not already done
         MultiInsertionConfig config;
-        config.numTrialsPerRegion = params_.numConfigTrials;
-        config.maxParallelInsertions = params_.maxParallelInsertions;
-        config.minSeparation = params_.minRegionSeparationNm * 10.0;
+        config.numTrialsPerRegion = params_.numConfigTrials > 0 ? params_.numConfigTrials : 10;
+        // Ensure at least 1 parallel insertion for fallback path
+        config.maxParallelInsertions = std::max(1, params_.maxParallelInsertions);
+        config.minSeparation = params_.minRegionSeparationNm > 0 ? params_.minRegionSeparationNm : 1.5;  // Default 1.5 nm
         config.chemicalPotential = params_.chemicalPotential;
-        config.displacementFraction = params_.multiDisplacementFraction;
+        config.displacementFraction = params_.multiDisplacementFraction > 0 ? params_.multiDisplacementFraction : 0.5;
         config.useRegionVolume = params_.multiUseRegionVolume;
         config.useCavityBias = params_.useCavityBias;  // Pass cavity bias flag
         
         // Set independence control parameters
         // Get cutoff from state
-        config.cutoffNm = state.info.cutoff / 10.0;  // Convert from Angstrom to nm
+        config.cutoffNm = state.info.cutoff;  // Already in nm
         config.moleculeExtentNm = 0.15;    // Default for water
         config.enforceIndependence = true; // Always enforce for correctness
         config.recomputeAfterAccept = false; // Expensive fallback, off by default
         
         pImpl_->multiInsertionCBMC = std::make_unique<MultiInsertionCBMC>(config, cavityManager_.get());
+        
+        // Set seed for reproducibility in fallback path
+        if (params_.seed != 0) {
+            pImpl_->multiInsertionCBMC->setSeed(params_.seed);
+        }
     }
     
     auto startTime = std::chrono::high_resolution_clock::now();
