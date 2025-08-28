@@ -334,3 +334,30 @@ from movementCPP.ideal_gas_distribution_funcs import (
     test_chemical_potential_scaling,
     test_detailed_balance_ratio
 )
+
+# ============================================================================
+# STATISTICAL UTILITIES TESTS (from movementCPP/test_movement_cpp.py)
+# ============================================================================
+
+# Basic statistical utility tests (8 functions)
+from movementCPP.statistical_utils_tests_basic_funcs import (
+    test_poisson_diff_ok_edge_cases,
+    test_poisson_diff_ok_statistical_power,
+    test_ratio_ci_ok_edge_cases,
+    test_ratio_ci_ok_confidence_level,
+    test_effective_sample_size_independent,
+    test_effective_sample_size_correlated,
+    test_effective_sample_size_edge_cases,
+    test_batch_means_edge_cases
+)
+
+# Advanced statistical utility tests (7 functions)
+from movementCPP.statistical_utils_tests_advanced_funcs import (
+    test_batch_means_variance,
+    test_batch_means_variance_autocorrelated,
+    test_no_drift_converged,
+    test_no_drift_drifting,
+    test_calibrate_mu,
+    test_no_drift_window_size,
+    test_integration_detailed_balance
+)
