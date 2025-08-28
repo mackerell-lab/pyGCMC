@@ -11,6 +11,7 @@
 #include <limits>
 #include <chrono>
 #include <iostream>
+#include <cstdlib>
 
 #ifdef PYGCMC_USE_OPENMP
 #include <omp.h>
@@ -34,11 +35,16 @@ MultiInsertionCBMC::MultiInsertionCBMC(const MultiInsertionConfig& config,
       uniform_(0.0, 1.0),
       cavityManager_(cavityManager) {
     
-    // When using cavity bias, region volume should be used for consistency
-    if (config_.useCavityBias && !config_.useRegionVolume) {
-        std::cerr << "Warning: useCavityBias=true but useRegionVolume=false. "
-                  << "This may lead to inconsistent proposal distribution. "
-                  << "Consider setting useRegionVolume=true." << std::endl;
+    // When using cavity bias, detailed balance is not guaranteed with Vbox normalization
+    // Only show warning if PYGCMC_VERBOSE environment variable is set
+    if (config_.useCavityBias) {
+        static bool warningShown = false;
+        if (!warningShown && std::getenv("PYGCMC_VERBOSE")) {
+            std::cerr << "Note: Cavity bias enabled with Vbox normalization. "
+                      << "Detailed balance with cavity-biased proposals is approximate. "
+                      << "Use for enhanced sampling, not for strict DB validation." << std::endl;
+            warningShown = true;
+        }
     }
     
     resetStatistics();
