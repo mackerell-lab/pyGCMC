@@ -321,3 +321,16 @@ from movementCPP.proposal_statistics_edge_funcs import (
     test_empty_system_statistics,
     test_statistics_overflow_protection
 )
+
+# ============================================================================
+# IDEAL GAS DISTRIBUTION TESTS (fundamental physics validation)
+# ============================================================================
+
+# Ideal gas limit tests (5 functions)
+from movementCPP.ideal_gas_distribution_funcs import (
+    test_ideal_gas_mean_particle_number,
+    test_particle_distribution_shape,
+    test_volume_scaling,
+    test_chemical_potential_scaling,
+    test_detailed_balance_ratio
+)
