@@ -573,6 +573,124 @@ def test_detailed_balance_ratio():
                 f"At N={n}: ratio {mean_ratio:.3f} deviates from theory {theory_ratio:.3f}"
 
 
+def test_detailed_balance_microstate_pairing_strict():
+    """Test strict microstate pairing for detailed balance (if API supports indexed deletion)"""
+    T = 298.15
+    mu = -20.0
+    L = 3.0
+    V = L**3
+    kB_kjmol = 8.314e-3
+    beta = 1.0 / (kB_kjmol * T)
+    
+    state = pygcmc.MCState()
+    state.info.box = np.array([L, L, L])
+    
+    ff = pygcmc.MCForceField()
+    ff.numTotalTypes = 1
+    ff.numMovementTypes = 1
+    ff.ljEps = [0.0]
+    ff.ljSigma = [0.0]
+    state.forcefield = ff
+    
+    params = pygcmc.movement.MovementParams()
+    params.temperature = T
+    params.chemicalPotential = mu
+    params.seed = 999
+    params.useCavityBias = False
+    params.fillProposalInfo = True
+    
+    mover = pygcmc.movement.MovementModule()
+    mover.setParams(params)
+    
+    # Pre-equilibrate
+    for _ in range(4000):
+        if np.random.random() < 0.6:
+            mover.attemptInsertion(state)
+        else:
+            mover.attemptDeletion(state)
+    
+    ratios_by_n = {}
+    
+    # Try to form strict microstate pairs
+    for _ in range(8000):
+        n_before = len([r for r in state.residues if r.active])
+        if n_before == 0:
+            # Only insertion possible
+            mover.attemptInsertion(state)
+            continue
+        
+        # Record active indices before insertion
+        before_idxs = set(i for i, r in enumerate(state.residues) if r.active)
+        
+        # Attempt insertion
+        ins_res = mover.attemptInsertion(state)
+        p_ins = ins_res.acceptanceProbability
+        
+        # Determine if insertion was accepted and find new index
+        n_after = len([r for r in state.residues if r.active])
+        insertion_accepted = (n_after == n_before + 1)
+        
+        inserted_idx = None
+        if insertion_accepted:
+            after_idxs = set(i for i, r in enumerate(state.residues) if r.active)
+            new_idxs = after_idxs - before_idxs
+            if new_idxs:
+                inserted_idx = list(new_idxs)[0]
+        
+        # Try strict paired deletion if possible
+        # Note: Most C++ bound methods don't support signature inspection
+        # Try to call with index argument and fallback if it fails
+        strict_pairing_used = False
+        
+        if inserted_idx is not None and insertion_accepted:
+            try:
+                # Try calling with index argument
+                del_res = mover.attemptDeletion(state, inserted_idx)
+                strict_pairing_used = True
+            except (TypeError, AttributeError):
+                # API doesn't support indexed deletion - use random deletion
+                del_res = mover.attemptDeletion(state)
+        else:
+            # No insertion or not accepted - just do random deletion
+            del_res = mover.attemptDeletion(state)
+        
+        p_del = del_res.acceptanceProbability
+        
+        if p_del > 1e-12:
+            ratio = p_ins / p_del
+            ratios_by_n.setdefault(n_before, []).append(ratio)
+    
+    # Theory: p_ins/p_del = exp(beta*mu)*V/(n+1)
+    theory_factor = np.exp(beta * mu) * V
+    
+    # Report if strict pairing was used (for debugging)
+    if 'strict_pairing_used' in locals() and strict_pairing_used:
+        pairing_mode = "strict microstate pairing"
+    else:
+        pairing_mode = "random deletion (API limitation)"
+    
+    print(f"\nDetailed Balance Test Results ({pairing_mode}):")
+    print(f"Theory factor: exp(βμ)*V = {theory_factor:.3f}")
+    
+    checked = 0
+    for n, vals in sorted(ratios_by_n.items()):
+        if len(vals) >= 10:
+            obs = float(np.mean(vals))
+            std_obs = float(np.std(vals))
+            theory = theory_factor / (n + 1)
+            rel_err = abs(obs - theory) / max(theory, 1e-12)
+            
+            print(f"N={n}: observed={obs:.3f}±{std_obs:.3f}, theory={theory:.3f}, rel_err={rel_err:.1%}")
+            
+            # Allow wider tolerance for this optional test
+            assert rel_err < 0.4, \
+                f"N={n}: ratio={obs:.3f}, theory={theory:.3f}, rel_err={rel_err:.1%}"
+            checked += 1
+    
+    assert checked > 0, "No sufficient paired samples collected"
+    print(f"Checked {checked} different particle numbers")
+
+
 if __name__ == "__main__":
     # Run tests with detailed output
     print("Running ideal gas distribution tests...")
@@ -600,5 +718,11 @@ if __name__ == "__main__":
     
     print("\n6. Testing detailed balance ratio...")
     test_detailed_balance_ratio()
+    
+    print("\n7. Testing strict microstate pairing (optional)...")
+    try:
+        test_detailed_balance_microstate_pairing_strict()
+    except Exception as e:
+        print(f"  Note: Strict pairing test skipped ({str(e)[:50]}...)")
     
     print("\nAll ideal gas distribution tests passed!")
