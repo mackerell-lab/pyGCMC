@@ -2,6 +2,7 @@
 """Test detailed balance preservation in movement operations."""
 
 import pytest
+from .conftest import setup_system_with_params
 import pygcmc
 import numpy as np
 import math
@@ -28,9 +29,9 @@ def setup_system():
     
     return state, params
 
-def test_insertion_deletion_balance(setup_system):
+def test_insertion_deletion_balance(setup_system_with_params):
     """Test detailed balance between insertion and deletion."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     mover = pygcmc.movement.MovementModule()
     mover.setParams(params)
@@ -70,9 +71,9 @@ def test_insertion_deletion_balance(setup_system):
         # Should be near 1 at equilibrium with paired operations
         assert 0.5 < ratio < 2.0
 
-def test_translation_reversibility(setup_system):
+def test_translation_reversibility(setup_system_with_params):
     """Test reversibility of translation moves."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     # Ensure parameters are properly initialized
     params.updateDerivedParameters()
@@ -147,9 +148,9 @@ def test_translation_reversibility(setup_system):
     assert abs(mean_forward) < 5.0, f"Forward mean energy change {mean_forward:.3f} too large"
     assert abs(mean_reverse) < 5.0, f"Reverse mean energy change {mean_reverse:.3f} too large"
 
-def test_metropolis_criterion(setup_system):
+def test_metropolis_criterion(setup_system_with_params):
     """Test that acceptance follows Metropolis criterion."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     # Use very high temperature for better statistics
     params.temperature = 1000.0  # K
@@ -195,9 +196,9 @@ def test_metropolis_criterion(setup_system):
                 assert actual_rate <= expected_rate + 0.1, \
                     f"Unfavorable moves at T={params.temperature}K: actual={actual_rate:.3f} > expected={expected_rate:.3f}+0.1"
 
-def test_cavity_bias_detailed_balance(setup_system):
+def test_cavity_bias_detailed_balance(setup_system_with_params):
     """Test detailed balance with cavity bias."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     params.useCavityBias = True
     params.cavityGridSpacing = 0.1
@@ -233,9 +234,9 @@ def test_cavity_bias_detailed_balance(setup_system):
         # Should be stable
         assert abs(first_half - second_half) < 2.0
 
-def test_config_bias_detailed_balance(setup_system):
+def test_config_bias_detailed_balance(setup_system_with_params):
     """Test detailed balance with configurational bias."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     params.useConfigBias = True
     # numTrialOrientations not exposed in Python
@@ -262,9 +263,9 @@ def test_config_bias_detailed_balance(setup_system):
     # Should have reasonable acceptance
     assert 0.0 <= rate <= 1.0
 
-def test_multi_insertion_detailed_balance(setup_system):
+def test_multi_insertion_detailed_balance(setup_system_with_params):
     """Test detailed balance for multi-insertion CBMC."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     params.useMultiInsertionCBMC = True
     params.maxParallelInsertions = 4
@@ -300,9 +301,9 @@ def test_multi_insertion_detailed_balance(setup_system):
     except Exception:
         pytest.skip("Multi-insertion CBMC not available")
 
-def test_temperature_scaling(setup_system):
+def test_temperature_scaling(setup_system_with_params):
     """Test that acceptance scales correctly with temperature."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     temperatures = [100.0, 300.0, 600.0, 1000.0]
     acceptance_rates = []
@@ -332,16 +333,24 @@ def test_temperature_scaling(setup_system):
     # Just check that rates vary
     assert len(set(acceptance_rates)) > 1  # Some variation
 
-def test_chemical_potential_balance(setup_system):
+def test_chemical_potential_balance(setup_system_with_params):
     """Test that chemical potential correctly affects equilibrium."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     chemical_potentials = [-30.0, -20.0, -10.0]
     avg_particles = []
     
     for mu in chemical_potentials:
-        # Reset system
-        state, _ = setup_system
+        # Reset system - recreate clean state
+        state = pygcmc.MCState()
+        state.info.box = np.array([4.0, 4.0, 4.0])
+        # Setup force field
+        ff = pygcmc.MCForceField()
+        ff.numTotalTypes = 1
+        ff.numMovementTypes = 1
+        ff.ljEps = [0.5]
+        ff.ljSigma = [0.3]
+        state.forcefield = ff
         params.chemicalPotential = mu
         
         mover = pygcmc.movement.MovementModule()
@@ -369,9 +378,9 @@ def test_chemical_potential_balance(setup_system):
     # This is a weak test due to simplified counting
     assert avg_particles[-1] >= avg_particles[0] - 10
 
-def test_ensemble_averages(setup_system):
+def test_ensemble_averages(setup_system_with_params):
     """Test that ensemble averages are stable."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     mover = pygcmc.movement.MovementModule()
     mover.setParams(params)
@@ -513,9 +522,9 @@ def test_ensemble_averages(setup_system):
     assert z_stat < z_thresh, \
         f"Block-means halves differ: z={z_stat:.2f} (SE={se:.3f}, n_blocks={len(bmeans)})"
 
-def test_rosenbluth_weight_consistency(setup_system):
+def test_rosenbluth_weight_consistency(setup_system_with_params):
     """Test Rosenbluth weight calculation consistency."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     params.useConfigBias = True
     # numTrialOrientations not exposed in Python

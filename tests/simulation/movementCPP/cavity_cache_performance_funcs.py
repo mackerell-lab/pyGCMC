@@ -2,6 +2,7 @@
 """Cavity cache performance and statistics test functions."""
 
 import pytest
+from .conftest import setup_system_with_params
 import pygcmc
 import numpy as np
 import time
@@ -32,9 +33,9 @@ def setup_system():
     return state, params
 
 
-def test_cache_memory_management(setup_system):
+def test_cache_memory_management(setup_system_with_params):
     """Test that cache doesn't grow unbounded."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     mover = pygcmc.movement.MovementModule()
     mover.setParams(params)
@@ -67,9 +68,9 @@ def test_cache_memory_management(setup_system):
         assert cache_stats["cache_misses"] > 0
 
 
-def test_cache_performance_benefit(setup_system):
+def test_cache_performance_benefit(setup_system_with_params):
     """Test performance improvement from caching."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     mover = pygcmc.movement.MovementModule()
     mover.setParams(params)
@@ -123,9 +124,9 @@ def test_cache_performance_benefit(setup_system):
     assert True  # Cache mechanism verified
 
 
-def test_cache_statistics_tracking(setup_system):
+def test_cache_statistics_tracking(setup_system_with_params):
     """Test tracking of cache statistics."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     mover = pygcmc.movement.MovementModule()
     mover.setParams(params)
@@ -164,9 +165,9 @@ def test_cache_statistics_tracking(setup_system):
                 assert stats[field] >= 0.0
 
 
-def test_cache_with_periodic_boundaries(setup_system):
+def test_cache_with_periodic_boundaries(setup_system_with_params):
     """Test cache consistency with periodic boundary conditions."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     mover = pygcmc.movement.MovementModule()
     mover.setParams(params)
@@ -192,9 +193,9 @@ def test_cache_with_periodic_boundaries(setup_system):
         assert 0 <= cavity.z <= box[2]
 
 
-def test_cache_clear_operation(setup_system):
+def test_cache_clear_operation(setup_system_with_params):
     """Test explicit cache clearing if available."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     mover = pygcmc.movement.MovementModule()
     mover.setParams(params)

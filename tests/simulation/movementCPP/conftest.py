@@ -10,11 +10,10 @@ import pygcmc
 
 
 @pytest.fixture
-def setup_system():
+def setup_system_with_params():
     """Setup test system with standard parameters.
     
-    Returns a state with 5x5x5 nm box and standard force field parameters.
-    For different box sizes, use create_state fixture.
+    Returns a tuple of (state, params).
     """
     state = pygcmc.MCState()
     state.info.box = [5.0, 5.0, 5.0]
@@ -33,6 +32,58 @@ def setup_system():
     params.seed = 42
     
     return state, params
+
+
+@pytest.fixture
+def setup_system():
+    """Setup test system - returns only state for compatibility.
+    
+    Returns a state with 5x5x5 nm box and standard force field parameters.
+    """
+    state = pygcmc.MCState()
+    state.info.box = [5.0, 5.0, 5.0]
+    
+    # Setup force field with known interactions
+    ff = pygcmc.MCForceField()
+    ff.numTotalTypes = 2
+    ff.numMovementTypes = 2
+    ff.ljEps = [0.65, 0.0, 0.0, 0.0]  # kJ/mol
+    ff.ljSigma = [0.3165, 0.0, 0.0, 0.0]  # nm
+    state.forcefield = ff
+    
+    return state
+
+
+@pytest.fixture
+def clean_system():
+    """Create a fresh system for each test."""
+    state = pygcmc.MCState()
+    state.info.box = [5.0, 5.0, 5.0]
+    
+    ff = pygcmc.MCForceField()
+    ff.numTotalTypes = 2
+    ff.numMovementTypes = 2
+    ff.ljEps = [0.65, 0.0, 0.0, 0.0]
+    ff.ljSigma = [0.3165, 0.0, 0.0, 0.0]
+    state.forcefield = ff
+    
+    return state
+
+
+@pytest.fixture
+def fresh_system():
+    """Create a fresh system for statistics tests."""
+    state = pygcmc.MCState()
+    state.info.box = [5.0, 5.0, 5.0]
+    
+    ff = pygcmc.MCForceField()
+    ff.numTotalTypes = 2
+    ff.numMovementTypes = 2
+    ff.ljEps = [0.65, 0.0, 0.0, 0.0]
+    ff.ljSigma = [0.3165, 0.0, 0.0, 0.0]
+    state.forcefield = ff
+    
+    return state
 
 
 @pytest.fixture

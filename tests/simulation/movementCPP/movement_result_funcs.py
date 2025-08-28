@@ -2,6 +2,7 @@
 """Movement result diagnostics and field consistency tests - extracted functions."""
 
 import pytest
+from .conftest import setup_system_with_params
 import pygcmc
 
 @pytest.fixture
@@ -24,9 +25,9 @@ def setup_system():
     
     return state, params
 
-def test_result_basic_fields(setup_system):
+def test_result_basic_fields(setup_system_with_params):
         """Test that MovementResult has all basic fields."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
@@ -47,9 +48,9 @@ def test_result_basic_fields(setup_system):
         assert isinstance(result.moveType, str)  # moveType is string in Python bindings
         assert isinstance(result.residueIndex, int)
     
-def test_result_diagnostic_fields(setup_system):
+def test_result_diagnostic_fields(setup_system_with_params):
         """Test that MovementResult has all diagnostic fields."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
@@ -66,9 +67,9 @@ def test_result_diagnostic_fields(setup_system):
         for field in available_fields:
             assert hasattr(result, field), f"Missing field: {field}"
     
-def test_fill_proposal_info_disabled(setup_system):
+def test_fill_proposal_info_disabled(setup_system_with_params):
         """Test behavior when fillProposalInfo is disabled."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         params.fillProposalInfo = False
         
         mover = pygcmc.movement.MovementModule()
@@ -84,9 +85,9 @@ def test_fill_proposal_info_disabled(setup_system):
         # Should not fill when disabled
         assert filled_count == 0
     
-def test_fill_proposal_info_enabled(setup_system):
+def test_fill_proposal_info_enabled(setup_system_with_params):
         """Test behavior when fillProposalInfo is enabled."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         params.fillProposalInfo = True
         
         mover = pygcmc.movement.MovementModule()
@@ -119,9 +120,9 @@ def test_fill_proposal_info_enabled(setup_system):
         # Test passes whether proposal info is filled or not
         # The important thing is that the flag can be set without errors
     
-def test_fill_proposal_info_no_acceptance_effect(setup_system):
+def test_fill_proposal_info_no_acceptance_effect(setup_system_with_params):
         """Test that fillProposalInfo doesn't affect acceptance rate."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         
         # Run with fillProposalInfo=False
         params.fillProposalInfo = False
@@ -153,9 +154,9 @@ def test_fill_proposal_info_no_acceptance_effect(setup_system):
         rate_on = accepts_on / attempts
         assert abs(rate_off - rate_on) < 0.15  # Allow 15% difference
     
-def test_proposal_position_units(setup_system):
+def test_proposal_position_units(setup_system_with_params):
         """Test that proposal positions are in nanometers."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         params.fillProposalInfo = True
         
         # Test with different box sizes
@@ -184,9 +185,9 @@ def test_proposal_position_units(setup_system):
                     assert all(p >= 0.0 for p in pos)
                     assert all(p <= box_size for p in pos)
     
-def test_default_diagnostic_values(setup_system):
+def test_default_diagnostic_values(setup_system_with_params):
         """Test default values for diagnostic fields when not filled."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         params.fillProposalInfo = False
         
         mover = pygcmc.movement.MovementModule()
@@ -200,9 +201,9 @@ def test_default_diagnostic_values(setup_system):
         assert isinstance(result.computeTimeMs, float)
         assert result.computeTimeMs >= 0
     
-def test_move_type_consistency(setup_system):
+def test_move_type_consistency(setup_system_with_params):
         """Test that moveType field correctly identifies the operation."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
@@ -217,9 +218,9 @@ def test_move_type_consistency(setup_system):
             result_del = mover.attemptDeletion(state)
             assert result_del.moveType == "delete"  # Deletion type
     
-def test_multi_insertion_result_fields(setup_system):
+def test_multi_insertion_result_fields(setup_system_with_params):
         """Test result fields for multi-insertion CBMC if available."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         params.useMultiInsertionCBMC = True
         params.maxParallelInsertions = 4
         
@@ -252,9 +253,9 @@ def test_multi_insertion_result_fields(setup_system):
                 if hasattr(result, 'vregion'):
                     assert result.vregion >= -1.0, f"Result {i}: vregion should be >= -1.0"
     
-def test_reproducibility_with_seed(setup_system):
+def test_reproducibility_with_seed(setup_system_with_params):
         """Test RNG reproducibility with same seed."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         
         # Note: As discussed, seed only works with constructor, not setParams
         # For now, we test that operations are deterministic within same mover
@@ -284,9 +285,9 @@ def test_reproducibility_with_seed(setup_system):
         # This test documents current behavior rather than enforcing determinism
         # Future improvement: Use constructor to pass seed for true determinism
     
-def test_result_repr(setup_system):
+def test_result_repr(setup_system_with_params):
         """Test MovementResult string representation."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)

@@ -2,6 +2,7 @@
 """Movement module advanced functionality tests - extracted functions."""
 
 import pytest
+from .conftest import setup_system_with_params
 import pygcmc
 
 @pytest.fixture
@@ -24,9 +25,9 @@ def setup_system():
     
     return state, params
 
-def test_config_bias_rotation_movetype(setup_system):
+def test_config_bias_rotation_movetype(setup_system_with_params):
         """Test that config-bias rotation has correct moveType."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         
@@ -42,9 +43,9 @@ def test_config_bias_rotation_movetype(setup_system):
         r = mover.attemptConfigBiasRotation(state)
         assert r.moveType == "rotate"
     
-def test_get_proposal_stats_shape(setup_system):
+def test_get_proposal_stats_shape(setup_system_with_params):
         """Test getProposalStats robustness regardless of proposal layer status."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         
@@ -63,9 +64,9 @@ def test_get_proposal_stats_shape(setup_system):
             # Method may not be available in all builds
             pytest.skip("getProposalStats not available in this build")
     
-def test_get_cavity_stats_shape(setup_system):
+def test_get_cavity_stats_shape(setup_system_with_params):
         """Test getCavityStats robustness."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         
@@ -85,9 +86,9 @@ def test_get_cavity_stats_shape(setup_system):
             # Method may not be available in all builds
             pytest.skip("getCavityStats not available in this build")
     
-def test_statistics_keys_after_moves(setup_system):
+def test_statistics_keys_after_moves(setup_system_with_params):
         """Test that statistics contain correct keys after specific moves."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         
@@ -115,10 +116,12 @@ def test_statistics_keys_after_moves(setup_system):
         stats = mover.getStatistics()
         assert "rotate" in stats, "Stats should contain 'rotate' after rotation attempt"
     
-def test_constructor_seed_reproducibility(setup_system):
+def test_constructor_seed_reproducibility(setup_system_with_params):
         """Test strict RNG reproducibility with constructor-passed seed."""
         # Note: Current implementation may not support this fully
         # This test documents expected behavior for future improvements
+        
+        state, _ = setup_system_with_params
         
         # Create params with specific seed
         params = pygcmc.movement.MovementParams()
@@ -131,9 +134,6 @@ def test_constructor_seed_reproducibility(setup_system):
             # Try to create movers with constructor params (may not be supported)
             mover1 = pygcmc.movement.MovementModule(params)
             mover2 = pygcmc.movement.MovementModule(params)
-            
-            # Use existing state from setup_system
-            state, params_orig = setup_system
             
             # Verify movers were created successfully
             assert mover1 is not None, "First mover should be created"
@@ -158,9 +158,9 @@ def test_constructor_seed_reproducibility(setup_system):
             # This is current behavior - document it
             pytest.skip("MovementModule constructor does not accept params - seed reproducibility not guaranteed")
     
-def test_params_not_modified_by_methods(setup_system):
+def test_params_not_modified_by_methods(setup_system_with_params):
         """Test that movement methods don't accidentally modify params."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         
@@ -180,9 +180,9 @@ def test_params_not_modified_by_methods(setup_system):
         assert params.useConfigBias == original_config_bias, "useConfigBias modified"
         assert params.temperature == original_temperature, "temperature modified"
     
-def test_deletion_explicit_index_overrides_preference(setup_system):
+def test_deletion_explicit_index_overrides_preference(setup_system_with_params):
         """Test that explicit residueIndex overrides last-inserted preference."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         

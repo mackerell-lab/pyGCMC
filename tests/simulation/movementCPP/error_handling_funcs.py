@@ -3,15 +3,15 @@ import pytest
 import pygcmc
 import numpy as np
 import warnings
+from .conftest import setup_system
 
 
-# Note: setup_system fixture is defined in test_movement_cpp.py and returns (state, params)
-# We'll use the existing fixture from the parent file
+# Note: setup_system fixture is defined in conftest.py and returns state only
 
 
 def test_invalid_temperature(setup_system):
     """Test handling of invalid temperature values."""
-    state, _ = setup_system  # Unpack tuple, ignore params
+    state = setup_system  # Now returns state only
     params = pygcmc.movement.MovementParams()
     params.temperature = -100.0
     params.chemicalPotential = -15.7
@@ -34,7 +34,7 @@ def test_invalid_temperature(setup_system):
 
 def test_invalid_cavity_parameters(setup_system):
     """Test handling of invalid cavity bias parameters."""
-    state, _ = setup_system
+    state = setup_system
     params = pygcmc.movement.MovementParams()
     params.temperature = 298.15
     params.chemicalPotential = -15.7
@@ -54,7 +54,7 @@ def test_invalid_cavity_parameters(setup_system):
 
 def test_invalid_proposal_mode(setup_system):
     """Test handling of invalid proposal modes."""
-    state, _ = setup_system
+    state = setup_system
     params = pygcmc.movement.MovementParams()
     params.temperature = 298.15
     params.chemicalPotential = -15.7
@@ -119,7 +119,7 @@ def test_invalid_box_dimensions():
 
 def test_overflow_protection(setup_system):
     """Test protection against numerical overflow."""
-    state, _ = setup_system
+    state = setup_system
     params = pygcmc.movement.MovementParams()
     params.temperature = 1e-10
     params.chemicalPotential = 1000.0
@@ -138,7 +138,7 @@ def test_overflow_protection(setup_system):
 
 def test_multi_insertion_parameter_conflicts(setup_system):
     """Test handling of conflicting multi-insertion parameters."""
-    state, _ = setup_system
+    state = setup_system
     params = pygcmc.movement.MovementParams()
     params.temperature = 298.15
     params.chemicalPotential = -15.7
@@ -160,7 +160,7 @@ def test_multi_insertion_parameter_conflicts(setup_system):
 
 def test_recovery_from_failed_insertion(setup_system):
     """Test recovery from failed insertion attempts."""
-    state, _ = setup_system
+    state = setup_system
     params = pygcmc.movement.MovementParams()
     params.temperature = 298.15
     params.chemicalPotential = -50.0
@@ -186,7 +186,7 @@ def test_concurrent_access_errors(setup_system):
         explicitly releases the GIL. This test primarily ensures no crashes or 
         data corruption occur, not true parallel execution.
         """
-    state, _ = setup_system
+    state = setup_system
     params = pygcmc.movement.MovementParams()
     params.temperature = 298.15
     params.chemicalPotential = -15.7
@@ -222,7 +222,7 @@ def test_concurrent_access_errors(setup_system):
 
 def test_warning_for_suboptimal_parameters(setup_system):
     """Test warnings for suboptimal parameter combinations."""
-    state, _ = setup_system
+    state = setup_system
     params = pygcmc.movement.MovementParams()
     params.temperature = 298.15
     params.chemicalPotential = -15.7
@@ -240,7 +240,7 @@ def test_warning_for_suboptimal_parameters(setup_system):
 
 def test_graceful_degradation(setup_system):
     """Test graceful degradation when features unavailable."""
-    state, _ = setup_system
+    state = setup_system
     params = pygcmc.movement.MovementParams()
     params.temperature = 298.15
     params.chemicalPotential = -15.7
@@ -259,7 +259,7 @@ def test_graceful_degradation(setup_system):
 
 def test_parameter_validation_messages(setup_system):
     """Test that parameter validation provides helpful messages."""
-    state, _ = setup_system
+    state = setup_system
     params = pygcmc.movement.MovementParams()
     
     # Test temperature validation

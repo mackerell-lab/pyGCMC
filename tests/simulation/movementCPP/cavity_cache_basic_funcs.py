@@ -2,6 +2,7 @@
 """Basic cavity cache mechanism test functions."""
 
 import pytest
+from .conftest import setup_system_with_params
 import pygcmc
 import numpy as np
 import time
@@ -33,9 +34,9 @@ def setup_system():
     return state, params
 
 
-def test_cache_basic_functionality(setup_system):
+def test_cache_basic_functionality(setup_system_with_params):
     """Test basic cache hit/miss behavior."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     mover = pygcmc.movement.MovementModule()
     mover.setParams(params)
@@ -61,9 +62,9 @@ def test_cache_basic_functionality(setup_system):
         assert abs(c1.z - c2.z) < 1e-6
 
 
-def test_cache_invalidation_on_movement(setup_system):
+def test_cache_invalidation_on_movement(setup_system_with_params):
     """Test that cache is invalidated after particle movement."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     mover = pygcmc.movement.MovementModule()
     mover.setParams(params)
@@ -91,9 +92,9 @@ def test_cache_invalidation_on_movement(setup_system):
         assert initial_count != after_count or inserted == 0
 
 
-def test_cache_key_generation(setup_system):
+def test_cache_key_generation(setup_system_with_params):
     """Test cache key generation for different configurations."""
-    state1, params = setup_system
+    state1, params = setup_system_with_params
     
     # Create slightly different state
     state2 = pygcmc.MCState()
@@ -115,9 +116,9 @@ def test_cache_key_generation(setup_system):
     assert len(cavities2) >= len(cavities1)
 
 
-def test_cache_with_different_parameters(setup_system):
+def test_cache_with_different_parameters(setup_system_with_params):
     """Test cache behavior with different cavity parameters."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     # First set of parameters
     params1 = pygcmc.movement.MovementParams()
@@ -147,9 +148,9 @@ def test_cache_with_different_parameters(setup_system):
     assert len(cavities1) != len(cavities2)
 
 
-def test_cache_thread_safety(setup_system):
+def test_cache_thread_safety(setup_system_with_params):
     """Test thread-safe access to cavity cache."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     def find_cavities_thread(seed):
         """Thread worker to find cavities."""
@@ -188,9 +189,9 @@ def test_cache_thread_safety(setup_system):
     assert len(set(first_counts)) == 1
 
 
-def test_cache_with_box_changes(setup_system):
+def test_cache_with_box_changes(setup_system_with_params):
     """Test cache behavior when box size changes."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     mover = pygcmc.movement.MovementModule()
     mover.setParams(params)

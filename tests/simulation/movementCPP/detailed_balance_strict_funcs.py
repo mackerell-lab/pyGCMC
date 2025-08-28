@@ -2,6 +2,7 @@
 """Strict detailed balance verification for GCMC moves based on theoretical formulas."""
 
 import warnings
+from .conftest import setup_system_with_params
 import pytest
 import pygcmc
 import numpy as np
@@ -68,9 +69,9 @@ def setup_system():
     
     return state, params
 
-def test_metropolis_criterion_exact(setup_system):
+def test_metropolis_criterion_exact(setup_system_with_params):
     """Test that acceptance probability exactly follows Metropolis criterion."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     # Test at different temperatures
     temperatures = [300.0, 600.0, 1000.0]
@@ -129,9 +130,9 @@ def test_metropolis_criterion_exact(setup_system):
                     assert avg_prob < 0.3, \
                         f"T={T}K: unfavorable moves should have low acceptance, got {avg_prob:.3f}"
 
-def test_insertion_deletion_pairwise_balance(setup_system):
+def test_insertion_deletion_pairwise_balance(setup_system_with_params):
     """Test detailed balance for insertion-deletion pairs on same microstate."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     params.useCavityBias = False  # Simplify for clear verification
     # Use moderate chemical potential for balanced acceptance
     params.chemicalPotential = -15.0  # kJ/mol (lower to reduce acceptance rate)
@@ -225,7 +226,7 @@ def test_insertion_deletion_pairwise_balance(setup_system):
 
 @pytest.mark.slow
 @pytest.mark.timeout(60)
-def test_insertion_deletion_flux_balance(setup_system):
+def test_insertion_deletion_flux_balance(setup_system_with_params):
     """Test global flux balance at equilibrium using statistical tests.
     
     Note: This test may occasionally fail due to statistical fluctuations.
@@ -237,7 +238,7 @@ def test_insertion_deletion_flux_balance(setup_system):
         effective_sample_size, calibrate_mu, run_until_stable
     )
     
-    state, params = setup_system
+    state, params = setup_system_with_params
     params.useCavityBias = False
     
     # Moderate box size
@@ -452,9 +453,9 @@ def test_insertion_deletion_flux_balance(setup_system):
                 print(f"Warning: Low ESS={ess} on diff series (n={len(diff_counts)}), threshold={ess_threshold}")
                 # Don't assert failure - ESS can be low in some valid scenarios
 
-def test_cavity_bias_probability_consistency(setup_system):
+def test_cavity_bias_probability_consistency(setup_system_with_params):
     """Test that cavity bias factor is correctly incorporated in acceptance probability."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     params.useCavityBias = True
     params.cavityGridSpacing = 0.15
     params.probeRadius = 0.15
@@ -525,9 +526,9 @@ def test_cavity_bias_probability_consistency(setup_system):
     # In sparse systems, cavity bias factor might be 1.0 (all space is cavity)
     # The important test is that the formula is correctly applied above
 
-def test_chemical_potential_controls_density(setup_system):
+def test_chemical_potential_controls_density(setup_system_with_params):
     """Test that chemical potential correctly controls equilibrium density using instantaneous acceptance rates."""
-    state, base_params = setup_system
+    state, base_params = setup_system_with_params
     
     # Use ideal gas limit to isolate μ effect  
     state.info.box = np.array([5.0, 5.0, 5.0])
@@ -600,9 +601,9 @@ def test_chemical_potential_controls_density(setup_system):
     assert actual_probs[1] + 0.01 >= actual_probs[0], \
         f"Empirical insertion prob not monotonic: μ={chemical_potentials} -> P={actual_probs}"
 
-def test_translation_reversibility_exact(setup_system):
+def test_translation_reversibility_exact(setup_system_with_params):
     """Test exact reversibility of translation moves."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     # Use moderate chemical potential to get reasonable density
     params.chemicalPotential = -8.0
     params.updateDerivedParameters()
@@ -664,9 +665,9 @@ def test_translation_reversibility_exact(setup_system):
         favorable_rate = favorable_accepts / favorable_attempts
         assert favorable_rate > 0.8, f"Favorable acceptance rate too low: {favorable_rate:.3f}"
 
-def test_config_bias_fields_present(setup_system):
+def test_config_bias_fields_present(setup_system_with_params):
     """Test that config bias fields are present and reasonable."""
-    state, params = setup_system
+    state, params = setup_system_with_params
     params.useConfigBias = True
     params.numConfigTrials = 10
     
@@ -704,14 +705,14 @@ def test_config_bias_fields_present(setup_system):
 
 @pytest.mark.slow
 @pytest.mark.timeout(60)
-def test_ensemble_convergence(setup_system):
+def test_ensemble_convergence(setup_system_with_params):
     """Test that ensemble averages converge to stable values using statistical tests."""
     from .statistical_utils import (
         no_drift, effective_sample_size, calibrate_mu, 
         run_until_stable, batch_means_variance
     )
     
-    state, params = setup_system
+    state, params = setup_system_with_params
     
     # Larger box for better convergence
     state.info.box = np.array([5.0, 5.0, 5.0])

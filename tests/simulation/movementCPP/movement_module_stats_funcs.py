@@ -2,6 +2,7 @@
 """Movement module statistics and effects tests - extracted functions."""
 
 import pytest
+from .conftest import setup_system_with_params
 import pygcmc
 
 @pytest.fixture
@@ -24,9 +25,9 @@ def setup_system():
     
     return state, params
 
-def test_statistics_retrieval(setup_system):
+def test_statistics_retrieval(setup_system_with_params):
         """Test statistics retrieval methods."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         
@@ -47,9 +48,9 @@ def test_statistics_retrieval(setup_system):
         cavity_stats = mover.getStatistics()
         assert isinstance(cavity_stats, dict)
     
-def test_multi_insertion_cbmc_basic(setup_system):
+def test_multi_insertion_cbmc_basic(setup_system_with_params):
         """Test multi-insertion CBMC basic functionality if available."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         params.useMultiInsertionCBMC = True
@@ -78,9 +79,9 @@ def test_multi_insertion_cbmc_basic(setup_system):
                 # Re-raise unexpected errors for debugging
                 raise
     
-def test_temperature_effect(setup_system):
+def test_temperature_effect(setup_system_with_params):
         """Test effect of temperature on acceptance."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         
@@ -108,7 +109,7 @@ def test_temperature_effect(setup_system):
         # Just check they're different
         assert len(set(acceptance_rates)) > 1
     
-def test_chemical_potential_effect_insertion(setup_system):
+def test_chemical_potential_effect_insertion(setup_system_with_params):
         """Test effect of chemical potential on insertion acceptance."""
         # Get fresh state for each mu test to avoid saturation
         # Each chemical potential test starts with empty box
@@ -153,9 +154,9 @@ def test_chemical_potential_effect_insertion(setup_system):
         # Just verify highest mu gives non-zero acceptance
         assert max(acceptance_rates) > 0, "Should have some accepted insertions"
     
-def test_statistics_counts_and_reset(setup_system):
+def test_statistics_counts_and_reset(setup_system_with_params):
         """Test statistics counting and reset functionality."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         
@@ -182,9 +183,9 @@ def test_statistics_counts_and_reset(setup_system):
         assert stats2["insert"].attempts == 0
         assert stats2["insert"].accepts == 0
     
-def test_deletion_prefers_last_inserted(setup_system):
+def test_deletion_prefers_last_inserted(setup_system_with_params):
         """Test that deletion prefers the last inserted residue."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         
@@ -208,9 +209,9 @@ def test_deletion_prefers_last_inserted(setup_system):
             assert state.activeResidueCount == before - 1
             assert rdel.residueIndex >= 0
     
-def test_find_cavities_bounds_all(setup_system):
+def test_find_cavities_bounds_all(setup_system_with_params):
         """Test that all cavities are within box bounds."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         
@@ -226,9 +227,9 @@ def test_find_cavities_bounds_all(setup_system):
             assert 0.0 <= c.y <= Ly
             assert 0.0 <= c.z <= Lz
     
-def test_probability_bounds_all_moves(setup_system):
+def test_probability_bounds_all_moves(setup_system_with_params):
         """Test that acceptance probability is always in [0,1] for all moves."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         

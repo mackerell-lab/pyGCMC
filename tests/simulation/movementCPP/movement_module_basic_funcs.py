@@ -2,6 +2,7 @@
 """Movement module basic functionality tests - extracted functions."""
 
 import pytest
+from .conftest import setup_system_with_params
 import pygcmc
 
 # Note: setup_system fixture is provided by conftest.py
@@ -33,9 +34,9 @@ def test_parameter_setting_and_getting():
         assert params_back.temperature == pytest.approx(300.0)
         assert params_back.chemicalPotential == pytest.approx(-20.0)
     
-def test_insertion_basic(setup_system):
+def test_insertion_basic(setup_system_with_params):
         """Test basic insertion functionality."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         
@@ -47,9 +48,9 @@ def test_insertion_basic(setup_system):
         assert result.moveType == "insert"  # Insertion
         assert isinstance(result.energyChange, float)
     
-def test_deletion_basic(setup_system):
+def test_deletion_basic(setup_system_with_params):
         """Test basic deletion functionality."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         
@@ -67,9 +68,9 @@ def test_deletion_basic(setup_system):
             assert isinstance(result.accepted, bool)
             assert result.moveType == "delete"  # Deletion
     
-def test_translation_basic(setup_system):
+def test_translation_basic(setup_system_with_params):
         """Test basic translation functionality."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         
@@ -87,9 +88,9 @@ def test_translation_basic(setup_system):
             assert isinstance(result.accepted, bool)
             assert result.moveType == "translate"  # Translation
     
-def test_rotation_basic(setup_system):
+def test_rotation_basic(setup_system_with_params):
         """Test basic rotation functionality."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         
@@ -107,9 +108,9 @@ def test_rotation_basic(setup_system):
             assert isinstance(result.accepted, bool)
             assert result.moveType == "rotate"  # Rotation
     
-def test_cavity_bias_insertion(setup_system):
+def test_cavity_bias_insertion(setup_system_with_params):
         """Test cavity-biased insertion."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         params.useCavityBias = True
@@ -121,9 +122,9 @@ def test_cavity_bias_insertion(setup_system):
         assert isinstance(result.accepted, bool)
         assert result.moveType == "insert"  # Still insertion
     
-def test_config_bias_rotation_basic(setup_system):
+def test_config_bias_rotation_basic(setup_system_with_params):
         """Test configurational bias rotation basic functionality."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         params.useConfigBias = True
@@ -142,9 +143,9 @@ def test_config_bias_rotation_basic(setup_system):
             result = mover.attemptConfigBiasRotation(state)
             assert isinstance(result.accepted, bool)
     
-def test_acceptance_rate_calculation(setup_system):
+def test_acceptance_rate_calculation(setup_system_with_params):
         """Test acceptance rate calculation."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         
@@ -167,9 +168,9 @@ def test_acceptance_rate_calculation(setup_system):
         expected_rate = accepts / attempts
         assert abs(rate - expected_rate) < 0.1
     
-def test_find_cavities_integration(setup_system):
+def test_find_cavities_integration(setup_system_with_params):
         """Test cavity finding integration."""
-        state, params = setup_system
+        state, params = setup_system_with_params
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         params.useCavityBias = True
