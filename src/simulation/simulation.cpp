@@ -4,8 +4,11 @@
 #include "../platform/cpu/energy/pme/PMEComposite.hpp"
 #include "../platform/cpu/energy/pgp/PGPCore.hpp"
 #include "../platform/cpu/energy/pgp/PGPComplete.hpp"
+#include "../platform/cpu/movement/gcmc/GCMCModule.hpp"
+#include "../platform/cpu/movement/reservoir/fragment_reservoir.hpp"
 #include <cmath>
 #include <cstdio>
+#include <iostream>
 
 namespace pygcmc {
 namespace simulation {
@@ -340,6 +343,182 @@ void Simulation::computeMovementEnergyPGPCompleteCorrect(model::MCState& state) 
     }
     platform::cpu::computeMovementEnergyPGPCompleteCorrect(state);
 }
+
+// ============================================================================
+// GCMCSimulation Implementation
+// ============================================================================
+
+namespace mc = model::montecarlo;
+namespace gcmc = platform::cpu::movement::gcmc;
+namespace movement = platform::cpu::movement;
+
+// Implementation class using pImpl pattern
+class GCMCSimulation::Impl {
+public:
+    explicit Impl(const Config& config) : config_(config) {
+        // Create GCMC module with converted configuration
+        gcmc::GCMCModule::Config gcmcConfig;
+        gcmcConfig.temperature = config.temperature;
+        gcmcConfig.equilibrationSteps = config.equilibrationSteps;
+        gcmcConfig.productionSteps = config.productionSteps;
+        gcmcConfig.useCavityBias = config.useCavityBias;
+        gcmcConfig.verbose = config.verbose;
+        
+        module_ = gcmc::createGCMCModule(gcmcConfig);
+    }
+    
+    void initialize(mc::MCState& state) {
+        module_->initialize(state);
+        state_ = &state;
+    }
+    
+    void addWater() {
+        // Create TIP3P water template
+        movement::FragmentTemplate water;
+        water.name = "WAT";
+        
+        mc::MCAtom o;
+        o.name = "O";
+        o.type = 0;  // Type index for oxygen
+        o.position = mc::Vector3(0.0, 0.0, 0.0);
+        o.charge = -0.834;
+        o.mass = 15.999;
+        water.atoms.push_back(o);
+        
+        mc::MCAtom h1;
+        h1.name = "H1";
+        h1.type = 1;  // Type index for hydrogen
+        h1.position = mc::Vector3(0.0957, 0.0, 0.0);
+        h1.charge = 0.417;
+        h1.mass = 1.008;
+        water.atoms.push_back(h1);
+        
+        mc::MCAtom h2;
+        h2.name = "H2";
+        h2.type = 1;  // Type index for hydrogen
+        h2.position = mc::Vector3(-0.024, 0.0927, 0.0);
+        h2.charge = 0.417;
+        h2.mass = 1.008;
+        water.atoms.push_back(h2);
+        
+        water.chemicalPotential = config_.chemicalPotential;
+        water.calculateActivity(config_.temperature);
+        
+        module_->addFragmentType(water);
+    }
+    
+    void run() {
+        module_->runEquilibration();
+        module_->runProduction();
+    }
+    
+    void runSteps(int nSteps) {
+        module_->runSteps(nSteps);
+    }
+    
+    GCMCSimulation::Results getResults() const {
+        Results results;
+        
+        // Fill in basic results
+        // TODO: Get statistics from module when GCMCStats methods are implemented
+        // const auto& stats = module_->getStatistics();
+        results.averageMolecules = 0.0;  // TODO: stats.getAverageMolecules(0)
+        results.averageEnergy = 0.0;     // TODO: stats.getAverageEnergy()
+        results.acceptanceRate = 0.0;    // TODO: stats.getOverallAcceptance()
+        
+        return results;
+    }
+    
+    Config config_;
+    std::unique_ptr<gcmc::GCMCModule> module_;
+    mc::MCState* state_;
+};
+
+// GCMCSimulation public interface
+GCMCSimulation::GCMCSimulation(const Config& config) 
+    : impl_(std::make_unique<Impl>(config)) {
+}
+
+GCMCSimulation::~GCMCSimulation() = default;
+
+void GCMCSimulation::initialize(mc::MCState& state) {
+    impl_->initialize(state);
+}
+
+void GCMCSimulation::addWater() {
+    impl_->addWater();
+}
+
+void GCMCSimulation::run() {
+    impl_->run();
+}
+
+void GCMCSimulation::runSteps(int nSteps) {
+    impl_->runSteps(nSteps);
+}
+
+GCMCSimulation::Results GCMCSimulation::getResults() const {
+    return impl_->getResults();
+}
+
+// Quick GCMC functions
+namespace GCMC {
+
+void runWaterSimulation(
+    mc::MCState& state,
+    double temperature,
+    double chemicalPotential,
+    int steps) {
+    
+    // Create simple configuration
+    GCMCSimulation::Config config;
+    config.temperature = temperature;
+    config.chemicalPotential = chemicalPotential;
+    config.productionSteps = steps;
+    config.equilibrationSteps = steps / 10;  // 10% equilibration
+    
+    // Create and run simulation
+    GCMCSimulation sim(config);
+    sim.initialize(state);
+    sim.addWater();
+    sim.run();
+    
+    // Print results
+    auto results = sim.getResults();
+    std::cout << "GCMC Simulation Results:" << std::endl;
+    std::cout << "  Average molecules: " << results.averageMolecules << std::endl;
+    std::cout << "  Average energy: " << results.averageEnergy << " kJ/mol" << std::endl;
+    std::cout << "  Acceptance rate: " << results.acceptanceRate * 100 << "%" << std::endl;
+}
+
+double pressureToChemicalPotential(
+    double pressure,      // bar
+    double temperature,   // K
+    double molecularMass) { // g/mol
+    
+    // Ideal gas approximation
+    // μ = kT * ln(P * Λ³ / kT)
+    // Where Λ is the de Broglie wavelength
+    
+    const double kB = 8.314e-3;  // kJ/(mol·K)
+    const double h = 6.626e-34;   // Planck constant (J·s)
+    const double NA = 6.022e23;   // Avogadro's number
+    
+    // Convert pressure to SI units (Pa)
+    double P = pressure * 1e5;
+    
+    // Calculate thermal de Broglie wavelength
+    double mass_kg = molecularMass / NA / 1000.0;  // kg per molecule
+    double lambda = h / std::sqrt(2.0 * M_PI * mass_kg * kB * temperature * 1000.0 / NA);
+    double lambda3 = lambda * lambda * lambda;
+    
+    // Calculate chemical potential
+    double mu = kB * temperature * std::log(P * lambda3 / (kB * temperature * 1000.0 / NA));
+    
+    return mu;
+}
+
+} // namespace GCMC
 
 } // namespace simulation
 } // namespace pygcmc

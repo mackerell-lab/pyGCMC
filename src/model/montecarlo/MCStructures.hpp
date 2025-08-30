@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include <cmath>
 
 /**
  * @file   MCStructures.hpp
@@ -13,6 +14,38 @@
 namespace pygcmc {
 namespace model {
 namespace montecarlo {
+
+/**
+ * @brief 3D Vector for positions and displacements
+ */
+struct Vector3 {
+    double x, y, z;
+    
+    Vector3() : x(0), y(0), z(0) {}
+    Vector3(double x_, double y_, double z_) : x(x_), y(y_), z(z_) {}
+    
+    Vector3 operator+(const Vector3& v) const { return Vector3(x+v.x, y+v.y, z+v.z); }
+    Vector3 operator-(const Vector3& v) const { return Vector3(x-v.x, y-v.y, z-v.z); }
+    Vector3 operator*(double s) const { return Vector3(x*s, y*s, z*s); }
+    double dot(const Vector3& v) const { return x*v.x + y*v.y + z*v.z; }
+    double norm() const { return std::sqrt(x*x + y*y + z*z); }
+    double norm2() const { return x*x + y*y + z*z; }
+};
+
+/**
+ * @brief Quaternion for orientations
+ */
+struct Quaternion {
+    double w, x, y, z;
+    
+    Quaternion() : w(1), x(0), y(0), z(0) {}
+    Quaternion(double w_, double x_, double y_, double z_) : w(w_), x(x_), y(y_), z(z_) {}
+    
+    void normalize() {
+        double n = std::sqrt(w*w + x*x + y*y + z*z);
+        if (n > 0) { w /= n; x /= n; y /= n; z /= n; }
+    }
+};
 
 /**
  * @brief Type mapping system for atom and residue types
@@ -91,7 +124,22 @@ struct MCForceField {
 struct MCAtom {
     float x{0.0f}, y{0.0f}, z{0.0f};
     float charge{0.0f};
+    float mass{1.0f};  // Atom mass in amu
     int   type{-1};
+    std::string name;  // Atom name (e.g., "O", "H1", "H2")
+    Vector3 position;  // Position as Vector3 (for convenience)
+    
+    // Helper to update position from x,y,z
+    void updatePosition() {
+        position = Vector3(x, y, z);
+    }
+    
+    // Helper to set x,y,z from position
+    void setFromPosition() {
+        x = static_cast<float>(position.x);
+        y = static_cast<float>(position.y);
+        z = static_cast<float>(position.z);
+    }
 };
 
 /**
@@ -109,6 +157,9 @@ struct MCResidue {
     float chemPot{0.0f};
     int   type{-1};
     float radius{0.0f};
+    std::string resname;  // Residue name (e.g., "TIP3", "WAT", etc.)
+    int resid{-1};        // Residue ID
+    std::vector<MCAtom> atoms;  // Atoms in this residue
 };
 
 /**

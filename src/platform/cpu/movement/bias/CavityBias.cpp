@@ -6,6 +6,7 @@
 #include <queue>
 #include <unordered_set>
 #include <iostream>
+#include <random>
 
 namespace pygcmc {
 namespace platform {
@@ -715,6 +716,75 @@ bool CavityManager::shouldUseClustering(const MCState& state) {
     bool moderateOccupancy = stats_.occupancyRatio > 0.3 && stats_.occupancyRatio < 0.7;
     
     return tooManyCavities || moderateOccupancy;
+}
+
+void CavityManager::updateAfterInsertion(int residueIdx, const MCState& state) {
+    // Invalidate cavity cache after insertion
+    // In a more sophisticated implementation, we could update only the affected region
+    invalidateCache();
+    
+    // Optional: Update grid locally around the inserted residue
+    // This would be more efficient than full recalculation
+    if (state.residues.size() > static_cast<size_t>(residueIdx) && 
+        state.residues[residueIdx].active) {
+        // Get position of inserted residue
+        const auto& residue = state.residues[residueIdx];
+        Vector3 pos(residue.center[0], residue.center[1], residue.center[2]);
+        
+        // Could implement local grid update here
+        // For now, just rely on cache invalidation
+    }
+}
+
+void CavityManager::updateAfterDeletion(const Vector3& position, const MCState& state) {
+    // Invalidate cavity cache after deletion
+    invalidateCache();
+    
+    // Optional: Update grid locally around the deleted position
+    // This would be more efficient than full recalculation
+    (void)position;  // Suppress unused parameter warning
+    (void)state;     // Suppress unused parameter warning
+}
+
+// Get cavity score for a position (1.0 if in cavity, 0.1 otherwise)
+double CavityManager::getCavityScore(const Vector3& position) const {
+    // Simple implementation: check if position is near a cavity
+    // In practice, would check against grid or cavity list
+    
+    if (cavityCache_.empty()) {
+        return 0.1;  // No cavities known, low score
+    }
+    
+    // Check distance to nearest cavity
+    double minDist = 1e10;
+    for (const auto& cavity : cavityCache_) {
+        double dist = distance(position, cavity);
+        minDist = std::min(minDist, dist);
+    }
+    
+    // Return score based on distance
+    if (minDist < gridSpacing_) {
+        return 1.0;  // In or near cavity
+    } else if (minDist < gridSpacing_ * 2) {
+        return 0.5;  // Close to cavity
+    } else {
+        return 0.1;  // Far from cavities
+    }
+}
+
+// Select a random cavity position
+Vector3 CavityManager::selectCavity() const {
+    if (cavityCache_.empty()) {
+        // No cavities available, return random position
+        return Vector3(0, 0, 0);
+    }
+    
+    // Select random cavity from cache
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, cavityCache_.size() - 1);
+    
+    return cavityCache_[dis(gen)];
 }
 
 } // namespace movement

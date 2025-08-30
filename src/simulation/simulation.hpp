@@ -342,5 +342,79 @@ private:
     std::unique_ptr<platform::IPlatform> platform_;
 };
 
+/**
+ * @brief Simple GCMC interface for high-level usage
+ * 
+ * This provides a minimal API for running GCMC simulations without
+ * exposing the complexity of the underlying implementation.
+ */
+class GCMCSimulation {
+public:
+    // Simple configuration
+    struct Config {
+        double temperature;      // K
+        int equilibrationSteps;
+        int productionSteps;
+        double chemicalPotential; // kJ/mol (for single component)
+        bool useCavityBias;
+        bool verbose;
+        
+        // Constructor with default values
+        Config()
+            : temperature(300.0),
+              equilibrationSteps(10000),
+              productionSteps(100000),
+              chemicalPotential(-15.7),
+              useCavityBias(true),
+              verbose(false) {}
+    };
+    
+    // Constructor
+    explicit GCMCSimulation(const Config& config = Config());
+    ~GCMCSimulation();
+    
+    // Initialize with state
+    void initialize(model::MCState& state);
+    
+    // Add water molecules (convenience method)
+    void addWater();
+    
+    // Run simulation
+    void run();
+    void runSteps(int nSteps);
+    
+    // Get results
+    struct Results {
+        double averageMolecules;
+        double averageEnergy;
+        double acceptanceRate;
+    };
+    Results getResults() const;
+    
+private:
+    class Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
+/**
+ * @brief Quick GCMC functions for common use cases
+ */
+namespace GCMC {
+    // Run water GCMC with default parameters
+    void runWaterSimulation(
+        model::MCState& state,
+        double temperature = 300.0,
+        double chemicalPotential = -15.7,
+        int steps = 100000
+    );
+    
+    // Calculate chemical potential from pressure (ideal gas)
+    double pressureToChemicalPotential(
+        double pressure,      // bar
+        double temperature,   // K
+        double molecularMass  // g/mol
+    );
+}
+
 } // namespace simulation
 } // namespace pygcmc

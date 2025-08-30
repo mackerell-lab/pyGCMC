@@ -85,6 +85,11 @@ struct FragmentTemplate {
     void updateActivity(double beta) {
         activity = std::exp(beta * chemicalPotential);
     }
+    
+    void calculateActivity(double temperature) {
+        double beta = 1.0 / (8.314e-3 * temperature);  // kJ/mol/K
+        updateActivity(beta);
+    }
 };
 
 // ============================================================================
@@ -104,6 +109,7 @@ struct FragmentInstance {
     
     // Position and orientation
     Vector3 centerOfMass;                  // Center of mass position
+    Vector3 position;                       // Position (alias for centerOfMass)
     Quaternion orientation;                // Orientation quaternion
     Vector3 velocity;                      // Velocity (for future MD)
     
@@ -205,6 +211,7 @@ public:
     const FragmentTemplate* getTemplate(int templateId) const;
     FragmentTemplate* getTemplate(const std::string& name);
     const FragmentTemplate* getTemplate(const std::string& name) const;
+    int getTemplateCount() const { return templates_.size(); }
     
     // Update template properties
     void updateChemicalPotential(int templateId, double mu);
@@ -255,6 +262,7 @@ public:
     // Get instance
     FragmentInstance* getInstance(int instanceId);
     const FragmentInstance* getInstance(int instanceId) const;
+    FragmentInstance* getInstanceByResidueIndex(int residueIdx);
     
     // Find instances in region
     std::vector<int> findInstancesInSphere(const Vector3& center, double radius) const;

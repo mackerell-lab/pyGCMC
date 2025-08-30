@@ -76,6 +76,10 @@ public:
     void invalidateCache();
     bool isCacheValid() const { return cacheValid_; }
     
+    // Update cavity grid after insertion/deletion
+    void updateAfterInsertion(int residueIdx, const MCState& state);
+    void updateAfterDeletion(const Vector3& position, const MCState& state);
+    
     // Configuration
     void setGridSpacing(double spacing) { gridSpacing_ = spacing; invalidateCache(); }
     void setProbeRadius(double radius) { probeRadius_ = radius; invalidateCache(); }
@@ -149,6 +153,10 @@ public:
     
     // Automatic mode selection
     bool shouldUseClustering(const MCState& state);
+    
+    // Additional methods for GCMC integration
+    double getCavityScore(const Vector3& position) const;
+    Vector3 selectCavity() const;
     
 private:
     // Configuration

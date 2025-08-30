@@ -846,6 +846,16 @@ const std::vector<int>& FragmentReservoir::getFragmentNeighbors(int instanceId) 
     return instances_[instanceId].fragmentNeighbors;
 }
 
+FragmentInstance* FragmentReservoir::getInstanceByResidueIndex(int residueIdx) {
+    // Search through active instances to find one with matching residue index
+    for (auto& instance : instances_) {
+        if (instance.isActive && instance.residueIndex == residueIdx) {
+            return &instance;
+        }
+    }
+    return nullptr;
+}
+
 } // namespace movement
 } // namespace cpu
 } // namespace platform

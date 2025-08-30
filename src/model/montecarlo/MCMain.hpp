@@ -31,6 +31,7 @@ struct MCState {
     MCInfo info;
     MCForceField forcefield;
     EwaldEnergy ewald_energy;
+    std::vector<double> periodicBox;  // Box dimensions [x, y, z] in nm
 
     MCState() = default;
 
