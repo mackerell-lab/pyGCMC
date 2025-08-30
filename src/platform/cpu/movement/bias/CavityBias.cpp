@@ -234,7 +234,7 @@ void CavityManager::markOccupiedRegion(const Vector3& center, double radius) {
     int kMax = static_cast<int>(std::floor((center.z + radius - grid_.origin.z) / grid_.spacing.z));
 
     const int nx = grid_.nx, ny = grid_.ny, nz = grid_.nz;
-    const Vector3 boxAng = grid_.boxSize; // Angstroms
+    const Vector3 boxNm = grid_.boxSize; // Actually in nm, not Angstroms
     const double radiusSq = radius * radius;
 
     for (int ii = iMin; ii <= iMax; ++ii) {
@@ -244,15 +244,15 @@ void CavityManager::markOccupiedRegion(const Vector3& center, double radius) {
             for (int kk = kMin; kk <= kMax; ++kk) {
                 int k = (kk % nz + nz) % nz;
 
-                Vector3 gridPos = gridToPosition(i, j, k); // Å
+                Vector3 gridPos = gridToPosition(i, j, k); // nm
 
-                // minimum-image displacement in Å
+                // minimum-image displacement in nm
                 double dx = gridPos.x - center.x;
                 double dy = gridPos.y - center.y;
                 double dz = gridPos.z - center.z;
-                dx -= std::round(dx / boxAng.x) * boxAng.x;
-                dy -= std::round(dy / boxAng.y) * boxAng.y;
-                dz -= std::round(dz / boxAng.z) * boxAng.z;
+                dx -= std::round(dx / boxNm.x) * boxNm.x;
+                dy -= std::round(dy / boxNm.y) * boxNm.y;
+                dz -= std::round(dz / boxNm.z) * boxNm.z;
 
                 double distSq = dx*dx + dy*dy + dz*dz;
 
@@ -474,7 +474,7 @@ std::vector<CavityManager::CavityCluster> CavityManager::findCavityClustersFlood
                     queue.pop();
                     
                     // Add to cluster
-                    Vector3 posNm = gridToPosition(current.i, current.j, current.k) * ANGSTROM_TO_NM;
+                    Vector3 posNm = gridToPosition(current.i, current.j, current.k);  // Already in nm
                     cluster.positions.push_back(posNm);
                     centerSum = centerSum + posNm;
                     count++;
@@ -687,7 +687,7 @@ std::vector<Vector3> CavityManager::selectIndependentCavities(
                 int idx = grid_.getIndex(i, j, k);
                 
                 if (!grid_.occupied[idx]) {
-                    Vector3 posNm = gridToPosition(i, j, k) * ANGSTROM_TO_NM;
+                    Vector3 posNm = gridToPosition(i, j, k);  // Already in nm
                     selectedCavities.push_back(posNm);
                     
                     if (static_cast<int>(selectedCavities.size()) >= maxPoints) {
