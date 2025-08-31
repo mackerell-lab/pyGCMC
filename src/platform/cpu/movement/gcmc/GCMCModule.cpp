@@ -8,6 +8,7 @@
 #include "../bias/CavityBias.hpp"
 #include "../bias/ConfigBias.hpp"
 #include "../../energy/EnergyModule.hpp"
+#include <cassert>
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -113,7 +114,15 @@ GCMCModule::GCMCModule(const Config& config)
     
     // Create core components
     engine_ = std::make_unique<GCMCEngine>();
-    reservoir_ = std::make_unique<FragmentReservoir>();
+    
+    // Configure reservoir to prevent slot reordering/compaction
+    FragmentReservoir::Config reservoirConfig;
+    reservoirConfig.autoCompact = false;          // CRITICAL: Never compact/reorder slots
+    reservoirConfig.ghostRecycleRatio = 1.0;      // Always recycle ghosts in-place
+    reservoirConfig.maxGhosts = 10000;            // Large limit to avoid purging
+    reservoirConfig.maxInstances = 10000;         // Sufficient for most simulations
+    reservoir_ = std::make_unique<FragmentReservoir>(reservoirConfig);
+    
     moveSelector_ = std::make_unique<GCMCMoveSelector>();
     biasCalc_ = std::make_unique<GCMCBias>();
     acceptCalc_ = std::make_unique<GCMCAcceptance>();
@@ -149,11 +158,67 @@ GCMCModule::~GCMCModule() = default;
 void GCMCModule::initialize(model::montecarlo::MCState& state) {
     state_ = &state;
     
+    // CRITICAL: Ensure periodicBox is initialized from info.box if not set
+    // This prevents segfaults in functions that directly index periodicBox[0..2]
+    if (state.periodicBox.size() < 3 && 
+        state.info.box[0] > 0 && state.info.box[1] > 0 && state.info.box[2] > 0) {
+        state.periodicBox.resize(3);
+        state.periodicBox[0] = state.info.box[0];
+        state.periodicBox[1] = state.info.box[1];
+        state.periodicBox[2] = state.info.box[2];
+        
+        if (config_.verbose) {
+            std::cout << "Auto-initialized periodicBox from info.box: " 
+                     << state.periodicBox[0] << " x " 
+                     << state.periodicBox[1] << " x " 
+                     << state.periodicBox[2] << " nm" << std::endl;
+        }
+    }
+    
     // Initialize engine
     engine_->initialize(state_, reservoir_.get());
     engine_->setTemperature(config_.temperature);
-    engine_->setEnergyMethod(config_.energyMethod);
+    
+    // Determine actual energy method to use based on system setup
+    EnergyMethod actualMethod = config_.energyMethod;
+    bool hasValidBox = (state.periodicBox.size() == 3 && 
+                       state.periodicBox[0] > 0 && 
+                       state.periodicBox[1] > 0 && 
+                       state.periodicBox[2] > 0);
+    
+    // PME/Ewald require valid periodic box - fallback to DIRECT if not available
+    if ((actualMethod == EnergyMethod::PME || actualMethod == EnergyMethod::EWALD) && !hasValidBox) {
+        if (config_.verbose) {
+            std::cerr << "WARNING: " << (actualMethod == EnergyMethod::PME ? "PME" : "Ewald") 
+                     << " energy method requires valid periodic box. Falling back to DIRECT." << std::endl;
+        }
+        actualMethod = EnergyMethod::DIRECT;
+    }
+    
+    engine_->setEnergyMethod(actualMethod);
     engine_->setCutoff(config_.cutoff);
+    
+    // Configure energy callback
+    if (auto* callback = engine_->getEnergyCallback()) {
+        callback->setEnergyMethod(actualMethod);
+        callback->setParameters(true, hasValidBox);  // Use cutoff, PBC only if box valid
+        
+        // Initialize Ewald/PME if needed and possible
+        if (actualMethod == EnergyMethod::EWALD && hasValidBox) {
+            callback->initializeEwald(config_.cutoff, state.periodicBox);
+        } else if (actualMethod == EnergyMethod::PME && hasValidBox) {
+            std::vector<int> gridSize = {64, 64, 64};  // Default PME grid
+            callback->initializePME(config_.cutoff, state.periodicBox, gridSize);
+        }
+    }
+    
+    // Setup acceptance calculator for proper GCMC
+    if (state.periodicBox.size() == 3) {
+        double volume = state.periodicBox[0] * state.periodicBox[1] * state.periodicBox[2];
+        acceptCalc_->setVolume(volume);
+    }
+    acceptCalc_->setTemperature(config_.temperature);
+    engine_->setAcceptanceCalculator(acceptCalc_.get());
     
     // Set bias components in engine
     if (cavityManager_) {
@@ -161,9 +226,9 @@ void GCMCModule::initialize(model::montecarlo::MCState& state) {
         
         // Initialize cavity manager with box dimensions
         if (state.periodicBox.size() == 3) {
-            // Configure cavity manager
-            cavityManager_->setGridSpacing(config_.gridSpacing);
-            cavityManager_->setProbeRadius(config_.probeRadius);
+            // Configure cavity manager - convert nm to Angstrom
+            cavityManager_->setGridSpacing(config_.gridSpacing * 10.0);  // nm to Å
+            cavityManager_->setProbeRadius(config_.probeRadius * 10.0);   // nm to Å
             // findCavities will automatically initialize the grid with the correct box size
             cavityManager_->findCavities(state);
         }
@@ -331,6 +396,17 @@ void GCMCModule::runSteps(int nSteps) {
     statistics_->recordStepTime(duration.count() / static_cast<double>(nSteps));
 }
 
+// Set random seed
+void GCMCModule::setSeed(unsigned int seed) {
+    if (engine_) {
+        engine_->setSeed(seed);
+    }
+    if (moveSelector_) {
+        moveSelector_->setSeed(seed + 1);  // Use different seed for move selector
+    }
+    // Also set seed for any other RNG components if needed
+}
+
 // Perform a move
 bool GCMCModule::performMove() {
     // Select move type
@@ -373,6 +449,11 @@ bool GCMCModule::performMove() {
     if (accepted) {
         moveSelector_->recordAcceptance(moveType);
     }
+    
+#ifdef DEBUG
+    // Verify state consistency after move
+    validateStateConsistency();
+#endif
     
     return accepted;
 }
@@ -663,6 +744,63 @@ void GCMCModule::enableFlatHistogram() {
     // Placeholder for Wang-Landau or similar methods
     if (config_.verbose) {
         std::cout << "Flat histogram sampling enabled (not yet implemented)" << std::endl;
+    }
+}
+
+// Validate state consistency (debug only)
+void GCMCModule::validateStateConsistency() {
+    if (!state_ || !reservoir_) return;
+    
+    // Check that all active instances in reservoir have corresponding active residues
+    auto activeInstances = reservoir_->getActiveInstances();
+    for (int instanceId : activeInstances) {
+        // Check bounds
+        if (instanceId < 0 || instanceId >= static_cast<int>(state_->residues.size())) {
+            std::cerr << "ERROR: Active instance " << instanceId 
+                     << " out of bounds (residues.size=" << state_->residues.size() << ")" << std::endl;
+            assert(false);
+        }
+        
+        // Check if residue is active
+        if (!state_->residues[instanceId].active) {
+            std::cerr << "ERROR: Instance " << instanceId 
+                     << " is active in reservoir but inactive in MCState" << std::endl;
+            assert(false);
+        }
+        
+        // CRITICAL: Verify instance-residue index consistency
+        FragmentInstance* instance = reservoir_->getInstance(instanceId);
+        if (instance) {
+            if (instance->instanceId != instanceId) {
+                std::cerr << "ERROR: Instance ID mismatch: expected " << instanceId 
+                         << " got " << instance->instanceId << std::endl;
+                assert(false);
+            }
+            if (instance->residueIndex != instanceId) {
+                std::cerr << "ERROR: Instance " << instanceId 
+                         << " has residueIndex=" << instance->residueIndex 
+                         << " (should match instanceId)" << std::endl;
+                assert(false);
+            }
+            
+            // Verify atoms exist for active residue
+            const FragmentTemplate* tmpl = reservoir_->getTemplate(instance->templateId);
+            if (tmpl && state_->residues[instanceId].atoms.size() != tmpl->atoms.size()) {
+                std::cerr << "ERROR: Residue " << instanceId 
+                         << " has " << state_->residues[instanceId].atoms.size() 
+                         << " atoms but template has " << tmpl->atoms.size() << std::endl;
+                assert(false);
+            }
+        }
+    }
+    
+    // Check that inactive residues don't have atoms
+    for (size_t i = 0; i < state_->residues.size(); ++i) {
+        if (!state_->residues[i].active && !state_->residues[i].atoms.empty()) {
+            std::cerr << "ERROR: Inactive residue " << i << " has " 
+                     << state_->residues[i].atoms.size() << " atoms" << std::endl;
+            assert(false);
+        }
     }
 }
 

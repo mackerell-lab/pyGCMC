@@ -160,13 +160,10 @@ public:
         if (state.size() >= 2) {
             masterSeed_ = state[0];
             currentStep_ = state[1];
-            // For simplicity, re-seed and fast-forward
-            // In production, would restore full internal state
-            reseed(masterSeed_);
-            // Fast-forward by discarding values
-            for (uint64_t i = 0; i < currentStep_; ++i) {
-                masterRng_();
-            }
+            // Re-seed with combined seed to get deterministic state
+            // Use splitmix64 to combine seed with step count
+            uint64_t combinedSeed = splitmix64(masterSeed_ + currentStep_);
+            masterRng_.seed(combinedSeed);
         }
     }
     
@@ -196,9 +193,8 @@ private:
      */
     void recordAccess(const std::string& operation) {
         if (recordRepro_) {
-            // Simple hash of current state (not cryptographic)
-            uint64_t stateHash = masterRng_() ^ currentStep_;
-            masterRng_.discard(-1); // Rewind one step
+            // Use current step and seed for hash - don't consume random numbers
+            uint64_t stateHash = masterSeed_ ^ currentStep_ ^ std::hash<std::string>{}(operation);
             reproRecords_.emplace_back(currentStep_, stateHash, operation);
         }
     }

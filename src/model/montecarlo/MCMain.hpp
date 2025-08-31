@@ -83,6 +83,13 @@ struct MCState {
     void setBoxDimensions(float x, float y, float z) { 
         info.box[0] = x; info.box[1] = y; info.box[2] = z;
         info.volume = x * y * z;
+        
+        // CRITICAL: Also set periodicBox to prevent segfaults in GCMCEngine
+        // Many functions directly index periodicBox[0..2] without checking size
+        periodicBox.resize(3);
+        periodicBox[0] = static_cast<double>(x);
+        periodicBox[1] = static_cast<double>(y);
+        periodicBox[2] = static_cast<double>(z);
     }
 
     void setupForceField(int totalTypes, int movementTypes = 0) { 

@@ -94,6 +94,9 @@ public:
     void setInsertionBias(int typeId, double bias);
     void setDeletionBias(int typeId, double bias);
     
+    // Random seed setting
+    void setSeed(unsigned int seed) { rng_.seed(seed); }
+    
 protected:
     // Probabilities
     std::map<MoveType, double> probabilities_;

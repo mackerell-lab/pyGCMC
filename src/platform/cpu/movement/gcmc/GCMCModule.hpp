@@ -117,7 +117,7 @@ public:
               useRegrowth(false),
               useClusterMoves(false),
               clusterCutoff(0.35),
-              energyMethod(platform::cpu::EnergyMethod::PME),
+              energyMethod(platform::cpu::EnergyMethod::DIRECT),
               cutoff(1.2),
               verbose(false),
               trajectoryFile(""),
@@ -147,6 +147,9 @@ public:
     void runProduction(int steps = -1);
     void runSteps(int nSteps);
     bool performMove();
+    
+    // Random number generation
+    void setSeed(unsigned int seed);
     
     // Individual move types
     bool attemptInsertion(int typeId = -1);
@@ -186,6 +189,9 @@ public:
     void enableFlatHistogram();
     
 private:
+    // Debug helpers
+    void validateStateConsistency();
+    
     // Core components
     std::unique_ptr<GCMCEngine> engine_;
     std::unique_ptr<FragmentReservoir> reservoir_;

@@ -192,35 +192,33 @@ void CavityManager::initializeGrid(const Vector3& boxSize) {
 }
 
 void CavityManager::markOccupiedRegions(const MCState& state) {
-    // Process all active atoms
-    for (int resIdx = 0; resIdx < state.activeResidueCount; ++resIdx) {
-        const MCResidue& residue = state.residues[resIdx];
+    // Process all active residues using per-residue atoms
+    // CRITICAL: Use residue.atoms instead of global state.atoms to avoid indexing issues
+    for (const MCResidue& residue : state.residues) {
         if (!residue.active) continue;
         
-        for (int i = 0; i < residue.atomCount; ++i) {
-            int atomIdx = residue.atomStart + i;
-            if (atomIdx < state.activeAtomCount) {
-                const MCAtom& atom = state.atoms[atomIdx];
-                // Position is in nm (same as box dimensions)
-                Vector3 posNm(atom.x, atom.y, atom.z);
-                
-                // Use sigma from force field if available
-                double radiusNm = 0.15;  // Default fallback in nm (1.5 Angstroms)
-                
-                if (atom.type >= 0 && 
-                    atom.type < static_cast<int>(state.forcefield.ljSigma.size())) {
-                    // LJ sigma is in nm (check forcefield units)
-                    // Use sigma/2 as atomic radius
-                    double sigma = state.forcefield.ljSigma[atom.type];
-                    if (sigma > 0) {
-                        radiusNm = 0.5 * sigma;
-                    }
+        // Iterate through atoms in the residue's own atom list
+        for (const MCAtom& atom : residue.atoms) {
+            // Position is in nm (same as box dimensions)
+            Vector3 posNm(atom.x, atom.y, atom.z);
+            
+            // Use sigma from force field if available
+            double radiusNm = 0.15;  // Default fallback in nm (1.5 Angstroms)
+            
+            int nt = state.forcefield.numTotalTypes;
+            if (atom.type >= 0 && atom.type < nt &&
+                state.forcefield.ljSigma.size() > static_cast<size_t>(atom.type * nt + atom.type)) {
+                // LJ sigma is NxN matrix in nm - get diagonal element for self-interaction
+                int idx = atom.type * nt + atom.type;
+                double sigma = state.forcefield.ljSigma[idx];
+                if (sigma > 0) {
+                    radiusNm = 0.5 * sigma;
                 }
-                
-                // Add probe radius (convert from Angstroms to nm)
-                double totalRadius = radiusNm + probeRadius_ * ANGSTROM_TO_NM;
-                markOccupiedRegion(posNm, totalRadius);
             }
+            
+            // Add probe radius (convert from Angstroms to nm)
+            double totalRadius = radiusNm + probeRadius_ * ANGSTROM_TO_NM;
+            markOccupiedRegion(posNm, totalRadius);
         }
     }
 }
@@ -280,26 +278,22 @@ bool CavityManager::checkCavity(const Vector3& position, const MCState& state) c
     double minDist = probeRadius_ * ANGSTROM_TO_NM;  // Convert probe radius to nm
     double minDistSq = minDist * minDist;
     
-    for (int resIdx = 0; resIdx < state.activeResidueCount; ++resIdx) {
-        const MCResidue& residue = state.residues[resIdx];
+    // Use per-residue atoms instead of global atom array
+    for (const MCResidue& residue : state.residues) {
         if (!residue.active) continue;
         
-        for (int i = 0; i < residue.atomCount; ++i) {
-            int atomIdx = residue.atomStart + i;
-            if (atomIdx < state.activeAtomCount) {
-                const MCAtom& atom = state.atoms[atomIdx];
-                // Calculate distance squared with PBC (box in Angstroms)
-                Vector3 atomPos(atom.x, atom.y, atom.z);
-                double dist = utils::PBCUtils::minimumImageDistance(
-                    position,
-                    atomPos,
-                    Vector3(state.info.box[0], state.info.box[1], state.info.box[2])
-                );
-                double distSq = dist * dist;  // Square the distance for comparison
-                
-                if (distSq < minDistSq) {
-                    return false;
-                }
+        for (const MCAtom& atom : residue.atoms) {
+            // Calculate distance squared with PBC (box in nm)
+            Vector3 atomPos(atom.x, atom.y, atom.z);
+            double dist = utils::PBCUtils::minimumImageDistance(
+                position,
+                atomPos,
+                Vector3(state.info.box[0], state.info.box[1], state.info.box[2])
+            );
+            double distSq = dist * dist;  // Square the distance for comparison
+            
+            if (distSq < minDistSq) {
+                return false;
             }
         }
     }

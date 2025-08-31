@@ -6,6 +6,8 @@
 #include "../bias/CavityBias.hpp"
 #include "../bias/ConfigBias.hpp"
 #include "../../energy/EnergyModule.hpp"
+#include "GCMCEnergyCallback.hpp"
+#include "GCMCAcceptance.hpp"
 #include <random>
 #include <memory>
 
@@ -103,6 +105,9 @@ public:
                                   const Vector3& position,
                                   const Quaternion& orientation);
     double calculateDeletionBias(int residueIdx);
+    
+    // State synchronization
+    void synchronizeStateWithReservoir(int instanceId, bool isInsertion);
     double calculateRegrowthBias(int residueIdx);
     
     // Acceptance criteria
@@ -115,6 +120,19 @@ public:
     void setEnergyMethod(EnergyMethod method) { energyMethod_ = method; }
     void setCutoff(double cutoff) { cutoff_ = cutoff; }
     void setSeed(unsigned int seed);
+    void setAcceptanceCalculator(GCMCAcceptance* acceptCalc) { 
+        acceptanceCalculator_ = acceptCalc; 
+    }
+    
+    // Set energy callback
+    void setEnergyCallback(std::unique_ptr<GCMCEnergyCallback> callback) {
+        energyCallback_ = std::move(callback);
+    }
+    
+    // Get energy callback (for configuration)
+    GCMCEnergyCallback* getEnergyCallback() {
+        return energyCallback_.get();
+    }
     
     // Statistics
     int getTotalMoves() const { return totalMoves_; }
@@ -130,6 +148,8 @@ private:
     FragmentReservoir* reservoir_;
     CavityManager* cavityManager_;
     ConfigBiasManager* configBias_;
+    GCMCAcceptance* acceptanceCalculator_;
+    std::unique_ptr<GCMCEnergyCallback> energyCallback_;
     
     // Parameters
     double temperature_;

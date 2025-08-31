@@ -79,9 +79,9 @@ int FragmentReservoir::loadTemplate(const std::string& filename,
     if (name == "WAT" || name == "TIP3") {
         // Water molecule
         tmpl.molecularWeight = 18.015;
-        tmpl.radius = 1.4;  // Å
+        tmpl.radius = 0.14;  // nm (was 1.4 Å)
         
-        // Add atoms (O, H, H)
+        // Add atoms (O, H, H) - convert coordinates from Å to nm
         MCAtom oxygen;
         oxygen.x = 0.0; oxygen.y = 0.0; oxygen.z = 0.0;
         oxygen.charge = -0.834;
@@ -89,20 +89,20 @@ int FragmentReservoir::loadTemplate(const std::string& filename,
         tmpl.atoms.push_back(oxygen);
         
         MCAtom hydrogen1;
-        hydrogen1.x = 0.9572; hydrogen1.y = 0.0; hydrogen1.z = 0.0;
+        hydrogen1.x = 0.09572; hydrogen1.y = 0.0; hydrogen1.z = 0.0;  // nm (was 0.9572 Å)
         hydrogen1.charge = 0.417;
         hydrogen1.type = 1;  // Hydrogen type
         tmpl.atoms.push_back(hydrogen1);
         
         MCAtom hydrogen2;
-        hydrogen2.x = -0.2399; hydrogen2.y = 0.9266; hydrogen2.z = 0.0;
+        hydrogen2.x = -0.02399; hydrogen2.y = 0.09266; hydrogen2.z = 0.0;  // nm
         hydrogen2.charge = 0.417;
         hydrogen2.type = 1;
         tmpl.atoms.push_back(hydrogen2);
         
-        // Add bonds
-        tmpl.bonds.push_back({0, 1, 0.9572});
-        tmpl.bonds.push_back({0, 2, 0.9572});
+        // Add bonds (in nm)
+        tmpl.bonds.push_back({0, 1, 0.09572});  // nm
+        tmpl.bonds.push_back({0, 2, 0.09572});  // nm
         
         // Add angle
         tmpl.angles.push_back({1, 0, 2, 104.52 * M_PI / 180.0});
@@ -193,6 +193,7 @@ int FragmentReservoir::createInstance(int templateId,
     instance.isActive = true;
     instance.isGhost = false;
     instance.centerOfMass = position;
+    instance.position = position;  // Keep position in sync for engine users
     instance.orientation = orientation;
     instance.insertionTime = currentMCStep_;
     instance.lastMoveTime = currentMCStep_;
@@ -303,6 +304,46 @@ bool FragmentReservoir::deleteInstance(int instanceId) {
     if (static_cast<int>(ghostIndices_.size()) > config_.maxGhosts) {
         purgeGhosts(config_.maxGhosts);
     }
+    
+    return true;
+}
+
+bool FragmentReservoir::restoreInstance(int instanceId, 
+                                       const Vector3& position,
+                                       const Quaternion& orientation) {
+    // Check if instance exists and is actually a ghost
+    if (!isValidInstanceId(instanceId)) {
+        return false;
+    }
+    
+    FragmentInstance& instance = instances_[instanceId];
+    
+    // Can only restore ghost instances
+    if (!instance.isGhost || instance.isActive) {
+        return false;
+    }
+    
+    int templateId = instance.templateId;
+    
+    // Restore the instance to active state
+    instance.isActive = true;
+    instance.isGhost = false;
+    instance.position = position;
+    instance.centerOfMass = position;
+    instance.orientation = orientation;
+    
+    // Note: ActivePool position update would be handled by synchronizeStateWithReservoir
+    // which is called after this function in GCMCEngine
+    
+    // Re-add to active instances list
+    activeByType_[templateId].push_back(instanceId);
+    
+    // Remove from ghost set
+    ghostIndices_.erase(instanceId);
+    
+    // Update statistics
+    stats_.activeCountByType[templateId]++;
+    stats_.ghostCountByType[templateId]--;
     
     return true;
 }
@@ -481,6 +522,7 @@ void FragmentReservoir::recordMoveAttempt(int instanceId, bool accepted,
 void FragmentReservoir::updatePosition(int instanceId, const Vector3& newPos) {
     if (auto* inst = getInstance(instanceId)) {
         inst->centerOfMass = newPos;
+        inst->position = newPos;  // Keep fields consistent
     }
 }
 

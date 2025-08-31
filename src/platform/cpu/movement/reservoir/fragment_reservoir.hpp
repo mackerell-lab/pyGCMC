@@ -233,6 +233,12 @@ public:
     // Delete an instance (convert to ghost)
     bool deleteInstance(int instanceId);
     
+    // Restore a deleted (ghost) instance back to active state
+    // Returns true if successfully restored, false otherwise
+    bool restoreInstance(int instanceId, 
+                        const Vector3& position,
+                        const Quaternion& orientation);
+    
     // Permanently remove an instance
     bool purgeInstance(int instanceId);
     

@@ -142,6 +142,7 @@ private:
     // Random number generation
     std::mt19937 rng_;
     std::uniform_real_distribution<double> uniform_;
+    std::normal_distribution<double> normal_;
     
     // Helper methods
     std::vector<Vector3> generateTrialPositions(int nTrials);

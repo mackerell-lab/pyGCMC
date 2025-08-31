@@ -26,7 +26,8 @@ GCMCBias::GCMCBias()
       averageBias_(1.0),
       biasCalculations_(0),
       rng_(std::random_device{}()),
-      uniform_(0.0, 1.0) {
+      uniform_(0.0, 1.0),
+      normal_(0.0, 1.0) {
 }
 
 // Destructor
@@ -182,25 +183,48 @@ double GCMCBias::calculateConfigBias(
     const Quaternion& orientation,
     int nTrials) {
     
-    // Suppress unused parameter warnings
-    (void)tmpl;
-    (void)position;
-    (void)orientation;
+    if (!configBias_ || !state_) return 1.0;
     
-    if (!configBias_) return 1.0;
-    
-    // Simplified CBMC calculation
-    std::vector<double> trialEnergies(nTrials);
-    double minEnergy = 1e10;
+    // Generate trial configurations and calculate energies
+    std::vector<double> trialEnergies;
+    trialEnergies.reserve(nTrials);
     
     for (int i = 0; i < nTrials; ++i) {
-        // Generate trial configuration
-        // Calculate energy
-        trialEnergies[i] = 0.0;  // Placeholder
-        minEnergy = std::min(minEnergy, trialEnergies[i]);
+        // Generate trial configuration by rotating the template
+        double angle = uniform_(rng_) * 2 * M_PI;
+        Vector3 axis(normal_(rng_), normal_(rng_), normal_(rng_));
+        double axisNorm = axis.norm();
+        if (axisNorm > 0) {
+            axis = axis * (1.0 / axisNorm);  // Normalize manually
+        }
+        
+        Quaternion trialOrientation = orientation;
+        if (i > 0) {  // Keep first trial as original
+            // Apply small random rotation
+            double halfAngle = angle / 2;
+            double s = std::sin(halfAngle);
+            Quaternion rotation(std::cos(halfAngle), s * axis.x, s * axis.y, s * axis.z);
+            // Quaternion multiplication: q1 * q2
+            // (w1, x1, y1, z1) * (w2, x2, y2, z2) = 
+            // (w1*w2 - x1*x2 - y1*y2 - z1*z2,
+            //  w1*x2 + x1*w2 + y1*z2 - z1*y2,
+            //  w1*y2 - x1*z2 + y1*w2 + z1*x2,
+            //  w1*z2 + x1*y2 - y1*x2 + z1*w2)
+            trialOrientation.w = rotation.w * orientation.w - rotation.x * orientation.x - rotation.y * orientation.y - rotation.z * orientation.z;
+            trialOrientation.x = rotation.w * orientation.x + rotation.x * orientation.w + rotation.y * orientation.z - rotation.z * orientation.y;
+            trialOrientation.y = rotation.w * orientation.y - rotation.x * orientation.z + rotation.y * orientation.w + rotation.z * orientation.x;
+            trialOrientation.z = rotation.w * orientation.z + rotation.x * orientation.y - rotation.y * orientation.x + rotation.z * orientation.w;
+            trialOrientation.normalize();
+        }
+        
+        // Calculate energy for this configuration
+        // This would require temporarily placing the fragment and calculating energy
+        // For now, use simplified energy based on orientation
+        double energy = evaluateOrientation(trialOrientation, position, tmpl);
+        trialEnergies.push_back(energy);
     }
     
-    // Rosenbluth weight
+    // Calculate and return Rosenbluth weight
     return calculateRosenbluthWeight(trialEnergies, temperature_);
 }
 
@@ -272,7 +296,8 @@ double GCMCBias::calculateRosenbluthWeight(
         weight += std::exp(-beta * energy);
     }
     
-    return weight / energies.size();
+    // Rosenbluth weight is the sum of Boltzmann factors, not the average
+    return weight;
 }
 
 // Select Rosenbluth trial
@@ -380,11 +405,14 @@ double GCMCBias::evaluatePosition(const Vector3& position, const FragmentTemplat
     // In practice, would calculate interaction energy with system
     double energy = 0.0;
     
-    // Simple LJ-like potential based on distance from origin
-    double r2 = position.norm2();
-    if (r2 < 1.0) r2 = 1.0;  // Avoid singularity
+    // Simple soft-core potential to avoid hard overlaps
+    double r = position.norm();
+    if (r < 0.1) r = 0.1;  // Avoid singularity
     
-    energy = 4.0 * (1.0 / (r2 * r2 * r2) - 1.0 / (r2 * r2 * r2));
+    // Soft repulsive potential at origin (in kJ/mol)
+    if (r < 1.0) {  // Within 1 nm of origin
+        energy = 10.0 * (1.0 - r);  // Linear repulsion
+    }
     
     return energy;
 }
