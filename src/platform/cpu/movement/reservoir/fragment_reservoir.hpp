@@ -279,42 +279,19 @@ public:
     std::vector<int> getInstancesByLifetime(double minTime, double maxTime, 
                                            double currentStep) const;
     
-    // === Neighbor Management ===
-    
-    // Update neighbor lists
-    void updateNeighborLists(int instanceId, const std::vector<int>& proteinAtoms,
-                            const std::vector<int>& otherFragments);
-    void updateAllNeighborLists();
-    
-    // Get neighbors
-    const std::vector<int>& getProteinNeighbors(int instanceId) const;
-    const std::vector<int>& getFragmentNeighbors(int instanceId) const;
-    
     // === Energy Management ===
     
-    // Update energy
-    void updateEnergy(int instanceId, double vdw, double elec);
-    void updateTotalEnergy(int instanceId, double total);
-    
-    // Get energy
+    // Get energy (inline implementations at bottom)
     double getTotalEnergy(int instanceId) const;
     double getVdwEnergy(int instanceId) const;
     double getElecEnergy(int instanceId) const;
     
-    // === Movement Tracking ===
+    // NOTE: Additional methods for neighbor management, movement tracking, 
+    // and synchronization are not implemented in this stub version
     
-    // Record move attempt
-    void recordMoveAttempt(int instanceId, bool accepted, double currentStep);
-    
-    // Update position
+    // Minimal methods required by GCMCEngine
     void updatePosition(int instanceId, const Vector3& newPos);
     void updateOrientation(int instanceId, const Quaternion& newOrient);
-    
-    // === Synchronization ===
-    
-    // Sync with ActivePool
-    void syncToPool();
-    void syncFromPool();
     
     // === Statistics ===
     
@@ -332,33 +309,26 @@ public:
     // Memory management
     void compact();
     double getFragmentation() const;
-    size_t getMemoryUsage() const;
     
-    // Validation
-    bool validate() const;
-    bool checkConsistency() const;
-    
-    // Serialization
-    void saveState(const std::string& filename) const;
-    void loadState(const std::string& filename);
+    // NOTE: Additional utility methods (time management, validation, serialization)
+    // are not implemented in this stub version
     
 private:
     // === Private Data Members ===
     
     // Templates
-    std::vector<FragmentTemplate> templates_;
+    std::map<int, FragmentTemplate> templates_;
     std::map<std::string, int> templateNameMap_;
-    std::map<int, int> typeToTemplateMap_;
     
-    // Instances
-    std::vector<FragmentInstance> instances_;
-    std::map<int, std::vector<int>> activeByType_;     // Active instances by template
-    std::set<int> ghostIndices_;                        // Ghost instance indices
-    std::queue<int> freeInstanceSlots_;                 // Reusable instance slots
+    // Instances  
+    std::map<int, FragmentInstance> instances_;
+    std::set<int> activeInstances_;                     // Active instance IDs
+    std::set<int> ghostInstances_;                      // Ghost instance IDs
+    std::map<int, std::set<int>> templateInstances_;    // Instances by template
+    std::map<int, std::queue<int>> ghostQueues_;        // Ghost queues by template
     
     // Active management
-    std::shared_ptr<ActivePool> activePool_;            // Underlying storage
-    bool ownsPool_;                                     // Whether we created the pool
+    std::shared_ptr<ActivePool> pool_;                  // Underlying storage
     
     // Configuration and statistics
     Config config_;
@@ -366,7 +336,8 @@ private:
     
     // Current state
     int nextInstanceId_ = 0;
-    double currentMCStep_ = 0.0;
+    int nextTemplateId_ = 0;
+    double currentStep_ = 0.0;
     
     // === Private Helper Functions ===
     
@@ -401,27 +372,30 @@ private:
 // ============================================================================
 
 inline bool FragmentReservoir::isValidInstanceId(int id) const {
-    return id >= 0 && id < static_cast<int>(instances_.size()) && 
-           instances_[id].instanceId >= 0;
+    auto it = instances_.find(id);
+    return it != instances_.end() && it->second.instanceId >= 0;
 }
 
 inline bool FragmentReservoir::isValidTemplateId(int id) const {
-    return id >= 0 && id < static_cast<int>(templates_.size());
+    return templates_.find(id) != templates_.end();
 }
 
 inline double FragmentReservoir::getTotalEnergy(int instanceId) const {
-    if (!isValidInstanceId(instanceId)) return 0.0;
-    return instances_[instanceId].energy_total;
+    auto it = instances_.find(instanceId);
+    if (it == instances_.end()) return 0.0;
+    return it->second.energy_total;
 }
 
 inline double FragmentReservoir::getVdwEnergy(int instanceId) const {
-    if (!isValidInstanceId(instanceId)) return 0.0;
-    return instances_[instanceId].energy_vdw;
+    auto it = instances_.find(instanceId);
+    if (it == instances_.end()) return 0.0;
+    return it->second.energy_vdw;
 }
 
 inline double FragmentReservoir::getElecEnergy(int instanceId) const {
-    if (!isValidInstanceId(instanceId)) return 0.0;
-    return instances_[instanceId].energy_elec;
+    auto it = instances_.find(instanceId);
+    if (it == instances_.end()) return 0.0;
+    return it->second.energy_elec;
 }
 
 } // namespace movement

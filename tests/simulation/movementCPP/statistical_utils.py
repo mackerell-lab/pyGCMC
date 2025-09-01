@@ -116,3 +116,41 @@ def batch_means_variance(x, batch_size=None):
     
     # Scale by batch_size to estimate per-sample variance
     return float(np.var(batch_means, ddof=1) * batch_size)
+
+
+def bootstrap_confidence_interval(data, statistic_func=np.mean, n_bootstrap=1000, confidence=0.95):
+    """Calculate bootstrap confidence interval for a statistic.
+    
+    Args:
+        data: Input data array
+        statistic_func: Function to compute statistic (default: mean)
+        n_bootstrap: Number of bootstrap samples
+        confidence: Confidence level (default: 0.95)
+    
+    Returns:
+        (lower, upper): Confidence interval bounds
+    """
+    n = len(data)
+    if n < 2:
+        stat = statistic_func(data)
+        return (stat, stat)
+    
+    # Generate bootstrap samples
+    bootstrap_stats = []
+    rng = np.random.RandomState(42)  # Fixed seed for reproducibility
+    for _ in range(n_bootstrap):
+        # Resample with replacement
+        indices = rng.choice(n, size=n, replace=True)
+        sample = [data[i] for i in indices]
+        stat = statistic_func(sample)
+        bootstrap_stats.append(stat)
+    
+    # Calculate percentiles
+    alpha = 1 - confidence
+    lower_percentile = (alpha/2) * 100
+    upper_percentile = (1 - alpha/2) * 100
+    
+    lower = np.percentile(bootstrap_stats, lower_percentile)
+    upper = np.percentile(bootstrap_stats, upper_percentile)
+    
+    return (lower, upper)

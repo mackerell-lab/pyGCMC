@@ -3,6 +3,7 @@
 #include <pybind11/numpy.h>
 #include "platform/cpu/movement/MovementModule.hpp"
 #include "model/montecarlo/MCMain.hpp"  // For MCState
+#include "platform/cpu/movement/reservoir/fragment_reservoir.hpp"  // For FragmentReservoir
 // All necessary types are included via MovementModule.hpp
 
 namespace py = pybind11;
@@ -10,6 +11,12 @@ using namespace pygcmc::platform::cpu::movement;
 
 namespace pygcmc {
 namespace bindings {
+
+// Forward declaration for fragment reservoir bindings
+namespace movement {
+    void init_fragment_reservoir_bindings(py::module& m);
+}
+
 namespace simulation {
 
 void init_movement_bindings(py::module& m) {
@@ -403,6 +410,7 @@ void init_movement_bindings(py::module& m) {
         - Rotation with configurational bias
         - Active pool memory management
         - Numerical stability through log-space calculations
+        - Fragment reservoir management
         
         Example usage:
             import pygcmc
@@ -420,6 +428,9 @@ void init_movement_bindings(py::module& m) {
             if result.accepted:
                 print(f"Insertion accepted with ΔE = {result.energyChange} kJ/mol")
     )pbdoc";
+    
+    // Initialize FragmentReservoir bindings
+    bindings::movement::init_fragment_reservoir_bindings(movement);
 }
 
 } // namespace simulation

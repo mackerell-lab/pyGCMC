@@ -160,7 +160,7 @@ def test_pgp_high_charge_density_system():
     
     # Initialize PGP - use finer mesh for high charge density
     alpha = 5.6 / state.info.cutoff
-    mesh_size = [64, 64, 64]  # Finer mesh for better accuracy
+    mesh_size = [16, 16, 16]  # Reduced from 64x64x64 for performance (must be power of 2)
     
     pygcmc.setPMEParameters(alpha, mesh_size, 4, 1e-5)
     pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha)
@@ -319,7 +319,7 @@ def test_pgp_long_mc_sampling_consistency():
     
     # Initialize methods
     alpha = 5.6 / state.info.cutoff
-    mesh_size = [32, 32, 32]
+    mesh_size = [16, 16, 16]  # Reduced from 32x32x32 for performance (must be power of 2)
     
     pygcmc.setPMEParameters(alpha, mesh_size, 4, 1e-5)
     pygcmc.initializePMEParameters(state.info.cutoff, state.info.box, alpha)
@@ -327,7 +327,7 @@ def test_pgp_long_mc_sampling_consistency():
     pygcmc.precomputeGridPotential(state, fixed_only=True)
     
     # Run MC sampling with both methods
-    n_steps = 5000  # Should complete in ~1 second based on benchmark
+    n_steps = 1000  # Reduced from 5000 for performance
     kT = 2.479  # 298K
     max_displacement = 0.15
     

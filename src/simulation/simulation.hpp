@@ -100,11 +100,23 @@ public:
      * @brief Calculate nonbonded energies for the full system
      */
     static void computeSystemEnergy(model::MCState& state);
+    
+    /**
+     * @brief Calculate and return total system energy (wrapper for Python)
+     * @return Total system energy (vdw + elec)
+     */
+    static double computeSystemEnergyTotal(model::MCState& state);
 
     /**
      * @brief Calculate nonbonded energies for the full system with distance cutoff
      */
     static void computeSystemEnergyCutoff(model::MCState& state);
+    
+    /**
+     * @brief Calculate and return total system energy with cutoff (wrapper for Python)
+     * @return Total system energy (vdw + elec)
+     */
+    static double computeSystemEnergyCutoffTotal(model::MCState& state);
 
     /**
      * @brief Calculate nonbonded energies for the full system with periodic boundary conditions

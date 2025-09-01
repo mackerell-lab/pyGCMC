@@ -34,11 +34,19 @@ void init_basic_bindings(py::module& m) {
     m.def("computeMovementEnergyCutoff", &::pygcmc::simulation::Simulation::computeMovementEnergyCutoff,
           "Calculate nonbonded energies for movement residues only with distance cutoff");
           
-    m.def("computeSystemEnergy", &::pygcmc::simulation::Simulation::computeSystemEnergy,
-          "Calculate nonbonded energies for the full system");
+    // Keep old functions for backward compatibility (they return None)
+    m.def("_computeSystemEnergyVoid", &::pygcmc::simulation::Simulation::computeSystemEnergy,
+          "Calculate nonbonded energies for the full system (internal, updates state)");
           
-    m.def("computeSystemEnergyCutoff", &::pygcmc::simulation::Simulation::computeSystemEnergyCutoff,
-          "Calculate nonbonded energies for the full system with distance cutoff");
+    m.def("_computeSystemEnergyCutoffVoid", &::pygcmc::simulation::Simulation::computeSystemEnergyCutoff,
+          "Calculate nonbonded energies for the full system with distance cutoff (internal, updates state)");
+    
+    // New functions that return total energy  
+    m.def("computeSystemEnergy", &::pygcmc::simulation::Simulation::computeSystemEnergyTotal,
+          "Calculate and return total system energy");
+          
+    m.def("computeSystemEnergyCutoff", &::pygcmc::simulation::Simulation::computeSystemEnergyCutoffTotal,
+          "Calculate and return total system energy with distance cutoff");
           
     m.def("computeSystemEnergyPBC", &::pygcmc::simulation::Simulation::computeSystemEnergyPBC,
           "Calculate nonbonded energies for the full system with periodic boundary conditions");

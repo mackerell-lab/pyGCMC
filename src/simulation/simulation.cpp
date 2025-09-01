@@ -54,6 +54,12 @@ void Simulation::computeSystemEnergy(model::MCState& state) {
     }
 }
 
+double Simulation::computeSystemEnergyTotal(model::MCState& state) {
+    computeSystemEnergy(state);
+    auto [elec, vdw] = getTotalEnergyComponents(state);
+    return elec + vdw;
+}
+
 void Simulation::computeSystemEnergyCutoff(model::MCState& state) {
     if (is_debug_enabled()) {
         log(LogLevel::DEBUG, "Computing cutoff nonbonded energy for all active residues");
@@ -79,6 +85,12 @@ void Simulation::computeSystemEnergyCutoff(model::MCState& state) {
             ", elec=", total_elec, 
             ", total=", (total_vdw + total_elec));
     }
+}
+
+double Simulation::computeSystemEnergyCutoffTotal(model::MCState& state) {
+    computeSystemEnergyCutoff(state);
+    auto [elec, vdw] = getTotalEnergyComponents(state);
+    return elec + vdw;
 }
 
 void Simulation::computeSystemEnergyPBC(model::MCState& state) {

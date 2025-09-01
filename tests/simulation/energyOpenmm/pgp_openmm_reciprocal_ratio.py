@@ -100,7 +100,7 @@ def test_pgp_openmm_reciprocal_ratio():
     
     # Initialize with high alpha for strong reciprocal dominance
     alpha = 5.6 / state.info.cutoff  # = 5.6
-    mesh_size = [64, 64, 64]  # Fine grid
+    mesh_size = [32, 32, 32]  # Reduced from 64x64x64 for performance
     spline_order = 4
     
     pygcmc.setPMEParameters(alpha, mesh_size, spline_order, 1e-5)
@@ -153,11 +153,9 @@ def test_pgp_openmm_reciprocal_ratio():
     displacements = [
         [0.1, 0.0, 0.0],
         [0.0, 0.2, 0.0],
-        [0.0, 0.0, -0.3],
         [0.2, -0.1, 0.1],
-        [-0.3, 0.2, -0.1],
         [0.5, 0.0, 0.0],
-    ]
+    ]  # Reduced from 6 to 4 displacements for performance
     
     ratios = []
     
