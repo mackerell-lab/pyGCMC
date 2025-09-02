@@ -13,6 +13,7 @@ namespace movement {
 
 // Forward declarations
 class ActivePool;
+class CavityManager;
 class EnergyInterface;
 
 /**
@@ -22,7 +23,7 @@ class EnergyInterface;
 class DeletionMove : public MovementInterface {
 public:
     // Constructor
-    DeletionMove(ActivePool* activePool, EnergyInterface* energyCalc);
+    DeletionMove(ActivePool* activePool, CavityManager* cavityManager, EnergyInterface* energyCalc);
     
     // Destructor
     virtual ~DeletionMove();
@@ -75,6 +76,7 @@ protected:
     
 private:
     ActivePool* activePool_;
+    CavityManager* cavityManager_;
     EnergyInterface* energyCalc_;
     Statistics stats_;
     

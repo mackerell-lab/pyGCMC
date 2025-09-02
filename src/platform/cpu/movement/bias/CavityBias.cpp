@@ -187,18 +187,21 @@ void CavityManager::initializeGrid(const Vector3& boxSize) {
     
     // Initialize occupancy grid
     int totalPoints = grid_.nx * grid_.ny * grid_.nz;
+    stats_.totalGridPoints = totalPoints;  // Store total grid points for bias calculation
     grid_.occupied.clear();
     grid_.occupied.resize(totalPoints, false);
 }
 
 void CavityManager::markOccupiedRegions(const MCState& state) {
-    // Process all active residues using per-residue atoms
-    // CRITICAL: Use residue.atoms instead of global state.atoms to avoid indexing issues
+    // Process all active residues using global state.atoms with residue mapping
     for (const MCResidue& residue : state.residues) {
         if (!residue.active) continue;
         
-        // Iterate through atoms in the residue's own atom list
-        for (const MCAtom& atom : residue.atoms) {
+        // Use global state.atoms array with residue's atom range
+        int atomEnd = residue.atomStart + residue.atomCount;
+        for (int atomIdx = residue.atomStart; atomIdx < atomEnd && atomIdx < state.activeAtomCount; ++atomIdx) {
+            const MCAtom& atom = state.atoms[atomIdx];
+            
             // Position is in nm (same as box dimensions)
             Vector3 posNm(atom.x, atom.y, atom.z);
             
@@ -278,11 +281,15 @@ bool CavityManager::checkCavity(const Vector3& position, const MCState& state) c
     double minDist = probeRadius_ * ANGSTROM_TO_NM;  // Convert probe radius to nm
     double minDistSq = minDist * minDist;
     
-    // Use per-residue atoms instead of global atom array
+    // Use same global atom array as markOccupiedRegions for consistency
     for (const MCResidue& residue : state.residues) {
         if (!residue.active) continue;
         
-        for (const MCAtom& atom : residue.atoms) {
+        // Use global state.atoms array with residue's atom range
+        int atomEnd = residue.atomStart + residue.atomCount;
+        for (int atomIdx = residue.atomStart; atomIdx < atomEnd && atomIdx < state.activeAtomCount; ++atomIdx) {
+            const MCAtom& atom = state.atoms[atomIdx];
+            
             // Calculate distance squared with PBC (box in nm)
             Vector3 atomPos(atom.x, atom.y, atom.z);
             double dist = utils::PBCUtils::minimumImageDistance(
@@ -750,6 +757,7 @@ double CavityManager::getCavityScore(const Vector3& position) const {
     }
     
     // Check distance to nearest cavity
+    // Note: position and cavity positions are in nm (from grid_)
     double minDist = 1e10;
     for (const auto& cavity : cavityCache_) {
         double dist = distance(position, cavity);
@@ -757,9 +765,11 @@ double CavityManager::getCavityScore(const Vector3& position) const {
     }
     
     // Return score based on distance
-    if (minDist < gridSpacing_) {
+    // Use grid spacing in nm for consistent units
+    const double h = grid_.spacing.x;  // nm
+    if (minDist < h) {
         return 1.0;  // In or near cavity
-    } else if (minDist < gridSpacing_ * 2) {
+    } else if (minDist < 2.0 * h) {
         return 0.5;  // Close to cavity
     } else {
         return 0.1;  // Far from cavities
@@ -773,12 +783,11 @@ Vector3 CavityManager::selectCavity() const {
         return Vector3(0, 0, 0);
     }
     
-    // Select random cavity from cache
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(0, cavityCache_.size() - 1);
+    // Select random cavity from cache using global seed-controlled RNG
+    // This ensures reproducibility and consistency with the rest of the simulation
+    int index = utils::RandomUtils::uniformInt(0, static_cast<int>(cavityCache_.size()) - 1);
     
-    return cavityCache_[dis(gen)];
+    return cavityCache_[index];
 }
 
 } // namespace movement

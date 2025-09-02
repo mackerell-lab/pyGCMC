@@ -55,6 +55,7 @@ struct MovementParams {
     // System parameters
     double volumeNm3 = 0.0;                // System volume in nm^3 (computed from box)
     double idealGasConcentration = 0.0;    // Ideal gas concentration (computed)
+    double thermalLambdaNm = 1.0;          // Thermal de Broglie wavelength in nm (default 1.0 for compatibility)
     
     // Random number generator seed
     uint64_t seed = 0;                     // RNG seed (0 = use time-based seed)

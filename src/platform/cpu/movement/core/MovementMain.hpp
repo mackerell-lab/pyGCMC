@@ -100,8 +100,7 @@ private:
     // Statistics tracking
     std::map<std::string, Statistics> stats_;
     
-    // Track last inserted residue for paired deletion
-    int lastInsertedResidueIndex_ = -1;
+    // Removed non-standard "last inserted" tracking to ensure uniform deletion selection
     
     // Helper functions
     void initializeComponents();

@@ -71,6 +71,8 @@ void init_movement_bindings(py::module& m) {
                       "Maximum residues in active pool")
         .def_readwrite("seed", &MovementParams::seed,
                       "Random number generator seed (0 = use time-based seed)")
+        .def_readwrite("thermalLambdaNm", &MovementParams::thermalLambdaNm,
+                      "Thermal de Broglie wavelength in nm (default 1.0 for compatibility)")
         .def_readwrite("useMultiInsertionCBMC", &MovementParams::useMultiInsertionCBMC,
                       "Enable multi-insertion CBMC")
         .def_readwrite("maxParallelInsertions", &MovementParams::maxParallelInsertions,

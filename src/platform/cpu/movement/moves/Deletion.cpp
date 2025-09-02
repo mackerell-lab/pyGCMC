@@ -1,5 +1,6 @@
 #include "Deletion.hpp"
 #include "../pool/ActivePool.hpp"
+#include "../bias/CavityBias.hpp"
 #include "../common/MovementUtils.hpp"
 #include "../../../../model/montecarlo/MCMain.hpp"
 #include "../../../../simulation/simulation.hpp"
@@ -11,8 +12,9 @@ namespace movement {
 
 using namespace model::montecarlo;
 
-DeletionMove::DeletionMove(ActivePool* activePool, EnergyInterface* energyCalc)
+DeletionMove::DeletionMove(ActivePool* activePool, CavityManager* cavityManager, EnergyInterface* energyCalc)
     : activePool_(activePool),
+      cavityManager_(cavityManager),
       energyCalc_(energyCalc) {
     resetStatistics();
 }
@@ -98,22 +100,66 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     double deltaE = energyAfter - energyBefore;
     result.energyChange = deltaE;
     
-    // Restore active flag before acceptance decision
-    state.residues[targetResIdx].active = true;
-    
     // Calculate system volume from box dimensions
     MovementParams paramsWithVolume = params;
     if (paramsWithVolume.volumeNm3 <= 0.0) {
         paramsWithVolume.volumeNm3 = state.info.box[0] * state.info.box[1] * state.info.box[2];
     }
     
-    // Calculate deletion acceptance probability (use n_before)
-    double acceptProb = calculateDeletionProbability(
-        n_before,  // n before deletion
-        deltaE,
-        paramsWithVolume
-    );
+    // Calculate cavity bias for deletion if enabled
+    // IMPORTANT: Calculate cavity bias in the post-deletion state (residue inactive)
+    // This represents the reverse insertion probability
+    double cavityBias = 1.0;
+    if (paramsWithVolume.useCavityBias && cavityManager_) {
+        // Ensure residue is inactive for correct cavity calculation
+        // (it's already false from the energy calculation above)
+        // Invalidate cache to ensure fresh grid for the changed state
+        cavityManager_->invalidateCache();
+        // Calculate cavity bias for the reverse insertion in the post-deletion state
+        cavityBias = cavityManager_->calculateCavityBiasFactor(state);
+        // Debug: Print cavity bias
+        // std::cout << "Deletion (post-state): cavityBias = " << cavityBias << std::endl;
+    }
+    
+    // Restore active flag before acceptance decision
+    state.residues[targetResIdx].active = true;
+    
+    // Calculate deletion acceptance probability with cavity bias and lambda (use n_before)
+    double acceptProb;
+    // Use cavity bias if enabled, even if factor is close to 1.0
+    bool useCavityBias = paramsWithVolume.useCavityBias && cavityManager_;
+    
+    if (useCavityBias && paramsWithVolume.thermalLambdaNm != 1.0) {
+        // Use version with both cavity bias and thermal wavelength
+        acceptProb = utils::LogSpaceCalculator::calculateDeletionProbabilityWithCavityAndLambda(
+            n_before,  // n before deletion
+            deltaE,
+            paramsWithVolume.beta,
+            paramsWithVolume.chemicalPotential,
+            cavityBias,
+            paramsWithVolume.volumeNm3,
+            paramsWithVolume.thermalLambdaNm,
+            paramsWithVolume.useLogSpace
+        );
+    } else if (useCavityBias) {
+        acceptProb = utils::LogSpaceCalculator::calculateDeletionProbabilityWithCavity(
+            n_before,  // n before deletion
+            deltaE,
+            paramsWithVolume.beta,
+            paramsWithVolume.chemicalPotential,
+            cavityBias,
+            paramsWithVolume.volumeNm3,
+            paramsWithVolume.useLogSpace
+        );
+    } else {
+        acceptProb = calculateDeletionProbability(
+            n_before,  // n before deletion
+            deltaE,
+            paramsWithVolume
+        );
+    }
     result.acceptanceProbability = acceptProb;
+    result.cavityBiasFactor = cavityBias;  // Store cavity bias factor in result
     
     // Accept or reject
     bool accepted = utils::RandomUtils::metropolisAccept(acceptProb);
@@ -124,25 +170,16 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
         // Mark as inactive again for deletion
         state.residues[targetResIdx].active = false;
         
-        // First, update active pool
-        auto activeIndices = activePool_->getActiveResidueIndices();
-        if (targetResIdx < static_cast<int>(activeIndices.size())) {
-            int poolResIdx = activeIndices[targetResIdx];
-            if (activePool_->deleteResidue(poolResIdx)) {
-                // Sync state with pool
-                activePool_->syncToState(state);
-                stats_.acceptedDeletions++;
-            } else {
-                // Pool deletion failed, restore
-                state.residues[targetResIdx].active = true;
-                result.accepted = false;
-                result.rejectReason = "Active pool deletion failed";
-            }
-        } else {
-            // Direct state manipulation (fallback)
-            state.removeResidue(targetResIdx);
-            stats_.acceptedDeletions++;
+        // Directly manipulate state to ensure correct deletion
+        // This ensures we delete exactly the residue we tested
+        state.removeResidue(targetResIdx);
+        
+        // Sync pool with the updated state
+        if (activePool_) {
+            activePool_->syncFromState(state);
         }
+        
+        stats_.acceptedDeletions++;
     }
     // else: residue is already active from restoration before acceptance decision
     
@@ -188,14 +225,29 @@ double DeletionMove::calculateDeletionProbability(
         volumeNm3 = 1.0;  // Default fallback
     }
     
-    return utils::LogSpaceCalculator::calculateDeletionProbability(
-        n,
-        deltaE,
-        params.beta,
-        params.chemicalPotential,
-        volumeNm3,
-        params.useLogSpace
-    );
+    // Use version with thermal wavelength if specified
+    if (params.thermalLambdaNm != 1.0) {
+        // Use cavity bias = 1.0 for non-cavity case
+        return utils::LogSpaceCalculator::calculateDeletionProbabilityWithCavityAndLambda(
+            n,
+            deltaE,
+            params.beta,
+            params.chemicalPotential,
+            1.0,  // cavity bias = 1.0 when not using cavity
+            volumeNm3,
+            params.thermalLambdaNm,
+            params.useLogSpace
+        );
+    } else {
+        return utils::LogSpaceCalculator::calculateDeletionProbability(
+            n,
+            deltaE,
+            params.beta,
+            params.chemicalPotential,
+            volumeNm3,
+            params.useLogSpace
+        );
+    }
 }
 
 double DeletionMove::calculateResidueEnergy(const MCState& state, int residueIndex) {

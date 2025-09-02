@@ -171,15 +171,9 @@ def test_pgp_openmm_reciprocal_ratio():
     omm_state = context.getState(getEnergy=True)
     omm_initial = omm_state.getPotentialEnergy().value_in_unit(mm.unit.kilojoules_per_mole)
     
-    # Remove fixed contribution for movement energy
-    for i in range(4, 6):
-        state.residues[i].active = False
-    omm_fixed_state = context.getState(getEnergy=True)
-    omm_fixed = omm_fixed_state.getPotentialEnergy().value_in_unit(mm.unit.kilojoules_per_mole)
-    for i in range(4, 6):
-        state.residues[i].active = True
-    
-    omm_movement_initial = omm_initial - omm_fixed
+    # Note: We compare full-system ΔE directly
+    # Setting state.residues[i].active = False does not affect OpenMM Context energies
+    # PGP Complete already handles movement residues correctly
     
     for disp in displacements:
         # Apply displacement
@@ -196,11 +190,10 @@ def test_pgp_openmm_reciprocal_ratio():
         pgp_final = pgp_result_final[0] + pgp_result_final[1]
         pgp_delta = pgp_final - pgp_initial
         
-        # OpenMM final
+        # OpenMM final - compare full system ΔE
         omm_state_final = context.getState(getEnergy=True)
         omm_final = omm_state_final.getPotentialEnergy().value_in_unit(mm.unit.kilojoules_per_mole)
-        omm_movement_final = omm_final - omm_fixed
-        omm_delta = omm_movement_final - omm_movement_initial
+        omm_delta = omm_final - omm_initial
         
         # Calculate ratio
         if abs(omm_delta) > 0.001:

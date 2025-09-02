@@ -15,8 +15,8 @@ from statistical_utils import bootstrap_confidence_interval
 
 def test_volume_scaling(small_state):
     """Test that molecule count scales with volume"""
-    # Set random seed for reproducibility
-    np.random.seed(42)
+    # Use numpy Generator for consistent random source
+    rng = np.random.Generator(np.random.PCG64(seed=42))
     
     # Create states with different volumes
     state_small = small_state  # 2x2x2 = 8 nm³
@@ -60,14 +60,14 @@ def test_volume_scaling(small_state):
     # Equilibration phase
     for _ in range(1000):
         # Small box
-        if np.random.random() < 0.5:
+        if rng.random() < 0.5:
             mover_small.attemptInsertion(state_small)
         else:
             if state_small.activeResidueCount > 0:
                 mover_small.attemptDeletion(state_small)
         
         # Large box
-        if np.random.random() < 0.5:
+        if rng.random() < 0.5:
             mover_large.attemptInsertion(state_large)
         else:
             if state_large.activeResidueCount > 0:
@@ -78,14 +78,14 @@ def test_volume_scaling(small_state):
     large_counts = []
     for i in range(1000):
         # Small box
-        if np.random.random() < 0.5:
+        if rng.random() < 0.5:
             mover_small.attemptInsertion(state_small)
         else:
             if state_small.activeResidueCount > 0:
                 mover_small.attemptDeletion(state_small)
         
         # Large box
-        if np.random.random() < 0.5:
+        if rng.random() < 0.5:
             mover_large.attemptInsertion(state_large)
         else:
             if state_large.activeResidueCount > 0:
@@ -110,9 +110,9 @@ def test_volume_scaling(small_state):
     if avg_small > 0.1 and avg_large > 0.1:
         molecule_ratio = avg_large / avg_small
         
-        # Wide tolerance: 0.2-5x of volume ratio to account for statistical fluctuations
-        # The test mainly checks order of magnitude correctness
-        assert 0.2 * volume_ratio <= molecule_ratio <= 5.0 * volume_ratio, \
+        # Tightened tolerance: 0.5-2x of volume ratio
+        # Still allows for statistical fluctuations but requires better agreement
+        assert 0.5 * volume_ratio <= molecule_ratio <= 2.0 * volume_ratio, \
             f"Average molecule ratio {molecule_ratio:.2f} not proportional to volume ratio {volume_ratio:.1f}"
     else:
         # WARNING: One or both boxes empty on average
@@ -124,6 +124,9 @@ def test_volume_scaling(small_state):
 
 def test_chemical_potential_scaling():
     """Test that chemical potential affects molecule count correctly"""
+    # Use numpy Generator for consistent random source
+    rng = np.random.Generator(np.random.PCG64(seed=123))
+    
     # Create identical states
     state1 = pygcmc.MCState()
     state2 = pygcmc.MCState()
@@ -171,14 +174,14 @@ def test_chemical_potential_scaling():
     # Equilibration phase
     for _ in range(n_equilibration):
         # State 1 with low chemical potential
-        if np.random.random() < 0.5:
+        if rng.random() < 0.5:
             mover_low.attemptInsertion(state1)
         else:
             if state1.activeResidueCount > 0:
                 mover_low.attemptDeletion(state1)
         
         # State 2 with high chemical potential
-        if np.random.random() < 0.5:
+        if rng.random() < 0.5:
             mover_high.attemptInsertion(state2)
         else:
             if state2.activeResidueCount > 0:
@@ -191,14 +194,14 @@ def test_chemical_potential_scaling():
     
     for _ in range(n_production):
         # State 1 with low chemical potential
-        if np.random.random() < 0.5:
+        if rng.random() < 0.5:
             mover_low.attemptInsertion(state1)
         else:
             if state1.activeResidueCount > 0:
                 mover_low.attemptDeletion(state1)
         
         # State 2 with high chemical potential
-        if np.random.random() < 0.5:
+        if rng.random() < 0.5:
             mover_high.attemptInsertion(state2)
         else:
             if state2.activeResidueCount > 0:
@@ -244,8 +247,8 @@ def test_chemical_potential_scaling():
     if avg_count1 > 0 and avg_count2 > 0:
         actual_ratio = avg_count2 / avg_count1
         
-        # Tightened: 0.3-3x of expected ratio for meaningful validation
-        assert 0.3 * expected_ratio <= actual_ratio <= 3.0 * expected_ratio, \
+        # Further tightened: 0.5-2x of expected ratio for better validation
+        assert 0.5 * expected_ratio <= actual_ratio <= 2.0 * expected_ratio, \
             f"Actual ratio {actual_ratio:.2f} not close to expected {expected_ratio:.2f}"
     elif avg_count1 == 0 or avg_count2 == 0:
         # WARNING: One or both states have no molecules on average

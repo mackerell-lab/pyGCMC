@@ -37,7 +37,7 @@ int FragmentReservoir::addTemplate(const FragmentTemplate& tmpl) {
     return id;
 }
 
-int FragmentReservoir::loadTemplate(const std::string& filename, const std::string& name, double chemicalPotential) {
+int FragmentReservoir::loadTemplate(const std::string& /*filename*/, const std::string& name, double chemicalPotential) {
     FragmentTemplate tmpl;
     tmpl.name = name;
     tmpl.chemicalPotential = chemicalPotential;
@@ -103,6 +103,7 @@ int FragmentReservoir::createInstance(int templateId, const Vector3& position, c
     instance.isActive = true;
     instance.isGhost = false;
     instance.insertionTime = currentStep_;
+    instance.residueIndex = -1;  // Initialize residueIndex
     
     instances_[instanceId] = instance;
     activeInstances_.insert(instanceId);
@@ -112,7 +113,7 @@ int FragmentReservoir::createInstance(int templateId, const Vector3& position, c
 }
 
 int FragmentReservoir::createInstanceCBMC(int templateId, const std::vector<Vector3>& trialPositions,
-                                         const std::vector<double>& trialEnergies) {
+                                         const std::vector<double>& /*trialEnergies*/) {
     if (trialPositions.empty()) return -1;
     return createInstance(templateId, trialPositions[0]);
 }
@@ -173,12 +174,12 @@ int FragmentReservoir::deleteMultipleInstances(const std::vector<int>& instanceI
 }
 
 // Ghost management
-int FragmentReservoir::recycleGhost(int templateId) {
+int FragmentReservoir::recycleGhost(int /*templateId*/) {
     // Simplified: just return -1 (no recycling)
     return -1;
 }
 
-int FragmentReservoir::purgeGhosts(int maxToKeep) {
+int FragmentReservoir::purgeGhosts(int /*maxToKeep*/) {
     // Simplified implementation
     return 0;
 }

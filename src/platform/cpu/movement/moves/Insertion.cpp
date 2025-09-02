@@ -86,9 +86,10 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
     newRes.type = moleculeType;
     newRes.active = true;
     
-    // Add atoms to state
+    // Add atoms to state and residue
     for (const auto& atom : atoms) {
         state.addAtom(atom);
+        newRes.atoms.push_back(atom);
     }
     
     // Calculate energy after insertion
@@ -182,7 +183,9 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
     
     if (cavityBiasInsertion_) {
         position = cavityBiasInsertion_->selectInsertionPosition(state, usedCavity);
-        if (usedCavity) {
+        // Calculate cavity bias factor - this should be the same for insertion and deletion
+        // to maintain detailed balance
+        if (params.useCavityBias && cavityManager_) {
             result.cavityBiasFactor = cavityManager_->calculateCavityBiasFactor(state);
         }
     }
@@ -237,6 +240,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         
         for (const auto& atom : trials[selectedIdx]) {
             state.addAtom(atom);
+            newRes.atoms.push_back(atom);
         }
         
         // Calculate system volume from box dimensions
@@ -346,6 +350,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
     
     for (const auto& atom : atoms) {
         state.addAtom(atom);
+        newRes.atoms.push_back(atom);
     }
     
     // Calculate energy after insertion
@@ -367,11 +372,13 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
     }
     
     // Calculate acceptance probability with cavity bias
+    // If cavity bias factor is effectively 1.0, cavity bias is not working - use standard formula
+    bool useCavityBias = params.useCavityBias && (abs(result.cavityBiasFactor - 1.0) > 1e-6);
     double acceptProb = calculateInsertionProbability(
         state.activeResidueCount - 1,
         deltaE,
         paramsWithVolume,
-        result.cavityBiasFactor
+        useCavityBias ? result.cavityBiasFactor : 1.0
     );
     result.acceptanceProbability = acceptProb;
     
@@ -510,15 +517,29 @@ double InsertionMove::calculateInsertionProbability(
         volumeNm3 = 1.0;  // Default fallback
     }
     
-    return utils::LogSpaceCalculator::calculateInsertionProbability(
-        n,
-        deltaE,
-        params.beta,
-        params.chemicalPotential,
-        cavityBiasFactor,
-        volumeNm3,
-        params.useLogSpace
-    );
+    // Use version with thermal wavelength if specified
+    if (params.thermalLambdaNm != 1.0) {
+        return utils::LogSpaceCalculator::calculateInsertionProbabilityWithLambda(
+            n,
+            deltaE,
+            params.beta,
+            params.chemicalPotential,
+            cavityBiasFactor,
+            volumeNm3,
+            params.thermalLambdaNm,
+            params.useLogSpace
+        );
+    } else {
+        return utils::LogSpaceCalculator::calculateInsertionProbability(
+            n,
+            deltaE,
+            params.beta,
+            params.chemicalPotential,
+            cavityBiasFactor,
+            volumeNm3,
+            params.useLogSpace
+        );
+    }
 }
 
 Vector3 InsertionMove::selectInsertionPosition(MCState& state, const MovementParams& params, double& cavityBias) {

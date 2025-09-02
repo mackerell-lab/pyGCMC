@@ -57,9 +57,10 @@ void MovementModule::initializeComponents() {
         utils::RandomUtils::setSeed(params_.seed);
     }
     
-    // Adjust cavity grid spacing to align with independence scale
+    // Adjust cavity grid spacing
     if (cavityManager_ && params_.useCavityBias) {
-        double spacingNm = std::max(params_.cavityGridSpacing, params_.minRegionSeparationNm * 0.5);
+        double spacingNm = params_.cavityGridSpacing;
+        
         // Avoid overly fine grids that cause performance issues
         spacingNm = std::max(spacingNm, 0.2);  // Minimum 0.2 nm
         cavityManager_->setGridSpacing(spacingNm * 10.0);  // Convert to Angstroms
@@ -70,7 +71,7 @@ void MovementModule::initializeComponents() {
         activePool_.get(), cavityManager_.get(), energyCalc_.get());
     
     pImpl_->deletionMove = std::make_unique<DeletionMove>(
-        activePool_.get(), energyCalc_.get());
+        activePool_.get(), cavityManager_.get(), energyCalc_.get());
     
     pImpl_->translationMove = std::make_unique<TranslationMove>(
         activePool_.get(), energyCalc_.get());
@@ -126,10 +127,7 @@ MovementResult MovementModule::attemptInsertion(MCState& state, int moleculeType
     
     updateStatistics("insert", result.accepted, result.energyChange);
     
-    // Remember last accepted insertion for paired deletion
-    if (result.accepted) {
-        lastInsertedResidueIndex_ = result.residueIndex;
-    }
+    // No longer tracking last inserted residue to ensure standard GCMC uniform deletion
     
     return result;
 }
@@ -137,13 +135,9 @@ MovementResult MovementModule::attemptInsertion(MCState& state, int moleculeType
 MovementResult MovementModule::attemptDeletion(MCState& state, int residueIndex) {
     auto startTime = std::chrono::high_resolution_clock::now();
     
-    // Prefer deleting the last accepted insertion when user didn't specify an index
-    if (residueIndex < 0 && lastInsertedResidueIndex_ >= 0 &&
-        lastInsertedResidueIndex_ < state.activeResidueCount &&
-        state.residues[lastInsertedResidueIndex_].active) {
-        residueIndex = lastInsertedResidueIndex_;
-        lastInsertedResidueIndex_ = -1; // consume once
-    }
+    // For standard GCMC, deletion target should be selected uniformly at random
+    // The previous "last inserted" preference was non-standard and biased the ensemble
+    // This is now handled in DeletionMove::performDeletion() with uniform selection
     
     MovementResult result = pImpl_->deletionMove->performDeletion(state, params_, residueIndex);
     

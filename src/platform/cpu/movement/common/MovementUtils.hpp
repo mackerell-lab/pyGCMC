@@ -122,6 +122,8 @@ public:
         
         if (useLogSpace) {
             // Log-space calculation
+            // For cavity-biased insertion: A_ins includes cavityBias factor
+            // This comes from detailed balance with biased proposal
             double logProb = std::log(cavityBias) - std::log(n + 1) + B - beta * deltaE;
             return std::min(1.0, std::exp(logProb));
         } else {
@@ -153,6 +155,100 @@ public:
         } else {
             // Direct calculation
             double prob = n * std::exp(-B - beta * deltaE);
+            return std::min(1.0, prob);
+        }
+    }
+    
+    /**
+     * Calculate deletion acceptance probability with cavity bias
+     * Symmetric to insertion with cavity bias
+     */
+    static double calculateDeletionProbabilityWithCavity(
+        int n,                      // Current number of molecules
+        double deltaE,              // Energy change
+        double beta,                // 1/kT
+        double chemPotential,       // Chemical potential
+        double cavityBias,          // Cavity bias factor (probability of selecting this position)
+        double volumeNm3,           // System volume in nm^3
+        bool useLogSpace = true) {
+        
+        if (n == 0) {
+            return 0.0;
+        }
+        
+        // B factor = β*μ + ln(V)
+        double B = beta * chemPotential + std::log(volumeNm3);
+        
+        if (useLogSpace) {
+            // For cavity-biased deletion: A_del includes 1/cavityBias factor
+            // This is the reverse of insertion to maintain detailed balance
+            double logProb = std::log(static_cast<double>(n)) - std::log(std::max(cavityBias, 1e-30))
+                            - B - beta * deltaE;
+            return std::min(1.0, std::exp(logProb));
+        } else {
+            // Direct calculation
+            double prob = n / std::max(cavityBias, 1e-30) * std::exp(-B - beta * deltaE);
+            return std::min(1.0, prob);
+        }
+    }
+    
+    /**
+     * Calculate insertion acceptance probability with thermal de Broglie wavelength
+     * Includes the Λ³ term for absolute calibration
+     */
+    static double calculateInsertionProbabilityWithLambda(
+        int n,                      // Current number of molecules
+        double deltaE,              // Energy change
+        double beta,                // 1/kT
+        double chemPotential,       // Chemical potential
+        double cavityBias,          // Cavity bias factor
+        double volumeNm3,           // System volume in nm^3
+        double thermalLambdaNm,     // Thermal de Broglie wavelength in nm
+        bool useLogSpace = true) {
+        
+        // B = β*μ + ln(V) - 3*ln(Λ)
+        double lambda = (thermalLambdaNm > 0.0 ? thermalLambdaNm : 1.0);
+        double B = beta * chemPotential + std::log(volumeNm3) - 3.0 * std::log(lambda);
+        
+        if (useLogSpace) {
+            // For cavity-biased insertion with Lambda: A_ins includes cavityBias
+            double logProb = std::log(cavityBias) - std::log(n + 1.0) + B - beta * deltaE;
+            return std::min(1.0, std::exp(logProb));
+        } else {
+            double prob = cavityBias / (n + 1.0) * std::exp(B - beta * deltaE);
+            return std::min(1.0, prob);
+        }
+    }
+    
+    /**
+     * Calculate deletion acceptance probability with cavity bias and thermal wavelength
+     * Symmetric to insertion with both cavity bias and Λ³
+     */
+    static double calculateDeletionProbabilityWithCavityAndLambda(
+        int n,                      // Current number of molecules
+        double deltaE,              // Energy change
+        double beta,                // 1/kT
+        double chemPotential,       // Chemical potential
+        double cavityBias,          // Cavity bias factor (probability of selecting this position)
+        double volumeNm3,           // System volume in nm^3
+        double thermalLambdaNm,     // Thermal de Broglie wavelength in nm
+        bool useLogSpace = true) {
+        
+        if (n == 0) {
+            return 0.0;
+        }
+        
+        // B = β*μ + ln(V) - 3*ln(Λ)
+        double lambda = (thermalLambdaNm > 0.0 ? thermalLambdaNm : 1.0);
+        double B = beta * chemPotential + std::log(volumeNm3) - 3.0 * std::log(lambda);
+        
+        if (useLogSpace) {
+            // For cavity-biased deletion with Lambda: A_del includes 1/cavityBias
+            double logProb = std::log(static_cast<double>(n)) - std::log(std::max(cavityBias, 1e-30))
+                            - B - beta * deltaE;
+            return std::min(1.0, std::exp(logProb));
+        } else {
+            double prob = n / std::max(cavityBias, 1e-30) * std::exp(-B - beta * deltaE);
             return std::min(1.0, prob);
         }
     }
