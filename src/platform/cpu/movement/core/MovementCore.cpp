@@ -124,6 +124,9 @@ void MovementModule::initializeComponents() {
 MovementResult MovementModule::attemptInsertion(MCState& state, int moleculeType) {
     auto startTime = std::chrono::high_resolution_clock::now();
     
+    // TODO: Pass moleculeType to InsertionMove when API is updated
+    (void)moleculeType; // Suppress unused parameter warning
+    
     // Use InsertionMove's attemptInsertion which properly routes to the right method
     MovementResult result = pImpl_->insertionMove->attemptInsertion(state, params_);
     
