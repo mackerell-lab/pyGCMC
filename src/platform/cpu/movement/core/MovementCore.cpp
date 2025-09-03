@@ -124,13 +124,8 @@ void MovementModule::initializeComponents() {
 MovementResult MovementModule::attemptInsertion(MCState& state, int moleculeType) {
     auto startTime = std::chrono::high_resolution_clock::now();
     
-    MovementResult result;
-    
-    if (params_.useCavityBias) {
-        result = pImpl_->insertionMove->performCavityBiasInsertion(state, params_, moleculeType);
-    } else {
-        result = pImpl_->insertionMove->performSimpleInsertion(state, params_, moleculeType);
-    }
+    // Use InsertionMove's attemptInsertion which properly routes to the right method
+    MovementResult result = pImpl_->insertionMove->attemptInsertion(state, params_);
     
     auto endTime = std::chrono::high_resolution_clock::now();
     result.computeTimeMs = std::chrono::duration<double, std::milli>(endTime - startTime).count();

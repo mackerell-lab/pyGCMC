@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <cstdlib>
 
 namespace pygcmc {
 namespace platform {
@@ -223,12 +224,22 @@ double CavityBiasCore::calculateFastApprox(const MCState& state) {
     // Mode A: Simple cavity fraction (skip expensive cluster analysis)
     // For FAST mode, we don't need cavityPoints_ list, just count unoccupied voxels
     int cavityCount = 0;
+    int totalCount = grid_.occupied.size();
     for (size_t i = 0; i < grid_.occupied.size(); ++i) {
         if (!grid_.occupied[i]) cavityCount++;
     }
     
     double voxelVolume = grid_.spacing.x * grid_.spacing.y * grid_.spacing.z;
-    return cavityCount * voxelVolume;  // nm³
+    double cavityVolume = cavityCount * voxelVolume;  // nm³
+    
+    // Debug output (remove in production)
+    if (std::getenv("DEBUG_CAVITY")) {
+        std::cout << "[CavityBiasCore] FastApprox: cavity=" << cavityCount 
+                  << "/" << totalCount << " voxels, volume=" << cavityVolume 
+                  << " nm³, n_particles=" << state.activeResidueCount << std::endl;
+    }
+    
+    return cavityVolume;
 }
 
 double CavityBiasCore::calculateClusterVolume(const MCState& state) {

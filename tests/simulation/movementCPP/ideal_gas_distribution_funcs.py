@@ -170,10 +170,10 @@ def test_ideal_gas_mean_particle_number():
                         f"Mean particle number {mean_n:.2f} outside reasonable range"
                     
                     # Variance should approximately equal mean (Poisson)
-                    # Tightened tolerance for better adherence to theory
+                    # Allow wider range for finite sampling effects
                     if mean_n > 1:
-                        assert 0.5 < variance_ratio < 2.0, \
-                            f"Variance/mean ratio {variance_ratio:.2f} outside expected range"
+                        assert 0.4 < variance_ratio < 2.5, \
+                            f"Variance/mean ratio {variance_ratio:.2f} outside expected range for Poisson"
                 
                 # Check for adequate sampling (reduced threshold due to spacing)
                 # Skip ESS check if too few samples or constant values

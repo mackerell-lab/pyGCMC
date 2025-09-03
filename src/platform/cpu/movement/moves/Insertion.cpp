@@ -1,4 +1,6 @@
 #include "Insertion.hpp"
+#include <iostream>
+#include <cstdlib>
 #include "../pool/ActivePool.hpp"
 #include "../bias/CavityBias.hpp"
 #include "../bias/CavityBiasCore.hpp"  // New cavity bias implementation
@@ -35,6 +37,13 @@ InsertionMove::InsertionMove(ActivePool* activePool,
 InsertionMove::~InsertionMove() = default;
 
 MovementResult InsertionMove::attemptInsertion(MCState& state, const MovementParams& params) {
+    // Debug output
+    if (std::getenv("DEBUG_CAVITY")) {
+        std::cout << "[InsertionMove::attemptInsertion] useCavityBias=" << params.useCavityBias 
+                  << " cavityCore_=" << (cavityCore_ ? "yes" : "null")
+                  << " cavityBiasInsertion_=" << (cavityBiasInsertion_ ? "yes" : "null") << std::endl;
+    }
+    
     // Use new CavityBiasCore if available, otherwise fallback to legacy
     if (params.useCavityBias && cavityCore_) {
         return performCavityBiasInsertion(state, params, moleculeType_);
@@ -141,6 +150,9 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
             stats_.acceptedInsertions++;
             
             // Invalidate cavity cache since system changed
+            if (cavityCore_) {
+                cavityCore_->invalidateCache();
+            }
             if (cavityManager_) {
                 cavityManager_->invalidateCache();
             }
@@ -199,20 +211,28 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         Vcav_before = std::max(1e-30, cavityCore_->calculateCavityVolume(state, mode));
         double cavityRatio = Vcav_before / Vbox;
         
+        // Debug output
+        if (std::getenv("DEBUG_CAVITY")) {
+            std::cout << "[Insertion] Using CavityBiasCore: Vcav=" << Vcav_before 
+                      << " Vbox=" << Vbox << " ratio=" << cavityRatio << std::endl;
+        }
+        
+        // Always record the actual cavity fraction for diagnostics
+        result.cavityBiasFactor = cavityRatio;  // Actual Vcav/Vbox ratio
+        
         // Heuristic: if cavity fraction is very high, fall back to uniform proposal
         // to avoid unnecessary biasing that can reduce acceptance in sparse systems
-        if (cavityRatio > 0.9) {
+        if (cavityRatio > 0.95) {  // Slightly higher threshold
             position = Vector3(
                 utils::RandomUtils::uniform(0.0, state.info.box[0]),
                 utils::RandomUtils::uniform(0.0, state.info.box[1]),
                 utils::RandomUtils::uniform(0.0, state.info.box[2])
             );
             usedCavity = false;
-            result.cavityBiasFactor = 1.0;  // Use uniform acceptance
+            // Note: Even with uniform proposal, cavityBiasFactor records actual cavity fraction
         } else {
             position = cavityCore_->proposeCavityPosition(state, mode);
             usedCavity = true;
-            result.cavityBiasFactor = cavityRatio;  // For diagnostics (0..1]
         }
     } else if (params.useCavityBias && cavityBiasInsertion_) {
         // Fallback to legacy CavityBiasInsertion
@@ -437,6 +457,9 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
             stats_.acceptedInsertions++;
             
             // Invalidate cavity cache since system changed
+            if (cavityCore_) {
+                cavityCore_->invalidateCache();
+            }
             if (cavityManager_) {
                 cavityManager_->invalidateCache();
             }
