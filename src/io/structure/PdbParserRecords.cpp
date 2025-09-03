@@ -2,6 +2,7 @@
 
 #include "PdbParserRecords.hpp"
 #include "PdbParserStructureRecords.hpp"
+#include "../common/IOConfig.hpp"
 #include <sstream>
 #include <stdexcept>
 #include <iostream>
@@ -153,7 +154,7 @@ bool PdbParserRecords::parseAtomRecord(const std::string& line,
         return true;
         
     } catch (const std::exception& e) {
-        std::cerr << "Error parsing ATOM record: " << e.what() << std::endl;
+        IOConfig::printError(std::string("Error parsing ATOM record: ") + e.what());
         return false;
     }
 }

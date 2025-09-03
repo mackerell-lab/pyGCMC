@@ -2,6 +2,7 @@
 
 #include "PdbParserMain.hpp"
 #include "PdbParserStructureRecords.hpp"
+#include "../common/IOConfig.hpp"
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -30,7 +31,7 @@ model::Structure PdbParserMain::parse_string(const std::string& pdbStr) {
 bool PdbParserMain::parse_to_structure(const std::string& filename, model::Structure& structure) {
     std::ifstream file(filename);
     if (!file.is_open()) {
-        std::cerr << "Error: Could not open file " << filename << std::endl;
+        IOConfig::printError("Error: Could not open file " + filename);
         return false;
     }
     

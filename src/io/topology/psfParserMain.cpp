@@ -10,6 +10,7 @@
 #include <array>
 #include <algorithm>
 #include <iostream>
+#include "../common/IOConfig.hpp"
 #include <unordered_map>
 #include <set>
 #include <filesystem>
@@ -34,7 +35,7 @@ model::Topology PSFParser::parse_string(const std::string& psf_str) {
 bool readFileToLines(const std::string& filename, std::vector<std::string>& lines) {
     std::ifstream file(filename);
     if (!file.is_open()) {
-        std::cerr << "Failed to open file: " << filename << std::endl;
+        IOConfig::printError("Failed to open file: " + filename);
         return false;
     }
 
@@ -127,7 +128,7 @@ bool PSFParser::parse_to_topology(const std::string& filename, model::Topology& 
     // Now process sections in the required order
     // NATOM must be first
     if (!sections.count("NATOM")) {
-        std::cerr << "Missing required NATOM section" << std::endl;
+        IOConfig::printError("Missing required NATOM section");
         return false;
     }
 
