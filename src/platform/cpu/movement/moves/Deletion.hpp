@@ -14,6 +14,7 @@ namespace movement {
 // Forward declarations
 class ActivePool;
 class CavityManager;
+class CavityBiasCore;  // New cavity bias implementation
 class EnergyInterface;
 
 /**
@@ -23,7 +24,8 @@ class EnergyInterface;
 class DeletionMove : public MovementInterface {
 public:
     // Constructor
-    DeletionMove(ActivePool* activePool, CavityManager* cavityManager, EnergyInterface* energyCalc);
+    DeletionMove(ActivePool* activePool, CavityManager* cavityManager, 
+                 EnergyInterface* energyCalc, CavityBiasCore* cavityCore = nullptr);
     
     // Destructor
     virtual ~DeletionMove();
@@ -77,6 +79,7 @@ protected:
 private:
     ActivePool* activePool_;
     CavityManager* cavityManager_;
+    CavityBiasCore* cavityCore_;  // New cavity bias implementation
     EnergyInterface* energyCalc_;
     Statistics stats_;
     

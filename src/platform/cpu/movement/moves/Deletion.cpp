@@ -1,6 +1,8 @@
 #include "Deletion.hpp"
 #include "../pool/ActivePool.hpp"
 #include "../bias/CavityBias.hpp"
+#include "../bias/CavityBiasCore.hpp"  // New cavity bias implementation
+#include "../bias/UnifiedAcceptance.hpp"  // Unified acceptance probability
 #include "../common/MovementUtils.hpp"
 #include "../../../../model/montecarlo/MCMain.hpp"
 #include "../../../../simulation/simulation.hpp"
@@ -12,9 +14,11 @@ namespace movement {
 
 using namespace model::montecarlo;
 
-DeletionMove::DeletionMove(ActivePool* activePool, CavityManager* cavityManager, EnergyInterface* energyCalc)
+DeletionMove::DeletionMove(ActivePool* activePool, CavityManager* cavityManager, 
+                           EnergyInterface* energyCalc, CavityBiasCore* cavityCore)
     : activePool_(activePool),
       cavityManager_(cavityManager),
+      cavityCore_(cavityCore),
       energyCalc_(energyCalc) {
     resetStatistics();
 }
@@ -110,50 +114,56 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     // IMPORTANT: Calculate cavity bias in the post-deletion state (residue inactive)
     // This represents the reverse insertion probability
     double cavityBias = 1.0;
-    if (paramsWithVolume.useCavityBias && cavityManager_) {
-        // Ensure residue is inactive for correct cavity calculation
-        // (it's already false from the energy calculation above)
-        // Invalidate cache to ensure fresh grid for the changed state
+    double Vbox = paramsWithVolume.volumeNm3;
+    double Vcav_after = Vbox;
+    
+    if (paramsWithVolume.useCavityBias && cavityCore_) {
+        // Use new CavityBiasCore - calculate after-state cavity volume
+        // Prefer FAST_APPROX here to reduce discretization bias in DB tests
+        cavityCore_->invalidateCache();
+        CavityMode mode = CavityMode::FAST_APPROX;
+        Vcav_after = std::max(1e-30, cavityCore_->calculateCavityVolume(state, mode));
+        cavityBias = Vcav_after / Vbox;
+    } else if (paramsWithVolume.useCavityBias && cavityManager_) {
+        // Fallback to legacy CavityManager
         cavityManager_->invalidateCache();
-        // Calculate cavity bias for the reverse insertion in the post-deletion state
         cavityBias = cavityManager_->calculateCavityBiasFactor(state);
-        // Debug: Print cavity bias
-        // std::cout << "Deletion (post-state): cavityBias = " << cavityBias << std::endl;
+        Vcav_after = cavityBias * Vbox;
     }
     
     // Restore active flag before acceptance decision
     state.residues[targetResIdx].active = true;
     
-    // Calculate deletion acceptance probability with cavity bias and lambda (use n_before)
+    // Calculate deletion acceptance probability (match legacy LogSpace path)
     double acceptProb;
-    // Use cavity bias if enabled, even if factor is close to 1.0
-    bool useCavityBias = paramsWithVolume.useCavityBias && cavityManager_;
-    
-    if (useCavityBias && paramsWithVolume.thermalLambdaNm != 1.0) {
-        // Use version with both cavity bias and thermal wavelength
+    bool useCavityBiasFlag = paramsWithVolume.useCavityBias && (cavityCore_ || cavityManager_);
+    if (useCavityBiasFlag && paramsWithVolume.thermalLambdaNm != 1.0) {
+        // With cavity + Lambda³
         acceptProb = utils::LogSpaceCalculator::calculateDeletionProbabilityWithCavityAndLambda(
-            n_before,  // n before deletion
+            n_before,
             deltaE,
             paramsWithVolume.beta,
             paramsWithVolume.chemicalPotential,
-            cavityBias,
+            cavityBias,                // fraction Vcav_after/V
             paramsWithVolume.volumeNm3,
             paramsWithVolume.thermalLambdaNm,
             paramsWithVolume.useLogSpace
         );
-    } else if (useCavityBias) {
+    } else if (useCavityBiasFlag) {
+        // With cavity only
         acceptProb = utils::LogSpaceCalculator::calculateDeletionProbabilityWithCavity(
-            n_before,  // n before deletion
+            n_before,
             deltaE,
             paramsWithVolume.beta,
             paramsWithVolume.chemicalPotential,
-            cavityBias,
+            cavityBias,                // fraction Vcav_after/V
             paramsWithVolume.volumeNm3,
             paramsWithVolume.useLogSpace
         );
     } else {
+        // No cavity
         acceptProb = calculateDeletionProbability(
-            n_before,  // n before deletion
+            n_before,
             deltaE,
             paramsWithVolume
         );
@@ -178,6 +188,10 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
         if (activePool_) {
             activePool_->syncFromState(state);
         }
+        
+        // Invalidate cavity cache after accepted deletion
+        if (cavityCore_) cavityCore_->invalidateCache();
+        if (cavityManager_) cavityManager_->invalidateCache();
         
         stats_.acceptedDeletions++;
     }

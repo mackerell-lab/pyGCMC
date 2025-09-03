@@ -25,6 +25,7 @@ namespace movement {
 // Forward declarations
 class ActivePool;
 class CavityManager;
+class CavityBiasCore;  // New cavity bias implementation
 class ConfigBiasManager;
 class EnergyInterface;
 
@@ -61,6 +62,8 @@ public:
     // Cavity analysis
     std::vector<Vector3> findCavities(const model::montecarlo::MCState& state);
     double calculateCavityVolume(const model::montecarlo::MCState& state);
+    CavityBiasCore* getCavityCore() { return cavityCore_.get(); }
+    const CavityBiasCore* getCavityCore() const { return cavityCore_.get(); }
     
     // Parameter management
     void setParams(const MovementParams& params);
@@ -88,7 +91,8 @@ private:
     // Core components
     MovementParams params_;
     std::unique_ptr<ActivePool> activePool_;
-    std::unique_ptr<CavityManager> cavityManager_;
+    std::unique_ptr<CavityManager> cavityManager_;  // Legacy, to be replaced
+    std::unique_ptr<CavityBiasCore> cavityCore_;     // New cavity bias implementation
     std::unique_ptr<ConfigBiasManager> configBiasManager_;
     std::unique_ptr<EnergyInterface> energyCalc_;
     

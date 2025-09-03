@@ -28,6 +28,7 @@ using model::montecarlo::MCAtom;
 class ActivePool;
 class CavityManager;
 class CavityBiasInsertion;
+class CavityBiasCore;  // New cavity bias implementation
 class EnergyInterface;
 
 /**
@@ -39,7 +40,8 @@ public:
     // Constructor
     InsertionMove(ActivePool* activePool, 
                   CavityManager* cavityManager,
-                  EnergyInterface* energyCalc);
+                  EnergyInterface* energyCalc,
+                  CavityBiasCore* cavityCore = nullptr);
     
     // Destructor
     virtual ~InsertionMove();
@@ -130,6 +132,7 @@ protected:
 private:
     ActivePool* activePool_;
     CavityManager* cavityManager_;
+    CavityBiasCore* cavityCore_;  // New cavity bias implementation
     EnergyInterface* energyCalc_;
     std::unique_ptr<CavityBiasInsertion> cavityBiasInsertion_;
     

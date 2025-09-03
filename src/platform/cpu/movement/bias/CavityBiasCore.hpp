@@ -70,6 +70,7 @@ private:
     // Helper functions
     std::vector<std::vector<int>> findClusters();
     double distance(const Vector3& a, const Vector3& b) const;
+    bool isIdealGas(const MCState& state) const;
     
     // Member variables
     double gridSpacing_;  // nm

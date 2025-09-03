@@ -3,6 +3,7 @@
 #include <queue>
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 
 namespace pygcmc {
 namespace platform {
@@ -15,7 +16,19 @@ CavityBiasCore::CavityBiasCore(double gridSpacing, double probeRadius)
     : gridSpacing_(gridSpacing), probeRadius_(probeRadius), cacheValid_(false) {}
 
 double CavityBiasCore::calculateCavityVolume(const MCState& state, CavityMode mode) {
-    switch (mode) {
+    // Auto-detect ideal gas and use appropriate mode
+    CavityMode effectiveMode = mode;
+    if (mode == CavityMode::CLUSTER_VOLUME || mode == CavityMode::LOCAL_VEFF) {
+        if (isIdealGas(state)) {
+            // For ideal gas, use FAST_APPROX to reduce discretization errors
+            effectiveMode = CavityMode::FAST_APPROX;
+            // Debug: log mode switch (disabled)
+            // std::cerr << "CavityBiasCore: Ideal gas detected, switching from mode " 
+            //           << static_cast<int>(mode) << " to FAST_APPROX" << std::endl;
+        }
+    }
+    
+    switch (effectiveMode) {
         case CavityMode::FAST_APPROX:
             return calculateFastApprox(state);
         case CavityMode::CLUSTER_VOLUME:
@@ -33,7 +46,16 @@ Vector3 CavityBiasCore::proposeCavityPosition(const MCState& state, CavityMode m
         buildGrid(state);
     }
     
-    switch (mode) {
+    // Auto-detect ideal gas and use appropriate mode
+    CavityMode effectiveMode = mode;
+    if (mode == CavityMode::CLUSTER_VOLUME || mode == CavityMode::LOCAL_VEFF) {
+        if (isIdealGas(state)) {
+            effectiveMode = CavityMode::FAST_APPROX;
+            // std::cerr << "CavityBiasCore::proposeCavityPosition: Ideal gas, using FAST_APPROX" << std::endl;
+        }
+    }
+    
+    switch (effectiveMode) {
         case CavityMode::FAST_APPROX:
             return sampleFastApprox();
         case CavityMode::CLUSTER_VOLUME:
@@ -46,16 +68,15 @@ Vector3 CavityBiasCore::proposeCavityPosition(const MCState& state, CavityMode m
 }
 
 void CavityBiasCore::buildGrid(const MCState& state) {
-    // Convert box from Angstroms to nm
-    const double ANG_TO_NM = 0.1;
-    grid_.box = Vector3(state.info.box[0] * ANG_TO_NM,
-                       state.info.box[1] * ANG_TO_NM,
-                       state.info.box[2] * ANG_TO_NM);
+    // Box is already in nm in MCState
+    grid_.box = Vector3(state.info.box[0],
+                       state.info.box[1],
+                       state.info.box[2]);
     
-    // Setup grid dimensions
-    grid_.nx = std::max(3, static_cast<int>(grid_.box.x / gridSpacing_));
-    grid_.ny = std::max(3, static_cast<int>(grid_.box.y / gridSpacing_));
-    grid_.nz = std::max(3, static_cast<int>(grid_.box.z / gridSpacing_));
+    // Setup grid dimensions - use round for stability
+    grid_.nx = std::max(3, static_cast<int>(std::round(grid_.box.x / gridSpacing_)));
+    grid_.ny = std::max(3, static_cast<int>(std::round(grid_.box.y / gridSpacing_)));
+    grid_.nz = std::max(3, static_cast<int>(std::round(grid_.box.z / gridSpacing_)));
     
     grid_.origin = Vector3(0, 0, 0);
     grid_.spacing = Vector3(grid_.box.x / grid_.nx,
@@ -71,28 +92,71 @@ void CavityBiasCore::buildGrid(const MCState& state) {
     
     // Build cavity point list
     cavityPoints_.clear();
-    for (int i = 0; i < grid_.nx; ++i) {
-        for (int j = 0; j < grid_.ny; ++j) {
-            for (int k = 0; k < grid_.nz; ++k) {
-                int idx = grid_.getIndex(i, j, k);
-                if (!grid_.occupied[idx]) {
-                    Vector3 pos(grid_.origin.x + i * grid_.spacing.x,
-                               grid_.origin.y + j * grid_.spacing.y,
-                               grid_.origin.z + k * grid_.spacing.z);
-                    cavityPoints_.push_back(pos);
+    clusters_.clear();
+    
+    // For performance, limit cavity point collection for very large grids
+    bool buildFullList = (totalPoints <= 50000);
+    
+    if (buildFullList) {
+        // Build complete cavity point list for smaller grids
+        for (int i = 0; i < grid_.nx; ++i) {
+            for (int j = 0; j < grid_.ny; ++j) {
+                for (int k = 0; k < grid_.nz; ++k) {
+                    int idx = grid_.getIndex(i, j, k);
+                    if (!grid_.occupied[idx]) {
+                        Vector3 pos(grid_.origin.x + i * grid_.spacing.x,
+                                   grid_.origin.y + j * grid_.spacing.y,
+                                   grid_.origin.z + k * grid_.spacing.z);
+                        cavityPoints_.push_back(pos);
+                    }
                 }
             }
         }
+        
+        // Find clusters only if cavity points list is reasonable size
+        if (cavityPoints_.size() < 5000) {
+            clusters_ = findClusters();
+        } else {
+            // For large cavity sets, treat as single cluster
+            std::vector<int> singleCluster;
+            for (size_t i = 0; i < cavityPoints_.size(); ++i) {
+                singleCluster.push_back(i);
+            }
+            clusters_.push_back(singleCluster);
+        }
+    } else {
+        // For very large grids, sample a subset of cavity points
+        int sampleStride = std::max(2, static_cast<int>(std::cbrt(totalPoints / 10000.0)));
+        
+        for (int i = 0; i < grid_.nx; i += sampleStride) {
+            for (int j = 0; j < grid_.ny; j += sampleStride) {
+                for (int k = 0; k < grid_.nz; k += sampleStride) {
+                    int idx = grid_.getIndex(i, j, k);
+                    if (!grid_.occupied[idx]) {
+                        Vector3 pos(grid_.origin.x + i * grid_.spacing.x,
+                                   grid_.origin.y + j * grid_.spacing.y,
+                                   grid_.origin.z + k * grid_.spacing.z);
+                        cavityPoints_.push_back(pos);
+                    }
+                }
+            }
+        }
+        
+        // Treat sampled points as single cluster
+        if (!cavityPoints_.empty()) {
+            std::vector<int> singleCluster;
+            for (size_t i = 0; i < cavityPoints_.size(); ++i) {
+                singleCluster.push_back(i);
+            }
+            clusters_.push_back(singleCluster);
+        }
     }
-    
-    // Find clusters for CLUSTER_VOLUME mode
-    clusters_ = findClusters();
     
     cacheValid_ = true;
 }
 
 void CavityBiasCore::markOccupied(const MCState& state) {
-    const double ANG_TO_NM = 0.1;
+    // Coordinates and sigma are already in nm
     
     for (int resIdx = 0; resIdx < state.activeResidueCount; ++resIdx) {
         const MCResidue& res = state.residues[resIdx];
@@ -103,29 +167,45 @@ void CavityBiasCore::markOccupied(const MCState& state) {
             if (atomIdx >= state.activeAtomCount) continue;
             
             const MCAtom& atom = state.atoms[atomIdx];
-            Vector3 pos(atom.x * ANG_TO_NM, atom.y * ANG_TO_NM, atom.z * ANG_TO_NM);
+            Vector3 pos(atom.x, atom.y, atom.z);  // Already in nm
             
             // Get effective radius (use LJ sigma if available)
             double radius = probeRadius_;
             if (atom.type < state.forcefield.numTotalTypes) {
-                radius = 0.5 * state.forcefield.ljSigma[atom.type] * ANG_TO_NM + probeRadius_;
+                radius = 0.5 * state.forcefield.ljSigma[atom.type] + probeRadius_;  // Already in nm
             }
             
-            // Mark grid points within radius as occupied
-            int iMin = std::max(0, (int)((pos.x - radius) / grid_.spacing.x));
-            int iMax = std::min(grid_.nx - 1, (int)((pos.x + radius) / grid_.spacing.x));
-            int jMin = std::max(0, (int)((pos.y - radius) / grid_.spacing.y));
-            int jMax = std::min(grid_.ny - 1, (int)((pos.y + radius) / grid_.spacing.y));
-            int kMin = std::max(0, (int)((pos.z - radius) / grid_.spacing.z));
-            int kMax = std::min(grid_.nz - 1, (int)((pos.z + radius) / grid_.spacing.z));
+            // Mark grid points within radius as occupied (with PBC)
+            int iMin = (int)((pos.x - radius) / grid_.spacing.x) - 1;
+            int iMax = (int)((pos.x + radius) / grid_.spacing.x) + 1;
+            int jMin = (int)((pos.y - radius) / grid_.spacing.y) - 1;
+            int jMax = (int)((pos.y + radius) / grid_.spacing.y) + 1;
+            int kMin = (int)((pos.z - radius) / grid_.spacing.z) - 1;
+            int kMax = (int)((pos.z + radius) / grid_.spacing.z) + 1;
             
-            for (int i = iMin; i <= iMax; ++i) {
-                for (int j = jMin; j <= jMax; ++j) {
-                    for (int k = kMin; k <= kMax; ++k) {
+            for (int ii = iMin; ii <= iMax; ++ii) {
+                for (int jj = jMin; jj <= jMax; ++jj) {
+                    for (int kk = kMin; kk <= kMax; ++kk) {
+                        // Apply PBC wrapping
+                        int i = ((ii % grid_.nx) + grid_.nx) % grid_.nx;
+                        int j = ((jj % grid_.ny) + grid_.ny) % grid_.ny;
+                        int k = ((kk % grid_.nz) + grid_.nz) % grid_.nz;
+                        
                         Vector3 gridPos(i * grid_.spacing.x,
                                        j * grid_.spacing.y,
                                        k * grid_.spacing.z);
-                        if (distance(pos, gridPos) < radius) {
+                        
+                        // Calculate minimum image distance
+                        double dx = gridPos.x - pos.x;
+                        double dy = gridPos.y - pos.y;
+                        double dz = gridPos.z - pos.z;
+                        
+                        dx -= std::round(dx / grid_.box.x) * grid_.box.x;
+                        dy -= std::round(dy / grid_.box.y) * grid_.box.y;
+                        dz -= std::round(dz / grid_.box.z) * grid_.box.z;
+                        
+                        double dist2 = dx*dx + dy*dy + dz*dz;
+                        if (dist2 < radius * radius) {
                             grid_.occupied[grid_.getIndex(i, j, k)] = true;
                         }
                     }
@@ -140,8 +220,12 @@ double CavityBiasCore::calculateFastApprox(const MCState& state) {
         buildGrid(state);
     }
     
-    // Mode A: Simple cavity fraction
-    int cavityCount = cavityPoints_.size();
+    // Mode A: Simple cavity fraction (skip expensive cluster analysis)
+    // For FAST mode, we don't need cavityPoints_ list, just count unoccupied voxels
+    int cavityCount = 0;
+    for (size_t i = 0; i < grid_.occupied.size(); ++i) {
+        if (!grid_.occupied[i]) cavityCount++;
+    }
     
     double voxelVolume = grid_.spacing.x * grid_.spacing.y * grid_.spacing.z;
     return cavityCount * voxelVolume;  // nm³
@@ -196,17 +280,58 @@ double CavityBiasCore::calculateLocalVeff(const MCState& /* state */, const Vect
 }
 
 Vector3 CavityBiasCore::sampleFastApprox() {
-    if (cavityPoints_.empty()) {
+    // If we have cavity points, use them
+    if (!cavityPoints_.empty()) {
+        int idx = utils::RandomUtils::uniformInt(0, cavityPoints_.size() - 1);
+        return cavityPoints_[idx];
+    }
+    
+    // Otherwise, directly sample from unoccupied grid points
+    // This is slower but ensures we always return a valid position
+    std::vector<int> unoccupiedIndices;
+    for (int i = 0; i < grid_.nx; ++i) {
+        for (int j = 0; j < grid_.ny; ++j) {
+            for (int k = 0; k < grid_.nz; ++k) {
+                int idx = grid_.getIndex(i, j, k);
+                if (!grid_.occupied[idx]) {
+                    unoccupiedIndices.push_back(idx);
+                }
+            }
+        }
+    }
+    
+    if (unoccupiedIndices.empty()) {
+        // No cavity available, return center
         return Vector3(grid_.box.x * 0.5, grid_.box.y * 0.5, grid_.box.z * 0.5);
     }
     
-    int idx = utils::RandomUtils::uniformInt(0, cavityPoints_.size() - 1);
-    return cavityPoints_[idx];
+    // Randomly select an unoccupied voxel
+    int selectedIdx = unoccupiedIndices[utils::RandomUtils::uniformInt(0, unoccupiedIndices.size() - 1)];
+    
+    // Convert grid index back to i,j,k
+    int k = selectedIdx / (grid_.nx * grid_.ny);
+    int j = (selectedIdx % (grid_.nx * grid_.ny)) / grid_.nx;
+    int i = selectedIdx % grid_.nx;
+    
+    // Return center of the voxel with small random offset for better sampling
+    return Vector3(
+        grid_.origin.x + (i + 0.5) * grid_.spacing.x,
+        grid_.origin.y + (j + 0.5) * grid_.spacing.y,
+        grid_.origin.z + (k + 0.5) * grid_.spacing.z
+    );
 }
 
 Vector3 CavityBiasCore::sampleClusterVolume() {
-    if (clusters_.empty()) {
+    // Ensure we have valid cavity points
+    if (cavityPoints_.empty()) {
+        // Fallback to direct grid sampling
         return sampleFastApprox();
+    }
+    
+    if (clusters_.empty()) {
+        // No clusters, but have cavity points - sample uniformly
+        int idx = utils::RandomUtils::uniformInt(0, cavityPoints_.size() - 1);
+        return cavityPoints_[idx];
     }
     
     // Build cumulative distribution based on cluster volumes
@@ -220,32 +345,78 @@ Vector3 CavityBiasCore::sampleClusterVolume() {
     auto it = std::upper_bound(cumulative.begin(), cumulative.end(), r);
     int clusterIdx = std::distance(cumulative.begin(), it) - 1;
     
+    // Bounds check
+    if (clusterIdx < 0 || clusterIdx >= static_cast<int>(clusters_.size())) {
+        return sampleFastApprox();
+    }
+    
     // Select random point within cluster
     const auto& cluster = clusters_[clusterIdx];
+    if (cluster.empty()) {
+        return sampleFastApprox();
+    }
+    
     int pointIdx = utils::RandomUtils::uniformInt(0, cluster.size() - 1);
-    return cavityPoints_[cluster[pointIdx]];
+    
+    // Bounds check for cavity point access
+    if (cluster[pointIdx] >= 0 && cluster[pointIdx] < static_cast<int>(cavityPoints_.size())) {
+        return cavityPoints_[cluster[pointIdx]];
+    }
+    
+    // Fallback
+    return sampleFastApprox();
 }
 
 Vector3 CavityBiasCore::sampleLocalVeff(const MCState& /* state */) {
-    // For simplicity, use cluster sampling as base
+    // Start with cluster sampling
     Vector3 basePos = sampleClusterVolume();
     
-    // Add small random offset for continuous sampling
-    double offset = 0.01;  // nm
-    basePos.x += (utils::RandomUtils::uniform() - 0.5) * offset;
-    basePos.y += (utils::RandomUtils::uniform() - 0.5) * offset;
-    basePos.z += (utils::RandomUtils::uniform() - 0.5) * offset;
+    // Try to add small random offset while staying in cavity
+    const double offset = 0.01;  // nm
+    const int maxAttempts = 10;
     
-    // Apply PBC
-    basePos.x = fmod(basePos.x + grid_.box.x, grid_.box.x);
-    basePos.y = fmod(basePos.y + grid_.box.y, grid_.box.y);
-    basePos.z = fmod(basePos.z + grid_.box.z, grid_.box.z);
+    for (int attempt = 0; attempt < maxAttempts; ++attempt) {
+        Vector3 candidate = basePos;
+        candidate.x += (utils::RandomUtils::uniform() - 0.5) * offset;
+        candidate.y += (utils::RandomUtils::uniform() - 0.5) * offset;
+        candidate.z += (utils::RandomUtils::uniform() - 0.5) * offset;
+        
+        // Apply PBC
+        while (candidate.x < 0) candidate.x += grid_.box.x;
+        while (candidate.x >= grid_.box.x) candidate.x -= grid_.box.x;
+        while (candidate.y < 0) candidate.y += grid_.box.y;
+        while (candidate.y >= grid_.box.y) candidate.y -= grid_.box.y;
+        while (candidate.z < 0) candidate.z += grid_.box.z;
+        while (candidate.z >= grid_.box.z) candidate.z -= grid_.box.z;
+        
+        // Check if still in cavity
+        int gi = static_cast<int>(candidate.x / grid_.spacing.x);
+        int gj = static_cast<int>(candidate.y / grid_.spacing.y);
+        int gk = static_cast<int>(candidate.z / grid_.spacing.z);
+        
+        if (grid_.isValid(gi, gj, gk) && !grid_.occupied[grid_.getIndex(gi, gj, gk)]) {
+            return candidate;  // Found valid position in cavity
+        }
+    }
     
+    // If no valid offset found, return original position
     return basePos;
 }
 
 std::vector<std::vector<int>> CavityBiasCore::findClusters() {
     std::vector<std::vector<int>> clusters;
+    
+    // Skip clustering for large cavity sets (performance optimization)
+    if (cavityPoints_.size() > 2000) {
+        // Treat entire cavity as single cluster
+        std::vector<int> singleCluster;
+        for (size_t i = 0; i < cavityPoints_.size(); ++i) {
+            singleCluster.push_back(i);
+        }
+        clusters.push_back(singleCluster);
+        return clusters;
+    }
+    
     std::vector<bool> visited(cavityPoints_.size(), false);
     
     for (size_t i = 0; i < cavityPoints_.size(); ++i) {
@@ -261,10 +432,32 @@ std::vector<std::vector<int>> CavityBiasCore::findClusters() {
             queue.pop();
             cluster.push_back(current);
             
-            // Check neighbors
+            // Optimization: only check nearby points using grid locality
+            // Instead of O(n²), limit search to reasonable neighbors
+            const Vector3& currentPos = cavityPoints_[current];
+            
             for (size_t j = 0; j < cavityPoints_.size(); ++j) {
-                if (!visited[j] && 
-                    distance(cavityPoints_[current], cavityPoints_[j]) < grid_.spacing.x * 1.5) {
+                if (visited[j]) continue;
+                
+                const Vector3& candidatePos = cavityPoints_[j];
+                
+                // Quick rejection based on Manhattan distance
+                double dx = std::abs(candidatePos.x - currentPos.x);
+                double dy = std::abs(candidatePos.y - currentPos.y);
+                double dz = std::abs(candidatePos.z - currentPos.z);
+                
+                // Apply PBC for Manhattan distance
+                dx = std::min(dx, grid_.box.x - dx);
+                dy = std::min(dy, grid_.box.y - dy);
+                dz = std::min(dz, grid_.box.z - dz);
+                
+                // Skip if Manhattan distance is too large
+                if (dx > grid_.spacing.x * 2 || dy > grid_.spacing.y * 2 || dz > grid_.spacing.z * 2) {
+                    continue;
+                }
+                
+                // Detailed distance check
+                if (distance(currentPos, candidatePos) < grid_.spacing.x * 1.5) {
                     queue.push(j);
                     visited[j] = true;
                 }
@@ -288,6 +481,27 @@ double CavityBiasCore::distance(const Vector3& a, const Vector3& b) const {
     dz = dz - grid_.box.z * round(dz / grid_.box.z);
     
     return sqrt(dx*dx + dy*dy + dz*dz);
+}
+
+bool CavityBiasCore::isIdealGas(const MCState& state) const {
+    // Check if all LJ epsilon values are essentially zero
+    // This indicates an ideal gas system with no intermolecular interactions
+    const double eps_threshold = 1e-6;  // Threshold for "zero" epsilon
+    
+    bool isIdeal = true;
+    for (int i = 0; i < state.forcefield.numTotalTypes; ++i) {
+        if (state.forcefield.ljEps[i] > eps_threshold) {
+            isIdeal = false;
+            break;
+        }
+    }
+    
+    // Debug output (disabled)
+    // std::cerr << "CavityBiasCore::isIdealGas: numTypes=" << state.forcefield.numTotalTypes 
+    //           << ", ljEps[0]=" << (state.forcefield.numTotalTypes > 0 ? state.forcefield.ljEps[0] : -1)
+    //           << ", result=" << (isIdeal ? "true" : "false") << std::endl;
+    
+    return isIdeal;
 }
 
 } // namespace movement

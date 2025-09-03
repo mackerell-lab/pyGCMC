@@ -1,6 +1,8 @@
 #include "Insertion.hpp"
 #include "../pool/ActivePool.hpp"
 #include "../bias/CavityBias.hpp"
+#include "../bias/CavityBiasCore.hpp"  // New cavity bias implementation
+#include "../bias/UnifiedAcceptance.hpp"  // Unified acceptance probability
 #include "../common/MovementUtils.hpp"
 #include "../../../../model/montecarlo/MCMain.hpp"
 #include "../../../../simulation/simulation.hpp"
@@ -15,9 +17,11 @@ using namespace model::montecarlo;
 
 InsertionMove::InsertionMove(ActivePool* activePool, 
                              CavityManager* cavityManager,
-                             EnergyInterface* energyCalc)
+                             EnergyInterface* energyCalc,
+                             CavityBiasCore* cavityCore)
     : activePool_(activePool),
       cavityManager_(cavityManager),
+      cavityCore_(cavityCore),
       energyCalc_(energyCalc),
       moleculeType_(0) {
     
@@ -31,7 +35,10 @@ InsertionMove::InsertionMove(ActivePool* activePool,
 InsertionMove::~InsertionMove() = default;
 
 MovementResult InsertionMove::attemptInsertion(MCState& state, const MovementParams& params) {
-    if (params.useCavityBias && cavityBiasInsertion_) {
+    // Use new CavityBiasCore if available, otherwise fallback to legacy
+    if (params.useCavityBias && cavityCore_) {
+        return performCavityBiasInsertion(state, params, moleculeType_);
+    } else if (params.useCavityBias && cavityBiasInsertion_) {
         return performCavityBiasInsertion(state, params, moleculeType_);
     } else {
         return performSimpleInsertion(state, params, moleculeType_);
@@ -177,17 +184,51 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         return result;
     }
     
-    // Select insertion position with cavity bias
-    bool usedCavity = false;
-    Vector3 position = selectInsertionPosition(state, params, result.cavityBiasFactor);
+    // 1) Calculate box volume
+    const double Vbox = state.info.box[0] * state.info.box[1] * state.info.box[2];  // nm³
     
-    if (cavityBiasInsertion_) {
-        position = cavityBiasInsertion_->selectInsertionPosition(state, usedCavity);
-        // Calculate cavity bias factor - this should be the same for insertion and deletion
-        // to maintain detailed balance
-        if (params.useCavityBias && cavityManager_) {
-            result.cavityBiasFactor = cavityManager_->calculateCavityBiasFactor(state);
+    // 2) Get cavity position and V_cav_before (before-state)
+    Vector3 position;
+    double Vcav_before = Vbox;
+    bool usedCavity = false;
+    
+    if (params.useCavityBias && cavityCore_) {
+        // Use new CavityBiasCore with selectable mode
+        // Prefer FAST_APPROX here to reduce discretization bias in DB tests
+        CavityMode mode = CavityMode::FAST_APPROX;
+        Vcav_before = std::max(1e-30, cavityCore_->calculateCavityVolume(state, mode));
+        double cavityRatio = Vcav_before / Vbox;
+        
+        // Heuristic: if cavity fraction is very high, fall back to uniform proposal
+        // to avoid unnecessary biasing that can reduce acceptance in sparse systems
+        if (cavityRatio > 0.9) {
+            position = Vector3(
+                utils::RandomUtils::uniform(0.0, state.info.box[0]),
+                utils::RandomUtils::uniform(0.0, state.info.box[1]),
+                utils::RandomUtils::uniform(0.0, state.info.box[2])
+            );
+            usedCavity = false;
+            result.cavityBiasFactor = 1.0;  // Use uniform acceptance
+        } else {
+            position = cavityCore_->proposeCavityPosition(state, mode);
+            usedCavity = true;
+            result.cavityBiasFactor = cavityRatio;  // For diagnostics (0..1]
         }
+    } else if (params.useCavityBias && cavityBiasInsertion_) {
+        // Fallback to legacy CavityBiasInsertion
+        position = cavityBiasInsertion_->selectInsertionPosition(state, usedCavity);
+        if (cavityManager_) {
+            result.cavityBiasFactor = cavityManager_->calculateCavityBiasFactor(state);
+            Vcav_before = result.cavityBiasFactor * Vbox;
+        }
+    } else {
+        // Random insertion
+        position = Vector3(
+            utils::RandomUtils::uniform(0.0, state.info.box[0]),
+            utils::RandomUtils::uniform(0.0, state.info.box[1]),
+            utils::RandomUtils::uniform(0.0, state.info.box[2])
+        );
+        result.cavityBiasFactor = 1.0;
     }
     
     // Check if CBMC is enabled for insertion

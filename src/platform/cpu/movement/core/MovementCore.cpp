@@ -1,6 +1,8 @@
 #include "MovementMain.hpp"
 #include "../pool/ActivePool.hpp"
 #include "../bias/CavityBias.hpp"
+#include "../bias/CavityBiasCore.hpp"  // New cavity bias implementation
+#include "../bias/UnifiedAcceptance.hpp"  // Unified acceptance probability
 #include "../bias/ConfigBias.hpp"
 #include "../moves/Insertion.hpp"
 #include "../moves/Deletion.hpp"
@@ -43,6 +45,7 @@ MovementModule::MovementModule(const MovementParams& params)
       params_(params),
       activePool_(std::make_unique<ActivePool>(params.maxAtoms, params.maxResidues)),
       cavityManager_(std::make_unique<CavityManager>(params.cavityGridSpacing * 10.0, params.probeRadius * 10.0)),
+      cavityCore_(std::make_unique<CavityBiasCore>(params.cavityGridSpacing, params.probeRadius)),  // New, uses nm directly
       configBiasManager_(std::make_unique<ConfigBiasManager>(params.numConfigTrials)),
       energyCalc_(nullptr) {
     
@@ -66,12 +69,19 @@ void MovementModule::initializeComponents() {
         cavityManager_->setGridSpacing(spacingNm * 10.0);  // Convert to Angstroms
     }
     
+    // Configure new cavity core (uses nm directly)
+    if (cavityCore_ && params_.useCavityBias) {
+        double spacingNm = std::max(params_.cavityGridSpacing, 0.2);  // Minimum 0.2 nm
+        cavityCore_->setGridSpacing(spacingNm);
+        cavityCore_->setProbeRadius(params_.probeRadius);
+    }
+    
     // Initialize movement implementations
     pImpl_->insertionMove = std::make_unique<InsertionMove>(
-        activePool_.get(), cavityManager_.get(), energyCalc_.get());
+        activePool_.get(), cavityManager_.get(), energyCalc_.get(), cavityCore_.get());
     
     pImpl_->deletionMove = std::make_unique<DeletionMove>(
-        activePool_.get(), cavityManager_.get(), energyCalc_.get());
+        activePool_.get(), cavityManager_.get(), energyCalc_.get(), cavityCore_.get());
     
     pImpl_->translationMove = std::make_unique<TranslationMove>(
         activePool_.get(), energyCalc_.get());
@@ -147,8 +157,9 @@ MovementResult MovementModule::attemptDeletion(MCState& state, int residueIndex)
     updateStatistics("delete", result.accepted, result.energyChange);
     
     // Invalidate cavity cache after accepted deletion
-    if (result.accepted && cavityManager_) {
-        cavityManager_->invalidateCache();
+    if (result.accepted) {
+        if (cavityManager_) cavityManager_->invalidateCache();
+        if (cavityCore_) cavityCore_->invalidateCache();
     }
     
     return result;
@@ -165,8 +176,9 @@ MovementResult MovementModule::attemptTranslation(MCState& state, int residueInd
     updateStatistics("translate", result.accepted, result.energyChange);
     
     // Invalidate cavity cache after accepted translation
-    if (result.accepted && cavityManager_) {
-        cavityManager_->invalidateCache();
+    if (result.accepted) {
+        if (cavityManager_) cavityManager_->invalidateCache();
+        if (cavityCore_) cavityCore_->invalidateCache();
     }
     
     return result;
@@ -189,8 +201,9 @@ MovementResult MovementModule::attemptRotation(MCState& state, int residueIndex)
     updateStatistics("rotate", result.accepted, result.energyChange);
     
     // Invalidate cavity cache after accepted rotation
-    if (result.accepted && cavityManager_) {
-        cavityManager_->invalidateCache();
+    if (result.accepted) {
+        if (cavityManager_) cavityManager_->invalidateCache();
+        if (cavityCore_) cavityCore_->invalidateCache();
     }
     
     return result;
@@ -263,6 +276,13 @@ void MovementModule::setParams(const MovementParams& params) {
     // Update component configurations (convert nm to Angstroms by multiplying by 10)
     cavityManager_->setGridSpacing(params_.cavityGridSpacing * 10.0);
     cavityManager_->setProbeRadius(params_.probeRadius * 10.0);
+    // Keep the new CavityBiasCore (nm) in sync as well
+    if (cavityCore_) {
+        double spacingNm = std::max(params_.cavityGridSpacing, 0.2);
+        cavityCore_->setGridSpacing(spacingNm);
+        cavityCore_->setProbeRadius(params_.probeRadius);
+        cavityCore_->invalidateCache();
+    }
     configBiasManager_->setNumTrials(params_.numConfigTrials);
     configBiasManager_->setTranslationRange(params_.configTranslationRange * 10.0);
     activePool_->setFragmentationThreshold(params_.fragmentationThreshold);

@@ -62,7 +62,7 @@ def test_metropolis_hastings_detailed_balance():
     deltaE = 0.0  # No interactions
     
     # Standard GCMC (cavity volume = total volume)
-    from test_cavity_bias_core import UnifiedAcceptance
+    # UnifiedAcceptance is defined below in this file
     
     A_ins = UnifiedAcceptance.insertionProbabilityStandard(
         n, deltaE, beta, mu, V_total, lambda3
@@ -194,7 +194,7 @@ def test_insertion_deletion_symmetry():
         (20, 2.0, 50.0, 52.0),    # With repulsion
     ]
     
-    from test_cavity_bias_core import UnifiedAcceptance
+    # UnifiedAcceptance is defined below in this file
     
     for n, deltaE_ins, V_before, V_after in test_cases:
         # Forward: n → n+1
