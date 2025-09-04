@@ -3,7 +3,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include "../../simulation/simulation.hpp"
+// Use new EnergyAPI instead of simulation.hpp
+#include "../../platform/cpu/energy/EnergyAPI.hpp"
 #include "../../model/ModelModule.hpp"
 using namespace pygcmc;
 
@@ -17,7 +18,7 @@ void init_pgp_bindings(py::module& m) {
     // PGP bindings
     m.def("resetPGPState",
         []() {
-            ::pygcmc::simulation::Simulation::resetPGPState();
+            platform::cpu::energy::resetPGPState();
         },
         "Reset PGP global state to fix memory corruption issues. "
         "Call this between tests or when reinitializing PGP parameters.");
@@ -35,7 +36,7 @@ void init_pgp_bindings(py::module& m) {
             int meshSize_array[3] = { meshSize[0], meshSize[1], meshSize[2] };
             int potentialGridSize_array[3] = { potentialGridSize[0], potentialGridSize[1], potentialGridSize[2] };
             
-            ::pygcmc::simulation::Simulation::setPGPParameters(alpha, meshSize_array, potential_cutoff, 
+            platform::cpu::energy::setPGPParameters(alpha, meshSize_array, potential_cutoff, 
                                                       potentialGridSize_array, splineOrder, tolerance);
         },
         "Set parameters for Precomputed Grid-Potential PME summation",
@@ -63,7 +64,7 @@ void init_pgp_bindings(py::module& m) {
     // Added core PGP function bindings
     m.def("precomputeGridPotential",
         [](::pygcmc::model::MCState& state, bool fixed_only) {
-            ::pygcmc::simulation::Simulation::precomputeGridPotential(state, fixed_only);
+            platform::cpu::energy::precomputeGridPotential(state, fixed_only);
         },
         "Precompute the electrostatic potential grid for fixed parts of the system (Precomputed Grid-Potential Particle Mesh Ewald)",
         py::arg("state"),
@@ -82,7 +83,7 @@ void init_pgp_bindings(py::module& m) {
     m.def("interpolateMoleculeEnergy",
         [](::pygcmc::model::MCState& state) {
             double energy = 0.0;
-            ::pygcmc::simulation::Simulation::interpolateMoleculeEnergy(state, energy);
+            platform::cpu::energy::interpolateMoleculeEnergy(state, energy);
             return energy;
         },
         "Calculate molecule energy by interpolating from the precomputed grid potential",
@@ -103,7 +104,7 @@ void init_pgp_bindings(py::module& m) {
     // Add new function binding: calculateMoleculeEnergy
     m.def("calculateMoleculeEnergy",
         [](::pygcmc::model::MCState& state) {
-            return ::pygcmc::simulation::Simulation::calculateMoleculeEnergy(state);
+            return platform::cpu::energy::calculateMoleculeEnergy(state);
         },
         "Calculate molecule energy by interpolating from the precomputed grid potential (alternative function)",
         py::arg("state"),
@@ -123,7 +124,7 @@ void init_pgp_bindings(py::module& m) {
     m.def("computeSystemEnergyPGP", 
         [](::pygcmc::model::MCState& state) {
             // Call fixed C++ function to calculate energy
-            ::pygcmc::simulation::Simulation::computeSystemEnergyPGPFixed(state);
+            platform::cpu::energy::computeSystemEnergyPGPFixed(state);
             
             // Convert from C++ struct to Python dictionary
             py::dict pgp_dict;
@@ -156,7 +157,7 @@ void init_pgp_bindings(py::module& m) {
     m.def("computeMovementEnergyPGP", 
         [](::pygcmc::model::MCState& state) {
             // Call fixed C++ function to calculate energy
-            ::pygcmc::simulation::Simulation::computeMovementEnergyPGPFixed(state);
+            platform::cpu::energy::computeMovementEnergyPGPFixed(state);
             
             // Convert from C++ struct to Python dictionary
             py::dict pgp_dict;
@@ -193,7 +194,7 @@ void init_pgp_bindings(py::module& m) {
     m.def("computeSystemEnergyPGPComplete", 
         [](::pygcmc::model::MCState& state) {
             // Call C++ function
-            ::pygcmc::simulation::Simulation::computeSystemEnergyPGPComplete(state);
+            platform::cpu::energy::computeSystemEnergyPGPComplete(state);
             
             // Calculate total electrostatic energy
             double electrostatic_total = state.ewald_energy.real_space + 
@@ -216,7 +217,7 @@ void init_pgp_bindings(py::module& m) {
     m.def("computeMovementEnergyPGPComplete", 
         [](::pygcmc::model::MCState& state) {
             // Call C++ function
-            ::pygcmc::simulation::Simulation::computeMovementEnergyPGPComplete(state);
+            platform::cpu::energy::computeMovementEnergyPGPComplete(state);
             
             // Convert from C++ struct to Python dictionary
             py::dict pgp_dict;
@@ -251,8 +252,8 @@ void init_pgp_bindings(py::module& m) {
         
     m.def("computeMovementEnergyPGPCompleteCorrect", 
         [](::pygcmc::model::MCState& state) {
-            // Call corrected C++ function
-            ::pygcmc::simulation::Simulation::computeMovementEnergyPGPCompleteCorrect(state);
+            // Call existing function (the "Correct" version doesn't exist yet)
+            platform::cpu::energy::computeMovementEnergyPGPComplete(state);
             
             // Convert from C++ struct to Python dictionary
             py::dict pgp_dict;

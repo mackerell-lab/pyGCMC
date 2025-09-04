@@ -3,7 +3,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include "../../simulation/simulation.hpp"
+// Use new EnergyAPI instead of simulation.hpp
+#include "../../platform/cpu/energy/EnergyAPI.hpp"
 #include "../../model/ModelModule.hpp"
 using namespace pygcmc;
 
@@ -22,7 +23,7 @@ void init_ewald_bindings(py::module& m) {
             }
             int kmax_array[3] = { kmax[0], kmax[1], kmax[2] };
             // Implementation needs to be modified to make setEwaldParameters a static method
-            ::pygcmc::simulation::Simulation::setEwaldParameters(alpha, kmax_array, tolerance);
+            platform::cpu::energy::setEwaldParameters(alpha, kmax_array, tolerance);
         },
         "Set parameters for Ewald summation",
         py::arg("alpha"),
@@ -36,7 +37,7 @@ void init_ewald_bindings(py::module& m) {
             }
             // Convert to array and call function
             float box_array[3] = {box[0], box[1], box[2]};
-            ::pygcmc::simulation::Simulation::initializeEwaldParameters(cutoff, box_array, alpha, tolerance);
+            platform::cpu::energy::initializeEwaldParameters(cutoff, box_array, alpha, tolerance);
         },
         "Initialize Ewald parameters with automatic optimization",
         py::arg("cutoff"),
@@ -47,7 +48,7 @@ void init_ewald_bindings(py::module& m) {
     m.def("computeSystemEnergyEwald", 
         [](::pygcmc::model::MCState& state) {
             // Call C++ function to calculate energy
-            ::pygcmc::simulation::Simulation::computeSystemEnergyEwald(state);
+            platform::cpu::energy::computeSystemEnergyEwald(state);
             
             // Convert from C++ struct to Python dictionary
             py::dict ewald_dict;
@@ -80,7 +81,7 @@ void init_ewald_bindings(py::module& m) {
     m.def("computeMovementEnergyEwald", 
         [](::pygcmc::model::MCState& state) {
             // Call C++ function to calculate energy
-            ::pygcmc::simulation::Simulation::computeMovementEnergyEwald(state);
+            platform::cpu::energy::computeMovementEnergyEwald(state);
             
             // Convert from C++ struct to Python dictionary
             py::dict ewald_dict;

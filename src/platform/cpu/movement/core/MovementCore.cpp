@@ -235,6 +235,17 @@ std::vector<Vector3> MovementModule::findCavities(const MCState& state) {
     return cavityManager_->findCavities(state);
 }
 
+double MovementModule::calculateCavityVolume(const MCState& state) {
+    // Use the new CavityBiasCore for cavity volume calculation
+    if (cavityCore_) {
+        // Use FAST_APPROX mode for global cavity volume calculation
+        return cavityCore_->calculateCavityVolume(state, CavityMode::FAST_APPROX);
+    }
+    // If no cavityCore, return box volume as fallback
+    // cavityManager doesn't have calculateCavityVolume method
+    return state.info.box[0] * state.info.box[1] * state.info.box[2] * 0.001;  // Convert A^3 to nm^3
+}
+
 double MovementModule::calculateAcceptanceRate(const std::string& moveType) const {
     auto it = stats_.find(moveType);
     if (it != stats_.end()) {
