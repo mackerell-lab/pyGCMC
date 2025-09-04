@@ -1,11 +1,11 @@
 #include "Deletion.hpp"
+#include "../../energy/EnergyModule.hpp"
 #include "../pool/ActivePool.hpp"
 #include "../bias/CavityBias.hpp"
 #include "../bias/CavityBiasCore.hpp"  // New cavity bias implementation
 #include "../bias/UnifiedAcceptance.hpp"  // Unified acceptance probability
 #include "../common/MovementUtils.hpp"
 #include "../../../../model/montecarlo/MCMain.hpp"
-#include "../../../../simulation/simulation.hpp"
 
 namespace pygcmc {
 namespace platform {
@@ -69,7 +69,7 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     
     // Calculate energy before deletion
     int n_before = state.activeResidueCount;  // Store n before deletion
-    simulation::Simulation::computeSystemEnergyPBCCutoff(state);
+    platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyBefore = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         energyBefore += state.residues[i].energy_vdw;
@@ -91,7 +91,7 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     state.residues[targetResIdx].active = false;
     
     // Calculate energy after deletion (with residue marked inactive)
-    simulation::Simulation::computeSystemEnergyPBCCutoff(state);
+    platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyAfter = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         if (i != targetResIdx && state.residues[i].active) {

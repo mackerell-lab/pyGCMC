@@ -1,11 +1,11 @@
 // CBMC insertion helper functions for Insertion.cpp
+#include "../../energy/EnergyModule.hpp"
 // This file contains the CBMC-specific logic that will be integrated into performCavityBiasInsertion
 
 #include "Insertion.hpp"
 #include "../pool/ActivePool.hpp"
 #include "../common/MovementUtils.hpp"
 #include "../../../../model/montecarlo/MCMain.hpp"
-#include "../../../../simulation/simulation.hpp"
 #include <cmath>
 #include <limits>
 #include <random>
@@ -108,7 +108,7 @@ std::pair<std::vector<double>, int> InsertionMove::evaluateTrialEnergies(
         
         // Calculate energy of the new molecule with existing system
         // This computes interaction energy without double counting
-        simulation::Simulation::computeMovementEnergyCutoff(state);
+        platform::cpu::computeMovementEnergyCutoff(state);
         
         // Get energy of new residue (interaction with existing atoms only)
         double energyAfter = state.residues[tempResIdx].energy_vdw 

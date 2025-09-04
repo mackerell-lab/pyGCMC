@@ -117,9 +117,7 @@ target_link_libraries(pygcmc_system PUBLIC pygcmc_model)
 add_pygcmc_library(pygcmc_platform "${CMAKE_CURRENT_SOURCE_DIR}/src/platform" STATIC)
 target_link_libraries(pygcmc_platform PUBLIC pygcmc_model)
 
-# 5. Simulation library (depends on platform and model) - now uses unified function
-add_pygcmc_library(pygcmc_simulation "${CMAKE_CURRENT_SOURCE_DIR}/src/simulation" STATIC)
-target_link_libraries(pygcmc_simulation PUBLIC pygcmc_platform pygcmc_model)
+# 5. Simulation module removed - functionality distributed to platform and bindings
 
 # ==============================================================================
 # PYTHON BINDINGS
@@ -155,7 +153,6 @@ target_link_libraries(pygcmc
         pygcmc_io
         pygcmc_system
         pygcmc_platform
-        pygcmc_simulation
 )
 
 # Set binding properties
@@ -197,7 +194,6 @@ if(ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(pygcmc_io PRIVATE --coverage)
     target_compile_options(pygcmc_system PRIVATE --coverage)
     target_compile_options(pygcmc_platform PRIVATE --coverage)
-    target_compile_options(pygcmc_simulation PRIVATE --coverage)
     target_link_options(pygcmc PRIVATE --coverage)
 endif()
 
@@ -206,6 +202,5 @@ if(ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(pygcmc_io PRIVATE ${SANITIZER_FLAGS})
     target_compile_options(pygcmc_system PRIVATE ${SANITIZER_FLAGS})
     target_compile_options(pygcmc_platform PRIVATE ${SANITIZER_FLAGS})
-    target_compile_options(pygcmc_simulation PRIVATE ${SANITIZER_FLAGS})
     target_link_options(pygcmc PRIVATE ${SANITIZER_FLAGS})
 endif()

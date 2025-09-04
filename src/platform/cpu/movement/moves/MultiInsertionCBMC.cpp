@@ -1,10 +1,10 @@
 // MultiInsertionCBMC.cpp
+#include "../../energy/EnergyModule.hpp"
 // Multi-insertion CBMC implementation
 
 #include "MultiInsertionCBMC.hpp"
 #include "../common/MovementUtils.hpp"
 #include "../bias/CavityBias.hpp"
-#include "../../../../simulation/simulation.hpp"
 #include "../../energy/common/EnergyDirectCore.hpp"
 #include <algorithm>
 #include <cmath>

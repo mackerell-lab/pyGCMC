@@ -1,7 +1,7 @@
 #include "ConfigBias.hpp"
 #include "../common/MovementUtils.hpp"
 #include "../../../../model/montecarlo/MCMain.hpp"
-#include "../../../../simulation/simulation.hpp"
+#include "../../energy/EnergyModule.hpp"
 #include <algorithm>
 #include <numeric>
 #include <cmath>
@@ -308,8 +308,8 @@ double ConfigBiasManager::evaluateConfiguration(
     // 3. Calculate energy
     // 4. Restore original configuration
     
-    // For now, use direct energy calculation
-    simulation::Simulation::computeSystemEnergyCutoff(state);
+    // Compute energy directly using platform functions
+    platform::cpu::computeSystemEnergyCutoff(state);
     
     double energy = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {

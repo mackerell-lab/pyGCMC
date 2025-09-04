@@ -1,9 +1,9 @@
 #include "Rotation.hpp"
+#include "../../energy/EnergyModule.hpp"
 #include "../pool/ActivePool.hpp"
 #include "../bias/ConfigBias.hpp"
 #include "../common/MovementUtils.hpp"
 #include "../../../../model/montecarlo/MCMain.hpp"
-#include "../../../../simulation/simulation.hpp"
 #include <cmath>
 
 namespace pygcmc {
@@ -77,7 +77,7 @@ MovementResult RotationMove::performSimpleRotation(MCState& state, const Movemen
     Quaternion rotation = generateRandomRotation(params.maxRotation);
     
     // Calculate energy before rotation
-    simulation::Simulation::computeSystemEnergyPBCCutoff(state);
+    platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyBefore = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         energyBefore += state.residues[i].energy_vdw;
@@ -89,7 +89,7 @@ MovementResult RotationMove::performSimpleRotation(MCState& state, const Movemen
     rotateResidue(state, targetResIdx, rotation);
     
     // Calculate energy after rotation
-    simulation::Simulation::computeSystemEnergyPBCCutoff(state);
+    platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyAfter = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         energyAfter += state.residues[i].energy_vdw;
@@ -198,7 +198,7 @@ RotationMove::ConfigBiasRotationResult RotationMove::performConfigBiasRotationIn
         rotateResidue(state, residueIndex, config.rotation);
         
         // Calculate energy
-        simulation::Simulation::computeSystemEnergyPBCCutoff(state);
+        platform::cpu::computeSystemEnergyPBCCutoff(state);
         config.energy = 0.0;
         for (int j = 0; j < state.activeResidueCount; ++j) {
             config.energy += state.residues[j].energy_vdw;
@@ -302,7 +302,7 @@ RotationMove::RotationConfig RotationMove::saveConfiguration(const MCState& stat
         config.center = calculateCenterOfMass(state, residueIndex);
         
         // Calculate original energy
-        simulation::Simulation::computeSystemEnergyPBCCutoff(const_cast<MCState&>(state));
+        platform::cpu::computeSystemEnergyPBCCutoff(const_cast<MCState&>(state));
         config.originalEnergy = 0.0;
         for (int i = 0; i < state.activeResidueCount; ++i) {
             config.originalEnergy += state.residues[i].energy_vdw;

@@ -1,4 +1,5 @@
 #include "Insertion.hpp"
+#include "../../energy/EnergyModule.hpp"
 #include <iostream>
 #include <cstdlib>
 #include "../pool/ActivePool.hpp"
@@ -7,7 +8,6 @@
 #include "../bias/UnifiedAcceptance.hpp"  // Unified acceptance probability
 #include "../common/MovementUtils.hpp"
 #include "../../../../model/montecarlo/MCMain.hpp"
-#include "../../../../simulation/simulation.hpp"
 #include <cmath>
 
 namespace pygcmc {
@@ -86,7 +86,7 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
     }
     
     // Calculate energy before insertion
-    simulation::Simulation::computeSystemEnergyPBCCutoff(state);
+    platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyBefore = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         energyBefore += state.residues[i].energy_vdw;
@@ -109,7 +109,7 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
     }
     
     // Calculate energy after insertion
-    simulation::Simulation::computeSystemEnergyPBCCutoff(state);
+    platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyAfter = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         energyAfter += state.residues[i].energy_vdw;
@@ -260,7 +260,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
             moleculeType, position, params, state);
         
         // Calculate energy before any insertion
-        simulation::Simulation::computeSystemEnergyPBCCutoff(state);
+        platform::cpu::computeSystemEnergyPBCCutoff(state);
         double energyBefore = 0.0;
         for (int i = 0; i < state.activeResidueCount; ++i) {
             energyBefore += state.residues[i].energy_vdw;
@@ -393,7 +393,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
     }
     
     // Calculate energy before insertion
-    simulation::Simulation::computeSystemEnergyPBCCutoff(state);
+    platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyBefore = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         energyBefore += state.residues[i].energy_vdw;
@@ -415,7 +415,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
     }
     
     // Calculate energy after insertion
-    simulation::Simulation::computeSystemEnergyPBCCutoff(state);
+    platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyAfter = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         energyAfter += state.residues[i].energy_vdw;

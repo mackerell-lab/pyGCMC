@@ -1,8 +1,8 @@
 #include "Translation.hpp"
+#include "../../energy/EnergyModule.hpp"
 #include "../pool/ActivePool.hpp"
 #include "../common/MovementUtils.hpp"
 #include "../../../../model/montecarlo/MCMain.hpp"
-#include "../../../../simulation/simulation.hpp"
 #include <vector>
 
 namespace pygcmc {
@@ -70,7 +70,7 @@ MovementResult TranslationMove::performTranslation(MCState& state, const Movemen
     Vector3 displacement = generateDisplacement(params.maxTranslation);
     
     // Calculate energy before translation
-    simulation::Simulation::computeSystemEnergyPBCCutoff(state);
+    platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyBefore = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         energyBefore += state.residues[i].energy_vdw;
@@ -96,7 +96,7 @@ MovementResult TranslationMove::performTranslation(MCState& state, const Movemen
     }
     
     // Calculate energy after translation
-    simulation::Simulation::computeSystemEnergyPBCCutoff(state);
+    platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyAfter = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         energyAfter += state.residues[i].energy_vdw;
@@ -235,7 +235,7 @@ std::pair<double, double> TranslationMove::calculateEnergyChange(
     auto originalPos = saveAtomPositions(state, residueIndex);
     
     // Calculate energy before
-    simulation::Simulation::computeSystemEnergyPBCCutoff(state);
+    platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyBefore = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         energyBefore += state.residues[i].energy_vdw;
@@ -247,7 +247,7 @@ std::pair<double, double> TranslationMove::calculateEnergyChange(
     translateResidue(state, residueIndex, displacement);
     
     // Calculate energy after
-    simulation::Simulation::computeSystemEnergyPBCCutoff(state);
+    platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyAfter = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
         energyAfter += state.residues[i].energy_vdw;
