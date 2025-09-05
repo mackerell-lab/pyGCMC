@@ -98,26 +98,51 @@ def test_chemical_potential_effect(setup_gcmc_state):
         f"Insufficient μ effect: <N> changes from {n_low:.2f} to {n_high:.2f}"
 
 
-def test_temperature_effect(setup_gcmc_state):
-    """Test that temperature affects acceptance rates"""
+def test_temperature_effect():
+    """Test that temperature affects acceptance rates with independent states"""
+    import numpy as np
+    
+    # Seed NumPy for reproducibility
+    np.random.seed(98765)
+    
     # Test at different temperatures
     temperatures = [250.0, 300.0, 350.0]
     acceptance_rates = []
+    energy_bins_by_temp = {}
     
     for T in temperatures:
-        # Reset state
-        state = setup_gcmc_state
+        # CREATE FRESH STATE for each temperature (independent)
+        state = pygcmc.MCState()
+        state.info = pygcmc.MCInfo()
+        state.info.box = [5.0, 5.0, 5.0]
         state.info.setTemperature(T)
+        state.info.cutoff = 1.2
+        state.info.volume = 125.0
         
-        # Create mover with temperature
+        # Setup force field
+        ff = pygcmc.MCForceField()
+        ff.numTotalTypes = 10
+        ff.maxTypes = 10
+        ff.ljSigma = [0.0] * 100
+        ff.ljEps = [0.0] * 100
+        ff.ljSigma[0] = 0.3151  # O-O
+        ff.ljEps[0] = 0.6364
+        state.forcefield = ff
+        state.residues = []
+        state.atoms = []
+        state.activeResidueCount = 0
+        state.activeAtomCount = 0
+        
+        # Create mover with temperature and seed
         params = pygcmc.movement.MovementParams()
         params.temperature = T
         params.chemicalPotential = -15.7
         params.maxTranslation = 0.1
         params.maxRotation = 0.2
+        params.seed = int(98765 + T)  # Different seed per T
         
-        mover = pygcmc.movement.MovementModule()
-        mover.setParams(params)
+        # Use MovementModule(params) for proper seeding
+        mover = pygcmc.movement.MovementModule(params)
         mover.resetStatistics()
         
         # Run steps

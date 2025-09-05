@@ -189,12 +189,11 @@ def test_chemical_potential_scaling():
             if state2.activeResidueCount > 0:
                 mover_high.attemptDeletion(state2)
     
-    # Production phase - collect averages
-    count1_sum = 0
-    count2_sum = 0
-    n_samples = 0
+    # Production phase - collect samples during the loop
+    samples1 = []  # Collect during production
+    samples2 = []  # Collect during production
     
-    for _ in range(n_production):
+    for i in range(n_production):
         # State 1 with low chemical potential
         if rng.random() < 0.5:
             mover_low.attemptInsertion(state1)
@@ -209,23 +208,14 @@ def test_chemical_potential_scaling():
             if state2.activeResidueCount > 0:
                 mover_high.attemptDeletion(state2)
         
-        # Sample every 10 steps
-        if _ % 10 == 0:
-            count1_sum += state1.activeResidueCount
-            count2_sum += state2.activeResidueCount
-            n_samples += 1
-    
-    # Calculate averages
-    avg_count1 = count1_sum / n_samples if n_samples > 0 else 0
-    avg_count2 = count2_sum / n_samples if n_samples > 0 else 0
-    
-    # Calculate bootstrap confidence intervals for the ratio
-    samples1 = []
-    samples2 = []
-    for _ in range(n_production):
-        if _ % 10 == 0:
+        # Sample every 10 steps - FIX: collect here, not in separate loop
+        if i % 10 == 0:
             samples1.append(state1.activeResidueCount)
             samples2.append(state2.activeResidueCount)
+    
+    # Calculate averages from collected samples
+    avg_count1 = np.mean(samples1) if samples1 else 0
+    avg_count2 = np.mean(samples2) if samples2 else 0
     
     # Bootstrap CI for mean counts
     if len(samples1) > 10 and len(samples2) > 10:
