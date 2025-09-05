@@ -72,7 +72,7 @@ def test_insertion_deletion_balance(setup_system_with_params):
         assert 0.5 < ratio < 2.0
 
 def test_translation_reversibility(setup_system_with_params):
-    """Test reversibility of translation moves."""
+    """Test that translation move energy changes follow expected symmetry."""
     state, params = setup_system_with_params
     
     # Ensure parameters are properly initialized
@@ -81,72 +81,75 @@ def test_translation_reversibility(setup_system_with_params):
     mover = pygcmc.movement.MovementModule()
     mover.setParams(params)
     
-    # Strong bootstrap insertion: progressively raise mu until successful
-    original_mu = params.chemicalPotential
-    for dmu in [0.0, +5.0, +10.0]:
-        params.chemicalPotential = original_mu + dmu
-        params.updateDerivedParameters()
-        mover.setParams(params)
-        # More attempts at each level
-        for _ in range(2000):
-            mover.attemptInsertion(state)
-            if state.activeResidueCount > 0:
-                break
-        if state.activeResidueCount > 0:
-            break
-    
-    # Restore original mu for translation phase
-    params.chemicalPotential = original_mu
+    # Insert multiple particles for better statistics
+    params.chemicalPotential = -5.0  # High mu for easier insertion
     params.updateDerivedParameters()
     mover.setParams(params)
     
-    # At this point we should have particles - no skip needed
-    assert state.activeResidueCount > 0, "Failed to insert any particles even with boosted mu"
+    # Insert particles
+    for _ in range(2000):
+        mover.attemptInsertion(state)
+        if state.activeResidueCount >= 10:  # Want multiple particles
+            break
     
-    # Track energy changes - only finite values
-    forward_energy_changes = []
-    reverse_energy_changes = []
+    # Restore moderate mu for translation tests
+    params.chemicalPotential = -20.0
+    params.updateDerivedParameters()
+    mover.setParams(params)
     
-    # Increase attempts for better statistics
-    for _ in range(300):
-        # Forward translation
-        result_forward = mover.attemptTranslation(state)
-        if result_forward.accepted and np.isfinite(result_forward.energyChange):
-            forward_energy_changes.append(result_forward.energyChange)
+    assert state.activeResidueCount > 0, "Failed to insert any particles"
+    
+    # Collect ALL energy changes (both accepted and rejected)
+    # For detailed balance, the distribution of ΔE should be symmetric
+    # around zero when system is at equilibrium
+    all_energy_changes = []
+    acceptance_by_sign = {'positive': [], 'negative': [], 'zero': []}
+    
+    # Equilibrate first
+    for _ in range(500):
+        mover.attemptTranslation(state)
+    
+    # Collect statistics
+    for _ in range(1000):
+        result = mover.attemptTranslation(state)
+        if np.isfinite(result.energyChange):
+            all_energy_changes.append(result.energyChange)
             
-            # Reverse translation (another random one)
-            result_reverse = mover.attemptTranslation(state)
-            if result_reverse.accepted and np.isfinite(result_reverse.energyChange):
-                reverse_energy_changes.append(result_reverse.energyChange)
+            # Track acceptance by energy sign
+            if result.energyChange > 0.01:
+                acceptance_by_sign['positive'].append(result.accepted)
+            elif result.energyChange < -0.01:
+                acceptance_by_sign['negative'].append(result.accepted)
+            else:
+                acceptance_by_sign['zero'].append(result.accepted)
     
-    # If insufficient samples, continue sampling
-    extra_attempts = 0
-    while (len(forward_energy_changes) < 10 or len(reverse_energy_changes) < 10) and extra_attempts < 1000:
-        result_forward = mover.attemptTranslation(state)
-        if result_forward.accepted and np.isfinite(result_forward.energyChange):
-            forward_energy_changes.append(result_forward.energyChange)
-            
-            # Try reverse translation
-            result_reverse = mover.attemptTranslation(state)
-            if result_reverse.accepted and np.isfinite(result_reverse.energyChange):
-                reverse_energy_changes.append(result_reverse.energyChange)
-        extra_attempts += 100
+    assert len(all_energy_changes) >= 100, f"Insufficient samples: {len(all_energy_changes)}"
     
-    # Now we should have enough samples
-    assert len(forward_energy_changes) >= 10, f"Insufficient forward samples: {len(forward_energy_changes)}"
-    assert len(reverse_energy_changes) >= 10, f"Insufficient reverse samples: {len(reverse_energy_changes)}"
+    # Test 1: Check Metropolis criterion for acceptance
+    # Favorable moves (ΔE < 0) should mostly be accepted
+    if len(acceptance_by_sign['negative']) > 10:
+        favorable_rate = np.mean(acceptance_by_sign['negative'])
+        assert favorable_rate > 0.9, f"Favorable moves acceptance too low: {favorable_rate:.2f}"
     
-    # Energy changes should have symmetric distribution
-    mean_forward = np.mean(forward_energy_changes)
-    mean_reverse = np.mean(reverse_energy_changes)
+    # Test 2: Check that energy change distribution has expected properties
+    # For a system at equilibrium, forward and reverse moves should balance
+    positive_changes = [e for e in all_energy_changes if e > 0.01]
+    negative_changes = [e for e in all_energy_changes if e < -0.01]
     
-    # Ensure means are finite
-    assert np.isfinite(mean_forward), f"Forward mean is not finite: {mean_forward}"
-    assert np.isfinite(mean_reverse), f"Reverse mean is not finite: {mean_reverse}"
+    if len(positive_changes) > 10 and len(negative_changes) > 10:
+        # The number of positive and negative changes should be roughly balanced
+        ratio = len(positive_changes) / len(negative_changes)
+        assert 0.3 < ratio < 3.0, f"Energy change asymmetry: {len(positive_changes)} positive vs {len(negative_changes)} negative"
+        
+        # The magnitudes should also be similar (test median)
+        median_positive = np.median(np.abs(positive_changes))
+        median_negative = np.median(np.abs(negative_changes))
+        magnitude_ratio = median_positive / median_negative if median_negative > 0 else float('inf')
+        assert 0.2 < magnitude_ratio < 5.0, f"Energy magnitude asymmetry: median |ΔE+|={median_positive:.3f} vs |ΔE-|={median_negative:.3f}"
     
-    # Both should be near zero for equilibrated system
-    assert abs(mean_forward) < 5.0, f"Forward mean energy change {mean_forward:.3f} too large"
-    assert abs(mean_reverse) < 5.0, f"Reverse mean energy change {mean_reverse:.3f} too large"
+    # Test 3: Overall mean should be near zero for equilibrium
+    mean_energy_change = np.mean(all_energy_changes)
+    assert abs(mean_energy_change) < 2.0, f"Mean energy change {mean_energy_change:.3f} indicates non-equilibrium"
 
 def test_metropolis_criterion(setup_system_with_params):
     """Test that acceptance follows Metropolis criterion."""
@@ -269,8 +272,8 @@ def test_multi_insertion_detailed_balance(setup_system_with_params):
     
     params.useMultiInsertionCBMC = True
     params.maxParallelInsertions = 4
-    # mproposal not exposed in Python
-    # params.mproposal = 10
+    params.chemicalPotential = -10.0  # Higher mu for more insertions to balance deletions
+    params.updateDerivedParameters()
     
     mover = pygcmc.movement.MovementModule()
     
@@ -278,27 +281,65 @@ def test_multi_insertion_detailed_balance(setup_system_with_params):
         mover.setParams(params)
         
         # Equilibrate
-        for _ in range(200):
+        for _ in range(500):
             if np.random.random() < 0.5:
                 mover.attemptMultiInsertionCBMC(state, 0)
             else:
                 mover.attemptDeletion(state)
         
-        # Check steady state
-        accepts = 0
-        for _ in range(100):
-            result = mover.attemptMultiInsertionCBMC(state, 0)
-            if hasattr(result, '__iter__'):
-                for r in result:
-                    if r.accepted:
-                        accepts += 1
-            elif result.accepted:
-                accepts += 1
+        # Collect insertion and deletion statistics
+        insertion_attempts = 0
+        insertion_accepts = 0
+        insertion_probs = []
+        deletion_attempts = 0
+        deletion_accepts = 0
+        deletion_probs = []
         
-        # Should have some acceptance
-        assert accepts >= 0
+        # Production phase
+        for _ in range(1000):
+            if np.random.random() < 0.5:
+                # Multi-insertion attempt
+                result = mover.attemptMultiInsertionCBMC(state, 0)
+                if hasattr(result, '__iter__'):
+                    for r in result:
+                        insertion_attempts += 1
+                        if r.accepted:
+                            insertion_accepts += 1
+                        insertion_probs.append(r.acceptanceProbability)
+                else:
+                    insertion_attempts += 1
+                    if result.accepted:
+                        insertion_accepts += 1
+                    insertion_probs.append(result.acceptanceProbability)
+            else:
+                # Deletion attempt
+                if state.activeResidueCount > 0:
+                    result = mover.attemptDeletion(state)
+                    deletion_attempts += 1
+                    if result.accepted:
+                        deletion_accepts += 1
+                    deletion_probs.append(result.acceptanceProbability)
         
-    except Exception:
+        # Tests for detailed balance
+        # 1. Both moves should occur
+        assert insertion_accepts > 0, f"No insertions accepted in {insertion_attempts} attempts"
+        assert deletion_accepts > 0, f"No deletions accepted in {deletion_attempts} attempts"
+        
+        # 2. Check acceptance rates are reasonable (not trivial)
+        if insertion_attempts > 50:
+            ins_rate = insertion_accepts / insertion_attempts
+            assert 0.01 < ins_rate < 0.99, f"Insertion rate {ins_rate:.3f} is trivial"
+        
+        if deletion_attempts > 50:
+            del_rate = deletion_accepts / deletion_attempts
+            assert 0.01 < del_rate < 0.99, f"Deletion rate {del_rate:.3f} is trivial"
+        
+        # 3. Check flux balance (insertions vs deletions at equilibrium)
+        if insertion_accepts > 10 and deletion_accepts > 10:
+            flux_ratio = insertion_accepts / deletion_accepts
+            assert 0.2 < flux_ratio < 5.0, f"Flux imbalance: {insertion_accepts} insertions vs {deletion_accepts} deletions"
+        
+    except (AttributeError, TypeError):
         pytest.skip("Multi-insertion CBMC not available")
 
 def test_temperature_scaling(setup_system_with_params):
@@ -334,49 +375,61 @@ def test_temperature_scaling(setup_system_with_params):
     assert len(set(acceptance_rates)) > 1  # Some variation
 
 def test_chemical_potential_balance(setup_system_with_params):
-    """Test that chemical potential correctly affects equilibrium."""
+    """Test that chemical potential correctly controls equilibrium particle number."""
     state, params = setup_system_with_params
     
     chemical_potentials = [-30.0, -20.0, -10.0]
-    avg_particles = []
+    mean_particles = []
     
     for mu in chemical_potentials:
         # Reset system - recreate clean state
         state = pygcmc.MCState()
         state.info.box = np.array([4.0, 4.0, 4.0])
-        # Setup force field
+        # Setup force field - use weak interactions to avoid dense packing issues
         ff = pygcmc.MCForceField()
         ff.numTotalTypes = 1
         ff.numMovementTypes = 1
-        ff.ljEps = [0.5]
+        ff.ljEps = [0.1]  # Weak interactions
         ff.ljSigma = [0.3]
         state.forcefield = ff
         params.chemicalPotential = mu
+        params.updateDerivedParameters()
         
         mover = pygcmc.movement.MovementModule()
         mover.setParams(params)
         
-        # Equilibrate
-        for _ in range(1000):
+        # Longer equilibration for better convergence
+        for _ in range(2000):
             if np.random.random() < 0.5:
                 mover.attemptInsertion(state)
             else:
                 mover.attemptDeletion(state)
         
-        # Count particles (simplified)
-        particle_count = 0
-        for _ in range(100):
-            result = mover.attemptInsertion(state)
-            if result.accepted:
-                particle_count += 1
-                # Remove to maintain state
+        # Production phase - measure steady-state particle number
+        particle_counts = []
+        for i in range(3000):
+            if np.random.random() < 0.5:
+                mover.attemptInsertion(state)
+            else:
                 mover.attemptDeletion(state)
+            
+            # Sample every 10 steps to reduce correlation
+            if i % 10 == 0:
+                n_particles = len([r for r in state.residues if r.active])
+                particle_counts.append(n_particles)
         
-        avg_particles.append(particle_count)
+        mean_n = np.mean(particle_counts)
+        mean_particles.append(mean_n)
     
-    # Higher chemical potential should give more particles
-    # This is a weak test due to simplified counting
-    assert avg_particles[-1] >= avg_particles[0] - 10
+    # Higher chemical potential MUST give more particles (monotonicity)
+    # This is a fundamental GCMC property
+    for i in range(len(mean_particles) - 1):
+        assert mean_particles[i+1] >= mean_particles[i], \
+            f"Chemical potential monotonicity violated: μ={chemical_potentials}, <N>={mean_particles}"
+    
+    # Also check that the effect is significant (not just noise)
+    assert mean_particles[-1] > mean_particles[0] * 1.5, \
+        f"Chemical potential effect too weak: <N> only changed from {mean_particles[0]:.1f} to {mean_particles[-1]:.1f}"
 
 def test_ensemble_averages(setup_system_with_params):
     """Test that ensemble averages are stable."""
