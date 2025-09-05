@@ -1,4 +1,4 @@
-// src/bindings/movement/FragmentReservoirBindings.cpp
+// src/bindings/platform/FragmentReservoirBindings.cpp
 // Python bindings for FragmentReservoir
 
 #include <pybind11/pybind11.h>
@@ -11,7 +11,7 @@ using namespace pygcmc::platform::cpu::movement;
 
 namespace pygcmc {
 namespace bindings {
-namespace movement {
+namespace platform {
 
 void init_fragment_reservoir_bindings(py::module& m) {
     // Bind Quaternion class if not already bound
@@ -203,6 +203,6 @@ void init_fragment_reservoir_bindings(py::module& m) {
              "Get memory fragmentation ratio");
 }
 
-} // namespace movement
+} // namespace platform
 } // namespace bindings
 } // namespace pygcmc

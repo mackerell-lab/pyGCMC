@@ -12,7 +12,7 @@ namespace py = pybind11;
 
 namespace pygcmc {
 namespace bindings {
-namespace simulation {
+namespace platform {
 
 void init_ewald_bindings(py::module& m) {
     // Ewald parameters are stored as static variables in the implementation
@@ -23,7 +23,7 @@ void init_ewald_bindings(py::module& m) {
             }
             int kmax_array[3] = { kmax[0], kmax[1], kmax[2] };
             // Implementation needs to be modified to make setEwaldParameters a static method
-            platform::cpu::energy::setEwaldParameters(alpha, kmax_array, tolerance);
+            ::pygcmc::platform::cpu::energy::setEwaldParameters(alpha, kmax_array, tolerance);
         },
         "Set parameters for Ewald summation",
         py::arg("alpha"),
@@ -37,7 +37,7 @@ void init_ewald_bindings(py::module& m) {
             }
             // Convert to array and call function
             float box_array[3] = {box[0], box[1], box[2]};
-            platform::cpu::energy::initializeEwaldParameters(cutoff, box_array, alpha, tolerance);
+            ::pygcmc::platform::cpu::energy::initializeEwaldParameters(cutoff, box_array, alpha, tolerance);
         },
         "Initialize Ewald parameters with automatic optimization",
         py::arg("cutoff"),
@@ -48,7 +48,7 @@ void init_ewald_bindings(py::module& m) {
     m.def("computeSystemEnergyEwald", 
         [](::pygcmc::model::MCState& state) {
             // Call C++ function to calculate energy
-            platform::cpu::energy::computeSystemEnergyEwald(state);
+            ::pygcmc::platform::cpu::energy::computeSystemEnergyEwald(state);
             
             // Convert from C++ struct to Python dictionary
             py::dict ewald_dict;
@@ -81,7 +81,7 @@ void init_ewald_bindings(py::module& m) {
     m.def("computeMovementEnergyEwald", 
         [](::pygcmc::model::MCState& state) {
             // Call C++ function to calculate energy
-            platform::cpu::energy::computeMovementEnergyEwald(state);
+            ::pygcmc::platform::cpu::energy::computeMovementEnergyEwald(state);
             
             // Convert from C++ struct to Python dictionary
             py::dict ewald_dict;
@@ -115,6 +115,6 @@ void init_ewald_bindings(py::module& m) {
         "Calculate movement residue energy using Ewald summation");
 }
 
-} // namespace simulation
+} // namespace platform
 } // namespace bindings
 } // namespace pygcmc

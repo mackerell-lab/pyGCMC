@@ -13,12 +13,12 @@
 #include "../../model/montecarlo/MCMain.hpp"  // For MCState
 
 namespace py = pybind11;
-using namespace pygcmc::platform::cpu::movement;
+using namespace ::pygcmc::platform::cpu::movement;
 
 // Forward declaration for FragmentReservoir bindings
 namespace pygcmc {
 namespace bindings {
-namespace movement {
+namespace platform {
     void init_fragment_reservoir_bindings(pybind11::module& m);
 }
 }
@@ -26,7 +26,7 @@ namespace movement {
 
 namespace pygcmc {
 namespace bindings {
-namespace simulation {
+namespace platform {
 
 void init_movement_bindings(py::module& m) {
     // Create movement submodule
@@ -228,12 +228,12 @@ void init_movement_bindings(py::module& m) {
     
     // Bind Vector3 class (required for several other classes)
     // Note: using the movement namespace Vector3
-    py::class_<pygcmc::platform::cpu::movement::Vector3>(movement, "Vector3")
+    py::class_<::pygcmc::platform::cpu::movement::Vector3>(movement, "Vector3")
         .def(py::init<>())
         .def(py::init<double, double, double>())
-        .def_readwrite("x", &pygcmc::platform::cpu::movement::Vector3::x)
-        .def_readwrite("y", &pygcmc::platform::cpu::movement::Vector3::y)
-        .def_readwrite("z", &pygcmc::platform::cpu::movement::Vector3::z);
+        .def_readwrite("x", &::pygcmc::platform::cpu::movement::Vector3::x)
+        .def_readwrite("y", &::pygcmc::platform::cpu::movement::Vector3::y)
+        .def_readwrite("z", &::pygcmc::platform::cpu::movement::Vector3::z);
     
     // Bind ActivePool::ResidueMetadata
     py::class_<ActivePool::ResidueMetadata>(movement, "ResidueMetadata")
@@ -287,9 +287,9 @@ void init_movement_bindings(py::module& m) {
         .def("acceptanceRate", &MovementStatistics::acceptanceRate);
     
     // Register FragmentReservoir and related classes
-    pygcmc::bindings::movement::init_fragment_reservoir_bindings(movement);
+    pygcmc::bindings::platform::init_fragment_reservoir_bindings(movement);
 }
 
-} // namespace simulation
+} // namespace platform
 } // namespace bindings
 } // namespace pygcmc

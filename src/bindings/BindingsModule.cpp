@@ -9,27 +9,7 @@ namespace py = pybind11;
 namespace pygcmc {
 namespace bindings {
 
-// Forward declarations for Simulation binding init functions from separate files
-namespace simulation {
-void init_basic_bindings(py::module& m);
-void init_ewald_bindings(py::module& m);
-void init_pme_bindings(py::module& m);
-void init_pgp_bindings(py::module& m);
-void init_drude_bindings(py::module& m);
-void init_movement_bindings(py::module& m);
-void init_gcmc_bindings(py::module& m);
-
-void init_simulation_bindings(py::module& m) {
-    // Initialize all Simulation binding groups
-    init_basic_bindings(m);
-    init_ewald_bindings(m);
-    init_pme_bindings(m);
-    init_pgp_bindings(m);
-    init_drude_bindings(m);
-    init_movement_bindings(m);
-    init_gcmc_bindings(m);
-}
-}
+// Platform bindings are now consolidated - forward declarations moved below
 
 // Forward declarations for System binding init functions from separate files
 namespace system {
@@ -78,6 +58,27 @@ void init_model(py::module& m) {
 // Forward declarations for Platform binding init functions
 namespace platform {
 void init_energy_bindings(py::module& m);
+void init_basic_bindings(py::module& m);
+void init_ewald_bindings(py::module& m);
+void init_pme_bindings(py::module& m);
+void init_pgp_bindings(py::module& m);
+void init_drude_bindings(py::module& m);
+void init_movement_bindings(py::module& m);
+void init_gcmc_bindings(py::module& m);
+void init_fragment_reservoir_bindings(py::module& m);
+
+void init_platform_bindings(py::module& m) {
+    // Initialize all Platform binding groups
+    init_energy_bindings(m);
+    init_basic_bindings(m);
+    init_ewald_bindings(m);
+    init_pme_bindings(m);
+    init_pgp_bindings(m);
+    init_drude_bindings(m);
+    init_movement_bindings(m);
+    init_gcmc_bindings(m);
+    // FragmentReservoir is now called from within movement bindings
+}
 }
 
 // Forward declarations for IO binding init functions from separate files
@@ -111,12 +112,11 @@ static void cleanup_global_state() {
 PYBIND11_MODULE(pygcmc, m) {
     m.doc() = "Python bindings for GCMC simulation library";
     
-    // Initialize bindings - io, model, and system are refactored
+    // Initialize bindings - all consolidated under platform
     pygcmc::bindings::io::init_io_bindings(m);
     pygcmc::bindings::model::init_model(m);
     pygcmc::bindings::system::init_system(m);
-    pygcmc::bindings::simulation::init_simulation_bindings(m);
-    pygcmc::bindings::platform::init_energy_bindings(m);
+    pygcmc::bindings::platform::init_platform_bindings(m);
     
     // Register cleanup function - can be called manually if needed
     // NOTE: We do NOT automatically register with atexit to avoid 

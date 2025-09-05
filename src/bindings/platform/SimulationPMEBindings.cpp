@@ -12,7 +12,7 @@ namespace py = pybind11;
 
 namespace pygcmc {
 namespace bindings {
-namespace simulation {
+namespace platform {
 
 void init_pme_bindings(py::module& m) {
     // PME bindings
@@ -22,7 +22,7 @@ void init_pme_bindings(py::module& m) {
                 throw std::runtime_error("meshSize must have exactly three elements");
             }
             int meshSize_array[3] = { meshSize[0], meshSize[1], meshSize[2] };
-            platform::cpu::energy::setPMEParameters(alpha, meshSize_array, splineOrder, tolerance);
+            ::pygcmc::platform::cpu::energy::setPMEParameters(alpha, meshSize_array, splineOrder, tolerance);
         },
         "Set parameters for Particle Mesh Ewald summation",
         py::arg("alpha"),
@@ -43,14 +43,14 @@ void init_pme_bindings(py::module& m) {
             // Handle optional meshSize
             if (meshSize.empty()) {
                 // If meshSize is not provided, pass nullptr
-                platform::cpu::energy::initializePMEParameters(cutoff, box_array, alpha, nullptr, splineOrder, tolerance);
+                ::pygcmc::platform::cpu::energy::initializePMEParameters(cutoff, box_array, alpha, nullptr, splineOrder, tolerance);
             } else {
                 // If meshSize is provided, check size and convert to array
                 if (meshSize.size() != 3) {
                     throw std::runtime_error("meshSize must have exactly three elements");
                 }
                 int meshSize_array[3] = {meshSize[0], meshSize[1], meshSize[2]};
-                platform::cpu::energy::initializePMEParameters(cutoff, box_array, alpha, meshSize_array, splineOrder, tolerance);
+                ::pygcmc::platform::cpu::energy::initializePMEParameters(cutoff, box_array, alpha, meshSize_array, splineOrder, tolerance);
             }
         },
         "Initialize PME parameters with automatic optimization",
@@ -64,7 +64,7 @@ void init_pme_bindings(py::module& m) {
     m.def("computeSystemEnergyPME", 
         [](::pygcmc::model::MCState& state) {
             // Call C++ function to calculate energy
-            platform::cpu::energy::computeSystemEnergyPME(state);
+            ::pygcmc::platform::cpu::energy::computeSystemEnergyPME(state);
             
             // Convert from C++ struct to Python dictionary
             py::dict pme_dict;
@@ -97,7 +97,7 @@ void init_pme_bindings(py::module& m) {
     m.def("computeMovementEnergyPME", 
         [](::pygcmc::model::MCState& state) {
             // Call C++ function to calculate energy
-            platform::cpu::energy::computeMovementEnergyPME(state);
+            ::pygcmc::platform::cpu::energy::computeMovementEnergyPME(state);
             
             // Convert from C++ struct to Python dictionary
             py::dict pme_dict;
@@ -134,7 +134,7 @@ void init_pme_bindings(py::module& m) {
     m.def("computeSystemEnergyPMEFixed", 
         [](::pygcmc::model::MCState& state) {
             // Call C++ function to calculate energy
-            platform::cpu::energy::computeSystemEnergyPME(state);
+            ::pygcmc::platform::cpu::energy::computeSystemEnergyPME(state);
             
             // Convert from C++ struct to Python dictionary
             py::dict pme_dict;
@@ -176,7 +176,7 @@ void init_pme_bindings(py::module& m) {
     m.def("computeSystemEnergyCutoffFixed", 
         [](::pygcmc::model::MCState& state) {
             // Call the standard cutoff computation
-            platform::cpu::energy::computeSystemEnergyCutoff(state);
+            ::pygcmc::platform::cpu::energy::computeSystemEnergyCutoff(state);
             
             // Fix double-counting by dividing residue energies by 2
             for(auto& res : state.residues) {
@@ -204,7 +204,7 @@ void init_pme_bindings(py::module& m) {
     m.def("computeMovementEnergyPMEFixed", 
         [](::pygcmc::model::MCState& state) {
             // Call C++ function to calculate energy
-            platform::cpu::energy::computeMovementEnergyPME(state);
+            ::pygcmc::platform::cpu::energy::computeMovementEnergyPME(state);
             
             // Convert from C++ struct to Python dictionary
             py::dict pme_dict;
@@ -252,7 +252,7 @@ void init_pme_bindings(py::module& m) {
     // Complete energy calculation functions
     m.def("computeSystemEnergyPMEComplete", 
         [](::pygcmc::model::MCState& state) {
-            platform::cpu::energy::computeSystemEnergyPMEComplete(state);
+            ::pygcmc::platform::cpu::energy::computeSystemEnergyPMEComplete(state);
             
             // Extract energy components  
             double elec = state.ewald_energy.real_space + state.ewald_energy.reciprocal + state.ewald_energy.self;
@@ -274,7 +274,7 @@ void init_pme_bindings(py::module& m) {
         
     m.def("computeSystemEnergyCutoffComplete",
         [](::pygcmc::model::MCState& state) {
-            platform::cpu::energy::computeSystemEnergyCutoffComplete(state);
+            ::pygcmc::platform::cpu::energy::computeSystemEnergyCutoffComplete(state);
             
             // Extract energy components from C++ struct
             double elec = state.ewald_energy.real_space + state.ewald_energy.self;
@@ -295,6 +295,6 @@ void init_pme_bindings(py::module& m) {
         "Compute complete system energy using cutoff with all interactions including intramolecular");
 }
 
-} // namespace simulation
+} // namespace platform
 } // namespace bindings
 } // namespace pygcmc

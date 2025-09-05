@@ -19,10 +19,10 @@ namespace py = pybind11;
 
 namespace pygcmc {
 namespace bindings {
-namespace simulation {
+namespace platform {
 
 void init_drude_bindings(py::module& m) {
-    using namespace pygcmc::platform::cpu;
+    using namespace ::pygcmc::platform::cpu;
     // DrudeConstants
     py::module constants = m.def_submodule("DrudeConstants", "Physical constants for Drude calculations");
     constants.attr("ONE_4PI_EPS0") = DrudeConstants::ONE_4PI_EPS0;
@@ -427,7 +427,7 @@ void init_drude_bindings(py::module& m) {
     // Use DrudeComplete for production. This is for testing/comparison only.
     // Re-enabled temporarily for OpenMM alignment testing
     
-    using namespace pygcmc::platform::cpu::exp;
+    using namespace ::pygcmc::platform::cpu::exp;
     
     // Static instance for experimental version
     static DrudeExperimentalCore g_experimentalDrude;
@@ -479,6 +479,6 @@ void init_drude_bindings(py::module& m) {
              "Get last SCF iteration count");
 }
 
-} // namespace simulation
+} // namespace platform
 } // namespace bindings
 } // namespace pygcmc
