@@ -98,30 +98,24 @@ from movementCPP.cavity_cache_performance_funcs import (
     test_cache_clear_operation
 )
 
-# Import detailed balance test functions directly (10 + 8 = 18 functions)
+# Import detailed balance test functions directly (10 functions)
 from movementCPP.detailed_balance_funcs import (
     test_insertion_deletion_balance,
     test_translation_reversibility,
     test_metropolis_criterion,
     test_cavity_bias_detailed_balance,
     test_config_bias_detailed_balance,
-    test_multi_insertion_detailed_balance,
+    test_multi_insertion_detailed_balance as test_multi_insertion_detailed_balance_main,
     test_temperature_scaling,
     test_chemical_potential_balance,
     test_ensemble_averages,
     test_rosenbluth_weight_consistency
 )
 
-from movementCPP.detailed_balance_strict_funcs import (
-    test_metropolis_criterion_exact,
-    test_insertion_deletion_pairwise_balance,
-    test_insertion_deletion_flux_balance,
-    test_cavity_bias_probability_consistency,
-    test_chemical_potential_controls_density,
-    test_translation_reversibility_exact,
-    test_config_bias_fields_present,
-    test_ensemble_convergence
-)
+# Note: These imports now come from the renamed file at the end of this file
+# from movementCPP.detailed_balance_strict_funcs import (
+#     Functions have been moved - see "Detailed balance strict tests" section below
+# )
 
 # Import error handling test functions (13 functions)
 from movementCPP.error_handling_funcs import (
@@ -151,7 +145,7 @@ from movementCPP.movement_module_basic_funcs import (
     test_rotation_basic,
     test_cavity_bias_insertion,
     test_config_bias_rotation_basic,
-    test_acceptance_rate_calculation,
+    test_acceptance_rate_calculation as test_acceptance_rate_calculation_module,
     test_find_cavities_integration
 )
 
@@ -224,7 +218,7 @@ from movementCPP.multi_insertion_basic_funcs import (
     test_cbmc_weight_calculation,
     test_multi_insertion_with_cavity_bias,
     test_multi_insertion_performance,
-    test_multi_insertion_detailed_balance,
+    test_multi_insertion_detailed_balance as test_multi_insertion_detailed_balance_basic,
     test_multi_insertion_with_types,
     test_multi_insertion_thread_safety
 )
@@ -326,10 +320,11 @@ from movementCPP.proposal_statistics_edge_funcs import (
 # IDEAL GAS DISTRIBUTION TESTS (fundamental physics validation)
 # ============================================================================
 
-# Ideal gas distribution tests (5 functions)
+# Ideal gas distribution tests (6 functions)
 from movementCPP.ideal_gas_distribution_funcs import (
     test_ideal_gas_mean_particle_number,
     test_particle_distribution_shape,
+    test_particle_distribution_no_scipy,
     test_volume_scaling,
     test_chemical_potential_scaling,
     test_detailed_balance_ratio
@@ -373,4 +368,82 @@ from movementCPP.statistical_utils_tests_advanced_funcs import (
     test_calibrate_mu,
     test_no_drift_window_size,
     test_integration_detailed_balance
+)
+
+# ============================================================================
+# ADDITIONAL CAVITY AND BALANCE TESTS (from renamed test_ files)
+# ============================================================================
+
+# Cavity before/after usage tests (5 functions)
+from movementCPP.cavity_before_after_usage_funcs import (
+    test_before_after_cavity_volume_is_used,
+    test_cavity_factor_consistency_multiple_cycles,
+    test_cavity_factor_range_and_bounds,
+    test_empty_box_cavity_factor,
+    test_dense_system_cavity_factors
+)
+
+# Cavity bias core tests (4 functions)
+from movementCPP.cavity_bias_core_funcs import (
+    test_metropolis_hastings_detailed_balance,
+    test_three_tier_modes,
+    test_cavity_volume_consistency,
+    test_insertion_deletion_symmetry
+)
+
+# Cavity cluster sampling tests (4 functions)
+from movementCPP.cavity_cluster_sampling_weighting_funcs import (
+    test_cluster_volume_weighted_sampling_two_regions,
+    test_uniform_sampling_without_cavity_bias,
+    test_three_cavity_regions,
+    test_cavity_sampling_with_varying_density
+)
+
+# Cavity core geometry tests (4 functions)
+from movementCPP.cavity_core_geometry_integration_funcs import (
+    test_cavity_volume_monotonicity_and_empty_box,
+    test_cavity_parameters_monotonicity,
+    test_cavity_volume_bounds,
+    test_cavity_reproducibility_with_seed
+)
+
+# Cavity lambda combination tests (2 functions)
+from movementCPP.cavity_lambda_combination_funcs import (
+    test_cavity_bias_with_lambda_detailed_balance,
+    test_cavity_bias_lambda_consistency
+)
+
+# Deletion uniformity tests (2 functions)
+from movementCPP.deletion_uniformity_funcs import (
+    test_deletion_uniformity,
+    test_deletion_uniformity_with_cavity_bias
+)
+
+# Detailed balance random deletion tests (1 function)
+from movementCPP.detailed_balance_random_deletion_funcs import (
+    test_detailed_balance_cavity_bias_random_deletion
+)
+
+# Detailed balance strict tests (8 functions) 
+from movementCPP.detailed_balance_strict_funcs import (
+    test_metropolis_criterion_exact,
+    test_insertion_deletion_pairwise_balance,
+    test_insertion_deletion_flux_balance,
+    test_cavity_bias_probability_consistency,
+    test_chemical_potential_controls_density,
+    test_translation_reversibility_exact,
+    test_config_bias_fields_present,
+    test_ensemble_convergence
+)
+
+# Hard sphere exclusion tests (1 function)
+from movementCPP.hard_sphere_exclusion_funcs import (
+    test_hard_sphere_repulsion_documentation
+)
+
+# Ideal gas absolute tests (3 functions)
+from movementCPP.ideal_gas_absolute_funcs import (
+    test_ideal_gas_absolute_number,
+    test_ideal_gas_scaling_with_lambda,
+    test_ideal_gas_different_masses
 )
