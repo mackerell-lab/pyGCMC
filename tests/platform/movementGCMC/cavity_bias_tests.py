@@ -51,11 +51,12 @@ def test_cavity_bias_insertion(setup_gcmc_state, gcmc_params):
         result = mover_with.attemptInsertion(state)
         results_with.append(result)
     
-    # Reset state
-    state.residues = []
-    state.atoms = []
-    state.activeResidueCount = 0
-    state.activeAtomCount = 0
+    # BETTER: Request fresh state instead of manual reset to avoid invariant violations
+    # For now, properly reset state ensuring consistency
+    while state.activeResidueCount > 0:
+        mover_with.attemptDeletion(state)
+    # Double-check state is clean
+    assert state.activeResidueCount == 0, "Failed to reset state"
     
     # Test without cavity bias
     params_without = gcmc_params
@@ -141,6 +142,33 @@ def test_cavity_vs_uniform_insertion(setup_gcmc_state):
     accept_cavity = sum(1 for r in results_cavity if r.accepted) / len(results_cavity)
     accept_uniform = sum(1 for r in results_uniform if r.accepted) / len(results_uniform)
     
-    # Both should have non-zero acceptance
-    assert accept_cavity >= 0
-    assert accept_uniform >= 0
+    # NON-TRIVIAL ASSERTIONS: Replace >= 0 with meaningful checks
+    
+    # 1. Both should have SOME acceptance (not just >= 0)
+    assert accept_cavity > 0, "No cavity insertions accepted"
+    assert accept_uniform > 0, "No uniform insertions accepted"
+    
+    # 2. Cavity should be at least as good as uniform (with tolerance)
+    # In a system with excluded volume, cavity bias should help or at least not hurt
+    improvement_ratio = accept_cavity / (accept_uniform + 1e-10)
+    assert improvement_ratio >= 0.8, \
+        f"Cavity bias significantly worse than uniform: {accept_cavity:.3f} vs {accept_uniform:.3f}"
+    
+    # 3. If we have enough statistics, check significance
+    n_cavity_accepts = sum(1 for r in results_cavity if r.accepted)
+    n_uniform_accepts = sum(1 for r in results_uniform if r.accepted)
+    
+    if n_cavity_accepts > 10 and n_uniform_accepts > 10:
+        # Simple binomial test for difference
+        import math
+        n_total = len(results_cavity) + len(results_uniform)
+        p_pooled = (n_cavity_accepts + n_uniform_accepts) / n_total
+        
+        if p_pooled * (1 - p_pooled) > 0:
+            se = math.sqrt(p_pooled * (1 - p_pooled) * 
+                          (1/len(results_cavity) + 1/len(results_uniform)))
+            z = (accept_cavity - accept_uniform) / (se + 1e-10)
+            
+            # Cavity shouldn't be significantly worse (z > -2 for one-sided test)
+            assert z > -2.0, \
+                f"Cavity bias statistically worse (z={z:.2f})"

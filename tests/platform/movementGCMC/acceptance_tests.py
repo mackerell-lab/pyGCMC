@@ -29,52 +29,73 @@ def test_acceptance_rate_range(setup_gcmc_state, gcmc_mover):
 
 
 def test_chemical_potential_effect(setup_gcmc_state):
-    """Test that chemical potential affects insertion/deletion balance"""
-    state = setup_gcmc_state
+    """Test that chemical potential affects steady-state <N> with proper equilibration"""
+    import numpy as np
     
-    # Test with low chemical potential (fewer molecules expected)
-    params_low = pygcmc.movement.MovementParams()
-    params_low.temperature = 300.0
-    params_low.chemicalPotential = -20.0  # Very low
-    params_low.maxTranslation = 0.1
-    params_low.maxRotation = 0.2
+    # Seed for reproducibility
+    np.random.seed(12345)
     
-    mover_low = pygcmc.movement.MovementModule()
-    mover_low.setParams(params_low)
-    mover_low.resetStatistics()
+    # Test multiple μ values for monotonicity
+    mu_values = [-20.0, -15.0, -10.0]
+    mean_n_values = []
     
-    # Run steps
-    for _ in range(200):
-        mover_low.attemptInsertion(state)
+    for mu in mu_values:
+        # Fresh state for each test
+        state = setup_gcmc_state
+        # Clear state properly
+        while state.activeResidueCount > 0:
+            temp_mover = pygcmc.movement.MovementModule()
+            temp_mover.attemptDeletion(state)
+        
+        params = pygcmc.movement.MovementParams()
+        params.temperature = 300.0
+        params.chemicalPotential = mu
+        params.seed = int(12345 + mu)  # Different seed for each
+        params.maxTranslation = 0.1
+        params.maxRotation = 0.2
+        
+        # Use MovementModule(params) for proper seeding
+        mover = pygcmc.movement.MovementModule(params)
+        
+        # EQUILIBRATION with balanced moves
+        for _ in range(500):
+            if np.random.random() < 0.5:
+                mover.attemptInsertion(state)
+            else:
+                if state.activeResidueCount > 0:
+                    mover.attemptDeletion(state)
+        
+        # STEADY-STATE SAMPLING
+        n_samples = []
+        for i in range(1000):
+            if np.random.random() < 0.5:
+                mover.attemptInsertion(state)
+            else:
+                if state.activeResidueCount > 0:
+                    mover.attemptDeletion(state)
+            
+            # Sample every 10 steps
+            if i % 10 == 0:
+                n_samples.append(state.activeResidueCount)
+        
+        mean_n = np.mean(n_samples)
+        std_n = np.std(n_samples)
+        mean_n_values.append((mu, mean_n, std_n))
     
-    n_molecules_low = state.activeResidueCount
+    # PHYSICS VALIDATION: <N> should increase with μ
+    for i in range(len(mean_n_values) - 1):
+        mu1, n1, _ = mean_n_values[i]
+        mu2, n2, _ = mean_n_values[i + 1]
+        
+        # Should increase (allow small noise)
+        assert n2 >= n1 * 0.9, \
+            f"Non-monotonic: μ={mu1} gives <N>={n1:.2f}, μ={mu2} gives <N>={n2:.2f}"
     
-    # Reset state
-    state.residues = []
-    state.atoms = []
-    state.activeResidueCount = 0
-    state.activeAtomCount = 0
-    
-    # Test with high chemical potential (more molecules expected)
-    params_high = pygcmc.movement.MovementParams()
-    params_high.temperature = 300.0
-    params_high.chemicalPotential = -10.0  # Higher
-    params_high.maxTranslation = 0.1
-    params_high.maxRotation = 0.2
-    
-    mover_high = pygcmc.movement.MovementModule()
-    mover_high.setParams(params_high)
-    mover_high.resetStatistics()
-    
-    # Run steps
-    for _ in range(200):
-        mover_high.attemptInsertion(state)
-    
-    n_molecules_high = state.activeResidueCount
-    
-    # Higher chemical potential should lead to more molecules
-    # (May not always be true due to stochastic nature, but trend should hold)
-    assert n_molecules_high >= n_molecules_low
+    # Should see significant effect from lowest to highest μ
+    n_low = mean_n_values[0][1]
+    n_high = mean_n_values[-1][1]
+    assert n_high > n_low * 1.2 or n_high > n_low + 1, \
+        f"Insufficient μ effect: <N> changes from {n_low:.2f} to {n_high:.2f}"
 
 
 def test_temperature_effect(setup_gcmc_state):

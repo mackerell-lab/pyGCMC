@@ -91,9 +91,9 @@ def water_template():
 
 @pytest.fixture
 def gcmc_mover(gcmc_params):
-    """Create a configured GCMC movement module"""
-    mover = pygcmc.movement.MovementModule()
-    mover.setParams(gcmc_params)
+    """Create a configured GCMC movement module with proper seeding"""
+    # Use MovementModule(params) for deterministic seeding
+    mover = pygcmc.movement.MovementModule(gcmc_params)
     mover.resetStatistics()
     return mover
 
@@ -156,8 +156,11 @@ def calculate_acceptance_rate(mover):
     return 0.0
 
 
-def run_gcmc_steps(state, mover, n_steps=1000):
-    """Run a specified number of GCMC steps"""
+def run_gcmc_steps(state, mover, n_steps=1000, seed=None):
+    """Run a specified number of GCMC steps with optional seeding"""
+    if seed is not None:
+        np.random.seed(seed)
+    
     results = []
     for _ in range(n_steps):
         # Choose move type randomly
@@ -176,40 +179,7 @@ def run_gcmc_steps(state, mover, n_steps=1000):
     return results
 
 
-@pytest.fixture
-def small_state():
-    """Create a small state for testing (2x2x2 nm box)"""
-    state = pygcmc.MCState()
-    state.info = pygcmc.MCInfo()
-    state.info.box = [2.0, 2.0, 2.0]  # 2x2x2 nm box
-    state.info.setTemperature(300.0)
-    state.info.cutoff = 0.9  # Smaller cutoff for small box
-    state.info.volume = 8.0
-    
-    # Setup force field
-    ff = pygcmc.MCForceField()
-    ff.numTotalTypes = 10  # Needed for 10x10 interaction matrix
-    ff.maxTypes = 10
-    ff.ljSigma = [0.0] * 100  # 10x10 matrix
-    ff.ljEps = [0.0] * 100    # 10x10 matrix
-    
-    # Set O-O interactions for water oxygen
-    ff.ljSigma[0] = 0.3151  # O-O sigma (nm)
-    ff.ljEps[0] = 0.6364    # O-O epsilon (kJ/mol)
-    
-    state.forcefield = ff
-    state.residues = []
-    state.atoms = []
-    state.activeResidueCount = 0
-    state.activeAtomCount = 0
-    
-    return state
-
-
-@pytest.fixture
-def populated_state(setup_gcmc_state, gcmc_mover):
-    """Create a state with some molecules already inserted"""
-    state = setup_gcmc_state
+# REMOVED DUPLICATE FIXTURES - using the ones defined earlier in the file
     
     # Insert a few molecules to create a populated state
     n_inserted = 0
