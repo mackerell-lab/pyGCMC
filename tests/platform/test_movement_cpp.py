@@ -447,3 +447,10 @@ from movementCPP.ideal_gas_absolute_funcs import (
     test_ideal_gas_scaling_with_lambda,
     test_ideal_gas_different_masses
 )
+
+# Acceptance cross-validation tests (3 functions)
+from movementCPP.acceptance_cross_validation_funcs import (
+    test_insertion_acceptance_vs_reported,
+    test_translation_acceptance_vs_reported,
+    test_metropolis_criterion_validation
+)

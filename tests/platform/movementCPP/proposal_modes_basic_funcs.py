@@ -5,6 +5,7 @@ import pytest
 import pygcmc
 import numpy as np
 from .proposal_modes_fixtures import setup_system
+from .test_helpers import create_ideal_gas_state, create_weak_interaction_state, residue_centroid_pbc
 
 
 def test_uniform_mode_basic(setup_system):
@@ -14,14 +15,8 @@ def test_uniform_mode_basic(setup_system):
     is position-independent, making accepted positions an unbiased proxy
     for proposal positions when proposalInfo is not available.
     """
-    state = setup_system
-    
-    # Make interactions ideal so acceptance is position-independent
-    ff = state.forcefield
-    if hasattr(ff, 'ljEps') and ff.ljEps:
-        ff.ljEps = [0.0] * len(ff.ljEps)  # Zero interactions for ideal gas
-    if hasattr(ff, 'charges') and ff.charges:
-        ff.charges = [0.0] * len(ff.charges)  # Zero charges too
+    # Create ideal gas state with independent forcefield to avoid leakage
+    state = create_ideal_gas_state(base_state=setup_system, seed=42)
     
     # Seed for reproducibility
     np.random.seed(42)
@@ -40,27 +35,10 @@ def test_uniform_mode_basic(setup_system):
     # Get actual box dimensions
     Lx, Ly, Lz = state.info.box
     
+    # Use helper function for centroid calculation
     def residue_centroid(ridx):
-        """Calculate centroid of residue as proxy for insertion position.
-        
-        Returns centroid position wrapped to primary box for PBC consistency.
-        """
-        if ridx < 0 or ridx >= len(state.residues):
-            return None
-        r = state.residues[ridx]
-        if not hasattr(r, 'atomStart') or not hasattr(r, 'atomCount') or r.atomCount == 0:
-            return None
-        try:
-            xs = [state.atoms[i].x for i in range(r.atomStart, r.atomStart + r.atomCount)]
-            ys = [state.atoms[i].y for i in range(r.atomStart, r.atomStart + r.atomCount)]
-            zs = [state.atoms[i].z for i in range(r.atomStart, r.atomStart + r.atomCount)]
-            # Calculate centroid and wrap to primary box
-            cx = float(np.mean(xs)) % Lx
-            cy = float(np.mean(ys)) % Ly
-            cz = float(np.mean(zs)) % Lz
-            return [cx, cy, cz]
-        except Exception as e:
-            return None
+        result = residue_centroid_pbc(state, ridx)
+        return result.tolist() if result is not None else None
     
     positions = []
     attempts = 400  # More attempts to gather enough accepted samples
@@ -125,14 +103,8 @@ def test_cavity_mode_basic(setup_system):
     ensuring sufficient acceptance. Validates cavity alignment against
     expected random baseline.
     """
-    state = setup_system
-    
-    # Make interactions weak to improve acceptance while maintaining cavity preference
-    ff = state.forcefield
-    if hasattr(ff, 'ljEps') and ff.ljEps:
-        ff.ljEps = [0.01 * e for e in ff.ljEps]  # Very weak interactions to isolate proposal behavior
-    if hasattr(ff, 'charges') and ff.charges:
-        ff.charges = [0.0] * len(ff.charges)  # Zero charges
+    # Create weak interaction state with independent forcefield
+    state = create_weak_interaction_state(base_state=setup_system, epsilon_scale=0.01, seed=42)
     
     # Seed for reproducibility
     np.random.seed(42)
@@ -153,24 +125,9 @@ def test_cavity_mode_basic(setup_system):
     # Get actual box dimensions
     Lx, Ly, Lz = state.info.box
     
+    # Use helper function for centroid calculation
     def residue_centroid(ridx):
-        """Calculate centroid of residue with PBC wrapping."""
-        if ridx < 0 or ridx >= len(state.residues):
-            return None
-        r = state.residues[ridx]
-        if not hasattr(r, 'atomStart') or not hasattr(r, 'atomCount') or r.atomCount == 0:
-            return None
-        try:
-            xs = [state.atoms[i].x for i in range(r.atomStart, r.atomStart + r.atomCount)]
-            ys = [state.atoms[i].y for i in range(r.atomStart, r.atomStart + r.atomCount)]
-            zs = [state.atoms[i].z for i in range(r.atomStart, r.atomStart + r.atomCount)]
-            # Wrap to primary box
-            cx = float(np.mean(xs)) % Lx
-            cy = float(np.mean(ys)) % Ly
-            cz = float(np.mean(zs)) % Lz
-            return np.array([cx, cy, cz])
-        except Exception:
-            return None
+        return residue_centroid_pbc(state, ridx)
     
     # Find cavities first
     cavities = mover.findCavities(state)
