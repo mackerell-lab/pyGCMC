@@ -3,7 +3,13 @@
 import pytest
 import numpy as np
 import pygcmc
-from scipy import stats
+
+# Guard SciPy import
+try:
+    from scipy import stats
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
 
 
 def test_deletion_uniformity():
@@ -68,7 +74,14 @@ def test_deletion_uniformity():
     
     # Calculate chi-square statistic
     chi2_stat = np.sum((observed - expected)**2 / expected)
-    chi2_critical = stats.chi2.ppf(0.95, df=n_active-1)
+    
+    if SCIPY_AVAILABLE:
+        chi2_critical = stats.chi2.ppf(0.95, df=n_active-1)
+    else:
+        # Approximation for chi-squared critical value
+        import math
+        df = n_active - 1
+        chi2_critical = df + 2.4 * math.sqrt(2 * df)
     
     print(f"\nDeletion selection counts:")
     for idx, count in deletion_counts.items():
