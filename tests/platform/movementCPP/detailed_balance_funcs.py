@@ -21,6 +21,16 @@ try:
 except ImportError:
     THEORY_HELPERS_AVAILABLE = False
 
+# Import statistical utilities if available
+try:
+    from .statistical_utils import (
+        poisson_diff_ok,
+        ratio_CI_ok
+    )
+    STATS_UTILS_AVAILABLE = True
+except ImportError:
+    STATS_UTILS_AVAILABLE = False
+
 
 @pytest.fixture
 def setup_system():
@@ -51,9 +61,10 @@ def test_insertion_deletion_balance(setup_system_with_params):
     """
     state, params = setup_system_with_params
     
-    # Fixed parameters - no adaptation
+    # Fixed parameters - no adaptation, explicitly disable cavity bias
     params.chemicalPotential = -8.0
     params.temperature = 300.0
+    params.useCavityBias = False  # Explicitly disable for "no bias" test
     params.seed = 12345
     params.updateDerivedParameters()
     
@@ -78,9 +89,13 @@ def test_insertion_deletion_balance(setup_system_with_params):
     deletion_data = []
     
     for i in range(5000):
+        # Record particle count BEFORE the attempt
+        n_before = state.activeResidueCount
+        
         if np.random.random() < 0.5:
             result = mover.attemptInsertion(state)
             insertion_data.append({
+                'n': n_before,  # Particle count at attempt time
                 'prob': result.acceptanceProbability,
                 'accepted': result.accepted,
                 'deltaE': result.energyChange
@@ -89,6 +104,7 @@ def test_insertion_deletion_balance(setup_system_with_params):
             if state.activeResidueCount > 0:
                 result = mover.attemptDeletion(state)
                 deletion_data.append({
+                    'n': n_before,  # Particle count at attempt time
                     'prob': result.acceptanceProbability,
                     'accepted': result.accepted,
                     'deltaE': result.energyChange
@@ -100,19 +116,33 @@ def test_insertion_deletion_balance(setup_system_with_params):
     
     # Test 1: Steady-state drift test
     if len(particle_counts) >= 100:
-        mid = len(particle_counts) // 2
-        mean1 = np.mean(particle_counts[:mid])
-        mean2 = np.mean(particle_counts[mid:])
-        var1 = np.var(particle_counts[:mid], ddof=1) if len(particle_counts[:mid]) > 1 else 1.0
-        var2 = np.var(particle_counts[mid:], ddof=1) if len(particle_counts[mid:]) > 1 else 1.0
+        # Check system is not stuck
+        variance = np.var(particle_counts)
+        assert variance > 0.01, f"System appears stuck: variance={variance:.4f}"
         
-        # Standard error for difference of means
-        se_diff = np.sqrt(var1/mid + var2/(len(particle_counts)-mid))
-        
-        # Z-test for drift
-        if se_diff > 0.01:
-            z_score = abs(mean1 - mean2) / se_diff
-            assert z_score < 3.0, f"System drifting: z={z_score:.2f}, means={mean1:.1f} vs {mean2:.1f}"
+        # Use statistical utilities if available, otherwise fallback
+        if STATS_UTILS_AVAILABLE:
+            # Use proper Poisson difference test
+            mid = len(particle_counts) // 2
+            first_half = particle_counts[:mid]
+            second_half = particle_counts[mid:]
+            
+            # poisson_diff_ok expects counts, use z=3.0 for ~0.003 significance
+            drift_ok = poisson_diff_ok(sum(first_half), sum(second_half), z=3.0)
+            assert drift_ok, f"System drifting: first_half mean={np.mean(first_half):.1f}, " \
+                           f"second_half mean={np.mean(second_half):.1f}"
+        else:
+            # Fallback to simple Z-test
+            mid = len(particle_counts) // 2
+            mean1 = np.mean(particle_counts[:mid])
+            mean2 = np.mean(particle_counts[mid:])
+            var1 = np.var(particle_counts[:mid], ddof=1) if len(particle_counts[:mid]) > 1 else 1.0
+            var2 = np.var(particle_counts[mid:], ddof=1) if len(particle_counts[mid:]) > 1 else 1.0
+            
+            se_diff = np.sqrt(var1/mid + var2/(len(particle_counts)-mid))
+            if se_diff > 0.01:
+                z_score = abs(mean1 - mean2) / se_diff
+                assert z_score < 3.0, f"System drifting: z={z_score:.2f}"
     
     # Test 2: Detailed balance via probability products
     if len(insertion_data) > 100 and len(deletion_data) > 100:
@@ -123,7 +153,16 @@ def test_insertion_deletion_balance(setup_system_with_params):
         # Flux ratio should be near 1 at equilibrium
         if ins_accepts > 10 and del_accepts > 10:
             flux_ratio = ins_accepts / del_accepts
-            assert 0.33 < flux_ratio < 3.0, f"Flux imbalance: {flux_ratio:.2f}"
+            
+            # Use statistical test if available
+            if STATS_UTILS_AVAILABLE:
+                # Use proper confidence interval for ratio (z=1.96 for 95% CI)
+                # ratio_CI_ok expects just the counts, not attempts
+                ratio_ok = ratio_CI_ok(ins_accepts, del_accepts, z=1.96)
+                assert ratio_ok, f"Flux imbalance detected: ratio={flux_ratio:.2f}"
+            else:
+                # Fallback to fixed bounds
+                assert 0.33 < flux_ratio < 3.0, f"Flux imbalance: {flux_ratio:.2f}"
         
         # Probability product check
         mean_ins_prob = np.mean([d['prob'] for d in insertion_data])
@@ -137,16 +176,15 @@ def test_insertion_deletion_balance(setup_system_with_params):
             # For systems without cavity bias, check against ideal gas theory
             volume = np.prod(state.info.box)  # nm^3
             
-            # Collect probabilities with particle numbers
-            ins_probs_with_n = [(len([r for r in state.residues if r.active]), d['prob']) 
-                               for d in insertion_data[:100]]  # Sample subset
-            del_probs_with_n = [(len([r for r in state.residues if r.active]), d['prob'])
-                               for d in deletion_data[:100]]
+            # Use recorded particle numbers from attempt time
+            ins_probs_with_n = [(d['n'], d['prob']) for d in insertion_data[:500]]
+            del_probs_with_n = [(d['n'], d['prob']) for d in deletion_data[:500]]
             
             if ins_probs_with_n and del_probs_with_n:
+                # Note: n_states argument is not used in validate_detailed_balance_ratio
                 passed, obs_ratio, exp_ratio, rel_error = validate_detailed_balance_ratio(
                     ins_probs_with_n, del_probs_with_n, 
-                    particle_counts[:100],  # Use same time points
+                    None,  # n_states not needed
                     volume, params.chemicalPotential, params.temperature,
                     tolerance=0.5  # 50% tolerance for weakly interacting systems
                 )
@@ -164,6 +202,9 @@ def test_translation_reversibility(setup_system_with_params):
     params.seed = 11111
     params.temperature = 300.0
     params.updateDerivedParameters()
+    
+    # Seed NumPy for reproducibility
+    np.random.seed(11111)
     
     mover = pygcmc.movement.MovementModule(params)
     
@@ -233,6 +274,9 @@ def test_metropolis_criterion(setup_system_with_params):
     params.temperature = 300.0
     params.updateDerivedParameters()
     
+    # Seed NumPy for reproducibility
+    np.random.seed(54321)
+    
     mover = pygcmc.movement.MovementModule(params)
     
     # Insert particles first
@@ -295,6 +339,9 @@ def test_cavity_bias_detailed_balance(setup_system_with_params):
     params.chemicalPotential = -8.0
     params.seed = 99999
     params.updateDerivedParameters()
+    
+    # Seed NumPy for reproducibility
+    np.random.seed(99999)
     
     mover = pygcmc.movement.MovementModule(params)
     
@@ -473,6 +520,9 @@ def test_temperature_scaling(setup_system_with_params):
     """Test temperature effect on acceptance rates."""
     state, params = setup_system_with_params
     
+    # Seed NumPy for reproducibility
+    np.random.seed(44444)
+    
     temperatures = [100.0, 300.0, 600.0, 1000.0]
     acceptance_rates = []
     
@@ -508,6 +558,9 @@ def test_temperature_scaling(setup_system_with_params):
 def test_chemical_potential_balance(setup_system_with_params):
     """Test that chemical potential controls equilibrium particle number."""
     state, params = setup_system_with_params
+    
+    # Seed NumPy for reproducibility
+    np.random.seed(55555)
     
     chemical_potentials = [-30.0, -20.0, -10.0]
     mean_particles = []
