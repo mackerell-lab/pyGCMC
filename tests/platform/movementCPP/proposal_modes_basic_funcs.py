@@ -8,13 +8,20 @@ from .proposal_modes_fixtures import setup_system
 
 
 def test_uniform_mode_basic(setup_system):
-    """Test uniform proposal mode with position-independent acceptance."""
+    """Test uniform proposal mode with position-independent acceptance.
+    
+    Uses ideal gas conditions (zero interactions) to ensure acceptance
+    is position-independent, making accepted positions an unbiased proxy
+    for proposal positions when proposalInfo is not available.
+    """
     state = setup_system
     
     # Make interactions ideal so acceptance is position-independent
     ff = state.forcefield
     if hasattr(ff, 'ljEps') and ff.ljEps:
         ff.ljEps = [0.0] * len(ff.ljEps)  # Zero interactions for ideal gas
+    if hasattr(ff, 'charges') and ff.charges:
+        ff.charges = [0.0] * len(ff.charges)  # Zero charges too
     
     # Seed for reproducibility
     np.random.seed(42)
@@ -23,7 +30,9 @@ def test_uniform_mode_basic(setup_system):
     params.temperature = 298.15
     params.chemicalPotential = -15.7
     params.proposalMode = 0  # Uniform mode
-    params.fillProposalInfo = True
+    params.useCavityBias = False  # Explicitly disable cavity bias to ensure uniform proposals
+    if hasattr(params, 'fillProposalInfo'):
+        params.fillProposalInfo = True
     params.seed = 42
     
     mover = pygcmc.movement.MovementModule(params)
@@ -32,18 +41,25 @@ def test_uniform_mode_basic(setup_system):
     Lx, Ly, Lz = state.info.box
     
     def residue_centroid(ridx):
-        """Calculate centroid of residue as proxy for insertion position."""
+        """Calculate centroid of residue as proxy for insertion position.
+        
+        Returns centroid position wrapped to primary box for PBC consistency.
+        """
         if ridx < 0 or ridx >= len(state.residues):
             return None
         r = state.residues[ridx]
-        if not hasattr(r, 'atomStart') or not hasattr(r, 'atomCount'):
+        if not hasattr(r, 'atomStart') or not hasattr(r, 'atomCount') or r.atomCount == 0:
             return None
         try:
             xs = [state.atoms[i].x for i in range(r.atomStart, r.atomStart + r.atomCount)]
             ys = [state.atoms[i].y for i in range(r.atomStart, r.atomStart + r.atomCount)]
             zs = [state.atoms[i].z for i in range(r.atomStart, r.atomStart + r.atomCount)]
-            return [float(np.mean(xs)), float(np.mean(ys)), float(np.mean(zs))]
-        except:
+            # Calculate centroid and wrap to primary box
+            cx = float(np.mean(xs)) % Lx
+            cy = float(np.mean(ys)) % Ly
+            cz = float(np.mean(zs)) % Lz
+            return [cx, cy, cz]
+        except Exception as e:
             return None
     
     positions = []
@@ -82,7 +98,7 @@ def test_uniform_mode_basic(setup_system):
     assert np.all(pos[:, 1] >= 0.0) and np.all(pos[:, 1] <= Ly), "Y positions out of bounds"
     assert np.all(pos[:, 2] >= 0.0) and np.all(pos[:, 2] <= Lz), "Z positions out of bounds"
     
-    # Coarse 3D uniformity check
+    # 3D uniformity check with chi-square
     bins = 3
     hist, _ = np.histogramdd(pos, bins=[bins, bins, bins], 
                             range=[[0, Lx], [0, Ly], [0, Lz]])
@@ -93,17 +109,30 @@ def test_uniform_mode_basic(setup_system):
     # Loose critical bound (df = 27-1 = 26)
     assert chi2 < 50.0, f"3D chi-square too large: {chi2:.1f} with {len(pos)} samples"
     
-    print(f"✓ Uniform mode test passed with {len(pos)} positions (chi2={chi2:.1f})")
+    # Additional 1D KS tests for per-axis uniformity (more stable for small N)
+    from scipy import stats
+    for axis, label, L in [(0, 'X', Lx), (1, 'Y', Ly), (2, 'Z', Lz)]:
+        ks_stat, p_value = stats.kstest(pos[:, axis] / L, 'uniform')
+        assert p_value > 0.01, f"{label}-axis KS test failed: p={p_value:.4f}, stat={ks_stat:.3f}"
+    
+    print(f"✓ Uniform mode test passed with {len(pos)} positions (chi2={chi2:.1f}, all 1D KS tests passed)")
 
 
 def test_cavity_mode_basic(setup_system):
-    """Test cavity proposal mode with fallback to accepted positions."""
+    """Test cavity proposal mode with statistical validation.
+    
+    Uses weak interactions to maintain some cavity preference while
+    ensuring sufficient acceptance. Validates cavity alignment against
+    expected random baseline.
+    """
     state = setup_system
     
-    # Make interactions weak to improve acceptance
+    # Make interactions weak to improve acceptance while maintaining cavity preference
     ff = state.forcefield
     if hasattr(ff, 'ljEps') and ff.ljEps:
-        ff.ljEps = [0.01 * e for e in ff.ljEps]  # Very weak interactions
+        ff.ljEps = [0.01 * e for e in ff.ljEps]  # Very weak interactions to isolate proposal behavior
+    if hasattr(ff, 'charges') and ff.charges:
+        ff.charges = [0.0] * len(ff.charges)  # Zero charges
     
     # Seed for reproducibility
     np.random.seed(42)
@@ -125,18 +154,22 @@ def test_cavity_mode_basic(setup_system):
     Lx, Ly, Lz = state.info.box
     
     def residue_centroid(ridx):
-        """Calculate centroid of residue."""
+        """Calculate centroid of residue with PBC wrapping."""
         if ridx < 0 or ridx >= len(state.residues):
             return None
         r = state.residues[ridx]
-        if not hasattr(r, 'atomStart') or not hasattr(r, 'atomCount'):
+        if not hasattr(r, 'atomStart') or not hasattr(r, 'atomCount') or r.atomCount == 0:
             return None
         try:
             xs = [state.atoms[i].x for i in range(r.atomStart, r.atomStart + r.atomCount)]
             ys = [state.atoms[i].y for i in range(r.atomStart, r.atomStart + r.atomCount)]
             zs = [state.atoms[i].z for i in range(r.atomStart, r.atomStart + r.atomCount)]
-            return np.array([float(np.mean(xs)), float(np.mean(ys)), float(np.mean(zs))])
-        except:
+            # Wrap to primary box
+            cx = float(np.mean(xs)) % Lx
+            cy = float(np.mean(ys)) % Ly
+            cz = float(np.mean(zs)) % Lz
+            return np.array([cx, cy, cz])
+        except Exception:
             return None
     
     # Find cavities first
@@ -186,17 +219,43 @@ def test_cavity_mode_basic(setup_system):
     assert np.all(positions[:, 1] >= 0.0) and np.all(positions[:, 1] <= Ly)
     assert np.all(positions[:, 2] >= 0.0) and np.all(positions[:, 2] <= Lz)
     
+    # Calculate expected random baseline
+    cavity_radius = 0.5  # Detection radius used above
+    # Account for overlapping spheres by using a conservative estimate
+    # Each cavity contributes a sphere volume, but they may overlap
+    single_cavity_volume = (4/3 * np.pi * cavity_radius**3)
+    box_volume = Lx * Ly * Lz
+    # Conservative estimate: assume no overlap, cap at reasonable value
+    expected_random_rate = min(len(cavities) * single_cavity_volume / box_volume, 0.5)
+    
     # Check cavity alignment
     cavity_usage_rate = cavity_aligned / len(positions)
     
-    # Cavity mode should show some preference for cavities
-    # But don't require too high a rate since cavities may be sparse
-    if len(cavities) > 5:
-        assert cavity_usage_rate > 0.1 or cavity_aligned > 2, \
-            f"Cavity mode shows insufficient cavity alignment: {cavity_usage_rate:.1%}"
+    # Statistical test: cavity mode should exceed random baseline
+    # Use binomial test for significance
+    from scipy import stats
+    n_trials = len(positions)
+    n_successes = cavity_aligned
+    
+    # One-sided test: P(observed >= n_successes | p = expected_random_rate)
+    result = stats.binomtest(n_successes, n_trials, expected_random_rate, alternative='greater')
+    p_value = result.pvalue
+    
+    # Cavity mode should show preference for cavities
+    if len(cavities) > 5 and n_trials > 20:
+        # If cavity usage is very high (>80%), that's good regardless of baseline
+        if cavity_usage_rate > 0.8:
+            pass  # Excellent cavity alignment
+        else:
+            # Otherwise require statistical significance OR substantial improvement
+            improvement_ratio = cavity_usage_rate / (expected_random_rate + 1e-10)
+            assert p_value < 0.05 or improvement_ratio > 1.5, \
+                f"Cavity mode not significantly better than random: p={p_value:.3f}, " \
+                f"observed={cavity_usage_rate:.1%}, expected={expected_random_rate:.1%}"
     
     print(f"✓ Cavity mode test passed: {cavity_aligned}/{len(positions)} "
-          f"({cavity_usage_rate:.1%}) near cavities")
+          f"({cavity_usage_rate:.1%}) near cavities, "
+          f"baseline={expected_random_rate:.1%}, p-value={p_value:.3f}")
 
 
 def test_color_mode_placeholder(setup_system):
@@ -246,35 +305,44 @@ def test_cluster_mode_placeholder(setup_system):
 
 
 def test_adaptive_mode_behavior(setup_system):
-    """Test adaptive proposal mode switching."""
+    """Test adaptive mode behavior with cross-validation."""
     state = setup_system
     
     params = pygcmc.movement.MovementParams()
     params.temperature = 298.15
     params.chemicalPotential = -15.7
     params.proposalMode = 4  # Adaptive mode
-    # autoOccupancy params not exposed in Python
-    # params.autoOccupancySparse = 0.01
-    # params.autoOccupancyDense = 0.1
-    params.fillProposalInfo = True
+    params.seed = 42
     
-    mover = pygcmc.movement.MovementModule()
-    mover.setParams(params)
+    # Use MovementModule(params) for proper seeding
+    mover = pygcmc.movement.MovementModule(params)
     
-    # Initially should be in sparse regime (empty system)
-    initial_stats = mover.getStatistics()
-    # Stats structure changed - just track attempts
-    initial_attempts = sum(s.attempts for s in initial_stats.values())
+    # Collect acceptance data for cross-validation
+    acceptance_data = []
     
-    # Insert many atoms to change density
-    for _ in range(200):
+    for _ in range(50):
         result = mover.attemptInsertion(state)
+        acceptance_data.append({
+            'accepted': result.accepted,
+            'prob': result.acceptanceProbability if hasattr(result, 'acceptanceProbability') else None
+        })
+        if result.accepted:
+            mover.attemptDeletion(state)
     
-    # Check if mode changed based on density
-    final_stats = mover.getStatistics()
-    final_attempts = sum(s.attempts for s in final_stats.values())
+    # Test that adaptive mode works
+    initial_accepts = sum(d['accepted'] for d in acceptance_data)
+    assert initial_accepts > 0, "Adaptive mode failed to accept any insertions"
     
-    # Should have done some attempts
-    assert final_attempts > initial_attempts
+    # Cross-validation: if acceptance probabilities are available,
+    # verify reported vs empirical acceptance
+    probs = [d['prob'] for d in acceptance_data if d['prob'] is not None]
+    if len(probs) > 20:
+        mean_reported = np.mean(probs)
+        empirical_rate = initial_accepts / len(acceptance_data)
+        # They should be roughly consistent (within factor of 2 for small samples)
+        ratio = empirical_rate / (mean_reported + 1e-10)
+        assert 0.3 < ratio < 3.0, \
+            f"Acceptance cross-validation failed: empirical={empirical_rate:.3f}, " \
+            f"mean_reported={mean_reported:.3f}, ratio={ratio:.2f}"
 
 
