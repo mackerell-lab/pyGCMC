@@ -7,7 +7,7 @@ import math
 import numpy as np
 import pytest
 import pygcmc
-from .test_helpers import save_forcefield, restore_forcefield
+from .movement_helpers import save_forcefield, restore_forcefield
 
 
 def create_two_particle_lj_system(box_len=8.0, sigma=1.0, epsilon=1.0, rcut=2.5):

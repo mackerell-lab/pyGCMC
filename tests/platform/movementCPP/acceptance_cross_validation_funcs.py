@@ -4,7 +4,7 @@ import pytest
 import pygcmc
 import numpy as np
 from scipy import stats
-from .test_helpers import create_ideal_gas_state, create_weak_interaction_state
+from .movement_helpers import create_ideal_gas_state, create_weak_interaction_state
 
 
 def test_insertion_acceptance_vs_reported(setup_system):

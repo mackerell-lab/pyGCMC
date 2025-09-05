@@ -5,7 +5,7 @@ import pytest
 import pygcmc
 import numpy as np
 from .proposal_modes_fixtures import setup_system
-from .test_helpers import create_ideal_gas_state, create_weak_interaction_state, residue_centroid_pbc
+from .movement_helpers import create_ideal_gas_state, create_weak_interaction_state, residue_centroid_pbc
 
 
 def test_uniform_mode_basic(setup_system):
