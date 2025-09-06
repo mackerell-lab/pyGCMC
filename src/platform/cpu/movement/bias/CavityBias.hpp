@@ -158,6 +158,10 @@ public:
     double getCavityScore(const Vector3& position) const;
     Vector3 selectCavity() const;
     
+    // CRITICAL ADDITION: Get total cavity volume for proper bias calculation
+    double getCavityVolume(const MCState& state);
+    double getCavityVolumeFraction(const MCState& state);
+    
 private:
     // Configuration
     double gridSpacing_;                    // Grid spacing in Angstroms

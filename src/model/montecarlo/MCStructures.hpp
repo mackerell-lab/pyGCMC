@@ -45,6 +45,41 @@ struct Quaternion {
         double n = std::sqrt(w*w + x*x + y*y + z*z);
         if (n > 0) { w /= n; x /= n; y /= n; z /= n; }
     }
+    
+    // CRITICAL ADDITION: Quaternion multiplication for proper rotation composition
+    Quaternion operator*(const Quaternion& q) const {
+        return Quaternion(
+            w * q.w - x * q.x - y * q.y - z * q.z,
+            w * q.x + x * q.w + y * q.z - z * q.y,
+            w * q.y - x * q.z + y * q.w + z * q.x,
+            w * q.z + x * q.y - y * q.x + z * q.w
+        );
+    }
+    
+    // Apply rotation to a vector
+    Vector3 rotate(const Vector3& v) const {
+        // Rotation formula: v' = q * v * q^*
+        // Using optimized formula without creating quaternion from vector
+        double qw = w, qx = x, qy = y, qz = z;
+        double vx = v.x, vy = v.y, vz = v.z;
+        
+        // Calculate q * v * q^*
+        double t2 = qw * qx;
+        double t3 = qw * qy;
+        double t4 = qw * qz;
+        double t5 = -qx * qx;
+        double t6 = qx * qy;
+        double t7 = qx * qz;
+        double t8 = -qy * qy;
+        double t9 = qy * qz;
+        double t10 = -qz * qz;
+        
+        return Vector3(
+            2 * ((t8 + t10) * vx + (t6 - t4) * vy + (t3 + t7) * vz) + vx,
+            2 * ((t4 + t6) * vx + (t5 + t10) * vy + (t9 - t2) * vz) + vy,
+            2 * ((t7 - t3) * vx + (t2 + t9) * vy + (t5 + t8) * vz) + vz
+        );
+    }
 };
 
 /**

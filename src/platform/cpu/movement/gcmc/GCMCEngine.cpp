@@ -72,6 +72,9 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         return result;
     }
     
+    // CRITICAL FIX: Get N BEFORE insertion for correct acceptance calculation
+    int N_before = reservoir_->getActiveCount(typeId);
+    
     // Generate position and orientation
     Vector3 position = cavityManager_ ? generateCavityPosition() : generateRandomPosition();
     applyPeriodicBoundary(position);  // Ensure position is within PBC
@@ -102,10 +105,9 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     // Calculate acceptance probability using proper GCMC formula
     bool accept = false;
     if (acceptanceCalculator_) {
-        // Use GCMCAcceptance for proper μVT ensemble
-        int currentN = reservoir_->getActiveCount(typeId);
+        // CRITICAL FIX: Use N_before for correct detailed balance
         double prob = acceptanceCalculator_->calculateInsertionProbability(
-            typeId, currentN, result.deltaE, result.bias);
+            typeId, N_before, result.deltaE, result.bias);
         accept = acceptanceCalculator_->acceptMove(prob);
     } else {
         // Fallback to simple acceptance (should not be used in production)
@@ -139,6 +141,15 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
         return result;
     }
     
+    // CRITICAL FIX: Get N BEFORE deletion for correct acceptance calculation
+    int N_before = reservoir_->getActiveCount(typeId);
+    
+    // Check if any instances exist
+    if (N_before == 0) {
+        result.accepted = false;
+        return result;
+    }
+    
     // Select random instance of this type
     int instanceId = selectRandomInstance(typeId);
     if (instanceId < 0) {
@@ -155,13 +166,13 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
         return result;
     }
     
-    result.position = instance->position;
+    // Save position and orientation for potential restoration
+    Vector3 savedPosition = instance->position;
+    Quaternion savedOrientation = instance->orientation;
+    result.position = savedPosition;
     
     // Calculate energy before deletion
     result.energyBefore = calculateSystemEnergy();
-    
-    // Calculate deletion bias
-    result.bias = calculateDeletionBias(instanceId);
     
     // Temporarily delete (convert to ghost)
     reservoir_->deleteInstance(instanceId);
@@ -171,13 +182,15 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     result.energyAfter = calculateSystemEnergy();
     result.deltaE = result.energyAfter - result.energyBefore;
     
+    // CRITICAL FIX: Calculate deletion bias AFTER deletion for cavity bias
+    result.bias = calculateDeletionBias(instanceId);
+    
     // Calculate acceptance probability using proper GCMC formula
     bool accept = false;
     if (acceptanceCalculator_) {
-        // Use GCMCAcceptance for proper μVT ensemble
-        int currentN = reservoir_->getActiveCount(typeId) + 1; // N before deletion
+        // CRITICAL FIX: Use N_before for correct detailed balance
         double prob = acceptanceCalculator_->calculateDeletionProbability(
-            typeId, currentN, result.deltaE, result.bias);
+            typeId, N_before, result.deltaE, result.bias);
         accept = acceptanceCalculator_->acceptMove(prob);
     } else {
         // Fallback to simple acceptance (should not be used in production)
@@ -190,7 +203,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
         energyCache_.invalidate();
     } else {
         // Restore the deleted instance at the same position (keeps same ID)
-        bool restored = reservoir_->restoreInstance(instanceId, result.position, Quaternion());
+        bool restored = reservoir_->restoreInstance(instanceId, savedPosition, savedOrientation);
         if (restored) {
             // Successfully restored with same instance ID
             synchronizeStateWithReservoir(instanceId, true);
@@ -198,7 +211,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
         } else {
             // Fallback: create a new instance if restoration failed
             // This can happen if the instance was already purged
-            int restoredId = reservoir_->createInstance(typeId, result.position, Quaternion());
+            int restoredId = reservoir_->createInstance(typeId, savedPosition, savedOrientation);
             if (restoredId >= 0) {
                 synchronizeStateWithReservoir(restoredId, true);
                 result.residueIndex = restoredId;
@@ -297,10 +310,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
     
     // Generate rotation
     Quaternion rotation = generateRotationQuaternion(0.5);  // Max 0.5 radian rotation
-    // Would multiply quaternions: newOrient = oldOrient * rotation
-    Quaternion newOrient = oldOrient;
-    // In a full implementation, would apply rotation here
-    (void)rotation;  // Suppress unused variable warning
+    // CRITICAL FIX: Actually apply the rotation by quaternion multiplication
+    Quaternion newOrient = oldOrient * rotation;
     newOrient.normalize();
     
     // Update orientation
@@ -671,13 +682,19 @@ double GCMCEngine::calculateInsertionBias(const FragmentTemplate& tmpl,
     // Suppress unused parameter warnings
     (void)tmpl;
     (void)orientation;
+    (void)position;  // Not used for volume-based bias
     
     double bias = 1.0;
     
-    if (cavityManager_) {
-        // Convert to movement::Vector3
-        movement::Vector3 pos(position.x, position.y, position.z);
-        bias *= cavityManager_->getCavityScore(pos);
+    if (cavityManager_ && state_) {
+        // CRITICAL FIX: Use cavity volume fraction for proper detailed balance
+        double V_cav = cavityManager_->getCavityVolume(*state_);
+        double V_box = state_->info.box[0] * state_->info.box[1] * state_->info.box[2];
+        
+        if (V_box > 0 && V_cav > 0) {
+            // For insertion: bias = V_cav / V_box
+            bias = V_cav / V_box;
+        }
     }
     
     if (configBias_) {
@@ -690,19 +707,22 @@ double GCMCEngine::calculateInsertionBias(const FragmentTemplate& tmpl,
 
 // Calculate deletion bias
 double GCMCEngine::calculateDeletionBias(int residueIdx) {
-    if (!reservoir_) return 1.0;
+    // Suppress unused parameter warning
+    (void)residueIdx;
     
-    FragmentInstance* instance = reservoir_->getInstance(residueIdx);
-    if (!instance) return 1.0;
-    
-    // Reverse of insertion bias
     double bias = 1.0;
     
-    if (cavityManager_) {
-        // Note: instance->position is already movement::Vector3
-        double cavityScore = cavityManager_->getCavityScore(instance->position);
-        if (cavityScore > 0) {
-            bias /= cavityScore;
+    if (cavityManager_ && state_) {
+        // CRITICAL FIX: Calculate cavity bias AFTER deletion
+        // Must invalidate cache first since we just deleted a molecule
+        cavityManager_->invalidateCache();
+        
+        double V_cav_after = cavityManager_->getCavityVolume(*state_);
+        double V_box = state_->info.box[0] * state_->info.box[1] * state_->info.box[2];
+        
+        if (V_box > 0 && V_cav_after > 0) {
+            // For deletion: bias = V_box / V_cav_after (inverse of insertion)
+            bias = V_box / V_cav_after;
         }
     }
     

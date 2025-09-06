@@ -53,6 +53,16 @@ struct Quaternion {
         double norm = std::sqrt(w*w + x*x + y*y + z*z);
         w /= norm; x /= norm; y /= norm; z /= norm;
     }
+    
+    // CRITICAL ADDITION: Quaternion multiplication for proper rotation composition
+    Quaternion operator*(const Quaternion& q) const {
+        return Quaternion(
+            w * q.w - x * q.x - y * q.y - z * q.z,
+            w * q.x + x * q.w + y * q.z - z * q.y,
+            w * q.y - x * q.z + y * q.w + z * q.x,
+            w * q.z + x * q.y - y * q.x + z * q.w
+        );
+    }
 };
 
 namespace utils {

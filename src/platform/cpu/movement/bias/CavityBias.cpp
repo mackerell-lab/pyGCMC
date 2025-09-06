@@ -790,6 +790,44 @@ Vector3 CavityManager::selectCavity() const {
     return cavityCache_[index];
 }
 
+// CRITICAL ADDITION: Calculate total cavity volume for proper bias calculation
+double CavityManager::getCavityVolume(const MCState& state) {
+    // Ensure cavities are up to date
+    if (!cacheValid_) {
+        findCavities(state);
+    }
+    
+    // Calculate cavity volume based on grid points
+    int cavityPoints = 0;
+    for (size_t i = 0; i < grid_.occupied.size(); ++i) {
+        if (!grid_.occupied[i]) {
+            cavityPoints++;
+        }
+    }
+    
+    // Calculate volume per grid point
+    double gridVolume = grid_.spacing.x * grid_.spacing.y * grid_.spacing.z;
+    
+    // Total cavity volume in nm^3 (convert from Angstrom^3)
+    double cavityVolume = cavityPoints * gridVolume / 1000.0;  // A^3 to nm^3
+    
+    return cavityVolume;
+}
+
+// Calculate cavity volume fraction for bias calculation
+double CavityManager::getCavityVolumeFraction(const MCState& state) {
+    double cavityVolume = getCavityVolume(state);
+    
+    // Get box volume in nm^3
+    double boxVolume = (grid_.boxSize.x * grid_.boxSize.y * grid_.boxSize.z) / 1000.0;
+    
+    if (boxVolume <= 0) {
+        return 0.0;
+    }
+    
+    return cavityVolume / boxVolume;
+}
+
 } // namespace movement
 } // namespace cpu
 } // namespace platform
