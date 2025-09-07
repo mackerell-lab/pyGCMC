@@ -49,13 +49,14 @@ public:
         double energyAfter;
         double deltaE;
         double bias;
+        double acceptanceProbability;  // Added for observability
         int fragmentType;
         int residueIndex;
         Vector3 position;
         
         MoveResult() : type(INSERT), accepted(false), energyBefore(0), 
                       energyAfter(0), deltaE(0), bias(1.0), 
-                      fragmentType(-1), residueIndex(-1) {}
+                      acceptanceProbability(0.0), fragmentType(-1), residueIndex(-1) {}
     };
     
     // Constructor
@@ -121,7 +122,11 @@ public:
     void setCutoff(double cutoff) { cutoff_ = cutoff; }
     void setSeed(unsigned int seed);
     void setAcceptanceCalculator(GCMCAcceptance* acceptCalc) { 
-        acceptanceCalculator_ = acceptCalc; 
+        acceptanceCalculator_ = acceptCalc;
+        // Auto-seed acceptance if engine has been seeded
+        if (acceptCalc && lastSeed_ != 0) {
+            acceptCalc->setSeed(lastSeed_ + 1);
+        }
     }
     
     // Set energy callback
@@ -164,6 +169,7 @@ private:
     // Statistics
     int totalMoves_;
     int acceptedMoves_;
+    unsigned int lastSeed_ = 0;  // Store last seed for auto-seeding acceptance
     
     // Helper methods
     void updateFragmentPosition(int residueIdx, const Vector3& newPos);

@@ -62,11 +62,15 @@ void init_gcmc_bindings(py::module& m) {
         .def("attemptRotation", &GCMCEngine::attemptRotation,
              py::arg("residueIdx"), "Attempt a rotation move")
         .def("setAcceptanceCalculator", &GCMCEngine::setAcceptanceCalculator,
-             py::arg("calculator"), "Set the acceptance calculator")
+             py::arg("calculator"), py::keep_alive<1, 2>(),
+             "Set the acceptance calculator")
         .def("setCavityManager", &GCMCEngine::setCavityManager,
-             py::arg("manager"), "Set the cavity manager")
+             py::arg("manager"), py::keep_alive<1, 2>(),
+             "Set the cavity manager")
         .def("getAcceptanceRate", &GCMCEngine::getAcceptanceRate,
-             "Get the overall acceptance rate");
+             "Get the overall acceptance rate")
+        .def("synchronizeStateWithReservoir", &GCMCEngine::synchronizeStateWithReservoir,
+             "Synchronize MCState with the reservoir's active fragments");
     
     // MoveResult struct for GCMCEngine
     py::class_<GCMCEngine::MoveResult>(m, "GCMCMoveResult")
@@ -75,6 +79,7 @@ void init_gcmc_bindings(py::module& m) {
         .def_readonly("energyBefore", &GCMCEngine::MoveResult::energyBefore)
         .def_readonly("energyAfter", &GCMCEngine::MoveResult::energyAfter)
         .def_readonly("bias", &GCMCEngine::MoveResult::bias)
+        .def_readonly("acceptanceProbability", &GCMCEngine::MoveResult::acceptanceProbability)
         .def_readonly("residueIndex", &GCMCEngine::MoveResult::residueIndex);
     
     // GCMCAcceptance class
@@ -102,6 +107,12 @@ void init_gcmc_bindings(py::module& m) {
              py::arg("typeId"), py::arg("currentNumber"),
              py::arg("deltaE"), py::arg("bias"),
              "Calculate deletion acceptance probability")
+        .def("calculateTranslationProbability",
+             &GCMCAcceptance::calculateTranslationProbability,
+             py::arg("deltaE"), py::arg("bias") = 1.0,
+             "Calculate translation acceptance probability")
+        .def("setSeed", &GCMCAcceptance::setSeed,
+             py::arg("seed"), "Set random seed for acceptance decisions")
         .def("acceptMove", &GCMCAcceptance::acceptMove,
              py::arg("probability"), "Accept or reject based on probability");
     

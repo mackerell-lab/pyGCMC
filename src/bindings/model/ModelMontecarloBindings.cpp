@@ -74,7 +74,8 @@ void init_montecarlo_bindings(py::module& m, py::module&) {
         .def_readwrite("type", &pygcmc::model::MCResidue::type)
         .def_readwrite("radius", &pygcmc::model::MCResidue::radius)
         .def_readwrite("energy_vdw", &pygcmc::model::MCResidue::energy_vdw)
-        .def_readwrite("energy_elec", &pygcmc::model::MCResidue::energy_elec);
+        .def_readwrite("energy_elec", &pygcmc::model::MCResidue::energy_elec)
+        .def_readwrite("atoms", &pygcmc::model::MCResidue::atoms);
 
     // Bind MCAtom
     py::class_<pygcmc::model::MCAtom>(m, "MCAtom")

@@ -1,5 +1,6 @@
 #include "GCMCEngine.hpp"
 #include "GCMCAcceptance.hpp"
+#include "GCMCConfig.hpp"
 #include "../../energy/EnergyModule.hpp"
 #include <cmath>
 #include <algorithm>
@@ -49,9 +50,28 @@ void GCMCEngine::initialize(MCState* state, FragmentReservoir* reservoir) {
     energyCache_.invalidate();
 }
 
-// Set seed
+// Set seed - unified for all RNG components
 void GCMCEngine::setSeed(unsigned int seed) {
+    // Set engine's RNG seed
     rng_.seed(seed);
+    lastSeed_ = seed;  // Store for auto-seeding acceptance
+    
+    // Also set acceptance calculator's RNG seed if present
+    if (acceptanceCalculator_) {
+        acceptanceCalculator_->setSeed(seed + 1);  // Use different but deterministic seed
+    }
+    
+    // Set reservoir's RNG seed if it has one
+    if (reservoir_) {
+        // Note: Add setSeed to FragmentReservoir if it needs random operations
+        // reservoir_->setSeed(seed + 2);
+    }
+    
+    // Set cavity manager's RNG seed if it has one
+    if (cavityManager_) {
+        // Note: Add setSeed to CavityManager if it needs random operations
+        // cavityManager_->setSeed(seed + 3);
+    }
 }
 
 // Attempt insertion
@@ -104,13 +124,23 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     
     // Calculate acceptance probability using proper GCMC formula
     bool accept = false;
+    double prob = 0.0;
     if (acceptanceCalculator_) {
         // CRITICAL FIX: Use N_before for correct detailed balance
-        double prob = acceptanceCalculator_->calculateInsertionProbability(
+        prob = acceptanceCalculator_->calculateInsertionProbability(
             typeId, N_before, result.deltaE, result.bias);
+        
+        // Only store probability if configured
+        result.acceptanceProbability = shouldStoreProbability() ? prob : -1.0;
+        
         accept = acceptanceCalculator_->acceptMove(prob);
     } else {
         // Fallback to simple acceptance (should not be used in production)
+        double beta = 1.0 / (8.314e-3 * temperature_);
+        double activity = 100.0; // Default activity
+        prob = std::min(1.0, (activity * state_->info.volume / (N_before + 1)) * 
+                       std::exp(-beta * result.deltaE) * result.bias);
+        result.acceptanceProbability = prob;
         accept = acceptMove(result.deltaE, result.bias, temperature_);
     }
     
@@ -187,13 +217,23 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     
     // Calculate acceptance probability using proper GCMC formula
     bool accept = false;
+    double prob = 0.0;
     if (acceptanceCalculator_) {
         // CRITICAL FIX: Use N_before for correct detailed balance
-        double prob = acceptanceCalculator_->calculateDeletionProbability(
+        prob = acceptanceCalculator_->calculateDeletionProbability(
             typeId, N_before, result.deltaE, result.bias);
+        
+        // Only store probability if configured
+        result.acceptanceProbability = shouldStoreProbability() ? prob : -1.0;
+        
         accept = acceptanceCalculator_->acceptMove(prob);
     } else {
         // Fallback to simple acceptance (should not be used in production)
+        double beta = 1.0 / (8.314e-3 * temperature_);
+        double activity = 100.0; // Default activity
+        prob = std::min(1.0, (N_before / (activity * state_->info.volume)) * 
+                       std::exp(-beta * result.deltaE) * result.bias);
+        result.acceptanceProbability = prob;
         accept = acceptMove(result.deltaE, result.bias, temperature_);
     }
     
@@ -264,8 +304,23 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
     result.energyAfter = calculateFragmentEnergy(residueIdx);
     result.deltaE = result.energyAfter - result.energyBefore;
     
-    // Accept or reject
-    bool accept = acceptMove(result.deltaE, 1.0, temperature_);
+    // Accept or reject using unified acceptance calculator
+    bool accept = false;
+    double prob = 0.0;
+    if (acceptanceCalculator_) {
+        prob = acceptanceCalculator_->calculateTranslationProbability(result.deltaE, 1.0);
+        
+        // Only store probability if configured
+        result.acceptanceProbability = shouldStoreProbability() ? prob : -1.0;
+        
+        accept = acceptanceCalculator_->acceptMove(prob);
+    } else {
+        // Metropolis criterion
+        double beta = 1.0 / (8.314e-3 * temperature_);
+        prob = std::min(1.0, std::exp(-beta * result.deltaE));
+        result.acceptanceProbability = prob;
+        accept = acceptMove(result.deltaE, 1.0, temperature_);
+    }
     
     if (accept) {
         result.accepted = true;
@@ -321,8 +376,25 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
     result.energyAfter = calculateFragmentEnergy(residueIdx);
     result.deltaE = result.energyAfter - result.energyBefore;
     
-    // Accept or reject
-    bool accept = acceptMove(result.deltaE, 1.0, temperature_);
+    // Use unified acceptance calculation for rotation
+    bool accept = false;
+    double prob = 0.0;
+    if (acceptanceCalculator_) {
+        // Rotation uses standard Metropolis criterion (no N dependence)
+        prob = acceptanceCalculator_->calculateTranslationProbability(
+            result.deltaE, 1.0);  // bias = 1.0 for rotation
+        
+        // Only store probability if configured
+        result.acceptanceProbability = shouldStoreProbability() ? prob : -1.0;
+        
+        accept = acceptanceCalculator_->acceptMove(prob);
+    } else {
+        // Fallback to direct calculation
+        double beta = 1.0 / (8.314e-3 * temperature_);
+        prob = (result.deltaE <= 0) ? 1.0 : std::exp(-beta * result.deltaE);
+        result.acceptanceProbability = prob;
+        accept = acceptMove(result.deltaE, 1.0, temperature_);
+    }
     
     if (accept) {
         result.accepted = true;
