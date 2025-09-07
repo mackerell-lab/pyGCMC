@@ -128,10 +128,10 @@ private:
 #define GCMC_DEBUG_CONFIG GCMCConfig::getInstance().debug
 #define GCMC_ADV_CONFIG GCMCConfig::getInstance().advanced
 
-// Performance-critical inline checks - always check environment
+// Performance-critical inline checks
 inline bool shouldStoreProbability() {
-    // Check environment variable each time to avoid state issues in parallel tests
-    // This is still very fast as getenv is optimized
+    // Direct check for correctness in tests
+    // The overhead is acceptable since this is only used when debugging
     return std::getenv("GCMC_STORE_PROB") != nullptr;
 }
 

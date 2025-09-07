@@ -33,7 +33,7 @@ class TestDetailedBalanceFix:
             
         # Create minimal test state
         self.state = pygcmc.MCState()
-        self.state.info.box = (30.0, 30.0, 30.0)  # 3nm box
+        self.state.info.box = (30.0, 30.0, 30.0)  # 30nm box
         self.state.info.setTemperature(300.0)
         
         # Create force field with weak interactions
@@ -69,7 +69,7 @@ class TestDetailedBalanceFix:
         # Create acceptance calculator
         self.acceptance = pygcmc.GCMCAcceptance()
         self.acceptance.setTemperature(300.0)
-        self.acceptance.setVolume(27.0)  # nm^3
+        self.acceptance.setVolume(27000.0)  # 30^3 nm^3
         self.acceptance.setActivity(0, 100.0)  # High activity for testing
         self.engine.setAcceptanceCalculator(self.acceptance)
     
@@ -96,17 +96,22 @@ class TestDetailedBalanceFix:
                     n_values.append(n_before)
                     acceptance_probs.append(result.acceptanceProbability)
             
-            # After collecting data, verify the trend
-            # With high activity and low energy, all probs might be 1.0
-            # So just verify we collected the data
-            assert len(n_values) > 0, "No acceptance probabilities collected"
-            assert len(acceptance_probs) > 0, "No acceptance probabilities collected"
+            # Verify quantitative formula for ideal gas
+            activity = 0.001
+            volume = 27000.0  # nm^3
             
-            # If all probabilities are 1.0 (due to high activity), that's okay
-            # The important thing is that N_before is used correctly
-            # which is tested by the fact that the code runs without error
+            for i, n_before in enumerate(n_values):
+                # Theoretical probability for ideal gas (bias=1.0, deltaE=0)
+                theoretical = min(1.0, activity * volume / (n_before + 1))
+                actual = acceptance_probs[i]
+                
+                # Should match within numerical precision
+                relative_error = abs(actual - theoretical) / max(theoretical, 1e-10)
+                assert relative_error < 1e-5, \
+                    f"Insertion probability mismatch at N={n_before}: " \
+                    f"expected {theoretical:.6f}, got {actual:.6f}"
             
-            print(f"✓ Insertion N counting verified: uses N_before correctly")
+            print(f"✓ Insertion N counting verified quantitatively")
         finally:
             # Clean up environment variable
             if 'GCMC_STORE_PROB' in os.environ:
@@ -200,7 +205,9 @@ class TestDetailedBalanceFix:
             
             # The bias should be between 0 and 1 (volume fraction)
             if hasattr(result, 'bias'):
-                assert 0 <= result.bias <= 1.0, "Cavity bias should be volume fraction"
+                # Allow small floating point error
+                assert -1e-10 <= result.bias <= 1.0 + 1e-10, \
+                    f"Cavity bias should be volume fraction, got {result.bias}"
                 print(f"✓ Cavity bias verified: {result.bias:.3f} (volume fraction)")
         except AttributeError:
             print("○ Cavity manager not fully exposed in bindings")

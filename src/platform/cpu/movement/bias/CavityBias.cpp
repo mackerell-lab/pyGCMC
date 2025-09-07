@@ -805,11 +805,11 @@ double CavityManager::getCavityVolume(const MCState& state) {
         }
     }
     
-    // Calculate volume per grid point
+    // Calculate volume per grid point (grid_.spacing is already in nm)
     double gridVolume = grid_.spacing.x * grid_.spacing.y * grid_.spacing.z;
     
-    // Total cavity volume in nm^3 (convert from Angstrom^3)
-    double cavityVolume = cavityPoints * gridVolume / 1000.0;  // A^3 to nm^3
+    // Total cavity volume in nm^3 (no conversion needed, grid is already in nm)
+    double cavityVolume = cavityPoints * gridVolume;
     
     return cavityVolume;
 }
@@ -818,8 +818,8 @@ double CavityManager::getCavityVolume(const MCState& state) {
 double CavityManager::getCavityVolumeFraction(const MCState& state) {
     double cavityVolume = getCavityVolume(state);
     
-    // Get box volume in nm^3
-    double boxVolume = (grid_.boxSize.x * grid_.boxSize.y * grid_.boxSize.z) / 1000.0;
+    // Get box volume in nm^3 (grid_.boxSize is already in nm)
+    double boxVolume = grid_.boxSize.x * grid_.boxSize.y * grid_.boxSize.z;
     
     if (boxVolume <= 0) {
         return 0.0;
