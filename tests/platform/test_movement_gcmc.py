@@ -71,3 +71,10 @@ from movementGCMC.scaling_tests import (
     test_chemical_potential_scaling,
     test_detailed_balance
 )
+
+# Configuration tests (3 functions)
+from movementGCMC.configuration_tests import (
+    test_statistics_sampling_occurs,
+    test_max_translation_applied_to_moves,
+    test_cavity_bias_toggle_bias_value
+)

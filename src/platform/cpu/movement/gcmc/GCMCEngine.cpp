@@ -32,7 +32,10 @@ GCMCEngine::GCMCEngine()
       uniform_(0.0, 1.0),
       normal_(0.0, 1.0),
       totalMoves_(0),
-      acceptedMoves_(0) {
+      acceptedMoves_(0),
+      maxTranslationStep_(2.0),
+      maxRotationAngleRad_(0.5),
+      useCavityBias_(true) {
     energyCache_.valid = false;
     // Configure default energy callback
     energyCallback_->setEnergyMethod(energyMethod_);
@@ -95,8 +98,9 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     // CRITICAL FIX: Get N BEFORE insertion for correct acceptance calculation
     int N_before = reservoir_->getActiveCount(typeId);
     
-    // Generate position and orientation
-    Vector3 position = cavityManager_ ? generateCavityPosition() : generateRandomPosition();
+    // Generate position and orientation based on configuration
+    Vector3 position = (useCavityBias_ && cavityManager_) ? 
+                      generateCavityPosition() : generateRandomPosition();
     applyPeriodicBoundary(position);  // Ensure position is within PBC
     Quaternion orientation = generateRandomOrientation();
     
@@ -158,6 +162,15 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     }
     
     totalMoves_++;
+    
+    // Sample statistics if configured
+    if (collectStats_ && statistics_.shouldSample(totalMoves_)) {
+        int particleCount = reservoir_ ? reservoir_->getActiveCount() : 0;
+        double energy = calculateSystemEnergy();
+        statistics_.addSample(totalMoves_, particleCount, energy, 
+                            getAcceptanceRate(), temperature_, 100.0);
+    }
+    
     return result;
 }
 
@@ -265,6 +278,15 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     }
     
     totalMoves_++;
+    
+    // Sample statistics if configured  
+    if (collectStats_ && statistics_.shouldSample(totalMoves_)) {
+        int particleCount = reservoir_ ? reservoir_->getActiveCount() : 0;
+        double energy = calculateSystemEnergy();
+        statistics_.addSample(totalMoves_, particleCount, energy, 
+                            getAcceptanceRate(), temperature_, 100.0);
+    }
+    
     return result;
 }
 
@@ -294,8 +316,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
     // Calculate energy before move
     result.energyBefore = calculateFragmentEnergy(residueIdx);
     
-    // Generate translation
-    Vector3 displacement = generateTranslationVector(2.0);  // Max 2 Angstrom move
+    // Generate translation using configured step size
+    Vector3 displacement = generateTranslationVector(maxTranslationStep_);
     Vector3 newPos = oldPos + displacement;
     applyPeriodicBoundary(newPos);
     
@@ -336,6 +358,15 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
     }
     
     totalMoves_++;
+    
+    // Sample statistics if configured
+    if (collectStats_ && statistics_.shouldSample(totalMoves_)) {
+        int particleCount = reservoir_ ? reservoir_->getActiveCount() : 0;
+        double energy = calculateSystemEnergy();
+        statistics_.addSample(totalMoves_, particleCount, energy, 
+                            getAcceptanceRate(), temperature_, 100.0);
+    }
+    
     return result;
 }
 
@@ -365,8 +396,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
     // Calculate energy before rotation
     result.energyBefore = calculateFragmentEnergy(residueIdx);
     
-    // Generate rotation
-    Quaternion rotation = generateRotationQuaternion(0.5);  // Max 0.5 radian rotation
+    // Generate rotation using configured angle
+    Quaternion rotation = generateRotationQuaternion(maxRotationAngleRad_);
     // CRITICAL FIX: Actually apply the rotation by quaternion multiplication
     Quaternion newOrient = oldOrient * rotation;
     newOrient.normalize();
@@ -409,6 +440,15 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
     }
     
     totalMoves_++;
+    
+    // Sample statistics if configured
+    if (collectStats_ && statistics_.shouldSample(totalMoves_)) {
+        int particleCount = reservoir_ ? reservoir_->getActiveCount() : 0;
+        double energy = calculateSystemEnergy();
+        statistics_.addSample(totalMoves_, particleCount, energy, 
+                            getAcceptanceRate(), temperature_, 100.0);
+    }
+    
     return result;
 }
 
@@ -991,6 +1031,100 @@ double GCMCEngine::minimumImageDistance(const Vector3& r1, const Vector3& r2) {
     }
     
     return dr.norm();
+}
+
+// Dynamic configuration implementation
+void GCMCEngine::setConfigValue(const std::string& key, double value) {
+    configMap_[key] = value;
+    
+    // Apply specific configuration changes
+    if (key == "temperature") {
+        temperature_ = value;
+        if (acceptanceCalculator_) {
+            acceptanceCalculator_->setTemperature(value);
+        }
+    } else if (key == "cutoff") {
+        cutoff_ = value;
+    } else if (key == "statsInterval") {
+        statsInterval_ = static_cast<int>(value);
+        statistics_.setSamplingInterval(statsInterval_);
+    } else if (key == "autoAdjustStats") {
+        statistics_.setAutoAdjust(value > 0.5);
+    } else if (key == "collectStats") {
+        collectStats_ = (value > 0.5);
+    } else if (key == "maxTranslation") {
+        maxTranslationStep_ = value;
+    } else if (key == "maxRotation") {
+        maxRotationAngleRad_ = value;
+    } else if (key == "useCavityBias") {
+        useCavityBias_ = (value > 0.5);
+    } else if (key == "storeProbabilities") {
+        // Just store in configMap, used by shouldStoreProbability()
+    }
+}
+
+double GCMCEngine::getConfigValue(const std::string& key) const {
+    auto it = configMap_.find(key);
+    if (it != configMap_.end()) {
+        return it->second;
+    }
+    
+    // Return current values for known keys
+    if (key == "temperature") return temperature_;
+    if (key == "cutoff") return cutoff_;
+    if (key == "statsInterval") return static_cast<double>(statsInterval_);
+    if (key == "collectStats") return collectStats_ ? 1.0 : 0.0;
+    if (key == "maxTranslation") return maxTranslationStep_;
+    if (key == "maxRotation") return maxRotationAngleRad_;
+    if (key == "useCavityBias") return useCavityBias_ ? 1.0 : 0.0;
+    if (key == "storeProbabilities") return shouldStoreProbability() ? 1.0 : 0.0;
+    
+    return 0.0;  // Default for unknown keys
+}
+
+void GCMCEngine::setStatisticsInterval(int interval) {
+    statsInterval_ = std::max(1, interval);
+    statistics_.setSamplingInterval(statsInterval_);
+    configMap_["statsInterval"] = static_cast<double>(statsInterval_);
+}
+
+// Check if should store probability - controlled by configuration
+bool GCMCEngine::shouldStoreProbability() const {
+    // Honor environment variable first (tests rely on this)
+    if (::pygcmc::platform::cpu::movement::gcmc::shouldStoreProbability()) {
+        return true;
+    }
+    // Fallback to runtime config keys
+    auto it = configMap_.find("storeProbabilities");
+    if (it != configMap_.end()) {
+        return it->second > 0.5;
+    }
+    auto it2 = configMap_.find("storeAcceptanceProbability");
+    if (it2 != configMap_.end()) {
+        return it2->second > 0.5;
+    }
+    // Default: don't store probabilities for performance
+    return false;
+}
+
+// Get residue position
+Vector3 GCMCEngine::getResiduePosition(int residueIdx) {
+    if (!reservoir_) return Vector3(0, 0, 0);
+    
+    FragmentInstance* instance = reservoir_->getInstance(residueIdx);
+    if (!instance) return Vector3(0, 0, 0);
+    
+    return Vector3(instance->position.x, instance->position.y, instance->position.z);
+}
+
+// Get residue orientation
+Quaternion GCMCEngine::getResidueOrientation(int residueIdx) {
+    if (!reservoir_) return Quaternion(1, 0, 0, 0);
+    
+    FragmentInstance* instance = reservoir_->getInstance(residueIdx);
+    if (!instance) return Quaternion(1, 0, 0, 0);
+    
+    return instance->orientation;
 }
 
 } // namespace gcmc

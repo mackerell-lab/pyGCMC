@@ -23,6 +23,7 @@ using FragmentReservoir = ::pygcmc::platform::cpu::movement::FragmentReservoir;
 using FragmentInstance = ::pygcmc::platform::cpu::movement::FragmentInstance;
 using GCMCEngine = ::pygcmc::platform::cpu::movement::gcmc::GCMCEngine;
 using GCMCAcceptance = ::pygcmc::platform::cpu::movement::gcmc::GCMCAcceptance;
+using GCMCStatistics = ::pygcmc::platform::cpu::movement::gcmc::GCMCStatistics;
 using CavityManager = ::pygcmc::platform::cpu::movement::CavityManager;
 using Vector3 = ::pygcmc::platform::cpu::movement::Vector3;
 using Quaternion = ::pygcmc::platform::cpu::movement::Quaternion;
@@ -70,7 +71,62 @@ void init_gcmc_bindings(py::module& m) {
         .def("getAcceptanceRate", &GCMCEngine::getAcceptanceRate,
              "Get the overall acceptance rate")
         .def("synchronizeStateWithReservoir", &GCMCEngine::synchronizeStateWithReservoir,
-             "Synchronize MCState with the reservoir's active fragments");
+             "Synchronize MCState with the reservoir's active fragments")
+        // Dynamic configuration
+        .def("setConfigValue", &GCMCEngine::setConfigValue,
+             py::arg("key"), py::arg("value"),
+             "Set a configuration value dynamically")
+        .def("getConfigValue", &GCMCEngine::getConfigValue,
+             py::arg("key"),
+             "Get a configuration value")
+        // Statistics management
+        .def("enableStatistics", &GCMCEngine::enableStatistics,
+             py::arg("enable"),
+             "Enable or disable statistics collection")
+        .def("setStatisticsInterval", &GCMCEngine::setStatisticsInterval,
+             py::arg("interval"),
+             "Set the interval for statistics sampling")
+        .def("getStatistics", 
+             (GCMCStatistics& (GCMCEngine::*)()) &GCMCEngine::getStatistics,
+             py::return_value_policy::reference_internal,
+             "Get the statistics collector")
+        // New methods for residue position and orientation queries
+        .def("getResiduePosition", &GCMCEngine::getResiduePosition,
+             py::arg("residueIdx"), "Get position of residue")
+        .def("getResidueOrientation", &GCMCEngine::getResidueOrientation,
+             py::arg("residueIdx"), "Get orientation of residue");
+    
+    // GCMCStatistics class
+    py::class_<GCMCStatistics>(m, "GCMCStatistics")
+        .def(py::init<>())
+        .def("setAutoAdjust", &GCMCStatistics::setAutoAdjust,
+             py::arg("enable"), "Enable/disable auto-adjustment of sampling frequency")
+        .def("setSamplingInterval", &GCMCStatistics::setSamplingInterval,
+             py::arg("interval"), "Set sampling interval")
+        .def("getSamplingInterval", &GCMCStatistics::getSamplingInterval,
+             "Get current sampling interval")
+        .def("shouldSample", &GCMCStatistics::shouldSample,
+             py::arg("step"), "Check if should sample at this step")
+        .def("addSample", &GCMCStatistics::addSample,
+             py::arg("step"), py::arg("particleCount"), py::arg("energy"),
+             py::arg("acceptanceRate"), py::arg("temperature"), py::arg("activity"),
+             "Add a sample")
+        .def("getParticleStats", &GCMCStatistics::getParticleStats,
+             "Get particle count statistics")
+        .def("getEnergyStats", &GCMCStatistics::getEnergyStats,
+             "Get energy statistics")
+        .def("getCurrentVariance", &GCMCStatistics::getCurrentVariance,
+             "Get current variance for auto-adjustment")
+        .def("clear", &GCMCStatistics::clear,
+             "Clear all samples");
+    
+    // Stats structure
+    py::class_<GCMCStatistics::Stats>(m, "GCMCStats")
+        .def_readonly("mean", &GCMCStatistics::Stats::mean)
+        .def_readonly("variance", &GCMCStatistics::Stats::variance)
+        .def_readonly("min", &GCMCStatistics::Stats::min)
+        .def_readonly("max", &GCMCStatistics::Stats::max)
+        .def_readonly("count", &GCMCStatistics::Stats::count);
     
     // MoveResult struct for GCMCEngine
     py::class_<GCMCEngine::MoveResult>(m, "GCMCMoveResult")
@@ -80,7 +136,8 @@ void init_gcmc_bindings(py::module& m) {
         .def_readonly("energyAfter", &GCMCEngine::MoveResult::energyAfter)
         .def_readonly("bias", &GCMCEngine::MoveResult::bias)
         .def_readonly("acceptanceProbability", &GCMCEngine::MoveResult::acceptanceProbability)
-        .def_readonly("residueIndex", &GCMCEngine::MoveResult::residueIndex);
+        .def_readonly("residueIndex", &GCMCEngine::MoveResult::residueIndex)
+        .def_readonly("position", &GCMCEngine::MoveResult::position);
     
     // GCMCAcceptance class
     py::class_<GCMCAcceptance>(m, "GCMCAcceptance")

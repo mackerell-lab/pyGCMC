@@ -8,8 +8,11 @@
 #include "../../energy/EnergyModule.hpp"
 #include "GCMCEnergyCallback.hpp"
 #include "GCMCAcceptance.hpp"
+#include "GCMCStatistics.hpp"
 #include <random>
 #include <memory>
+#include <unordered_map>
+#include <string>
 
 namespace pygcmc {
 namespace platform {
@@ -116,9 +119,18 @@ public:
     double calculateAcceptanceProbability(const MoveResult& result, 
                                          double temperature);
     
+    // Residue position and orientation queries
+    Vector3 getResiduePosition(int residueIdx);
+    Quaternion getResidueOrientation(int residueIdx);
+    
     // Configuration
     void setTemperature(double T) { temperature_ = T; }
-    void setEnergyMethod(EnergyMethod method) { energyMethod_ = method; }
+    void setEnergyMethod(EnergyMethod method) { 
+        energyMethod_ = method; 
+        if (energyCallback_) {
+            energyCallback_->setEnergyMethod(method);
+        }
+    }
     void setCutoff(double cutoff) { cutoff_ = cutoff; }
     void setSeed(unsigned int seed);
     void setAcceptanceCalculator(GCMCAcceptance* acceptCalc) { 
@@ -147,6 +159,16 @@ public:
                static_cast<double>(acceptedMoves_) / totalMoves_ : 0.0;
     }
     
+    // Dynamic configuration
+    void setConfigValue(const std::string& key, double value);
+    double getConfigValue(const std::string& key) const;
+    
+    // Statistics management
+    void enableStatistics(bool enable) { collectStats_ = enable; }
+    void setStatisticsInterval(int interval);
+    GCMCStatistics& getStatistics() { return statistics_; }
+    const GCMCStatistics& getStatistics() const { return statistics_; }
+    
 private:
     // State and components
     MCState* state_;
@@ -169,13 +191,29 @@ private:
     // Statistics
     int totalMoves_;
     int acceptedMoves_;
+    
+    // Configuration parameters for moves
+    double maxTranslationStep_;
+    double maxRotationAngleRad_;
+    bool useCavityBias_;
     unsigned int lastSeed_ = 0;  // Store last seed for auto-seeding acceptance
+    
+    // Smart statistics collection
+    GCMCStatistics statistics_;
+    bool collectStats_ = false;
+    int statsInterval_ = 1000;  // Default: sample every 1000 steps
+    
+    // Dynamic configuration
+    std::unordered_map<std::string, double> configMap_;
     
     // Helper methods
     void updateFragmentPosition(int residueIdx, const Vector3& newPos);
     void updateFragmentOrientation(int residueIdx, const Quaternion& newOrient);
     void applyPeriodicBoundary(Vector3& position);
     double minimumImageDistance(const Vector3& r1, const Vector3& r2);
+    
+    // Probability storage control
+    bool shouldStoreProbability() const;
     
     // Energy caching (optional optimization)
     struct EnergyCache {
