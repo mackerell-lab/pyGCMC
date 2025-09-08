@@ -256,7 +256,7 @@ class TestDetailedBalanceFix:
                 
                 # The ratio should be consistent with theory
                 activity = 100.0
-                volume = 27.0
+                volume = 27000.0  # 30^3 nm^3, matching acceptance.setVolume(27000.0)
                 expected_ratio = n / (activity * volume)
                 actual_ratio = avg_del / avg_ins if avg_ins > 0 else 0
                 

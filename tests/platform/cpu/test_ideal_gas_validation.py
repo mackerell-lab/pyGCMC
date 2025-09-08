@@ -180,38 +180,49 @@ class TestIdealGasValidation:
         os.environ['GCMC_STORE_PROB'] = '1'
         
         try:
-            # Insert some molecules
-            for _ in range(10):
-                engine.attemptInsertion(0)
-            
-            # Collect paired insertion/deletion probabilities at same N
+            # Test at specific N values for clarity
+            test_N_values = [1, 2, 5, 10, 20, 30]
             N_values = []
             ins_probs = []
             del_probs = []
             
-            for _ in range(20):
-                # Get current N
-                N = reservoir.getActiveCount(0)
+            for target_N in test_N_values:
+                # Setup exactly target_N molecules
+                # Remove all first
+                while reservoir.getActiveCount(0) > 0:
+                    engine.attemptDeletion(0)
                 
-                # Try insertion
+                # Insert exactly target_N
+                for _ in range(target_N):
+                    while True:
+                        if engine.attemptInsertion(0).accepted:
+                            break
+                
+                # Verify we have exactly target_N
+                actual_N = reservoir.getActiveCount(0)
+                if actual_N != target_N:
+                    continue
+                
+                # Measure insertion probability at N
                 ins_result = engine.attemptInsertion(0)
                 ins_prob = ins_result.acceptanceProbability
                 
-                # If accepted, delete it to maintain N
-                if ins_result.accepted:
+                # Reset to exactly N (ignore what happened above)
+                while reservoir.getActiveCount(0) > target_N:
                     engine.attemptDeletion(0)
+                while reservoir.getActiveCount(0) < target_N:
+                    while True:
+                        if engine.attemptInsertion(0).accepted:
+                            break
                 
-                # Try deletion
-                if N > 0:
-                    del_result = engine.attemptDeletion(0)
-                    del_prob = del_result.acceptanceProbability
-                    
-                    # If accepted, insert back to maintain N
-                    if del_result.accepted:
-                        engine.attemptInsertion(0)
-                    
-                    # Record the pair
-                    N_values.append(N)
+                # Now measure deletion probability at same N
+                del_result = engine.attemptDeletion(0)
+                del_prob = del_result.acceptanceProbability
+                
+                # Record only if we maintained exact N for both measurements
+                if reservoir.getActiveCount(0) == target_N or \
+                   reservoir.getActiveCount(0) == target_N - 1:
+                    N_values.append(target_N)
                     ins_probs.append(ins_prob)
                     del_probs.append(del_prob)
             
@@ -255,19 +266,11 @@ class TestIdealGasValidation:
                         f"Insertion probability mismatch at N={N}: " \
                         f"expected {expected_ins:.6f}, got {ins_probs[i]:.6f}"
                     
-                    # For deletion, allow for a systematic factor (possibly units issue)
-                    # The ratio 1.1 suggests a possible factor of 1.1 in the implementation
-                    # Just check that it's consistent
-                    if abs(del_probs[i] - expected_del * 1.1) < 1e-5:
-                        # There's a consistent factor, that's acceptable
-                        print(f"  Note: Deletion probability has factor ~1.1 (units convention?)")
-                    elif del_error < 0.15:  # Allow 15% error for deletion
-                        # Small error, acceptable
-                        print(f"  Deletion probability within 15% tolerance")
-                    else:
-                        assert False, \
-                            f"Deletion probability mismatch at N={N}: " \
-                            f"expected {expected_del:.6f}, got {del_probs[i]:.6f}"
+                    # For deletion, should also match exactly for ideal gas
+                    # Now that we've fixed the test logic to use same N
+                    assert del_error < 1e-5, \
+                        f"Deletion probability mismatch at N={N}: " \
+                        f"expected {expected_del:.6f}, got {del_probs[i]:.6f}"
             
             print("✓ Detailed balance ratio validated")
             

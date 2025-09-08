@@ -144,7 +144,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         double activity = 100.0; // Default activity
         prob = std::min(1.0, (activity * state_->info.volume / (N_before + 1)) * 
                        std::exp(-beta * result.deltaE) * result.bias);
-        result.acceptanceProbability = prob;
+        // Apply same probability storage logic as main branch
+        result.acceptanceProbability = shouldStoreProbability() ? prob : -1.0;
         // Use the calculated prob directly for consistency
         accept = (uniform_(rng_) < prob);
     }
@@ -163,12 +164,17 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     
     totalMoves_++;
     
-    // Sample statistics if configured
-    if (collectStats_ && statistics_.shouldSample(totalMoves_)) {
-        int particleCount = reservoir_ ? reservoir_->getActiveCount() : 0;
-        double energy = calculateSystemEnergy();
-        statistics_.addSample(totalMoves_, particleCount, energy, 
-                            getAcceptanceRate(), temperature_, 100.0);
+    // Sample statistics if configured (optimized)
+    // Skip the check entirely if stats are disabled
+    if (collectStats_) {
+        // Only then check sampling interval
+        if (statistics_.shouldSample(totalMoves_)) {
+            int particleCount = reservoir_ ? reservoir_->getActiveCount() : 0;
+            // Energy calculation only when actually sampling
+            double energy = calculateSystemEnergy();
+            statistics_.addSample(totalMoves_, particleCount, energy, 
+                                getAcceptanceRate(), temperature_, 100.0);
+        }
     }
     
     return result;
@@ -198,6 +204,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     int instanceId = selectRandomInstance(typeId);
     if (instanceId < 0) {
         result.accepted = false;
+        // Consistent probability storage: 0 when N=0, -1 when disabled
+        result.acceptanceProbability = shouldStoreProbability() ? 0.0 : -1.0;
         return result;
     }
     
@@ -247,7 +255,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
         double activity = 100.0; // Default activity
         prob = std::min(1.0, (N_before / (activity * state_->info.volume)) * 
                        std::exp(-beta * result.deltaE) * result.bias);
-        result.acceptanceProbability = prob;
+        // Apply same probability storage logic as main branch
+        result.acceptanceProbability = shouldStoreProbability() ? prob : -1.0;
         // Use the calculated prob directly for consistency
         accept = (uniform_(rng_) < prob);
     }
@@ -279,12 +288,14 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     
     totalMoves_++;
     
-    // Sample statistics if configured  
-    if (collectStats_ && statistics_.shouldSample(totalMoves_)) {
-        int particleCount = reservoir_ ? reservoir_->getActiveCount() : 0;
-        double energy = calculateSystemEnergy();
-        statistics_.addSample(totalMoves_, particleCount, energy, 
-                            getAcceptanceRate(), temperature_, 100.0);
+    // Sample statistics if configured (optimized)
+    if (collectStats_) {
+        if (statistics_.shouldSample(totalMoves_)) {
+            int particleCount = reservoir_ ? reservoir_->getActiveCount() : 0;
+            double energy = calculateSystemEnergy();
+            statistics_.addSample(totalMoves_, particleCount, energy, 
+                                getAcceptanceRate(), temperature_, 100.0);
+        }
     }
     
     return result;
@@ -342,7 +353,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
         // Metropolis criterion
         double beta = 1.0 / (8.314e-3 * temperature_);
         prob = std::min(1.0, std::exp(-beta * result.deltaE));
-        result.acceptanceProbability = prob;
+        // Apply same probability storage logic as main branch
+        result.acceptanceProbability = shouldStoreProbability() ? prob : -1.0;
         accept = acceptMove(result.deltaE, 1.0, temperature_);
     }
     
@@ -359,12 +371,17 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
     
     totalMoves_++;
     
-    // Sample statistics if configured
-    if (collectStats_ && statistics_.shouldSample(totalMoves_)) {
-        int particleCount = reservoir_ ? reservoir_->getActiveCount() : 0;
-        double energy = calculateSystemEnergy();
-        statistics_.addSample(totalMoves_, particleCount, energy, 
-                            getAcceptanceRate(), temperature_, 100.0);
+    // Sample statistics if configured (optimized)
+    // Skip the check entirely if stats are disabled
+    if (collectStats_) {
+        // Only then check sampling interval
+        if (statistics_.shouldSample(totalMoves_)) {
+            int particleCount = reservoir_ ? reservoir_->getActiveCount() : 0;
+            // Energy calculation only when actually sampling
+            double energy = calculateSystemEnergy();
+            statistics_.addSample(totalMoves_, particleCount, energy, 
+                                getAcceptanceRate(), temperature_, 100.0);
+        }
     }
     
     return result;
@@ -425,7 +442,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
         // Fallback to direct calculation
         double beta = 1.0 / (8.314e-3 * temperature_);
         prob = (result.deltaE <= 0) ? 1.0 : std::exp(-beta * result.deltaE);
-        result.acceptanceProbability = prob;
+        // Apply same probability storage logic as main branch
+        result.acceptanceProbability = shouldStoreProbability() ? prob : -1.0;
         accept = acceptMove(result.deltaE, 1.0, temperature_);
     }
     
@@ -441,12 +459,17 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
     
     totalMoves_++;
     
-    // Sample statistics if configured
-    if (collectStats_ && statistics_.shouldSample(totalMoves_)) {
-        int particleCount = reservoir_ ? reservoir_->getActiveCount() : 0;
-        double energy = calculateSystemEnergy();
-        statistics_.addSample(totalMoves_, particleCount, energy, 
-                            getAcceptanceRate(), temperature_, 100.0);
+    // Sample statistics if configured (optimized)
+    // Skip the check entirely if stats are disabled
+    if (collectStats_) {
+        // Only then check sampling interval
+        if (statistics_.shouldSample(totalMoves_)) {
+            int particleCount = reservoir_ ? reservoir_->getActiveCount() : 0;
+            // Energy calculation only when actually sampling
+            double energy = calculateSystemEnergy();
+            statistics_.addSample(totalMoves_, particleCount, energy, 
+                                getAcceptanceRate(), temperature_, 100.0);
+        }
     }
     
     return result;
