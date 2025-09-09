@@ -164,7 +164,14 @@ public:
     double getConfigValue(const std::string& key) const;
     
     // Statistics management
-    void enableStatistics(bool enable) { collectStats_ = enable; }
+    void enableStatistics(bool enable) {
+        collectStats_ = enable;
+        // When enabling, initialize countdown to current interval to avoid
+        // immediate sampling and eliminate per-move modulo overhead
+        if (collectStats_) {
+            statsCountdown_ = std::max(1, statsInterval_);
+        }
+    }
     void setStatisticsInterval(int interval);
     GCMCStatistics& getStatistics() { return statistics_; }
     const GCMCStatistics& getStatistics() const { return statistics_; }
@@ -202,6 +209,7 @@ private:
     GCMCStatistics statistics_;
     bool collectStats_ = false;
     int statsInterval_ = 1000;  // Default: sample every 1000 steps
+    int statsCountdown_ = 1000; // Lightweight countdown to next sample
     
     // Dynamic configuration
     std::unordered_map<std::string, double> configMap_;

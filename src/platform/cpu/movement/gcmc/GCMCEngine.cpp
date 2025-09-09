@@ -164,16 +164,14 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     
     totalMoves_++;
     
-    // Sample statistics if configured (optimized)
-    // Skip the check entirely if stats are disabled
+    // Sample statistics if configured using a lightweight countdown
     if (collectStats_) {
-        // Only then check sampling interval
-        if (statistics_.shouldSample(totalMoves_)) {
+        if (--statsCountdown_ <= 0) {
             int particleCount = reservoir_ ? reservoir_->getActiveCount() : 0;
-            // Energy calculation only when actually sampling
             double energy = calculateSystemEnergy();
-            statistics_.addSample(totalMoves_, particleCount, energy, 
-                                getAcceptanceRate(), temperature_, 100.0);
+            statistics_.addSample(totalMoves_, particleCount, energy,
+                                  getAcceptanceRate(), temperature_, 100.0);
+            statsCountdown_ = std::max(1, statsInterval_);
         }
     }
     
@@ -290,13 +288,14 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     
     totalMoves_++;
     
-    // Sample statistics if configured (optimized)
+    // Sample statistics if configured using a lightweight countdown
     if (collectStats_) {
-        if (statistics_.shouldSample(totalMoves_)) {
+        if (--statsCountdown_ <= 0) {
             int particleCount = reservoir_ ? reservoir_->getActiveCount() : 0;
             double energy = calculateSystemEnergy();
-            statistics_.addSample(totalMoves_, particleCount, energy, 
-                                getAcceptanceRate(), temperature_, 100.0);
+            statistics_.addSample(totalMoves_, particleCount, energy,
+                                  getAcceptanceRate(), temperature_, 100.0);
+            statsCountdown_ = std::max(1, statsInterval_);
         }
     }
     
@@ -373,16 +372,14 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
     
     totalMoves_++;
     
-    // Sample statistics if configured (optimized)
-    // Skip the check entirely if stats are disabled
+    // Sample statistics if configured using a lightweight countdown
     if (collectStats_) {
-        // Only then check sampling interval
-        if (statistics_.shouldSample(totalMoves_)) {
+        if (--statsCountdown_ <= 0) {
             int particleCount = reservoir_ ? reservoir_->getActiveCount() : 0;
-            // Energy calculation only when actually sampling
             double energy = calculateSystemEnergy();
-            statistics_.addSample(totalMoves_, particleCount, energy, 
-                                getAcceptanceRate(), temperature_, 100.0);
+            statistics_.addSample(totalMoves_, particleCount, energy,
+                                  getAcceptanceRate(), temperature_, 100.0);
+            statsCountdown_ = std::max(1, statsInterval_);
         }
     }
     
@@ -461,16 +458,14 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
     
     totalMoves_++;
     
-    // Sample statistics if configured (optimized)
-    // Skip the check entirely if stats are disabled
+    // Sample statistics if configured using a lightweight countdown
     if (collectStats_) {
-        // Only then check sampling interval
-        if (statistics_.shouldSample(totalMoves_)) {
+        if (--statsCountdown_ <= 0) {
             int particleCount = reservoir_ ? reservoir_->getActiveCount() : 0;
-            // Energy calculation only when actually sampling
             double energy = calculateSystemEnergy();
-            statistics_.addSample(totalMoves_, particleCount, energy, 
-                                getAcceptanceRate(), temperature_, 100.0);
+            statistics_.addSample(totalMoves_, particleCount, energy,
+                                  getAcceptanceRate(), temperature_, 100.0);
+            statsCountdown_ = std::max(1, statsInterval_);
         }
     }
     
@@ -1111,6 +1106,8 @@ void GCMCEngine::setStatisticsInterval(int interval) {
     statsInterval_ = std::max(1, interval);
     statistics_.setSamplingInterval(statsInterval_);
     configMap_["statsInterval"] = static_cast<double>(statsInterval_);
+    // Reset countdown to align with the new interval
+    statsCountdown_ = statsInterval_;
 }
 
 // Check if should store probability - controlled by configuration
