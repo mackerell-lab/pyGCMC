@@ -121,6 +121,15 @@ class PerformanceBenchmark:
         # Create fresh system
         engine, state, reservoir = self.create_test_system()
         
+        # Wire environment variables to engine settings
+        if "GCMC_ENABLE_STATS" in os.environ:
+            if os.environ["GCMC_ENABLE_STATS"] == "1":
+                engine.enableStatistics(True)
+        if "GCMC_STATS_INTERVAL" in os.environ:
+            engine.setStatisticsInterval(int(os.environ["GCMC_STATS_INTERVAL"]))
+        # Note: GCMC_STORE_PROB is handled via environment variable in C++
+        # No need to wire it here as it's checked directly in shouldStoreProbability()
+        
         # Warm up
         self.run_simulation(engine, steps=100)
         

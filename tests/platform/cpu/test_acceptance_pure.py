@@ -96,21 +96,11 @@ class TestAcceptancePure:
                 print(f"  N_before={N_before}: prob={prob:.10f}, expected={expected:.10f}, "
                       f"error={error:.2e}, rel_error={rel_error:.2e}")
                 
-                # Note: There seems to be a systematic factor in the implementation
-                # Check if it's exactly 1.1
-                ratio = prob / expected if expected > 0 else 0
-                if abs(ratio - 1.1) < 1e-10:
-                    print(f"    Note: Found exact 1.1 factor (prob = expected * 1.1)")
-                
-                # For now, allow either exact match or 1.1 factor
-                if error < 1e-12:
-                    pass  # Exact match
-                elif abs(prob - expected * 1.1) < 1e-12:
-                    print(f"    WARNING: Systematic 1.1 factor detected")
-                else:
-                    assert False, \
-                        f"Deletion probability mismatch at N_before={N_before}: " \
-                        f"expected {expected:.10f}, got {prob:.10f}"
+                # Strict check - no systematic factors allowed in pure test
+                # The formulas must be exact
+                assert error < 1e-12, \
+                    f"Deletion probability mismatch at N_before={N_before}: " \
+                    f"expected {expected:.10f}, got {prob:.10f}"
         
         print("✓ Deletion formula verified (with possible 1.1 factor)")
     
@@ -145,15 +135,10 @@ class TestAcceptancePure:
             print(f"  N={N}: ins*N={lhs:.6f}, del*zV={rhs:.6f}, "
                   f"error={error:.2e}, rel_error={rel_error:.2e}")
             
-            # Check if there's a systematic factor
-            if rel_error > 1e-10:
-                ratio = lhs / rhs if rhs > 0 else 0
-                print(f"    Ratio: {ratio:.10f}")
-                
-                # The 1.1 factor in deletion would break detailed balance
-                # unless it's compensated elsewhere
-                if abs(ratio - 1.0/1.1) < 1e-10:
-                    print(f"    Note: Ratio is exactly 1/1.1 = {1.0/1.1:.10f}")
+            # Detailed balance must be exact - no systematic factors
+            assert rel_error < 1e-10, \
+                f"Detailed balance violation at N={N}: " \
+                f"ins*N={lhs:.10f} should equal del*zV={rhs:.10f}"
         
         print("✓ Detailed balance product examined")
     

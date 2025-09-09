@@ -197,6 +197,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     // Check if any instances exist
     if (N_before == 0) {
         result.accepted = false;
+        // Set probability semantics: 0.0 when storing, -1.0 when not
+        result.acceptanceProbability = shouldStoreProbability() ? 0.0 : -1.0;
         return result;
     }
     

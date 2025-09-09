@@ -90,11 +90,13 @@ public:
      * Optimized with inline hint for performance
      */
     inline bool shouldSample(int step) const {
-        // Quick check to avoid subtraction in most cases
+        // For large intervals, use modulo but avoid step 0
+        // to prevent immediate sampling at the start
         if (samplingInterval_ > 1000) {
-            // For large intervals, use modulo to reduce overhead
-            return (step % samplingInterval_) == 0;
+            // Only sample at multiples of interval, but not at step 0
+            return (step > 0) && (step % samplingInterval_ == 0);
         }
+        // For smaller intervals, use difference from last sample
         return (step - lastSampleStep_) >= samplingInterval_;
     }
     

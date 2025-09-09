@@ -142,7 +142,8 @@ def test_ideal_gas_mean_particle_number():
                 
                 # Statistical analysis
                 mean_n = np.mean(particle_counts)
-                std_n = np.std(particle_counts)
+                # Use unbiased std (ddof=1) to mitigate small-sample underestimation
+                std_n = np.std(particle_counts, ddof=1)
                 ess = effective_sample_size(particle_counts)
                 
                 # For ideal gas, variance should equal mean (Poisson)

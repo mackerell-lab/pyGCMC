@@ -252,25 +252,22 @@ class TestIdealGasValidation:
                     print(f"         ratio={actual_ratio:.6f}, expected={expected_ratio:.6f}, "
                           f"error={relative_error:.2e}")
                     
-                    # For large N, the ratio might be very different from 1
-                    # Just check that individual probabilities are correct
+                    # Individual probabilities must match exactly for ideal gas
                     ins_error = abs(ins_probs[i] - expected_ins) / max(expected_ins, 1e-10)
                     del_error = abs(del_probs[i] - expected_del) / max(expected_del, 1e-10)
                     
-                    # Check individual probabilities
-                    # Note: There might be a constant factor difference due to units or convention
-                    # So we check if the probabilities are proportionally correct
+                    # Strict physics check - no tolerance for "factors" or "conventions"
+                    # Ideal gas formulas are exact, no 1.1 factor allowed
                     
-                    # For insertion, should match exactly for ideal gas
-                    assert ins_error < 1e-5, \
+                    # For insertion, must match exactly (within numerical precision)
+                    assert ins_error < 1e-10, \
                         f"Insertion probability mismatch at N={N}: " \
-                        f"expected {expected_ins:.6f}, got {ins_probs[i]:.6f}"
+                        f"expected {expected_ins:.10f}, got {ins_probs[i]:.10f}"
                     
-                    # For deletion, should also match exactly for ideal gas
-                    # Now that we've fixed the test logic to use same N
-                    assert del_error < 1e-5, \
+                    # For deletion, must also match exactly (within numerical precision)
+                    assert del_error < 1e-10, \
                         f"Deletion probability mismatch at N={N}: " \
-                        f"expected {expected_del:.6f}, got {del_probs[i]:.6f}"
+                        f"expected {expected_del:.10f}, got {del_probs[i]:.10f}"
             
             print("✓ Detailed balance ratio validated")
             
