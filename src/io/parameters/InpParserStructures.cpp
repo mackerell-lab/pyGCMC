@@ -58,6 +58,16 @@ std::vector<float> InpParserStructures::parse_float_vector(const std::string& st
     return result;
 }
 
+std::vector<int> InpParserStructures::parse_int_vector(const std::string& str) {
+    std::vector<int> result;
+    std::istringstream iss(str);
+    int value;
+    while (iss >> value) {
+        result.push_back(value);
+    }
+    return result;
+}
+
 } // namespace parameters
 } // namespace io
 } // namespace pygcmc

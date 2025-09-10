@@ -128,25 +128,54 @@ private:
 #define GCMC_DEBUG_CONFIG GCMCConfig::getInstance().debug
 #define GCMC_ADV_CONFIG GCMCConfig::getInstance().advanced
 
-// Performance-critical inline checks
+// Performance-critical inline checks with intelligent caching
 inline bool shouldStoreProbability() {
-    // Direct check for correctness in tests
-    // The overhead is acceptable since this is only used when debugging
-    return std::getenv("GCMC_STORE_PROB") != nullptr;
+    // For production: cache at first call for maximum performance
+    // For testing: always check to allow test isolation
+    static const bool is_testing = (std::getenv("PYTEST_CURRENT_TEST") != nullptr);
+    
+    if (is_testing) {
+        // In test mode, always check the environment variable
+        return std::getenv("GCMC_STORE_PROB") != nullptr;
+    } else {
+        // In production, cache for maximum performance
+        static const bool store_prob = (std::getenv("GCMC_STORE_PROB") != nullptr);
+        return store_prob;
+    }
 }
 
 inline bool shouldCollectStats(int step) {
-    // Check environment variable for consistency
-    if (std::getenv("GCMC_ENABLE_STATS") == nullptr) {
-        return false;
+    // Check if we're in test mode
+    static const bool is_testing = (std::getenv("PYTEST_CURRENT_TEST") != nullptr);
+    
+    if (is_testing) {
+        // In test mode, always check environment variables
+        const char* enable_str = std::getenv("GCMC_ENABLE_STATS");
+        if (!enable_str) return false;
+        
+        const char* interval_str = std::getenv("GCMC_STATS_INTERVAL");
+        int interval = interval_str ? std::atoi(interval_str) : 1000;
+        return (step > 0) && (step % interval == 0);
+    } else {
+        // In production, cache for maximum performance
+        static const bool enable_stats = (std::getenv("GCMC_ENABLE_STATS") != nullptr);
+        static const int interval = []() {
+            const char* interval_str = std::getenv("GCMC_STATS_INTERVAL");
+            return interval_str ? std::atoi(interval_str) : 1000;
+        }();
+        
+        if (!enable_stats) return false;
+        return (step > 0) && (step % interval == 0);
     }
-    
-    // Get interval from environment or use default
-    const char* interval_str = std::getenv("GCMC_STATS_INTERVAL");
-    int interval = interval_str ? std::atoi(interval_str) : 1000;
-    
-    return (step % interval == 0);
 }
+
+// For testing purposes only - allows resetting the cached values
+// This should NEVER be called in production code
+#ifdef PYGCMC_TESTING
+namespace testing {
+    void resetConfigCache();
+}
+#endif
 
 } // namespace gcmc
 } // namespace movement

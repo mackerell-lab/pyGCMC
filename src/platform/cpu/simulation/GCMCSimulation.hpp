@@ -5,10 +5,12 @@
 #include "../movement/gcmc/GCMCAcceptance.hpp"
 #include "../movement/gcmc/GCMCStatistics.hpp"
 #include "../movement/reservoir/fragment_reservoir.hpp"
+#include "../movement/reservoir/MultiTypeReservoir.hpp"
 #include "../energy/EnergyModule.hpp"
 #include "../../../model/param/ParamMain.hpp"
 #include "../../../model/montecarlo/MCMain.hpp"
 #include "../../../io/parameters/InpParserMain.hpp"
+#include "../../../io/parameters/InpParserGCMC.hpp"
 #include "../../../system/log/LogMain.hpp"
 #include <memory>
 #include <vector>
@@ -148,7 +150,7 @@ private:
     std::unique_ptr<model::montecarlo::MCState> state_;
     std::unique_ptr<movement::gcmc::GCMCEngine> engine_;
     std::unique_ptr<movement::gcmc::GCMCAcceptance> acceptance_;
-    std::unique_ptr<movement::FragmentReservoir> reservoir_;
+    std::unique_ptr<movement::MultiTypeReservoir> reservoir_;
     movement::gcmc::GCMCStatistics statistics_;
     
     // Fragment management

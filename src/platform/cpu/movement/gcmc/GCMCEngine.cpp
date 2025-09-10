@@ -1079,7 +1079,11 @@ void GCMCEngine::setConfigValue(const std::string& key, double value) {
     } else if (key == "useCavityBias") {
         useCavityBias_ = (value > 0.5);
     } else if (key == "storeProbabilities") {
-        // Just store in configMap, used by shouldStoreProbability()
+        // Clear cache when config changes
+        storeProbabilityCached_ = false;
+    } else if (key == "storeAcceptanceProbability") {
+        // Clear cache when config changes
+        storeProbabilityCached_ = false;
     }
 }
 
@@ -1112,21 +1116,31 @@ void GCMCEngine::setStatisticsInterval(int interval) {
 
 // Check if should store probability - controlled by configuration
 bool GCMCEngine::shouldStoreProbability() const {
-    // Honor environment variable first (tests rely on this)
-    if (::pygcmc::platform::cpu::movement::gcmc::shouldStoreProbability()) {
-        return true;
+    // Use cached value for performance
+    if (!storeProbabilityCached_) {
+        // First time: check environment and config directly
+        // Avoid calling the global function to prevent cross-test contamination
+        const char* env_value = std::getenv("GCMC_STORE_PROB");
+        if (env_value != nullptr) {
+            storeProbabilityValue_ = true;
+        } else {
+            // Check runtime config keys
+            auto it = configMap_.find("storeProbabilities");
+            if (it != configMap_.end()) {
+                storeProbabilityValue_ = (it->second > 0.5);
+            } else {
+                auto it2 = configMap_.find("storeAcceptanceProbability");
+                if (it2 != configMap_.end()) {
+                    storeProbabilityValue_ = (it2->second > 0.5);
+                } else {
+                    // Default: don't store probabilities for performance
+                    storeProbabilityValue_ = false;
+                }
+            }
+        }
+        storeProbabilityCached_ = true;
     }
-    // Fallback to runtime config keys
-    auto it = configMap_.find("storeProbabilities");
-    if (it != configMap_.end()) {
-        return it->second > 0.5;
-    }
-    auto it2 = configMap_.find("storeAcceptanceProbability");
-    if (it2 != configMap_.end()) {
-        return it2->second > 0.5;
-    }
-    // Default: don't store probabilities for performance
-    return false;
+    return storeProbabilityValue_;
 }
 
 // Get residue position

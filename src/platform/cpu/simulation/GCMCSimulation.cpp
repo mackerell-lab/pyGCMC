@@ -1,4 +1,5 @@
 #include "GCMCSimulation.hpp"
+#include "../movement/reservoir/MultiTypeReservoir.hpp"
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -92,15 +93,14 @@ bool GCMCSimulation::loadParameters() {
     try {
         params_ = std::make_unique<model::param::Param>();
         
-        // Parse INP file
-        io::parameters::InpParserMain::parse_to_param(config_.inputFile, *params_);
+        // Parse INP file (use extended GCMC parser)
+        io::parameters::InpParserGCMC::parse_to_param(config_.inputFile, *params_);
         
         // Update derived values
         params_->update_derived_values();
         
         log("Loaded parameters from %s", config_.inputFile.c_str());
-        // TODO: Get temperature from params
-        log("  Temperature: %.2f K", 298.15);
+        log("  Temperature: %.2f K", params_->get_mc_info().temperature);
         log("  Box size: %.2f x %.2f x %.2f nm", 
             params_->get_space_info().box_size[0],
             params_->get_space_info().box_size[1],
@@ -124,10 +124,9 @@ bool GCMCSimulation::setupSystem() {
     state_->info.box[1] = box[1];
     state_->info.box[2] = box[2];
     
-    // Set temperature through beta
-    // Note: MCInfo doesn't have temperature, get from params
-    double temperature = 298.15;  // Default temperature
-    state_->info.beta = 1.0 / (kB * temperature);
+    // Set temperature through beta from parameters
+    const double beta = params_->get_mc_info().beta;
+    state_->info.beta = beta;
     
     // Load initial structure if provided
     const auto& pdbFile = params_->get_file_info().input_pdb_file;
@@ -149,8 +148,8 @@ bool GCMCSimulation::setupFragments() {
     const auto& fileInfo = params_->get_file_info();
     const auto& mcInfo = params_->get_mc_info();
     
-    // Create fragment reservoir
-    reservoir_ = std::make_unique<movement::FragmentReservoir>();
+    // Create multi-type fragment reservoir
+    reservoir_ = std::make_unique<movement::MultiTypeReservoir>();
     
     // Process each fragment type
     for (size_t i = 0; i < fileInfo.fragment_names.size(); ++i) {
@@ -182,13 +181,28 @@ bool GCMCSimulation::setupFragments() {
         // Convert concentration (M) to number: N = C * V * NA / 1000
         frag.maxCount = static_cast<int>(frag.concentration * volume * NA / 1000.0);
         
-        // Load fragment template
-        // TODO: Load from fragment ITP files
-        frag.template_.typeId = frag.typeId;
-        frag.template_.atoms.resize(1);  // Placeholder
+        // Create fragment template
+        movement::FragmentTemplate tmpl;
+        tmpl.name = frag.name;
+        tmpl.typeId = frag.typeId;
+        tmpl.chemicalPotential = frag.chemicalPotential;
+        tmpl.activity = frag.activity;
+        tmpl.concentration = frag.concentration;
+        tmpl.radius = (i < fragInfo.radius_list.size()) ? fragInfo.radius_list[i] : 0.0;
+        tmpl.atoms.resize(1);  // Placeholder until ITP parser is ready
         
-        // Add template to reservoir
-        reservoir_->addTemplate(frag.template_);
+        // Create type info for multi-type reservoir
+        movement::MultiTypeReservoir::TypeInfo typeInfo;
+        typeInfo.typeId = frag.typeId;
+        typeInfo.name = frag.name;
+        typeInfo.chemicalPotential = frag.chemicalPotential;
+        typeInfo.activity = frag.activity;
+        typeInfo.probability = frag.probability;
+        typeInfo.maxCount = frag.maxCount;
+        typeInfo.radius = tmpl.radius;
+        
+        // Add to reservoir
+        reservoir_->addType(typeInfo, tmpl);
         
         // Store fragment info
         fragmentTypes_.push_back(frag);
@@ -205,9 +219,8 @@ bool GCMCSimulation::setupFragments() {
 bool GCMCSimulation::setupAcceptance() {
     acceptance_ = std::make_unique<GCMCAcceptance>();
     
-    // Set temperature
-    // TODO: Get temperature from params properly
-    double temperature = 298.15;  // Default temperature
+    // Set temperature from parameters
+    const double temperature = params_->get_mc_info().temperature;
     acceptance_->setTemperature(temperature);
     
     // Set volume
@@ -221,7 +234,7 @@ bool GCMCSimulation::setupAcceptance() {
     }
     
     log("Acceptance calculator configured:");
-    log("  Temperature: %.2f K", 298.15);  // TODO: Store temperature properly
+    log("  Temperature: %.2f K", params_->get_mc_info().temperature);
     log("  Volume: %.2f nm^3", volume);
     
     return true;
@@ -453,7 +466,8 @@ int GCMCSimulation::selectActiveFragment() {
     auto instance = reservoir_->getInstance(idx);
     if (instance && instance->isActive) {
         // Get type from template
-        return 0;  // TODO: Get actual type from instance
+        const auto* tpl = reservoir_->getTemplate(instance->templateId);
+        return tpl ? tpl->typeId : -1;
     }
     
     return -1;
@@ -570,7 +584,7 @@ void GCMCSimulation::writeFinalResults() {
     
     out << "Configuration:\n";
     out << "  Input file: " << config_.inputFile << "\n";
-    out << "  Temperature: " << 298.15 << " K\n";  // TODO: Get from params
+    out << "  Temperature: " << params_->get_mc_info().temperature << " K\n";
     out << "  Box: " << state_->info.box[0] << " x " << state_->info.box[1] 
         << " x " << state_->info.box[2] << " nm\n";
     out << "  Total steps: " << stats_.totalSteps << "\n\n";

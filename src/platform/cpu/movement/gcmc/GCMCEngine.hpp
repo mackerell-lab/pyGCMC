@@ -214,6 +214,10 @@ private:
     // Dynamic configuration
     std::unordered_map<std::string, double> configMap_;
     
+    // Performance optimization: cache probability storage flag
+    mutable bool storeProbabilityCached_ = false;
+    mutable bool storeProbabilityValue_ = false;
+    
     // Helper methods
     void updateFragmentPosition(int residueIdx, const Vector3& newPos);
     void updateFragmentOrientation(int residueIdx, const Quaternion& newOrient);

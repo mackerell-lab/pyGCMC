@@ -51,6 +51,13 @@ public:
      * @return std::vector<float> Vector of parsed float values
      */
     static std::vector<float> parse_float_vector(const std::string& str);
+
+    /**
+     * @brief Parse vector of integers from string
+     * @param str Input string containing space-separated integer values
+     * @return std::vector<int> Vector of parsed integer values
+     */
+    static std::vector<int> parse_int_vector(const std::string& str);
 };
 
 } // namespace parameters
