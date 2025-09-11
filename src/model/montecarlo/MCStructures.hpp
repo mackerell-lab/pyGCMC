@@ -149,8 +149,103 @@ struct MCInfo {
 struct MCForceField {
     int numTotalTypes{0};
     int numMovementTypes{0};
-    std::vector<float> ljSigma;
-    std::vector<float> ljEps;
+    std::vector<float> ljSigma;  // NxN matrix of sigma values (nm)
+    std::vector<float> ljEps;    // NxN matrix of epsilon values (kJ/mol)
+    
+    // NBFIX support and mixing rules
+    struct NBFixEntry {
+        int type1;
+        int type2;
+        float sigma;  // nm
+        float eps;    // kJ/mol
+    };
+    
+    std::vector<NBFixEntry> nbfix;      // Pair-specific overrides
+    std::vector<float> ljSigmaType;     // Per-type sigma values (nm)
+    std::vector<float> ljEpsType;       // Per-type epsilon values (kJ/mol)
+    
+    enum class MixingRule { 
+        None,              // Use explicit NxN matrix
+        LorentzBerthelot,  // sigma_ij = (sigma_i + sigma_j)/2, eps_ij = sqrt(eps_i * eps_j)
+        Geometric          // sigma_ij = sqrt(sigma_i * sigma_j), eps_ij = sqrt(eps_i * eps_j)
+    };
+    MixingRule mixingRule = MixingRule::None;
+    
+    bool ljMatrixInitialized = false;
+    
+    /**
+     * @brief Rebuild the NxN LJ parameter matrix from per-type values and NBFIX overrides
+     * 
+     * This function constructs the full NxN matrix by:
+     * 1. Applying mixing rules to per-type parameters
+     * 2. Overriding specific pairs with NBFIX values
+     */
+    inline void rebuildLJMatrix() {
+        const int n = numTotalTypes;
+        const size_t expected = static_cast<size_t>(n) * n;
+        
+        // Ensure matrix has correct size
+        if (ljSigma.size() != expected || ljEps.size() != expected) {
+            ljSigma.assign(expected, 0.0f);
+            ljEps.assign(expected, 0.0f);
+        }
+        
+        // Build from per-type parameters with mixing rule
+        if (mixingRule != MixingRule::None &&
+            ljSigmaType.size() == static_cast<size_t>(n) &&
+            ljEpsType.size() == static_cast<size_t>(n)) {
+            
+            for (int i = 0; i < n; ++i) {
+                for (int j = 0; j < n; ++j) {
+                    float sigma, eps;
+                    
+                    if (mixingRule == MixingRule::LorentzBerthelot) {
+                        // Lorentz-Berthelot: arithmetic mean for sigma
+                        sigma = 0.5f * (ljSigmaType[i] + ljSigmaType[j]);
+                    } else {
+                        // Geometric: geometric mean for sigma
+                        sigma = std::sqrt(ljSigmaType[i] * ljSigmaType[j]);
+                    }
+                    
+                    // Both rules use geometric mean for epsilon
+                    eps = std::sqrt(ljEpsType[i] * ljEpsType[j]);
+                    
+                    ljSigma[i*n + j] = sigma;
+                    ljEps[i*n + j] = eps;
+                }
+            }
+        }
+        
+        // Apply NBFIX overrides (symmetric)
+        for (const auto& p : nbfix) {
+            if (p.type1 >= 0 && p.type1 < n && p.type2 >= 0 && p.type2 < n) {
+                const int idx1 = p.type1 * n + p.type2;
+                const int idx2 = p.type2 * n + p.type1;
+                ljSigma[idx1] = ljSigma[idx2] = p.sigma;
+                ljEps[idx1] = ljEps[idx2] = p.eps;
+            }
+        }
+        
+        ljMatrixInitialized = true;
+    }
+    
+    /**
+     * @brief Add an NBFIX override for a specific atom pair
+     */
+    inline void addNBFix(int type1, int type2, float sigma, float eps) {
+        nbfix.push_back({type1, type2, sigma, eps});
+        ljMatrixInitialized = false;  // Force rebuild
+    }
+    
+    /**
+     * @brief Set per-type LJ parameters
+     */
+    inline void setPerTypeParameters(const std::vector<float>& sigmas, 
+                                     const std::vector<float>& epsilons) {
+        ljSigmaType = sigmas;
+        ljEpsType = epsilons;
+        ljMatrixInitialized = false;  // Force rebuild
+    }
 };
 
 /**

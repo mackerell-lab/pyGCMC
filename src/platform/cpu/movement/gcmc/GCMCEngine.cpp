@@ -646,15 +646,22 @@ Vector3 GCMCEngine::generateCavityPosition() {
 
 // Generate random orientation
 Quaternion GCMCEngine::generateRandomOrientation() {
-    double u1 = uniform_(rng_);
-    double u2 = uniform_(rng_);
-    double u3 = uniform_(rng_);
+    // Use the correct Shoemake algorithm for uniform quaternion distribution
+    // This matches gcmc_gpu's create_random_quarternion() implementation
+    double u = uniform_(rng_);
+    double v = uniform_(rng_);
+    double w = uniform_(rng_);
+    
+    double sqrt_1_minus_u = std::sqrt(1.0 - u);
+    double sqrt_u = std::sqrt(u);
+    double two_pi_v = 2.0 * M_PI * v;
+    double two_pi_w = 2.0 * M_PI * w;
     
     Quaternion q(
-        std::sqrt(1 - u1) * std::sin(2 * M_PI * u2),
-        std::sqrt(1 - u1) * std::cos(2 * M_PI * u2),
-        std::sqrt(u1) * std::sin(2 * M_PI * u3),
-        std::sqrt(u1) * std::cos(2 * M_PI * u3)
+        sqrt_u * std::cos(two_pi_w),           // w component
+        sqrt_1_minus_u * std::sin(two_pi_v),   // x component
+        sqrt_1_minus_u * std::cos(two_pi_v),   // y component
+        sqrt_u * std::sin(two_pi_w)            // z component
     );
     q.normalize();
     
@@ -905,6 +912,10 @@ void GCMCEngine::synchronizeStateWithReservoir(int instanceId, bool isInsertion)
         residue.energy_vdw = 0.0;
         residue.energy_elec = 0.0;
         
+        // CRITICAL: Set atomStart and atomCount for energy calculations
+        residue.atomStart = state_->activeAtomCount;
+        residue.atomCount = static_cast<int>(tmpl->atoms.size());
+        
         // Clear and add atoms
         residue.atoms.clear();
         residue.atoms.reserve(tmpl->atoms.size());
@@ -949,15 +960,31 @@ void GCMCEngine::synchronizeStateWithReservoir(int instanceId, bool isInsertion)
             atom.updatePosition();
             
             residue.atoms.push_back(atom);
+            
+            // CRITICAL: Also add to global atoms array for energy calculations
+            if (state_->activeAtomCount < static_cast<int>(state_->atoms.size())) {
+                state_->atoms[state_->activeAtomCount] = atom;
+            } else {
+                state_->atoms.push_back(atom);
+            }
+            state_->activeAtomCount++;
         }
         
         // Update residue index in fragment instance
         instance->residueIndex = instanceId;
     } else {
-        // Mark residue as inactive
+        // Mark residue as inactive (deletion case)
         if (instanceId < static_cast<int>(state_->residues.size())) {
-            state_->residues[instanceId].active = false;
-            state_->residues[instanceId].atoms.clear();
+            auto& residue = state_->residues[instanceId];
+            residue.active = false;
+            
+            // CRITICAL: Don't actually remove atoms from global array to avoid shifting indices
+            // Just mark the residue as inactive so energy calculations skip it
+            residue.atomCount = 0;  // Mark as having no atoms
+            residue.atoms.clear();
+            
+            // Note: We don't decrement activeAtomCount here to avoid index shifting
+            // This is a simplification for now - a production system would compact arrays
         }
     }
 }

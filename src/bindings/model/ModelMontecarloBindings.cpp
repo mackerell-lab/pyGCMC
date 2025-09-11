@@ -161,7 +161,23 @@ void init_montecarlo_bindings(py::module& m, py::module&) {
         });
 
     // Bind MCForceField
-    py::class_<pygcmc::model::MCForceField>(m, "MCForceField")
+    py::class_<pygcmc::model::MCForceField> forcefield_class(m, "MCForceField");
+    
+    // Bind MixingRule enum
+    py::enum_<pygcmc::model::MCForceField::MixingRule>(forcefield_class, "MixingRule")
+        .value("None", pygcmc::model::MCForceField::MixingRule::None)
+        .value("LorentzBerthelot", pygcmc::model::MCForceField::MixingRule::LorentzBerthelot)
+        .value("Geometric", pygcmc::model::MCForceField::MixingRule::Geometric);
+    
+    // Bind NBFixEntry struct
+    py::class_<pygcmc::model::MCForceField::NBFixEntry>(forcefield_class, "NBFixEntry")
+        .def(py::init<>())
+        .def_readwrite("type1", &pygcmc::model::MCForceField::NBFixEntry::type1)
+        .def_readwrite("type2", &pygcmc::model::MCForceField::NBFixEntry::type2)
+        .def_readwrite("sigma", &pygcmc::model::MCForceField::NBFixEntry::sigma)
+        .def_readwrite("eps", &pygcmc::model::MCForceField::NBFixEntry::eps);
+    
+    forcefield_class
         .def(py::init<>())
         .def_readwrite("numTotalTypes", &pygcmc::model::MCForceField::numTotalTypes)
         .def_property("maxTypes",
@@ -169,7 +185,20 @@ void init_montecarlo_bindings(py::module& m, py::module&) {
             [](pygcmc::model::MCForceField& ff, int value) { ff.numTotalTypes = value; })
         .def_readwrite("numMovementTypes", &pygcmc::model::MCForceField::numMovementTypes)
         .def_readwrite("ljSigma", &pygcmc::model::MCForceField::ljSigma)
-        .def_readwrite("ljEps", &pygcmc::model::MCForceField::ljEps);
+        .def_readwrite("ljEps", &pygcmc::model::MCForceField::ljEps)
+        .def_readwrite("nbfix", &pygcmc::model::MCForceField::nbfix)
+        .def_readwrite("ljSigmaType", &pygcmc::model::MCForceField::ljSigmaType)
+        .def_readwrite("ljEpsType", &pygcmc::model::MCForceField::ljEpsType)
+        .def_readwrite("mixingRule", &pygcmc::model::MCForceField::mixingRule)
+        .def_readwrite("ljMatrixInitialized", &pygcmc::model::MCForceField::ljMatrixInitialized)
+        .def("rebuildLJMatrix", &pygcmc::model::MCForceField::rebuildLJMatrix,
+             "Rebuild the NxN LJ parameter matrix from per-type values and NBFIX overrides")
+        .def("addNBFix", &pygcmc::model::MCForceField::addNBFix,
+             py::arg("type1"), py::arg("type2"), py::arg("sigma"), py::arg("eps"),
+             "Add an NBFIX override for a specific atom pair")
+        .def("setPerTypeParameters", &pygcmc::model::MCForceField::setPerTypeParameters,
+             py::arg("sigmas"), py::arg("epsilons"),
+             "Set per-type LJ parameters");
 
     // Add COULOMB constant to the module
     m.attr("COULOMB") = 138.935458; // kJ·mol^-1·nm·e^-2, Coulomb's constant in MD units

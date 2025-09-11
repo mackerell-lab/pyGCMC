@@ -33,7 +33,17 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
     }
 
     auto& residues = state.residues;
-    const auto& forcefield = state.forcefield;
+    auto& forcefield = state.forcefield;  // Non-const to allow rebuild
+    
+    // Build NxN matrix if needed (from mixing rules + NBFIX)
+    const size_t expected_size_check = static_cast<size_t>(forcefield.numTotalTypes) * 
+                                       static_cast<size_t>(forcefield.numTotalTypes);
+    
+    if ((!forcefield.ljMatrixInitialized) ||
+        (forcefield.ljSigma.size() != expected_size_check) ||
+        (forcefield.ljEps.size() != expected_size_check)) {
+        forcefield.rebuildLJMatrix();
+    }
 
     // Validate basic state parameters
     if (state.activeResidueCount < 0 || 
@@ -93,7 +103,17 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
 
 void computeResidueNonbondedEnergy(model::MCState& state, int residue_idx, bool use_cutoff, bool use_pbc, bool vdw_only) {
     auto& residues = state.residues;
-    const auto& forcefield = state.forcefield;
+    auto& forcefield = state.forcefield;  // Non-const to allow rebuild
+    
+    // Build NxN matrix if needed (from mixing rules + NBFIX)
+    const size_t expected_size_check = static_cast<size_t>(forcefield.numTotalTypes) * 
+                                       static_cast<size_t>(forcefield.numTotalTypes);
+    
+    if ((!forcefield.ljMatrixInitialized) ||
+        (forcefield.ljSigma.size() != expected_size_check) ||
+        (forcefield.ljEps.size() != expected_size_check)) {
+        forcefield.rebuildLJMatrix();
+    }
     const auto& atoms = state.atoms;
     const auto& box = state.info.box;
     

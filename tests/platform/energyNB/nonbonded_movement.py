@@ -88,23 +88,35 @@ def test_invalid_forcefield_params():
     """Test handling of invalid force field parameters."""
     state = pygcmc.MCState()
     
-    # Set up force field with incorrect parameter array size
+    # With the new NBFIX implementation, the LJ matrix is auto-rebuilt
+    # So we test that it correctly rebuilds instead of raising an error
     state.forcefield.numTotalTypes = 2
     state.forcefield.numMovementTypes = 1
-    state.forcefield.ljEps = [1.0]  # Should be size 2
-    state.forcefield.ljSigma = [1.0, 1.0]
+    state.forcefield.ljEps = [1.0]  # Will be rebuilt to size 4
+    state.forcefield.ljSigma = [1.0, 1.0]  # Will be rebuilt to size 4
     
     # Set up minimal state
     atom = pygcmc.MCAtom()
+    atom.type = 0
     state.atoms = [atom]
     res = pygcmc.MCResidue()
+    res.active = True
+    res.atomStart = 0
+    res.atomCount = 1
     state.residues = [res]
+    state.activeResidueCount = 1
     movement_info = pygcmc.MCMovementResidueInfo()
+    movement_info.startIndex = 0
+    movement_info.activeCount = 1
     state.movementResidues = [movement_info]
     
-    # Expect runtime error due to invalid parameter array size
-    with pytest.raises(RuntimeError):
-        pygcmc.computeMovementEnergy(state)
+    # The function should now rebuild the matrix automatically
+    # and not raise an error
+    pygcmc.computeMovementEnergy(state)
+    
+    # Verify the matrix was rebuilt to correct size
+    assert len(state.forcefield.ljEps) == 4  # 2x2 matrix
+    assert len(state.forcefield.ljSigma) == 4
 
 
 def test_inactive_residue():
