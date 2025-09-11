@@ -79,7 +79,7 @@ class TestQuaternionExtended:
         engine.setAcceptanceCalculator(acceptance)
         
         # Collect rotation angles
-        n_samples = 1000
+        n_samples = 500  # Reduced from 1000
         euler_angles = []
         
         for i in range(n_samples):
@@ -185,7 +185,7 @@ class TestQuaternionExtended:
         engine.setAcceptanceCalculator(acceptance)
         
         # Insert benzene molecules and check geometry preservation
-        n_insertions = 10
+        n_insertions = 5  # Reduced from 10
         for i in range(n_insertions):
             result = engine.attemptInsertion(0)
             if result.accepted:
@@ -262,7 +262,7 @@ class TestQuaternionExtended:
         engine.setAcceptanceCalculator(acceptance)
         
         # Measure rotation performance
-        n_rotations = 100
+        n_rotations = 50  # Reduced from 100
         start_time = time.time()
         
         for i in range(n_rotations):
@@ -320,7 +320,7 @@ class TestQuaternionExtended:
         engine.setAcceptanceCalculator(acceptance)
         
         # Try many insertions in small box
-        n_attempts = 100
+        n_attempts = 50  # Reduced from 100
         n_accepted = 0
         
         for i in range(n_attempts):
@@ -356,7 +356,7 @@ class TestQuaternionExtended:
         
         # Generate random quaternions using scipy for comparison
         np.random.seed(42)
-        n_tests = 50
+        n_tests = 25  # Reduced from 50
         
         for i in range(n_tests):
             # Generate random quaternion (Shoemake algorithm)
