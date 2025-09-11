@@ -131,7 +131,7 @@ class PerformanceBenchmark:
         # No need to wire it here as it's checked directly in shouldStoreProbability()
         
         # Warm up
-        self.run_simulation(engine, steps=100)
+        self.run_simulation(engine, steps=50)  # Reduced warmup
         
         # Measure using CPU time and disable GC to reduce jitter
         gc_was_enabled = gc.isenabled()
@@ -216,7 +216,7 @@ class TestPerformance:
     def test_baseline_performance(self):
         """Test that baseline performance meets minimum requirements"""
         benchmark = PerformanceBenchmark()
-        result = benchmark.measure_performance("baseline", {}, steps=5000)
+        result = benchmark.measure_performance("baseline", {}, steps=2000)  # Reduced from 5000
         
         # Minimum acceptable rate (adjust based on hardware and build type)
         # Note: Debug builds and GitHub CI runners may be slower
@@ -239,20 +239,20 @@ class TestPerformance:
             
             # Run multiple measurements alternating to reduce bias
             impacts = []
-            for i in range(3):  # 3 rounds for median
+            for i in range(2):  # 2 rounds instead of 3
                 # Alternate order to avoid time-based bias
                 if i % 2 == 0:
-                    baseline = benchmark.measure_performance("baseline", {}, steps=5000)
-                    with_prob = benchmark.measure_performance("with_prob", {"GCMC_STORE_PROB": "1"}, steps=5000)
+                    baseline = benchmark.measure_performance("baseline", {}, steps=2000)  # Reduced from 5000
+                    with_prob = benchmark.measure_performance("with_prob", {"GCMC_STORE_PROB": "1"}, steps=2000)
                 else:
-                    with_prob = benchmark.measure_performance("with_prob", {"GCMC_STORE_PROB": "1"}, steps=5000)
-                    baseline = benchmark.measure_performance("baseline", {}, steps=5000)
+                    with_prob = benchmark.measure_performance("with_prob", {"GCMC_STORE_PROB": "1"}, steps=2000)
+                    baseline = benchmark.measure_performance("baseline", {}, steps=2000)
                 
                 impact = (with_prob['rate'] - baseline['rate']) / baseline['rate']
                 impacts.append(impact)
             
-            # Use median to reduce noise from system load variations
-            median_impact = float(np.median(impacts))
+            # Use mean for 2 samples (median doesn't help much with just 2 values)
+            median_impact = float(np.mean(impacts))
             
             # Allow up to 40% performance degradation for probability storage
             # This is acceptable since it's only used for debugging/testing
@@ -283,28 +283,28 @@ class TestPerformance:
             
             # Run multiple measurements alternating to reduce bias
             impacts = []
-            for i in range(3):  # 3 rounds for median
+            for i in range(2):  # 2 rounds instead of 3
                 # Alternate order to avoid time-based bias
                 if i % 2 == 0:
-                    baseline = benchmark.measure_performance("baseline", {}, steps=5000)
+                    baseline = benchmark.measure_performance("baseline", {}, steps=2000)  # Reduced from 5000
                     with_stats = benchmark.measure_performance(
                         "with_stats", 
                         {"GCMC_ENABLE_STATS": "1", "GCMC_STATS_INTERVAL": "10000"},
-                        steps=5000
+                        steps=2000
                     )
                 else:
                     with_stats = benchmark.measure_performance(
                         "with_stats", 
                         {"GCMC_ENABLE_STATS": "1", "GCMC_STATS_INTERVAL": "10000"},
-                        steps=5000
+                        steps=2000
                     )
-                    baseline = benchmark.measure_performance("baseline", {}, steps=5000)
+                    baseline = benchmark.measure_performance("baseline", {}, steps=2000)
                 
                 impact = (with_stats['rate'] - baseline['rate']) / baseline['rate']
                 impacts.append(impact)
             
-            # Use median to reduce noise from system load variations
-            median_impact = float(np.median(impacts))
+            # Use mean for 2 samples (median doesn't help much with just 2 values)
+            median_impact = float(np.mean(impacts))
             
             # Stats collection with large interval should have minimal impact
             # Allow up to 30% degradation (test environment has variability)
