@@ -109,9 +109,11 @@ public:
                                   const Vector3& position,
                                   const Quaternion& orientation);
     double calculateDeletionBias(int residueIdx);
+    double calculateDeletionBiasAtPosition(const Vector3& position);
     
     // State synchronization
     void synchronizeStateWithReservoir(int instanceId, bool isInsertion);
+    void updateAtomCoordinates(int residueIdx);  // Update positions without changing count
     double calculateRegrowthBias(int residueIdx);
     
     // Acceptance criteria

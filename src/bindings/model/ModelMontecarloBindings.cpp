@@ -140,6 +140,14 @@ void init_montecarlo_bindings(py::module& m, py::module&) {
         .def_readwrite("atomTypes", &pygcmc::model::MCState::atomTypes)
         .def_readwrite("activeAtomCount", &pygcmc::model::MCState::activeAtomCount)
         .def_readwrite("activeResidueCount", &pygcmc::model::MCState::activeResidueCount)
+        .def("get_active_residue_count", [](const pygcmc::model::MCState& state) {
+            // Return actual count of active residues, not the upper bound
+            int count = 0;
+            for (const auto& residue : state.residues) {
+                if (residue.active) count++;
+            }
+            return count;
+        }, "Get the actual count of active residues")
         .def_readwrite("info", &pygcmc::model::MCState::info)
         .def_readwrite("forcefield", &pygcmc::model::MCState::forcefield)
         .def_property("movementResidues",

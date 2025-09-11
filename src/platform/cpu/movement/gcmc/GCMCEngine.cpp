@@ -2,6 +2,7 @@
 #include "GCMCAcceptance.hpp"
 #include "GCMCConfig.hpp"
 #include "../../energy/EnergyModule.hpp"
+#include "../../energy/common/EnergyDirectCore.hpp"
 #include <cmath>
 #include <algorithm>
 #include <iostream>
@@ -119,9 +120,19 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     // Synchronize MCState with the new instance
     synchronizeStateWithReservoir(instanceId, true);
     
-    // Calculate energy after insertion
-    result.energyAfter = calculateSystemEnergy();
-    result.deltaE = result.energyAfter - result.energyBefore;
+    // Calculate energy change - optimize for DIRECT mode
+    if (energyMethod_ == EnergyMethod::DIRECT) {
+        // Fast local ΔE calculation - only compute interaction of new residue with system
+        cpu::computeResidueEnergyCutoffPBC(*state_, instanceId);
+        const auto& residue = state_->residues[instanceId];
+        result.deltaE = residue.energy_vdw + residue.energy_elec;
+        result.energyBefore = 0.0;  // Not needed for local calculation
+        result.energyAfter = result.deltaE;  // For consistency
+    } else {
+        // Full system energy for Ewald/PME modes
+        result.energyAfter = calculateSystemEnergy();
+        result.deltaE = result.energyAfter - result.energyBefore;
+    }
     
     // Calculate bias
     result.bias = calculateInsertionBias(*tmpl, position, orientation);
@@ -223,19 +234,32 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     Quaternion savedOrientation = instance->orientation;
     result.position = savedPosition;
     
-    // Calculate energy before deletion
-    result.energyBefore = calculateSystemEnergy();
+    // Calculate energy change - optimize for DIRECT mode
+    if (energyMethod_ == EnergyMethod::DIRECT) {
+        // Fast local ΔE calculation - compute energy of residue to be deleted
+        cpu::computeResidueEnergyCutoffPBC(*state_, instanceId);
+        const auto& residue = state_->residues[instanceId];
+        double residueEnergy = residue.energy_vdw + residue.energy_elec;
+        result.deltaE = -residueEnergy;  // Removing this energy from system
+        result.energyBefore = residueEnergy;  // For consistency
+        result.energyAfter = 0.0;
+    } else {
+        // Full system energy for Ewald/PME modes
+        result.energyBefore = calculateSystemEnergy();
+    }
     
     // Temporarily delete (convert to ghost)
     reservoir_->deleteInstance(instanceId);
     synchronizeStateWithReservoir(instanceId, false);
     
-    // Calculate energy after deletion
-    result.energyAfter = calculateSystemEnergy();
-    result.deltaE = result.energyAfter - result.energyBefore;
+    // Calculate energy after deletion for non-DIRECT modes
+    if (energyMethod_ != EnergyMethod::DIRECT) {
+        result.energyAfter = calculateSystemEnergy();
+        result.deltaE = result.energyAfter - result.energyBefore;
+    }
     
-    // CRITICAL FIX: Calculate deletion bias AFTER deletion for cavity bias
-    result.bias = calculateDeletionBias(instanceId);
+    // CRITICAL FIX: Calculate deletion bias using saved position for robustness
+    result.bias = calculateDeletionBiasAtPosition(savedPosition);
     
     // Calculate acceptance probability using proper GCMC formula
     bool accept = false;
@@ -823,11 +847,11 @@ double GCMCEngine::calculateInsertionBias(const FragmentTemplate& tmpl,
     // Suppress unused parameter warnings
     (void)tmpl;
     (void)orientation;
-    (void)position;  // Not used for volume-based bias
     
     double bias = 1.0;
     
-    if (cavityManager_) {
+    // CRITICAL: Only apply cavity bias if enabled
+    if (cavityManager_ && useCavityBias_) {
         // Use position-based cavity score (O(1)) instead of volume calculation (O(n³))
         // This is much faster and was the original implementation
         movement::Vector3 pos(position.x, position.y, position.z);
@@ -842,18 +866,36 @@ double GCMCEngine::calculateInsertionBias(const FragmentTemplate& tmpl,
     return bias;
 }
 
-// Calculate deletion bias
-double GCMCEngine::calculateDeletionBias(int residueIdx) {
-    // Suppress unused parameter warning
-    (void)residueIdx;
-    
+// Calculate deletion bias at specific position (more robust)
+double GCMCEngine::calculateDeletionBiasAtPosition(const Vector3& position) {
     double bias = 1.0;
     
-    // For deletion, the bias is typically the inverse of insertion bias
-    // But since we use position-based scoring, we keep it simple
-    // The detailed balance is maintained by the acceptance probability calculation
+    // CRITICAL: For detailed balance, deletion bias must match insertion bias
+    // at the same position
+    if (cavityManager_ && useCavityBias_) {
+        movement::Vector3 pos(position.x, position.y, position.z);
+        // Use the same cavity score calculation as insertion
+        bias *= cavityManager_->getCavityScore(pos);
+    }
+    
+    if (configBias_) {
+        // Config bias calculation would go here (must match insertion)
+        bias *= 1.0;
+    }
     
     return bias;
+}
+
+// Calculate deletion bias (legacy - depends on reservoir state)
+double GCMCEngine::calculateDeletionBias(int residueIdx) {
+    // Try to get position from reservoir
+    FragmentInstance* instance = reservoir_->getInstance(residueIdx);
+    if (instance) {
+        Vector3 pos(instance->position.x, instance->position.y, instance->position.z);
+        return calculateDeletionBiasAtPosition(pos);
+    }
+    // Fallback if instance not accessible
+    return 1.0;
 }
 
 // Calculate regrowth bias
@@ -972,6 +1014,15 @@ void GCMCEngine::synchronizeStateWithReservoir(int instanceId, bool isInsertion)
         
         // Update residue index in fragment instance
         instance->residueIndex = instanceId;
+        
+        // CRITICAL: Update activeResidueCount
+        // Find the highest active residue index + 1
+        state_->activeResidueCount = 0;
+        for (int i = 0; i < static_cast<int>(state_->residues.size()); i++) {
+            if (state_->residues[i].active) {
+                state_->activeResidueCount = i + 1;
+            }
+        }
     } else {
         // Mark residue as inactive (deletion case)
         if (instanceId < static_cast<int>(state_->residues.size())) {
@@ -982,6 +1033,15 @@ void GCMCEngine::synchronizeStateWithReservoir(int instanceId, bool isInsertion)
             // Just mark the residue as inactive so energy calculations skip it
             residue.atomCount = 0;  // Mark as having no atoms
             residue.atoms.clear();
+            
+            // CRITICAL: Update activeResidueCount
+            // Find the highest active residue index + 1
+            state_->activeResidueCount = 0;
+            for (int i = 0; i < static_cast<int>(state_->residues.size()); i++) {
+                if (state_->residues[i].active) {
+                    state_->activeResidueCount = i + 1;
+                }
+            }
             
             // Note: We don't decrement activeAtomCount here to avoid index shifting
             // This is a simplification for now - a production system would compact arrays
@@ -996,9 +1056,8 @@ void GCMCEngine::updateFragmentPosition(int residueIdx, const Vector3& newPos) {
     reservoir_->updatePosition(residueIdx, newPos);
     energyCache_.invalidate();
     
-    // CRITICAL: Force synchronize MCState after position update
-    // This ensures energy calculations and cavity bias see updated positions
-    synchronizeStateWithReservoir(residueIdx, true);
+    // Update atom coordinates without adding new atoms
+    updateAtomCoordinates(residueIdx);
 }
 
 // Update fragment orientation
@@ -1008,9 +1067,67 @@ void GCMCEngine::updateFragmentOrientation(int residueIdx, const Quaternion& new
     reservoir_->updateOrientation(residueIdx, newOrient);
     energyCache_.invalidate();
     
-    // CRITICAL: Force synchronize MCState after orientation update
-    // This ensures energy calculations see correctly oriented atoms
-    synchronizeStateWithReservoir(residueIdx, true);
+    // Update atom coordinates without adding new atoms
+    updateAtomCoordinates(residueIdx);
+}
+
+// Update atom coordinates for an existing residue without changing atom count
+void GCMCEngine::updateAtomCoordinates(int residueIdx) {
+    if (!state_ || !reservoir_) return;
+    
+    if (residueIdx >= static_cast<int>(state_->residues.size())) return;
+    
+    auto& residue = state_->residues[residueIdx];
+    if (!residue.active) return;
+    
+    FragmentInstance* instance = reservoir_->getInstance(residueIdx);
+    if (!instance) return;
+    
+    const FragmentTemplate* tmpl = reservoir_->getTemplate(instance->templateId);
+    if (!tmpl) return;
+    
+    // Update atoms in both residue.atoms and state->atoms arrays
+    int atomIdx = 0;
+    for (const auto& tmplAtom : tmpl->atoms) {
+        if (atomIdx >= residue.atomCount) break;
+        
+        // Apply rotation and translation
+        Vector3 v(tmplAtom.x, tmplAtom.y, tmplAtom.z);
+        Quaternion q = instance->orientation;
+        
+        // Quaternion rotation formula
+        double qw = q.w, qx = q.x, qy = q.y, qz = q.z;
+        double vx = v.x, vy = v.y, vz = v.z;
+        
+        double rx = vx * (qw*qw + qx*qx - qy*qy - qz*qz) + 
+                   vy * 2*(qx*qy - qw*qz) + 
+                   vz * 2*(qx*qz + qw*qy);
+        double ry = vx * 2*(qx*qy + qw*qz) + 
+                   vy * (qw*qw - qx*qx + qy*qy - qz*qz) + 
+                   vz * 2*(qy*qz - qw*qx);
+        double rz = vx * 2*(qx*qz - qw*qy) + 
+                   vy * 2*(qy*qz + qw*qx) + 
+                   vz * (qw*qw - qx*qx - qy*qy + qz*qz);
+        
+        // Update coordinates in residue.atoms
+        if (atomIdx < static_cast<int>(residue.atoms.size())) {
+            residue.atoms[atomIdx].x = instance->position.x + rx;
+            residue.atoms[atomIdx].y = instance->position.y + ry;
+            residue.atoms[atomIdx].z = instance->position.z + rz;
+            residue.atoms[atomIdx].updatePosition();
+        }
+        
+        // Update coordinates in global atoms array
+        int globalIdx = residue.atomStart + atomIdx;
+        if (globalIdx < static_cast<int>(state_->atoms.size())) {
+            state_->atoms[globalIdx].x = instance->position.x + rx;
+            state_->atoms[globalIdx].y = instance->position.y + ry;
+            state_->atoms[globalIdx].z = instance->position.z + rz;
+            state_->atoms[globalIdx].updatePosition();
+        }
+        
+        atomIdx++;
+    }
 }
 
 // Apply periodic boundary conditions
@@ -1101,8 +1218,8 @@ void GCMCEngine::setConfigValue(const std::string& key, double value) {
         collectStats_ = (value > 0.5);
     } else if (key == "maxTranslation") {
         maxTranslationStep_ = value;
-    } else if (key == "maxRotation") {
-        maxRotationAngleRad_ = value;
+    } else if (key == "maxRotation" || key == "maxRotationAngle") {
+        maxRotationAngleRad_ = value;  // Support both key names
     } else if (key == "useCavityBias") {
         useCavityBias_ = (value > 0.5);
     } else if (key == "storeProbabilities") {
@@ -1126,7 +1243,7 @@ double GCMCEngine::getConfigValue(const std::string& key) const {
     if (key == "statsInterval") return static_cast<double>(statsInterval_);
     if (key == "collectStats") return collectStats_ ? 1.0 : 0.0;
     if (key == "maxTranslation") return maxTranslationStep_;
-    if (key == "maxRotation") return maxRotationAngleRad_;
+    if (key == "maxRotation" || key == "maxRotationAngle") return maxRotationAngleRad_;
     if (key == "useCavityBias") return useCavityBias_ ? 1.0 : 0.0;
     if (key == "storeProbabilities") return shouldStoreProbability() ? 1.0 : 0.0;
     

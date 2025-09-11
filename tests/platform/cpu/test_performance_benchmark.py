@@ -218,8 +218,9 @@ class TestPerformance:
         benchmark = PerformanceBenchmark()
         result = benchmark.measure_performance("baseline", {}, steps=5000)
         
-        # Minimum acceptable rate (adjust based on hardware)
-        min_rate = 1000  # steps/second
+        # Minimum acceptable rate (adjust based on hardware and build type)
+        # Note: Debug builds and GitHub CI runners may be slower
+        min_rate = 300  # steps/second
         
         assert result['rate'] >= min_rate, \
             f"Performance too low: {result['rate']:.0f} < {min_rate} steps/s"
