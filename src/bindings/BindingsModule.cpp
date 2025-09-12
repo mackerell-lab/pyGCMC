@@ -87,6 +87,7 @@ void init_structure_bindings(py::module& m, py::module& io_module);
 void init_topology_bindings(py::module& m, py::module& io_module);
 void init_forcefield_bindings(py::module& m, py::module& io_module);
 void init_parameters_bindings(py::module& m, py::module& io_module);
+void init_trajectory_bindings(py::module& m);
 
 void init_io_bindings(py::module& m) {
     // Create io submodule
@@ -97,6 +98,7 @@ void init_io_bindings(py::module& m) {
     init_topology_bindings(m, io_module);
     init_forcefield_bindings(m, io_module);
     init_parameters_bindings(m, io_module);
+    init_trajectory_bindings(m);
 }
 
 } // namespace io
