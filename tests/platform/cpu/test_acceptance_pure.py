@@ -222,6 +222,50 @@ class TestAcceptancePure:
                 f"Bias factor mismatch for bias={bias}"
         
         print("✓ Bias factor applied correctly")
+    
+    def test_deletion_probability_detailed(self):
+        """Test deletion probability calculation with detailed validation"""
+        print("\n" + "="*60)
+        print("Testing deletion probability calculation")
+        print("="*60)
+        
+        # Create acceptance calculator
+        acceptance = pygcmc.GCMCAcceptance()
+        acceptance.setTemperature(300.0)
+        acceptance.setVolume(27000.0)  # 30x30x30 nm^3
+        acceptance.setActivity(0, 0.001)  # Low activity for testing
+        acceptance.setSeed(12346)
+        
+        # Test at different particle numbers
+        test_cases = [
+            (10, "Low density"),
+            (100, "Medium density"),
+            (1000, "High density")
+        ]
+        
+        zV = 0.001 * 27000.0  # = 27.0
+        
+        for N, description in test_cases:
+            # Calculate deletion probability
+            prob = acceptance.calculateDeletionProbability(0, N, 0.0, 1.0)
+            
+            # Expected value from detailed balance
+            expected = min(1.0, N / zV)
+            
+            print(f"\n{description} (N={N}):")
+            print(f"  Deletion probability: {prob:.10f}")
+            print(f"  Expected: {expected:.10f}")
+            print(f"  zV = {zV}")
+            print(f"  N/zV = {N/zV:.10f}")
+            
+            # Check accuracy
+            error = abs(prob - expected)
+            print(f"  Error: {error:.2e}")
+            
+            assert error < 1e-10, \
+                f"Deletion probability incorrect for N={N}: got {prob}, expected {expected}"
+        
+        print("\n✓ Deletion probability calculations correct")
 
 
 if __name__ == "__main__":
