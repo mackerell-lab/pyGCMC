@@ -78,3 +78,31 @@ from movementGCMC.configuration_tests import (
     test_max_translation_applied_to_moves,
     test_cavity_bias_toggle_bias_value
 )
+
+# =====================================================
+# Additional tests migrated from platform/cpu/
+# =====================================================
+
+# Acceptance probability tests (functions)
+from movementGCMC.acceptance_probability import (
+    test_acceptance_probability_with_env,
+    test_acceptance_probability_without_env,
+    test_seed_chain
+)
+
+# Test classes from migrated files
+from movementGCMC.acceptance_pure import TestAcceptancePure
+from movementGCMC.detailed_balance import TestDetailedBalance
+from movementGCMC.detailed_balance_fix import TestDetailedBalanceFix
+from movementGCMC.insertion_deletion_balance import TestInsertionDeletionBalance
+from movementGCMC.ideal_gas_validation import TestIdealGasValidation
+from movementGCMC.gcmc_engine_config import TestGCMCEngineConfig
+from movementGCMC.cavity_bias_cpu import TestCavityBias as TestCavityBiasCPU
+
+# Temperature scaling tests (functions)
+from movementGCMC.temperature_scaling import (
+    test_boltzmann_distribution,
+    test_metropolis_criterion,
+    test_temperature_effect_on_acceptance,
+    test_zero_temperature_limit
+)
