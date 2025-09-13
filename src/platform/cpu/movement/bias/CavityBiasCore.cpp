@@ -69,15 +69,28 @@ Vector3 CavityBiasCore::proposeCavityPosition(const MCState& state, CavityMode m
 }
 
 void CavityBiasCore::buildGrid(const MCState& state) {
+    // Validate box dimensions
+    if (state.info.box[0] <= 0 || state.info.box[1] <= 0 || state.info.box[2] <= 0) {
+        // Invalid box dimensions - clear cache and return
+        cacheValid_ = false;
+        cavityPoints_.clear();
+        clusters_.clear();
+        grid_.occupied.clear();
+        return;
+    }
+    
+    // Ensure grid spacing is positive
+    double spacing = gridSpacing_ > 0 ? gridSpacing_ : 0.25;  // Default to 0.25 nm
+    
     // Box is already in nm in MCState
     grid_.box = Vector3(state.info.box[0],
                        state.info.box[1],
                        state.info.box[2]);
     
     // Setup grid dimensions - use round for stability
-    grid_.nx = std::max(3, static_cast<int>(std::round(grid_.box.x / gridSpacing_)));
-    grid_.ny = std::max(3, static_cast<int>(std::round(grid_.box.y / gridSpacing_)));
-    grid_.nz = std::max(3, static_cast<int>(std::round(grid_.box.z / gridSpacing_)));
+    grid_.nx = std::max(3, static_cast<int>(std::round(grid_.box.x / spacing)));
+    grid_.ny = std::max(3, static_cast<int>(std::round(grid_.box.y / spacing)));
+    grid_.nz = std::max(3, static_cast<int>(std::round(grid_.box.z / spacing)));
     
     grid_.origin = Vector3(0, 0, 0);
     grid_.spacing = Vector3(grid_.box.x / grid_.nx,
@@ -159,21 +172,34 @@ void CavityBiasCore::buildGrid(const MCState& state) {
 void CavityBiasCore::markOccupied(const MCState& state) {
     // Coordinates and sigma are already in nm
     
-    for (int resIdx = 0; resIdx < state.activeResidueCount; ++resIdx) {
+    // Ensure we don't exceed residues vector size
+    int maxResIdx = std::min(state.activeResidueCount, static_cast<int>(state.residues.size()));
+    
+    for (int resIdx = 0; resIdx < maxResIdx; ++resIdx) {
         const MCResidue& res = state.residues[resIdx];
         if (!res.active) continue;
         
         for (int i = 0; i < res.atomCount; ++i) {
             int atomIdx = res.atomStart + i;
-            if (atomIdx >= state.activeAtomCount) continue;
+            // Check for negative index (e.g., when atomStart is -1)
+            // Also ensure we don't exceed atoms vector size
+            if (atomIdx < 0 || atomIdx >= state.activeAtomCount || 
+                atomIdx >= static_cast<int>(state.atoms.size())) {
+                continue;
+            }
             
             const MCAtom& atom = state.atoms[atomIdx];
             Vector3 pos(atom.x, atom.y, atom.z);  // Already in nm
             
             // Get effective radius (use LJ sigma if available)
             double radius = probeRadius_;
-            if (atom.type < state.forcefield.numTotalTypes) {
-                radius = 0.5 * state.forcefield.ljSigma[atom.type] + probeRadius_;  // Already in nm
+            if (atom.type < state.forcefield.numTotalTypes && 
+                !state.forcefield.ljSigma.empty()) {
+                // ljSigma is an NxN matrix, get diagonal element
+                int idx = atom.type * state.forcefield.numTotalTypes + atom.type;
+                if (idx < static_cast<int>(state.forcefield.ljSigma.size())) {
+                    radius = 0.5 * state.forcefield.ljSigma[idx] + probeRadius_;  // Already in nm
+                }
             }
             
             // Mark grid points within radius as occupied (with PBC)
@@ -499,17 +525,30 @@ bool CavityBiasCore::isIdealGas(const MCState& state) const {
     // This indicates an ideal gas system with no intermolecular interactions
     const double eps_threshold = 1e-6;  // Threshold for "zero" epsilon
     
+    const int n = state.forcefield.numTotalTypes;
+    if (n <= 0) return true;  // No types defined, treat as ideal gas
+    
+    const auto& eps = state.forcefield.ljEps;
+    // Check if ljEps is properly sized for NxN matrix
+    if (eps.size() < static_cast<size_t>(n * n)) {
+        // ljEps not properly initialized, treat as ideal gas for safety
+        return true;
+    }
+    
+    // Check diagonal elements (self-interactions) of the epsilon matrix
     bool isIdeal = true;
-    for (int i = 0; i < state.forcefield.numTotalTypes; ++i) {
-        if (state.forcefield.ljEps[i] > eps_threshold) {
+    for (int i = 0; i < n; ++i) {
+        // ljEps is an NxN matrix, get diagonal element
+        int idx = i * n + i;
+        if (eps[idx] > eps_threshold) {
             isIdeal = false;
             break;
         }
     }
     
     // Debug output (disabled)
-    // std::cerr << "CavityBiasCore::isIdealGas: numTypes=" << state.forcefield.numTotalTypes 
-    //           << ", ljEps[0]=" << (state.forcefield.numTotalTypes > 0 ? state.forcefield.ljEps[0] : -1)
+    // std::cerr << "CavityBiasCore::isIdealGas: numTypes=" << n
+    //           << ", ljEps.size=" << eps.size()
     //           << ", result=" << (isIdeal ? "true" : "false") << std::endl;
     
     return isIdeal;

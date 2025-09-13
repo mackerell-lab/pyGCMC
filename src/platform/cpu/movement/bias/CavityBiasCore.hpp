@@ -49,8 +49,14 @@ public:
     void invalidateCache() { cacheValid_ = false; }
     
     // Configuration
-    void setGridSpacing(double spacing) { gridSpacing_ = spacing; }
-    void setProbeRadius(double radius) { probeRadius_ = radius; }
+    void setGridSpacing(double spacing) { 
+        gridSpacing_ = spacing; 
+        invalidateCache();  // Invalidate cache when parameters change
+    }
+    void setProbeRadius(double radius) { 
+        probeRadius_ = radius; 
+        invalidateCache();  // Invalidate cache when parameters change
+    }
     
 private:
     // Grid building

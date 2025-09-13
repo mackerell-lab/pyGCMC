@@ -11,6 +11,7 @@
 #include "../../platform/cpu/movement/pool/ActivePool.hpp"
 #include "../../platform/cpu/movement/common/MovementUtils.hpp"  // For Vector3
 #include "../../model/montecarlo/MCMain.hpp"  // For MCState
+#include "../../platform/cpu/movement/bias/CavityBiasCore.hpp"  // For CavityBiasCore
 
 namespace py = pybind11;
 using namespace ::pygcmc::platform::cpu::movement;
@@ -285,6 +286,39 @@ void init_movement_bindings(py::module& m) {
         .def_readwrite("accepts", &MovementStatistics::accepts)
         .def_readwrite("totalEnergyChange", &MovementStatistics::totalEnergyChange)
         .def("acceptanceRate", &MovementStatistics::acceptanceRate);
+    
+    // Bind CavityMode enum
+    py::enum_<CavityMode>(movement, "CavityMode")
+        .value("FAST_APPROX", CavityMode::FAST_APPROX, "Global cavity fraction (default)")
+        .value("CLUSTER_VOLUME", CavityMode::CLUSTER_VOLUME, "Cluster-based accurate sampling")
+        .value("LOCAL_VEFF", CavityMode::LOCAL_VEFF, "Local effective volume (highest accuracy)")
+        .export_values();
+    
+    // Bind CavityBiasCore class
+    py::class_<CavityBiasCore>(movement, "CavityBiasCore")
+        .def(py::init<double, double>(), 
+             py::arg("gridSpacing") = 0.25, 
+             py::arg("probeRadius") = 0.14,
+             "Create CavityBiasCore with grid spacing and probe radius in nm")
+        .def("calculateCavityVolume", &CavityBiasCore::calculateCavityVolume,
+             py::arg("state"), 
+             py::arg("mode"),
+             "Calculate cavity volume in nm^3")
+        .def("proposeCavityPosition", &CavityBiasCore::proposeCavityPosition,
+             py::arg("state"),
+             py::arg("mode"),
+             "Propose a position inside a cavity")
+        .def("invalidateCache", &CavityBiasCore::invalidateCache,
+             "Invalidate the internal cache")
+        .def("setGridSpacing", &CavityBiasCore::setGridSpacing,
+             py::arg("spacing"),
+             "Set grid spacing in nm")
+        .def("setProbeRadius", &CavityBiasCore::setProbeRadius,
+             py::arg("radius"),
+             "Set probe radius in nm")
+        .def("__repr__", [](const CavityBiasCore& c) {
+            return std::string("CavityBiasCore(gridSpacing=0.25, probeRadius=0.14)");
+        });
     
     // Register FragmentReservoir and related classes
     pygcmc::bindings::platform::init_fragment_reservoir_bindings(movement);
