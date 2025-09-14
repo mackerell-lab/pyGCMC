@@ -58,27 +58,30 @@ struct Quaternion {
     
     // Apply rotation to a vector
     Vector3 rotate(const Vector3& v) const {
-        // Rotation formula: v' = q * v * q^*
-        // Using optimized formula without creating quaternion from vector
+        // Standard quaternion rotation formula: v' = q * v * q^*
+        // Using the correct formula from computer graphics/robotics
         double qw = w, qx = x, qy = y, qz = z;
         double vx = v.x, vy = v.y, vz = v.z;
         
-        // Calculate q * v * q^*
-        double t2 = qw * qx;
-        double t3 = qw * qy;
-        double t4 = qw * qz;
-        double t5 = -qx * qx;
-        double t6 = qx * qy;
-        double t7 = qx * qz;
-        double t8 = -qy * qy;
-        double t9 = qy * qz;
-        double t10 = -qz * qz;
+        // Rotation matrix form (verified formula)
+        double qw2 = qw * qw;
+        double qx2 = qx * qx;
+        double qy2 = qy * qy;
+        double qz2 = qz * qz;
         
-        return Vector3(
-            2 * ((t8 + t10) * vx + (t6 - t4) * vy + (t3 + t7) * vz) + vx,
-            2 * ((t4 + t6) * vx + (t5 + t10) * vy + (t9 - t2) * vz) + vy,
-            2 * ((t7 - t3) * vx + (t2 + t9) * vy + (t5 + t8) * vz) + vz
-        );
+        double rx = vx * (qw2 + qx2 - qy2 - qz2) + 
+                   vy * 2.0 * (qx * qy - qw * qz) + 
+                   vz * 2.0 * (qx * qz + qw * qy);
+                   
+        double ry = vx * 2.0 * (qx * qy + qw * qz) + 
+                   vy * (qw2 - qx2 + qy2 - qz2) + 
+                   vz * 2.0 * (qy * qz - qw * qx);
+                   
+        double rz = vx * 2.0 * (qx * qz - qw * qy) + 
+                   vy * 2.0 * (qy * qz + qw * qx) + 
+                   vz * (qw2 - qx2 - qy2 + qz2);
+        
+        return Vector3(rx, ry, rz);
     }
 };
 

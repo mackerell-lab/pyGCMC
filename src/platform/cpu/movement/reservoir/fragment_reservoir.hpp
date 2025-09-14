@@ -6,6 +6,8 @@
 #include <map>
 #include <set>
 #include <queue>
+#include <deque>
+#include <unordered_map>
 #include <memory>
 #include <string>
 #include <algorithm>
@@ -314,6 +316,13 @@ public:
     // are not implemented in this stub version
     
 private:
+    // Ghost record structure for tracking deleted instances
+    struct GhostRecord {
+        int instanceId;
+        int templateId;
+        double deletionStep;
+    };
+    
     // === Private Data Members ===
     
     // Templates
@@ -338,6 +347,10 @@ private:
     int nextInstanceId_ = 0;
     int nextTemplateId_ = 0;
     double currentStep_ = 0.0;
+    
+    // Ghost pool management (using deque for FIFO)
+    std::unordered_map<int, std::deque<GhostRecord>> ghostPools_;  // Per-template FIFO ghost pools
+    std::unordered_map<int, int> perTypeActiveCount_;               // Active count per template type
     
     // === Private Helper Functions ===
     

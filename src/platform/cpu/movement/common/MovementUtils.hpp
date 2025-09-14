@@ -63,6 +63,33 @@ struct Quaternion {
             w * q.z + x * q.y - y * q.x + z * q.w
         );
     }
+    
+    // Apply rotation to a vector (using verified formula)
+    Vector3 rotate(const Vector3& v) const {
+        // Standard quaternion rotation formula
+        double qw = w, qx = x, qy = y, qz = z;
+        double vx = v.x, vy = v.y, vz = v.z;
+        
+        // Rotation matrix form
+        double qw2 = qw * qw;
+        double qx2 = qx * qx;
+        double qy2 = qy * qy;
+        double qz2 = qz * qz;
+        
+        double rx = vx * (qw2 + qx2 - qy2 - qz2) + 
+                   vy * 2.0 * (qx * qy - qw * qz) + 
+                   vz * 2.0 * (qx * qz + qw * qy);
+                   
+        double ry = vx * 2.0 * (qx * qy + qw * qz) + 
+                   vy * (qw2 - qx2 + qy2 - qz2) + 
+                   vz * 2.0 * (qy * qz - qw * qx);
+                   
+        double rz = vx * 2.0 * (qx * qz - qw * qy) + 
+                   vy * 2.0 * (qy * qz + qw * qx) + 
+                   vz * (qw2 - qx2 - qy2 + qz2);
+        
+        return Vector3(rx, ry, rz);
+    }
 };
 
 namespace utils {

@@ -91,10 +91,10 @@ def test_ghost_fragment_recycling():
     new_pos = pygcmc.movement.Vector3(2.0, 2.0, 2.0)
     new_id = reservoir.createInstance(template_id, new_pos)
     
-    # Should have recycled a ghost (but current implementation doesn't recycle)
+    # Should have recycled a ghost (our new implementation DOES recycle)
     assert reservoir.getActiveCount(template_id) == 1
-    # Note: Current implementation doesn't automatically recycle ghosts
-    assert reservoir.getGhostCount(template_id) == 5
+    # After recycling one ghost, should have 4 ghosts remaining
+    assert reservoir.getGhostCount(template_id) == 4
 
 
 def test_reservoir_statistics():

@@ -62,12 +62,12 @@ class TestRotationUniformity:
         engine = pygcmc.GCMCEngine()
         engine.initialize(state, reservoir)
         engine.setTemperature(300.0)
-        engine.setSeed(42)
         
         acceptance = pygcmc.GCMCAcceptance()
         acceptance.setTemperature(300.0)
         acceptance.setVolume(1000.0)
-        acceptance.setActivity(0, 0.1)
+        # Use very low activity for guaranteed deletion acceptance
+        acceptance.setActivity(0, 0.001)
         engine.setAcceptanceCalculator(acceptance)
         
         # Collect cos(theta) values from inserted molecules
@@ -76,10 +76,17 @@ class TestRotationUniformity:
         phi_values = []
         
         for i in range(n_samples):
+            # Use different seed for each insertion to ensure true independence
+            engine.setSeed(42 + i)
+            
+            # Clear any existing molecules
+            while state.activeResidueCount > 0:
+                engine.attemptDeletion(0)
+            
             result = engine.attemptInsertion(0)
             if result.accepted:
                 # Get orientation of inserted molecule
-                residue = state.residues[state.activeResidueCount - 1]
+                residue = state.residues[0]
                 if residue.active and residue.atomCount >= 2:
                     idx1 = residue.atomStart
                     idx2 = residue.atomStart + 1
@@ -102,9 +109,6 @@ class TestRotationUniformity:
                         if abs(dx) > 1e-10 or abs(dy) > 1e-10:
                             phi = np.arctan2(dy, dx)
                             phi_values.append(phi)
-                
-                # Delete for next iteration
-                engine.attemptDeletion(0)
         
         cos_theta_values = np.array(cos_theta_values)
         phi_values = np.array(phi_values)

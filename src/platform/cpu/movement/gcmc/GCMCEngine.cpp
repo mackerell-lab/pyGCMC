@@ -983,20 +983,13 @@ void GCMCEngine::synchronizeStateWithReservoir(int instanceId, bool isInsertion)
             double qw = q.w, qx = q.x, qy = q.y, qz = q.z;
             double vx = v.x, vy = v.y, vz = v.z;
             
-            // Calculate rotated position using quaternion rotation formula
-            double rx = vx * (qw*qw + qx*qx - qy*qy - qz*qz) + 
-                       vy * 2*(qx*qy - qw*qz) + 
-                       vz * 2*(qx*qz + qw*qy);
-            double ry = vx * 2*(qx*qy + qw*qz) + 
-                       vy * (qw*qw - qx*qx + qy*qy - qz*qz) + 
-                       vz * 2*(qy*qz - qw*qx);
-            double rz = vx * 2*(qx*qz - qw*qy) + 
-                       vy * 2*(qy*qz + qw*qx) + 
-                       vz * (qw*qw - qx*qx - qy*qy + qz*qz);
+            // Use the movement layer's Quaternion::rotate() method
+            Vector3 templatePos(vx, vy, vz);
+            Vector3 rotatedPos = q.rotate(templatePos);
             
-            atom.x = instance->position.x + rx;
-            atom.y = instance->position.y + ry;
-            atom.z = instance->position.z + rz;
+            atom.x = instance->position.x + rotatedPos.x;
+            atom.y = instance->position.y + rotatedPos.y;
+            atom.z = instance->position.z + rotatedPos.z;
             
             // Sync position vector with x,y,z coordinates
             atom.updatePosition();
@@ -1095,34 +1088,23 @@ void GCMCEngine::updateAtomCoordinates(int residueIdx) {
         Vector3 v(tmplAtom.x, tmplAtom.y, tmplAtom.z);
         Quaternion q = instance->orientation;
         
-        // Quaternion rotation formula
-        double qw = q.w, qx = q.x, qy = q.y, qz = q.z;
-        double vx = v.x, vy = v.y, vz = v.z;
-        
-        double rx = vx * (qw*qw + qx*qx - qy*qy - qz*qz) + 
-                   vy * 2*(qx*qy - qw*qz) + 
-                   vz * 2*(qx*qz + qw*qy);
-        double ry = vx * 2*(qx*qy + qw*qz) + 
-                   vy * (qw*qw - qx*qx + qy*qy - qz*qz) + 
-                   vz * 2*(qy*qz - qw*qx);
-        double rz = vx * 2*(qx*qz - qw*qy) + 
-                   vy * 2*(qy*qz + qw*qx) + 
-                   vz * (qw*qw - qx*qx - qy*qy + qz*qz);
+        // Use the verified Quaternion::rotate() method
+        Vector3 rotatedPos = q.rotate(v);
         
         // Update coordinates in residue.atoms
         if (atomIdx < static_cast<int>(residue.atoms.size())) {
-            residue.atoms[atomIdx].x = instance->position.x + rx;
-            residue.atoms[atomIdx].y = instance->position.y + ry;
-            residue.atoms[atomIdx].z = instance->position.z + rz;
+            residue.atoms[atomIdx].x = instance->position.x + rotatedPos.x;
+            residue.atoms[atomIdx].y = instance->position.y + rotatedPos.y;
+            residue.atoms[atomIdx].z = instance->position.z + rotatedPos.z;
             residue.atoms[atomIdx].updatePosition();
         }
         
         // Update coordinates in global atoms array
         int globalIdx = residue.atomStart + atomIdx;
         if (globalIdx < static_cast<int>(state_->atoms.size())) {
-            state_->atoms[globalIdx].x = instance->position.x + rx;
-            state_->atoms[globalIdx].y = instance->position.y + ry;
-            state_->atoms[globalIdx].z = instance->position.z + rz;
+            state_->atoms[globalIdx].x = instance->position.x + rotatedPos.x;
+            state_->atoms[globalIdx].y = instance->position.y + rotatedPos.y;
+            state_->atoms[globalIdx].z = instance->position.z + rotatedPos.z;
             state_->atoms[globalIdx].updatePosition();
         }
         

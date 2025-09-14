@@ -4,6 +4,7 @@
 
 #include "fragment_reservoir.hpp"
 #include <random>
+#include <unordered_map>
 
 namespace pygcmc {
 namespace platform {
@@ -32,6 +33,12 @@ public:
 
 private:
     std::vector<TypeInfo> types_;
+    std::unordered_map<int, size_t> idToIdx_;  // typeId to index in types_ vector
+    
+    // Internal helper methods (not exposed to Python)
+    TypeInfo* getTypeById(int typeId);
+    void incCount(int typeId);
+    void decCount(int typeId);
 };
 
 } // namespace movement

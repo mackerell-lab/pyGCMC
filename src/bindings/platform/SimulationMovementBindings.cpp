@@ -316,7 +316,7 @@ void init_movement_bindings(py::module& m) {
         .def("setProbeRadius", &CavityBiasCore::setProbeRadius,
              py::arg("radius"),
              "Set probe radius in nm")
-        .def("__repr__", [](const CavityBiasCore& c) {
+        .def("__repr__", [](const CavityBiasCore& /*c*/) {
             return std::string("CavityBiasCore(gridSpacing=0.25, probeRadius=0.14)");
         });
     
