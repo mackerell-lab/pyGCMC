@@ -97,6 +97,85 @@ def test_ghost_fragment_recycling():
     assert reservoir.getGhostCount(template_id) == 4
 
 
+def test_instance_id_recycling():
+    """Test that deleted instance IDs are properly recycled"""
+    try:
+        reservoir = pygcmc.movement.FragmentReservoir()
+    except AttributeError:
+        pytest.skip("FragmentReservoir not exposed in Python bindings")
+    
+    water = create_water_template()
+    template_id = reservoir.addTemplate(water)
+    
+    # Create instances and track their IDs
+    first_ids = []
+    for i in range(3):
+        pos = pygcmc.movement.Vector3(i, i, i)
+        inst_id = reservoir.createInstance(template_id, pos)
+        first_ids.append(inst_id)
+    
+    # Delete middle instance
+    deleted_id = first_ids[1]
+    reservoir.deleteInstance(deleted_id)
+    
+    # Create new instance - should recycle the deleted ID
+    new_pos = pygcmc.movement.Vector3(5.0, 5.0, 5.0)
+    new_id = reservoir.createInstance(template_id, new_pos)
+    
+    # The new ID should be the recycled one (implementation dependent)
+    # At minimum, it should be in the range of previously used IDs
+    assert new_id in first_ids, \
+        f"Instance ID {new_id} not recycled from {first_ids}"
+    
+    print(f"✓ Instance ID recycling test passed: recycled ID {new_id}")
+
+
+def test_max_count_rejection():
+    """Test that insertion is rejected when type reaches maxCount"""
+    try:
+        # Create multi-type reservoir with limits
+        multi_reservoir = pygcmc.movement.MultiTypeReservoir()
+    except AttributeError:
+        pytest.skip("MultiTypeReservoir not exposed in Python bindings")
+    
+    # Add type with maxCount = 2
+    type_config = pygcmc.movement.TypeConfig()
+    type_config.typeId = 0
+    type_config.maxCount = 2
+    type_config.probability = 1.0
+    multi_reservoir.addType(type_config)
+    
+    water = create_water_template()
+    template_id = multi_reservoir.addTemplate(water, typeId=0)
+    
+    # Create instances up to maxCount
+    positions = [
+        pygcmc.movement.Vector3(0, 0, 0),
+        pygcmc.movement.Vector3(1, 1, 1),
+        pygcmc.movement.Vector3(2, 2, 2)  # This should be rejected
+    ]
+    
+    created_ids = []
+    for i, pos in enumerate(positions):
+        inst_id = multi_reservoir.createInstance(template_id, pos)
+        if inst_id >= 0:
+            created_ids.append(inst_id)
+    
+    # Should only create 2 instances (maxCount = 2)
+    assert len(created_ids) == 2, \
+        f"Created {len(created_ids)} instances, expected 2 (maxCount)"
+    
+    # Verify count
+    assert multi_reservoir.getActiveCount(0) == 2
+    
+    # Try selectTypeForInsertion - should skip type at maxCount
+    selected_type = multi_reservoir.selectTypeForInsertion()
+    assert selected_type == -1, \
+        "selectTypeForInsertion should return -1 when all types at maxCount"
+    
+    print("✓ Max count rejection test passed")
+
+
 def test_reservoir_statistics():
     """Test reservoir statistics tracking"""
     try:

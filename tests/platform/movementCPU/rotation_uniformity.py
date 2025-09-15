@@ -85,8 +85,8 @@ class TestRotationUniformity:
             
             result = engine.attemptInsertion(0)
             if result.accepted:
-                # Get orientation of inserted molecule
-                residue = state.residues[0]
+                # Get orientation of inserted molecule using result.residueIndex
+                residue = state.residues[result.residueIndex]
                 if residue.active and residue.atomCount >= 2:
                     idx1 = residue.atomStart
                     idx2 = residue.atomStart + 1
