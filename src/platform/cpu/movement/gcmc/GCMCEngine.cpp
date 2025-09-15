@@ -979,11 +979,8 @@ void GCMCEngine::synchronizeStateWithReservoir(int instanceId, bool isInsertion)
             Vector3 v(tmplAtom.x, tmplAtom.y, tmplAtom.z);
             Quaternion q = instance->orientation;
             
-            // Simplified rotation formula for unit quaternion
-            double qw = q.w, qx = q.x, qy = q.y, qz = q.z;
-            double vx = v.x, vy = v.y, vz = v.z;
-            
             // Use the movement layer's Quaternion::rotate() method
+            double vx = v.x, vy = v.y, vz = v.z;
             Vector3 templatePos(vx, vy, vz);
             Vector3 rotatedPos = q.rotate(templatePos);
             

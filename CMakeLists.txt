@@ -197,6 +197,32 @@ if(ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_link_options(pygcmc PRIVATE --coverage)
 endif()
 
+# ==============================================================================
+# CLI EXECUTABLES
+# ==============================================================================
+
+# GCMC CPU driver (reads INP and runs simulation)
+add_executable(gcmc_cpu
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/simulation/gcmc_cpu.cpp
+)
+
+target_include_directories(gcmc_cpu
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(gcmc_cpu
+    PRIVATE
+        pygcmc_platform
+        pygcmc_io
+        pygcmc_system
+        pygcmc_model
+)
+
+set_target_properties(gcmc_cpu PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+
 if(ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     set(SANITIZER_FLAGS "-fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer")
     target_compile_options(pygcmc_io PRIVATE ${SANITIZER_FLAGS})
