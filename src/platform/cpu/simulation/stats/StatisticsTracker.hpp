@@ -1,5 +1,5 @@
-#ifndef PYGCMC_PLATFORM_CPU_SIMULATION_SIMULATION_STATISTICS_HPP
-#define PYGCMC_PLATFORM_CPU_SIMULATION_SIMULATION_STATISTICS_HPP
+#ifndef PYGCMC_PLATFORM_CPU_SIMULATION_STATS_STATISTICS_TRACKER_HPP
+#define PYGCMC_PLATFORM_CPU_SIMULATION_STATS_STATISTICS_TRACKER_HPP
 
 #include <map>
 #include <vector>
@@ -17,7 +17,7 @@ namespace simulation {
  * This class manages all statistics collection and analysis
  * for the simulation, tracking moves, energy, and performance.
  */
-class SimulationStatistics {
+class StatisticsTracker {
 public:
     /**
      * @brief Move statistics structure
@@ -48,7 +48,7 @@ public:
     };
     
     // Constructor
-    SimulationStatistics();
+    StatisticsTracker();
     
     // Recording methods
     void recordMove(const std::string& moveType, 
@@ -82,6 +82,7 @@ public:
     int getTotalSteps() const { return totalSteps_; }
     int getTotalAccepted() const { return totalAccepted_; }
     double getTotalTime() const { return totalTime_; }
+    double getCurrentEnergy() const { return currentEnergy_; }
     const std::vector<double>& getEnergyHistory() const { 
         return energyHistory_; 
     }
@@ -119,4 +120,4 @@ private:
 } // namespace platform
 } // namespace pygcmc
 
-#endif // PYGCMC_PLATFORM_CPU_SIMULATION_SIMULATION_STATISTICS_HPP
+#endif // PYGCMC_PLATFORM_CPU_SIMULATION_STATS_STATISTICS_TRACKER_HPP
