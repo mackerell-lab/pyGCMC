@@ -135,14 +135,114 @@ bool GCMCSimulation::setupSystem() {
     // Load initial structure if provided
     const auto& pdbFile = params_->get_file_info().input_pdb_file;
     if (!pdbFile.empty()) {
-        // TODO: Load PDB file into state
         log("Loading initial structure from %s", pdbFile.c_str());
+        // TODO: Integrate PDB parser when available
+        /*
+        try {
+            auto structure = io::PdbParserMain::parse_file(pdbFile);
+            
+            // Convert PDB structure to MCState atoms and residues
+            state_->atoms.resize(structure.get_atoms().size());
+            
+            for (size_t i = 0; i < structure.get_atoms().size(); ++i) {
+                const auto& pdbAtom = structure.get_atoms()[i];
+                auto& mcAtom = state_->atoms[i];
+                mcAtom.x = pdbAtom.get_x() / 10.0;  // Convert Angstrom to nm
+                mcAtom.y = pdbAtom.get_y() / 10.0;
+                mcAtom.z = pdbAtom.get_z() / 10.0;
+                mcAtom.type = 0;  // Will be assigned from topology
+                mcAtom.name = pdbAtom.get_name();
+                mcAtom.updatePosition();
+            }
+            
+            // Convert residues
+            state_->residues.resize(structure.get_residues().size());
+            
+            for (size_t i = 0; i < structure.get_residues().size(); ++i) {
+                const auto& pdbRes = structure.get_residues()[i];
+                auto& mcRes = state_->residues[i];
+                mcRes.resname = pdbRes.get_name();
+                mcRes.resid = pdbRes.get_resseq();
+                mcRes.atomStart = pdbRes.get_atom_indices().empty() ? 0 : pdbRes.get_atom_indices()[0];
+                mcRes.atomCount = pdbRes.get_atom_indices().size();
+                mcRes.active = true;
+                mcRes.fixed = false;
+                
+                // Calculate center of mass
+                mcRes.center[0] = pdbRes.get_center_of_mass()[0] / 10.0;  // Convert to nm
+                mcRes.center[1] = pdbRes.get_center_of_mass()[1] / 10.0;
+                mcRes.center[2] = pdbRes.get_center_of_mass()[2] / 10.0;
+            }
+            
+            log("Loaded %zu atoms and %zu residues from PDB", 
+                state_->atoms.size(), state_->residues.size());
+                
+        } catch (const std::exception& e) {
+            log("ERROR: Failed to parse PDB file: %s", e.what());
+            return false;
+        }
+        */
+        log("PDB loading temporarily disabled - using empty initial state");
     }
     
-    // Setup force field
-    // TODO: Load force field parameters from files
-    state_->forcefield.numTotalTypes = 10;  // Placeholder
-    state_->forcefield.numMovementTypes = 4;  // Placeholder
+    // Load topology and setup force field
+    const auto& topFile = params_->get_file_info().topology_file;
+    if (!topFile.empty()) {
+        log("Loading topology from %s", topFile.c_str());
+        // TODO: Integrate TOP parser when available
+        /*
+        try {
+            auto topology = io::TOPParser::parse_file(topFile);
+            
+            // Extract atom types and build force field
+            // For now, use simple placeholder values
+            // TODO: Integrate with proper force field parameters from PAR files
+            size_t numTypes = 10;  // Placeholder - should come from topology
+            state_->forcefield.numTotalTypes = numTypes;
+            state_->forcefield.numMovementTypes = 4;  // Water, ions, etc.
+            
+            // Initialize LJ parameters with placeholder values
+            state_->forcefield.ljSigma.resize(numTypes * numTypes);
+            state_->forcefield.ljEpsilon.resize(numTypes * numTypes);
+            
+            for (size_t i = 0; i < numTypes; ++i) {
+                for (size_t j = 0; j < numTypes; ++j) {
+                    size_t idx = i * numTypes + j;
+                    // Placeholder LJ parameters (will be replaced with real values from PAR files)
+                    state_->forcefield.ljSigma[idx] = 0.3f + 0.01f * (i + j);  // nm
+                    state_->forcefield.ljEps[idx] = 0.5f + 0.05f * (i * j);  // kJ/mol
+                }
+            }
+            
+            log("Initialized force field with %zu types", numTypes);
+            
+        } catch (const std::exception& e) {
+            log("WARNING: Failed to parse topology file: %s", e.what());
+            log("Using default force field parameters");
+            // Fall back to placeholder values
+            state_->forcefield.numTotalTypes = 10;
+            state_->forcefield.numMovementTypes = 4;
+        }
+        */
+        log("Topology loading temporarily disabled - using placeholder force field");
+    }
+    
+    // Use default force field for now
+    size_t numTypes = 10;  // Placeholder
+    state_->forcefield.numTotalTypes = numTypes;
+    state_->forcefield.numMovementTypes = 4;
+    
+    // Initialize LJ parameters with placeholder values
+    state_->forcefield.ljSigma.resize(numTypes * numTypes);
+    state_->forcefield.ljEps.resize(numTypes * numTypes);
+    
+    for (size_t i = 0; i < numTypes; ++i) {
+        for (size_t j = 0; j < numTypes; ++j) {
+            size_t idx = i * numTypes + j;
+            state_->forcefield.ljSigma[idx] = 0.3f + 0.01f * (i + j);  // nm
+            state_->forcefield.ljEps[idx] = 0.5f + 0.05f * (i * j);  // kJ/mol
+        }
+    }
     
     return true;
 }
@@ -193,7 +293,61 @@ bool GCMCSimulation::setupFragments() {
         tmpl.activity = frag.activity;
         tmpl.concentration = frag.concentration;
         tmpl.radius = (i < fragInfo.radius_list.size()) ? fragInfo.radius_list[i] : 0.0;
-        tmpl.atoms.resize(1);  // Placeholder until ITP parser is ready
+        
+        // Create fragment atoms based on fragment type
+        // TODO: Replace with ITP parser when ready
+        if (frag.name == "water" || frag.name == "WAT" || frag.name == "HOH") {
+            // Water molecule: O-H-H
+            tmpl.atoms.resize(3);
+            // Oxygen
+            tmpl.atoms[0].x = 0.0;
+            tmpl.atoms[0].y = 0.0;
+            tmpl.atoms[0].z = 0.0;
+            tmpl.atoms[0].type = 0;  // O type
+            tmpl.atoms[0].charge = -0.834;  // TIP3P charge
+            tmpl.atoms[0].mass = 15.999;
+            // H1
+            tmpl.atoms[1].x = 0.0756;
+            tmpl.atoms[1].y = 0.0586;
+            tmpl.atoms[1].z = 0.0;
+            tmpl.atoms[1].type = 1;  // H type
+            tmpl.atoms[1].charge = 0.417;
+            tmpl.atoms[1].mass = 1.008;
+            // H2
+            tmpl.atoms[2].x = -0.0756;
+            tmpl.atoms[2].y = 0.0586;
+            tmpl.atoms[2].z = 0.0;
+            tmpl.atoms[2].type = 1;  // H type
+            tmpl.atoms[2].charge = 0.417;
+            tmpl.atoms[2].mass = 1.008;
+        } else if (frag.name == "Na" || frag.name == "NA" || frag.name == "SOD") {
+            // Sodium ion
+            tmpl.atoms.resize(1);
+            tmpl.atoms[0].x = 0.0;
+            tmpl.atoms[0].y = 0.0;
+            tmpl.atoms[0].z = 0.0;
+            tmpl.atoms[0].type = 2;  // Na type
+            tmpl.atoms[0].charge = 1.0;
+            tmpl.atoms[0].mass = 22.990;
+        } else if (frag.name == "Cl" || frag.name == "CL" || frag.name == "CLA") {
+            // Chloride ion
+            tmpl.atoms.resize(1);
+            tmpl.atoms[0].x = 0.0;
+            tmpl.atoms[0].y = 0.0;
+            tmpl.atoms[0].z = 0.0;
+            tmpl.atoms[0].type = 3;  // Cl type
+            tmpl.atoms[0].charge = -1.0;
+            tmpl.atoms[0].mass = 35.453;
+        } else {
+            // Default: single atom placeholder
+            tmpl.atoms.resize(1);
+            tmpl.atoms[0].x = 0.0;
+            tmpl.atoms[0].y = 0.0;
+            tmpl.atoms[0].z = 0.0;
+            tmpl.atoms[0].type = i % state_->forcefield.numMovementTypes;
+            tmpl.atoms[0].charge = 0.0;
+            tmpl.atoms[0].mass = 12.0;
+        }
         
         // Create type info for multi-type reservoir
         movement::MultiTypeReservoir::TypeInfo typeInfo;
@@ -656,14 +810,152 @@ void GCMCSimulation::printStatistics() const {
     }
 }
 
-void GCMCSimulation::saveTrajectory(const std::string& /*filename*/) const {
-    // TODO: Implement PDB trajectory writing
-    // Will use state_->residues to write current configuration
+void GCMCSimulation::saveTrajectory(const std::string& filename) const {
+    if (!state_) return;
+    
+    std::ofstream out(filename);
+    if (!out) {
+        log("ERROR: Failed to open trajectory file %s", filename.c_str());
+        return;
+    }
+    
+    // Write PDB header
+    out << "REMARK GCMC Trajectory\n";
+    out << "REMARK Step: " << stats_.totalSteps << "\n";
+    out << "REMARK Energy: " << stats_.currentEnergy << " kJ/mol\n";
+    
+    // Write box dimensions (CRYST1 record)
+    out << "CRYST1";
+    out << std::fixed << std::setprecision(3);
+    out << std::setw(9) << state_->info.box[0] * 10.0;  // nm to Angstrom
+    out << std::setw(9) << state_->info.box[1] * 10.0;
+    out << std::setw(9) << state_->info.box[2] * 10.0;
+    out << std::setw(7) << "90.00";
+    out << std::setw(7) << "90.00";
+    out << std::setw(7) << "90.00";
+    out << " P 1           1\n";
+    
+    // Write atoms
+    int atomIdx = 1;
+    for (size_t resIdx = 0; resIdx < state_->residues.size(); ++resIdx) {
+        const auto& res = state_->residues[resIdx];
+        if (!res.active) continue;
+        
+        // Write atoms for this residue
+        for (int j = 0; j < res.atomCount && (res.atomStart + j) < static_cast<int>(state_->atoms.size()); ++j) {
+            const auto& atom = state_->atoms[res.atomStart + j];
+            
+            out << "ATOM  ";
+            out << std::setw(5) << atomIdx++;
+            out << "  ";
+            
+            // Atom name - based on type
+            if (atom.type == 0) {
+                out << std::left << std::setw(4) << "O";
+            } else if (atom.type == 1) {
+                out << std::left << std::setw(4) << "H";
+            } else if (atom.type == 2) {
+                out << std::left << std::setw(4) << "Na";
+            } else if (atom.type == 3) {
+                out << std::left << std::setw(4) << "Cl";
+            } else {
+                out << std::left << std::setw(4) << "X";
+            }
+            
+            // Residue name and number
+            out << std::right;
+            out << std::setw(3) << res.resname.substr(0, 3);
+            out << " A";  // Default chain ID
+            out << std::setw(4) << res.resid;
+            out << "    ";
+            
+            // Coordinates (nm to Angstrom)
+            out << std::fixed << std::setprecision(3);
+            out << std::setw(8) << atom.x * 10.0;
+            out << std::setw(8) << atom.y * 10.0;
+            out << std::setw(8) << atom.z * 10.0;
+            
+            // Occupancy and temperature factor
+            out << std::setw(6) << "1.00";
+            out << std::setw(6) << "0.00";
+            
+            // Element symbol
+            out << "          ";
+            if (atom.type == 0) out << " O";
+            else if (atom.type == 1) out << " H";
+            else if (atom.type == 2) out << "Na";
+            else if (atom.type == 3) out << "Cl";
+            else out << " X";
+            
+            out << "\n";
+        }
+    }
+    
+    out << "END\n";
+    out.close();
+    
+    log("Saved trajectory to %s", filename.c_str());
 }
 
-void GCMCSimulation::saveCheckpoint(const std::string& /*filename*/) const {
-    // TODO: Implement checkpoint saving
-    // Will serialize state_, reservoir_, and statistics
+void GCMCSimulation::saveCheckpoint(const std::string& filename) const {
+    if (!state_ || !engine_) return;
+    
+    std::ofstream out(filename, std::ios::binary);
+    if (!out) {
+        log("ERROR: Failed to open checkpoint file %s", filename.c_str());
+        return;
+    }
+    
+    // Write checkpoint header
+    const std::string header = "GCMC_CHECKPOINT_V1";
+    out.write(header.c_str(), header.size());
+    
+    // Write simulation state
+    out.write(reinterpret_cast<const char*>(&stats_.totalSteps), sizeof(stats_.totalSteps));
+    out.write(reinterpret_cast<const char*>(&stats_.acceptedMoves), sizeof(stats_.acceptedMoves));
+    out.write(reinterpret_cast<const char*>(&stats_.currentEnergy), sizeof(stats_.currentEnergy));
+    out.write(reinterpret_cast<const char*>(&stats_.totalTime), sizeof(stats_.totalTime));
+    
+    // Write fragment counts
+    size_t numFragTypes = fragmentTypes_.size();
+    out.write(reinterpret_cast<const char*>(&numFragTypes), sizeof(numFragTypes));
+    for (const auto& frag : fragmentTypes_) {
+        size_t nameLen = frag.name.size();
+        out.write(reinterpret_cast<const char*>(&nameLen), sizeof(nameLen));
+        out.write(frag.name.c_str(), nameLen);
+        out.write(reinterpret_cast<const char*>(&frag.currentCount), sizeof(frag.currentCount));
+        out.write(reinterpret_cast<const char*>(&frag.insertAttempts), sizeof(frag.insertAttempts));
+        out.write(reinterpret_cast<const char*>(&frag.insertAccepted), sizeof(frag.insertAccepted));
+        out.write(reinterpret_cast<const char*>(&frag.deleteAttempts), sizeof(frag.deleteAttempts));
+        out.write(reinterpret_cast<const char*>(&frag.deleteAccepted), sizeof(frag.deleteAccepted));
+    }
+    
+    // Write atom positions
+    size_t numAtoms = state_->atoms.size();
+    out.write(reinterpret_cast<const char*>(&numAtoms), sizeof(numAtoms));
+    for (const auto& atom : state_->atoms) {
+        out.write(reinterpret_cast<const char*>(&atom.x), sizeof(atom.x));
+        out.write(reinterpret_cast<const char*>(&atom.y), sizeof(atom.y));
+        out.write(reinterpret_cast<const char*>(&atom.z), sizeof(atom.z));
+        out.write(reinterpret_cast<const char*>(&atom.type), sizeof(atom.type));
+        // MCAtom doesn't have isActive, write a placeholder
+        bool active = true;
+        out.write(reinterpret_cast<const char*>(&active), sizeof(active));
+    }
+    
+    // Write residue information
+    size_t numResidues = state_->residues.size();
+    out.write(reinterpret_cast<const char*>(&numResidues), sizeof(numResidues));
+    for (const auto& res : state_->residues) {
+        size_t nameLen = res.resname.size();
+        out.write(reinterpret_cast<const char*>(&nameLen), sizeof(nameLen));
+        out.write(res.resname.c_str(), nameLen);
+        // Write active status
+        out.write(reinterpret_cast<const char*>(&res.active), sizeof(res.active));
+    }
+    
+    out.close();
+    log("Saved checkpoint to %s", filename.c_str());
 }
 
 bool GCMCSimulation::loadCheckpoint(const std::string& /*filename*/) {
