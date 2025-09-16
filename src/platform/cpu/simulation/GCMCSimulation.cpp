@@ -522,12 +522,16 @@ bool GCMCSimulation::performMCStep() {
             
             stats_.moveAttempts["insertion"]++;
             if (accepted) stats_.moveAccepted["insertion"]++;
+            
+            // Update new statistics module
+            simulationStats_.recordMove("insert", fragmentTypes_[fragType].name, accepted);
             break;
         }
         
         case DELETE: {
+            int fragType = -1;
             if (reservoir_->getActiveCount() > 0) {
-                int fragType = selectActiveFragment();
+                fragType = selectActiveFragment();
                 if (fragType >= 0) {
                     result = engine_->attemptDeletion(fragType);
                     
@@ -542,16 +546,27 @@ bool GCMCSimulation::performMCStep() {
             
             stats_.moveAttempts["deletion"]++;
             if (accepted) stats_.moveAccepted["deletion"]++;
+            
+            // Update new statistics module
+            if (fragType >= 0) {
+                simulationStats_.recordMove("delete", fragmentTypes_[fragType].name, accepted);
+            }
             break;
         }
         
         case TRANSLATE: {
+            std::vector<int> activeIndices;
             if (reservoir_->getActiveCount() > 0) {
-                auto activeIndices = reservoir_->getActiveInstances();
+                activeIndices = reservoir_->getActiveInstances();
                 if (!activeIndices.empty()) {
                     int idx = activeIndices[rng_() % activeIndices.size()];
                     result = engine_->attemptTranslation(idx);
                     accepted = result.accepted;
+                    
+                    // Update new statistics module for translation
+                    // Note: We'll skip type lookup for now as getInstanceType doesn't exist
+                    // Just record with generic "fragment" name
+                    simulationStats_.recordMove("translate", "fragment", accepted);
                 }
             }
             
@@ -561,12 +576,18 @@ bool GCMCSimulation::performMCStep() {
         }
         
         case ROTATE: {
+            std::vector<int> activeIndices;
             if (reservoir_->getActiveCount() > 0) {
-                auto activeIndices = reservoir_->getActiveInstances();
+                activeIndices = reservoir_->getActiveInstances();
                 if (!activeIndices.empty()) {
                     int idx = activeIndices[rng_() % activeIndices.size()];
                     result = engine_->attemptRotation(idx);
                     accepted = result.accepted;
+                    
+                    // Update new statistics module for rotation
+                    // Note: We'll skip type lookup for now as getInstanceType doesn't exist
+                    // Just record with generic "fragment" name
+                    simulationStats_.recordMove("rotate", "fragment", accepted);
                 }
             }
             
@@ -585,6 +606,9 @@ bool GCMCSimulation::performMCStep() {
         double energy = calculateSystemEnergy();
         stats_.energyHistory.push_back(energy);
         stats_.currentEnergy = energy;
+        
+        // Record in new statistics module
+        simulationStats_.recordEnergy(energy);
     }
     
     return true;
@@ -797,16 +821,22 @@ void GCMCSimulation::finalize() {
 }
 
 void GCMCSimulation::printStatistics() const {
-    std::cout << "\n=== GCMC Simulation Statistics ===" << std::endl;
-    std::cout << "Total steps: " << stats_.totalSteps << std::endl;
-    std::cout << "Accepted moves: " << stats_.acceptedMoves << std::endl;
-    if (stats_.totalSteps > 0) {
-        std::cout << "Acceptance rate: " 
-                  << (100.0 * stats_.acceptedMoves / stats_.totalSteps) << "%" << std::endl;
-    }
+    // Use the new statistics module for formatted output
+    simulationStats_.printSummary(stats_.totalSteps);
     
-    for (const auto& frag : fragmentTypes_) {
-        std::cout << "Fragment " << frag.name << ": " << frag.currentCount << " molecules" << std::endl;
+    // Also print legacy statistics if needed
+    if (config_.verbose) {
+        std::cout << "\n=== GCMC Simulation Statistics ===" << std::endl;
+        std::cout << "Total steps: " << stats_.totalSteps << std::endl;
+        std::cout << "Accepted moves: " << stats_.acceptedMoves << std::endl;
+        if (stats_.totalSteps > 0) {
+            std::cout << "Acceptance rate: " 
+                      << (100.0 * stats_.acceptedMoves / stats_.totalSteps) << "%" << std::endl;
+        }
+        
+        for (const auto& frag : fragmentTypes_) {
+            std::cout << "Fragment " << frag.name << ": " << frag.currentCount << " molecules" << std::endl;
+        }
     }
 }
 

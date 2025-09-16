@@ -12,6 +12,7 @@
 #include "../../../io/parameters/InpParserMain.hpp"
 #include "../../../io/parameters/InpParserGCMC.hpp"
 #include "../../../system/log/LogMain.hpp"
+#include "SimulationStatistics.hpp"
 #include <memory>
 #include <vector>
 #include <map>
@@ -159,6 +160,7 @@ private:
     
     // Statistics
     Statistics stats_;
+    SimulationStatistics simulationStats_;  // New modular statistics tracker
     std::chrono::steady_clock::time_point startTime_;
     
     // Random number generation
