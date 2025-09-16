@@ -51,6 +51,10 @@ bool GCMCSimulation::initialize() {
         log("ERROR: Failed to load parameters");
         return false;
     }
+    // If print frequency wasn't explicitly set via CLI, use INP nprint
+    if (config_.printFrequency <= 0) {
+        config_.printFrequency = params_->get_mc_info().print_freq;
+    }
     
     // Setup the MC state
     if (!setupSystem()) {
@@ -270,6 +274,11 @@ bool GCMCSimulation::setupEngine() {
     log("  Max rotation: %.1f degrees", engine_->getConfigValue("maxRotation"));
     log("  Cavity bias: %s", params_->get_bias_info().use_cavity_bias ? "enabled" : "disabled");
     
+    // Ensure deterministic RNG when seed provided
+    if (config_.randomSeed >= 0) {
+        engine_->setSeed(static_cast<unsigned int>(config_.randomSeed));
+    }
+
     return true;
 }
 
@@ -332,6 +341,8 @@ bool GCMCSimulation::run() {
     log("  Total steps: %d", stats_.totalSteps);
     log("  Total time: %.2f seconds", stats_.totalTime);
     log("  Performance: %.1f steps/second", stats_.stepsPerSecond);
+    // Emit a completion line to stdout even in non-verbose mode (tests expect this)
+    std::cout << "Simulation completed" << std::endl;
     
     return true;
 }
@@ -416,7 +427,7 @@ bool GCMCSimulation::performMCStep() {
     }
     
     // Update energy history
-    if (stats_.totalSteps % config_.statisticsInterval == 0) {
+    if (config_.enableStatistics && stats_.totalSteps % config_.statisticsInterval == 0) {
         double energy = calculateSystemEnergy();
         stats_.energyHistory.push_back(energy);
         stats_.currentEnergy = energy;
@@ -589,9 +600,11 @@ void GCMCSimulation::writeFinalResults() {
         << " x " << state_->info.box[2] << " nm\n";
     out << "  Total steps: " << stats_.totalSteps << "\n\n";
     
-    out << "Performance:\n";
-    out << "  Total time: " << stats_.totalTime << " seconds\n";
-    out << "  Steps/second: " << stats_.stepsPerSecond << "\n\n";
+    if (config_.enableStatistics) {
+        out << "Performance:\n";
+        out << "  Total time: " << stats_.totalTime << " seconds\n";
+        out << "  Steps/second: " << stats_.stepsPerSecond << "\n\n";
+    }
     
     out << "Statistics:\n";
     out << "  Overall acceptance: " << stats_.acceptanceRate * 100 << "%\n";

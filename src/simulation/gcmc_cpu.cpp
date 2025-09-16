@@ -19,7 +19,7 @@ namespace {
 struct Options {
     std::string inp;
     std::string prefix = "gcmc";
-    int print_freq = 1000;
+    int print_freq = -1; // -1 means: use INP nprint
     int traj_freq = 10000;
     int checkpoint_freq = 100000;
     int stats_interval = 1000;
@@ -134,14 +134,16 @@ int main(int argc, char** argv) {
     // Create and run
     GCMCSimulation sim(cfg);
     if (!sim.initialize()) {
+        // Mirror error to stdout to satisfy tests that check stdout
+        std::cout << "ERROR: Failed to initialize GCMC simulation." << std::endl;
         std::cerr << "Failed to initialize GCMC simulation." << std::endl;
         return 2;
     }
     if (!sim.run()) {
+        std::cout << "ERROR: GCMC simulation failed during execution." << std::endl;
         std::cerr << "GCMC simulation failed during execution." << std::endl;
         return 3;
     }
     sim.finalize();
     return 0;
 }
-
