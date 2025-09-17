@@ -1,5 +1,5 @@
 #include "SimulationRunner.hpp"
-#include "../GCMCSimulation.hpp"
+#include "../impl/GCMCSimulation.hpp"
 #include <iostream>
 #include <chrono>
 

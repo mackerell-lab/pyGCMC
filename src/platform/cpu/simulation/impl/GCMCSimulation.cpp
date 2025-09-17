@@ -1,5 +1,5 @@
 #include "GCMCSimulation.hpp"
-#include "../movement/reservoir/MultiTypeReservoir.hpp"
+#include "../../movement/reservoir/MultiTypeReservoir.hpp"
 #include <iostream>
 #include <fstream>
 #include <iomanip>

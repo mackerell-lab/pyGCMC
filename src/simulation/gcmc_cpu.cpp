@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <cstdlib>
 
-#include "platform/cpu/simulation/GCMCSimulation.hpp"
+#include "platform/cpu/simulation/impl/GCMCSimulation.hpp"
 
 using pygcmc::platform::cpu::simulation::GCMCSimulation;
 
