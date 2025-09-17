@@ -1,15 +1,14 @@
-#ifndef PYGCMC_PLATFORM_CPU_SIMULATION_IO_CHECKPOINT_MANAGER_HPP
-#define PYGCMC_PLATFORM_CPU_SIMULATION_IO_CHECKPOINT_MANAGER_HPP
+#ifndef PYGCMC_IO_OUTPUT_CHECKPOINT_MANAGER_HPP
+#define PYGCMC_IO_OUTPUT_CHECKPOINT_MANAGER_HPP
 
-#include "../../../../model/montecarlo/MCMain.hpp"
-#include "../stats/StatisticsTracker.hpp"
+#include "../../model/montecarlo/MCMain.hpp"
+#include "../../platform/cpu/simulation/stats/StatisticsTracker.hpp"
 #include <string>
 #include <fstream>
 
 namespace pygcmc {
-namespace platform {
-namespace cpu {
-namespace simulation {
+namespace io {
+namespace output {
 
 /**
  * @brief Checkpoint manager for simulation save/load
@@ -35,13 +34,13 @@ public:
     
     // Save checkpoint
     bool saveCheckpoint(const model::montecarlo::MCState& state,
-                       const StatisticsTracker& stats,
+                       const platform::cpu::simulation::StatisticsTracker& stats,
                        int step,
                        const std::string& filename = "");
     
     // Load checkpoint
     bool loadCheckpoint(model::montecarlo::MCState& state,
-                       StatisticsTracker& stats,
+                       platform::cpu::simulation::StatisticsTracker& stats,
                        int& step,
                        const std::string& filename);
     
@@ -61,9 +60,8 @@ private:
     bool readHeader(std::ifstream& in, int& version) const;
 };
 
-} // namespace simulation
-} // namespace cpu
-} // namespace platform
+} // namespace output
+} // namespace io
 } // namespace pygcmc
 
-#endif // PYGCMC_PLATFORM_CPU_SIMULATION_IO_CHECKPOINT_MANAGER_HPP
+#endif // PYGCMC_IO_OUTPUT_CHECKPOINT_MANAGER_HPP

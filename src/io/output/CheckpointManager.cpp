@@ -4,9 +4,10 @@
 #include <sstream>
 
 namespace pygcmc {
-namespace platform {
-namespace cpu {
-namespace simulation {
+namespace io {
+namespace output {
+
+using platform::cpu::simulation::StatisticsTracker;
 
 CheckpointManager::CheckpointManager(const Config& config)
     : config_(config) {
@@ -168,7 +169,6 @@ bool CheckpointManager::readHeader(std::ifstream& in, int& version) const {
     return in.good();
 }
 
-} // namespace simulation
-} // namespace cpu
-} // namespace platform
+} // namespace output
+} // namespace io
 } // namespace pygcmc

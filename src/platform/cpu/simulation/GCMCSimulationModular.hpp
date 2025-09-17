@@ -3,8 +3,8 @@
 
 #include "core/SimulationRunner.hpp"
 #include "setup/SystemInitializer.hpp"
-#include "io/TrajectoryWriter.hpp"
-#include "io/CheckpointManager.hpp"
+#include "../../../io/output/TrajectoryWriter.hpp"
+#include "../../../io/output/CheckpointManager.hpp"
 #include "stats/StatisticsTracker.hpp"
 #include "../movement/gcmc/GCMCEngine.hpp"
 #include "../movement/gcmc/GCMCAcceptance.hpp"
@@ -87,8 +87,8 @@ private:
     // Modules
     std::unique_ptr<SimulationRunner> core_;
     std::unique_ptr<SystemInitializer> setup_;
-    std::unique_ptr<TrajectoryWriter> trajectoryWriter_;
-    std::unique_ptr<CheckpointManager> checkpointManager_;
+    std::unique_ptr<io::output::TrajectoryWriter> trajectoryWriter_;
+    std::unique_ptr<io::output::CheckpointManager> checkpointManager_;
     
     // Core components
     std::unique_ptr<model::param::Param> params_;

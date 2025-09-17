@@ -19,13 +19,13 @@ GCMCSimulationModular::GCMCSimulationModular(const Config& config)
     setup_ = std::make_unique<SystemInitializer>();
     
     // Configure IO modules
-    TrajectoryWriter::Config trajConfig;
+    io::output::TrajectoryWriter::Config trajConfig;
     trajConfig.prefix = config.outputPrefix;
-    trajectoryWriter_ = std::make_unique<TrajectoryWriter>(trajConfig);
+    trajectoryWriter_ = std::make_unique<io::output::TrajectoryWriter>(trajConfig);
     
-    CheckpointManager::Config chkConfig;
+    io::output::CheckpointManager::Config chkConfig;
     chkConfig.prefix = config.outputPrefix;
-    checkpointManager_ = std::make_unique<CheckpointManager>(chkConfig);
+    checkpointManager_ = std::make_unique<io::output::CheckpointManager>(chkConfig);
     
     // Create core components
     params_ = std::make_unique<model::param::Param>();
@@ -199,11 +199,11 @@ void GCMCSimulationModular::updateConfig(const Config& config) {
     config_ = config;
     
     // Update IO configuration
-    TrajectoryWriter::Config trajConfig;
+    io::output::TrajectoryWriter::Config trajConfig;
     trajConfig.prefix = config.outputPrefix;
     trajectoryWriter_->setConfig(trajConfig);
     
-    CheckpointManager::Config chkConfig;
+    io::output::CheckpointManager::Config chkConfig;
     chkConfig.prefix = config.outputPrefix;
     checkpointManager_->setConfig(chkConfig);
     
