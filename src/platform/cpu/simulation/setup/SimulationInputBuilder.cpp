@@ -103,7 +103,8 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
         for (const auto& fragFile : fileInfo.fragment_top_files) {
             resolvedFragFiles.push_back(resolveFilePath(fragFile, baseDir));
         }
-        result.fragmentTemplates = loadFragmentTemplates(resolvedFragFiles);
+        result.fragmentTemplates = loadFragmentTemplates(resolvedFragFiles, 
+                                                         result.parameters);
         log("Loaded " + std::to_string(result.fragmentTemplates.size()) + " fragment templates");
     }
     
@@ -157,11 +158,22 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
 }
 
 std::map<std::string, platform::cpu::movement::FragmentTemplate> SimulationInputBuilder::loadFragmentTemplates(
-    const std::vector<std::string>& fragItpFiles) {
+    const std::vector<std::string>& fragItpFiles,
+    const std::shared_ptr<model::param::Param>& parameters) {
     
     std::map<std::string, platform::cpu::movement::FragmentTemplate> templates;
     
-    for (const auto& itpFile : fragItpFiles) {
+    if (!parameters) {
+        throw std::runtime_error("Parameters not available for fragment template loading");
+    }
+    
+    // Get fragment info from parameters for matching
+    const auto& fragNames = parameters->get_file_info().fragment_names;
+    const auto& fragConcs = parameters->get_fragment_info().conc_list;
+    const auto& fragMuexs = parameters->get_fragment_info().muex_list;
+    
+    for (size_t i = 0; i < fragItpFiles.size(); ++i) {
+        const auto& itpFile = fragItpFiles[i];
         log("Loading fragment template from: " + itpFile);
         
         // Check if file exists
@@ -171,7 +183,7 @@ std::map<std::string, platform::cpu::movement::FragmentTemplate> SimulationInput
         }
         file.close();
         
-        // Extract fragment name from filename for now
+        // Extract fragment name from filename
         std::filesystem::path itpPath(itpFile);
         std::string fragName = itpPath.stem().string();
         
@@ -181,18 +193,44 @@ std::map<std::string, platform::cpu::movement::FragmentTemplate> SimulationInput
             throw std::runtime_error("Failed to parse fragment template: " + itpFile);
         }
         
-        // Get the fragment by name
+        // Get the fragment data
         auto fragmentData = fragLib.get(fragName);
-        if (fragmentData) {
-            platform::cpu::movement::FragmentTemplate tmpl;
-            tmpl.name = fragmentData->name;
-            // FragmentTemplate stores basic info
-            // Detailed atom info will be in Fragment itself
-            
-            templates[tmpl.name] = tmpl;
-            log("Loaded fragment " + tmpl.name + " with " + 
-                std::to_string(fragmentData->atoms.size()) + " atoms");
+        if (!fragmentData) {
+            throw std::runtime_error("Failed to retrieve fragment data for: " + fragName);
         }
+        
+        // Build complete FragmentTemplate
+        platform::cpu::movement::FragmentTemplate tmpl;
+        tmpl.name = fragmentData->name;
+        tmpl.typeId = fragmentData->typeId;
+        tmpl.atoms = fragmentData->atoms;
+        tmpl.molecularWeight = fragmentData->molecularWeight;
+        tmpl.radius = fragmentData->radius;
+        
+        // Find matching fragment in parameters to get concentration and chemical potential
+        auto nameIt = std::find(fragNames.begin(), fragNames.end(), fragName);
+        if (nameIt != fragNames.end()) {
+            size_t idx = std::distance(fragNames.begin(), nameIt);
+            if (idx < fragConcs.size()) {
+                tmpl.concentration = fragConcs[idx];
+            }
+            if (idx < fragMuexs.size()) {
+                tmpl.chemicalPotential = fragMuexs[idx];
+                // Calculate activity: z = exp(β*μ)
+                double beta = parameters->get_mc_info().beta;
+                tmpl.activity = std::exp(beta * tmpl.chemicalPotential);
+            }
+        }
+        
+        templates[tmpl.name] = tmpl;
+        log("Loaded fragment " + tmpl.name + " with " + 
+            std::to_string(tmpl.atoms.size()) + " atoms, " +
+            "conc=" + std::to_string(tmpl.concentration) + " M, " +
+            "μ=" + std::to_string(tmpl.chemicalPotential) + " kJ/mol");
+    }
+    
+    if (templates.empty() && !fragItpFiles.empty()) {
+        throw std::runtime_error("Failed to load any fragment templates");
     }
     
     return templates;

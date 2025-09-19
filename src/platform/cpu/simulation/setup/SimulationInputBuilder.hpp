@@ -70,10 +70,12 @@ public:
      * @brief Load fragment templates from ITP files
      * 
      * @param fragItpFiles List of ITP file paths from INP
+     * @param parameters Parsed parameters containing fragment info
      * @return Map of fragment name to template
      */
     std::map<std::string, platform::cpu::movement::FragmentTemplate> loadFragmentTemplates(
-        const std::vector<std::string>& fragItpFiles);
+        const std::vector<std::string>& fragItpFiles,
+        const std::shared_ptr<model::param::Param>& parameters);
 
 private:
     Config config_;

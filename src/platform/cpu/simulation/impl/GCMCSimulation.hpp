@@ -157,6 +157,10 @@ private:
     // Fragment management
     std::vector<FragmentInfo> fragmentTypes_;
     std::map<std::string, int> fragmentNameToId_;
+    std::map<std::string, movement::FragmentTemplate> fragmentTemplatesFromBuilder_;
+    
+    // Force field from builder (if loaded)
+    std::shared_ptr<model::ForceField> forceFieldFromBuilder_;
     
     // Statistics
     Statistics stats_;
