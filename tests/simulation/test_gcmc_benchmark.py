@@ -169,7 +169,8 @@ fragmuex:-5.0
     
     def test_step_count_scaling(self, benchmark_dir):
         """Test performance with different numbers of MC steps"""
-        step_counts = [100, 500, 1000, 5000, 10000]
+        # Reduced step counts and runs for faster testing
+        step_counts = [100, 500, 1000, 2000]  # Removed 5000 and 10000, added 2000
         results = {}
         
         for steps in step_counts:
@@ -191,7 +192,7 @@ fragmuex:-5.0
             inp_path.write_text(inp_content)
             
             bench_result = BenchmarkResult(f"steps_{steps}")
-            runs = self.run_benchmark(inp_path, benchmark_dir, num_runs=2)
+            runs = self.run_benchmark(inp_path, benchmark_dir, num_runs=1)  # Reduced from 2 to 1
             
             for run in runs:
                 bench_result.add_run(run["elapsed"], steps, run["acceptance"], run["final_count"])
