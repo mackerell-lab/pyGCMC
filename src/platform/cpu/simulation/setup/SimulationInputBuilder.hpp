@@ -4,6 +4,7 @@
 #include "../../movement/reservoir/fragment_reservoir.hpp"
 #include <memory>
 #include <string>
+#include <filesystem>
 
 namespace pygcmc {
 namespace platform {
@@ -40,6 +41,7 @@ public:
         std::shared_ptr<model::Molecular> molecular;            // Combined molecular system
         std::shared_ptr<model::ForceField> forceField;         // Force field parameters
         std::shared_ptr<model::montecarlo::MCState> mcState;   // Initialized MC state
+        std::map<std::string, platform::cpu::movement::FragmentTemplate> fragmentTemplates; // Fragment templates
         bool structureLoaded = false;                          // Whether PDB was loaded
         bool topologyLoaded = false;                           // Whether TOP was loaded
         bool parametersLoaded = false;                         // Whether PAR was loaded
@@ -111,6 +113,12 @@ private:
         const std::shared_ptr<model::Molecular>& molecular,
         const std::shared_ptr<model::ForceField>& forceField);
 
+    /**
+     * @brief Resolve file path relative to base directory
+     */
+    std::string resolveFilePath(const std::string& path, 
+                                const std::filesystem::path& baseDir) const;
+    
     void log(const std::string& message) const;
 };
 

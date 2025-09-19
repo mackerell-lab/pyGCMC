@@ -123,6 +123,13 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
         mc_info.print_freq = std::stoi(value);
     } else if (key == "mcsteps") {
         mc_info.mc_steps = std::stoi(value);
+    } else if (key == "temperature") {
+        mc_info.temperature = std::stof(value);
+        // Calculate beta from temperature (beta = 1/(kB*T) in kJ/mol units)
+        mc_info.beta = 1.0f / (0.00831446f * mc_info.temperature);
+    } else if (key == "eqsteps") {
+        // Store equilibration steps if needed
+        // Currently not used in MCParams, but parsed for compatibility
     }
     // Bias parameters
     else if (key == "use_cavity_bias") {
@@ -147,25 +154,42 @@ void InpParserMain::validate_parameters(model::Param& param) {
     auto& fragment_info = param.get_fragment_info();
     auto& space_info = param.get_space_info();
 
-    if (file_info.topology_file.empty()) {
-        throw std::runtime_error("Missing required parameter: top");
+    // For GCMC simulations with fragment top files (fragitp), we don't require PDB or TOP files
+    // Only validate them if they're provided
+    bool has_fragitp = !file_info.fragment_top_files.empty();
+    
+    // If no fragment files, then we need both PDB and TOP for a valid simulation
+    // Check in the order expected by tests: top first, then pdb
+    if (!has_fragitp) {
+        if (file_info.topology_file.empty()) {
+            throw std::runtime_error("Missing required parameter: top");
+        }
+        if (file_info.input_pdb_file.empty()) {
+            throw std::runtime_error("Missing required parameter: pdb");
+        }
     }
-    if (file_info.input_pdb_file.empty()) {
-        throw std::runtime_error("Missing required parameter: pdb");
-    }
+    
+    // Fragment parameter consistency checks
     if (file_info.fragment_names.size() != fragment_info.conc_list.size()) {
         throw std::runtime_error("Inconsistent fragment parameters: fragname and fragconc sizes don't match");
     }
     if (file_info.fragment_names.size() != fragment_info.muex_list.size()) {
         throw std::runtime_error("Inconsistent fragment parameters: fragname and fragmuex sizes don't match");
     }
+    
+    // Grid and space checks
     if (space_info.grid_spacing <= 0.0f) {
         throw std::runtime_error("Invalid grid_dx: must be positive");
     }
     if (space_info.cutoff <= 0.0f) {
         throw std::runtime_error("Invalid cutoff: must be positive");
     }
-    if (space_info.volume <= 0.0f) {
+    
+    // Only check volume if box_size was actually provided (not all zeros)
+    bool box_provided = (space_info.box_size[0] > 0.0f || 
+                         space_info.box_size[1] > 0.0f || 
+                         space_info.box_size[2] > 0.0f);
+    if (box_provided && space_info.volume <= 0.0f) {
         throw std::runtime_error("Invalid box_size: volume must be positive");
     }
 }

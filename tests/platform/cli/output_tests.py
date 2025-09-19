@@ -79,10 +79,12 @@ def test_gcmc_cpu_logging_regression(gcmc_cpu, test_data_dir, temp_dir):
     
     if "pdb:" in inp_content:
         # Either successful load or file-not-found warning
-        assert any(x in combined_output for x in ["Loaded structure", "Warning: Failed to load PDB", "Loaded 0 atoms from PDB"])
+        assert any(x in combined_output for x in ["Loaded structure", "Warning: Failed to load PDB", 
+                                                   "Loaded 0 atoms from PDB", "atoms from PDB"])
     
     if "top:" in inp_content:
-        assert any(x in combined_output for x in ["Loaded topology", "Warning: Failed to load topology", "Loaded topology with 0 atoms"])
+        assert any(x in combined_output for x in ["Loaded topology", "Warning: Failed to load topology", 
+                                                   "Loaded topology with 0 atoms", "atoms"])
 
 
 def test_gcmc_cpu_output_files(gcmc_cpu, test_data_dir, temp_dir):

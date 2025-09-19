@@ -169,6 +169,7 @@ private:
     
     // Helper methods
     bool loadParameters();
+    void printParameterSummary();
     bool setupSystem();
     bool setupFragments();
     bool setupAcceptance();

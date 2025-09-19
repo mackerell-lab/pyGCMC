@@ -65,13 +65,8 @@ bool GCMCSimulation::initialize() {
         if (result.parameters) {
             params_ = std::make_unique<model::param::Param>(*result.parameters);
             
-            // Log key parameters for test compatibility
-            log("Loaded parameters from ", config_.inputFile);
-            log("  Temperature: ", params_->get_mc_info().temperature, " K");
-            log("  Box size: ", params_->get_space_info().box_size[0], " x ", 
-                params_->get_space_info().box_size[1], " x ", 
-                params_->get_space_info().box_size[2], " nm");
-            log("  MC steps: ", params_->get_mc_info().mc_steps);
+            // Print parameter summary for test compatibility
+            printParameterSummary();
         }
         if (result.mcState) {
             state_ = std::make_unique<model::montecarlo::MCState>(*result.mcState);
@@ -89,7 +84,18 @@ bool GCMCSimulation::initialize() {
         
     } catch (const std::exception& e) {
         log("ERROR: Failed to build simulation input: ", e.what());
-        // Fall back to old method
+        
+        // Check if this is a critical file not found error
+        std::string errorMsg = e.what();
+        if (errorMsg.find("not found") != std::string::npos || 
+            errorMsg.find("invalid") != std::string::npos) {
+            // File was explicitly specified but doesn't exist - this is fatal
+            log("ERROR: Cannot continue with missing input files");
+            return false;
+        }
+        
+        // For other errors, fall back to old method
+        log("Attempting fallback to legacy parameter loading...");
         if (!loadParameters()) {
             log("ERROR: Failed to load parameters");
             return false;
@@ -137,6 +143,17 @@ bool GCMCSimulation::initialize() {
     return true;
 }
 
+void GCMCSimulation::printParameterSummary() {
+    if (!params_) return;
+    
+    log("Loaded parameters from ", config_.inputFile);
+    log("  Temperature: ", params_->get_mc_info().temperature, " K");
+    log("  Box size: ", params_->get_space_info().box_size[0], " x ", 
+        params_->get_space_info().box_size[1], " x ", 
+        params_->get_space_info().box_size[2], " nm");
+    log("  MC steps: ", params_->get_mc_info().mc_steps);
+}
+
 bool GCMCSimulation::loadParameters() {
     try {
         params_ = std::make_unique<model::param::Param>();
@@ -147,10 +164,8 @@ bool GCMCSimulation::loadParameters() {
         // Update derived values
         params_->update_derived_values();
         
-        log("Loaded parameters from ", config_.inputFile);
-        log("  Temperature: ", params_->get_mc_info().temperature, " K");
-        log("  Box size: ", params_->get_space_info().box_size[0], " x ", params_->get_space_info().box_size[1], " x ", params_->get_space_info().box_size[2], " nm");
-        log("  MC steps: ", params_->get_mc_info().mc_steps);
+        // Print parameter summary
+        printParameterSummary();
         
         return true;
         
@@ -273,21 +288,27 @@ bool GCMCSimulation::setupSystem() {
         log("Topology loading temporarily disabled - using placeholder force field");
     }
     
-    // Use default force field for now
-    size_t numTypes = 10;  // Placeholder
-    state_->forcefield.numTotalTypes = numTypes;
-    state_->forcefield.numMovementTypes = 4;
-    
-    // Initialize LJ parameters with placeholder values
-    state_->forcefield.ljSigma.resize(numTypes * numTypes);
-    state_->forcefield.ljEps.resize(numTypes * numTypes);
-    
-    for (size_t i = 0; i < numTypes; ++i) {
-        for (size_t j = 0; j < numTypes; ++j) {
-            size_t idx = i * numTypes + j;
-            state_->forcefield.ljSigma[idx] = 0.3f + 0.01f * (i + j);  // nm
-            state_->forcefield.ljEps[idx] = 0.5f + 0.05f * (i * j);  // kJ/mol
+    // Only use default force field if state was not populated by builder
+    // or if force field is empty
+    if (state_->forcefield.numTotalTypes == 0) {
+        log("Using default placeholder force field");
+        size_t numTypes = 10;  // Placeholder
+        state_->forcefield.numTotalTypes = numTypes;
+        state_->forcefield.numMovementTypes = 4;
+        
+        // Initialize LJ parameters with placeholder values
+        state_->forcefield.ljSigma.resize(numTypes * numTypes);
+        state_->forcefield.ljEps.resize(numTypes * numTypes);
+        
+        for (size_t i = 0; i < numTypes; ++i) {
+            for (size_t j = 0; j < numTypes; ++j) {
+                size_t idx = i * numTypes + j;
+                state_->forcefield.ljSigma[idx] = 0.3f + 0.01f * (i + j);  // nm
+                state_->forcefield.ljEps[idx] = 0.5f + 0.05f * (i * j);  // kJ/mol
+            }
         }
+    } else {
+        log("Using force field from input files");
     }
     
     return true;

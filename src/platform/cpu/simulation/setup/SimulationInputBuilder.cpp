@@ -9,6 +9,7 @@
 #include "../../../../system/log/LogMain.hpp"
 #include <fstream>
 #include <stdexcept>
+#include <filesystem>
 
 namespace pygcmc {
 namespace platform {
@@ -33,34 +34,47 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
         throw std::runtime_error("Failed to parse INP file");
     }
     
+    // Determine base directory for resolving relative paths
+    std::filesystem::path baseDir = std::filesystem::path(config_.inpFile).parent_path();
+    if (baseDir.empty()) {
+        baseDir = std::filesystem::current_path();
+    }
+    
     const auto& fileInfo = result.parameters->get_file_info();
     
     // Step 2: Load PDB structure if available
+    std::shared_ptr<Structure> structure;
     if (config_.loadStructure && !fileInfo.input_pdb_file.empty()) {
-        log("Loading PDB structure: " + fileInfo.input_pdb_file);
+        std::string pdbPath = resolveFilePath(fileInfo.input_pdb_file, baseDir);
+        log("Loading PDB structure: " + pdbPath);
         try {
-            auto structure = loadPDB(fileInfo.input_pdb_file);
+            structure = loadPDB(pdbPath);
             if (structure) {
                 result.structureLoaded = true;
                 log("Loaded " + std::to_string(structure->get_atoms().size()) + " atoms from PDB");
             }
         } catch (const std::exception& e) {
-            log("Warning: Failed to load PDB: " + std::string(e.what()));
+            // If PDB file is explicitly specified but cannot be loaded, treat as fatal
+            log("ERROR: Failed to load PDB: " + std::string(e.what()));
+            throw std::runtime_error("PDB file not found or invalid: " + pdbPath);
         }
     }
     
     // Step 3: Load TOP topology if available
     std::shared_ptr<Topology> topology;
     if (config_.loadTopology && !fileInfo.topology_file.empty()) {
-        log("Loading topology: " + fileInfo.topology_file);
+        std::string topPath = resolveFilePath(fileInfo.topology_file, baseDir);
+        log("Loading topology: " + topPath);
         try {
-            topology = loadTopology(fileInfo.topology_file);
+            topology = loadTopology(topPath);
             if (topology) {
                 result.topologyLoaded = true;
                 log("Loaded topology with " + std::to_string(topology->get_num_atoms()) + " atoms");
             }
         } catch (const std::exception& e) {
-            log("Warning: Failed to load topology: " + std::string(e.what()));
+            // If TOP file is explicitly specified but cannot be loaded, treat as fatal
+            log("ERROR: Failed to load topology: " + std::string(e.what()));
+            throw std::runtime_error("Topology file not found or invalid: " + topPath);
         }
     }
     
@@ -68,7 +82,11 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
     if (config_.loadParameters && !fileInfo.par_files.empty()) {
         log("Loading force field parameters");
         try {
-            result.forceField = loadParameters(fileInfo.par_files);
+            std::vector<std::string> resolvedParFiles;
+            for (const auto& parFile : fileInfo.par_files) {
+                resolvedParFiles.push_back(resolveFilePath(parFile, baseDir));
+            }
+            result.forceField = loadParameters(resolvedParFiles);
             if (result.forceField) {
                 result.parametersLoaded = true;
                 log("Loaded force field parameters");
@@ -78,10 +96,21 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
         }
     }
     
+    // Step 4b: Load fragment templates if available
+    if (!fileInfo.fragment_top_files.empty()) {
+        log("Loading fragment templates");
+        std::vector<std::string> resolvedFragFiles;
+        for (const auto& fragFile : fileInfo.fragment_top_files) {
+            resolvedFragFiles.push_back(resolveFilePath(fragFile, baseDir));
+        }
+        result.fragmentTemplates = loadFragmentTemplates(resolvedFragFiles);
+        log("Loaded " + std::to_string(result.fragmentTemplates.size()) + " fragment templates");
+    }
+    
     // Step 5: Combine molecular data if we have BOTH structure and topology with actual data
     if (result.structureLoaded && result.topologyLoaded) {
         log("Combining molecular data");
-        auto structure = loadPDB(fileInfo.input_pdb_file);
+        // Use already loaded structure instead of re-loading
         
         // Only combine if we have actual atoms
         if (structure && structure->get_atoms().size() > 0 && 
@@ -133,29 +162,36 @@ std::map<std::string, platform::cpu::movement::FragmentTemplate> SimulationInput
     std::map<std::string, platform::cpu::movement::FragmentTemplate> templates;
     
     for (const auto& itpFile : fragItpFiles) {
-        try {
-            log("Loading fragment template from: " + itpFile);
-            
-            // Parse ITP file (implementation depends on ITPParser availability)
-            // For now, create placeholder
-            // TODO: Implement proper ITP parsing
-            
-            // Extract fragment name from filename
-            size_t lastSlash = itpFile.find_last_of("/\\");
-            size_t lastDot = itpFile.find_last_of(".");
-            std::string fragName = itpFile.substr(
-                lastSlash != std::string::npos ? lastSlash + 1 : 0,
-                lastDot - (lastSlash != std::string::npos ? lastSlash + 1 : 0)
-            );
-            
+        log("Loading fragment template from: " + itpFile);
+        
+        // Check if file exists
+        std::ifstream file(itpFile);
+        if (!file.good()) {
+            throw std::runtime_error("Fragment template not found: " + itpFile);
+        }
+        file.close();
+        
+        // Extract fragment name from filename for now
+        std::filesystem::path itpPath(itpFile);
+        std::string fragName = itpPath.stem().string();
+        
+        // Use FragmentLibrary to load the ITP file
+        io::topology::FragmentLibrary fragLib;
+        if (!fragLib.loadFromITP(itpFile, fragName, templates.size())) {
+            throw std::runtime_error("Failed to parse fragment template: " + itpFile);
+        }
+        
+        // Get the fragment by name
+        auto fragmentData = fragLib.get(fragName);
+        if (fragmentData) {
             platform::cpu::movement::FragmentTemplate tmpl;
-            tmpl.name = fragName;
-            // TODO: Populate from ITP
+            tmpl.name = fragmentData->name;
+            // FragmentTemplate stores basic info
+            // Detailed atom info will be in Fragment itself
             
-            templates[fragName] = tmpl;
-            
-        } catch (const std::exception& e) {
-            log("Warning: Failed to load fragment template from " + itpFile + ": " + e.what());
+            templates[tmpl.name] = tmpl;
+            log("Loaded fragment " + tmpl.name + " with " + 
+                std::to_string(fragmentData->atoms.size()) + " atoms");
         }
     }
     
@@ -259,6 +295,20 @@ std::shared_ptr<model::MCState> SimulationInputBuilder::initializeMCState(
     }
     
     return mcState;
+}
+
+std::string SimulationInputBuilder::resolveFilePath(const std::string& path, 
+                                                    const std::filesystem::path& baseDir) const {
+    std::filesystem::path filePath(path);
+    
+    // If path is already absolute, return as-is
+    if (filePath.is_absolute()) {
+        return path;
+    }
+    
+    // Otherwise resolve relative to base directory
+    std::filesystem::path resolved = baseDir / filePath;
+    return resolved.string();
 }
 
 void SimulationInputBuilder::log(const std::string& message) const {
