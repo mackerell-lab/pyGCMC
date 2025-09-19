@@ -26,10 +26,11 @@ from cli.basic_tests import (
     test_gcmc_cpu_basic_run
 )
 
-# Output and file generation tests (2 functions)
+# Output and file generation tests (3 functions)
 from cli.output_tests import (
     test_gcmc_cpu_verbose_output,
-    test_gcmc_cpu_output_files
+    test_gcmc_cpu_output_files,
+    test_gcmc_cpu_logging_regression
 )
 
 # Validation and error handling tests (3 functions)

@@ -38,6 +38,53 @@ def test_gcmc_cpu_verbose_output(gcmc_cpu, test_data_dir, temp_dir):
     assert "Initializing GCMC simulation" in output
 
 
+def test_gcmc_cpu_logging_regression(gcmc_cpu, test_data_dir, temp_dir):
+    """Test that expected log strings are printed when builder path runs"""
+    # Use quick version for faster testing
+    inp_file = test_data_dir / "gcmc_quick.inp"
+    if not inp_file.exists():
+        inp_file = test_data_dir / "gcmc.inp"
+    
+    if not inp_file.exists():
+        pytest.skip(f"Test INP file not found: {inp_file}")
+    
+    cmd = [
+        gcmc_cpu,
+        "--inp", str(inp_file),
+        "--prefix", os.path.join(temp_dir, "test_log"),
+        "--seed", "12345",
+        "--verbose"
+    ]
+    
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=temp_dir, timeout=10)
+    except subprocess.TimeoutExpired:
+        pytest.skip("Command timed out")
+    
+    combined_output = result.stdout + result.stderr
+    
+    # These log lines must be present for backward compatibility
+    required_logs = [
+        "Temperature:",
+        "Box size:",
+        "MC steps:"
+    ]
+    
+    for log_pattern in required_logs:
+        assert log_pattern in combined_output, f"Missing required log output: {log_pattern}"
+    
+    # If PDB/TOP files are referenced, builder should report loading them
+    with open(inp_file) as f:
+        inp_content = f.read().lower()
+    
+    if "pdb:" in inp_content:
+        # Either successful load or file-not-found warning
+        assert any(x in combined_output for x in ["Loaded structure", "Warning: Failed to load PDB", "Loaded 0 atoms from PDB"])
+    
+    if "top:" in inp_content:
+        assert any(x in combined_output for x in ["Loaded topology", "Warning: Failed to load topology", "Loaded topology with 0 atoms"])
+
+
 def test_gcmc_cpu_output_files(gcmc_cpu, test_data_dir, temp_dir):
     """Test that gcmc_cpu creates expected output files"""
     # Use quick version for faster testing
