@@ -12,6 +12,7 @@
 #include "core/SimulationCore.hpp"
 #include "core/SimulationRunner.hpp"
 #include "setup/SystemInitializer.hpp"
+#include "setup/SimulationInputBuilder.hpp"
 #include "stats/StatisticsTracker.hpp"
 #include "io/SimulationIO.hpp"
 #include "gcmc/GCMCController.hpp"

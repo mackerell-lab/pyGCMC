@@ -1,5 +1,7 @@
 #include "GCMCSimulation.hpp"
 #include "../../movement/reservoir/MultiTypeReservoir.hpp"
+#include "../setup/SimulationInputBuilder.hpp"
+#include "../io/SimulationIO.hpp"
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -46,10 +48,52 @@ GCMCSimulation::~GCMCSimulation() {
 bool GCMCSimulation::initialize() {
     log("Initializing GCMC simulation from ", config_.inputFile);
     
-    // Load parameters from input file
-    if (!loadParameters()) {
-        log("ERROR: Failed to load parameters");
-        return false;
+    // Use SimulationInputBuilder for comprehensive loading
+    setup::SimulationInputBuilder::Config builderConfig;
+    builderConfig.inpFile = config_.inputFile;
+    builderConfig.loadStructure = true;
+    builderConfig.loadTopology = true;
+    builderConfig.loadParameters = true;
+    builderConfig.verbose = config_.verbose;
+    
+    setup::SimulationInputBuilder builder(builderConfig);
+    
+    try {
+        auto result = builder.build();
+        
+        // Use the loaded data
+        if (result.parameters) {
+            params_ = std::make_unique<model::param::Param>(*result.parameters);
+            
+            // Log key parameters for test compatibility
+            log("Loaded parameters from ", config_.inputFile);
+            log("  Temperature: ", params_->get_mc_info().temperature, " K");
+            log("  Box size: ", params_->get_space_info().box_size[0], " x ", 
+                params_->get_space_info().box_size[1], " x ", 
+                params_->get_space_info().box_size[2], " nm");
+            log("  MC steps: ", params_->get_mc_info().mc_steps);
+        }
+        if (result.mcState) {
+            state_ = std::make_unique<model::montecarlo::MCState>(*result.mcState);
+        }
+        
+        if (result.structureLoaded) {
+            log("Loaded structure from PDB");
+        }
+        if (result.topologyLoaded) {
+            log("Loaded topology from TOP");
+        }
+        if (result.parametersLoaded) {
+            log("Loaded force field parameters");
+        }
+        
+    } catch (const std::exception& e) {
+        log("ERROR: Failed to build simulation input: ", e.what());
+        // Fall back to old method
+        if (!loadParameters()) {
+            log("ERROR: Failed to load parameters");
+            return false;
+        }
     }
     // If print frequency wasn't explicitly set via CLI, use INP nprint
     if (config_.printFrequency <= 0) {
@@ -98,7 +142,7 @@ bool GCMCSimulation::loadParameters() {
         params_ = std::make_unique<model::param::Param>();
         
         // Parse INP file (use extended GCMC parser)
-        io::parameters::InpParserGCMC::parse_to_param(config_.inputFile, *params_);
+        pygcmc::io::parameters::InpParserGCMC::parse_to_param(config_.inputFile, *params_);
         
         // Update derived values
         params_->update_derived_values();
@@ -117,17 +161,23 @@ bool GCMCSimulation::loadParameters() {
 }
 
 bool GCMCSimulation::setupSystem() {
-    state_ = std::make_unique<model::montecarlo::MCState>();
-    
-    // Set box dimensions
-    const auto& box = params_->get_space_info().box_size;
-    state_->info.box[0] = box[0];
-    state_->info.box[1] = box[1];
-    state_->info.box[2] = box[2];
-    
-    // Set temperature through beta from parameters
-    const double beta = params_->get_mc_info().beta;
-    state_->info.beta = beta;
+    // Only create new state if we don't already have one from builder
+    if (!state_) {
+        state_ = std::make_unique<model::montecarlo::MCState>();
+        
+        // Set box dimensions
+        const auto& box = params_->get_space_info().box_size;
+        state_->info.box[0] = box[0];
+        state_->info.box[1] = box[1];
+        state_->info.box[2] = box[2];
+        
+        // Set temperature through beta from parameters
+        const double beta = params_->get_mc_info().beta;
+        state_->info.beta = beta;
+    } else {
+        // State already populated by builder, just log
+        log("Using pre-populated MC state from input files");
+    }
     
     // Load initial structure if provided
     const auto& pdbFile = params_->get_file_info().input_pdb_file;
