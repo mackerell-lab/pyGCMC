@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <random>
 #include <set>
+#include <map>
+#include <cmath>
 
 namespace pygcmc {
 namespace platform {
@@ -362,11 +364,19 @@ bool GCMCSimulation::setupSystem() {
         log("Applying force field parameters from input files");
         
         // Convert ForceField to MCState force field format
-        // The ForceField contains LJ parameters and other force field data
+        // Extract actual LJ parameters from the ForceField
         
-        // Get number of atom types from ForceField
-        size_t numLJTypes = forceFieldFromBuilder_->get_num_lj_params();
-        size_t numTypes = std::max(numLJTypes, size_t(10));  // At least 10 types for compatibility
+        const auto& ljParamsMap = forceFieldFromBuilder_->get_lj_params_map();
+        const auto& nbfixMap = forceFieldFromBuilder_->get_nbfix_map();
+        
+        // Build a mapping from atom type names to indices
+        std::map<std::string, size_t> typeNameToIndex;
+        size_t typeIndex = 0;
+        for (const auto& [typeName, ljParams] : ljParamsMap) {
+            typeNameToIndex[typeName] = typeIndex++;
+        }
+        
+        size_t numTypes = std::max(typeNameToIndex.size(), size_t(10));  // At least 10 types
         
         state_->forcefield.numTotalTypes = numTypes;
         state_->forcefield.numMovementTypes = 4;  // Will be updated based on fragments
@@ -375,20 +385,64 @@ bool GCMCSimulation::setupSystem() {
         state_->forcefield.ljSigma.resize(numTypes * numTypes);
         state_->forcefield.ljEps.resize(numTypes * numTypes);
         
-        // TODO: Extract actual LJ parameters from forceFieldFromBuilder_
-        // This requires mapping atom type names to indices and extracting epsilon/sigma values
-        // For now, use improved placeholder values that resemble real CHARMM parameters
+        // Fill in LJ parameters using Lorentz-Berthelot mixing rules
         for (size_t i = 0; i < numTypes; ++i) {
             for (size_t j = 0; j < numTypes; ++j) {
                 size_t idx = i * numTypes + j;
-                // Better placeholder values that resemble real LJ parameters
-                // These are typical values for CHARMM force field
-                state_->forcefield.ljSigma[idx] = 0.35f;  // ~3.5 Angstrom in nm
-                state_->forcefield.ljEps[idx] = 0.4f;     // ~0.1 kcal/mol = 0.4 kJ/mol
+                
+                // Find the type names for indices i and j
+                std::string typeI, typeJ;
+                for (const auto& [name, index] : typeNameToIndex) {
+                    if (index == i) typeI = name;
+                    if (index == j) typeJ = name;
+                }
+                
+                if (!typeI.empty() && !typeJ.empty()) {
+                    // Check for NBFIX override first
+                    auto nbfixKey = model::forcefield::ForceField::makeTypePair(typeI, typeJ);
+                    auto nbfixIt = nbfixMap.find(nbfixKey);
+                    
+                    if (nbfixIt != nbfixMap.end()) {
+                        // Use NBFIX parameters directly
+                        state_->forcefield.ljEps[idx] = nbfixIt->second.epsilon * 4.184f;  // kcal/mol to kJ/mol
+                        state_->forcefield.ljSigma[idx] = nbfixIt->second.rmin * 0.1f;     // Angstrom to nm
+                    } else {
+                        // Use Lorentz-Berthelot mixing rules
+                        auto ljI = ljParamsMap.find(typeI);
+                        auto ljJ = ljParamsMap.find(typeJ);
+                        
+                        if (ljI != ljParamsMap.end() && ljJ != ljParamsMap.end()) {
+                            // epsilon_ij = sqrt(epsilon_i * epsilon_j)
+                            float epsI = ljI->second.epsilon * 4.184f;  // kcal/mol to kJ/mol
+                            float epsJ = ljJ->second.epsilon * 4.184f;
+                            state_->forcefield.ljEps[idx] = std::sqrt(epsI * epsJ);
+                            
+                            // sigma_ij = (rmin_i + rmin_j) / 2
+                            // Note: rmin_half is Rmin/2, so rmin = 2 * rmin_half
+                            float rminI = 2.0f * ljI->second.rmin_half * 0.1f;  // Angstrom to nm
+                            float rminJ = 2.0f * ljJ->second.rmin_half * 0.1f;
+                            // Convert from Rmin to sigma: sigma = Rmin / 2^(1/6)
+                            float sigmaI = rminI / std::pow(2.0f, 1.0f/6.0f);
+                            float sigmaJ = rminJ / std::pow(2.0f, 1.0f/6.0f);
+                            state_->forcefield.ljSigma[idx] = (sigmaI + sigmaJ) / 2.0f;
+                        } else {
+                            // Fallback for missing types
+                            state_->forcefield.ljSigma[idx] = 0.35f;  // Default ~3.5 Angstrom in nm
+                            state_->forcefield.ljEps[idx] = 0.4f;     // Default ~0.1 kcal/mol = 0.4 kJ/mol
+                        }
+                    }
+                } else {
+                    // Fallback for unmapped indices
+                    state_->forcefield.ljSigma[idx] = 0.35f;
+                    state_->forcefield.ljEps[idx] = 0.4f;
+                }
             }
         }
         
-        log("Initialized force field with ", numLJTypes, " LJ parameter types from PAR files");
+        log("Initialized force field with ", ljParamsMap.size(), " atom types from PAR files");
+        if (!nbfixMap.empty()) {
+            log("Applied ", nbfixMap.size(), " NBFIX corrections");
+        }
         
     } else if (state_->forcefield.numTotalTypes == 0) {
         // Only use default force field if state was not populated by builder

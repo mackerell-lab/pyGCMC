@@ -1,0 +1,9 @@
+[ moleculetype ]
+; molname	   nrexcl
+CL		1
+
+[ atoms ]
+; nr    type    resnr   residu  atom    cgnr    charge  mass  
+1       CLA       1     CL       CL      1      -1.00   35.453   ; qtot -1.00
+
+[ exclusions ]

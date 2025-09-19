@@ -100,7 +100,7 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
     // Space parameters
     else if (key == "grid_dx") {
         space_info.grid_spacing = std::stof(value);
-    } else if (key == "box_size") {
+    } else if (key == "box_size" || key == "box") {
         space_info.box_size = InpParserStructures::parse_float_array(value);
         space_info.volume = space_info.box_size[0] * space_info.box_size[1] * space_info.box_size[2];
     } else if (key == "cutoff") {

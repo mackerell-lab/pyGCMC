@@ -1,0 +1,9 @@
+[ moleculetype ]
+; molname	   nrexcl
+NA		1
+
+[ atoms ]
+; nr    type    resnr   residu  atom    cgnr    charge  mass
+1       SOD       1     NA       NA      1      1.00    22.9898   ; qtot 1.00
+
+[ exclusions ]

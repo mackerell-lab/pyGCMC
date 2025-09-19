@@ -54,9 +54,8 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
                 log("Loaded " + std::to_string(structure->get_atoms().size()) + " atoms from PDB");
             }
         } catch (const std::exception& e) {
-            // If PDB file is explicitly specified but cannot be loaded, treat as fatal
             log("ERROR: Failed to load PDB: " + std::string(e.what()));
-            throw std::runtime_error("PDB file not found or invalid: " + pdbPath);
+            throw;
         }
     }
     
@@ -72,9 +71,8 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
                 log("Loaded topology with " + std::to_string(topology->get_num_atoms()) + " atoms");
             }
         } catch (const std::exception& e) {
-            // If TOP file is explicitly specified but cannot be loaded, treat as fatal
             log("ERROR: Failed to load topology: " + std::string(e.what()));
-            throw std::runtime_error("Topology file not found or invalid: " + topPath);
+            throw;
         }
     }
     
@@ -179,6 +177,7 @@ std::map<std::string, platform::cpu::movement::FragmentTemplate> SimulationInput
         // Check if file exists
         std::ifstream file(itpFile);
         if (!file.good()) {
+            log("ERROR: Fragment template not found: " + itpFile);
             throw std::runtime_error("Fragment template not found: " + itpFile);
         }
         file.close();
