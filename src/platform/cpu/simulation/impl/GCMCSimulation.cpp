@@ -44,7 +44,7 @@ GCMCSimulation::~GCMCSimulation() {
 }
 
 bool GCMCSimulation::initialize() {
-    log("Initializing GCMC simulation from %s", config_.inputFile.c_str());
+    log("Initializing GCMC simulation from ", config_.inputFile);
     
     // Load parameters from input file
     if (!loadParameters()) {
@@ -103,18 +103,15 @@ bool GCMCSimulation::loadParameters() {
         // Update derived values
         params_->update_derived_values();
         
-        log("Loaded parameters from %s", config_.inputFile.c_str());
-        log("  Temperature: %.2f K", params_->get_mc_info().temperature);
-        log("  Box size: %.2f x %.2f x %.2f nm", 
-            params_->get_space_info().box_size[0],
-            params_->get_space_info().box_size[1],
-            params_->get_space_info().box_size[2]);
-        log("  MC steps: %d", params_->get_mc_info().mc_steps);
+        log("Loaded parameters from ", config_.inputFile);
+        log("  Temperature: ", params_->get_mc_info().temperature, " K");
+        log("  Box size: ", params_->get_space_info().box_size[0], " x ", params_->get_space_info().box_size[1], " x ", params_->get_space_info().box_size[2], " nm");
+        log("  MC steps: ", params_->get_mc_info().mc_steps);
         
         return true;
         
     } catch (const std::exception& e) {
-        log("ERROR: Exception loading parameters: %s", e.what());
+        log("ERROR: Exception loading parameters: ", e.what());
         return false;
     }
 }
@@ -135,7 +132,7 @@ bool GCMCSimulation::setupSystem() {
     // Load initial structure if provided
     const auto& pdbFile = params_->get_file_info().input_pdb_file;
     if (!pdbFile.empty()) {
-        log("Loading initial structure from %s", pdbFile.c_str());
+        log("Loading initial structure from ", pdbFile);
         // TODO: Integrate PDB parser when available
         /*
         try {
@@ -174,11 +171,10 @@ bool GCMCSimulation::setupSystem() {
                 mcRes.center[2] = pdbRes.get_center_of_mass()[2] / 10.0;
             }
             
-            log("Loaded %zu atoms and %zu residues from PDB", 
-                state_->atoms.size(), state_->residues.size());
+            log("Loaded %zu atoms and %zu residues from PDB");
                 
         } catch (const std::exception& e) {
-            log("ERROR: Failed to parse PDB file: %s", e.what());
+            log("ERROR: Failed to parse PDB file: ", e.what());
             return false;
         }
         */
@@ -188,7 +184,7 @@ bool GCMCSimulation::setupSystem() {
     // Load topology and setup force field
     const auto& topFile = params_->get_file_info().topology_file;
     if (!topFile.empty()) {
-        log("Loading topology from %s", topFile.c_str());
+        log("Loading topology from ", topFile);
         // TODO: Integrate TOP parser when available
         /*
         try {
@@ -214,10 +210,10 @@ bool GCMCSimulation::setupSystem() {
                 }
             }
             
-            log("Initialized force field with %zu types", numTypes);
+            log("Initialized force field with %zu types");
             
         } catch (const std::exception& e) {
-            log("WARNING: Failed to parse topology file: %s", e.what());
+            log("WARNING: Failed to parse topology file: ", e.what());
             log("Using default force field parameters");
             // Fall back to placeholder values
             state_->forcefield.numTotalTypes = 10;
@@ -366,9 +362,7 @@ bool GCMCSimulation::setupFragments() {
         fragmentTypes_.push_back(frag);
         fragmentNameToId_[frag.name] = frag.typeId;
         
-        log("Fragment %s: conc=%.3f M, mu=%.2f kJ/mol, activity=%.3e, max=%d",
-            frag.name.c_str(), frag.concentration, frag.chemicalPotential,
-            frag.activity, frag.maxCount);
+        log("Fragment ", frag.name, ": conc=", frag.concentration, " M, mu=", frag.chemicalPotential, " kJ/mol, activity=", frag.activity, ", max=", frag.maxCount);
     }
     
     return true;
@@ -392,8 +386,8 @@ bool GCMCSimulation::setupAcceptance() {
     }
     
     log("Acceptance calculator configured:");
-    log("  Temperature: %.2f K", params_->get_mc_info().temperature);
-    log("  Volume: %.2f nm^3", volume);
+    log("  Temperature: ", params_->get_mc_info().temperature, " K");
+    log("  Volume: ", volume, " nm^3");
     
     return true;
 }
@@ -424,9 +418,9 @@ bool GCMCSimulation::setupEngine() {
     }
     
     log("GCMC engine configured:");
-    log("  Max translation: %.3f nm", engine_->getConfigValue("maxTranslation"));
-    log("  Max rotation: %.1f degrees", engine_->getConfigValue("maxRotation"));
-    log("  Cavity bias: %s", params_->get_bias_info().use_cavity_bias ? "enabled" : "disabled");
+    log("  Max translation: ", engine_->getConfigValue("maxTranslation"), " nm");
+    log("  Max rotation: ", engine_->getConfigValue("maxRotation"), " degrees");
+    log("  Cavity bias: ", (params_->get_bias_info().use_cavity_bias ? "enabled" : "disabled"));
     
     // Ensure deterministic RNG when seed provided
     if (config_.randomSeed >= 0) {
@@ -442,7 +436,7 @@ bool GCMCSimulation::run() {
         return false;
     }
     
-    log("Starting GCMC simulation for %d steps", params_->get_mc_info().mc_steps);
+    log("Starting GCMC simulation for ", params_->get_mc_info().mc_steps, " steps");
     
     running_ = true;
     startTime_ = std::chrono::steady_clock::now();
@@ -452,7 +446,7 @@ bool GCMCSimulation::run() {
     for (int step = 0; step < mcSteps && running_; ++step) {
         // Perform MC move
         if (!performMCStep()) {
-            log("ERROR: Failed at step %d", step);
+            log("ERROR: Failed at step ", step);
             return false;
         }
         
@@ -476,7 +470,7 @@ bool GCMCSimulation::run() {
         // Check convergence
         if (config_.enableAdaptiveSampling && step % 10000 == 0 && step > 0) {
             if (checkConvergence()) {
-                log("Simulation converged at step %d", step);
+                log("Simulation converged at step ", step);
                 break;
             }
         }
@@ -492,9 +486,9 @@ bool GCMCSimulation::run() {
     stats_.stepsPerSecond = stats_.totalSteps / stats_.totalTime;
     
     log("Simulation completed:");
-    log("  Total steps: %d", stats_.totalSteps);
-    log("  Total time: %.2f seconds", stats_.totalTime);
-    log("  Performance: %.1f steps/second", stats_.stepsPerSecond);
+    log("  Total steps: ", stats_.totalSteps);
+    log("  Total time: ", stats_.totalTime, " seconds");
+    log("  Performance: ", stats_.stepsPerSecond, " steps/second");
     // Emit a completion line to stdout even in non-verbose mode (tests expect this)
     std::cout << "Simulation completed" << std::endl;
     
@@ -753,13 +747,13 @@ void GCMCSimulation::writeStatistics(int step) {
 void GCMCSimulation::writeTrajectory(int step) {
     std::string filename = config_.outputPrefix + "_traj_" + std::to_string(step) + ".pdb";
     saveTrajectory(filename);
-    log("Saved trajectory to %s", filename.c_str());
+    log("Saved trajectory to ", filename);
 }
 
 void GCMCSimulation::writeCheckpoint(int step) {
     std::string filename = config_.outputPrefix + "_checkpoint_" + std::to_string(step) + ".dat";
     saveCheckpoint(filename);
-    log("Saved checkpoint to %s", filename.c_str());
+    log("Saved checkpoint to ", filename);
 }
 
 void GCMCSimulation::writeFinalResults() {
@@ -801,7 +795,7 @@ void GCMCSimulation::writeFinalResults() {
     }
     
     out.close();
-    log("Wrote final results to %s", filename.c_str());
+    log("Wrote final results to ", filename);
 }
 
 void GCMCSimulation::finalize() {
@@ -845,7 +839,7 @@ void GCMCSimulation::saveTrajectory(const std::string& filename) const {
     
     std::ofstream out(filename);
     if (!out) {
-        log("ERROR: Failed to open trajectory file %s", filename.c_str());
+        log("ERROR: Failed to open trajectory file ", filename);
         return;
     }
     
@@ -924,7 +918,7 @@ void GCMCSimulation::saveTrajectory(const std::string& filename) const {
     out << "END\n";
     out.close();
     
-    log("Saved trajectory to %s", filename.c_str());
+    log("Saved trajectory to ", filename);
 }
 
 void GCMCSimulation::saveCheckpoint(const std::string& filename) const {
@@ -932,7 +926,7 @@ void GCMCSimulation::saveCheckpoint(const std::string& filename) const {
     
     std::ofstream out(filename, std::ios::binary);
     if (!out) {
-        log("ERROR: Failed to open checkpoint file %s", filename.c_str());
+        log("ERROR: Failed to open checkpoint file ", filename);
         return;
     }
     
@@ -985,7 +979,7 @@ void GCMCSimulation::saveCheckpoint(const std::string& filename) const {
     }
     
     out.close();
-    log("Saved checkpoint to %s", filename.c_str());
+    log("Saved checkpoint to ", filename);
 }
 
 bool GCMCSimulation::loadCheckpoint(const std::string& /*filename*/) {

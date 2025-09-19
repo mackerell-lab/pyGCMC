@@ -203,7 +203,7 @@ endif()
 
 # GCMC CPU driver (reads INP and runs simulation)
 add_executable(gcmc_cpu
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/simulation/gcmc_cpu.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/cpu/simulation/cli/gcmc_cpu.cpp
 )
 
 target_include_directories(gcmc_cpu
