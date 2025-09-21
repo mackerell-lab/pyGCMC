@@ -85,6 +85,14 @@ public:
     void setProbeRadius(double radius) { probeRadius_ = radius; invalidateCache(); }
     double getGridSpacing() const { return gridSpacing_; }
     double getProbeRadius() const { return probeRadius_; }
+
+    // Cavity exclusion options
+    void setExcludeProtein(bool exclude) { excludeProtein_ = exclude; invalidateCache(); }
+    void setExcludeHydrogens(bool exclude) { excludeHydrogens_ = exclude; invalidateCache(); }
+    void setUseVDWRadius(bool use) { useVDWRadius_ = use; invalidateCache(); }
+    bool getExcludeProtein() const { return excludeProtein_; }
+    bool getExcludeHydrogens() const { return excludeHydrogens_; }
+    bool getUseVDWRadius() const { return useVDWRadius_; }
     
     // Grid access
     const Grid3D& getGrid() const { return grid_; }
@@ -166,6 +174,9 @@ private:
     // Configuration
     double gridSpacing_;                    // Grid spacing in Angstroms
     double probeRadius_;                    // Probe radius for cavity detection
+    bool excludeProtein_ = false;           // Only exclude protein atoms from grid
+    bool excludeHydrogens_ = false;         // Exclude hydrogen atoms from grid
+    bool useVDWRadius_ = false;             // Use VDW radius instead of LJ sigma
     
     // Grid structure
     Grid3D grid_;

@@ -110,17 +110,41 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
     } else if (key == "sys_center") {
         space_info.sys_center = InpParserStructures::parse_float_array(value);
     }
-    // Fragment parameters
+    // Fragment parameters - support both single and multiple entries
     else if (key == "fragname") {
-        file_info.fragment_names = InpParserStructures::parse_string_vector(value);
+        // Support both single fragment and comma-separated list
+        auto names = InpParserStructures::parse_string_vector(value);
+        for (const auto& name : names) {
+            file_info.fragment_names.push_back(name);
+        }
     } else if (key == "fragconc") {
-        fragment_info.conc_list = InpParserStructures::parse_float_vector(value);
+        // For single-component systems, override previous values
+        // For multi-component, accumulate values
+        auto concs = InpParserStructures::parse_float_vector(value);
+        if (file_info.fragment_names.size() <= 1 && !fragment_info.conc_list.empty()) {
+            // Single component mode - override
+            fragment_info.conc_list.clear();
+        }
+        for (float conc : concs) {
+            fragment_info.conc_list.push_back(conc);
+        }
     } else if (key == "fragmuex") {
-        fragment_info.muex_list = InpParserStructures::parse_float_vector(value);
+        // For single-component systems, override previous values
+        // For multi-component, accumulate values
+        auto muexs = InpParserStructures::parse_float_vector(value);
+        if (file_info.fragment_names.size() <= 1 && !fragment_info.muex_list.empty()) {
+            // Single component mode - override
+            fragment_info.muex_list.clear();
+        }
+        for (float muex : muexs) {
+            fragment_info.muex_list.push_back(muex);
+        }
     }
     // MC parameters
     else if (key == "nprint") {
         mc_info.print_freq = std::stoi(value);
+    } else if (key == "nsave") {
+        mc_info.save_freq = std::stoi(value);
     } else if (key == "mcsteps") {
         mc_info.mc_steps = std::stoi(value);
     } else if (key == "temperature") {

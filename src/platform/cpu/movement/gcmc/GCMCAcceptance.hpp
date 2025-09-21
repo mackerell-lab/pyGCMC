@@ -41,6 +41,7 @@ public:
     void setTemperature(double T) { temperature_ = T; }
     void setPressure(double P) { pressure_ = P; }
     void setVolume(double V) { volume_ = V; }
+    double getVolume() const { return volume_; }  // Get current volume
     void setChemicalPotential(int typeId, double mu);
     void setActivity(int typeId, double activity);
     

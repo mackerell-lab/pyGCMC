@@ -21,7 +21,7 @@ struct Options {
     std::string prefix = "gcmc";
     int print_freq = -1; // -1 means: use INP nprint
     int traj_freq = 10000;
-    int checkpoint_freq = 100000;
+    int checkpoint_freq = 0;  // Disabled by default
     int stats_interval = 1000;
     int seed = -1;
     bool verbose = false;

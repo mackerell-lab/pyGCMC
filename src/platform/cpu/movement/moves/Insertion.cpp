@@ -70,11 +70,18 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
     }
     
     // Select random insertion position (in nm)
-    Vector3 position(
-        utils::RandomUtils::uniform(0.0, state.info.box[0]),
-        utils::RandomUtils::uniform(0.0, state.info.box[1]),
-        utils::RandomUtils::uniform(0.0, state.info.box[2])
-    );
+    Vector3 position;
+    if (regionConstraint_) {
+        // Sample from constrained region
+        position = regionConstraint_->samplePosition();
+    } else {
+        // Sample from entire box
+        position = Vector3(
+            utils::RandomUtils::uniform(0.0, state.info.box[0]),
+            utils::RandomUtils::uniform(0.0, state.info.box[1]),
+            utils::RandomUtils::uniform(0.0, state.info.box[2])
+        );
+    }
     
     // Create molecule at position
     std::vector<MCAtom> atoms = createMolecule(moleculeType, position);
@@ -242,12 +249,16 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
             Vcav_before = result.cavityBiasFactor * Vbox;
         }
     } else {
-        // Random insertion
-        position = Vector3(
-            utils::RandomUtils::uniform(0.0, state.info.box[0]),
-            utils::RandomUtils::uniform(0.0, state.info.box[1]),
-            utils::RandomUtils::uniform(0.0, state.info.box[2])
-        );
+        // Random insertion (with optional region constraint)
+        if (regionConstraint_) {
+            position = regionConstraint_->samplePosition();
+        } else {
+            position = Vector3(
+                utils::RandomUtils::uniform(0.0, state.info.box[0]),
+                utils::RandomUtils::uniform(0.0, state.info.box[1]),
+                utils::RandomUtils::uniform(0.0, state.info.box[2])
+            );
+        }
         result.cavityBiasFactor = 1.0;
     }
     
@@ -618,13 +629,17 @@ Vector3 InsertionMove::selectInsertionPosition(MCState& state, const MovementPar
         return pos;
     }
     
-    // Random position
+    // Random position (with optional region constraint)
     cavityBias = 1.0;
-    return Vector3(
-        utils::RandomUtils::uniform(0.0, state.info.box[0]),
-        utils::RandomUtils::uniform(0.0, state.info.box[1]),
-        utils::RandomUtils::uniform(0.0, state.info.box[2])
-    );
+    if (regionConstraint_) {
+        return regionConstraint_->samplePosition();
+    } else {
+        return Vector3(
+            utils::RandomUtils::uniform(0.0, state.info.box[0]),
+            utils::RandomUtils::uniform(0.0, state.info.box[1]),
+            utils::RandomUtils::uniform(0.0, state.info.box[2])
+        );
+    }
 }
 
 void InsertionMove::resetStatistics() {

@@ -356,7 +356,33 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
     Vector3 displacement = generateTranslationVector(maxTranslationStep_);
     Vector3 newPos = oldPos + displacement;
     applyPeriodicBoundary(newPos);
-    
+
+    // Enforce region constraint: reject moves that leave region
+    if (regionConstraint_) {
+        movement::Vector3 movNew(newPos.x, newPos.y, newPos.z);
+        if (!regionConstraint_->isInRegion(movNew)) {
+            // Reject without changing position
+            result.deltaE = 0.0;
+            result.energyAfter = result.energyBefore;
+            result.accepted = false;
+            // Probability bookkeeping (only if configured)
+            result.acceptanceProbability = shouldStoreProbability() ? 0.0 : -1.0;
+
+            totalMoves_++;
+            // Sample statistics if configured using a lightweight countdown
+            if (collectStats_) {
+                if (--statsCountdown_ <= 0) {
+                    int particleCount = reservoir_ ? reservoir_->getActiveCount() : 0;
+                    double energy = calculateSystemEnergy();
+                    statistics_.addSample(totalMoves_, particleCount, energy,
+                                          getAcceptanceRate(), temperature_, 100.0);
+                    statsCountdown_ = std::max(1, statsInterval_);
+                }
+            }
+            return result;
+        }
+    }
+
     // Update position
     updateFragmentPosition(residueIdx, newPos);
     
@@ -583,10 +609,30 @@ int GCMCEngine::selectRandomFragment() {
 // Select random instance
 int GCMCEngine::selectRandomInstance(int typeId) {
     if (!reservoir_) return -1;
-    
+
     std::vector<int> instances = reservoir_->getActiveInstances(typeId);
     if (instances.empty()) return -1;
-    
+
+    // If region constraint is set, filter instances to those within the region
+    if (regionConstraint_) {
+        std::vector<int> filteredInstances;
+        for (int id : instances) {
+            FragmentInstance* inst = reservoir_->getInstance(id);
+            if (inst) {
+                movement::Vector3 pos(inst->position.x, inst->position.y, inst->position.z);
+                if (regionConstraint_->isInRegion(pos)) {
+                    filteredInstances.push_back(id);
+                }
+            }
+        }
+
+        // Use filtered list if not empty, otherwise fall back to all instances
+        // (this prevents deletion from being completely blocked if all molecules drift outside)
+        if (!filteredInstances.empty()) {
+            instances = filteredInstances;
+        }
+    }
+
     std::uniform_int_distribution<int> dist(0, instances.size() - 1);
     return instances[dist(rng_)];
 }
@@ -642,6 +688,12 @@ Vector3 GCMCEngine::generateRandomPosition() {
         boxX = boxY = boxZ = 100.0;
     }
     
+    // If region constraint is set, sample from constrained region
+    if (regionConstraint_) {
+        movement::Vector3 movPos = regionConstraint_->samplePosition();
+        return Vector3(movPos.x, movPos.y, movPos.z);
+    }
+
     // Use [0, L) coordinate system to match CavityManager
     return Vector3(uniform_(rng_) * boxX,
                   uniform_(rng_) * boxY,
@@ -653,19 +705,37 @@ Vector3 GCMCEngine::generateCavityPosition() {
     if (!cavityManager_) {
         return generateRandomPosition();
     }
-    
-    // Get cavity from manager (returns movement::Vector3)
-    movement::Vector3 movCavity = cavityManager_->selectCavity();
-    
-    // Convert to montecarlo::Vector3
-    Vector3 cavity(movCavity.x, movCavity.y, movCavity.z);
-    
-    // Add small random displacement
-    Vector3 displacement(normal_(rng_) * 0.5,
-                        normal_(rng_) * 0.5,
-                        normal_(rng_) * 0.5);
-    
-    return cavity + displacement;
+
+    // Try to find a cavity position within the region constraint
+    const int maxAttempts = 100;
+    for (int attempt = 0; attempt < maxAttempts; ++attempt) {
+        // Get cavity from manager (returns movement::Vector3)
+        movement::Vector3 movCavity = cavityManager_->selectCavity();
+
+        // Convert to montecarlo::Vector3
+        Vector3 cavity(movCavity.x, movCavity.y, movCavity.z);
+
+        // Add small random displacement
+        Vector3 displacement(normal_(rng_) * 0.5,
+                            normal_(rng_) * 0.5,
+                            normal_(rng_) * 0.5);
+
+        Vector3 position = cavity + displacement;
+
+        // Check if position is within region constraint
+        if (!regionConstraint_ || regionConstraint_->isInRegion(movement::Vector3(position.x, position.y, position.z))) {
+            return position;
+        }
+    }
+
+    // If no valid cavity found in region, fall back to random position in region
+    if (regionConstraint_) {
+        movement::Vector3 movPos = regionConstraint_->samplePosition();
+        return Vector3(movPos.x, movPos.y, movPos.z);
+    }
+
+    // Last resort: random position in box
+    return generateRandomPosition();
 }
 
 // Generate random orientation
@@ -847,9 +917,9 @@ double GCMCEngine::calculateInsertionBias(const FragmentTemplate& tmpl,
     // Suppress unused parameter warnings
     (void)tmpl;
     (void)orientation;
-    
+
     double bias = 1.0;
-    
+
     // CRITICAL: Only apply cavity bias if enabled
     if (cavityManager_ && useCavityBias_) {
         // Use position-based cavity score (O(1)) instead of volume calculation (O(n³))
@@ -857,19 +927,26 @@ double GCMCEngine::calculateInsertionBias(const FragmentTemplate& tmpl,
         movement::Vector3 pos(position.x, position.y, position.z);
         bias *= cavityManager_->getCavityScore(pos);
     }
-    
+
     if (configBias_) {
         // Config bias calculation would go here
         bias *= 1.0;
     }
-    
+
+    // Proposal bias for detailed balance when using target_numwaters
+    // For insertion: multiply by p_delete/p_insert ratio
+    double proposalBias = getConfigValue("proposalBias");
+    if (proposalBias > 0) {
+        bias *= proposalBias;  // This is p_delete/p_insert for insertion
+    }
+
     return bias;
 }
 
 // Calculate deletion bias at specific position (more robust)
 double GCMCEngine::calculateDeletionBiasAtPosition(const Vector3& position) {
     double bias = 1.0;
-    
+
     // CRITICAL: For detailed balance, deletion bias must match insertion bias
     // at the same position
     if (cavityManager_ && useCavityBias_) {
@@ -877,12 +954,19 @@ double GCMCEngine::calculateDeletionBiasAtPosition(const Vector3& position) {
         // Use the same cavity score calculation as insertion
         bias *= cavityManager_->getCavityScore(pos);
     }
-    
+
     if (configBias_) {
         // Config bias calculation would go here (must match insertion)
         bias *= 1.0;
     }
-    
+
+    // Proposal bias for detailed balance when using target_numwaters
+    // For deletion: multiply by p_insert/p_delete ratio (inverse of insertion)
+    double proposalBias = getConfigValue("proposalBias");
+    if (proposalBias > 0) {
+        bias *= (1.0 / proposalBias);  // This is p_insert/p_delete for deletion
+    }
+
     return bias;
 }
 

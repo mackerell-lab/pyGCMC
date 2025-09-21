@@ -35,9 +35,14 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
     auto& frag_info = param.get_fragment_info();
     auto& bias_info = param.get_bias_info();
     auto& space_info = param.get_space_info();
+    auto& energy_info = param.get_energy_info();
 
     if (key == "mctime") {
-        mc_info.mc_time_list = InpParserStructures::parse_float_vector(value);
+        // Support accumulation of multiple mctime lines
+        auto times = InpParserStructures::parse_float_vector(value);
+        for (float t : times) {
+            mc_info.mc_time_list.push_back(t);
+        }
     } else if (key == "fragradius") {
         frag_info.radius_list = InpParserStructures::parse_float_vector(value);
     } else if (key == "fragconf" || key == "fragconfs") {
@@ -54,6 +59,36 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
         const float r = std::stof(value);
         bias_info.sigma = r;
         bias_info.sigma_squared = r * r;
+    } else if (key == "wdens") {
+        // Water density output control
+        mc_info.wdens = std::stof(value);
+    } else if (key == "target_numwaters" || key == "target_num_waters") {
+        // Target number of water molecules - store in both places
+        frag_info.target_num_waters = std::stoi(value);
+    } else if (key == "gcmc_region") {
+        // GCMC insertion region (sphere/box specification)
+        space_info.gcmc_region = value;
+    } else if (key == "exclude_protein_volume") {
+        // Exclude protein volume from cavity bias
+        space_info.exclude_protein_volume = (value == "yes" || value == "true" || value == "1");
+    } else if (key == "use_vdw_radius_for_grid") {
+        // Use VDW radii for grid generation
+        space_info.use_vdw_radius_for_grid = (value == "yes" || value == "true" || value == "1");
+    } else if (key == "exclude_hydrogens_from_grid") {
+        // Exclude hydrogens from grid occupancy
+        space_info.exclude_hydrogens_from_grid = (value == "yes" || value == "true" || value == "1");
+    } else if (key == "use_switching") {
+        // Enable switching function
+        mc_info.use_switching = (value == "yes" || value == "true" || value == "1");
+    } else if (key == "switch_r_on" || key == "switch_ron") {
+        // Switching function r_on
+        mc_info.switch_r_on = std::stof(value);
+    } else if (key == "switch_r_off" || key == "switch_roff") {
+        // Switching function r_off
+        mc_info.switch_r_off = std::stof(value);
+    } else if (key == "pairlist_freq") {
+        // Pairlist update frequency
+        energy_info.pairlist_freq = static_cast<unsigned int>(std::stoi(value));
     }
 }
 

@@ -9,6 +9,7 @@
 #include "GCMCEnergyCallback.hpp"
 #include "GCMCAcceptance.hpp"
 #include "GCMCStatistics.hpp"
+#include "../common/RegionConstraint.hpp"
 #include <random>
 #include <memory>
 #include <unordered_map>
@@ -70,11 +71,14 @@ public:
     void initialize(MCState* state, FragmentReservoir* reservoir);
     
     // Set components
-    void setCavityManager(CavityManager* cavityManager) { 
-        cavityManager_ = cavityManager; 
+    void setCavityManager(CavityManager* cavityManager) {
+        cavityManager_ = cavityManager;
     }
-    void setConfigBiasManager(ConfigBiasManager* configBias) { 
-        configBias_ = configBias; 
+    void setConfigBiasManager(ConfigBiasManager* configBias) {
+        configBias_ = configBias;
+    }
+    void setRegionConstraint(std::unique_ptr<RegionConstraint> constraint) {
+        regionConstraint_ = std::move(constraint);
     }
     
     // Core move operations
@@ -186,6 +190,7 @@ private:
     ConfigBiasManager* configBias_;
     GCMCAcceptance* acceptanceCalculator_;
     std::unique_ptr<GCMCEnergyCallback> energyCallback_;
+    std::unique_ptr<RegionConstraint> regionConstraint_;
     
     // Parameters
     double temperature_;

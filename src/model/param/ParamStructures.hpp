@@ -47,7 +47,9 @@ struct SpaceInfo {
     bool use_vdw_radius_for_grid = false;
     bool exclude_hydrogens_from_grid = false;
     bool exclude_protein_volume = false;
-    
+
+    std::string gcmc_region = "";  // GCMC insertion region specification
+
     float tmp_prob = 0.0;
     float cutoff = 12.0;
 };
@@ -59,6 +61,7 @@ struct MCParams {
     int mc_steps = 1;
     int current_step = 0;
     int print_freq = 1;
+    int save_freq = 10000;  // nsave: trajectory save frequency
 
     float temperature = 300.0;
     float beta = 1.0;
@@ -72,6 +75,14 @@ struct MCParams {
     std::vector<std::string> operation_types = {"Ins", "Del", "Trn", "Rot"};
     std::vector<float> mc_time_list;
     std::vector<float> mc_time_cumulative;
+
+    // Analysis and control
+    float wdens = 0.0f;  // Water density value or output frequency
+
+    // Switching function parameters
+    bool use_switching = false;
+    float switch_r_on = 10.0;  // Switching function start distance
+    float switch_r_off = 12.0; // Switching function cutoff distance
 
     std::vector<float> fragment_prob;
     std::vector<float> water_prob;

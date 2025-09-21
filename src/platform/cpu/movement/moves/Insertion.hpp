@@ -7,6 +7,7 @@
 #include "../common/MovementParams.hpp"
 #include "../common/MovementResult.hpp"
 #include "../common/MovementUtils.hpp"
+#include "../common/RegionConstraint.hpp"
 
 // Forward declarations for MCAtom
 namespace pygcmc {
@@ -95,7 +96,12 @@ public:
     
     const Statistics& getStatistics() const { return stats_; }
     void resetStatistics();
-    
+
+    // Set region constraint for insertion
+    void setRegionConstraint(std::unique_ptr<RegionConstraint> constraint) {
+        regionConstraint_ = std::move(constraint);
+    }
+
 protected:
     // Create a molecule at a given position
     std::vector<MCAtom> createMolecule(int moleculeType, const Vector3& position);
@@ -135,10 +141,11 @@ private:
     CavityBiasCore* cavityCore_;  // New cavity bias implementation
     EnergyInterface* energyCalc_;
     std::unique_ptr<CavityBiasInsertion> cavityBiasInsertion_;
-    
+    std::unique_ptr<RegionConstraint> regionConstraint_;  // GCMC region constraint
+
     int moleculeType_;
     Statistics stats_;
-    
+
     // Update statistics
     void updateStatistics(bool accepted, bool usedCavity, double energyChange, double cavityBias);
 };

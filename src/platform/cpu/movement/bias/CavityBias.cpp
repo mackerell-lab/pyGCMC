@@ -196,26 +196,60 @@ void CavityManager::markOccupiedRegions(const MCState& state) {
     // Process all active residues using global state.atoms with residue mapping
     for (const MCResidue& residue : state.residues) {
         if (!residue.active) continue;
-        
+
+        // Skip non-protein residues if excludeProtein_ is enabled
+        // Consider a residue as protein if it's fixed or has a large chain
+        if (excludeProtein_ && !residue.fixed) {
+            // Only process protein (fixed) residues when excludeProtein_ is true
+            continue;
+        }
+
         // Use global state.atoms array with residue's atom range
         int atomEnd = residue.atomStart + residue.atomCount;
         for (int atomIdx = residue.atomStart; atomIdx < atomEnd && atomIdx < state.activeAtomCount; ++atomIdx) {
             const MCAtom& atom = state.atoms[atomIdx];
+
+            // Skip hydrogens if excludeHydrogens_ is enabled
+            if (excludeHydrogens_) {
+                // Check if atom is hydrogen based on name or mass
+                if (atom.mass < 2.0 ||
+                    (atom.name.length() > 0 && atom.name[0] == 'H')) {
+                    continue;
+                }
+            }
             
             // Position is in nm (same as box dimensions)
             Vector3 posNm(atom.x, atom.y, atom.z);
             
-            // Use sigma from force field if available
+            // Determine radius based on useVDWRadius_ flag
             double radiusNm = 0.15;  // Default fallback in nm (1.5 Angstroms)
-            
-            int nt = state.forcefield.numTotalTypes;
-            if (atom.type >= 0 && atom.type < nt &&
-                state.forcefield.ljSigma.size() > static_cast<size_t>(atom.type * nt + atom.type)) {
-                // LJ sigma is NxN matrix in nm - get diagonal element for self-interaction
-                int idx = atom.type * nt + atom.type;
-                double sigma = state.forcefield.ljSigma[idx];
-                if (sigma > 0) {
-                    radiusNm = 0.5 * sigma;
+
+            if (useVDWRadius_) {
+                // Use VDW radius based on element type
+                // Common VDW radii in nm (converted from Angstroms)
+                if (atom.name.length() > 0) {
+                    char elem = atom.name[0];
+                    switch(elem) {
+                        case 'H': radiusNm = 0.120; break;  // 1.20 Å
+                        case 'C': radiusNm = 0.170; break;  // 1.70 Å
+                        case 'N': radiusNm = 0.155; break;  // 1.55 Å
+                        case 'O': radiusNm = 0.152; break;  // 1.52 Å
+                        case 'S': radiusNm = 0.180; break;  // 1.80 Å
+                        case 'P': radiusNm = 0.180; break;  // 1.80 Å
+                        default: radiusNm = 0.150; break;   // Default
+                    }
+                }
+            } else {
+                // Use LJ sigma from force field if available
+                int nt = state.forcefield.numTotalTypes;
+                if (atom.type >= 0 && atom.type < nt &&
+                    state.forcefield.ljSigma.size() > static_cast<size_t>(atom.type * nt + atom.type)) {
+                    // LJ sigma is NxN matrix in nm - get diagonal element for self-interaction
+                    int idx = atom.type * nt + atom.type;
+                    double sigma = state.forcefield.ljSigma[idx];
+                    if (sigma > 0) {
+                        radiusNm = 0.5 * sigma;
+                    }
                 }
             }
             

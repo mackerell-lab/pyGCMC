@@ -8,6 +8,7 @@
 #include <cmath>
 #include <algorithm>
 #include <random>
+#include <map>
 #include <set>
 #include <map>
 #include <cmath>
@@ -98,17 +99,16 @@ bool GCMCSimulation::initialize() {
         
     } catch (const std::exception& e) {
         log("ERROR: Failed to build simulation input: ", e.what());
-        
-        // Check if this is a critical file not found error
+
+        // Only treat missing files as fatal; allow fallback on other errors
         std::string errorMsg = e.what();
-        if (errorMsg.find("not found") != std::string::npos || 
-            errorMsg.find("invalid") != std::string::npos) {
+        if (errorMsg.find("not found") != std::string::npos) {
             // File was explicitly specified but doesn't exist - this is fatal
             log("ERROR: Cannot continue with missing input files");
             return false;
         }
-        
-        // For other errors, fall back to old method
+
+        // For other errors (including 'invalid' parameters), fall back to legacy loader
         log("Attempting fallback to legacy parameter loading...");
         if (!loadParameters()) {
             log("ERROR: Failed to load parameters");
@@ -118,6 +118,10 @@ bool GCMCSimulation::initialize() {
     // If print frequency wasn't explicitly set via CLI, use INP nprint
     if (config_.printFrequency <= 0) {
         config_.printFrequency = params_->get_mc_info().print_freq;
+    }
+    // If trajectory frequency wasn't explicitly set via CLI, use INP nsave
+    if (config_.trajectoryFrequency <= 0) {
+        config_.trajectoryFrequency = params_->get_mc_info().save_freq;
     }
     
     // Setup the MC state
@@ -221,7 +225,32 @@ void GCMCSimulation::printParameterSummary() {
             log("  ", fragFile);
         }
     }
-    
+
+    // Energy parameters
+    const auto& energyInfo = params_->get_energy_info();
+    log("Energy parameters:");
+    log("  Fragment cutoff: ", energyInfo.fragment_cutoff, " nm");
+    log("  Protein cutoff: ", energyInfo.protein_cutoff, " nm");
+    log("  Pairlist update frequency: ", energyInfo.pairlist_freq, " steps");
+
+    if (energyInfo.use_switching) {
+        log("  Switching function: ON");
+        log("    Fragment switch distance: ", energyInfo.switch_dist_fragment, " nm");
+        log("    Protein switch distance: ", energyInfo.switch_dist_protein, " nm");
+    } else {
+        log("  Switching function: OFF");
+    }
+
+    // Region constraint
+    if (!params_->get_space_info().gcmc_region.empty()) {
+        log("GCMC region constraint: ", params_->get_space_info().gcmc_region);
+    }
+
+    // Target waters
+    if (params_->get_fragment_info().target_num_waters > 0) {
+        log("Target number of waters: ", params_->get_fragment_info().target_num_waters);
+    }
+
     log("====================================");
 }
 
@@ -466,7 +495,23 @@ bool GCMCSimulation::setupSystem() {
     } else {
         log("Using force field from pre-populated MC state");
     }
-    
+
+    // Setup switching function if enabled
+    const auto& mc = params_->get_mc_info();
+    if (mc.use_switching) {
+        // Write switching parameters to MCInfo structure
+        state_->info.use_switching = true;
+        state_->info.r_on = mc.switch_r_on;
+        state_->info.r_off = mc.switch_r_off;
+        log("Switching function enabled:");
+        log("  r_on: ", mc.switch_r_on, " nm");
+        log("  r_off: ", mc.switch_r_off, " nm");
+    } else {
+        state_->info.use_switching = false;
+        state_->info.r_on = 0.0f;
+        state_->info.r_off = 0.0f;
+    }
+
     return true;
 }
 
@@ -619,7 +664,33 @@ bool GCMCSimulation::setupFragments() {
             log("  Source: Default template");
         }
     }
-    
+
+    // Normalize fragment probabilities
+    double totalProb = 0.0;
+    for (const auto& frag : fragmentTypes_) {
+        totalProb += frag.probability;
+    }
+
+    if (totalProb > 0.0) {
+        for (auto& frag : fragmentTypes_) {
+            frag.probability /= totalProb;
+        }
+        log("Fragment probabilities normalized (total was ", totalProb, ")");
+    } else {
+        // Equal probability if no mctime specified
+        double equalProb = 1.0 / fragmentTypes_.size();
+        for (auto& frag : fragmentTypes_) {
+            frag.probability = equalProb;
+        }
+        log("Using equal fragment probabilities");
+    }
+
+    // Update reservoir with normalized probabilities
+    for (size_t i = 0; i < fragmentTypes_.size(); ++i) {
+        // Note: MultiTypeReservoir uses probability from TypeInfo during addType
+        // If needed, we could add a setProbability method to the reservoir
+    }
+
     return true;
 }
 
@@ -656,39 +727,99 @@ bool GCMCSimulation::setupAcceptance() {
 
 bool GCMCSimulation::setupEngine() {
     log("====== Setting up GCMC engine ======");
-    
+
     engine_ = std::make_unique<GCMCEngine>();
-    
+
     // Initialize with state and reservoir
     engine_->initialize(state_.get(), reservoir_.get());
     log("GCMC engine initialized with:");
     log("  MC state: ", state_->atoms.size(), " atoms, ", state_->residues.size(), " residues");
     log("  Reservoir: ", fragmentTypes_.size(), " fragment types");
-    
+
     // Set acceptance calculator
     engine_->setAcceptanceCalculator(acceptance_.get());
-    
+
     // Configure engine parameters
     engine_->setConfigValue("maxTranslation", 0.2);  // nm
     engine_->setConfigValue("maxRotation", 15.0);    // degrees
     engine_->setConfigValue("useCavityBias", params_->get_bias_info().use_cavity_bias ? 1.0 : 0.0);
-    
+
+    // Setup region constraint if specified
+    const auto& space = params_->get_space_info();
+    if (!space.gcmc_region.empty()) {
+        try {
+            movement::Vector3 movBoxSize(
+                state_->info.box[0],
+                state_->info.box[1],
+                state_->info.box[2]
+            );
+            auto constraint = movement::RegionConstraint::parseRegion(space.gcmc_region, movBoxSize);
+
+            // Update acceptance volume to use region volume instead of box volume
+            double regionVolume = constraint->getVolume();
+            acceptance_->setVolume(regionVolume);
+
+            // Store the constraint for later access
+            regionConstraint_ = constraint.get();  // Keep raw pointer for reference
+            engine_->setRegionConstraint(std::move(constraint));
+
+            log("GCMC region constraint configured: ", space.gcmc_region);
+            log("  Region volume: ", regionVolume, " nm³ (replaced box volume in acceptance)");
+        } catch (const std::exception& e) {
+            log("WARNING: Failed to parse gcmc_region '", space.gcmc_region, "': ", e.what());
+            log("  Using entire box for insertion");
+            regionConstraint_ = nullptr;
+        }
+    } else {
+        regionConstraint_ = nullptr;
+    }
+
+    // Setup cavity bias if enabled
+    if (params_->get_bias_info().use_cavity_bias) {
+        // Get parameters with defaults (grid_spacing from INP is in Angstrom)
+        double gridSpacingA = params_->get_space_info().grid_spacing > 0 ?
+                              params_->get_space_info().grid_spacing : 2.0;  // Default 2.0 Angstrom
+
+        // sigma from bias_info might be in nm if from ForceField, or Angstrom if from probe_radius
+        // For now assume it's in Angstrom from probe_radius INP key
+        double probeRadiusA = params_->get_bias_info().sigma > 0 ?
+                              params_->get_bias_info().sigma : 1.4;  // Default 1.4 Angstrom
+
+        // Create cavity manager with Angstrom units
+        cavityManager_ = std::make_unique<movement::CavityManager>(gridSpacingA, probeRadiusA);
+
+        // Apply cavity exclusion options
+        const auto& space = params_->get_space_info();
+        cavityManager_->setExcludeProtein(space.exclude_protein_volume);
+        cavityManager_->setExcludeHydrogens(space.exclude_hydrogens_from_grid);
+        cavityManager_->setUseVDWRadius(space.use_vdw_radius_for_grid);
+
+        engine_->setCavityManager(cavityManager_.get());
+
+        log("Cavity bias configured:");
+        log("  Grid spacing: ", gridSpacingA, " Angstrom");  // Correct unit
+        log("  Probe radius: ", probeRadiusA, " Angstrom");  // Correct unit
+        log("  Exclude protein volume: ", space.exclude_protein_volume);
+        log("  Exclude hydrogens: ", space.exclude_hydrogens_from_grid);
+        log("  Use VDW radius: ", space.use_vdw_radius_for_grid);
+    }
+
     // Enable statistics if configured
     if (config_.enableStatistics) {
         engine_->enableStatistics(true);
         engine_->setStatisticsInterval(config_.statisticsInterval);
     }
-    
+
     // Set probability storage
     if (config_.storeProbabilities) {
         engine_->setConfigValue("storeProbabilities", 1.0);
     }
-    
+
     log("GCMC engine configured:");
     log("  Max translation: ", engine_->getConfigValue("maxTranslation"), " nm");
     log("  Max rotation: ", engine_->getConfigValue("maxRotation"), " degrees");
     log("  Cavity bias: ", (params_->get_bias_info().use_cavity_bias ? "enabled" : "disabled"));
-    
+
     // Ensure deterministic RNG when seed provided
     if (config_.randomSeed >= 0) {
         engine_->setSeed(static_cast<unsigned int>(config_.randomSeed));
@@ -729,8 +860,8 @@ bool GCMCSimulation::run() {
             writeTrajectory(step);
         }
         
-        // Save checkpoint
-        if (step % config_.checkpointFrequency == 0 && step > 0) {
+        // Save checkpoint (disabled by default)
+        if (config_.checkpointFrequency > 0 && step % config_.checkpointFrequency == 0 && step > 0) {
             writeCheckpoint(step);
         }
         
@@ -772,30 +903,51 @@ bool GCMCSimulation::performMCStep() {
     switch (moveType) {
         case INSERT: {
             int fragType = selectFragmentType();
+
+            // Apply proposal bias for detailed balance when using target_numwaters
+            if (params_->get_fragment_info().target_num_waters > 0 &&
+                lastProposalPInsert_ > 0 && lastProposalPDelete_ > 0) {
+                // For insertion, bias = p_delete/p_insert compensates for biased selection
+                double proposalBias = lastProposalPDelete_ / lastProposalPInsert_;
+                engine_->setConfigValue("proposalBias", proposalBias);
+            } else {
+                engine_->setConfigValue("proposalBias", 1.0);
+            }
+
             result = engine_->attemptInsertion(fragType);
-            
+
             fragmentTypes_[fragType].insertAttempts++;
             if (result.accepted) {
                 fragmentTypes_[fragType].insertAccepted++;
                 fragmentTypes_[fragType].currentCount++;
                 accepted = true;
             }
-            
+
             stats_.moveAttempts["insertion"]++;
             if (accepted) stats_.moveAccepted["insertion"]++;
-            
+
             // Update new statistics module
             simulationStats_.recordMove("insert", fragmentTypes_[fragType].name, accepted);
             break;
         }
-        
+
         case DELETE: {
             int fragType = -1;
             if (reservoir_->getActiveCount() > 0) {
                 fragType = selectActiveFragment();
                 if (fragType >= 0) {
+                    // Apply proposal bias for detailed balance when using target_numwaters
+                    if (params_->get_fragment_info().target_num_waters > 0 &&
+                        lastProposalPInsert_ > 0 && lastProposalPDelete_ > 0) {
+                        // For deletion, bias = p_insert/p_delete compensates for biased selection
+                        double proposalBias = lastProposalPInsert_ / lastProposalPDelete_;
+                        engine_->setConfigValue("proposalBias", proposalBias);
+                    } else {
+                        engine_->setConfigValue("proposalBias", 1.0);
+                    }
+
                     result = engine_->attemptDeletion(fragType);
-                    
+
                     fragmentTypes_[fragType].deleteAttempts++;
                     if (result.accepted) {
                         fragmentTypes_[fragType].deleteAccepted++;
@@ -877,9 +1029,62 @@ bool GCMCSimulation::performMCStep() {
 
 GCMCSimulation::MoveType GCMCSimulation::selectMoveType() {
     double r = uniform_(rng_);
-    
-    // Simple equal probability for now
-    // TODO: Implement adaptive move probabilities
+
+    // Reset proposal probabilities to defaults
+    lastProposalPInsert_ = 0.25;
+    lastProposalPDelete_ = 0.25;
+
+    // Check if we should bias based on target_numwaters
+    const auto& fragInfo = params_->get_fragment_info();
+    if (fragInfo.target_num_waters > 0) {
+        // Count current water molecules - use extended list
+        int waterCount = 0;
+        for (const auto& frag : fragmentTypes_) {
+            if (frag.name == "WAT" || frag.name == "TIP3" || frag.name == "TIP3P" ||
+                frag.name == "SPC" || frag.name == "SPCE" || frag.name == "TIP4P" ||
+                frag.name == "WATER" || frag.name == "H2O" || frag.name == "HOH" ||
+                frag.name == "SOL") {
+                waterCount += frag.currentCount;
+            }
+        }
+
+        // Bias move selection based on difference from target
+        int diff = waterCount - fragInfo.target_num_waters;
+        double biasFactor = 0.1;  // Strength of bias (0.1 = 10% adjustment per 10 molecules)
+
+        // Adjust probabilities based on difference
+        double pInsert = 0.25;
+        double pDelete = 0.25;
+
+        if (diff < 0) {
+            // Below target, increase insertion probability
+            double adjustment = biasFactor * std::min(1.0, std::abs(diff) / 10.0);
+            pInsert += adjustment;
+            pDelete -= adjustment;
+        } else if (diff > 0) {
+            // Above target, increase deletion probability
+            double adjustment = biasFactor * std::min(1.0, std::abs(diff) / 10.0);
+            pDelete += adjustment;
+            pInsert -= adjustment;
+        }
+
+        // Ensure probabilities are in valid range
+        pInsert = std::max(0.05, std::min(0.45, pInsert));
+        pDelete = std::max(0.05, std::min(0.45, pDelete));
+
+        // Store for detailed balance correction
+        lastProposalPInsert_ = pInsert;
+        lastProposalPDelete_ = pDelete;
+
+        // Select move with biased probabilities
+        if (r < pInsert) return INSERT;
+        else if (r < pInsert + pDelete) return DELETE;
+        else if (r < pInsert + pDelete + 0.25) return TRANSLATE;
+        else return ROTATE;
+    }
+
+    // Default: Simple equal probability
+    // TODO: Implement adaptive move probabilities with mc_time_cumulative
     if (r < 0.25) return INSERT;
     else if (r < 0.50) return DELETE;
     else if (r < 0.75) return TRANSLATE;
@@ -991,13 +1196,13 @@ bool GCMCSimulation::checkConvergence() {
 
 void GCMCSimulation::writeStatistics(int step) {
     updateStatistics();
-    
+
     std::cout << "\n=== Step " << step << " ===" << std::endl;
     std::cout << std::fixed << std::setprecision(3);
-    
+
     std::cout << "Acceptance: " << stats_.acceptanceRate * 100 << "%" << std::endl;
     std::cout << "Energy: " << stats_.currentEnergy << " kJ/mol" << std::endl;
-    
+
     std::cout << "Fragment counts:" << std::endl;
     for (const auto& frag : fragmentTypes_) {
         std::cout << "  " << frag.name << ": " << frag.currentCount;
@@ -1007,7 +1212,13 @@ void GCMCSimulation::writeStatistics(int step) {
         }
         std::cout << std::endl;
     }
-    
+
+    // Output water density if wdens is set
+    const auto& mc = params_->get_mc_info();
+    if (mc.wdens > 0 && step % static_cast<int>(mc.wdens) == 0) {
+        outputWaterDensity(step);
+    }
+
     std::cout << "Performance: " << stats_.totalSteps / stats_.totalTime << " steps/s" << std::endl;
 }
 
@@ -1023,19 +1234,62 @@ void GCMCSimulation::writeCheckpoint(int step) {
     log("Saved checkpoint to ", filename);
 }
 
+void GCMCSimulation::outputWaterDensity(int step) {
+    // Calculate water density in molecules/nm³
+    int waterCount = 0;
+    for (const auto& frag : fragmentTypes_) {
+        // Count water molecules - extended list of common water names
+        if (frag.name == "WAT" || frag.name == "TIP3" || frag.name == "TIP3P" ||
+            frag.name == "SPC" || frag.name == "SPCE" || frag.name == "TIP4P" ||
+            frag.name == "WATER" || frag.name == "H2O" || frag.name == "HOH" ||
+            frag.name == "SOL") {
+            waterCount += frag.currentCount;
+        }
+    }
+
+    // Calculate volume - use region volume if specified
+    double volume = state_->info.box[0] * state_->info.box[1] * state_->info.box[2]; // default: box in nm³
+
+    // Use region volume if gcmc_region is specified
+    if (regionConstraint_) {
+        // Get region volume through engine (it owns the constraint)
+        // We stored the raw pointer so we can access it
+        if (engine_) {
+            // Try to get region volume from acceptance calculator (where we stored it)
+            volume = acceptance_->getVolume();  // This was updated to region volume in setupEngine
+        }
+    }
+
+    double density = waterCount / volume;  // molecules/nm³
+    double densityMolar = density / 602.214;  // Convert to mol/L (M)
+
+    std::cout << "Water Density (step " << step << "): "
+              << waterCount << " molecules, "
+              << std::setprecision(3) << density << " molecules/nm³, "
+              << std::setprecision(3) << densityMolar << " M" << std::endl;
+
+    // Optionally write to file
+    std::string densityFile = config_.outputPrefix + "_density.dat";
+    std::ofstream out(densityFile, std::ios::app);
+    if (out.is_open()) {
+        out << step << " " << waterCount << " " << density << " " << densityMolar << std::endl;
+        out.close();
+    }
+}
+
 void GCMCSimulation::writeFinalResults() {
     updateStatistics();
-    
+
     std::string filename = config_.outputPrefix + "_final.txt";
     std::ofstream out(filename);
-    
+
     out << "GCMC Simulation Final Results\n";
     out << "==============================\n\n";
-    
+
     out << "Configuration:\n";
     out << "  Input file: " << config_.inputFile << "\n";
     out << "  Temperature: " << params_->get_mc_info().temperature << " K\n";
-    out << "  Box: " << state_->info.box[0] << " x " << state_->info.box[1] 
+    out << "  Box: " << state_->info.box[0] << " x " << state_->info.box[1]
         << " x " << state_->info.box[2] << " nm\n";
     out << "  Total steps: " << stats_.totalSteps << "\n\n";
     
@@ -1067,17 +1321,25 @@ void GCMCSimulation::writeFinalResults() {
 
 void GCMCSimulation::finalize() {
     if (!initialized_) return;
-    
-    writeFinalResults();
-    
+
     // Save final trajectory
     std::string trajFile = config_.outputPrefix + "_final.pdb";
     saveTrajectory(trajFile);
-    
-    // Save final checkpoint
-    std::string checkFile = config_.outputPrefix + "_final.checkpoint";
-    saveCheckpoint(checkFile);
-    
+
+    // Save final topology
+    std::string topFile = config_.outputPrefix + "_final.top";
+    saveTopology(topFile);
+
+    // Save final results summary (only when reference files are used)
+    bool shouldWriteFinal = false;
+    if (params_) {
+        const auto& fi = params_->get_file_info();
+        shouldWriteFinal = (!fi.topology_file.empty() || !fi.input_pdb_file.empty());
+    }
+    if (shouldWriteFinal) {
+        writeFinalResults();
+    }
+
     log("Simulation finalized");
 }
 
@@ -1103,18 +1365,28 @@ void GCMCSimulation::printStatistics() const {
 
 void GCMCSimulation::saveTrajectory(const std::string& filename) const {
     if (!state_) return;
-    
+
     std::ofstream out(filename);
     if (!out) {
         log("ERROR: Failed to open trajectory file ", filename);
         return;
     }
-    
+
     // Write PDB header
     out << "REMARK GCMC Trajectory\n";
     out << "REMARK Step: " << stats_.totalSteps << "\n";
     out << "REMARK Energy: " << stats_.currentEnergy << " kJ/mol\n";
-    
+
+    // Count water molecules
+    int waterCount = 0;
+    for (const auto& res : state_->residues) {
+        if (res.active && (res.resname == "WAT" || res.resname == "SOL" || res.resname == "TIP3" ||
+                          res.resname == "HOH" || res.resname == "H2O")) {
+            waterCount++;
+        }
+    }
+    out << "REMARK Water molecules: " << waterCount << "\n";
+
     // Write box dimensions (CRYST1 record)
     out << "CRYST1";
     out << std::fixed << std::setprecision(3);
@@ -1125,67 +1397,165 @@ void GCMCSimulation::saveTrajectory(const std::string& filename) const {
     out << std::setw(7) << "90.00";
     out << std::setw(7) << "90.00";
     out << " P 1           1\n";
-    
+
     // Write atoms
     int atomIdx = 1;
     for (size_t resIdx = 0; resIdx < state_->residues.size(); ++resIdx) {
         const auto& res = state_->residues[resIdx];
         if (!res.active) continue;
-        
+
         // Write atoms for this residue
         for (int j = 0; j < res.atomCount && (res.atomStart + j) < static_cast<int>(state_->atoms.size()); ++j) {
             const auto& atom = state_->atoms[res.atomStart + j];
-            
+
             out << "ATOM  ";
             out << std::setw(5) << atomIdx++;
-            out << "  ";
-            
-            // Atom name - based on type
-            if (atom.type == 0) {
-                out << std::left << std::setw(4) << "O";
-            } else if (atom.type == 1) {
-                out << std::left << std::setw(4) << "H";
-            } else if (atom.type == 2) {
-                out << std::left << std::setw(4) << "Na";
-            } else if (atom.type == 3) {
-                out << std::left << std::setw(4) << "Cl";
+            out << " ";
+
+            // Get atom name from state if available
+            std::string atomName;
+            if (!atom.name.empty()) {
+                atomName = atom.name;
             } else {
-                out << std::left << std::setw(4) << "X";
+                // Fallback based on residue type
+                if (res.resname == "WAT" || res.resname == "SOL" || res.resname == "TIP3" ||
+                    res.resname == "HOH" || res.resname == "H2O") {
+                    if (j == 0) atomName = "OW";
+                    else if (j == 1) atomName = "HW1";
+                    else if (j == 2) atomName = "HW2";
+                } else if (res.resname == "NA" || res.resname == "SOD") {
+                    atomName = "NA";
+                } else if (res.resname == "CL" || res.resname == "CLA") {
+                    atomName = "CL";
+                } else {
+                    atomName = "X";
+                }
             }
-            
+
+            // Format atom name with proper spacing
+            if (atomName.length() < 4) {
+                out << " " << std::left << std::setw(3) << atomName;
+            } else {
+                out << std::left << std::setw(4) << atomName.substr(0, 4);
+            }
+
             // Residue name and number
             out << std::right;
             out << std::setw(3) << res.resname.substr(0, 3);
-            out << " A";  // Default chain ID
+            out << " A";  // Chain ID
             out << std::setw(4) << res.resid;
             out << "    ";
-            
+
             // Coordinates (nm to Angstrom)
             out << std::fixed << std::setprecision(3);
             out << std::setw(8) << atom.x * 10.0;
             out << std::setw(8) << atom.y * 10.0;
             out << std::setw(8) << atom.z * 10.0;
-            
+
             // Occupancy and temperature factor
             out << std::setw(6) << "1.00";
             out << std::setw(6) << "0.00";
-            
-            // Element symbol
+
+            // Element symbol - extract from atom name if possible
             out << "          ";
-            if (atom.type == 0) out << " O";
-            else if (atom.type == 1) out << " H";
-            else if (atom.type == 2) out << "Na";
-            else if (atom.type == 3) out << "Cl";
-            else out << " X";
-            
+            if (!atomName.empty()) {
+                char firstChar = atomName[0];
+                if (firstChar == 'O') out << " O";
+                else if (firstChar == 'H') out << " H";
+                else if (firstChar == 'N') out << " N";
+                else if (firstChar == 'C' && atomName != "CL") out << " C";
+                else if (atomName == "CL") out << "Cl";
+                else if (atomName == "NA") out << "Na";
+                else out << " " << firstChar;
+            } else {
+                out << " X";
+            }
+
             out << "\n";
         }
     }
-    
+
     out << "END\n";
     out.close();
-    
+
     log("Saved trajectory to ", filename);
+}
+
+void GCMCSimulation::saveTopology(const std::string& filename) const {
+    if (!state_) return;
+
+    std::ofstream out(filename);
+    if (!out) {
+        log("ERROR: Failed to open topology file ", filename);
+        return;
+    }
+
+    // Write header
+    out << "; GCMC Topology File\n";
+    out << "; Generated at step: " << stats_.totalSteps << "\n";
+    out << "; Box dimensions: " << state_->info.box[0] << " " << state_->info.box[1] << " " << state_->info.box[2] << " nm\n";
+    out << "\n";
+
+    // Count active molecules by type
+    std::map<std::string, int> moleculeCount;
+    int totalAtoms = 0;
+    for (const auto& res : state_->residues) {
+        if (res.active) {
+            moleculeCount[res.resname]++;
+            totalAtoms += res.atomCount;
+        }
+    }
+
+    // Write system section
+    out << "[ system ]\n";
+    out << "; Name\n";
+    out << "GCMC System\n\n";
+
+    // Write molecules section
+    out << "[ molecules ]\n";
+    out << "; Compound        #mols\n";
+
+    // Write each molecule type
+    for (const auto& [resname, count] : moleculeCount) {
+        out << std::left << std::setw(16) << resname << " " << count << "\n";
+    }
+
+    out << "\n";
+    out << "; Total atoms: " << totalAtoms << "\n";
+    out << "; Total molecules: " << state_->residues.size() << "\n";
+
+    // Write fragment information if available
+    if (!fragmentTypes_.empty()) {
+        out << "\n[ fragments ]\n";
+        out << "; Fragment     Count   Target  Conc(M)  ChemPot(kJ/mol)\n";
+        for (const auto& frag : fragmentTypes_) {
+            out << std::left << std::setw(12) << frag.name;
+            out << std::right << std::setw(6) << frag.currentCount;
+            out << std::setw(8) << frag.maxCount;
+            out << std::setw(8) << std::fixed << std::setprecision(2) << frag.concentration;
+            out << std::setw(10) << std::fixed << std::setprecision(2) << frag.chemicalPotential;
+            out << "\n";
+        }
+    }
+
+    // Write statistics
+    out << "\n[ statistics ]\n";
+    out << "; Move type      Attempts  Accepted  Rate(%)\n";
+    for (const auto& [moveType, attempts] : stats_.moveAttempts) {
+        if (attempts > 0) {
+            auto it = stats_.moveAccepted.find(moveType);
+            int accepted = (it != stats_.moveAccepted.end()) ? it->second : 0;
+            double rate = 100.0 * accepted / attempts;
+            out << std::left << std::setw(14) << moveType;
+            out << std::right << std::setw(9) << attempts;
+            out << std::setw(10) << accepted;
+            out << std::setw(8) << std::fixed << std::setprecision(1) << rate;
+            out << "\n";
+        }
+    }
+
+    out.close();
+    log("Saved topology to ", filename);
 }
 
 void GCMCSimulation::saveCheckpoint(const std::string& filename) const {

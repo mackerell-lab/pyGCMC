@@ -6,6 +6,7 @@
 #include "../../movement/gcmc/GCMCStatistics.hpp"
 #include "../../movement/reservoir/fragment_reservoir.hpp"
 #include "../../movement/reservoir/MultiTypeReservoir.hpp"
+#include "../../movement/bias/CavityBias.hpp"
 #include "../../energy/EnergyModule.hpp"
 #include "../../../../model/param/ParamMain.hpp"
 #include "../../../../model/montecarlo/MCMain.hpp"
@@ -44,7 +45,7 @@ public:
         std::string outputPrefix = "gcmc";  // Output file prefix
         int printFrequency = 1000;          // Statistics print frequency
         int trajectoryFrequency = 10000;    // Trajectory save frequency
-        int checkpointFrequency = 100000;   // Checkpoint save frequency
+        int checkpointFrequency = 0;         // Checkpoint save frequency (0 = disabled)
         bool verbose = false;               // Verbose output
         int randomSeed = -1;                // Random seed (-1 for auto)
         
@@ -130,6 +131,7 @@ public:
     Statistics getStatistics() const { return stats_; }
     void printStatistics() const;
     void saveTrajectory(const std::string& filename) const;
+    void saveTopology(const std::string& filename) const;
     void saveCheckpoint(const std::string& filename) const;
     bool loadCheckpoint(const std::string& filename);
     
@@ -152,6 +154,8 @@ private:
     std::unique_ptr<movement::gcmc::GCMCEngine> engine_;
     std::unique_ptr<movement::gcmc::GCMCAcceptance> acceptance_;
     std::unique_ptr<movement::MultiTypeReservoir> reservoir_;
+    std::unique_ptr<movement::CavityManager> cavityManager_;  // Cavity bias manager
+    movement::RegionConstraint* regionConstraint_ = nullptr;  // Raw pointer to region constraint (owned by engine)
     movement::gcmc::GCMCStatistics statistics_;
     
     // Fragment management
@@ -170,6 +174,10 @@ private:
     // Random number generation
     std::mt19937 rng_;
     std::uniform_real_distribution<double> uniform_;
+
+    // Proposal probabilities for detailed balance with target_numwaters
+    double lastProposalPInsert_ = 0.25;
+    double lastProposalPDelete_ = 0.25;
     
     // Helper methods
     bool loadParameters();
@@ -201,6 +209,7 @@ private:
     void writeTrajectory(int step);
     void writeCheckpoint(int step);
     void writeFinalResults();
+    void outputWaterDensity(int step);
     
     // Logging helper
     template<typename... Args>
