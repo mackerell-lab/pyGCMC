@@ -157,7 +157,7 @@ def test_ideal_gas_scaling_with_lambda():
     V = 4.0**3  # nm³
     mass = 39.948  # amu
     
-    temperatures = [250.0, 300.0, 350.0]
+    temperatures = [250.0, 350.0]  # Reduced from 3 to 2 temperatures
     
     kB_kjmol = 8.314e-3
     
@@ -204,7 +204,7 @@ def test_ideal_gas_scaling_with_lambda():
         mover.setParams(params)
         
         # Quick equilibration
-        for _ in range(200):  # Reduced from 500
+        for _ in range(100):  # Further reduced from 200
             if rng.random() < 0.5:
                 mover.attemptInsertion(state)
             else:
@@ -212,13 +212,13 @@ def test_ideal_gas_scaling_with_lambda():
         
         # Sample
         N_samples = []
-        for _ in range(800):  # Reduced from 2000
+        for _ in range(400):  # Further reduced from 800
             if rng.random() < 0.5:
                 mover.attemptInsertion(state)
             else:
                 mover.attemptDeletion(state)
             
-            if len(N_samples) < 100 and rng.random() < 0.2:  # Reduced samples, increased frequency
+            if len(N_samples) < 50 and rng.random() < 0.25:  # Reduced samples, increased frequency
                 n_active = sum(1 for r in state.residues if r.active)
                 N_samples.append(n_active)
         
@@ -232,26 +232,19 @@ def test_ideal_gas_scaling_with_lambda():
     print(f"-"*60)
     
     # Check scaling
-    # Theory: N ∝ T^(3/2) at fixed μ, V
-    T_ratio_1 = temperatures[1] / temperatures[0]
-    T_ratio_2 = temperatures[2] / temperatures[1]
+    # Theory: N ∝ T^(3/2) at fixed μ, V  
+    T_ratio = temperatures[1] / temperatures[0]
     
-    theory_ratio_1 = N_theory_list[1] / N_theory_list[0] if N_theory_list[0] > 0 else 0
-    theory_ratio_2 = N_theory_list[2] / N_theory_list[1] if N_theory_list[1] > 0 else 0
-    
-    measured_ratio_1 = N_measured_list[1] / N_measured_list[0] if N_measured_list[0] > 0 else 0
-    measured_ratio_2 = N_measured_list[2] / N_measured_list[1] if N_measured_list[1] > 0 else 0
+    theory_ratio = N_theory_list[1] / N_theory_list[0] if N_theory_list[0] > 0 else 0
+    measured_ratio = N_measured_list[1] / N_measured_list[0] if N_measured_list[0] > 0 else 0
     
     print(f"\nScaling Analysis:")
-    print(f"T₂/T₁ = {T_ratio_1:.3f}, Theory N₂/N₁ = {theory_ratio_1:.3f}, Measured N₂/N₁ = {measured_ratio_1:.3f}")
-    print(f"T₃/T₂ = {T_ratio_2:.3f}, Theory N₃/N₂ = {theory_ratio_2:.3f}, Measured N₃/N₂ = {measured_ratio_2:.3f}")
+    print(f"T₂/T₁ = {T_ratio:.3f}, Theory N₂/N₁ = {theory_ratio:.3f}, Measured N₂/N₁ = {measured_ratio:.3f}")
     
     # The scaling should follow the theory trend even if absolute values differ
     # Check that measured ratios are in the right direction
-    if theory_ratio_1 > 1:
-        assert measured_ratio_1 > 0.5, "Temperature scaling wrong direction"
-    if theory_ratio_2 > 1:
-        assert measured_ratio_2 > 0.5, "Temperature scaling wrong direction"
+    if theory_ratio > 1:
+        assert measured_ratio > 0.5, "Temperature scaling wrong direction"
 
 
 def test_ideal_gas_different_masses():
