@@ -76,6 +76,12 @@ struct MCParams {
     std::vector<float> mc_time_list;
     std::vector<float> mc_time_cumulative;
 
+    // Per-fragment move probabilities (legacy compatibility)
+    std::vector<float> attempt_prob_ins;   // Insert attempt probabilities per fragment
+    std::vector<float> attempt_prob_del;   // Delete attempt probabilities per fragment
+    std::vector<float> attempt_prob_trn;   // Translate attempt probabilities per fragment
+    std::vector<float> attempt_prob_rot;   // Rotate attempt probabilities per fragment
+
     // Analysis and control
     float wdens = 0.0f;  // Water density value or output frequency
 

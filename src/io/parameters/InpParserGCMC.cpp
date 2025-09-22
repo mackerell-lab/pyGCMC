@@ -62,6 +62,9 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
     } else if (key == "wdens") {
         // Water density output control
         mc_info.wdens = std::stof(value);
+    } else if (key == "eps" || key == "epsilon") {
+        // Dielectric constant
+        frag_info.epsilon = std::stof(value);
     } else if (key == "target_numwaters" || key == "target_num_waters") {
         // Target number of water molecules - store in both places
         frag_info.target_num_waters = std::stoi(value);
@@ -89,6 +92,32 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
     } else if (key == "pairlist_freq") {
         // Pairlist update frequency
         energy_info.pairlist_freq = static_cast<unsigned int>(std::stoi(value));
+    } else if (key == "use_group_cutoff") {
+        // Use group-based cutoff instead of atom-based
+        energy_info.use_group_cutoff = (value == "yes" || value == "true" || value == "1");
+    } else if (key == "pairlist_cutoff") {
+        // Pairlist cutoff distance for fragments
+        energy_info.pairlist_cutoff = std::stof(value);
+        energy_info.pairlist_cutoff_squared = energy_info.pairlist_cutoff * energy_info.pairlist_cutoff;
+        energy_info.pair_list_cutoff_fragment = energy_info.pairlist_cutoff;
+        energy_info.pair_list_cutoff_fragment_squared = energy_info.pairlist_cutoff_squared;
+    } else if (key == "pairlist_cutoff_protein") {
+        // Pairlist cutoff distance for protein
+        float cutoff = std::stof(value);
+        energy_info.pair_list_cutoff_protein = cutoff;
+        energy_info.pair_list_cutoff_protein_squared = cutoff * cutoff;
+    } else if (key == "attempt_prob_ins") {
+        // Per-fragment insertion attempt probabilities
+        mc_info.attempt_prob_ins = InpParserStructures::parse_float_vector(value);
+    } else if (key == "attempt_prob_del") {
+        // Per-fragment deletion attempt probabilities
+        mc_info.attempt_prob_del = InpParserStructures::parse_float_vector(value);
+    } else if (key == "attempt_prob_trn") {
+        // Per-fragment translation attempt probabilities
+        mc_info.attempt_prob_trn = InpParserStructures::parse_float_vector(value);
+    } else if (key == "attempt_prob_rot") {
+        // Per-fragment rotation attempt probabilities
+        mc_info.attempt_prob_rot = InpParserStructures::parse_float_vector(value);
     }
 }
 

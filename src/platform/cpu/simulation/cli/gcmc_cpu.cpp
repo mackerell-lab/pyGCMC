@@ -41,9 +41,9 @@ void print_usage(const char* prog) {
     std::cout << "  --verbose                  Verbose logging\n";
     std::cout << "  --no-stats                 Disable statistics collection\n";
     std::cout << "  --stats-interval <int>     Statistics sampling interval (default: 1000)\n";
-    std::cout << "  --print-freq <int>         Print frequency (default: 1000)\n";
+    std::cout << "  --print-freq <int>         Print frequency (default: use INP nprint)\n";
     std::cout << "  --traj-freq <int>          Trajectory output frequency (default: 10000)\n";
-    std::cout << "  --checkpoint-freq <int>    Checkpoint frequency (default: 100000)\n";
+    std::cout << "  --checkpoint-freq <int>    Checkpoint frequency (default: 0 = disabled)\n";
     std::cout << "  --adaptive                 Enable adaptive sampling of move probs\n";
     std::cout << "  --store-probabilities      Store acceptance probabilities\n";
 }
