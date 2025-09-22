@@ -129,14 +129,20 @@ void computeResidueNonbondedEnergy(model::MCState& state, int residue_idx, bool 
     for (int atom_i = residues[residue_idx].atomStart;
          atom_i < residues[residue_idx].atomStart + residues[residue_idx].atomCount;
          ++atom_i) {
+        // Skip LP/LPA atoms (lone pairs)
+        if (atoms[atom_i].name == "LP" || atoms[atom_i].name == "LPA") continue;
+
         int type_i = atoms[atom_i].type;
-        
+
         for (int j = 0; j < state.activeResidueCount; ++j) {
             if (!residues[j].active || j == residue_idx) continue;
-            
+
             for (int atom_j = residues[j].atomStart;
                  atom_j < residues[j].atomStart + residues[j].atomCount;
                  ++atom_j) {
+                // Skip LP/LPA atoms (lone pairs)
+                if (atoms[atom_j].name == "LP" || atoms[atom_j].name == "LPA") continue;
+
                 int type_j = atoms[atom_j].type;
                 
                 double dx = atoms[atom_j].x - atoms[atom_i].x;

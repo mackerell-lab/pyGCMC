@@ -19,6 +19,7 @@
 #include <map>
 #include <string>
 #include <chrono>
+#include <array>
 
 namespace pygcmc {
 namespace platform {
@@ -103,7 +104,8 @@ public:
         double probability;        // Selection probability
         int maxCount;             // Maximum number allowed
         int currentCount = 0;     // Current number in system
-        
+        int confBiasTrials = 1;   // Number of configuration bias trials
+
         // Template information
         movement::FragmentTemplate template_;
         
@@ -214,6 +216,16 @@ private:
     // Logging helper
     template<typename... Args>
     void log(const std::string& format, Args... args) const;
+
+    // === Added: per-fragment move probabilities (Ins/Del/Trn/Rot) ===
+    // CDF per fragment: [P(Ins), P(Del), P(Trn), P(Rot)] cumulative
+    std::vector<std::array<double, 4>> fragmentMoveCDF_;
+    void buildPerFragmentMoveCDF();
+    MoveType selectMoveForFragment(int fragType);
+
+    // === Added: nbar modes integration ===
+    void updateActivitiesForNbar();
+    static bool isWaterName(const std::string& name);
 };
 
 } // namespace simulation

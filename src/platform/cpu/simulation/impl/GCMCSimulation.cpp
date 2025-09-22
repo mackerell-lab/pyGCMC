@@ -542,7 +542,14 @@ bool GCMCSimulation::setupFragments() {
         // Calculate activity from chemical potential
         double beta = state_->info.beta;
         frag.activity = std::exp(beta * frag.chemicalPotential);
-        
+
+        // Set conf bias trials
+        if (i < fragInfo.fragconf_list.size()) {
+            frag.confBiasTrials = fragInfo.fragconf_list[i];
+        } else {
+            frag.confBiasTrials = 1;
+        }
+
         // Set probability from MC time allocation
         if (i < mcInfo.mc_time_list.size()) {
             frag.probability = mcInfo.mc_time_list[i];
@@ -658,6 +665,7 @@ bool GCMCSimulation::setupFragments() {
         log("  Probability: ", frag.probability);
         log("  Max count: ", frag.maxCount);
         log("  Atoms: ", tmpl.atoms.size());
+        log("  Config bias trials: ", frag.confBiasTrials);
         if (usingBuilderTemplate) {
             log("  Source: ITP template");
         } else {
@@ -691,6 +699,27 @@ bool GCMCSimulation::setupFragments() {
         // If needed, we could add a setProbability method to the reservoir
     }
 
+    // Build per-fragment move probability CDF
+    buildPerFragmentMoveCDF();
+
+    // Log per-fragment move probabilities
+    log("Per-fragment move probabilities:");
+    for (size_t i = 0; i < fragmentTypes_.size(); ++i) {
+        const auto& frag = fragmentTypes_[i];
+        log("  Fragment ", i, " (", frag.name, "):");
+
+        // Get raw probabilities for this fragment
+        double pIns = (i < mcInfo.attempt_prob_ins.size()) ? mcInfo.attempt_prob_ins[i] : 0.25;
+        double pDel = (i < mcInfo.attempt_prob_del.size()) ? mcInfo.attempt_prob_del[i] : 0.25;
+        double pTrn = (i < mcInfo.attempt_prob_trn.size()) ? mcInfo.attempt_prob_trn[i] : 0.25;
+        double pRot = (i < mcInfo.attempt_prob_rot.size()) ? mcInfo.attempt_prob_rot[i] : 0.25;
+        double total = pIns + pDel + pTrn + pRot;
+
+        log("    Raw: Ins=", pIns, " Del=", pDel, " Trn=", pTrn, " Rot=", pRot);
+        log("    Normalized: Ins=", pIns/total, " Del=", pDel/total, " Trn=", pTrn/total, " Rot=", pRot/total);
+        log("    CDF: [", fragmentMoveCDF_[i][0], ", ", fragmentMoveCDF_[i][1], ", ", fragmentMoveCDF_[i][2], ", ", fragmentMoveCDF_[i][3], "]");
+    }
+
     return true;
 }
 
@@ -708,16 +737,21 @@ bool GCMCSimulation::setupAcceptance() {
     double volume = box[0] * box[1] * box[2];
     acceptance_->setVolume(volume);
     
-    // Set activities for each fragment type
+    // Set activities for each fragment type (initial)
     for (const auto& frag : fragmentTypes_) {
-        acceptance_->setActivity(frag.typeId, frag.activity);
+        // Initialize with exp(beta*mu); nbar correction will be applied by updateActivitiesForNbar()
+        double baseActivity = std::exp(params_->get_mc_info().beta * frag.chemicalPotential);
+        acceptance_->setActivity(frag.typeId, baseActivity);
     }
-    
+
+    // Initial nbar projection into activities
+    updateActivitiesForNbar();
+
     log("Acceptance calculator configured:");
     log("  Temperature: ", temperature, " K");
     log("  Beta: ", params_->get_mc_info().beta, " mol/kJ");
     log("  Volume: ", volume, " nm³");
-    log("  Fragment activities:");
+    log("  Fragment activities (with nbar correction):");
     for (const auto& frag : fragmentTypes_) {
         log("    ", frag.name, ": ", frag.activity);
     }
@@ -743,6 +777,24 @@ bool GCMCSimulation::setupEngine() {
     engine_->setConfigValue("maxTranslation", 0.2);  // nm
     engine_->setConfigValue("maxRotation", 15.0);    // degrees
     engine_->setConfigValue("useCavityBias", params_->get_bias_info().use_cavity_bias ? 1.0 : 0.0);
+
+    // Setup configuration bias
+    const auto& biasInfo = params_->get_bias_info();
+    engine_->setConfigValue("useConfBias", biasInfo.use_conf_bias ? 1.0 : 0.0);
+    if (biasInfo.use_conf_bias) {
+        std::vector<int> conf_trials;
+        conf_trials.reserve(fragmentTypes_.size());
+        for (const auto& frag_info : fragmentTypes_) {
+            conf_trials.push_back(frag_info.confBiasTrials);
+        }
+        // Pass CBMC trials to engine
+        engine_->setCBMCTrialsPerType(conf_trials);
+        log("Configuration bias enabled:");
+        log("  Default trials from INP: ", biasInfo.num_conf_bias_trials);
+        for (size_t i = 0; i < fragmentTypes_.size(); ++i) {
+            log("  Fragment ", i, " (", fragmentTypes_[i].name, "): ", fragmentTypes_[i].confBiasTrials, " trials");
+        }
+    }
 
     // Setup region constraint if specified
     const auto& space = params_->get_space_info();
@@ -894,16 +946,23 @@ bool GCMCSimulation::run() {
 }
 
 bool GCMCSimulation::performMCStep() {
-    // Select move type
-    MoveType moveType = selectMoveType();
-    
+    // Dynamically refresh activities for nbar modes (per step)
+    updateActivitiesForNbar();
+
+    // Select fragment by weight (mctime)
+    int fragType = selectFragmentType();
+    if (fragType < 0) {
+        return false;
+    }
+
+    // Select move based on per-fragment CDF (with optional target bias)
+    MoveType moveType = selectMoveForFragment(fragType);
+
     bool accepted = false;
     GCMCEngine::MoveResult result;
-    
+
     switch (moveType) {
         case INSERT: {
-            int fragType = selectFragmentType();
-
             // Apply proposal bias for detailed balance when using target_numwaters
             if (params_->get_fragment_info().target_num_waters > 0 &&
                 lastProposalPInsert_ > 0 && lastProposalPDelete_ > 0) {
@@ -1630,6 +1689,163 @@ void GCMCSimulation::log(const std::string& format, Args... args) const {
     if (config_.verbose) {
         system::log::LogMain::info(format, args...);
     }
+}
+
+// Build CDF for Ins/Del/Trn/Rot per fragment from MCParams
+void GCMCSimulation::buildPerFragmentMoveCDF() {
+    fragmentMoveCDF_.clear();
+    fragmentMoveCDF_.resize(fragmentTypes_.size(), {0.25, 0.5, 0.75, 1.0});
+
+    const auto& mc = params_->get_mc_info();
+    auto getOr = [](const std::vector<float>& v, size_t i, double defv) -> double {
+        return i < v.size() ? static_cast<double>(v[i]) : defv;
+    };
+
+    // For each fragment type, read weights for 4 moves; fallback to 1.0 if unspecified
+    for (size_t i = 0; i < fragmentTypes_.size(); ++i) {
+        double wIns = getOr(mc.attempt_prob_ins, i, 1.0);
+        double wDel = getOr(mc.attempt_prob_del, i, 1.0);
+        double wTrn = getOr(mc.attempt_prob_trn, i, 1.0);
+        double wRot = getOr(mc.attempt_prob_rot, i, 1.0);
+
+        // If all zeros, default to equal
+        if (wIns <= 0 && wDel <= 0 && wTrn <= 0 && wRot <= 0) {
+            wIns = wDel = wTrn = wRot = 1.0;
+        }
+
+        double sum = wIns + wDel + wTrn + wRot;
+        if (sum <= 0) sum = 1.0;
+
+        std::array<double, 4> cdf;
+        cdf[0] = wIns / sum;
+        cdf[1] = cdf[0] + wDel / sum;
+        cdf[2] = cdf[1] + wTrn / sum;
+        cdf[3] = 1.0;  // ensure end at 1.0
+        fragmentMoveCDF_[i] = cdf;
+
+        log("Fragment ", fragmentTypes_[i].name, " move probabilities: Ins=", wIns/sum,
+            ", Del=", wDel/sum, ", Trn=", wTrn/sum, ", Rot=", wRot/sum);
+    }
+}
+
+GCMCSimulation::MoveType GCMCSimulation::selectMoveForFragment(int fragType) {
+    // Base CDF
+    auto cdf = fragmentMoveCDF_.empty()
+        ? std::array<double,4>{0.25,0.50,0.75,1.0}
+        : fragmentMoveCDF_[std::min<size_t>(fragType, fragmentMoveCDF_.size()-1)];
+
+    // Optional: apply soft bias for target_num_waters (adjust Ins/Del weights)
+    const auto& fragInfo = params_->get_fragment_info();
+    if (fragInfo.target_num_waters > 0) {
+        // Reconstruct PDF from CDF
+        double wIns = cdf[0];
+        double wDel = cdf[1] - cdf[0];
+        double wTrn = cdf[2] - cdf[1];
+        double wRot = cdf[3] - cdf[2];
+
+        // Current water count
+        int waterCount = 0;
+        for (const auto& f : fragmentTypes_) {
+            if (isWaterName(f.name)) waterCount += f.currentCount;
+        }
+        int diff = waterCount - fragInfo.target_num_waters;
+        double adjustment = 0.0;
+        if (diff < 0) adjustment = 0.1 * std::min(1.0, std::abs(diff) / 10.0);
+        else if (diff > 0) adjustment = -0.1 * std::min(1.0, std::abs(diff) / 10.0);
+
+        // Only bias Ins/Del (bounded)
+        double baseIns = std::max(0.0, wIns + std::max(0.0, adjustment));
+        double baseDel = std::max(0.0, wDel + std::max(0.0, -adjustment));
+        double sum = baseIns + baseDel + wTrn + wRot;
+        if (sum > 0) {
+            cdf[0] = baseIns / sum;
+            cdf[1] = cdf[0] + baseDel / sum;
+            cdf[2] = cdf[1] + wTrn / sum;
+            cdf[3] = 1.0;
+        }
+    }
+
+    double r = uniform_(rng_);
+    if (r < cdf[0]) return INSERT;
+    if (r < cdf[1]) return DELETE;
+    if (r < cdf[2]) return TRANSLATE;
+    return ROTATE;
+}
+
+// nbar modes → effective per-type activity = exp(beta*mu) * nbar / Volume
+void GCMCSimulation::updateActivitiesForNbar() {
+    if (!acceptance_) return;
+
+    const auto& mc = params_->get_mc_info();
+    const auto& fragPar = params_->get_fragment_info();
+
+    // Count waters
+    int waterCount = 0;
+    for (const auto& f : fragmentTypes_) {
+        if (isWaterName(f.name)) waterCount += f.currentCount;
+    }
+
+    // Volume used by acceptance; consistent with region if configured
+    double volume = acceptance_->getVolume();
+    if (volume <= 0) {
+        // Fallback to box volume
+        volume = state_->info.box[0] * state_->info.box[1] * state_->info.box[2];
+        if (volume <= 0) volume = 1.0;
+    }
+
+    constexpr double NA = 6.02214076e23;
+    auto nbar_volume = [&](double concM) {
+        // mol/L to molecules in nm^3: conc(M) * Volume(nm^3) * NA * 1e-24 (L/nm^3)
+        // 1 nm^3 = 1e-24 L, so molecules = conc * volume * NA * 1e-24
+        return concM * volume * NA * 1e-24;
+    };
+
+    for (size_t i = 0; i < fragmentTypes_.size(); ++i) {
+        auto& f = fragmentTypes_[i];
+        // base activity exp(beta * mu)
+        double act = std::exp(mc.beta * f.chemicalPotential);
+        double nbar = 0.0;
+
+        bool isWater = isWaterName(f.name);
+        if (isWater && fragPar.use_const_water_nbar && fragPar.const_water_nbar > 0) {
+            // Fixed nbar value
+            nbar = fragPar.const_water_nbar;
+        } else if (isWater && fragPar.use_number_water_nbar) {
+            // nbar based on current water count
+            nbar = static_cast<double>(waterCount);
+        } else {
+            // default volume-based (using concentration)
+            nbar = nbar_volume(f.concentration);
+        }
+
+        // Set effective activity for acceptance calculation
+        // For nbar modes, we want <N> ≈ nbar
+        // In standard GCMC: <N> ≈ a * V for ideal gas
+        // So we set a_eff based on the mode
+        double a_eff;
+        if (isWater && (fragPar.use_const_water_nbar || fragPar.use_number_water_nbar)) {
+            // For explicit nbar modes, adjust activity to target nbar molecules
+            // a_eff = nbar / V gives <N> ≈ nbar in ideal gas limit
+            a_eff = nbar / std::max(1e-30, volume);
+        } else {
+            // For concentration-based (default), use standard activity
+            a_eff = act;  // exp(beta * mu)
+        }
+        acceptance_->setActivity(f.typeId, a_eff);
+
+        // Also update the stored activity for logging
+        f.activity = a_eff;
+    }
+}
+
+bool GCMCSimulation::isWaterName(const std::string& name) {
+    // Extended water aliases
+    if (name == "WAT" || name == "SOL" || name == "TIP3" || name == "TIP3P" ||
+        name == "SPC" || name == "SPCE" || name == "TIP4P" ||
+        name == "WATER" || name == "H2O" || name == "HOH") {
+        return true;
+    }
+    return false;
 }
 
 } // namespace simulation

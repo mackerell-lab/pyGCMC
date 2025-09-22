@@ -98,13 +98,31 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     
     // CRITICAL FIX: Get N BEFORE insertion for correct acceptance calculation
     int N_before = reservoir_->getActiveCount(typeId);
-    
-    // Generate position and orientation based on configuration
-    Vector3 position = (useCavityBias_ && cavityManager_) ? 
-                      generateCavityPosition() : generateRandomPosition();
-    applyPeriodicBoundary(position);  // Ensure position is within PBC
-    Quaternion orientation = generateRandomOrientation();
-    
+
+    // Determine number of CBMC trials for this fragment type
+    int numTrials = 1;
+    if (useConfBias_ && typeId < static_cast<int>(cbmcTrialsPerType_.size())) {
+        numTrials = cbmcTrialsPerType_[typeId];
+    }
+
+    Vector3 position;
+    Quaternion orientation;
+    double cbmcBias = 1.0;
+
+    if (useConfBias_ && numTrials > 1) {
+        // Use CBMC to select configuration
+        TrialConfiguration selected = performCBMCInsertion(typeId, numTrials);
+        position = selected.position;
+        orientation = selected.orientation;
+        cbmcBias = selected.weight * numTrials;  // W_new / K
+    } else {
+        // Original single configuration generation
+        position = (useCavityBias_ && cavityManager_) ?
+                  generateCavityPosition() : generateRandomPosition();
+        applyPeriodicBoundary(position);  // Ensure position is within PBC
+        orientation = generateRandomOrientation();
+    }
+
     result.position = position;
     
     // Calculate energy before insertion
@@ -134,8 +152,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         result.deltaE = result.energyAfter - result.energyBefore;
     }
     
-    // Calculate bias
-    result.bias = calculateInsertionBias(*tmpl, position, orientation);
+    // Calculate bias (cavity bias * CBMC bias)
+    result.bias = calculateInsertionBias(*tmpl, position, orientation) * cbmcBias;
     
     // Calculate acceptance probability using proper GCMC formula
     bool accept = false;
@@ -233,7 +251,72 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     Vector3 savedPosition = instance->position;
     Quaternion savedOrientation = instance->orientation;
     result.position = savedPosition;
-    
+
+    // Calculate CBMC bias for deletion if enabled
+    double cbmcBias = 1.0;
+    int numTrials = 1;
+    if (useConfBias_ && typeId < static_cast<int>(cbmcTrialsPerType_.size())) {
+        numTrials = cbmcTrialsPerType_[typeId];
+    }
+
+    if (useConfBias_ && numTrials > 1) {
+        // For deletion, calculate W_old: energy of current config + K-1 trial configs
+        std::vector<TrialConfiguration> trials;
+        trials.reserve(numTrials);
+
+        // Add current configuration as first trial
+        TrialConfiguration current;
+        current.position = savedPosition;
+        current.orientation = savedOrientation;
+        current.energy = calculateFragmentEnergy(instanceId);
+        trials.push_back(current);
+
+        // Generate K-1 additional trials
+        FragmentTemplate* tmpl = reservoir_->getTemplate(typeId);
+        if (tmpl) {
+            for (int k = 1; k < numTrials; ++k) {
+                TrialConfiguration trial;
+                trial.position = (useCavityBias_ && cavityManager_) ?
+                                generateCavityPosition() : generateRandomPosition();
+                applyPeriodicBoundary(trial.position);
+                trial.orientation = generateRandomOrientation();
+
+                // Create temporary instance for energy calculation
+                int tempId = reservoir_->createInstance(typeId, trial.position, trial.orientation);
+                if (tempId >= 0) {
+                    synchronizeStateWithReservoir(tempId, true);
+
+                    if (energyMethod_ == EnergyMethod::DIRECT) {
+                        cpu::computeResidueEnergyCutoffPBC(*state_, tempId);
+                        const auto& residue = state_->residues[tempId];
+                        trial.energy = residue.energy_vdw + residue.energy_elec;
+                    } else {
+                        trial.energy = calculateFragmentEnergy(tempId);
+                    }
+
+                    reservoir_->deleteInstance(tempId);
+                    synchronizeStateWithReservoir(tempId, false);
+                    trials.push_back(trial);
+                }
+            }
+        }
+
+        // Calculate W_old (sum of Boltzmann factors)
+        if (trials.size() == static_cast<size_t>(numTrials)) {
+            double beta = 1.0 / (8.314e-3 * temperature_);
+            double minEnergy = std::numeric_limits<double>::max();
+            for (const auto& trial : trials) {
+                minEnergy = std::min(minEnergy, trial.energy);
+            }
+
+            double sumBoltzmann = 0.0;
+            for (const auto& trial : trials) {
+                sumBoltzmann += std::exp(-beta * (trial.energy - minEnergy));
+            }
+            cbmcBias = sumBoltzmann / numTrials * std::exp(beta * minEnergy);  // W_old / K
+        }
+    }
+
     // Calculate energy change - optimize for DIRECT mode
     if (energyMethod_ == EnergyMethod::DIRECT) {
         // Fast local ΔE calculation - compute energy of residue to be deleted
@@ -259,7 +342,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     }
     
     // CRITICAL FIX: Calculate deletion bias using saved position for robustness
-    result.bias = calculateDeletionBiasAtPosition(savedPosition);
+    // Include CBMC bias in total bias
+    result.bias = calculateDeletionBiasAtPosition(savedPosition) * cbmcBias;
     
     // Calculate acceptance probability using proper GCMC formula
     bool accept = false;
@@ -1285,6 +1369,8 @@ void GCMCEngine::setConfigValue(const std::string& key, double value) {
         maxRotationAngleRad_ = value;  // Support both key names
     } else if (key == "useCavityBias") {
         useCavityBias_ = (value > 0.5);
+    } else if (key == "useConfBias") {
+        useConfBias_ = (value > 0.5);
     } else if (key == "storeProbabilities") {
         // Clear cache when config changes
         storeProbabilityCached_ = false;
@@ -1308,6 +1394,7 @@ double GCMCEngine::getConfigValue(const std::string& key) const {
     if (key == "maxTranslation") return maxTranslationStep_;
     if (key == "maxRotation" || key == "maxRotationAngle") return maxRotationAngleRad_;
     if (key == "useCavityBias") return useCavityBias_ ? 1.0 : 0.0;
+    if (key == "useConfBias") return useConfBias_ ? 1.0 : 0.0;
     if (key == "storeProbabilities") return shouldStoreProbability() ? 1.0 : 0.0;
     
     return 0.0;  // Default for unknown keys
@@ -1348,6 +1435,96 @@ bool GCMCEngine::shouldStoreProbability() const {
         storeProbabilityCached_ = true;
     }
     return storeProbabilityValue_;
+}
+
+// CBMC insertion - generate K trials and select based on Boltzmann weights
+GCMCEngine::TrialConfiguration GCMCEngine::performCBMCInsertion(int typeId, int numTrials) {
+    std::vector<TrialConfiguration> trials;
+    trials.reserve(numTrials);
+
+    FragmentTemplate* tmpl = reservoir_->getTemplate(typeId);
+    if (!tmpl) {
+        // Return default configuration if template not found
+        return TrialConfiguration{Vector3(0,0,0), Quaternion(1,0,0,0), 0.0, 1.0};
+    }
+
+    // Generate K trial configurations
+    double minEnergy = std::numeric_limits<double>::max();
+    for (int k = 0; k < numTrials; ++k) {
+        TrialConfiguration trial;
+
+        // Generate position and orientation
+        trial.position = (useCavityBias_ && cavityManager_) ?
+                        generateCavityPosition() : generateRandomPosition();
+        applyPeriodicBoundary(trial.position);
+        trial.orientation = generateRandomOrientation();
+
+        // Create temporary instance for energy calculation
+        int tempId = reservoir_->createInstance(typeId, trial.position, trial.orientation);
+        if (tempId < 0) continue;
+
+        synchronizeStateWithReservoir(tempId, true);
+
+        // Calculate energy for this configuration
+        if (energyMethod_ == EnergyMethod::DIRECT) {
+            cpu::computeResidueEnergyCutoffPBC(*state_, tempId);
+            const auto& residue = state_->residues[tempId];
+            trial.energy = residue.energy_vdw + residue.energy_elec;
+        } else {
+            trial.energy = calculateFragmentEnergy(tempId);
+        }
+
+        // Clean up temporary instance
+        reservoir_->deleteInstance(tempId);
+        synchronizeStateWithReservoir(tempId, false);
+
+        // Track minimum energy for numerical stability
+        minEnergy = std::min(minEnergy, trial.energy);
+        trials.push_back(trial);
+    }
+
+    // Calculate Boltzmann weights (subtract minEnergy for numerical stability)
+    double beta = 1.0 / (8.314e-3 * temperature_);
+    double totalWeight = 0.0;
+    for (auto& trial : trials) {
+        trial.weight = std::exp(-beta * (trial.energy - minEnergy));
+        totalWeight += trial.weight;
+    }
+
+    // Select configuration based on weights
+    double r = uniform_(rng_) * totalWeight;
+    double cumWeight = 0.0;
+    for (const auto& trial : trials) {
+        cumWeight += trial.weight;
+        if (cumWeight >= r) {
+            return trial;
+        }
+    }
+
+    // Fallback to last trial (should not happen)
+    return trials.back();
+}
+
+// Calculate CBMC bias factor
+double GCMCEngine::calculateCBMCBias(const std::vector<TrialConfiguration>& trials, int selectedIdx) {
+    if (trials.empty() || selectedIdx < 0 || selectedIdx >= static_cast<int>(trials.size())) {
+        return 1.0;
+    }
+
+    // Calculate average Boltzmann factor
+    double beta = 1.0 / (8.314e-3 * temperature_);
+    double minEnergy = std::numeric_limits<double>::max();
+    for (const auto& trial : trials) {
+        minEnergy = std::min(minEnergy, trial.energy);
+    }
+
+    double sumBoltzmann = 0.0;
+    for (const auto& trial : trials) {
+        sumBoltzmann += std::exp(-beta * (trial.energy - minEnergy));
+    }
+
+    // Return W_new / K for insertion
+    return sumBoltzmann / trials.size() * std::exp(beta * minEnergy);
 }
 
 // Get residue position

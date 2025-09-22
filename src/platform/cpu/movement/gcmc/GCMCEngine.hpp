@@ -151,10 +151,15 @@ public:
     void setEnergyCallback(std::unique_ptr<GCMCEnergyCallback> callback) {
         energyCallback_ = std::move(callback);
     }
-    
+
     // Get energy callback (for configuration)
     GCMCEnergyCallback* getEnergyCallback() {
         return energyCallback_.get();
+    }
+
+    // Set CBMC trials per fragment type
+    void setCBMCTrialsPerType(const std::vector<int>& trials) {
+        cbmcTrialsPerType_ = trials;
     }
     
     // Statistics
@@ -210,6 +215,8 @@ private:
     double maxTranslationStep_;
     double maxRotationAngleRad_;
     bool useCavityBias_;
+    bool useConfBias_ = false;
+    std::vector<int> cbmcTrialsPerType_;  // CBMC trials per fragment type
     unsigned int lastSeed_ = 0;  // Store last seed for auto-seeding acceptance
     
     // Smart statistics collection
@@ -233,6 +240,16 @@ private:
     
     // Probability storage control
     bool shouldStoreProbability() const;
+
+    // CBMC helper methods
+    struct TrialConfiguration {
+        Vector3 position;
+        Quaternion orientation;
+        double energy;
+        double weight;
+    };
+    TrialConfiguration performCBMCInsertion(int typeId, int numTrials);
+    double calculateCBMCBias(const std::vector<TrialConfiguration>& trials, int selectedIdx);
     
     // Energy caching (optional optimization)
     struct EnergyCache {
