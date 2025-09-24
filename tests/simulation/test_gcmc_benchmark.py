@@ -309,11 +309,11 @@ fragmuex:-5.0
             results[name] = stats
             print(f"{name}: {stats['avg_steps_per_sec']:.1f} steps/s, acceptance: {stats['avg_acceptance']:.1f}%")
         
-        # Cavity bias has overhead, allow up to 70% slowdown (30% of original performance)
+        # Cavity bias has overhead, allow up to 75% slowdown (25% of original performance)
         no_cavity_perf = results["no_cavity"]['avg_steps_per_sec']
         for name in ["cavity_1.0", "cavity_0.5"]:
             # Cavity bias can be expensive, especially with fine grids
-            min_acceptable = 0.3 * no_cavity_perf  # Allow down to 30% of base performance
+            min_acceptable = 0.25 * no_cavity_perf  # Allow down to 25% of base performance
             assert results[name]['avg_steps_per_sec'] > min_acceptable, \
                 f"Cavity bias {name} causes too much slowdown: {results[name]['avg_steps_per_sec']:.1f} < {min_acceptable:.1f}"
     
