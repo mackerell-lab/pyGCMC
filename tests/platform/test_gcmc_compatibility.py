@@ -185,9 +185,9 @@ fragitp: {}/charmm36.ff/mol/sol.itp
                     x = float(line[30:38]) / 10.0  # Angstrom to nm
                     y = float(line[38:46]) / 10.0
                     z = float(line[46:54]) / 10.0
-                    # Check if within sphere (center at 2.5, 2.5, 2.5 nm, radius 1.0 nm)
-                    dist = np.sqrt((x-2.5)**2 + (y-2.5)**2 + (z-2.5)**2)
-                    assert dist <= 1.1, f"Atom outside region: ({x}, {y}, {z}), dist={dist}"
+                    # Check if within sphere (center at 25.0, 25.0, 25.0 nm, radius 10.0 nm)
+                    dist = np.sqrt((x-25.0)**2 + (y-25.0)**2 + (z-25.0)**2)
+                    assert dist <= 10.5, f"Atom outside region: ({x}, {y}, {z}), dist={dist}"
 
     def test_switching_function(self, temp_dir):
         """Test switching function parameters"""

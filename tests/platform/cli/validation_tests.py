@@ -84,9 +84,8 @@ def test_gcmc_cpu_parameter_validation(gcmc_cpu, test_data_dir):
     result = subprocess.run(cmd, capture_output=True, text=True)
     assert result.returncode != 0
     
-    # Test invalid print frequency
+    # Test invalid print frequency (negative value should be handled gracefully)
     cmd = [gcmc_cpu, "--inp", str(inp_file), "--print-freq", "-100"]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    # Negative frequency might be accepted but treated as default
-    # Just check it doesn't crash
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+    # Should complete without crashing (negative freq gets converted to default)
     assert result.returncode == 0 or "ERROR" in result.stderr

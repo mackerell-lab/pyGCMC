@@ -44,7 +44,7 @@ public:
     struct Config {
         std::string inputFile;              // Path to INP file
         std::string outputPrefix = "gcmc";  // Output file prefix
-        int printFrequency = 1000;          // Statistics print frequency
+        int printFrequency = 0;             // Statistics print frequency (0 = use INP nprint)
         int trajectoryFrequency = 10000;    // Trajectory save frequency
         int checkpointFrequency = 0;         // Checkpoint save frequency (0 = disabled)
         bool verbose = false;               // Verbose output
@@ -52,6 +52,7 @@ public:
         
         // Performance options
         bool enableStatistics = true;       // Enable statistics collection
+        int movesPerStep = 1;               // Number of moves per MC step (default 1 for proper GCMC)
         int statisticsInterval = 1000;      // Statistics sampling interval
         bool storeProbabilities = false;    // Store acceptance probabilities
         
@@ -97,12 +98,12 @@ public:
      */
     struct FragmentInfo {
         std::string name;
-        int typeId;
-        double concentration;      // Target concentration (M)
-        double chemicalPotential;  // Chemical potential (kJ/mol)
-        double activity;           // Activity (computed from μ)
-        double probability;        // Selection probability
-        int maxCount;             // Maximum number allowed
+        int typeId = 0;
+        double concentration = 0.0;      // Target concentration (M)
+        double chemicalPotential = 0.0;  // Chemical potential (kJ/mol)
+        double activity = 0.0;           // Activity (computed from μ)
+        double probability = 0.0;        // Selection probability
+        int maxCount = 0;                // Maximum number allowed
         int currentCount = 0;     // Current number in system
         int confBiasTrials = 1;   // Number of configuration bias trials
 
@@ -164,6 +165,7 @@ private:
     std::vector<FragmentInfo> fragmentTypes_;
     std::map<std::string, int> fragmentNameToId_;
     std::map<std::string, movement::FragmentTemplate> fragmentTemplatesFromBuilder_;
+    std::map<std::string, size_t> atomTypeNameToIndex_;  // Atom type name to force field index mapping
     
     // Force field from builder (if loaded)
     std::shared_ptr<model::ForceField> forceFieldFromBuilder_;
@@ -189,7 +191,8 @@ private:
     bool setupAcceptance();
     bool setupEngine();
     bool performMCStep();
-    
+    bool performSingleMove();  // Performs a single GCMC move
+
     // Move selection
     enum MoveType {
         INSERT,

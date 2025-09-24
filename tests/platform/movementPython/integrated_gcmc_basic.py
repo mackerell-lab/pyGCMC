@@ -248,6 +248,8 @@ def test_gcmc_md_integration_pattern():
 
 def test_multiple_fragment_types():
     """测试多分子类型 - 学自OpenCL examples"""
+    # Make probabilistic selection deterministic and avoid rare flakiness
+    random.seed(0)
     # 配置多种分子
     config = GCMCConfig(
         mcsteps=500,
@@ -288,5 +290,4 @@ def test_multiple_fragment_types():
         water_ratio = fragment_counts['water'] / total
         # 放宽边界条件，0.6刚好是12/20这样的常见比例
         assert 0.55 <= water_ratio < 1.0, f"Water ratio {water_ratio} out of expected range"
-
 

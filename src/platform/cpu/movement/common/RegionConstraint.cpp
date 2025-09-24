@@ -10,9 +10,9 @@ namespace movement {
 
 // Parse region specification string
 // Formats:
-// - "sphere x y z r" - sphere centered at (x,y,z) with radius r (in Angstrom)
-// - "box x1 y1 z1 x2 y2 z2" - box from (x1,y1,z1) to (x2,y2,z2) (in Angstrom)
-// - "cylinder x y z r h axis" - cylinder centered at (x,y,z) with radius r, height h, along axis (x/y/z)
+// - "sphere x y z r" - sphere centered at (x,y,z) with radius r (in nm)
+// - "box x1 y1 z1 x2 y2 z2" - box from (x1,y1,z1) to (x2,y2,z2) (in nm)
+// - "cylinder x y z r h axis" - cylinder centered at (x,y,z) with radius r, height h, along axis (x/y/z) (in nm)
 // - "" or "all" - entire box (default)
 std::unique_ptr<RegionConstraint> RegionConstraint::parseRegion(
     const std::string& regionSpec, const Vector3& boxSize) {
@@ -35,9 +35,9 @@ std::unique_ptr<RegionConstraint> RegionConstraint::parseRegion(
         if (!(iss >> x >> y >> z >> r)) {
             throw std::runtime_error("Invalid sphere region format. Expected: sphere x y z r");
         }
-        // Convert from Angstrom to nm
-        Vector3 center(x * 0.1, y * 0.1, z * 0.1);
-        double radius = r * 0.1;
+        // Input is already in nm (consistent with box_size, cutoff, etc.)
+        Vector3 center(x, y, z);
+        double radius = r;
         return std::make_unique<SphereRegion>(center, radius, boxSize);
 
     } else if (type == "box") {
@@ -45,9 +45,9 @@ std::unique_ptr<RegionConstraint> RegionConstraint::parseRegion(
         if (!(iss >> x1 >> y1 >> z1 >> x2 >> y2 >> z2)) {
             throw std::runtime_error("Invalid box region format. Expected: box x1 y1 z1 x2 y2 z2");
         }
-        // Convert from Angstrom to nm
-        Vector3 min(x1 * 0.1, y1 * 0.1, z1 * 0.1);
-        Vector3 max(x2 * 0.1, y2 * 0.1, z2 * 0.1);
+        // Input is already in nm (consistent with box_size, cutoff, etc.)
+        Vector3 min(x1, y1, z1);
+        Vector3 max(x2, y2, z2);
         return std::make_unique<BoxRegion>(min, max, boxSize);
 
     } else if (type == "cylinder") {
@@ -56,10 +56,10 @@ std::unique_ptr<RegionConstraint> RegionConstraint::parseRegion(
         if (!(iss >> x >> y >> z >> r >> h >> axisStr)) {
             throw std::runtime_error("Invalid cylinder region format. Expected: cylinder x y z r h axis");
         }
-        // Convert from Angstrom to nm
-        Vector3 center(x * 0.1, y * 0.1, z * 0.1);
-        double radius = r * 0.1;
-        double height = h * 0.1;
+        // Input is already in nm (consistent with box_size, cutoff, etc.)
+        Vector3 center(x, y, z);
+        double radius = r;
+        double height = h;
 
         int axis = 2; // default z-axis
         if (axisStr == "x") axis = 0;

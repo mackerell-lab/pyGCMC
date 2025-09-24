@@ -157,7 +157,7 @@ bool SystemInitializer::setupEngine(movement::gcmc::GCMCEngine& engine,
     
     // Configure engine settings
     engine.setTemperature(params.get_mc_info().temperature);
-    engine.setCutoff(10.0);  // Default cutoff
+    engine.setCutoff(params.get_space_info().cutoff);  // Use cutoff from parameters
     
     return true;
 }

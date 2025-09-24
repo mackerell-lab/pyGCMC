@@ -44,7 +44,7 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
             mc_info.mc_time_list.push_back(t);
         }
     } else if (key == "fragradius") {
-        frag_info.radius_list = InpParserStructures::parse_float_vector(value);
+        frag_info.radius_list = InpParserStructures::parse_float_vector(value);  // Already in nm
     } else if (key == "fragconf" || key == "fragconfs") {
         // keep both for compatibility
         frag_info.conf_list = InpParserStructures::parse_int_vector(value);
@@ -53,10 +53,10 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
         bias_info.num_conf_bias_trials = static_cast<unsigned int>(std::stoi(value));
     } else if (key == "cavity_grid_dx") {
         // Map to grid_dx if given (fallback)
-        space_info.grid_spacing = std::stof(value);
+        space_info.grid_spacing = std::stof(value);  // Already in nm
     } else if (key == "probe_radius") {
         // Map to sigma (approximate) if present
-        const float r = std::stof(value);
+        float r = std::stof(value);  // Already in nm
         bias_info.sigma = r;
         bias_info.sigma_squared = r * r;
     } else if (key == "wdens") {
@@ -85,10 +85,10 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
         mc_info.use_switching = (value == "yes" || value == "true" || value == "1");
     } else if (key == "switch_r_on" || key == "switch_ron") {
         // Switching function r_on
-        mc_info.switch_r_on = std::stof(value);
+        mc_info.switch_r_on = std::stof(value);  // Already in nm
     } else if (key == "switch_r_off" || key == "switch_roff") {
         // Switching function r_off
-        mc_info.switch_r_off = std::stof(value);
+        mc_info.switch_r_off = std::stof(value);  // Already in nm
     } else if (key == "pairlist_freq") {
         // Pairlist update frequency
         energy_info.pairlist_freq = static_cast<unsigned int>(std::stoi(value));
@@ -97,13 +97,13 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
         energy_info.use_group_cutoff = (value == "yes" || value == "true" || value == "1");
     } else if (key == "pairlist_cutoff") {
         // Pairlist cutoff distance for fragments
-        energy_info.pairlist_cutoff = std::stof(value);
+        energy_info.pairlist_cutoff = std::stof(value);  // Already in nm
         energy_info.pairlist_cutoff_squared = energy_info.pairlist_cutoff * energy_info.pairlist_cutoff;
         energy_info.pair_list_cutoff_fragment = energy_info.pairlist_cutoff;
         energy_info.pair_list_cutoff_fragment_squared = energy_info.pairlist_cutoff_squared;
     } else if (key == "pairlist_cutoff_protein") {
         // Pairlist cutoff distance for protein
-        float cutoff = std::stof(value);
+        float cutoff = std::stof(value);  // Already in nm
         energy_info.pair_list_cutoff_protein = cutoff;
         energy_info.pair_list_cutoff_protein_squared = cutoff * cutoff;
     } else if (key == "attempt_prob_ins") {
@@ -118,6 +118,27 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
     } else if (key == "attempt_prob_rot") {
         // Per-fragment rotation attempt probabilities
         mc_info.attempt_prob_rot = InpParserStructures::parse_float_vector(value);
+    } else if (key == "const_water_nbar") {
+        // Fixed target number of water molecules
+        frag_info.use_const_water_nbar = true;
+        frag_info.const_water_nbar = static_cast<int>(std::stoi(value));
+    } else if (key == "number_water_nbar") {
+        // Toggle number-based nbar (use current water count as target)
+        frag_info.use_number_water_nbar = (value == "yes" || value == "true" || value == "1");
+        if (frag_info.use_number_water_nbar) {
+            frag_info.use_const_water_nbar = false;
+        }
+    } else if (key == "volume_water_nbar") {
+        // Volume-based nbar via target concentration (M)
+        // Use this to override water concentration for volume projection mode
+        // (default mode already uses concentration, but we record explicitly)
+        const float concM = std::stof(value);
+        if (!frag_info.conc_list.empty()) {
+            // Override first (water) entry if present
+            frag_info.conc_list[0] = concM;
+        } else {
+            frag_info.conc_list.push_back(concM);
+        }
     }
 }
 

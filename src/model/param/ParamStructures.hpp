@@ -59,6 +59,7 @@ struct SpaceInfo {
  */
 struct MCParams {
     int mc_steps = 1;
+    int moves_per_step = 10;  // Number of GCMC moves per MC step
     int current_step = 0;
     int print_freq = 1;
     int save_freq = 10000;  // nsave: trajectory save frequency
@@ -147,7 +148,7 @@ struct FragmentInfo {
 
     float excess_threshold = 1.0;
 
-    bool use_number_water_nbar = true;
+    bool use_number_water_nbar = false;
     bool use_const_water_nbar = false;
     int const_water_nbar = 0;
 

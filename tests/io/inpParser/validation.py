@@ -24,11 +24,13 @@ fragconc:0.25
 fragmuex:-0.79 1.96
 """)
 
-    # Test invalid space parameters
+    # Test invalid space parameters (include required fragment params)
     with pytest.raises(RuntimeError, match="Invalid grid_dx"):
         pygcmc.io.INPParser.parse_string("""
 top:test.top
 pdb:test.pdb
+fragname:WAT
+fragmuex:1.0
 grid_dx:-1.0
 """)
 
@@ -36,5 +38,7 @@ grid_dx:-1.0
         pygcmc.io.INPParser.parse_string("""
 top:test.top
 pdb:test.pdb
+fragname:WAT
+fragmuex:1.0
 cutoff:-12.0
 """)

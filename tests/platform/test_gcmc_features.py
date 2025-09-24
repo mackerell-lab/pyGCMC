@@ -311,13 +311,13 @@ fragitp: {}/charmm36.ff/mol/sol.itp
 
         for line in atom_lines:
             if len(line) > 54:
-                x = float(line[30:38])  # Angstrom
-                y = float(line[38:46])
-                z = float(line[46:54])
+                x = float(line[30:38]) / 10.0  # Angstrom to nm
+                y = float(line[38:46]) / 10.0
+                z = float(line[46:54]) / 10.0
 
-                # Calculate distance from center
+                # Calculate distance from center (in nm)
                 dist = np.sqrt((x-center[0])**2 + (y-center[1])**2 + (z-center[2])**2)
-                assert dist <= radius + 0.5, f"Atom at ({x},{y},{z}) outside sphere, dist={dist}"
+                assert dist <= radius + 0.05, f"Atom at ({x},{y},{z}) nm outside sphere, dist={dist}"
 
     def _check_box_constraint(self, pdb_file, min_coord, max_coord):
         """Helper to check atoms are within box"""
@@ -326,14 +326,14 @@ fragitp: {}/charmm36.ff/mol/sol.itp
 
         for line in atom_lines:
             if len(line) > 54:
-                x = float(line[30:38])  # Angstrom
-                y = float(line[38:46])
-                z = float(line[46:54])
+                x = float(line[30:38]) / 10.0  # Angstrom to nm
+                y = float(line[38:46]) / 10.0
+                z = float(line[46:54]) / 10.0
 
-                # Check within box boundaries
-                assert min_coord[0] - 0.5 <= x <= max_coord[0] + 0.5, f"X coord {x} outside box"
-                assert min_coord[1] - 0.5 <= y <= max_coord[1] + 0.5, f"Y coord {y} outside box"
-                assert min_coord[2] - 0.5 <= z <= max_coord[2] + 0.5, f"Z coord {z} outside box"
+                # Check within box boundaries (in nm)
+                assert min_coord[0] - 0.05 <= x <= max_coord[0] + 0.05, f"X coord {x} nm outside box"
+                assert min_coord[1] - 0.05 <= y <= max_coord[1] + 0.05, f"Y coord {y} nm outside box"
+                assert min_coord[2] - 0.05 <= z <= max_coord[2] + 0.05, f"Z coord {z} nm outside box"
 
 
 class TestTargetControl:

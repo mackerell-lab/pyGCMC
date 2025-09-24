@@ -76,6 +76,18 @@ bool GCMCSimulationModular::initialize() {
     
     // Configure engine
     engine_->setAcceptanceCalculator(acceptance_.get());
+    // Provide acceptance with system volume and per-type activities
+    {
+        // Volume from box (nm^3)
+        double V = state_->info.box[0] * state_->info.box[1] * state_->info.box[2];
+        if (V > 0) {
+            acceptance_->setVolume(V);
+        }
+        // Activities from fragment configs (z = exp(mu/RT)) already computed in setupFragments
+        for (const auto& frag : fragmentConfigs_) {
+            acceptance_->setActivity(frag.typeId, frag.activity);
+        }
+    }
     
     // Initialize core module
     core_->initialize(state_.get(), reservoir_.get(), 

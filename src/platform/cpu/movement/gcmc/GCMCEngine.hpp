@@ -237,6 +237,9 @@ private:
     void updateFragmentOrientation(int residueIdx, const Quaternion& newOrient);
     void applyPeriodicBoundary(Vector3& position);
     double minimumImageDistance(const Vector3& r1, const Vector3& r2);
+
+    // Region constraint helper: ensure all atoms of a fragment lie within region
+    bool isMoleculeWithinRegion(int typeId, const Vector3& position, const Quaternion& orientation) const;
     
     // Probability storage control
     bool shouldStoreProbability() const;

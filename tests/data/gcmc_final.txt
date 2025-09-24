@@ -1,0 +1,25 @@
+GCMC Simulation Final Results
+==============================
+
+Configuration:
+  Input file: /tmp/tmpv2_l5b6y/test.inp
+  Temperature: 300 K
+  Box: 10 x 10 x 10 nm
+  Total steps: 100
+
+Performance:
+  Total time: 0.0500783 seconds
+  Steps/second: 1996.87
+
+Statistics:
+  Overall acceptance: 6%
+  Average energy: 0 +/- 0 kJ/mol
+
+Fragment Statistics:
+  WAT:
+    Final count: 0
+    Density: 0 molecules/nm^3
+    Insert attempts: 22
+    Insert accepted: 2
+    Delete attempts: 2
+    Delete accepted: 2

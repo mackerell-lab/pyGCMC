@@ -148,7 +148,19 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
         // Set temperature
         const auto& mcInfo = result.parameters->get_mc_info();
         result.mcState->info.beta = mcInfo.beta;
-        
+
+        // Set cutoff from space info
+        result.mcState->info.cutoff = spaceInfo.cutoff;
+
+        // Also sync cutoff to energy parameters if parameters exist
+        if (result.parameters) {
+            auto& energyInfo = const_cast<model::param::EnergyInfo&>(result.parameters->get_energy_info());
+            energyInfo.fragment_cutoff = spaceInfo.cutoff;
+            energyInfo.protein_cutoff = spaceInfo.cutoff;
+            energyInfo.fragment_cutoff_squared = spaceInfo.cutoff * spaceInfo.cutoff;
+            energyInfo.protein_cutoff_squared = spaceInfo.cutoff * spaceInfo.cutoff;
+        }
+
         log("MC state initialized with INP parameters only");
     }
     

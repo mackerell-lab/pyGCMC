@@ -22,7 +22,9 @@ int MultiTypeReservoir::selectTypeForInsertion(std::mt19937& rng) const {
     std::vector<int> availableTypes;
     
     for (const auto& t : types_) {
-        if (t.currentCount < t.maxCount) {  // Skip types at max capacity
+        // Use actual active counts from base reservoir to enforce caps
+        const int active = activeCount(t.typeId);
+        if (active < t.maxCount) {  // Skip types at max capacity
             weights.push_back(t.probability);
             availableTypes.push_back(t.typeId);
         }

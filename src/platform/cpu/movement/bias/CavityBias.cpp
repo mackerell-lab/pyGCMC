@@ -787,7 +787,7 @@ double CavityManager::getCavityScore(const Vector3& position) const {
     // In practice, would check against grid or cavity list
     
     if (cavityCache_.empty()) {
-        return 0.1;  // No cavities known, low score
+        return 1.0;  // No cavities known, neutral bias
     }
     
     // Check distance to nearest cavity

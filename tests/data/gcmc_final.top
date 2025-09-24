@@ -1,0 +1,25 @@
+; GCMC Topology File
+; Generated at step: 1000
+; Box dimensions: 20 20 20 nm
+
+[ system ]
+; Name
+GCMC System
+
+[ molecules ]
+; Compound        #mols
+WAT              256
+
+; Total atoms: 768
+; Total molecules: 256
+
+[ fragments ]
+; Fragment     Count   Target  Conc(M)  ChemPot(kJ/mol)
+WAT            256-2147483648   55.50     -6.10
+
+[ statistics ]
+; Move type      Attempts  Accepted  Rate(%)
+deletion            233         1     0.4
+insertion           260       257    98.8
+rotation            248       247    99.6
+translation         259       259   100.0

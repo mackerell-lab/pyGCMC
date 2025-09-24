@@ -99,16 +99,20 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
     }
     // Space parameters
     else if (key == "grid_dx") {
-        space_info.grid_spacing = std::stof(value);
+        space_info.grid_spacing = std::stof(value);  // Already in nm
     } else if (key == "box_size" || key == "box") {
         space_info.box_size = InpParserStructures::parse_float_array(value);
+        // INP files use nanometers for consistency with PDB CRYST1 records
+        // Calculate volume in nm³
         space_info.volume = space_info.box_size[0] * space_info.box_size[1] * space_info.box_size[2];
     } else if (key == "cutoff") {
-        space_info.cutoff = std::stof(value);
+        space_info.cutoff = std::stof(value);  // Already in nanometers
     } else if (key == "gc_center") {
         space_info.gc_center = InpParserStructures::parse_float_array(value);
+        // Already in nanometers
     } else if (key == "sys_center") {
         space_info.sys_center = InpParserStructures::parse_float_array(value);
+        // Already in nanometers
     }
     // Fragment parameters - support both single and multiple entries
     else if (key == "fragname") {
@@ -147,6 +151,8 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
         mc_info.save_freq = std::stoi(value);
     } else if (key == "mcsteps") {
         mc_info.mc_steps = std::stoi(value);
+    } else if (key == "moves_per_step" || key == "movesPerStep") {
+        mc_info.moves_per_step = std::stoi(value);
     } else if (key == "temperature") {
         mc_info.temperature = std::stof(value);
         // Calculate beta from temperature (beta = 1/(kB*T) in kJ/mol units)
@@ -194,11 +200,19 @@ void InpParserMain::validate_parameters(model::Param& param) {
     }
     
     // Fragment parameter consistency checks
-    if (file_info.fragment_names.size() != fragment_info.conc_list.size()) {
+    // Both fragconc and fragmuex are optional
+    if (!fragment_info.conc_list.empty() &&
+        file_info.fragment_names.size() != fragment_info.conc_list.size()) {
         throw std::runtime_error("Inconsistent fragment parameters: fragname and fragconc sizes don't match");
     }
-    if (file_info.fragment_names.size() != fragment_info.muex_list.size()) {
+    if (!fragment_info.muex_list.empty() &&
+        file_info.fragment_names.size() != fragment_info.muex_list.size()) {
         throw std::runtime_error("Inconsistent fragment parameters: fragname and fragmuex sizes don't match");
+    }
+
+    // At least one of fragconc or fragmuex must be specified
+    if (fragment_info.conc_list.empty() && fragment_info.muex_list.empty()) {
+        throw std::runtime_error("Must specify either fragconc or fragmuex (or both) for GCMC");
     }
     
     // Grid and space checks

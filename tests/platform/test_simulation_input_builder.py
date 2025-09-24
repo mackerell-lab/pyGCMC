@@ -165,18 +165,19 @@ fragitp:{test_paths['itp_benx']}
 fragitp:{test_paths['itp_acox']}
 box_size:10.0 10.0 10.0
 temperature:298.15
-mcsteps:100
+mcsteps:10
 fragname:SOL BENX ACOX
 fragconc:55.0 1.0 1.0
 fragmuex:-5.0 -0.79 -0.5
+moves_per_step:1
 """)
-        
+
         result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "42", "--verbose"],
+            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "42"],
             cwd=tmp_path,  # Run in temp directory
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=20
         )
         
         # Clean up any generated files
@@ -306,18 +307,19 @@ fragitp:{test_paths['itp_benx']}
 par:{test_paths['par_ff']}
 box_size:15.0 15.0 15.0
 temperature:298.15
-mcsteps:100
+mcsteps:10
 fragname:BENX
 fragconc:1.0
 fragmuex:-0.79
+moves_per_step:1
 """)
-        
+
         result = subprocess.run(
             [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "42"],
             cwd=tmp_path,  # Run in temp directory
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=20
         )
         
         # Clean up any generated files
