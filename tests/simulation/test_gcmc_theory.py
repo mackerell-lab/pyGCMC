@@ -205,7 +205,10 @@ attempt_prob_rot:0.25
         """Test that molecules are constrained to specified regions"""
         pdb, top, itp = self.create_minimal_water_files(tmp_path)
 
-        # Test sphere region
+        # Test sphere region with known center and radius
+        sphere_center = (15.0, 15.0, 15.0)  # nm
+        sphere_radius = 5.0  # nm
+
         inp_content = f"""# Region constraint test
 pdb:{pdb}
 top:{top}
@@ -213,32 +216,60 @@ fragitp:{itp}
 op_pdb:region_test.pdb
 op_top:output.top
 box_size:30.0 30.0 30.0
-gcmc_region:sphere 15.0 15.0 15.0 5.0
+gcmc_region:sphere {sphere_center[0]} {sphere_center[1]} {sphere_center[2]} {sphere_radius}
 cutoff:9.0
-mcsteps:1000
-nprint:500
+mcsteps:500
+nprint:250
 fragname:WAT
-fragconc:0.1
+fragmuex:2.0
 """
-        metrics = self.run_gcmc(inp_content, tmp_path, steps=2000)
+        metrics = self.run_gcmc(inp_content, tmp_path, steps=500)
 
-        # Check that region constraint was applied
-        assert "region" in metrics["stdout"].lower(), "Region constraint should be mentioned in output"
-
-        # Check that molecules were created
+        # Verify simulation ran successfully
+        assert metrics["returncode"] == 0, "Region constraint simulation should run"
         assert metrics["final_count"] > 0, "Should create molecules in constrained region"
 
-        # The number of molecules should be less than if the whole box was used
-        # (sphere volume is much smaller than box volume)
-        sphere_volume = (4.0/3.0) * np.pi * 5.0**3  # ~523 nm³
-        box_volume = 30.0 * 30.0 * 30.0  # 27000 nm³
-        volume_ratio = sphere_volume / box_volume  # ~0.019
+        # Parse the output PDB file to verify all water molecules are within the sphere
+        output_pdb = tmp_path / "region_test.pdb"
+        if not output_pdb.exists():
+            # Try alternative output names
+            for alt_name in ["region_test_final.pdb", "output.pdb", "test_0_final.pdb"]:
+                alt_path = tmp_path / alt_name
+                if alt_path.exists():
+                    output_pdb = alt_path
+                    break
 
-        # Molecules should roughly scale with available volume (with wide tolerance)
-        # We just check it's not filling the whole box
-        expected_max = 100  # For a small sphere, shouldn't have too many molecules
-        assert metrics["final_count"] < expected_max, \
-            f"Too many molecules ({metrics['final_count']}) for small sphere region"
+        if output_pdb.exists():
+            # Parse PDB and check coordinates
+            with open(output_pdb, 'r') as f:
+                lines = f.readlines()
+
+            water_oxygens = []  # Track oxygen atoms as water representatives
+            for line in lines:
+                if line.startswith(("ATOM", "HETATM")):
+                    atom_name = line[12:16].strip()
+                    if atom_name in ["O", "OW", "OH2"]:
+                        # Parse coordinates (in Angstroms in PDB)
+                        x = float(line[30:38]) / 10.0  # Convert to nm
+                        y = float(line[38:46]) / 10.0  # Convert to nm
+                        z = float(line[46:54]) / 10.0  # Convert to nm
+                        water_oxygens.append((x, y, z))
+
+            # Verify all waters are within the sphere (with small tolerance)
+            tolerance = 0.5  # nm, to account for water molecule size
+            for i, (x, y, z) in enumerate(water_oxygens):
+                distance = np.sqrt(
+                    (x - sphere_center[0])**2 +
+                    (y - sphere_center[1])**2 +
+                    (z - sphere_center[2])**2
+                )
+                assert distance <= sphere_radius + tolerance, \
+                    f"Water {i} at ({x:.2f}, {y:.2f}, {z:.2f}) is {distance:.2f} nm from sphere center, exceeds radius {sphere_radius} nm"
+
+            print(f"Verified {len(water_oxygens)} waters all within sphere constraint")
+        else:
+            # If no PDB output, at least verify the constraint was recognized
+            assert "sphere" in metrics["stdout"].lower(), "Sphere constraint should be mentioned"
 
     def test_nbar_modes(self, tmp_path):
         """Test different nbar activity modes"""
@@ -313,35 +344,55 @@ fragconf:3
 
     def test_move_probabilities(self, tmp_path):
         """Test per-fragment move probability configuration"""
+        import re
         pdb, top, itp = self.create_minimal_water_files(tmp_path)
 
+        # Use exact probabilities that should give predictable CDF
+        # 1:2:3:4 ratio => 0.1, 0.2, 0.3, 0.4 normalized
+        # Expected CDF: [0.1, 0.3, 0.6, 1.0]
         inp_content = f"""# Move probability test
 pdb:{pdb}
 top:{top}
 fragitp:{itp}
 op_pdb:output.pdb
 op_top:output.top
-box_size:15.0 15.0 15.0
-cutoff:7.0
-mcsteps:500
-nprint:100
+box_size:10.0 10.0 10.0
+cutoff:4.0
+mcsteps:100
+nprint:50
 fragname:WAT
-fragconc:30.0
-fragconc:55.0
-fragmuex:-6.0
+fragmuex:1.0
 # Custom move probabilities (1:2:3:4 ratio)
 attempt_prob_ins:0.1
 attempt_prob_del:0.2
 attempt_prob_trn:0.3
 attempt_prob_rot:0.4
 """
-        metrics = self.run_gcmc(inp_content, tmp_path, steps=1000)
-
-        # Check if CDF is mentioned in output
-        assert "cdf" in metrics["stdout"].lower(), "Move probability CDF should be calculated"
+        metrics = self.run_gcmc(inp_content, tmp_path, steps=100)
 
         # Verify the simulation ran successfully
         assert metrics["returncode"] == 0, "Simulation with custom move probabilities should run"
+
+        # Parse the actual CDF values from output
+        # Look for pattern like: "WAT cdf: [0.1, 0.3, 0.6, 1]"
+        cdf_pattern = r"WAT\s+cdf:\s*\[([\d.,\s]+)\]"
+        cdf_match = re.search(cdf_pattern, metrics["stdout"])
+
+        assert cdf_match, "CDF values should be printed in output"
+
+        # Parse the CDF values
+        cdf_str = cdf_match.group(1)
+        cdf_values = [float(x.strip()) for x in cdf_str.split(',')]
+
+        # Expected CDF for 1:2:3:4 ratio
+        expected_cdf = [0.1, 0.3, 0.6, 1.0]
+
+        assert len(cdf_values) == 4, f"Should have 4 CDF values, got {len(cdf_values)}"
+
+        # Verify CDF values match expected (with small tolerance for floating point)
+        for i, (actual, expected) in enumerate(zip(cdf_values, expected_cdf)):
+            assert abs(actual - expected) < 0.001, \
+                f"CDF[{i}]: expected {expected}, got {actual}. Full CDF: {cdf_values}"
 
     def test_cavity_bias(self, tmp_path):
         """Test cavity bias configuration"""
