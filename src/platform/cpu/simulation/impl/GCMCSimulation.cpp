@@ -13,6 +13,7 @@
 #include <set>
 #include <thread>
 #include <chrono>
+#include <cstdlib>  // for std::getenv
 
 namespace pygcmc {
 namespace platform {
@@ -245,9 +246,26 @@ bool GCMCSimulation::initialize() {
         }
     }
 
+    // Enable diagnostics if requested via environment variable
+    const char* enableDiag = std::getenv("GCMC_ENABLE_DIAGNOSTICS");
+    if (enableDiag && *enableDiag) {
+        size_t bufSize = 4096;
+        const char* bufSizeStr = std::getenv("GCMC_DIAG_BUFFER_SIZE");
+        if (bufSizeStr) {
+            bufSize = std::atol(bufSizeStr);
+        }
+        enableDiagnostics(bufSize);
+    }
+
+    // Export LJ matrix if requested
+    const char* dumpLJ = std::getenv("GCMC_DUMP_LJ");
+    if (dumpLJ && *dumpLJ) {
+        dumpLJMatrix();
+    }
+
     // Print initial system information
     printStatistics();
-    
+
     return true;
 }
 
@@ -1121,6 +1139,10 @@ bool GCMCSimulation::setupEngine() {
     engine_->setConfigValue("enableEnergyCache", 1.0);
     engine_->setConfigValue("neighborListCutoff", params_->get_space_info().cutoff * 1.2);  // 20% buffer
 
+    // Set maximum molecules per type (default 10000, -1 to disable)
+    // This can be overridden via CLI or INP file
+    engine_->setConfigValue("maxMoleculesPerType", static_cast<double>(config_.maxMoleculesPerType));
+
     // Setup configuration bias
     const auto& biasInfo = params_->get_bias_info();
     engine_->setConfigValue("useConfBias", biasInfo.use_conf_bias ? 1.0 : 0.0);
@@ -1233,6 +1255,10 @@ bool GCMCSimulation::setupEngine() {
     // Ensure deterministic RNG when seed provided
     if (config_.randomSeed >= 0) {
         engine_->setSeed(static_cast<unsigned int>(config_.randomSeed));
+        // Also seed the global RandomUtils for cavity/region
+        movement::utils::RandomUtils::setSeed(static_cast<uint64_t>(config_.randomSeed));
+        // And RotationUtils for quaternion generation
+        movement::utils::RotationUtils::setSeed(static_cast<unsigned int>(config_.randomSeed));
     }
 
     return true;
@@ -1257,8 +1283,8 @@ bool GCMCSimulation::run() {
             log("ERROR: Failed at step ", step);
             return false;
         }
-        
-        stats_.totalSteps++;
+
+        // Remove double-counting: totalSteps is incremented in performSingleMove
         
         // Print statistics (ensure positive frequency)
         if (config_.printFrequency > 0 && step % config_.printFrequency == 0 && step > 0) {
@@ -1311,7 +1337,15 @@ bool GCMCSimulation::run() {
     log("  Performance: ", stats_.stepsPerSecond, " steps/second");
     // Emit a completion line to stdout even in non-verbose mode (tests expect this)
     std::cout << "Simulation completed" << std::endl;
-    
+
+    // Export acceptance log if requested
+    const char* dumpAccept = std::getenv("GCMC_DUMP_ACCEPT");
+    if (dumpAccept && *dumpAccept && diagnosticsEnabled_) {
+        std::string filename = (std::string(dumpAccept) == "1") ?
+            (config_.outputPrefix + "_acceptance.jsonl") : std::string(dumpAccept);
+        dumpAcceptanceLog(filename);
+    }
+
     return true;
 }
 
@@ -1599,7 +1633,8 @@ double GCMCSimulation::calculateSystemEnergy() {
 
 void GCMCSimulation::updateStatistics() {
     // Update acceptance rates
-    stats_.acceptanceRate = static_cast<double>(stats_.acceptedMoves) / stats_.totalSteps;
+    stats_.acceptanceRate = (stats_.totalSteps > 0) ?
+        static_cast<double>(stats_.acceptedMoves) / stats_.totalSteps : 0.0;
     
     for (auto& [move, attempts] : stats_.moveAttempts) {
         if (attempts > 0) {
@@ -1683,6 +1718,22 @@ void GCMCSimulation::writeStatistics(int step) {
     const double delRatePct = delAttempts > 0 ? (100.0 * static_cast<double>(delAccepted) / delAttempts) : 0.0;
     std::cout << "Insert move accept: " << insRatePct << "%" << std::endl;
     std::cout << "Delete move accept: " << delRatePct << "%" << std::endl;
+
+    // Add detailed counts for diagnostics
+    if (diagnosticsEnabled_ || std::getenv("GCMC_VERBOSE_STATS")) {
+        std::cout << "Insert attempts: " << insAttempts << std::endl;
+        std::cout << "Insert accepted: " << insAccepted << std::endl;
+        std::cout << "Delete attempts: " << delAttempts << std::endl;
+        std::cout << "Delete accepted: " << delAccepted << std::endl;
+
+        // Weighted overall acceptance rate for insert/delete
+        const double insDelAllAttempts = static_cast<double>(insAttempts + delAttempts);
+        const double insDelAllAccepted = static_cast<double>(insAccepted + delAccepted);
+        const double insDelOverallPct = insDelAllAttempts > 0
+            ? (100.0 * insDelAllAccepted / insDelAllAttempts) : 0.0;
+        std::cout << "Ins/Del acceptance (overall): " << insDelOverallPct << "%" << std::endl;
+    }
+
     std::cout << "Energy: " << stats_.currentEnergy << " kJ/mol" << std::endl;
 
     std::cout << "Fragment counts:" << std::endl;
@@ -2278,6 +2329,116 @@ bool GCMCSimulation::isWaterName(const std::string& name) {
         return true;
     }
     return false;
+}
+
+// Diagnostic methods implementation
+void GCMCSimulation::enableDiagnostics(size_t bufferSize) {
+    diagnosticsEnabled_ = true;
+    bufferSize_ = bufferSize;
+    acceptanceBuffer_.reserve(bufferSize);
+    acceptanceBuffer_.clear();
+    bufferIndex_ = 0;
+
+    log("Diagnostics enabled with buffer size: ", bufferSize);
+}
+
+GCMCSimulation::AcceptanceRecord GCMCSimulation::getLastMove() const {
+    if (acceptanceBuffer_.empty()) {
+        return AcceptanceRecord{};
+    }
+    size_t lastIdx = (bufferIndex_ > 0) ? (bufferIndex_ - 1) : (acceptanceBuffer_.size() - 1);
+    return acceptanceBuffer_[lastIdx];
+}
+
+std::vector<GCMCSimulation::AcceptanceRecord> GCMCSimulation::getMoves(size_t n) const {
+    std::vector<AcceptanceRecord> result;
+    size_t available = std::min(n, acceptanceBuffer_.size());
+
+    for (size_t i = 0; i < available; ++i) {
+        size_t idx = (bufferIndex_ >= i + 1) ?
+            (bufferIndex_ - i - 1) :
+            (acceptanceBuffer_.size() + bufferIndex_ - i - 1);
+        result.push_back(acceptanceBuffer_[idx]);
+    }
+
+    return result;
+}
+
+void GCMCSimulation::dumpLJMatrix() const {
+    if (!state_) return;
+
+    const auto& ff = state_->forcefield;
+    const int n = ff.numTotalTypes;
+
+    std::string filename = config_.outputPrefix + "_lj.csv";
+    std::ofstream ofs(filename);
+    if (!ofs) {
+        log("ERROR: Failed to open file for LJ matrix export: ", filename);
+        return;
+    }
+
+    // Header
+    ofs << "i,j,sigma_ij,eps_ij,rule\n";
+
+    // Matrix entries
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            int idx = i * n + j;
+
+            // Determine mixing rule used
+            std::string rule = "LB";  // Default Lorentz-Berthelot
+            // TODO: Track actual rule used per pair
+
+            ofs << i << "," << j << ","
+                << ff.ljSigma[idx] << ","
+                << ff.ljEps[idx] << ","
+                << rule << "\n";
+        }
+    }
+
+    ofs.close();
+    log("LJ matrix exported to: ", filename);
+}
+
+void GCMCSimulation::dumpAcceptanceLog(const std::string& filename) const {
+    if (!diagnosticsEnabled_ || acceptanceBuffer_.empty()) {
+        log("No acceptance data to dump");
+        return;
+    }
+
+    std::ofstream ofs(filename);
+    if (!ofs) {
+        log("ERROR: Failed to open acceptance log file: ", filename);
+        return;
+    }
+
+    // Write JSONL format
+    for (const auto& rec : acceptanceBuffer_) {
+        ofs << "{"
+            << "\"move\":\"" << (rec.moveType == AcceptanceRecord::INSERT ? "insert" :
+                                rec.moveType == AcceptanceRecord::DELETE ? "delete" :
+                                rec.moveType == AcceptanceRecord::TRANSLATE ? "translate" : "rotate") << "\","
+            << "\"species\":" << rec.species << ","
+            << "\"step\":" << rec.step << ","
+            << "\"deltaU\":" << rec.deltaU << ","
+            << "\"betaDeltaU\":" << rec.betaDeltaU << ","
+            << "\"mu\":" << rec.mu << ","
+            << "\"betaMu\":" << rec.betaMu << ","
+            << "\"z\":" << rec.z << ","
+            << "\"qForward\":" << rec.qForward << ","
+            << "\"qReverse\":" << rec.qReverse << ","
+            << "\"proposalRatio\":" << rec.proposalRatio << ","
+            << "\"vEff\":" << rec.vEff << ","
+            << "\"pAcc\":" << rec.pAcc << ","
+            << "\"u\":" << rec.u << ","
+            << "\"accepted\":" << (rec.accepted ? "true" : "false") << ","
+            << "\"wForward\":" << rec.wForward << ","
+            << "\"wReverse\":" << rec.wReverse
+            << "}\n";
+    }
+
+    ofs.close();
+    log("Acceptance log written to: ", filename);
 }
 
 } // namespace simulation

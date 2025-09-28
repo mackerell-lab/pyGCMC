@@ -320,18 +320,25 @@ public:
  * Rotation utilities
  */
 class RotationUtils {
+private:
+    static std::mt19937 gen_;
+    static std::uniform_real_distribution<> dis_;
+
 public:
+    /**
+     * Set seed for deterministic quaternion generation
+     */
+    static void setSeed(unsigned int seed) {
+        gen_.seed(seed);
+    }
+
     /**
      * Generate a uniform random quaternion
      */
     static Quaternion generateRandomQuaternion() {
-        static std::random_device rd;
-        static std::mt19937 gen(rd());
-        static std::uniform_real_distribution<> dis(0.0, 1.0);
-        
-        double u1 = dis(gen);
-        double u2 = dis(gen);
-        double u3 = dis(gen);
+        double u1 = dis_(gen_);
+        double u2 = dis_(gen_);
+        double u3 = dis_(gen_);
         
         Quaternion q;
         q.w = std::sqrt(1 - u1) * std::sin(2 * M_PI * u2);

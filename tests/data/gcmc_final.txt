@@ -2,24 +2,24 @@ GCMC Simulation Final Results
 ==============================
 
 Configuration:
-  Input file: /tmp/tmpv2_l5b6y/test.inp
+  Input file: /tmp/pytest-of-zhaomt/pytest-1922/test_acceptance_formula_quanti0/test.inp
   Temperature: 300 K
-  Box: 10 x 10 x 10 nm
-  Total steps: 100
+  Box: 5 x 5 x 5 nm
+  Total steps: 11000
 
 Performance:
-  Total time: 0.0500783 seconds
-  Steps/second: 1996.87
+  Total time: 1.45821 seconds
+  Steps/second: 7543.5
 
 Statistics:
-  Overall acceptance: 6%
-  Average energy: 0 +/- 0 kJ/mol
+  Overall acceptance: 66.9909%
+  Average energy: -1375.06 +/- 743.662 kJ/mol
 
 Fragment Statistics:
   WAT:
-    Final count: 0
-    Density: 0 molecules/nm^3
-    Insert attempts: 22
-    Insert accepted: 2
-    Delete attempts: 2
-    Delete accepted: 2
+    Final count: 74
+    Density: 0.592 molecules/nm^3
+    Insert attempts: 1462
+    Insert accepted: 836
+    Delete attempts: 2764
+    Delete accepted: 762

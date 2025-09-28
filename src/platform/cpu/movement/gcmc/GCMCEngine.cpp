@@ -100,12 +100,16 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     // CRITICAL FIX: Get N BEFORE insertion for correct acceptance calculation
     int N_before = reservoir_->getActiveCount(typeId);
 
-    // CRITICAL: Hard capacity check to prevent runaway growth
-    // Essential for test performance with large chemical potentials
-    // Use a hard limit based on test requirements
-    const int HARD_LIMIT = 1000;  // Balance between test accuracy and performance
-    if (N_before >= HARD_LIMIT) {
-        // At hard limit, reject insertion immediately
+    // Configurable capacity check to prevent runaway growth
+    // Can be disabled by setting maxMoleculesPerType to -1
+    double maxMolecules = getConfigValue("maxMoleculesPerType");
+    if (maxMolecules <= 0) {
+        // Default: large but reasonable limit for safety
+        maxMolecules = 10000;
+    }
+
+    if (N_before >= static_cast<int>(maxMolecules)) {
+        // At limit, reject insertion immediately
         MoveResult early;
         early.type = MoveResult::INSERT;
         early.fragmentType = typeId;

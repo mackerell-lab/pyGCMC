@@ -60,6 +60,7 @@ public:
         bool enableAdaptiveSampling = false;  // Adjust move probabilities
         bool enableEnergyMinimization = false; // Minimize after insertion
         double convergenceTolerance = 0.01;    // Convergence criterion
+        int maxMoleculesPerType = 10000;       // Max molecules per fragment type (-1 = disabled)
     };
     
     /**
@@ -92,7 +93,58 @@ public:
         double timePerStep = 0.0;  // seconds
         double stepsPerSecond = 0.0;
     };
-    
+
+    /**
+     * @brief Detailed acceptance counters for diagnostics
+     */
+    struct Counters {
+        uint64_t attemptsInsert = 0;
+        uint64_t acceptsInsert = 0;
+        uint64_t attemptsDelete = 0;
+        uint64_t acceptsDelete = 0;
+        uint64_t attemptsTranslate = 0;
+        uint64_t acceptsTranslate = 0;
+        uint64_t attemptsRotate = 0;
+        uint64_t acceptsRotate = 0;
+
+        // Since last print
+        uint64_t attemptsSinceLastPrint = 0;
+        uint64_t acceptsSinceLastPrint = 0;
+
+        double getInsDelOverallRate() const {
+            uint64_t total = attemptsInsert + attemptsDelete;
+            return total > 0 ?
+                static_cast<double>(acceptsInsert + acceptsDelete) / total : 0.0;
+        }
+    };
+
+    /**
+     * @brief Detailed acceptance diagnostics record
+     */
+    struct AcceptanceRecord {
+        enum MoveType { INSERT, DELETE, TRANSLATE, ROTATE };
+
+        MoveType moveType;
+        int species;
+        int step;
+        double deltaU;
+        double betaDeltaU;
+        double mu;
+        double betaMu;
+        double z;  // Activity
+        double qForward;   // Forward proposal probability
+        double qReverse;   // Reverse proposal probability
+        double proposalRatio;
+        double vEff;       // Effective volume
+        double pAcc;       // Calculated acceptance probability
+        double u;          // Random number used
+        bool accepted;
+
+        // For biased moves
+        double wForward = 1.0;
+        double wReverse = 1.0;
+    };
+
     /**
      * @brief Fragment type information
      */
@@ -144,7 +196,16 @@ public:
     
     // Fragment information access
     std::vector<FragmentInfo> getFragmentInfo() const { return fragmentTypes_; }
-    
+
+    // Diagnostic methods
+    void enableDiagnostics(size_t bufferSize = 4096);
+    bool isDiagnosticsEnabled() const { return diagnosticsEnabled_; }
+    Counters getCounters() const { return counters_; }
+    AcceptanceRecord getLastMove() const;
+    std::vector<AcceptanceRecord> getMoves(size_t n) const;
+    void dumpLJMatrix() const;
+    void dumpAcceptanceLog(const std::string& filename) const;
+
 private:
     // Configuration
     Config config_;
@@ -182,7 +243,14 @@ private:
     // Proposal probabilities for detailed balance with target_numwaters
     double lastProposalPInsert_ = 0.25;
     double lastProposalPDelete_ = 0.25;
-    
+
+    // Diagnostics
+    bool diagnosticsEnabled_ = false;
+    Counters counters_;
+    std::vector<AcceptanceRecord> acceptanceBuffer_;
+    size_t bufferSize_ = 4096;
+    size_t bufferIndex_ = 0;
+
     // Helper methods
     bool loadParameters();
     void printParameterSummary();
