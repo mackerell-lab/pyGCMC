@@ -33,6 +33,7 @@ void InpParserGCMC::parse_to_param(const std::string& filename, model::param::Pa
 void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& value, model::param::Param& param) {
     auto& mc_info = param.get_mc_info();
     auto& frag_info = param.get_fragment_info();
+    auto& file_info = param.get_file_info();
     auto& bias_info = param.get_bias_info();
     auto& space_info = param.get_space_info();
     auto& energy_info = param.get_energy_info();
@@ -118,6 +119,32 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
     } else if (key == "attempt_prob_rot") {
         // Per-fragment rotation attempt probabilities
         mc_info.attempt_prob_rot = InpParserStructures::parse_float_vector(value);
+    } else if (key == "mc_move_prob") {
+        // Legacy format: four weights [insert, delete, translate, rotate]
+        // Store in attempt_prob_* temporarily, will be broadcasted in enhance_param
+        auto probs = InpParserStructures::parse_float_vector(value);
+
+        if (probs.size() >= 4) {
+            // Clear any existing values and store the four probabilities
+            // These will be broadcasted to all fragments in enhance_param()
+            mc_info.attempt_prob_ins = {probs[0]};
+            mc_info.attempt_prob_del = {probs[1]};
+            mc_info.attempt_prob_trn = {probs[2]};
+            mc_info.attempt_prob_rot = {probs[3]};
+
+            // Set a flag to indicate mc_move_prob was used (store in first element as negative to mark)
+            // This is a hack to avoid adding new fields to MCInfo
+            // We'll check this in enhance_param and broadcast to all fragments
+            std::cout << "[INP] Parsed mc_move_prob: "
+                      << probs[0] << " (ins), "
+                      << probs[1] << " (del), "
+                      << probs[2] << " (trn), "
+                      << probs[3] << " (rot)"
+                      << " - will be applied to all fragments" << std::endl;
+        } else {
+            std::cerr << "[WARNING] mc_move_prob requires 4 values, got "
+                      << probs.size() << std::endl;
+        }
     } else if (key == "const_water_nbar") {
         // Fixed target number of water molecules
         frag_info.use_const_water_nbar = true;
@@ -143,8 +170,35 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
 }
 
 void InpParserGCMC::enhance_param(model::param::Param& param) {
-    // Ensure mc_time_cumulative if mc_time_list provided
     auto& mc_info = param.get_mc_info();
+    auto& file_info = param.get_file_info();
+
+    // Broadcast mc_move_prob to all fragments if it was used
+    // If attempt_prob_* vectors have size 1, it means mc_move_prob was set
+    // We need to broadcast to all fragments
+    if (mc_info.attempt_prob_ins.size() == 1 &&
+        mc_info.attempt_prob_del.size() == 1 &&
+        mc_info.attempt_prob_trn.size() == 1 &&
+        mc_info.attempt_prob_rot.size() == 1) {
+
+        size_t fragment_count = file_info.fragment_names.size();
+        if (fragment_count > 1) {
+            // Broadcast the single values to all fragments
+            float ins_val = mc_info.attempt_prob_ins[0];
+            float del_val = mc_info.attempt_prob_del[0];
+            float trn_val = mc_info.attempt_prob_trn[0];
+            float rot_val = mc_info.attempt_prob_rot[0];
+
+            mc_info.attempt_prob_ins.assign(fragment_count, ins_val);
+            mc_info.attempt_prob_del.assign(fragment_count, del_val);
+            mc_info.attempt_prob_trn.assign(fragment_count, trn_val);
+            mc_info.attempt_prob_rot.assign(fragment_count, rot_val);
+
+            std::cout << "[INP] Broadcasted mc_move_prob to " << fragment_count << " fragments" << std::endl;
+        }
+    }
+
+    // Ensure mc_time_cumulative if mc_time_list provided
     if (!mc_info.mc_time_list.empty()) {
         mc_info.mc_time_cumulative.clear();
         float s = 0.0f;

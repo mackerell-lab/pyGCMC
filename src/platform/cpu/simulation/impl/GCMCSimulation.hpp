@@ -207,6 +207,8 @@ public:
     void dumpAcceptanceLog(const std::string& filename) const;
 
 private:
+    // Statistics output
+    void writeStatisticsDAT(int step);
     // Configuration
     Config config_;
     bool initialized_ = false;
