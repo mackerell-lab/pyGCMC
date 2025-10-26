@@ -398,13 +398,20 @@ void GCMCModule::runSteps(int nSteps) {
 
 // Set random seed
 void GCMCModule::setSeed(unsigned int seed) {
+    // Use non-overlapping seed offsets for each component to ensure independent RNG streams
+    // Seed allocation:
+    //   engine: seed+0 (internally gives acceptanceCalculator seed+1)
+    //   moveSelector: seed+10
+    //   biasCalc: seed+20
     if (engine_) {
         engine_->setSeed(seed);
     }
     if (moveSelector_) {
-        moveSelector_->setSeed(seed + 1);  // Use different seed for move selector
+        moveSelector_->setSeed(seed + 10);  // Offset avoids collision with engine's sub-components
     }
-    // Also set seed for any other RNG components if needed
+    if (biasCalc_) {
+        biasCalc_->setSeed(seed + 20);  // Separate offset for bias calculations
+    }
 }
 
 // Perform a move

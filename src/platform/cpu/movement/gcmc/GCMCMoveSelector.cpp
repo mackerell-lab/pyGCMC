@@ -17,9 +17,9 @@ GCMCMoveSelector::GCMCMoveSelector()
       adaptationRate_(0.01),
       adaptationInterval_(1000),
       movesSinceAdaptation_(0),
-      rng_(std::random_device{}()),
+      rng_(0u),  // Deterministic initial value, will be set via setSeed()
       uniform_(0.0, 1.0) {
-    
+
     // Initialize default probabilities
     probabilities_[MoveType::INSERT] = 0.25;
     probabilities_[MoveType::DELETE] = 0.25;
@@ -30,9 +30,9 @@ GCMCMoveSelector::GCMCMoveSelector()
     probabilities_[MoveType::CLUSTER] = 0.0;
     probabilities_[MoveType::VOLUME_CHANGE] = 0.0;
     probabilities_[MoveType::IDENTITY_SWAP] = 0.0;
-    
+
     updateCumulativeProbabilities();
-    
+
     // Initialize statistics
     for (auto& [type, prob] : probabilities_) {
         statistics_[type] = MoveStats();

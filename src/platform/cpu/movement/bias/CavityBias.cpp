@@ -80,7 +80,12 @@ std::vector<Vector3> CavityManager::findCavities(const MCState& state) {
     stats_.occupiedPoints = stats_.totalGridPoints - stats_.cavityPoints;
     stats_.cavityRatio = static_cast<double>(stats_.cavityPoints) / stats_.totalGridPoints;
     stats_.occupancyRatio = static_cast<double>(stats_.occupiedPoints) / stats_.totalGridPoints;
-    
+
+    // Output machine-readable cavity statistics (P1 requirement)
+    std::cout << "Cavity stats: total=" << stats_.totalGridPoints
+              << ", cavities=" << stats_.cavityPoints
+              << ", fraction=" << stats_.cavityRatio << std::endl;
+
     cacheValid_ = true;
     return cavityCache_;
 }
@@ -783,31 +788,42 @@ void CavityManager::updateAfterDeletion(const Vector3& position, const MCState& 
 
 // Get cavity score for a position (1.0 if in cavity, 0.1 otherwise)
 double CavityManager::getCavityScore(const Vector3& position) const {
-    // Simple implementation: check if position is near a cavity
-    // In practice, would check against grid or cavity list
-    
-    if (cavityCache_.empty()) {
-        return 1.0;  // No cavities known, neutral bias
+    // Fast grid-based scoring: O(1) with tiny constant neighborhood check
+    if (grid_.occupied.empty() || grid_.nx <= 0 || grid_.ny <= 0 || grid_.nz <= 0) {
+        return 1.0;  // No grid available => neutral
     }
-    
-    // Check distance to nearest cavity
-    // Note: position and cavity positions are in nm (from grid_)
-    double minDist = 1e10;
-    for (const auto& cavity : cavityCache_) {
-        double dist = distance(position, cavity);
-        minDist = std::min(minDist, dist);
+
+    auto toIndex = [&](double coord, double origin, double spacing, int n) -> int {
+        int idx = static_cast<int>(std::floor((coord - origin) / spacing));
+        // PBC wrap into [0,n)
+        idx = (idx % n + n) % n;
+        return idx;
+    };
+
+    const int i = toIndex(position.x, grid_.origin.x, grid_.spacing.x, grid_.nx);
+    const int j = toIndex(position.y, grid_.origin.y, grid_.spacing.y, grid_.ny);
+    const int k = toIndex(position.z, grid_.origin.z, grid_.spacing.z, grid_.nz);
+
+    // In-voxel check: inside cavity => strong bias
+    if (!grid_.occupied[grid_.getIndex(i, j, k)]) {
+        return 1.0;
     }
-    
-    // Return score based on distance
-    // Use grid spacing in nm for consistent units
-    const double h = grid_.spacing.x;  // nm
-    if (minDist < h) {
-        return 1.0;  // In or near cavity
-    } else if (minDist < 2.0 * h) {
-        return 0.5;  // Close to cavity
-    } else {
-        return 0.1;  // Far from cavities
+
+    // One-ring neighborhood as "near cavity" heuristic
+    for (int di = -1; di <= 1; ++di) {
+        int ii = (i + di + grid_.nx) % grid_.nx;
+        for (int dj = -1; dj <= 1; ++dj) {
+            int jj = (j + dj + grid_.ny) % grid_.ny;
+            for (int dk = -1; dk <= 1; ++dk) {
+                int kk = (k + dk + grid_.nz) % grid_.nz;
+                if (!grid_.occupied[grid_.getIndex(ii, jj, kk)]) {
+                    return 0.5;  // near cavity
+                }
+            }
+        }
     }
+
+    return 0.1;  // far from cavities
 }
 
 // Select a random cavity position

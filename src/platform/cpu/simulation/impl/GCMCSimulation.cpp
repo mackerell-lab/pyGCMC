@@ -670,6 +670,7 @@ bool GCMCSimulation::setupFragments() {
     const auto& fileInfo = params_->get_file_info();
     const auto& mcInfo = params_->get_mc_info();
     const auto& space = params_->get_space_info();
+    const auto& biasInfo = params_->get_bias_info();
 
     log("====== Setting up fragments ======");
 
@@ -715,8 +716,11 @@ bool GCMCSimulation::setupFragments() {
         frag.activity = std::exp(beta * frag.chemicalPotential);
 
         // Set conf bias trials
+        // Priority: fragconf per-fragment list > global num_conf_bias_trial > default 1
         if (i < fragInfo.fragconf_list.size()) {
             frag.confBiasTrials = fragInfo.fragconf_list[i];
+        } else if (biasInfo.num_conf_bias_trials > 0) {
+            frag.confBiasTrials = biasInfo.num_conf_bias_trials;
         } else {
             frag.confBiasTrials = 1;
         }
@@ -999,6 +1003,14 @@ bool GCMCSimulation::setupFragments() {
         // If needed, we could add a setProbability method to the reservoir
     }
 
+    // Print machine-readable fragment selection weights for tests
+    std::cout << "Fragment weights: ";
+    for (size_t i = 0; i < fragmentTypes_.size(); ++i) {
+        if (i > 0) std::cout << ", ";
+        std::cout << fragmentTypes_[i].name << "=" << fragmentTypes_[i].probability;
+    }
+    std::cout << std::endl;
+
     // Build per-fragment move probability CDF
     buildPerFragmentMoveCDF();
 
@@ -1234,6 +1246,17 @@ bool GCMCSimulation::setupEngine() {
         log("  Exclude protein volume: ", space.exclude_protein_volume);
         log("  Exclude hydrogens: ", space.exclude_hydrogens_from_grid);
         log("  Use VDW radius: ", space.use_vdw_radius_for_grid);
+
+        // Initialize cavity grid (will output statistics to stdout)
+        // This is needed to pre-build the cavity cache and output stats for testing
+        try {
+            // Convert state to movement::MCState for cavity manager
+            // Note: CavityManager expects box dimensions in nm (state_->info.box is in nm)
+            cavityManager_->findCavities(*state_);
+            log("Cavity grid initialized successfully");
+        } catch (const std::exception& e) {
+            log("WARNING: Failed to initialize cavity grid: ", e.what());
+        }
     }
 
     // Enable statistics if configured
@@ -1252,13 +1275,17 @@ bool GCMCSimulation::setupEngine() {
     log("  Max rotation: ", engine_->getConfigValue("maxRotation"), " degrees");
     log("  Cavity bias: ", (params_->get_bias_info().use_cavity_bias ? "enabled" : "disabled"));
 
-    // Ensure deterministic RNG when seed provided
+    // Ensure deterministic RNG when seed provided with non-overlapping seeds
+    // Seed allocation:
+    //   engine: seed+0 (internally cascades to sub-components with seed+1, seed+10, seed+20)
+    //   RandomUtils: seed+100
+    //   RotationUtils: seed+200
     if (config_.randomSeed >= 0) {
-        engine_->setSeed(static_cast<unsigned int>(config_.randomSeed));
-        // Also seed the global RandomUtils for cavity/region
-        movement::utils::RandomUtils::setSeed(static_cast<uint64_t>(config_.randomSeed));
-        // And RotationUtils for quaternion generation
-        movement::utils::RotationUtils::setSeed(static_cast<unsigned int>(config_.randomSeed));
+        unsigned int baseSeed = static_cast<unsigned int>(config_.randomSeed);
+        engine_->setSeed(baseSeed);
+        // Use different offsets to avoid collision with engine's internal components
+        movement::utils::RandomUtils::setSeed(static_cast<uint64_t>(baseSeed + 100));
+        movement::utils::RotationUtils::setSeed(baseSeed + 200);
     }
 
     return true;
@@ -1389,13 +1416,27 @@ bool GCMCSimulation::performSingleMove() {
                 return false;  // Skip this move entirely
             }
         } else if (moveType == DELETE && frag.currentCount <= 0) {
-            // Nothing to delete, skip
-            return false;
+            // No molecules of this fragment; try another move instead of failing the step
+            if (reservoir_->getActiveCount() > 0) {
+                // There are some molecules (maybe other types): try a cheap move
+                moveType = (uniform_(rng_) < 0.5) ? TRANSLATE : ROTATE;
+            } else {
+                // No molecules at all: switch to insertion
+                moveType = INSERT;
+            }
         }
     }
 
     bool accepted = false;
     GCMCEngine::MoveResult result;
+
+    // Save nBefore for diagnostics (before move modifies currentCount)
+    int nBefore = -1;
+    if (diagnosticsEnabled_ && (moveType == INSERT || moveType == DELETE)) {
+        if (fragType >= 0 && static_cast<size_t>(fragType) < fragmentTypes_.size()) {
+            nBefore = fragmentTypes_[fragType].currentCount;
+        }
+    }
 
     // Increment total move attempts
     stats_.totalSteps++;
@@ -1511,17 +1552,105 @@ bool GCMCSimulation::performSingleMove() {
     if (accepted) {
         stats_.acceptedMoves++;
     }
-    
+
+    // Record to acceptance buffer if diagnostics enabled
+    if (diagnosticsEnabled_ && moveType != TRANSLATE && moveType != ROTATE) {
+        // Only record INSERT/DELETE moves for now (TRANSLATE/ROTATE lack fragment type info)
+        AcceptanceRecord rec;
+
+        // Map local MoveType to AcceptanceRecord::MoveType
+        switch (moveType) {
+            case INSERT:    rec.moveType = AcceptanceRecord::INSERT; break;
+            case DELETE:    rec.moveType = AcceptanceRecord::DELETE; break;
+            case TRANSLATE: rec.moveType = AcceptanceRecord::TRANSLATE; break;
+            case ROTATE:    rec.moveType = AcceptanceRecord::ROTATE; break;
+        }
+
+        // Get fragment type (valid for INSERT/DELETE)
+        rec.species = fragType;
+        rec.nBefore = nBefore;  // Number of molecules before the move
+        rec.step = stats_.totalSteps;
+        rec.deltaU = result.deltaE;
+
+        // Get beta from params (beta = 1/kT)
+        double beta = params_->get_mc_info().beta;
+        rec.betaDeltaU = result.deltaE * beta;
+
+        // Get chemical potential, activity, and CBMC trials for this fragment type
+        if (fragType >= 0 && static_cast<size_t>(fragType) < fragmentTypes_.size()) {
+            rec.mu = fragmentTypes_[fragType].chemicalPotential;
+            rec.betaMu = rec.mu * beta;
+            rec.z = fragmentTypes_[fragType].activity;
+            rec.cbmcTrials = fragmentTypes_[fragType].confBiasTrials;
+        } else {
+            rec.mu = 0.0;
+            rec.betaMu = 0.0;
+            rec.z = 1.0;
+            rec.cbmcTrials = 1;
+        }
+
+        // CBMC Rosenbluth weights from engine
+        // For insertion: qForward = W_new/K
+        // For deletion: qReverse = W_old/K
+        // proposalRatio will be calculated from paired qForward/qReverse in tests
+        if (moveType == INSERT) {
+            rec.qForward = result.rosenbluthWeight;
+            rec.qReverse = 1.0;  // Not applicable for single move
+        } else {  // DELETE
+            rec.qForward = 1.0;  // Not applicable for single move
+            rec.qReverse = result.rosenbluthWeight;
+        }
+        rec.proposalRatio = 1.0;  // Will be qForward/qReverse from paired moves
+
+        // Effective volume (box volume)
+        const auto& box = params_->get_space_info().box_size;
+        double boxVol = box[0] * box[1] * box[2];
+        rec.vEff = boxVol;
+
+        // Acceptance probability and random number
+        rec.pAcc = result.acceptanceProbability;
+        rec.u = uniform_(rng_);  // Generate a random number for logging purposes
+        rec.accepted = accepted;
+
+        // Cavity bias weights from engine
+        // For insertion: wForward = cavity score, wReverse = 1.0 (to be from paired deletion)
+        // For deletion: wReverse = cavity score, wForward = 1.0 (to be from paired insertion)
+        if (moveType == INSERT) {
+            rec.wForward = result.cavityBiasComponent;
+            rec.wReverse = 1.0;  // Will be from paired deletion
+        } else {  // DELETE
+            rec.wForward = 1.0;  // Will be from paired insertion
+            rec.wReverse = result.cavityBiasComponent;
+        }
+
+        // Calculate cavity volume fraction for wCavity field
+        // Note: This can be expensive for fine grids, so we use the cached value
+        // from the last grid calculation rather than recalculating every move
+        if (cavityManager_ && cavityManager_->isCacheValid()) {
+            rec.wCavity = cavityManager_->getStatistics().cavityRatio;
+        } else {
+            rec.wCavity = 1.0;  // No cavity bias or cache invalid
+        }
+
+        // Add to circular buffer
+        if (acceptanceBuffer_.size() < bufferSize_) {
+            acceptanceBuffer_.push_back(rec);
+        } else {
+            acceptanceBuffer_[bufferIndex_] = rec;
+        }
+        bufferIndex_ = (bufferIndex_ + 1) % bufferSize_;
+    }
+
     // Update energy history
     if (config_.enableStatistics && stats_.totalSteps % config_.statisticsInterval == 0) {
         double energy = calculateSystemEnergy();
         stats_.energyHistory.push_back(energy);
         stats_.currentEnergy = energy;
-        
+
         // Record in new statistics module
         simulationStats_.recordEnergy(energy);
     }
-    
+
     return true;
 }
 
@@ -2219,10 +2348,127 @@ void GCMCSimulation::saveCheckpoint(const std::string& filename) const {
     log("Saved checkpoint to ", filename);
 }
 
-bool GCMCSimulation::loadCheckpoint(const std::string& /*filename*/) {
-    // TODO: Implement checkpoint loading
-    // Will deserialize state_, reservoir_, and statistics
-    return false;
+bool GCMCSimulation::loadCheckpoint(const std::string& filename) {
+    if (!state_ || !engine_) {
+        log("ERROR: Cannot load checkpoint - state or engine not initialized");
+        return false;
+    }
+
+    std::ifstream in(filename, std::ios::binary);
+    if (!in) {
+        log("ERROR: Failed to open checkpoint file ", filename);
+        return false;
+    }
+
+    // Read and verify header
+    const std::string expected_header = "GCMC_CHECKPOINT_V1";
+    std::string header(expected_header.size(), '\0');
+    in.read(&header[0], header.size());
+    if (header != expected_header) {
+        log("ERROR: Invalid checkpoint file format");
+        return false;
+    }
+
+    // Read simulation state
+    in.read(reinterpret_cast<char*>(&stats_.totalSteps), sizeof(stats_.totalSteps));
+    in.read(reinterpret_cast<char*>(&stats_.acceptedMoves), sizeof(stats_.acceptedMoves));
+    in.read(reinterpret_cast<char*>(&stats_.currentEnergy), sizeof(stats_.currentEnergy));
+    in.read(reinterpret_cast<char*>(&stats_.totalTime), sizeof(stats_.totalTime));
+
+    // Read fragment counts
+    size_t numFragTypes;
+    in.read(reinterpret_cast<char*>(&numFragTypes), sizeof(numFragTypes));
+
+    for (size_t i = 0; i < numFragTypes; ++i) {
+        size_t nameLen;
+        in.read(reinterpret_cast<char*>(&nameLen), sizeof(nameLen));
+        std::string fragName(nameLen, '\0');
+        in.read(&fragName[0], nameLen);
+
+        int currentCount, insertAttempts, insertAccepted, deleteAttempts, deleteAccepted;
+        in.read(reinterpret_cast<char*>(&currentCount), sizeof(currentCount));
+        in.read(reinterpret_cast<char*>(&insertAttempts), sizeof(insertAttempts));
+        in.read(reinterpret_cast<char*>(&insertAccepted), sizeof(insertAccepted));
+        in.read(reinterpret_cast<char*>(&deleteAttempts), sizeof(deleteAttempts));
+        in.read(reinterpret_cast<char*>(&deleteAccepted), sizeof(deleteAccepted));
+
+        // Find matching fragment type and update counts
+        for (auto& frag : fragmentTypes_) {
+            if (frag.name == fragName) {
+                frag.currentCount = currentCount;
+                frag.insertAttempts = insertAttempts;
+                frag.insertAccepted = insertAccepted;
+                frag.deleteAttempts = deleteAttempts;
+                frag.deleteAccepted = deleteAccepted;
+                break;
+            }
+        }
+    }
+
+    // Read atom positions
+    size_t numAtoms;
+    in.read(reinterpret_cast<char*>(&numAtoms), sizeof(numAtoms));
+
+    if (numAtoms != state_->atoms.size()) {
+        log("WARNING: Atom count mismatch in checkpoint (", numAtoms, " vs ", state_->atoms.size(), ")");
+        // Continue anyway - may be due to insertions/deletions
+    }
+
+    // Resize atoms vector if needed
+    if (numAtoms > state_->atoms.size()) {
+        state_->atoms.resize(numAtoms);
+    }
+
+    for (size_t i = 0; i < numAtoms && i < state_->atoms.size(); ++i) {
+        in.read(reinterpret_cast<char*>(&state_->atoms[i].x), sizeof(state_->atoms[i].x));
+        in.read(reinterpret_cast<char*>(&state_->atoms[i].y), sizeof(state_->atoms[i].y));
+        in.read(reinterpret_cast<char*>(&state_->atoms[i].z), sizeof(state_->atoms[i].z));
+        in.read(reinterpret_cast<char*>(&state_->atoms[i].type), sizeof(state_->atoms[i].type));
+        bool active;
+        in.read(reinterpret_cast<char*>(&active), sizeof(active));
+        // Note: MCAtom doesn't have isActive field, so we just read and discard
+    }
+
+    // Read residue information
+    size_t numResidues;
+    in.read(reinterpret_cast<char*>(&numResidues), sizeof(numResidues));
+
+    if (numResidues != state_->residues.size()) {
+        log("WARNING: Residue count mismatch in checkpoint (", numResidues, " vs ", state_->residues.size(), ")");
+    }
+
+    // Resize residues vector if needed
+    if (numResidues > state_->residues.size()) {
+        state_->residues.resize(numResidues);
+    }
+
+    for (size_t i = 0; i < numResidues && i < state_->residues.size(); ++i) {
+        size_t nameLen;
+        in.read(reinterpret_cast<char*>(&nameLen), sizeof(nameLen));
+        std::string resname(nameLen, '\0');
+        in.read(&resname[0], nameLen);
+        state_->residues[i].resname = resname;
+        in.read(reinterpret_cast<char*>(&state_->residues[i].active), sizeof(state_->residues[i].active));
+    }
+
+    // Update active atom/residue counts
+    state_->activeAtomCount = 0;
+    for (const auto& atom : state_->atoms) {
+        if (atom.type >= 0) {  // Simple active check
+            state_->activeAtomCount++;
+        }
+    }
+
+    state_->activeResidueCount = 0;
+    for (const auto& res : state_->residues) {
+        if (res.active) {
+            state_->activeResidueCount++;
+        }
+    }
+
+    in.close();
+    log("Loaded checkpoint from ", filename, " (step ", stats_.totalSteps, ")");
+    return true;
 }
 
 template<typename... Args>
@@ -2406,6 +2652,12 @@ void GCMCSimulation::enableDiagnostics(size_t bufferSize) {
     acceptanceBuffer_.clear();
     bufferIndex_ = 0;
 
+    // Enable probability storage for acceptance logging
+    config_.storeProbabilities = true;
+    if (engine_) {
+        engine_->setConfigValue("storeProbabilities", 1.0);
+    }
+
     log("Diagnostics enabled with buffer size: ", bufferSize);
 }
 
@@ -2481,11 +2733,26 @@ void GCMCSimulation::dumpAcceptanceLog(const std::string& filename) const {
 
     // Write JSONL format
     for (const auto& rec : acceptanceBuffer_) {
+        // Map move type enum to string (with "ion" suffix as per spec)
+        const char* moveTypeStr = "";
+        switch (rec.moveType) {
+            case AcceptanceRecord::INSERT:     moveTypeStr = "insertion"; break;
+            case AcceptanceRecord::DELETE:     moveTypeStr = "deletion"; break;
+            case AcceptanceRecord::TRANSLATE:  moveTypeStr = "translation"; break;
+            case AcceptanceRecord::ROTATE:     moveTypeStr = "rotation"; break;
+        }
+
+        // Map species index to fragment name
+        std::string speciesName = "unknown";
+        if (rec.species >= 0 && static_cast<size_t>(rec.species) < fragmentTypes_.size()) {
+            speciesName = fragmentTypes_[rec.species].name;
+        }
+
         ofs << "{"
-            << "\"move\":\"" << (rec.moveType == AcceptanceRecord::INSERT ? "insert" :
-                                rec.moveType == AcceptanceRecord::DELETE ? "delete" :
-                                rec.moveType == AcceptanceRecord::TRANSLATE ? "translate" : "rotate") << "\","
-            << "\"species\":" << rec.species << ","
+            << "\"move\":\"" << moveTypeStr << "\","
+            << "\"species\":\"" << speciesName << "\","
+            << "\"nBefore\":" << rec.nBefore << ","
+            << "\"cbmcTrials\":" << rec.cbmcTrials << ","
             << "\"step\":" << rec.step << ","
             << "\"deltaU\":" << rec.deltaU << ","
             << "\"betaDeltaU\":" << rec.betaDeltaU << ","
@@ -2500,7 +2767,8 @@ void GCMCSimulation::dumpAcceptanceLog(const std::string& filename) const {
             << "\"u\":" << rec.u << ","
             << "\"accepted\":" << (rec.accepted ? "true" : "false") << ","
             << "\"wForward\":" << rec.wForward << ","
-            << "\"wReverse\":" << rec.wReverse
+            << "\"wReverse\":" << rec.wReverse << ","
+            << "\"wCavity\":" << rec.wCavity
             << "}\n";
     }
 

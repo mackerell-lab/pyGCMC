@@ -126,6 +126,8 @@ public:
 
         MoveType moveType;
         int species;
+        int nBefore;       // Number of molecules of this species before the move
+        int cbmcTrials;    // Number of CBMC trial configurations (K)
         int step;
         double deltaU;
         double betaDeltaU;
@@ -143,6 +145,7 @@ public:
         // For biased moves
         double wForward = 1.0;
         double wReverse = 1.0;
+        double wCavity = 1.0;   // Cavity bias factor (V_cavity / V_box)
     };
 
     /**

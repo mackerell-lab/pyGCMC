@@ -23,7 +23,7 @@ private:
     mutable std::uniform_real_distribution<double> dist_;
     
 public:
-    ProposalUniform(unsigned seed = std::random_device{}());
+    ProposalUniform(unsigned seed = 0u);  // Deterministic default, should be set via setSeed()
     
     Vector3 propose(const MCState& state, ProposalInfo& info) override;
     

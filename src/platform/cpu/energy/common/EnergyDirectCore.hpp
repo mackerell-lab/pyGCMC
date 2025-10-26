@@ -1,6 +1,7 @@
 #pragma once
 
 #include "model/ModelModule.hpp"
+#include "NeighborList.hpp"
 
 namespace pygcmc {
 namespace platform {
@@ -69,6 +70,38 @@ void computeSystemEnergyPBCCutoff(model::MCState& state);
 void computeSystemEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc);
 void computeMovementEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc);
 void computeSystemVdwEnergyDirect(model::MCState& state, bool use_cutoff, bool use_pbc);
+
+/**
+ * @brief Compute nonbonded energy using neighbor list
+ *
+ * @param state MC state
+ * @param neighborList Pre-built neighbor list
+ * @param use_pbc Whether to use periodic boundary conditions
+ * @param vdw_only Whether to calculate only VDW interactions
+ */
+void computeNonbondedEnergyWithNeighborList(
+    model::MCState& state,
+    const NeighborList& neighborList,
+    bool use_pbc,
+    bool vdw_only = false
+);
+
+/**
+ * @brief Compute residue energy using neighbor list
+ *
+ * @param state MC state
+ * @param residue_idx Index of the residue to calculate
+ * @param neighborList Pre-built neighbor list
+ * @param use_pbc Whether to use periodic boundary conditions
+ * @param vdw_only Whether to calculate only VDW interactions
+ */
+void computeResidueEnergyWithNeighborList(
+    model::MCState& state,
+    int residue_idx,
+    const NeighborList& neighborList,
+    bool use_pbc,
+    bool vdw_only = false
+);
 
 } // namespace cpu
 } // namespace platform

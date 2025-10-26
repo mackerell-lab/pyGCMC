@@ -57,10 +57,17 @@ public:
         int fragmentType;
         int residueIndex;
         Vector3 position;
-        
-        MoveResult() : type(INSERT), accepted(false), energyBefore(0), 
-                      energyAfter(0), deltaE(0), bias(1.0), 
-                      acceptanceProbability(0.0), fragmentType(-1), residueIndex(-1) {}
+
+        // CBMC (Configurational Bias) Rosenbluth weights for detailed balance
+        double rosenbluthWeight;  // W_new/K for insertion, W_old/K for deletion
+
+        // Cavity bias component (for detailed balance verification)
+        double cavityBiasComponent;
+
+        MoveResult() : type(INSERT), accepted(false), energyBefore(0),
+                      energyAfter(0), deltaE(0), bias(1.0),
+                      acceptanceProbability(0.0), fragmentType(-1), residueIndex(-1),
+                      rosenbluthWeight(1.0), cavityBiasComponent(1.0) {}
     };
     
     // Constructor

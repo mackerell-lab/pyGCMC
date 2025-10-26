@@ -12,7 +12,8 @@ namespace movement {
 namespace utils {
 
 // Static member definitions for RotationUtils
-std::mt19937 RotationUtils::gen_(std::random_device{}());
+// Initialize with deterministic seed (0), will be set via setSeed()
+std::mt19937 RotationUtils::gen_(0u);
 std::uniform_real_distribution<> RotationUtils::dis_(0.0, 1.0);
 
 } // namespace utils

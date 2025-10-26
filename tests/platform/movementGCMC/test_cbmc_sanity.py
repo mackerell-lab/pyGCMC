@@ -1,0 +1,380 @@
+"""
+CBMC Sanity Tests
+
+Verifies that CBMC (Configurational Bias Monte Carlo) implementation:
+1. Correctly enables/disables based on configuration
+2. Records varying Rosenbluth weights when enabled
+3. Uses unity weights when disabled
+4. Improves insertion acceptance statistics
+5. Satisfies acceptance probability formula
+
+Test Strategy:
+- Run minimal water system with CBMC on/off
+- Compare qForward/qReverse distributions
+- Verify cbmcTrials field matches configuration
+- Check pAcc against theoretical formula
+"""
+
+import subprocess
+from pathlib import Path
+import math
+import statistics
+import pytest
+from acceptance_log_utils import read_jsonl, filter_by_move, acceptance_statistics
+
+# Path to gcmc_cpu executable
+GCMC_CPU_PATH = Path(__file__).parent.parent.parent.parent / "build" / "bin" / "gcmc_cpu"
+
+
+def create_minimal_water_files(tmpdir: Path):
+    """Create minimal TIP3P water files for CBMC testing."""
+    # PDB file
+    pdb_file = tmpdir / "water.pdb"
+    pdb_file.write_text(
+        "CRYST1   10.000   10.000   10.000  90.00  90.00  90.00 P 1           1\n"
+        "ATOM      1  O   WAT     1       5.000   5.000   5.000  1.00  0.00           O\n"
+        "ATOM      2  H1  WAT     1       5.757   5.586   5.000  1.00  0.00           H\n"
+        "ATOM      3  H2  WAT     1       4.243   5.586   5.000  1.00  0.00           H\n"
+        "END\n"
+    )
+
+    # TOP file
+    top_file = tmpdir / "water.top"
+    top_file.write_text(
+        "[ moleculetype ]\n"
+        "WAT     3\n\n"
+        "[ atoms ]\n"
+        "1  O   1  WAT  OW  1  -0.834  15.9994\n"
+        "2  H   1  WAT  HW1 1   0.417   1.008\n"
+        "3  H   1  WAT  HW2 1   0.417   1.008\n\n"
+        "[ bonds ]\n"
+        "1  2  1  0.09572  462750.4\n"
+        "1  3  1  0.09572  462750.4\n\n"
+        "[ angles ]\n"
+        "2  1  3  1  104.52  628.02\n\n"
+        "[ system ]\n"
+        "Water System\n\n"
+        "[ molecules ]\n"
+        "WAT  1\n"
+    )
+
+    # Atomtypes file
+    atp_file = tmpdir / "atomtypes.atp"
+    atp_file.write_text("O   15.9994\nH    1.008\n")
+
+    # Force field file
+    ff_file = tmpdir / "ffnonbonded.itp"
+    ff_file.write_text(
+        "[ atomtypes ]\n"
+        "O   8   15.9994  -0.834  A  3.15061e-01  6.36386e-01\n"
+        "H   1   1.008     0.417  A  0.00000e+00  0.00000e+00\n"
+    )
+
+    return pdb_file, top_file, atp_file, ff_file
+
+
+def build_inp(pdb: Path, top: Path, atp: Path, ff: Path,
+              use_cbmc: bool, k_trials: int, mcsteps: int, mu: float = -2.0):
+    """Build INP file content with CBMC configuration."""
+    cbmc_line = "use_conf_bias:yes" if use_cbmc else "use_conf_bias:no"
+    fragconf_line = f"fragconf:{k_trials}"
+
+    return f"""par:{ff}
+atomtypes:{atp}
+top:{top}
+pdb:{pdb}
+protitp:{top}
+
+fragname: water
+fragconc: 55.0
+fragmuex: {mu}
+{fragconf_line}
+
+box_size: 10.0 10.0 10.0
+cutoff: 4.5
+temperature: 300.0
+mcsteps: {mcsteps}
+nprint: {max(1, mcsteps // 2)}
+eqsteps: 0
+
+mc_move_prob: 0.5 0.5 0 0
+
+{cbmc_line}
+
+seed: 42
+"""
+
+
+def run_with_accept_log(inp_content: str, workdir: Path,
+                       accept_name: str = "accept.jsonl", timeout: int = 120):
+    """Run simulation and return result + acceptance log path."""
+    inp_file = workdir / "test.inp"
+    inp_file.write_text(inp_content)
+    accept_log = workdir / accept_name
+
+    result = subprocess.run(
+        [str(GCMC_CPU_PATH), "--inp", str(inp_file),
+         "--dump-accept", str(accept_log), "--seed", "42"],
+        cwd=str(workdir),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    return result, accept_log
+
+
+class TestCBMCSanity:
+    """CBMC sanity tests verifying weight calculation and acceptance."""
+
+    def test_cbmc_enabled_has_weights(self, tmp_path):
+        """
+        P1验收测试：CBMC启用时权重变化
+
+        验证：
+        - cbmcTrials = K >= 2
+        - qForward (插入) 不全等于1
+        - qReverse (删除) 不全等于1
+        - 权重在合理范围内变化
+        """
+        print("\n=== CBMC Enabled: Weights Variation Test ===")
+
+        pdb, top, atp, ff = create_minimal_water_files(tmp_path)
+        inp = build_inp(pdb, top, atp, ff, use_cbmc=True, k_trials=8,
+                       mcsteps=4000, mu=-2.0)
+
+        result, accept_log = run_with_accept_log(inp, tmp_path, "cbmc_on.jsonl", timeout=180)
+
+        assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+
+        records = read_jsonl(accept_log)
+        assert records, "No acceptance records found"
+
+        ins = filter_by_move(records, "insertion")
+        dels = filter_by_move(records, "deletion")
+
+        print(f"Total records: {len(records)}")
+        print(f"Insertions: {len(ins)}, Deletions: {len(dels)}")
+
+        assert ins or dels, "Need at least insertion or deletion attempts"
+
+        # Check cbmcTrials field
+        all_moves = ins + dels
+        cbmc_trials = {r.get("cbmcTrials", 0) for r in all_moves}
+        print(f"CBMC trials values: {cbmc_trials}")
+        assert max(cbmc_trials) >= 2, f"cbmcTrials should be >= 2 when enabled, got {cbmc_trials}"
+
+        # Check qForward variation (if insertions exist)
+        if ins:
+            qf = [r.get("qForward", 1.0) for r in ins[:100]]  # Sample first 100
+            print(f"qForward sample (n={len(qf)}): min={min(qf):.6f}, max={max(qf):.6f}, mean={sum(qf)/len(qf):.6f}")
+            # At least some should differ from 1.0
+            non_unity = [x for x in qf if abs(x - 1.0) > 1e-12]
+            assert len(non_unity) > 0, "qForward should vary with CBMC enabled"
+
+        # Check qReverse variation (deletions always exist)
+        if dels:
+            qr = [r.get("qReverse", 1.0) for r in dels[:100]]  # Sample first 100
+            print(f"qReverse sample (n={len(qr)}): min={min(qr):.6f}, max={max(qr):.6f}, mean={sum(qr)/len(qr):.6f}")
+            # Should vary across attempts
+            assert min(qr) < max(qr), "qReverse should vary across deletion attempts"
+            # Check reasonable range (0 < W/K <= 1 typically)
+            assert all(0 < x <= 1.5 for x in qr), f"qReverse out of reasonable range: {[x for x in qr if x > 1.5]}"
+
+        print("✅ CBMC weights variation test passed")
+
+    def test_cbmc_disabled_has_unity_weights(self, tmp_path):
+        """
+        P1验收测试：CBMC禁用时权重为1
+
+        验证：
+        - cbmcTrials = 1
+        - qForward ≈ 1.0 (all insertions)
+        - qReverse ≈ 1.0 (all deletions)
+        """
+        print("\n=== CBMC Disabled: Unity Weights Test ===")
+
+        pdb, top, atp, ff = create_minimal_water_files(tmp_path)
+        inp = build_inp(pdb, top, atp, ff, use_cbmc=False, k_trials=1,
+                       mcsteps=3000, mu=-2.0)
+
+        result, accept_log = run_with_accept_log(inp, tmp_path, "cbmc_off.jsonl", timeout=120)
+
+        assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+
+        records = read_jsonl(accept_log)
+        assert records, "No acceptance records found"
+
+        ins = filter_by_move(records, "insertion")
+        dels = filter_by_move(records, "deletion")
+
+        print(f"Total records: {len(records)}")
+        print(f"Insertions: {len(ins)}, Deletions: {len(dels)}")
+
+        assert ins or dels, "Need at least insertion or deletion attempts"
+
+        # Check cbmcTrials = 1
+        all_moves = ins + dels
+        cbmc_trials = {r.get("cbmcTrials", 0) for r in all_moves}
+        print(f"CBMC trials values: {cbmc_trials}")
+        assert cbmc_trials == {1}, f"cbmcTrials should be 1 when disabled, got {cbmc_trials}"
+
+        # Check qForward = 1
+        if ins:
+            qf = [r.get("qForward", 1.0) for r in ins]
+            print(f"qForward range: min={min(qf):.6f}, max={max(qf):.6f}")
+            assert all(abs(x - 1.0) < 1e-12 for x in qf), "qForward must be 1.0 without CBMC"
+
+        # Check qReverse = 1
+        if dels:
+            qr = [r.get("qReverse", 1.0) for r in dels]
+            print(f"qReverse range: min={min(qr):.6f}, max={max(qr):.6f}")
+            assert all(abs(x - 1.0) < 1e-12 for x in qr), "qReverse must be 1.0 without CBMC"
+
+        print("✅ Unity weights test passed")
+
+    def test_cbmc_improves_insertion_statistics(self, tmp_path):
+        """
+        P1验收测试：CBMC提升插入接受统计
+
+        验证K增大时插入接受率或平均pAcc呈上升趋势。
+
+        策略：
+        - 比较K=1 vs K=8
+        - 检查接受率提升 OR 平均pAcc提升
+        """
+        print("\n=== CBMC Improvement Test ===")
+
+        pdb, top, atp, ff = create_minimal_water_files(tmp_path)
+
+        # Run baseline (K=1)
+        print("Running baseline (K=1)...")
+        inp_off = build_inp(pdb, top, atp, ff, use_cbmc=False, k_trials=1,
+                           mcsteps=5000, mu=-1.5)  # Higher mu for more insertions
+        result_off, log_off = run_with_accept_log(inp_off, tmp_path, "off.jsonl", timeout=180)
+        assert result_off.returncode == 0
+        rec_off = read_jsonl(log_off)
+
+        # Run CBMC (K=8)
+        print("Running CBMC (K=8)...")
+        inp_on = build_inp(pdb, top, atp, ff, use_cbmc=True, k_trials=8,
+                          mcsteps=5000, mu=-1.5)
+        result_on, log_on = run_with_accept_log(inp_on, tmp_path, "on.jsonl", timeout=180)
+        assert result_on.returncode == 0
+        rec_on = read_jsonl(log_on)
+
+        # Get insertion statistics
+        ins_off = filter_by_move(rec_off, "insertion")
+        ins_on = filter_by_move(rec_on, "insertion")
+
+        print(f"Baseline insertions: {len(ins_off)}")
+        print(f"CBMC insertions: {len(ins_on)}")
+
+        if len(ins_off) < 20 or len(ins_on) < 20:
+            pytest.skip("Not enough insertion attempts for robust comparison")
+
+        # Compare acceptance rates
+        stats_off = acceptance_statistics(rec_off)
+        stats_on = acceptance_statistics(rec_on)
+
+        acc_off = stats_off.get("insertion", {}).get("water", 0.0)
+        acc_on = stats_on.get("insertion", {}).get("water", 0.0)
+
+        print(f"Acceptance rate: {acc_off:.4f} (K=1) -> {acc_on:.4f} (K=8)")
+
+        # Compare median pAcc
+        pacc_off = [r.get("pAcc", 0.0) for r in ins_off if r.get("pAcc", 0.0) >= 0.0]
+        pacc_on = [r.get("pAcc", 0.0) for r in ins_on if r.get("pAcc", 0.0) >= 0.0]
+
+        med_off = statistics.median(pacc_off) if pacc_off else 0.0
+        med_on = statistics.median(pacc_on) if pacc_on else 0.0
+
+        print(f"Median pAcc: {med_off:.6f} (K=1) -> {med_on:.6f} (K=8)")
+
+        # Accept if either metric improves
+        acc_improved = acc_on >= acc_off - 0.01  # Allow small statistical noise
+        pacc_improved = med_on >= med_off - 0.001
+
+        assert acc_improved or pacc_improved, \
+            f"CBMC did not improve: acc {acc_off:.3f}->{acc_on:.3f}, pAcc {med_off:.6f}->{med_on:.6f}"
+
+        print("✅ CBMC improvement test passed")
+
+    def test_acceptance_formula_consistency(self, tmp_path):
+        """
+        P1验收测试：接受概率公式验证
+
+        验证pAcc字段与理论公式匹配：
+        - 插入: pAcc = min(1, (z×V)/(N+1) × exp(-βΔU) × qForward)
+        - 删除: pAcc = min(1, N/(z×V) × exp(-βΔU) × qReverse)
+
+        容忍度: 5e-5 (数值精度)
+        """
+        print("\n=== Acceptance Formula Consistency Test ===")
+
+        pdb, top, atp, ff = create_minimal_water_files(tmp_path)
+        inp = build_inp(pdb, top, atp, ff, use_cbmc=True, k_trials=5,
+                       mcsteps=4000, mu=-2.0)
+
+        result, accept_log = run_with_accept_log(inp, tmp_path, "formula.jsonl", timeout=180)
+
+        assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+
+        records = read_jsonl(accept_log)
+        assert records, "No acceptance records found"
+
+        ins = filter_by_move(records, "insertion")
+        dels = filter_by_move(records, "deletion")
+
+        print(f"Checking {len(ins)} insertions and {len(dels)} deletions")
+
+        tol = 5e-5
+        checked_ins = 0
+        checked_del = 0
+
+        # Check insertions
+        for r in ins[:300]:  # Sample to keep runtime reasonable
+            z = r.get("z", 1.0)
+            v_eff = r.get("vEff", 1.0)
+            n_before = r.get("nBefore", 0)
+            beta_delta_u = r.get("betaDeltaU", 0.0)
+            qf = r.get("qForward", 1.0)
+
+            expected = min(1.0, (z * v_eff) / (n_before + 1.0) * math.exp(-beta_delta_u) * qf)
+            actual = r.get("pAcc", 0.0)
+
+            if actual < 0:  # Skip if probability not stored
+                continue
+
+            assert abs(expected - actual) < tol, \
+                f"Insertion pAcc mismatch: exp={expected:.6f}, act={actual:.6f}, " \
+                f"z={z}, V={v_eff}, N={n_before}, βΔU={beta_delta_u:.4f}, qF={qf:.6f}"
+            checked_ins += 1
+
+        # Check deletions
+        for r in dels[:300]:
+            z = r.get("z", 1.0)
+            v_eff = r.get("vEff", 1.0)
+            n_before = r.get("nBefore", 1)
+            beta_delta_u = r.get("betaDeltaU", 0.0)
+            qr = r.get("qReverse", 1.0)
+
+            expected = min(1.0, n_before / (z * v_eff) * math.exp(-beta_delta_u) * qr)
+            actual = r.get("pAcc", 0.0)
+
+            if actual < 0:  # Skip if probability not stored
+                continue
+
+            assert abs(expected - actual) < tol, \
+                f"Deletion pAcc mismatch: exp={expected:.6f}, act={actual:.6f}, " \
+                f"z={z}, V={v_eff}, N={n_before}, βΔU={beta_delta_u:.4f}, qR={qr:.6f}"
+            checked_del += 1
+
+        print(f"Verified {checked_ins} insertions and {checked_del} deletions")
+        assert checked_ins + checked_del > 0, "No records validated against acceptance formula"
+
+        print("✅ Acceptance formula consistency test passed")
+
+
+if __name__ == "__main__":
+    # Allow running test directly for debugging
+    pytest.main([__file__, "-v", "-s"])

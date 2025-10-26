@@ -14,7 +14,7 @@ GCMCAcceptance::GCMCAcceptance()
       pressure_(1.0),
       volume_(1000.0),
       criterionType_(CriterionType::GRAND_CANONICAL),
-      rng_(std::random_device{}()),
+      rng_(0u),  // Deterministic initial value, will be set via setSeed()
       uniform_(0.0, 1.0),
       totalDecisions_(0),
       acceptedMoves_(0) {

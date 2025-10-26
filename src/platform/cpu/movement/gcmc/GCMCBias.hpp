@@ -105,6 +105,7 @@ public:
     
     // Configuration
     void setTemperature(double T) { temperature_ = T; }
+    void setSeed(unsigned int seed) { rng_.seed(seed); }
     void enableCavityBias(bool enable) { useCavityBias_ = enable; }
     void enableConfigBias(bool enable) { useConfigBias_ = enable; }
     void enableOrientBias(bool enable) { useOrientBias_ = enable; }

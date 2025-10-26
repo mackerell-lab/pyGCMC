@@ -38,8 +38,8 @@ def test_cavity_bias_effect():
         system = create_system_with_density(density)
         f_n = 1.0 - density  # Cavity fraction
         
-        # Try insertions
-        n_attempts = 100
+        # Try insertions (increase sample size to reduce statistical fluctuation)
+        n_attempts = 1000
         accepted_no_bias = 0
         accepted_with_bias = 0
         

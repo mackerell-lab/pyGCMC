@@ -30,7 +30,7 @@ GCMCEngine::GCMCEngine()
       temperature_(300.0),
       cutoff_(12.0),
       energyMethod_(EnergyMethod::DIRECT),
-      rng_(std::random_device{}()),
+      rng_(0u),  // Deterministic initial value, will be set via setSeed()
       uniform_(0.0, 1.0),
       normal_(0.0, 1.0),
       totalMoves_(0),
@@ -132,13 +132,14 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     Vector3 position;
     Quaternion orientation;
     double cbmcBias = 1.0;
+    double cavityBias = 1.0;
 
     if (useConfBias_ && numTrials > 1) {
         // Use CBMC to select configuration
         TrialConfiguration selected = performCBMCInsertion(typeId, numTrials);
         position = selected.position;
         orientation = selected.orientation;
-        cbmcBias = selected.weight * numTrials;  // W_new / K
+        cbmcBias = selected.weight;  // W_new / K (already normalized by performCBMCInsertion)
     } else {
         // Original single configuration generation
         // Try multiple times to find a placement fully inside region (if configured)
@@ -198,8 +199,18 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         result.deltaE = result.energyAfter - result.energyBefore;
     }
     
-    // Calculate bias (cavity bias * CBMC bias)
+    // Calculate cavity bias component separately for detailed balance tracking
+    if (cavityManager_ && useCavityBias_) {
+        movement::Vector3 pos(position.x, position.y, position.z);
+        cavityBias = cavityManager_->getCavityScore(pos);
+    }
+
+    // Calculate total bias (cavity bias * CBMC bias * proposal bias)
     result.bias = calculateInsertionBias(*tmpl, position, orientation) * cbmcBias;
+
+    // Store individual components for detailed balance verification
+    result.rosenbluthWeight = cbmcBias;
+    result.cavityBiasComponent = cavityBias;
 
     // Calculate acceptance probability using proper GCMC formula
     bool accept = false;
@@ -300,6 +311,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
 
     // Calculate CBMC bias for deletion if enabled
     double cbmcBias = 1.0;
+    double cavityBias = 1.0;
     int numTrials = 1;
     if (useConfBias_ && typeId < static_cast<int>(cbmcTrialsPerType_.size())) {
         numTrials = cbmcTrialsPerType_[typeId];
@@ -387,9 +399,19 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
         result.deltaE = result.energyAfter - result.energyBefore;
     }
     
+    // Calculate cavity bias component separately for detailed balance tracking
+    if (cavityManager_ && useCavityBias_) {
+        movement::Vector3 pos(savedPosition.x, savedPosition.y, savedPosition.z);
+        cavityBias = cavityManager_->getCavityScore(pos);
+    }
+
     // CRITICAL FIX: Calculate deletion bias using saved position for robustness
     // Include CBMC bias in total bias
     result.bias = calculateDeletionBiasAtPosition(savedPosition) * cbmcBias;
+
+    // Store individual components for detailed balance verification
+    result.rosenbluthWeight = cbmcBias;
+    result.cavityBiasComponent = cavityBias;
 
     // Calculate acceptance probability using proper GCMC formula
     bool accept = false;
@@ -1593,15 +1615,25 @@ GCMCEngine::TrialConfiguration GCMCEngine::performCBMCInsertion(int typeId, int 
     // Select configuration based on weights
     double r = uniform_(rng_) * totalWeight;
     double cumWeight = 0.0;
+    TrialConfiguration selected;
     for (const auto& trial : trials) {
         cumWeight += trial.weight;
         if (cumWeight >= r) {
-            return trial;
+            selected = trial;
+            break;
         }
     }
 
-    // Fallback to last trial (should not happen with valid weights)
-    return trials.back();
+    // If no selection made (numerical edge case), use last trial
+    if (cumWeight == 0.0) {
+        selected = trials.back();
+    }
+
+    // Store total Rosenbluth weight for detailed balance
+    // Note: selected.weight contains individual trial weight, but we need total weight W
+    selected.weight = totalWeight / numTrials;  // Store W/K for later multiplication
+
+    return selected;
 }
 
 // Calculate CBMC bias factor

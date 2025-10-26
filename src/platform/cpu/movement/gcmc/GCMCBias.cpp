@@ -25,7 +25,7 @@ GCMCBias::GCMCBias()
       biasPotential_(0.0),
       averageBias_(1.0),
       biasCalculations_(0),
-      rng_(std::random_device{}()),
+      rng_(0u),  // Deterministic initial value, will be set via setSeed()
       uniform_(0.0, 1.0),
       normal_(0.0, 1.0) {
 }

@@ -27,8 +27,8 @@ private:
     mutable std::uniform_real_distribution<double> dist_;
     
 public:
-    ProposalCavity(std::shared_ptr<CavityManager> cavityManager, 
-                   unsigned seed = std::random_device{}());
+    ProposalCavity(std::shared_ptr<CavityManager> cavityManager,
+                   unsigned seed = 0u);  // Deterministic default, should be set via setSeed()
     
     Vector3 propose(const MCState& state, ProposalInfo& info) override;
     
