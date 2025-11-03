@@ -99,6 +99,10 @@ from movementGCMC.ideal_gas_validation import TestIdealGasValidation
 from movementGCMC.gcmc_engine_config import TestGCMCEngineConfig
 from movementGCMC.cavity_bias_cpu import TestCavityBias as TestCavityBiasCPU
 
+# CLI/JSONL integration suites
+from movementGCMC.cavity_bias_cli import TestCavityBias as TestCavityBiasCLI
+from movementGCMC.cbmc_sanity_cli import TestCBMCSanity
+
 # Temperature scaling tests (functions)
 from movementGCMC.temperature_scaling import (
     test_boltzmann_distribution,

@@ -98,8 +98,8 @@ struct MCParams {
 
     int rotate_dih_status = 0;
 
-    // Physical constants
-    float BOLTZMANN = 0.001987f;
+    // Physical constants (use kJ/mol/K to match platform energy units)
+    float BOLTZMANN = 0.00831446f;
     float KCAL_TO_KJ = 4.184f;
 };
 

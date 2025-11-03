@@ -139,6 +139,7 @@ public:
         double proposalRatio;
         double vEff;       // Effective volume
         double pAcc;       // Calculated acceptance probability
+        double bias = 1.0; // Total bias factor applied in acceptance
         double u;          // Random number used
         bool accepted;
 

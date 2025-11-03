@@ -128,14 +128,12 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
     
     // Only use MCInitializer if we have complete molecular data with actual atoms
     if (result.molecular && result.structureLoaded && result.topologyLoaded &&
-        result.molecular->atoms.size() > 0) {
+        result.molecular->atoms.size() > 0 && result.forceField) {
         // Use MCInitializer to populate from real molecular data
         system::montecarlo::MCInitializer initializer;
         initializer.initializeFromMolecular(*result.mcState, result.molecular);
         
-        if (result.forceField) {
-            initializer.initializeForceField(*result.mcState, *result.forceField);
-        }
+        initializer.initializeForceField(*result.mcState, *result.forceField);
         
         log("MC state initialized with real molecular data");
     } else {

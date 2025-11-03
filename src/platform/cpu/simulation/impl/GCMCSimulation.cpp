@@ -59,9 +59,11 @@ bool GCMCSimulation::initialize() {
     builderConfig.inpFile = config_.inputFile;
     // Disable heavy loading in non-verbose mode to avoid timeout
     // We'll check file existence separately below
-    builderConfig.loadStructure = config_.verbose;
-    builderConfig.loadTopology = config_.verbose;
-    builderConfig.loadParameters = config_.verbose;
+    // Always attempt to load structure/topology/parameters to mirror legacy gcmc_gpu behavior.
+    // If files are missing we will fall back gracefully below.
+    builderConfig.loadStructure = true;
+    builderConfig.loadTopology = true;
+    builderConfig.loadParameters = true;
     builderConfig.verbose = config_.verbose;
     
     setup::SimulationInputBuilder builder(builderConfig);
@@ -350,6 +352,10 @@ void GCMCSimulation::printParameterSummary() {
     log("  Fragment cutoff: ", energyInfo.fragment_cutoff, " nm");
     log("  Protein cutoff: ", energyInfo.protein_cutoff, " nm");
     log("  Pairlist update frequency: ", energyInfo.pairlist_freq, " steps");
+
+    if (state_) {
+        state_->info.cutoff = energyInfo.fragment_cutoff;
+    }
 
     if (energyInfo.use_switching) {
         log("  Switching function: ON");
@@ -1606,6 +1612,7 @@ bool GCMCSimulation::performSingleMove() {
         const auto& box = params_->get_space_info().box_size;
         double boxVol = box[0] * box[1] * box[2];
         rec.vEff = boxVol;
+        rec.bias = result.bias;
 
         // Acceptance probability and random number
         rec.pAcc = result.acceptanceProbability;
@@ -2763,6 +2770,7 @@ void GCMCSimulation::dumpAcceptanceLog(const std::string& filename) const {
             << "\"qReverse\":" << rec.qReverse << ","
             << "\"proposalRatio\":" << rec.proposalRatio << ","
             << "\"vEff\":" << rec.vEff << ","
+            << "\"bias\":" << rec.bias << ","
             << "\"pAcc\":" << rec.pAcc << ","
             << "\"u\":" << rec.u << ","
             << "\"accepted\":" << (rec.accepted ? "true" : "false") << ","

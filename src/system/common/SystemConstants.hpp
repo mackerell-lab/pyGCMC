@@ -18,7 +18,7 @@ public:
     static constexpr float KJ_TO_KCAL = 1.0f / 4.184f;
     
     // Physical constants
-    static constexpr float BOLTZMANN_CONSTANT = 0.001987204f; // kcal/(mol·K)
+    static constexpr float BOLTZMANN_CONSTANT = 0.00831446f; // kJ/(mol·K)
     static constexpr float AVOGADRO_NUMBER = 6.02214076e23f;
     
     // Numerical constants
