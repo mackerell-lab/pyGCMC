@@ -66,11 +66,12 @@ struct MCState {
 
     void removeResidue(int index) {
         if (index >= 0 && index < activeResidueCount) {
-            residues[index].active = false;
-            if (index < activeResidueCount - 1) {
-                residues[index] = residues[activeResidueCount - 1];
+            const int lastIndex = activeResidueCount - 1;
+            if (index != lastIndex) {
+                residues[index] = residues[lastIndex];
                 residues[index].active = true;
             }
+            residues[lastIndex].active = false;
             activeResidueCount--;
         }
     }

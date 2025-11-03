@@ -33,7 +33,6 @@ void InpParserGCMC::parse_to_param(const std::string& filename, model::param::Pa
 void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& value, model::param::Param& param) {
     auto& mc_info = param.get_mc_info();
     auto& frag_info = param.get_fragment_info();
-    auto& file_info = param.get_file_info();
     auto& bias_info = param.get_bias_info();
     auto& space_info = param.get_space_info();
     auto& energy_info = param.get_energy_info();

@@ -19,11 +19,60 @@ import subprocess
 from pathlib import Path
 import math
 import statistics
+import json
 import pytest
-from acceptance_log_utils import read_jsonl, filter_by_move, acceptance_statistics
+from typing import List, Dict, Any
+from collections import defaultdict
 
 # Path to gcmc_cpu executable
 GCMC_CPU_PATH = Path(__file__).parent.parent.parent.parent / "build" / "bin" / "gcmc_cpu"
+
+
+# ============================================================================
+# JSONL Utilities (inline to avoid cross-directory conftest imports)
+# ============================================================================
+
+def read_jsonl(filepath: Path) -> List[Dict[str, Any]]:
+    """Read JSONL file and return list of records."""
+    records = []
+    if not filepath.exists():
+        return records
+    with open(filepath, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError as e:
+                print(f"Warning: Failed to parse line: {line[:50]}... Error: {e}")
+    return records
+
+
+def filter_by_move(records: List[Dict[str, Any]], move_type: str) -> List[Dict[str, Any]]:
+    """Filter records by move type."""
+    return [r for r in records if r.get('move') == move_type]
+
+
+def acceptance_statistics(records: List[Dict[str, Any]]) -> Dict[str, Dict[str, float]]:
+    """Compute acceptance rate statistics by move type and species."""
+    stats = defaultdict(lambda: defaultdict(lambda: {'attempts': 0, 'accepted': 0}))
+    for record in records:
+        move = record.get('move', 'unknown')
+        species = record.get('species', 'unknown')
+        accepted = record.get('accepted', False)
+        stats[move][species]['attempts'] += 1
+        if accepted:
+            stats[move][species]['accepted'] += 1
+    result = {}
+    for move, species_dict in stats.items():
+        result[move] = {}
+        for species, counts in species_dict.items():
+            if counts['attempts'] > 0:
+                result[move][species] = counts['accepted'] / counts['attempts']
+            else:
+                result[move][species] = 0.0
+    return result
 
 
 def create_minimal_water_files(tmpdir: Path):

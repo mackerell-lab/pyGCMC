@@ -5,17 +5,6 @@ Fixtures for GCMC movement tests
 import pytest
 import sys
 import os
-from acceptance_log_utils import (  # noqa: F401
-    acceptance_statistics,
-    compute_detailed_balance_ratio,
-    count_by_move_and_species,
-    count_by_species,
-    filter_by_move,
-    filter_by_species,
-    match_insert_delete_pairs,
-    read_jsonl,
-)
-
 # Add build directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'build'))
 import pygcmc

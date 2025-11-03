@@ -10,13 +10,50 @@ Verifies P1: mctime采样统计
 import pytest
 import subprocess
 import numpy as np
+import json
 from pathlib import Path
 from scipy import stats
-from acceptance_log_utils import read_jsonl, filter_by_move, count_by_species
+from typing import List, Dict, Any
+from collections import defaultdict
 
 
 # Path to gcmc_cpu executable
 GCMC_CPU_PATH = Path(__file__).parent.parent.parent / "build" / "bin" / "gcmc_cpu"
+
+
+# ============================================================================
+# JSONL Utilities (inline to avoid cross-directory conftest imports)
+# ============================================================================
+
+def read_jsonl(filepath: Path) -> List[Dict[str, Any]]:
+    """Read JSONL file and return list of records."""
+    records = []
+    if not filepath.exists():
+        return records
+    with open(filepath, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError as e:
+                print(f"Warning: Failed to parse line: {line[:50]}... Error: {e}")
+    return records
+
+
+def filter_by_move(records: List[Dict[str, Any]], move_type: str) -> List[Dict[str, Any]]:
+    """Filter records by move type."""
+    return [r for r in records if r.get('move') == move_type]
+
+
+def count_by_species(records: List[Dict[str, Any]]) -> Dict[str, int]:
+    """Count total attempts per species."""
+    counts = defaultdict(int)
+    for record in records:
+        species = record.get('species', 'unknown')
+        counts[species] += 1
+    return dict(counts)
 
 
 class TestMctimeWeighting:

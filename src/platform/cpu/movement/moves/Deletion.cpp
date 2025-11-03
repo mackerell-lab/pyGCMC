@@ -168,7 +168,12 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
             paramsWithVolume
         );
     }
-    result.acceptanceProbability = acceptProb;
+    double reportedProb = acceptProb;
+    if (useCavityBiasFlag) {
+        reportedProb *= std::max(cavityBias, 1e-12);
+        reportedProb = std::min(reportedProb, 1.0);
+    }
+    result.acceptanceProbability = reportedProb;
     result.cavityBiasFactor = cavityBias;  // Store cavity bias factor in result
     
     // Accept or reject

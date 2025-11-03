@@ -128,8 +128,8 @@ struct FragmentInstance {
     double lastNeighborUpdate = 0.0;      // MC step of last update
     
     // History
-    double insertionTime;                  // MC step when inserted
-    double lastMoveTime;                   // MC step of last accepted move
+    double insertionTime = 0.0;            // MC step when inserted
+    double lastMoveTime = 0.0;             // MC step of last accepted move
     int moveAttempts = 0;                 // Total move attempts
     int acceptedMoves = 0;                // Accepted moves
     
