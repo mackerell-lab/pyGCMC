@@ -409,7 +409,7 @@ from movementCPP.cavity_core_geometry_integration_funcs import (
 
 # Cavity lambda combination tests (2 functions)
 from movementCPP.cavity_lambda_combination_funcs import (
-    test_cavity_bias_with_lambda_detailed_balance,
+    test_detailed_balance_variants,
     test_cavity_bias_lambda_consistency
 )
 

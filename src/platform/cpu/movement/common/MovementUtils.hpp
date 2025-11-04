@@ -5,6 +5,7 @@
 #include <cmath>
 #include <algorithm>
 #include <random>
+#include <limits>
 #include <chrono>
 #include <cstdint>
 #include "MovementParams.hpp"
@@ -124,195 +125,209 @@ public:
      * Calculate acceptance probability in log-space
      */
     static double logSpaceAcceptance(double deltaE, double beta, const MovementParams& params) {
-        // Always accept if energy decreases
         if (deltaE <= 0) return 1.0;
-        
-        // Calculate log probability
         double logProb = -beta * deltaE;
-        
-        // Apply bounds for numerical stability
         if (logProb < std::log(params.logSpaceMin)) {
             return params.logSpaceMin;
         }
         if (logProb > std::log(params.logSpaceMax)) {
             return params.logSpaceMax;
         }
-        
         return std::exp(logProb);
     }
-    
-    /**
-     * Calculate insertion acceptance probability
-     */
+
     static double calculateInsertionProbability(
-        int n,                      // Current number of molecules
-        double deltaE,              // Energy change
-        double beta,                // 1/kT
-        double chemPotential,       // Chemical potential
-        double cavityBias,          // Cavity bias factor
-        double volumeNm3,           // System volume in nm^3
-        bool useLogSpace = true) {
-        
-        // Calculate ideal gas concentration using thermodynamic relationship
-        // B factor = β*μ + ln(V) where V is volume in appropriate units
-        double B = beta * chemPotential + std::log(volumeNm3);
-        
-        if (useLogSpace) {
-            // Log-space calculation
-            // For cavity-biased insertion: A_ins includes cavityBias factor
-            // This comes from detailed balance with biased proposal
-            double logProb = std::log(cavityBias) - std::log(n + 1) + B - beta * deltaE;
-            return std::min(1.0, std::exp(logProb));
-        } else {
-            // Direct calculation
-            double prob = cavityBias / (n + 1) * std::exp(B - beta * deltaE);
-            return std::min(1.0, prob);
-        }
+        int n,
+        double deltaE,
+        double beta,
+        double chemPotential,
+        double cavityBias,
+        double volumeNm3,
+        bool /*useLogSpace*/ = true) {
+        AcceptanceLogTerms terms;
+        terms.beta = beta;
+        terms.betaMu = beta * chemPotential;
+        terms.deltaE = deltaE;
+        terms.countBefore = n;
+        (void)cavityBias;
+        terms.logVolume = safeLog(volumeNm3);
+        AcceptanceLogResult res = computeInsertionAcceptance(terms);
+        return res.probability;
     }
-    
-    /**
-     * Calculate deletion acceptance probability
-     */
+
     static double calculateDeletionProbability(
-        int n,                      // Current number of molecules
-        double deltaE,              // Energy change
-        double beta,                // 1/kT
-        double chemPotential,       // Chemical potential
-        double volumeNm3,           // System volume in nm^3
-        bool useLogSpace = true) {
-        
-        // Calculate ideal gas concentration using thermodynamic relationship
-        // B factor = β*μ + ln(V) where V is volume in appropriate units
-        double B = beta * chemPotential + std::log(volumeNm3);
-        
-        if (useLogSpace) {
-            // Log-space calculation
-            double logProb = std::log(static_cast<double>(n)) - B - beta * deltaE;
-            return std::min(1.0, std::exp(logProb));
-        } else {
-            // Direct calculation
-            double prob = n * std::exp(-B - beta * deltaE);
-            return std::min(1.0, prob);
-        }
+        int n,
+        double deltaE,
+        double beta,
+        double chemPotential,
+        double volumeNm3,
+        bool /*useLogSpace*/ = true) {
+        AcceptanceLogTerms terms;
+        terms.beta = beta;
+        terms.betaMu = beta * chemPotential;
+        terms.deltaE = deltaE;
+        terms.countBefore = n;
+        terms.logVolume = safeLog(volumeNm3);
+        terms.logCavity = 0.0;
+        AcceptanceLogResult res = computeDeletionAcceptance(terms);
+        return res.probability;
     }
-    
-    /**
-     * Calculate deletion acceptance probability with cavity bias
-     * Symmetric to insertion with cavity bias
-     */
+
     static double calculateDeletionProbabilityWithCavity(
-        int n,                      // Current number of molecules
-        double deltaE,              // Energy change
-        double beta,                // 1/kT
-        double chemPotential,       // Chemical potential
-        double cavityBias,          // Cavity bias factor (probability of selecting this position)
-        double volumeNm3,           // System volume in nm^3
-        bool useLogSpace = true) {
-        
-        if (n == 0) {
-            return 0.0;
-        }
-        
-        // B factor = β*μ + ln(V)
-        double B = beta * chemPotential + std::log(volumeNm3);
-        
-        if (useLogSpace) {
-            // For cavity-biased deletion: A_del includes 1/cavityBias factor
-            // This is the reverse of insertion to maintain detailed balance
-            double logProb = std::log(static_cast<double>(n)) - std::log(std::max(cavityBias, 1e-30))
-                            - B - beta * deltaE;
-            return std::min(1.0, std::exp(logProb));
-        } else {
-            // Direct calculation
-            double prob = n / std::max(cavityBias, 1e-30) * std::exp(-B - beta * deltaE);
-            return std::min(1.0, prob);
-        }
+        int n,
+        double deltaE,
+        double beta,
+        double chemPotential,
+        double cavityBias,
+        double volumeNm3,
+        bool /*useLogSpace*/ = true) {
+        AcceptanceLogTerms terms;
+        terms.beta = beta;
+        terms.betaMu = beta * chemPotential;
+        terms.deltaE = deltaE;
+        terms.countBefore = n;
+        (void)cavityBias;
+        terms.logVolume = safeLog(volumeNm3);
+        AcceptanceLogResult res = computeDeletionAcceptance(terms);
+        return res.probability;
     }
-    
-    /**
-     * Calculate insertion acceptance probability with thermal de Broglie wavelength
-     * Includes the Λ³ term for absolute calibration
-     */
+
     static double calculateInsertionProbabilityWithLambda(
-        int n,                      // Current number of molecules
-        double deltaE,              // Energy change
-        double beta,                // 1/kT
-        double chemPotential,       // Chemical potential
-        double cavityBias,          // Cavity bias factor
-        double volumeNm3,           // System volume in nm^3
-        double thermalLambdaNm,     // Thermal de Broglie wavelength in nm
-        bool useLogSpace = true) {
-        
-        // B = β*μ + ln(V) - 3*ln(Λ)
+        int n,
+        double deltaE,
+        double beta,
+        double chemPotential,
+        double cavityBias,
+        double volumeNm3,
+        double thermalLambdaNm,
+        bool /*useLogSpace*/ = true) {
+        AcceptanceLogTerms terms;
+        terms.beta = beta;
+        terms.betaMu = beta * chemPotential;
+        terms.deltaE = deltaE;
+        terms.countBefore = n;
+        (void)cavityBias;
+        terms.logVolume = safeLog(volumeNm3);
         double lambda = (thermalLambdaNm > 0.0 ? thermalLambdaNm : 1.0);
-        double B = beta * chemPotential + std::log(volumeNm3) - 3.0 * std::log(lambda);
-        
-        if (useLogSpace) {
-            // For cavity-biased insertion with Lambda: A_ins includes cavityBias
-            double logProb = std::log(cavityBias) - std::log(n + 1.0) + B - beta * deltaE;
-            return std::min(1.0, std::exp(logProb));
-        } else {
-            double prob = cavityBias / (n + 1.0) * std::exp(B - beta * deltaE);
-            return std::min(1.0, prob);
-        }
+        terms.logLambda3 = 3.0 * safeLog(lambda);
+        AcceptanceLogResult res = computeInsertionAcceptance(terms);
+        return res.probability;
     }
-    
-    /**
-     * Calculate deletion acceptance probability with cavity bias and thermal wavelength
-     * Symmetric to insertion with both cavity bias and Λ³
-     */
+
     static double calculateDeletionProbabilityWithCavityAndLambda(
-        int n,                      // Current number of molecules
-        double deltaE,              // Energy change
-        double beta,                // 1/kT
-        double chemPotential,       // Chemical potential
-        double cavityBias,          // Cavity bias factor (probability of selecting this position)
-        double volumeNm3,           // System volume in nm^3
-        double thermalLambdaNm,     // Thermal de Broglie wavelength in nm
-        bool useLogSpace = true) {
-        
-        if (n == 0) {
-            return 0.0;
-        }
-        
-        // B = β*μ + ln(V) - 3*ln(Λ)
+        int n,
+        double deltaE,
+        double beta,
+        double chemPotential,
+        double cavityBias,
+        double volumeNm3,
+        double thermalLambdaNm,
+        bool /*useLogSpace*/ = true) {
+        AcceptanceLogTerms terms;
+        terms.beta = beta;
+        terms.betaMu = beta * chemPotential;
+        terms.deltaE = deltaE;
+        terms.countBefore = n;
+        (void)cavityBias;
+        terms.logVolume = safeLog(volumeNm3);
         double lambda = (thermalLambdaNm > 0.0 ? thermalLambdaNm : 1.0);
-        double B = beta * chemPotential + std::log(volumeNm3) - 3.0 * std::log(lambda);
-        
-        if (useLogSpace) {
-            // For cavity-biased deletion with Lambda: A_del includes 1/cavityBias
-            double logProb = std::log(static_cast<double>(n)) - std::log(std::max(cavityBias, 1e-30))
-                            - B - beta * deltaE;
-            return std::min(1.0, std::exp(logProb));
-        } else {
-            double prob = n / std::max(cavityBias, 1e-30) * std::exp(-B - beta * deltaE);
-            return std::min(1.0, prob);
-        }
+        terms.logLambda3 = 3.0 * safeLog(lambda);
+        AcceptanceLogResult res = computeDeletionAcceptance(terms);
+        return res.probability;
     }
-    
-    /**
-     * Calculate CBMC insertion acceptance probability
-     * Uses Rosenbluth weight instead of direct energy change
-     */
+
     static double calculateInsertionProbabilityCBMC(
-        int n,                      // Current number of molecules (before insertion)
-        double beta,                // 1/kT
-        double chemPotential,       // Chemical potential in kJ/mol
-        double volumeNm3,           // System volume in nm^3
-        double logWnew,             // log(sum(exp(-beta*deltaE_i)))
-        int Keff,                   // Effective number of valid trials
-        double cavityBias) {        // Cavity bias factor (f_n)
-        
-        // Calculate ideal gas concentration using thermodynamic relationship
-        // B factor = β*μ + ln(V) where V is volume in appropriate units
-        const double B = beta * chemPotential + std::log(volumeNm3);
-        
-        // CBMC acceptance formula in log-space
-        const double logA = std::log(cavityBias) - std::log(n + 1.0) 
-                          + B + logWnew - std::log(static_cast<double>(Keff));
-        
-        // Return probability (not log)
-        return std::min(1.0, std::exp(logA));
+        int n,
+        double beta,
+        double chemPotential,
+        double volumeNm3,
+        double logWnew,
+        int Keff,
+        double cavityBias) {
+        AcceptanceLogTerms terms;
+        terms.beta = beta;
+        terms.betaMu = beta * chemPotential;
+        terms.countBefore = n;
+        (void)cavityBias;
+        terms.logVolume = safeLog(volumeNm3);
+        terms.cbmcTrials = std::max(Keff, 1);
+        terms.logWForward = logWnew;
+        AcceptanceLogResult res = computeInsertionAcceptance(terms);
+        return res.probability;
+    }
+
+private:
+    struct AcceptanceLogTerms {
+        double logProposalForward = 0.0;
+        double logProposalReverse = 0.0;
+        double beta = 0.0;
+        double betaMu = 0.0;
+        double deltaE = 0.0;
+        double logVolume = 0.0;
+        double logCavity = 0.0;
+        int    countBefore = 0;
+        int    cbmcTrials = 1;
+        double logWForward = 0.0;
+        double logWReverse = 0.0;
+        double logLambda3 = 0.0;
+    };
+
+    struct AcceptanceLogResult {
+        double probability = 0.0;
+        double logRatio = -std::numeric_limits<double>::infinity();
+    };
+
+    static inline double safeLog(double value) {
+        return std::log(std::max(value, 1e-30));
+    }
+
+    static inline double safeExp(double logValue) {
+        if (logValue >= 0.0) return 1.0;
+        double lowerBound = -700.0;
+        return std::exp(std::max(logValue, lowerBound));
+    }
+
+    static AcceptanceLogResult computeInsertionAcceptance(const AcceptanceLogTerms& t) {
+        int nPlusOne = t.countBefore + 1;
+        double logNplus1 = safeLog(static_cast<double>(std::max(nPlusOne, 1)));
+        double logK = safeLog(static_cast<double>(std::max(t.cbmcTrials, 1)));
+
+        double logRatio =
+            (t.logProposalForward - t.logProposalReverse)
+            - t.beta * t.deltaE
+            + t.betaMu
+            + (t.logVolume + t.logCavity) - logNplus1
+            + (t.logWForward - logK)
+            - t.logLambda3;
+
+        AcceptanceLogResult res;
+        res.logRatio = logRatio;
+        res.probability = safeExp(logRatio);
+        return res;
+    }
+
+    static AcceptanceLogResult computeDeletionAcceptance(const AcceptanceLogTerms& t) {
+        AcceptanceLogResult res;
+        if (t.countBefore <= 0) {
+            res.probability = 0.0;
+            res.logRatio = -std::numeric_limits<double>::infinity();
+            return res;
+        }
+
+        double logN = safeLog(static_cast<double>(t.countBefore));
+        double logK = safeLog(static_cast<double>(std::max(t.cbmcTrials, 1)));
+
+        double logRatio =
+            (t.logProposalForward - t.logProposalReverse)
+            + t.beta * t.deltaE
+            - t.betaMu
+            + logN - (t.logVolume + t.logCavity)
+            + (logK - t.logWReverse)
+            + t.logLambda3;
+
+        res.logRatio = logRatio;
+        res.probability = safeExp(logRatio);
+        return res;
     }
 };
 

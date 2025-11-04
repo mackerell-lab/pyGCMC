@@ -32,6 +32,12 @@ MovementResult DeletionMove::attemptDeletion(MCState& state, const MovementParam
 MovementResult DeletionMove::performDeletion(MCState& state, const MovementParams& params, int residueIndex) {
     MovementResult result;
     result.moveType = "delete";
+
+    const int nBeforeGlobal = state.activeResidueCount;
+    result.lambdaNm = (params.thermalLambdaNm > 0.0) ? params.thermalLambdaNm : 1.0;
+    result.logLambda3 = (std::abs(result.lambdaNm - 1.0) > 1e-12)
+        ? 3.0 * std::log(result.lambdaNm)
+        : 0.0;
     
     // Check for valid box dimensions
     if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
@@ -109,6 +115,8 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     if (paramsWithVolume.volumeNm3 <= 0.0) {
         paramsWithVolume.volumeNm3 = state.info.box[0] * state.info.box[1] * state.info.box[2];
     }
+    result.volumeNm3 = paramsWithVolume.volumeNm3;
+    result.logVolume = std::log(std::max(result.volumeNm3, 1e-30));
     
     // Calculate cavity bias for deletion if enabled
     // IMPORTANT: Calculate cavity bias in the post-deletion state (residue inactive)
@@ -168,13 +176,28 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
             paramsWithVolume
         );
     }
-    double reportedProb = acceptProb;
-    if (useCavityBiasFlag) {
-        reportedProb *= std::max(cavityBias, 1e-12);
-        reportedProb = std::min(reportedProb, 1.0);
-    }
-    result.acceptanceProbability = reportedProb;
+    result.acceptanceProbability = acceptProb;
     result.cavityBiasFactor = cavityBias;  // Store cavity bias factor in result
+    if (useCavityBiasFlag) {
+        result.logCavityFactor = std::log(std::max(cavityBias, 1e-30));
+        result.cavityVolumeNm3 = Vcav_after;
+        result.effectiveVolumeNm3 = Vcav_after;
+    } else {
+        result.logCavityFactor = 0.0;
+        result.cavityVolumeNm3 = result.volumeNm3;
+        result.effectiveVolumeNm3 = result.volumeNm3;
+    }
+    const double logN = std::log(static_cast<double>(std::max(nBeforeGlobal, 1)));
+    result.logAcceptanceRatio = paramsWithVolume.beta * deltaE
+        - paramsWithVolume.beta * paramsWithVolume.chemicalPotential
+        + logN - result.logVolume - result.logCavityFactor + result.logLambda3;
+    result.cbmcTrialsUsed = 1;
+    result.logWForward = 0.0;
+    result.logWReverse = (result.rosenbluthWeight > 0.0)
+        ? std::log(result.rosenbluthWeight)
+        : 0.0;
+    result.logProposalForward = 0.0;
+    result.logProposalReverse = 0.0;
     
     // Accept or reject
     bool accepted = utils::RandomUtils::metropolisAccept(acceptProb);

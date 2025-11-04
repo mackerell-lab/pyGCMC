@@ -25,7 +25,9 @@ struct MovementResult {
     // Bias factors (for analysis)
     double cavityBiasFactor = 1.0;        // Cavity bias correction factor
     double configBiasFactor = 1.0;        // Configurational bias correction factor
+    double rosenbluthWeight = 1.0;        // Rosenbluth weight (W/K) for CBMC diagnostics
     int numConfigTrials = 1;              // Number of configuration trials used
+    int cbmcTrialsUsed = 1;              // Effective CBMC trials contributing to acceptance
     
     // Proposal layer fields (filled when USE_PROPOSAL_LAYER is enabled)
     bool usedCavity = false;              // Whether cavity was used in proposal
@@ -44,6 +46,20 @@ struct MovementResult {
     double proposalPosY = 0.0;            // Proposed position Y (nm) - same unit as ProposalInfo
     double proposalPosZ = 0.0;            // Proposed position Z (nm) - same unit as ProposalInfo
     bool proposalInfoFilled = false;      // Whether proposal info was filled
+
+    // Detailed acceptance metrics
+    double logAcceptanceRatio = 0.0;       // log(r) before clamp
+    double logProposalForward = 0.0;       // log(p_forward) from scheduler layer
+    double logProposalReverse = 0.0;       // log(p_reverse) from scheduler layer
+    double volumeNm3 = 0.0;               // Total box volume used in acceptance
+    double effectiveVolumeNm3 = 0.0;      // Effective volume after cavity weighting
+    double cavityVolumeNm3 = 0.0;         // Actual cavity volume (if available)
+    double logVolume = 0.0;               // log(volumeNm3)
+    double logCavityFactor = 0.0;         // log(cavityBiasFactor)
+    double lambdaNm = 1.0;                // Thermal de Broglie wavelength
+    double logLambda3 = 0.0;              // 3*log(lambdaNm)
+    double logWForward = 0.0;             // log Rosenbluth forward weight (insertion)
+    double logWReverse = 0.0;             // log Rosenbluth reverse weight (deletion)
     
     // Performance metrics
     double computeTimeMs = 0.0;           // Time taken for the move in milliseconds

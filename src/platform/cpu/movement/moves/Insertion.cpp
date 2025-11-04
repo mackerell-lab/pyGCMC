@@ -58,6 +58,12 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
     MovementResult result;
     result.moveType = "insert";
     result.moleculeType = moleculeType;
+
+    const int nBeforeGlobal = state.activeResidueCount;
+    result.lambdaNm = (params.thermalLambdaNm > 0.0) ? params.thermalLambdaNm : 1.0;
+    result.logLambda3 = (std::abs(result.lambdaNm - 1.0) > 1e-12)
+        ? 3.0 * std::log(result.lambdaNm)
+        : 0.0;
     
     // Check for valid box dimensions
     if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
@@ -132,16 +138,32 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
     if (paramsWithVolume.volumeNm3 <= 0.0) {
         paramsWithVolume.volumeNm3 = state.info.box[0] * state.info.box[1] * state.info.box[2];
     }
+    result.volumeNm3 = paramsWithVolume.volumeNm3;
+    result.logVolume = std::log(std::max(result.volumeNm3, 1e-30));
+    result.effectiveVolumeNm3 = result.volumeNm3 * std::max(result.cavityBiasFactor, 0.0);
+    if (result.cavityVolumeNm3 <= 0.0) {
+        result.cavityVolumeNm3 = result.effectiveVolumeNm3;
+    }
     
     // Calculate acceptance probability
     double cavityBiasFactor = 1.0;  // No cavity bias in simple insertion
     double acceptProb = calculateInsertionProbability(
-        state.activeResidueCount - 1,  // n before insertion
+        nBeforeGlobal,  // n before insertion
         deltaE,
         paramsWithVolume,
         cavityBiasFactor
     );
     result.acceptanceProbability = acceptProb;
+    const double logNplus1 = std::log(static_cast<double>(nBeforeGlobal + 1));
+    result.logAcceptanceRatio = -paramsWithVolume.beta * deltaE
+        + paramsWithVolume.beta * paramsWithVolume.chemicalPotential
+        + result.logVolume + result.logCavityFactor
+        - logNplus1 - result.logLambda3;
+    result.cbmcTrialsUsed = 1;
+    result.logWForward = 0.0;
+    result.logWReverse = 0.0;
+    result.logProposalForward = 0.0;
+    result.logProposalReverse = 0.0;
     
     // Accept or reject
     bool accepted = utils::RandomUtils::metropolisAccept(acceptProb);
@@ -192,6 +214,11 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
     MovementResult result;
     result.moveType = "insert";
     result.moleculeType = moleculeType;
+    const int nBeforeGlobal = state.activeResidueCount;
+    result.lambdaNm = (params.thermalLambdaNm > 0.0) ? params.thermalLambdaNm : 1.0;
+    result.logLambda3 = (std::abs(result.lambdaNm - 1.0) > 1e-12)
+        ? 3.0 * std::log(result.lambdaNm)
+        : 0.0;
     
     // Check for valid box dimensions
     if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
@@ -205,6 +232,8 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
     
     // 1) Calculate box volume
     const double Vbox = state.info.box[0] * state.info.box[1] * state.info.box[2];  // nm³
+    result.volumeNm3 = Vbox;
+    result.logVolume = std::log(std::max(Vbox, 1e-30));
     
     // 2) Get cavity position and V_cav_before (before-state)
     Vector3 position;
@@ -226,6 +255,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         
         // Always record the actual cavity fraction for diagnostics
         result.cavityBiasFactor = cavityRatio;  // Actual Vcav/Vbox ratio
+        result.cavityVolumeNm3 = Vcav_before;
         
         // Heuristic: if cavity fraction is very high, fall back to uniform proposal
         // to avoid unnecessary biasing that can reduce acceptance in sparse systems
@@ -247,6 +277,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         if (cavityManager_) {
             result.cavityBiasFactor = cavityManager_->calculateCavityBiasFactor(state);
             Vcav_before = result.cavityBiasFactor * Vbox;
+            result.cavityVolumeNm3 = Vcav_before;
         }
     } else {
         // Random insertion (with optional region constraint)
@@ -260,6 +291,14 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
             );
         }
         result.cavityBiasFactor = 1.0;
+        result.cavityVolumeNm3 = Vbox;
+    }
+
+    const double cavityFraction = std::max(result.cavityBiasFactor, 1e-30);
+    result.logCavityFactor = (cavityFraction == 1.0) ? 0.0 : std::log(cavityFraction);
+    result.effectiveVolumeNm3 = result.volumeNm3 * cavityFraction;
+    if (result.cavityVolumeNm3 <= 0.0) {
+        result.cavityVolumeNm3 = result.effectiveVolumeNm3;
     }
     
     // Check if CBMC is enabled for insertion
@@ -320,21 +359,34 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         if (paramsWithVolume.volumeNm3 <= 0.0) {
             paramsWithVolume.volumeNm3 = state.info.box[0] * state.info.box[1] * state.info.box[2];
         }
-        
-        // CBMC Metropolis acceptance (no deltaE!)
-        double acceptProb = utils::LogSpaceCalculator::calculateInsertionProbabilityCBMC(
-            state.activeResidueCount - 1,  // N before insertion
-            params.beta,
-            params.chemicalPotential,
-            paramsWithVolume.volumeNm3,
-            logWnew,
-            Keff,
-            result.cavityBiasFactor
-        );
+        result.volumeNm3 = paramsWithVolume.volumeNm3;
+        result.logVolume = std::log(std::max(result.volumeNm3, 1e-30));
+        result.effectiveVolumeNm3 = result.volumeNm3 * std::max(result.cavityBiasFactor, 0.0);
+        result.cavityVolumeNm3 = result.effectiveVolumeNm3;
+
+        const double logNplus1 = std::log(static_cast<double>(nBeforeGlobal + 1));
+        const double logK = std::log(static_cast<double>(std::max(Keff, 1)));
+        double logRatio = result.logCavityFactor
+                        - logNplus1
+                        + params.beta * params.chemicalPotential
+                        + result.logVolume
+                        - result.logLambda3
+                        + logWnew - logK;
+
+        double acceptProb = (logRatio >= 0.0)
+            ? 1.0
+            : std::exp(std::max(logRatio, -700.0));
         
         result.acceptanceProbability = acceptProb;
         result.configBiasFactor = std::exp(logWnew) / Keff;
         result.numConfigTrials = Keff;
+        result.cbmcTrialsUsed = Keff;
+        result.rosenbluthWeight = result.configBiasFactor;
+        result.logWForward = logWnew;
+        result.logAcceptanceRatio = logRatio;
+        result.logProposalForward = 0.0;
+        result.logProposalReverse = 0.0;
+        result.logWReverse = 0.0;
         result.energyChange = deltaEnergies[selectedIdx];  // For statistics only
         
         // Final decision
