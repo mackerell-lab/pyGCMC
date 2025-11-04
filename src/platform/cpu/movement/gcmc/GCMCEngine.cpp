@@ -7,6 +7,7 @@
 #include <cmath>
 #include <algorithm>
 #include <iostream>
+#include <stdexcept>
 
 namespace pygcmc {
 namespace platform {
@@ -259,16 +260,9 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         
         accept = acceptanceCalculator_->acceptMove(prob);
     } else {
-        // Fallback to simple acceptance (should not be used in production)
-        double beta = 1.0 / (8.314e-3 * temperature_);
-        double activity = 100.0; // Default activity
-        double effectiveVolume = std::max(result.effectiveVolume, 1e-12);
-        prob = std::min(1.0, (activity * effectiveVolume / (N_before + 1)) *
-                       std::exp(-beta * result.deltaE) * result.bias);
-        // Apply same probability storage logic as main branch
-        result.acceptanceProbability = shouldStoreProbability() ? prob : -1.0;
-        // Use the calculated prob directly for consistency
-        accept = (uniform_(rng_) < prob);
+        throw std::runtime_error(
+            "GCMCEngine::attemptInsertion requires an acceptance calculator; "
+            "log-space fallback acceptance has been removed.");
     }
     
     if (accept) {
@@ -496,16 +490,9 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
         
         accept = acceptanceCalculator_->acceptMove(prob);
     } else {
-        // Fallback to simple acceptance (should not be used in production)
-        double beta = 1.0 / (8.314e-3 * temperature_);
-        double activity = 100.0; // Default activity
-        double effectiveVolume = std::max(result.effectiveVolume, 1e-12);
-        prob = std::min(1.0, (N_before / (activity * effectiveVolume)) *
-                       std::exp(-beta * result.deltaE) * result.bias);
-        // Apply same probability storage logic as main branch
-        result.acceptanceProbability = shouldStoreProbability() ? prob : -1.0;
-        // Use the calculated prob directly for consistency
-        accept = (uniform_(rng_) < prob);
+        throw std::runtime_error(
+            "GCMCEngine::attemptDeletion requires an acceptance calculator; "
+            "log-space fallback acceptance has been removed.");
     }
     
     if (accept) {

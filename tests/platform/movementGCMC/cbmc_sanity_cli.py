@@ -447,6 +447,97 @@ class TestCBMCSanity:
 
         print("✅ Acceptance formula consistency test passed")
 
+    def test_cavity_timing_in_logs(self, tmp_path):
+        """
+        Ensure logged cavity fractions align with before/after move states.
+        """
+        print("\n=== Cavity Timing Consistency Test ===")
+
+        pdb, top, atp, ff = create_minimal_water_files(tmp_path)
+        inp = build_inp(
+            pdb,
+            top,
+            atp,
+            ff,
+            use_cbmc=False,
+            k_trials=1,
+            mcsteps=3500,
+            mu=-2.0,
+            use_cavity=True,
+            grid_spacing=2.0,
+            probe_radius=1.4,
+        )
+
+        result, accept_log = run_with_accept_log(
+            inp, tmp_path, "cavity_timing.jsonl", timeout=180
+        )
+        assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+
+        records = read_jsonl(accept_log)
+        assert records, "No acceptance records captured"
+
+        insertions = filter_by_move(records, "insertion")
+        deletions = filter_by_move(records, "deletion")
+        assert insertions, "Need insertion records for cavity timing check"
+        assert deletions, "Need deletion records for cavity timing check"
+
+        insert_by_n = defaultdict(list)
+        delete_by_after = defaultdict(list)
+
+        for rec in insertions:
+            w_cavity = rec.get("wCavity")
+            n_before = rec.get("nBefore")
+            if w_cavity is None or n_before is None:
+                continue
+            if not (0.0 < w_cavity <= 1.0):
+                raise AssertionError(f"Insertion wCavity out of range: {w_cavity}")
+            insert_by_n[n_before].append(w_cavity)
+
+        for rec in deletions:
+            w_cavity = rec.get("wCavity")
+            n_before = rec.get("nBefore")
+            if w_cavity is None or n_before is None:
+                continue
+            if n_before == 0:
+                continue
+            if not (0.0 < w_cavity <= 1.0):
+                raise AssertionError(f"Deletion wCavity out of range: {w_cavity}")
+            n_after = n_before - 1
+            delete_by_after[n_after].append(w_cavity)
+
+        common_levels = sorted(set(insert_by_n) & set(delete_by_after))
+        assert common_levels, "No overlapping occupancy levels to compare cavity fractions"
+
+        deviations = []
+        for level in common_levels:
+            ins_vals = insert_by_n[level]
+            del_vals = delete_by_after[level]
+            if len(ins_vals) < 3 or len(del_vals) < 3:
+                continue
+
+            avg_ins = sum(ins_vals) / len(ins_vals)
+            avg_del = sum(del_vals) / len(del_vals)
+            diff = abs(avg_ins - avg_del)
+            rel = diff / max(avg_ins, 1e-6)
+            deviations.append(rel)
+
+            print(
+                f"  Occupancy {level}: "
+                f"avg_insert={avg_ins:.3f}, avg_delete={avg_del:.3f}, rel_diff={rel:.2%}"
+            )
+
+            assert rel < 0.2, (
+                f"Cavity fraction mismatch at occupancy {level}: "
+                f"insert={avg_ins:.4f}, delete={avg_del:.4f}, rel_diff={rel:.2%}"
+            )
+
+        assert deviations, "Insufficient overlapping samples for cavity timing comparison"
+        print(
+            f"Compared cavity fractions across {len(deviations)} occupancy levels; "
+            f"max relative diff={max(deviations):.2%}"
+        )
+        print("✅ Cavity timing consistency test passed")
+
     def test_v_eff_matches_cavity_fraction(self, tmp_path):
         """
         验证日志中的 vEff 与 vBox×wCavity 一致（支持 cavity bias 校验）

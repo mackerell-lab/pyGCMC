@@ -139,6 +139,8 @@ public:
         double proposalRatio;
         double vEff;       // Effective volume
         double vBox = 0.0; // Base box volume at time of move
+        double cavityFraction = 1.0; // Recorded cavity fraction (f_cav)
+        double rosenbluthWeight = 1.0; // Recorded Rosenbluth ratio (W/K or K/W)
         double pAcc;       // Calculated acceptance probability
         double bias = 1.0; // Total bias factor applied in acceptance
         double u;          // Random number used

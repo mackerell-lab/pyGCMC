@@ -117,3 +117,66 @@ def test_detailed_log_ratio_matches_formula(
     ]:
         prob = result["probability"]
         assert 0.0 <= prob <= 1.0, f"{label} probability out of bounds: {prob}"
+
+
+def test_log_ratio_sum_is_zero():
+    """Ensure ln(r_ins) + ln(r_del) cancels for matched moves."""
+    acc = pygcmc.GCMCAcceptance()
+    temperature = 298.15
+    acc.setTemperature(temperature)
+    volume = 27.0
+    acc.setVolume(volume)
+
+    mu = -4.2
+    acc.setChemicalPotential(0, mu)
+
+    test_cases = [
+        # (N, DeltaE_ins, cavity, lambda_nm, rosenbluth, cbmc_k, proposal_log)
+        (10, 2.5, 0.4, 0.5, 1.8, 5, 0.2),
+        (5, -1.2, 1.0, 1.0, 1.0, 1, 0.0),
+        (15, 0.8, 0.3, 0.7, 2.5, 8, -0.15),
+        (2, 3.5, 0.9, 0.4, 1.2, 3, 0.05),
+    ]
+
+    for (
+        n_before,
+        delta_e_ins,
+        cavity_fraction,
+        lambda_nm,
+        rosenbluth,
+        cbmc_trials,
+        proposal_log_ratio,
+    ) in test_cases:
+        acc.setThermalLambda(0, lambda_nm)
+
+        ins_result = acc.calculate_insertion_probability_detailed(
+            typeId=0,
+            currentNumber=n_before,
+            deltaE=delta_e_ins,
+            cavityFraction=cavity_fraction,
+            lambdaNm=lambda_nm,
+            rosenbluthWeight=rosenbluth,
+            cbmcTrials=cbmc_trials,
+            proposalLogRatio=proposal_log_ratio,
+        )
+
+        del_result = acc.calculate_deletion_probability_detailed(
+            typeId=0,
+            currentNumber=n_before + 1,
+            deltaE=-delta_e_ins,
+            cavityFraction=cavity_fraction,
+            lambdaNm=lambda_nm,
+            rosenbluthWeight=rosenbluth,
+            cbmcTrials=cbmc_trials,
+            proposalLogRatio=-proposal_log_ratio,
+        )
+
+        log_r_ins = ins_result["logRatio"]
+        log_r_del = del_result["logRatio"]
+        sum_log = log_r_ins + log_r_del
+
+        assert abs(sum_log) < 1e-11, (
+            "Detailed balance symmetry violated: "
+            f"N={n_before}, DeltaE={delta_e_ins}, cavity={cavity_fraction}, lambda={lambda_nm}, "
+            f"ln(r_ins)={log_r_ins:.12e}, ln(r_del)={log_r_del:.12e}, sum={sum_log:.2e}"
+        )

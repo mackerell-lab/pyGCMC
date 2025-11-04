@@ -1612,14 +1612,23 @@ bool GCMCSimulation::performSingleMove() {
         rec.proposalRatio = 1.0;  // Will be qForward/qReverse from paired moves
 
         // Effective volume (box volume)
+        const auto& box = params_->get_space_info().box_size;
+        double boxVolume = box[0] * box[1] * box[2];
+        rec.vBox = boxVolume;
+
         double effVolume = result.effectiveVolume;
         if (effVolume <= 0.0) {
-            const auto& box = params_->get_space_info().box_size;
-            effVolume = box[0] * box[1] * box[2];
+            effVolume = boxVolume;
         }
-        double cavityFrac = std::max(result.cavityBiasComponent, 1e-12);
-        rec.vBox = effVolume / cavityFrac;
         rec.vEff = effVolume;
+
+        double cavityFrac = result.cavityBiasComponent;
+        if (cavityFrac <= 0.0) {
+            cavityFrac = 1.0;
+        }
+        rec.wCavity = cavityFrac;
+        rec.cavityFraction = cavityFrac;
+        rec.rosenbluthWeight = result.rosenbluthWeight;
         rec.bias = result.bias;
 
         // Acceptance probability and random number
@@ -1639,7 +1648,7 @@ bool GCMCSimulation::performSingleMove() {
         }
 
         // Record cavity volume fraction (already computed in move result)
-        rec.wCavity = result.cavityBiasComponent;
+        // wCavity written above from engine result
 
         // Add to circular buffer
         if (acceptanceBuffer_.size() < bufferSize_) {
@@ -2773,6 +2782,8 @@ void GCMCSimulation::dumpAcceptanceLog(const std::string& filename) const {
             << "\"proposalRatio\":" << rec.proposalRatio << ","
             << "\"vBox\":" << rec.vBox << ","
             << "\"vEff\":" << rec.vEff << ","
+            << "\"cavityFraction\":" << rec.cavityFraction << ","
+            << "\"rosenbluthWeight\":" << rec.rosenbluthWeight << ","
             << "\"bias\":" << rec.bias << ","
             << "\"pAcc\":" << rec.pAcc << ","
             << "\"u\":" << rec.u << ","
