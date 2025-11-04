@@ -122,11 +122,33 @@ def create_minimal_water_files(tmpdir: Path):
     return pdb_file, top_file, atp_file, ff_file
 
 
-def build_inp(pdb: Path, top: Path, atp: Path, ff: Path,
-              use_cbmc: bool, k_trials: int, mcsteps: int, mu: float = -2.0):
-    """Build INP file content with CBMC configuration."""
-    cbmc_line = "use_conf_bias:yes" if use_cbmc else "use_conf_bias:no"
-    fragconf_line = f"fragconf:{k_trials}"
+def build_inp(
+    pdb: Path,
+    top: Path,
+    atp: Path,
+    ff: Path,
+    use_cbmc: bool,
+    k_trials: int,
+    mcsteps: int,
+    mu: float = -2.0,
+    use_cavity: bool = False,
+    grid_spacing: float = 2.0,
+    probe_radius: float = 1.4,
+):
+    """Build INP file content with optional CBMC and cavity configuration."""
+    if use_cbmc:
+        cbmc_block = f"""use_conf_bias:yes
+fragconf:{k_trials}"""
+    else:
+        cbmc_block = "use_conf_bias:no"
+
+    cavity_block = (
+        f"""use_cavity_bias:yes
+cavity_grid_spacing:{grid_spacing}
+cavity_probe_radius:{probe_radius}"""
+        if use_cavity
+        else "use_cavity_bias:no"
+    )
 
     return f"""par:{ff}
 atomtypes:{atp}
@@ -137,7 +159,7 @@ protitp:{top}
 fragname: water
 fragconc: 55.0
 fragmuex: {mu}
-{fragconf_line}
+{cbmc_block}
 
 box_size: 10.0 10.0 10.0
 cutoff: 4.5
@@ -148,7 +170,7 @@ eqsteps: 0
 
 mc_move_prob: 0.5 0.5 0 0
 
-{cbmc_line}
+{cavity_block}
 
 seed: 42
 """
@@ -424,6 +446,60 @@ class TestCBMCSanity:
         assert checked_ins + checked_del > 0, "No records validated against acceptance formula"
 
         print("✅ Acceptance formula consistency test passed")
+
+    def test_v_eff_matches_cavity_fraction(self, tmp_path):
+        """
+        验证日志中的 vEff 与 vBox×wCavity 一致（支持 cavity bias 校验）
+        """
+        print("\n=== vEff Consistency With Cavity Fraction ===")
+
+        pdb, top, atp, ff = create_minimal_water_files(tmp_path)
+        inp = build_inp(
+            pdb,
+            top,
+            atp,
+            ff,
+            use_cbmc=True,
+            k_trials=5,
+            mcsteps=4000,
+            mu=-2.0,
+            use_cavity=True,
+        )
+
+        result, accept_log = run_with_accept_log(
+            inp, tmp_path, "veff.jsonl", timeout=180
+        )
+        assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+
+        records = read_jsonl(accept_log)
+        insertions = filter_by_move(records, "insertion")
+        assert insertions, "No insertion records found for vEff check"
+
+        checked = 0
+        for rec in insertions[:200]:  # sample first 200 records for speed
+            v_eff = rec.get("vEff")
+            v_box = rec.get("vBox")
+            w_cavity = rec.get("wCavity")
+
+            assert v_eff is not None, "vEff missing from acceptance record"
+            assert v_box is not None, "vBox missing from acceptance record"
+            assert w_cavity is not None, "wCavity missing from acceptance record"
+
+            expected = v_box * w_cavity
+            if expected <= 0:
+                continue
+
+            rel_error = abs(v_eff - expected) / expected
+            assert rel_error < 1e-6, (
+                "vEff does not match vBox * wCavity: "
+                f"vEff={v_eff:.12e}, vBox={v_box:.12e}, "
+                f"wCavity={w_cavity:.12e}, rel_error={rel_error:.2e}"
+            )
+            checked += 1
+
+        assert checked > 0, "No positive-volume records validated"
+        print(f"Validated {checked} insertion records for vEff consistency")
+        print("✅ vEff consistency test passed")
 
 
 if __name__ == "__main__":

@@ -102,7 +102,18 @@ def test_insertion_probability_detailed_matches_formula() -> None:
         delta_e=delta_e,
     )
 
-    prob_cpp = acc.calculate_insertion_probability_detailed(
+    expected_log_ratio = (
+        proposal_log_ratio
+        - beta * delta_e
+        + beta * mu
+        + math.log(volume_nm3)
+        + math.log(cavity_fraction)
+        - math.log(n_before + 1.0)
+        + math.log(rosenbluth_weight)
+        - 3.0 * math.log(lambda_nm)
+    )
+
+    result_cpp = acc.calculate_insertion_probability_detailed(
         type_id,
         n_before,
         delta_e,
@@ -113,7 +124,13 @@ def test_insertion_probability_detailed_matches_formula() -> None:
         proposal_log_ratio,
     )
 
-    assert math.isclose(prob_cpp, expected, rel_tol=1e-12, abs_tol=1e-12)
+    assert math.isclose(
+        result_cpp["probability"], expected, rel_tol=1e-12, abs_tol=1e-12
+    )
+
+    assert math.isclose(
+        result_cpp["logRatio"], expected_log_ratio, rel_tol=1e-12, abs_tol=1e-12
+    )
 
 
 def test_deletion_probability_detailed_matches_formula() -> None:
@@ -149,7 +166,17 @@ def test_deletion_probability_detailed_matches_formula() -> None:
         delta_e=delta_e,
     )
 
-    prob_cpp = acc.calculate_deletion_probability_detailed(
+    expected_log_ratio = (
+        proposal_log_ratio
+        + beta * delta_e
+        - beta * mu
+        + math.log(n_before)
+        - (math.log(volume_nm3) + math.log(cavity_fraction))
+        - math.log(rosenbluth_weight)
+        + 3.0 * math.log(lambda_nm)
+    )
+
+    result_cpp = acc.calculate_deletion_probability_detailed(
         type_id,
         n_before,
         delta_e,
@@ -160,4 +187,10 @@ def test_deletion_probability_detailed_matches_formula() -> None:
         proposal_log_ratio,
     )
 
-    assert math.isclose(prob_cpp, expected, rel_tol=1e-12, abs_tol=1e-12)
+    assert math.isclose(
+        result_cpp["probability"], expected, rel_tol=1e-12, abs_tol=1e-12
+    )
+
+    assert math.isclose(
+        result_cpp["logRatio"], expected_log_ratio, rel_tol=1e-12, abs_tol=1e-12
+    )

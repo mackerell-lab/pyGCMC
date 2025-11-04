@@ -137,7 +137,11 @@ void init_gcmc_bindings(py::module& m) {
         .def_readonly("bias", &GCMCEngine::MoveResult::bias)
         .def_readonly("acceptanceProbability", &GCMCEngine::MoveResult::acceptanceProbability)
         .def_readonly("residueIndex", &GCMCEngine::MoveResult::residueIndex)
-        .def_readonly("position", &GCMCEngine::MoveResult::position);
+        .def_readonly("position", &GCMCEngine::MoveResult::position)
+        .def_readonly("rosenbluthWeight", &GCMCEngine::MoveResult::rosenbluthWeight)
+        .def_readonly("cavityBiasComponent", &GCMCEngine::MoveResult::cavityBiasComponent)
+        .def_readonly("effectiveVolume", &GCMCEngine::MoveResult::effectiveVolume)
+        .def_readonly("cbmcTrialsUsed", &GCMCEngine::MoveResult::cbmcTrialsUsed);
     
     // GCMCAcceptance class
     py::class_<GCMCAcceptance>(m, "GCMCAcceptance")
@@ -185,12 +189,17 @@ void init_gcmc_bindings(py::module& m) {
                 terms.typeId = typeId;
                 terms.countBefore = currentNumber;
                 terms.deltaE = deltaE;
-                terms.cavityFraction = cavityFraction;
-                terms.lambdaNm = lambdaNm;
-                terms.rosenbluthWeight = rosenbluthWeight;
-                terms.cbmcTrials = cbmcTrials;
-                terms.proposalLogRatio = proposalLogRatio;
-                return self.calculateInsertionProbabilityDetailed(terms);
+               terms.cavityFraction = cavityFraction;
+               terms.lambdaNm = lambdaNm;
+               terms.rosenbluthWeight = rosenbluthWeight;
+               terms.cbmcTrials = cbmcTrials;
+               terms.proposalLogRatio = proposalLogRatio;
+                double logRatio = 0.0;
+                double probability = self.calculateInsertionProbabilityDetailed(terms, &logRatio);
+                py::dict result;
+                result["probability"] = probability;
+                result["logRatio"] = logRatio;
+                return result;
             },
             py::arg("typeId"),
             py::arg("currentNumber"),
@@ -216,12 +225,17 @@ void init_gcmc_bindings(py::module& m) {
                 terms.typeId = typeId;
                 terms.countBefore = currentNumber;
                 terms.deltaE = deltaE;
-                terms.cavityFraction = cavityFraction;
-                terms.lambdaNm = lambdaNm;
-                terms.rosenbluthWeight = rosenbluthWeight;
-                terms.cbmcTrials = cbmcTrials;
-                terms.proposalLogRatio = proposalLogRatio;
-                return self.calculateDeletionProbabilityDetailed(terms);
+               terms.cavityFraction = cavityFraction;
+               terms.lambdaNm = lambdaNm;
+               terms.rosenbluthWeight = rosenbluthWeight;
+               terms.cbmcTrials = cbmcTrials;
+               terms.proposalLogRatio = proposalLogRatio;
+                double logRatio = 0.0;
+                double probability = self.calculateDeletionProbabilityDetailed(terms, &logRatio);
+                py::dict result;
+                result["probability"] = probability;
+                result["logRatio"] = logRatio;
+                return result;
             },
             py::arg("typeId"),
             py::arg("currentNumber"),
