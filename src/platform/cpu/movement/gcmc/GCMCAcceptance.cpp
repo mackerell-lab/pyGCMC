@@ -1,6 +1,7 @@
 #include "GCMCAcceptance.hpp"
 #include <algorithm>
 #include <numeric>
+#include <limits>
 
 namespace pygcmc {
 namespace platform {
@@ -30,6 +31,9 @@ void GCMCAcceptance::setChemicalPotential(int typeId, double mu) {
     // Update activity
     double beta = getBeta();
     activities_[typeId] = std::exp(beta * mu);
+    if (thermalLambdaNm_.find(typeId) == thermalLambdaNm_.end()) {
+        thermalLambdaNm_[typeId] = 1.0;
+    }
 }
 
 // Set activity for a type
@@ -38,6 +42,25 @@ void GCMCAcceptance::setActivity(int typeId, double activity) {
     // Update chemical potential
     double beta = getBeta();
     chemicalPotentials_[typeId] = std::log(activity) / beta;
+    if (thermalLambdaNm_.find(typeId) == thermalLambdaNm_.end()) {
+        thermalLambdaNm_[typeId] = 1.0;
+    }
+}
+
+void GCMCAcceptance::setThermalLambda(int typeId, double lambdaNm) {
+    if (lambdaNm > 0.0) {
+        thermalLambdaNm_[typeId] = lambdaNm;
+    } else {
+        thermalLambdaNm_[typeId] = 1.0;
+    }
+}
+
+double GCMCAcceptance::getThermalLambda(int typeId) const {
+    auto it = thermalLambdaNm_.find(typeId);
+    if (it != thermalLambdaNm_.end() && it->second > 0.0) {
+        return it->second;
+    }
+    return 1.0;
 }
 
 // Calculate insertion probability
@@ -57,6 +80,53 @@ double GCMCAcceptance::calculateInsertionProbability(
     return std::min(1.0, prefactor * boltzmann * bias);
 }
 
+double GCMCAcceptance::calculateInsertionProbabilityDetailed(
+    const GrandCanonicalInsertionTerms& terms,
+    double* logRatioOut) {
+    
+    if (terms.typeId < 0) {
+        if (logRatioOut) {
+            *logRatioOut = -std::numeric_limits<double>::infinity();
+        }
+        return 0.0;
+    }
+
+    double beta = getBeta();
+
+    double activity = 1.0;
+    auto actIt = activities_.find(terms.typeId);
+    if (actIt != activities_.end()) {
+        activity = actIt->second;
+    } else {
+        auto muIt = chemicalPotentials_.find(terms.typeId);
+        if (muIt != chemicalPotentials_.end()) {
+            activity = std::exp(beta * muIt->second);
+            activities_[terms.typeId] = activity;
+        }
+    }
+
+    double logZ = safeLog(activity);
+    double logNplus1 = safeLog(static_cast<double>(terms.countBefore + 1));
+    double logVolume = safeLog(volume_);
+    double logCavity = safeLog(terms.cavityFraction);
+    double lambdaNm = terms.lambdaNm > 0.0 ? terms.lambdaNm : getThermalLambda(terms.typeId);
+    double logLambda3 = 3.0 * safeLog(lambdaNm);
+    double logWForward = safeLog(terms.rosenbluthWeight);
+
+    double logRatio = terms.proposalLogRatio
+        - beta * terms.deltaE
+        + logZ
+        + (logVolume + logCavity)
+        - logNplus1
+        + logWForward
+        - logLambda3;
+
+    if (logRatioOut) {
+        *logRatioOut = logRatio;
+    }
+    return safeExp(logRatio);
+}
+
 // Calculate deletion probability
 double GCMCAcceptance::calculateDeletionProbability(
     int typeId,
@@ -74,6 +144,53 @@ double GCMCAcceptance::calculateDeletionProbability(
     double boltzmann = std::exp(-beta * deltaE);
     
     return std::min(1.0, prefactor * boltzmann * bias);
+}
+
+double GCMCAcceptance::calculateDeletionProbabilityDetailed(
+    const GrandCanonicalDeletionTerms& terms,
+    double* logRatioOut) {
+    
+    if (terms.typeId < 0 || terms.countBefore <= 0) {
+        if (logRatioOut) {
+            *logRatioOut = -std::numeric_limits<double>::infinity();
+        }
+        return 0.0;
+    }
+
+    double beta = getBeta();
+
+    double activity = 1.0;
+    auto actIt = activities_.find(terms.typeId);
+    if (actIt != activities_.end()) {
+        activity = actIt->second;
+    } else {
+        auto muIt = chemicalPotentials_.find(terms.typeId);
+        if (muIt != chemicalPotentials_.end()) {
+            activity = std::exp(beta * muIt->second);
+            activities_[terms.typeId] = activity;
+        }
+    }
+
+    double logZ = safeLog(activity);
+    double logN = safeLog(static_cast<double>(terms.countBefore));
+    double logVolume = safeLog(volume_);
+    double logCavity = safeLog(terms.cavityFraction);
+    double lambdaNm = terms.lambdaNm > 0.0 ? terms.lambdaNm : getThermalLambda(terms.typeId);
+    double logLambda3 = 3.0 * safeLog(lambdaNm);
+    double logWReverse = safeLog(terms.rosenbluthWeight);
+
+    double logRatio = terms.proposalLogRatio
+        + beta * terms.deltaE
+        - logZ
+        + logN
+        - (logVolume + logCavity)
+        - logWReverse
+        + logLambda3;
+
+    if (logRatioOut) {
+        *logRatioOut = logRatio;
+    }
+    return safeExp(logRatio);
 }
 
 // Calculate translation probability
@@ -243,6 +360,18 @@ double GCMCAcceptance::getDeBroglieWavelength(double mass) const {
     
     double lambda = h / std::sqrt(2.0 * pi * mass * k * temperature_);
     return lambda * 1e10; // Convert to Angstroms
+}
+
+double GCMCAcceptance::safeLog(double value) const {
+    return std::log(std::max(value, 1e-30));
+}
+
+double GCMCAcceptance::safeExp(double logValue) const {
+    if (logValue >= 0.0) {
+        return 1.0;
+    }
+    const double lowerBound = -700.0;
+    return std::exp(std::max(logValue, lowerBound));
 }
 
 // ============================================================================

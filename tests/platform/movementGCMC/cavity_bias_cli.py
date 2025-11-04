@@ -268,7 +268,7 @@ class TestCavityBias:
             n_before = rec["nBefore"]
             beta_mu = rec["betaMu"]
             z = rec["z"]
-            delta_u = rec["deltaU"]
+            beta_delta_u = rec.get("betaDeltaU", rec["deltaU"])
             q_forward = rec["qForward"]
             w_cavity = rec.get("wCavity", 1.0)
             p_acc_actual = rec["pAcc"]
@@ -277,7 +277,7 @@ class TestCavityBias:
             # Theory: P_acc = min(1, (z * V_eff) / (N+1) * exp(-βΔU) * qForward)
             # Note: vEff already includes cavity bias, so we don't multiply by wCavity again
             import math
-            ratio = (z * v_eff) / (n_before + 1) * math.exp(-delta_u) * q_forward
+            ratio = (z * v_eff) / (n_before + 1) * math.exp(-beta_delta_u) * q_forward
             p_acc_theory = min(1.0, ratio)
 
             # Calculate error
@@ -289,7 +289,7 @@ class TestCavityBias:
                 print(f"WARNING: Large error={error:.2e} for record step={rec['step']}")
                 print(f"  nBefore={n_before}, z={z:.3e}, vEff={v_eff:.3f}, "
                       f"wCavity={w_cavity:.4f}")
-                print(f"  deltaU={delta_u:.3f}, qForward={q_forward:.4f}")
+                print(f"  betaDeltaU={beta_delta_u:.3f}, qForward={q_forward:.4f}")
                 print(f"  pAcc_actual={p_acc_actual:.6f}, pAcc_theory={p_acc_theory:.6f}")
 
         # Statistical check: max error should be < 5e-5

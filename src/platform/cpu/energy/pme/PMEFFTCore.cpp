@@ -203,6 +203,7 @@ void padded_fft(cmplx* data, int actual_size, bool inverse) {
     bool is_power_of_two = (actual_size & (actual_size - 1)) == 0;
     
     if (!is_power_of_two) {
+        platform::log(LogLevel::ERROR, "padded_fft received non-power-of-two size", actual_size);
         throw std::runtime_error("FFT size must be a power of 2");
     }
     

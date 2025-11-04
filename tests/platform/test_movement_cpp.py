@@ -413,6 +413,12 @@ from movementCPP.cavity_lambda_combination_funcs import (
     test_cavity_bias_lambda_consistency
 )
 
+# Acceptance formula tests (2 functions)
+from movementCPP.acceptance_formula_funcs import (
+    test_insertion_probability_includes_cavity_and_lambda,
+    test_deletion_probability_includes_cavity_and_lambda
+)
+
 # Deletion uniformity tests (2 functions)
 from movementCPP.deletion_uniformity_funcs import (
     test_deletion_uniformity,

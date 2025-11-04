@@ -154,6 +154,12 @@ void init_gcmc_bindings(py::module& m) {
         .def("setActivity", &GCMCAcceptance::setActivity,
              py::arg("typeId"), py::arg("activity"),
              "Set activity for a type")
+        .def("setThermalLambda", &GCMCAcceptance::setThermalLambda,
+             py::arg("typeId"), py::arg("lambdaNm"),
+             "Set thermal de Broglie wavelength (nm) for a type")
+        .def("getThermalLambda", &GCMCAcceptance::getThermalLambda,
+             py::arg("typeId"),
+             "Get thermal de Broglie wavelength (nm) for a type")
         .def("calculateInsertionProbability", 
              &GCMCAcceptance::calculateInsertionProbability,
              py::arg("typeId"), py::arg("currentNumber"), 
@@ -164,6 +170,68 @@ void init_gcmc_bindings(py::module& m) {
              py::arg("typeId"), py::arg("currentNumber"),
              py::arg("deltaE"), py::arg("bias"),
              "Calculate deletion acceptance probability")
+        .def(
+            "calculate_insertion_probability_detailed",
+            [](GCMCAcceptance& self,
+               int typeId,
+               int currentNumber,
+               double deltaE,
+               double cavityFraction,
+               double lambdaNm,
+               double rosenbluthWeight,
+               int cbmcTrials,
+               double proposalLogRatio) {
+                GCMCAcceptance::GrandCanonicalInsertionTerms terms;
+                terms.typeId = typeId;
+                terms.countBefore = currentNumber;
+                terms.deltaE = deltaE;
+                terms.cavityFraction = cavityFraction;
+                terms.lambdaNm = lambdaNm;
+                terms.rosenbluthWeight = rosenbluthWeight;
+                terms.cbmcTrials = cbmcTrials;
+                terms.proposalLogRatio = proposalLogRatio;
+                return self.calculateInsertionProbabilityDetailed(terms);
+            },
+            py::arg("typeId"),
+            py::arg("currentNumber"),
+            py::arg("deltaE"),
+            py::arg("cavityFraction"),
+            py::arg("lambdaNm") = 1.0,
+            py::arg("rosenbluthWeight") = 1.0,
+            py::arg("cbmcTrials") = 1,
+            py::arg("proposalLogRatio") = 0.0,
+            "Calculate insertion probability with detailed balance terms")
+        .def(
+            "calculate_deletion_probability_detailed",
+            [](GCMCAcceptance& self,
+               int typeId,
+               int currentNumber,
+               double deltaE,
+               double cavityFraction,
+               double lambdaNm,
+               double rosenbluthWeight,
+               int cbmcTrials,
+               double proposalLogRatio) {
+                GCMCAcceptance::GrandCanonicalDeletionTerms terms;
+                terms.typeId = typeId;
+                terms.countBefore = currentNumber;
+                terms.deltaE = deltaE;
+                terms.cavityFraction = cavityFraction;
+                terms.lambdaNm = lambdaNm;
+                terms.rosenbluthWeight = rosenbluthWeight;
+                terms.cbmcTrials = cbmcTrials;
+                terms.proposalLogRatio = proposalLogRatio;
+                return self.calculateDeletionProbabilityDetailed(terms);
+            },
+            py::arg("typeId"),
+            py::arg("currentNumber"),
+            py::arg("deltaE"),
+            py::arg("cavityFraction"),
+            py::arg("lambdaNm") = 1.0,
+            py::arg("rosenbluthWeight") = 1.0,
+            py::arg("cbmcTrials") = 1,
+            py::arg("proposalLogRatio") = 0.0,
+            "Calculate deletion probability with detailed balance terms")
         .def("calculateTranslationProbability",
              &GCMCAcceptance::calculateTranslationProbability,
              py::arg("deltaE"), py::arg("bias") = 1.0,

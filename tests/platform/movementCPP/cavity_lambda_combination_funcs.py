@@ -103,7 +103,12 @@ def _run_detailed_balance_case(
             state.residues[inserted_idx].active = False
             continue
 
-        theory_ratio = math.exp(beta * params.chemicalPotential) * volume
+        effective_volume = getattr(ins_result, "effectiveVolumeNm3", volume)
+        if effective_volume <= 0.0:
+            cavity_factor = getattr(ins_result, "cavityBiasFactor", 1.0)
+            effective_volume = volume * max(cavity_factor, 1e-12)
+
+        theory_ratio = math.exp(beta * params.chemicalPotential) * effective_volume
         theory_ratio /= (n_before + 1) * lambda_cubed
 
         ratio = p_ins / p_del

@@ -23,6 +23,28 @@ namespace gcmc {
  */
 class GCMCAcceptance {
 public:
+    struct GrandCanonicalInsertionTerms {
+        int typeId = -1;
+        int countBefore = 0;
+        double deltaE = 0.0;
+        double cavityFraction = 1.0;
+        double lambdaNm = 1.0;
+        double rosenbluthWeight = 1.0;
+        int cbmcTrials = 1;
+        double proposalLogRatio = 0.0; // log(p_fwd) - log(p_rev)
+    };
+
+    struct GrandCanonicalDeletionTerms {
+        int typeId = -1;
+        int countBefore = 0;
+        double deltaE = 0.0;
+        double cavityFraction = 1.0;
+        double lambdaNm = 1.0;
+        double rosenbluthWeight = 1.0;
+        int cbmcTrials = 1;
+        double proposalLogRatio = 0.0; // log(p_fwd) - log(p_rev)
+    };
+
     // Acceptance criteria types
     enum class CriterionType {
         METROPOLIS,           // Standard Metropolis
@@ -44,6 +66,8 @@ public:
     double getVolume() const { return volume_; }  // Get current volume
     void setChemicalPotential(int typeId, double mu);
     void setActivity(int typeId, double activity);
+    void setThermalLambda(int typeId, double lambdaNm);
+    double getThermalLambda(int typeId) const;
     
     // Calculate acceptance probability
     double calculateInsertionProbability(
@@ -58,6 +82,16 @@ public:
         int currentNumber,
         double deltaE,
         double bias = 1.0
+    );
+
+    double calculateInsertionProbabilityDetailed(
+        const GrandCanonicalInsertionTerms& terms,
+        double* logRatioOut = nullptr
+    );
+
+    double calculateDeletionProbabilityDetailed(
+        const GrandCanonicalDeletionTerms& terms,
+        double* logRatioOut = nullptr
     );
     
     double calculateTranslationProbability(
@@ -140,6 +174,7 @@ protected:
     double volume_;
     std::map<int, double> chemicalPotentials_;
     std::map<int, double> activities_;
+    std::map<int, double> thermalLambdaNm_;
     
     // Configuration
     CriterionType criterionType_;
@@ -161,6 +196,8 @@ protected:
 private:
     double getIdealGasContribution(int n, double V) const;
     double getDeBroglieWavelength(double mass) const;
+    double safeLog(double value) const;
+    double safeExp(double logValue) const;
 };
 
 /**

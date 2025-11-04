@@ -149,7 +149,8 @@ public:
         terms.betaMu = beta * chemPotential;
         terms.deltaE = deltaE;
         terms.countBefore = n;
-        (void)cavityBias;
+        double clampedCavity = std::max(cavityBias, 1e-30);
+        terms.logCavity = safeLog(clampedCavity);
         terms.logVolume = safeLog(volumeNm3);
         AcceptanceLogResult res = computeInsertionAcceptance(terms);
         return res.probability;
@@ -186,7 +187,8 @@ public:
         terms.betaMu = beta * chemPotential;
         terms.deltaE = deltaE;
         terms.countBefore = n;
-        (void)cavityBias;
+        double clampedCavity = std::max(cavityBias, 1e-30);
+        terms.logCavity = safeLog(clampedCavity);
         terms.logVolume = safeLog(volumeNm3);
         AcceptanceLogResult res = computeDeletionAcceptance(terms);
         return res.probability;
@@ -206,7 +208,8 @@ public:
         terms.betaMu = beta * chemPotential;
         terms.deltaE = deltaE;
         terms.countBefore = n;
-        (void)cavityBias;
+        double clampedCavity = std::max(cavityBias, 1e-30);
+        terms.logCavity = safeLog(clampedCavity);
         terms.logVolume = safeLog(volumeNm3);
         double lambda = (thermalLambdaNm > 0.0 ? thermalLambdaNm : 1.0);
         terms.logLambda3 = 3.0 * safeLog(lambda);
@@ -228,7 +231,8 @@ public:
         terms.betaMu = beta * chemPotential;
         terms.deltaE = deltaE;
         terms.countBefore = n;
-        (void)cavityBias;
+        double clampedCavity = std::max(cavityBias, 1e-30);
+        terms.logCavity = safeLog(clampedCavity);
         terms.logVolume = safeLog(volumeNm3);
         double lambda = (thermalLambdaNm > 0.0 ? thermalLambdaNm : 1.0);
         terms.logLambda3 = 3.0 * safeLog(lambda);
@@ -248,7 +252,8 @@ public:
         terms.beta = beta;
         terms.betaMu = beta * chemPotential;
         terms.countBefore = n;
-        (void)cavityBias;
+        double clampedCavity = std::max(cavityBias, 1e-30);
+        terms.logCavity = safeLog(clampedCavity);
         terms.logVolume = safeLog(volumeNm3);
         terms.cbmcTrials = std::max(Keff, 1);
         terms.logWForward = logWnew;

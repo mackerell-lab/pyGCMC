@@ -7,109 +7,105 @@ Hypothesis: offset = f(number of residues)
 import sys
 import os
 import subprocess
+import textwrap
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
 import pygcmc
+pygcmc.set_platform_verbose(True)
+pygcmc.set_platform_log_level(pygcmc.PlatformLogLevel.DEBUG)
 from pygcmc import MCState, MCAtom, MCResidue, MCForceField
+pygcmc.set_platform_verbose(True)
+pygcmc.set_platform_log_level(pygcmc.PlatformLogLevel.DEBUG)
 
 
 def compute_pme_with_state_isolation(n_residues, residue_config):
     """Calculate PME energy in isolated subprocess to avoid global state pollution"""
     
+    mesh_size = [32, 32, 32]
+
     # Build Python script string that directly returns results
-    script = f"""
-import sys
-sys.path.insert(0, '{os.path.dirname(os.path.dirname(os.path.abspath(__file__)))}')
+    script = textwrap.dedent(f"""
+        import pygcmc
+        from pygcmc import MCState, MCAtom, MCResidue, MCForceField
 
-import pygcmc
-from pygcmc import MCState, MCAtom, MCResidue, MCForceField
+        box_size = 5.0
+        cutoff = 2.0
+        alpha = 2.5
+        mesh_size = {mesh_size}
+        spline_order = 4
 
-# Fixed system parameters
-box_size = 5.0
-cutoff = 2.0
-alpha = 2.5
-mesh_size = [32, 32, 32]
-spline_order = 4
+        state = MCState()
+        state.info.box = [box_size, box_size, box_size]
+        state.info.cutoff = cutoff
 
-# Create new state
-state = MCState()
-state.info.box = [box_size, box_size, box_size]
-state.info.cutoff = cutoff
+        ff = MCForceField()
+        ff.numTotalTypes = 1
+        ff.numMovementTypes = 1
+        ff.ljEps = [0.0]
+        ff.ljSigma = [0.3]
+        state.forcefield = ff
 
-ff = MCForceField()
-ff.numTotalTypes = 1
-ff.numMovementTypes = 1
-ff.ljEps = [0.0]
-ff.ljSigma = [0.3]
-state.forcefield = ff
+        positions = [[2.0, 2.0, 2.5], [3.0, 2.0, 2.5], [3.0, 3.0, 2.5], [2.0, 3.0, 2.5]]
+        charges = [1.0, -1.0, 1.0, -1.0]
 
-# Shared atom positions and charges
-positions = [[2.0, 2.0, 2.5], [3.0, 2.0, 2.5], [3.0, 3.0, 2.5], [2.0, 3.0, 2.5]]
-charges = [1.0, -1.0, 1.0, -1.0]
-n_atoms = 4
+        for pos, charge in zip(positions, charges):
+            atom = MCAtom()
+            atom.x, atom.y, atom.z = pos
+            atom.charge = charge
+            atom.type = 0
+            state.atoms.append(atom)
 
-# Create atoms
-atoms = []
-for i in range(n_atoms):
-    atom = MCAtom()
-    atom.x, atom.y, atom.z = positions[i]
-    atom.charge = charges[i]
-    atom.type = 0
-    atoms.append(atom)
+        state.activeAtomCount = len(state.atoms)
 
-state.atoms = atoms
-state.activeAtomCount = n_atoms
+        residue_config = {residue_config}
+        for res_info in residue_config:
+            res = MCResidue()
+            res.active = True
+            res.fixed = False
+            res.atomStart = res_info['atomStart']
+            res.atomCount = res_info['atomCount']
+            res.type = 0
+            state.residues.append(res)
 
-# Create residue configuration
-residues = []
-residue_config = {residue_config}
-for res_info in residue_config:
-    res = MCResidue()
-    res.active = True
-    res.fixed = False
-    res.atomStart = res_info['atomStart']
-    res.atomCount = res_info['atomCount']
-    res.type = 0
-    residues.append(res)
+        state.activeResidueCount = len(state.residues)
 
-state.residues = residues
-state.activeResidueCount = len(residues)
+        pygcmc.initializePMEParameters(
+            cutoff,
+            [box_size, box_size, box_size],
+            alpha,
+            mesh_size,
+            spline_order
+        )
 
-# Initialize PME
-pygcmc.setPMEParameters(alpha, mesh_size, spline_order)
-pygcmc.initializePMEParameters(
-    cutoff,
-    [box_size, box_size, box_size],
-    alpha,
-    mesh_size,
-    spline_order
-)
+        pygcmc.computeSystemEnergyPME(state)
 
-# Calculate energy
-pygcmc.computeSystemEnergyPME(state)
-
-# Print result dictionary directly
-print({{
-    'total': state.ewald_energy.get('total', 0.0),
-    'real_space': state.ewald_energy.get('real_space', 0.0),
-    'reciprocal': state.ewald_energy.get('reciprocal', 0.0),
-    'self': state.ewald_energy.get('self', 0.0)
-}})
-"""
+        print({{
+            'total': state.ewald_energy.get('total', 0.0),
+            'real_space': state.ewald_energy.get('real_space', 0.0),
+            'reciprocal': state.ewald_energy.get('reciprocal', 0.0),
+            'self': state.ewald_energy.get('self', 0.0)
+        }})
+    """)
 
     # Run in subprocess
     try:
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+        build_path = os.path.join(project_root, 'build')
+        existing_path = os.environ.get('PYTHONPATH', '')
+        combined_pythonpath = build_path if not existing_path else os.pathsep.join([build_path, existing_path])
         result = subprocess.run(
             [sys.executable, '-c', script],
             capture_output=True,
             text=True,
-            check=True,
-            env={**os.environ, 'PYTHONPATH': os.environ.get('PYTHONPATH', '')}
+            check=False,
+            env={**os.environ, 'PYTHONPATH': combined_pythonpath}
         )
-        
-        # Use eval to parse dict (safe because we control the output)
+
+        print("SUBPROCESS STDOUT:", result.stdout)
+        print("SUBPROCESS STDERR:", result.stderr)
+        result.check_returncode()
         return eval(result.stdout)
     except subprocess.CalledProcessError as e:
         print(f"Error running subprocess: {e.stderr}")

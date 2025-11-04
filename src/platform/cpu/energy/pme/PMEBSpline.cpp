@@ -106,9 +106,10 @@ void initializePMEBsplines() {
  */
 void setPMEParameters(double alpha, const int meshSize[3], int splineOrder, double tolerance) {
     pme_params.alpha = alpha;
-    
+
     // Ensure grid size is a power of 2
     for (int i = 0; i < 3; i++) {
+        platform::log(LogLevel::DEBUG, "Requested mesh dimension ", i, " = ", meshSize[i]);
         if ((meshSize[i] & (meshSize[i] - 1)) != 0) {
             int power = 1;
             while (power < meshSize[i]) {
@@ -120,6 +121,7 @@ void setPMEParameters(double alpha, const int meshSize[3], int splineOrder, doub
         } else {
             pme_params.meshSize[i] = meshSize[i];
         }
+        platform::log(LogLevel::DEBUG, "Effective mesh dimension ", i, " = ", pme_params.meshSize[i]);
     }
     
     // Set other parameters

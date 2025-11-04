@@ -209,16 +209,30 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     result.bias = calculateInsertionBias(*tmpl, position, orientation) * cbmcBias;
 
     // Store individual components for detailed balance verification
+    double cavityFraction = std::max(cavityBias, 1e-30);
     result.rosenbluthWeight = cbmcBias;
-    result.cavityBiasComponent = cavityBias;
+    result.cavityBiasComponent = cavityFraction;
 
     // Calculate acceptance probability using proper GCMC formula
     bool accept = false;
     double prob = 0.0;
     if (acceptanceCalculator_) {
-        // CRITICAL FIX: Use N_before for correct detailed balance
-        prob = acceptanceCalculator_->calculateInsertionProbability(
-            typeId, N_before, result.deltaE, result.bias);
+        const int trialsUsed = std::max(numTrials, 1);
+        double proposalBias = getConfigValue("proposalBias");
+        double proposalLogRatio = 0.0;
+        if (proposalBias > 0.0) {
+            proposalLogRatio = -std::log(proposalBias);
+        }
+        GCMCAcceptance::GrandCanonicalInsertionTerms terms;
+        terms.typeId = typeId;
+        terms.countBefore = N_before;
+        terms.deltaE = result.deltaE;
+        terms.cavityFraction = cavityFraction;
+        terms.lambdaNm = acceptanceCalculator_->getThermalLambda(typeId);
+        terms.rosenbluthWeight = std::max(cbmcBias, 1e-30);
+        terms.cbmcTrials = trialsUsed;
+        terms.proposalLogRatio = proposalLogRatio;
+        prob = acceptanceCalculator_->calculateInsertionProbabilityDetailed(terms);
         
         // Only store probability if configured
         result.acceptanceProbability = shouldStoreProbability() ? prob : -1.0;
@@ -410,16 +424,30 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     result.bias = calculateDeletionBiasAtPosition(savedPosition) * cbmcBias;
 
     // Store individual components for detailed balance verification
+    double cavityFraction = std::max(cavityBias, 1e-30);
     result.rosenbluthWeight = cbmcBias;
-    result.cavityBiasComponent = cavityBias;
+    result.cavityBiasComponent = cavityFraction;
 
     // Calculate acceptance probability using proper GCMC formula
     bool accept = false;
     double prob = 0.0;
     if (acceptanceCalculator_) {
-        // CRITICAL FIX: Use N_before for correct detailed balance
-        prob = acceptanceCalculator_->calculateDeletionProbability(
-            typeId, N_before, result.deltaE, result.bias);
+        const int trialsUsed = std::max(numTrials, 1);
+        double proposalBias = getConfigValue("proposalBias");
+        double proposalLogRatio = 0.0;
+        if (proposalBias > 0.0) {
+            proposalLogRatio = std::log(proposalBias);
+        }
+        GCMCAcceptance::GrandCanonicalDeletionTerms terms;
+        terms.typeId = typeId;
+        terms.countBefore = N_before;
+        terms.deltaE = result.deltaE;
+        terms.cavityFraction = cavityFraction;
+        terms.lambdaNm = acceptanceCalculator_->getThermalLambda(typeId);
+        terms.rosenbluthWeight = std::max(cbmcBias, 1e-30);
+        terms.cbmcTrials = trialsUsed;
+        terms.proposalLogRatio = proposalLogRatio;
+        prob = acceptanceCalculator_->calculateDeletionProbabilityDetailed(terms);
         
         // Only store probability if configured
         result.acceptanceProbability = shouldStoreProbability() ? prob : -1.0;

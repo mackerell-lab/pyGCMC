@@ -42,6 +42,11 @@ from movementGCMC.acceptance_tests import (
     test_temperature_effect
 )
 
+from movementGCMC.acceptance_formula_engine import (
+    test_insertion_probability_detailed_matches_formula,
+    test_deletion_probability_detailed_matches_formula
+)
+
 # Energy calculation tests (3 functions)
 from movementGCMC.energy_tests import (
     test_energy_conservation,

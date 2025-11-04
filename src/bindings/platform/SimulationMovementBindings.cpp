@@ -182,6 +182,85 @@ void init_movement_bindings(py::module& m) {
         .def("__repr__", [](const MovementModule&) {
             return std::string("MovementModule(temperature=300.0)");
         });
+
+    // Expose acceptance probability helpers for regression tests
+    movement.def(
+        "calculate_insertion_probability_basic",
+        [](int n, double deltaE, double beta, double chemPotential,
+           double cavityBias, double volumeNm3) {
+            return utils::LogSpaceCalculator::calculateInsertionProbability(
+                n, deltaE, beta, chemPotential, cavityBias, volumeNm3, true);
+        },
+        py::arg("n"),
+        py::arg("deltaE"),
+        py::arg("beta"),
+        py::arg("chemicalPotential"),
+        py::arg("cavityBias"),
+        py::arg("volumeNm3"),
+        "Compute insertion acceptance probability (log-space) including cavity bias");
+
+    movement.def(
+        "calculate_insertion_probability_with_lambda",
+        [](int n, double deltaE, double beta, double chemPotential,
+           double cavityBias, double volumeNm3, double thermalLambdaNm) {
+            return utils::LogSpaceCalculator::calculateInsertionProbabilityWithLambda(
+                n, deltaE, beta, chemPotential, cavityBias, volumeNm3,
+                thermalLambdaNm, true);
+        },
+        py::arg("n"),
+        py::arg("deltaE"),
+        py::arg("beta"),
+        py::arg("chemicalPotential"),
+        py::arg("cavityBias"),
+        py::arg("volumeNm3"),
+        py::arg("thermalLambdaNm"),
+        "Compute insertion acceptance probability with thermal wavelength factor");
+
+    movement.def(
+        "calculate_deletion_probability_basic",
+        [](int n, double deltaE, double beta, double chemPotential,
+           double volumeNm3) {
+            return utils::LogSpaceCalculator::calculateDeletionProbability(
+                n, deltaE, beta, chemPotential, volumeNm3, true);
+        },
+        py::arg("n"),
+        py::arg("deltaE"),
+        py::arg("beta"),
+        py::arg("chemicalPotential"),
+        py::arg("volumeNm3"),
+        "Compute deletion acceptance probability without cavity or lambda terms");
+
+    movement.def(
+        "calculate_deletion_probability_with_cavity",
+        [](int n, double deltaE, double beta, double chemPotential,
+           double cavityBias, double volumeNm3) {
+            return utils::LogSpaceCalculator::calculateDeletionProbabilityWithCavity(
+                n, deltaE, beta, chemPotential, cavityBias, volumeNm3, true);
+        },
+        py::arg("n"),
+        py::arg("deltaE"),
+        py::arg("beta"),
+        py::arg("chemicalPotential"),
+        py::arg("cavityBias"),
+        py::arg("volumeNm3"),
+        "Compute deletion acceptance probability including cavity bias");
+
+    movement.def(
+        "calculate_deletion_probability_with_cavity_and_lambda",
+        [](int n, double deltaE, double beta, double chemPotential,
+           double cavityBias, double volumeNm3, double thermalLambdaNm) {
+            return utils::LogSpaceCalculator::calculateDeletionProbabilityWithCavityAndLambda(
+                n, deltaE, beta, chemPotential, cavityBias, volumeNm3,
+                thermalLambdaNm, true);
+        },
+        py::arg("n"),
+        py::arg("deltaE"),
+        py::arg("beta"),
+        py::arg("chemicalPotential"),
+        py::arg("cavityBias"),
+        py::arg("volumeNm3"),
+        py::arg("thermalLambdaNm"),
+        "Compute deletion acceptance probability with both cavity and thermal wavelength factors");
     
     // Basic GCMC functions using MovementAPI
     movement.def("initializeGCMC", &initializeGCMC,
