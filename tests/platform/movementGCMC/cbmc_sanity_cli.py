@@ -538,6 +538,66 @@ class TestCBMCSanity:
         )
         print("✅ Cavity timing consistency test passed")
 
+    def test_cbmc_weights_within_bounds(self, tmp_path):
+        """
+        Check that CBMC forward/reverse Rosenbluth weights remain within physical bounds.
+        """
+        print("\n=== CBMC Weight Bounds Test ===")
+
+        pdb, top, atp, ff = create_minimal_water_files(tmp_path)
+        inp = build_inp(
+            pdb,
+            top,
+            atp,
+            ff,
+            use_cbmc=True,
+            k_trials=8,
+            mcsteps=3500,
+            mu=-2.0,
+        )
+
+        result, accept_log = run_with_accept_log(
+            inp, tmp_path, "cbmc_weight_bounds.jsonl", timeout=200
+        )
+        assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+
+        records = read_jsonl(accept_log)
+        assert records, "No acceptance records captured"
+
+        max_trials = max((r.get("cbmcTrials", 1) for r in records), default=1)
+        insertions = [
+            r for r in records if r.get("move") == "insertion" and r.get("cbmcTrials", 1) > 1
+        ]
+        deletions = [
+            r for r in records if r.get("move") == "deletion" and r.get("cbmcTrials", 1) > 1
+        ]
+
+        if insertions:
+            q_forward = [r.get("qForward", 1.0) for r in insertions if r.get("qForward") is not None]
+            if not q_forward:
+                pytest.skip("No qForward values recorded for CBMC insertions")
+            min_qf = min(q_forward)
+            max_qf = max(q_forward)
+            print(f"qForward range: min={min_qf:.4f}, max={max_qf:.4f}, trials={max_trials}")
+            assert all(q > 0.0 for q in q_forward), "CBMC qForward must be positive"
+            assert max_qf < max_trials * 2.0, (
+                f"qForward={max_qf:.4f} exceeds loose upper bound (2*K={max_trials*2.0})"
+            )
+
+        if deletions:
+            q_reverse = [r.get("qReverse", 1.0) for r in deletions if r.get("qReverse") is not None]
+            if not q_reverse:
+                pytest.skip("No qReverse values recorded for CBMC deletions")
+            min_qr = min(q_reverse)
+            max_qr = max(q_reverse)
+            print(f"qReverse range: min={min_qr:.4f}, max={max_qr:.4f}, trials={max_trials}")
+            assert all(q > 0.0 for q in q_reverse), "CBMC qReverse must be positive"
+            assert max_qr < max_trials * 2.0, (
+                f"qReverse={max_qr:.4f} exceeds loose upper bound (2*K={max_trials*2.0})"
+            )
+
+        print("✅ CBMC Rosenbluth weights within expected bounds")
+
     def test_v_eff_matches_cavity_fraction(self, tmp_path):
         """
         验证日志中的 vEff 与 vBox×wCavity 一致（支持 cavity bias 校验）

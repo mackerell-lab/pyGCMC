@@ -47,14 +47,17 @@ def _build_simple_state(box_size: float = 3.0):
 
 
 @pytest.mark.parametrize(
-    "use_cavity, lambda_nm",
+    "use_cavity, lambda_nm, use_cbmc, cbmc_trials",
     [
-        (False, 0.3),  # Lambda only
-        (True, 1.0),   # Cavity only
-        (True, 0.3),   # Cavity + Lambda
+        (False, 0.3, False, 1),   # Lambda only
+        (True, 1.0, False, 1),    # Cavity only
+        (True, 0.3, False, 1),    # Cavity + Lambda
+        (True, 0.3, True, 5),     # Cavity + Lambda + CBMC
     ],
 )
-def test_engine_cavity_lambda_detailed_balance(use_cavity: bool, lambda_nm: float):
+def test_engine_cavity_lambda_detailed_balance(
+    use_cavity: bool, lambda_nm: float, use_cbmc: bool, cbmc_trials: int
+):
     """Verify insertion/deletion ratios from GCMCEngine match theoretical expectations."""
     state, reservoir = _build_simple_state(box_size=3.0)
 
@@ -78,6 +81,10 @@ def test_engine_cavity_lambda_detailed_balance(use_cavity: bool, lambda_nm: floa
         engine.setConfigValue("useCavityBias", 1.0)
         cavity_mgr = pygcmc.CavityManager(2.0, 1.4)
         engine.setCavityManager(cavity_mgr)
+
+    if use_cbmc:
+        engine.setConfigValue("useConfBias", 1.0)
+        engine.setCBMCTrialsPerType([cbmc_trials])
 
     # Enable probability capture to retrieve detailed info
     engine.setConfigValue("storeProbabilities", 1.0)

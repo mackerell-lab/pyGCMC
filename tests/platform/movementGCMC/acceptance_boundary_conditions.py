@@ -61,18 +61,19 @@ def test_large_lambda_suppresses_insertion():
     """Increasing thermal wavelength should reduce insertion probability."""
     acc = _make_acceptance()
     acc.setTemperature(300.0)
-    acc.setVolume(1.0)
+    acc.setVolume(2.0)
 
-    lambda_small = 0.1
-    lambda_large = 10.0
+    lambda_small = 0.4
+    lambda_large = 4.0
     n_before = 5
-    delta_e = 5.0
+    delta_e = 6.0
+    cavity_fraction = 0.8
 
     result_small = acc.calculate_insertion_probability_detailed(
         typeId=0,
         currentNumber=n_before,
         deltaE=delta_e,
-        cavityFraction=1.0,
+        cavityFraction=cavity_fraction,
         lambdaNm=lambda_small,
         rosenbluthWeight=1.0,
         cbmcTrials=1,
@@ -83,7 +84,7 @@ def test_large_lambda_suppresses_insertion():
         typeId=0,
         currentNumber=n_before,
         deltaE=delta_e,
-        cavityFraction=1.0,
+        cavityFraction=cavity_fraction,
         lambdaNm=lambda_large,
         rosenbluthWeight=1.0,
         cbmcTrials=1,
@@ -99,7 +100,7 @@ def test_large_lambda_suppresses_insertion():
 
     expected_ratio = (lambda_small / lambda_large) ** 3
     actual_ratio = p_large / p_small
-    assert actual_ratio == pytest.approx(expected_ratio, rel=0.1), (
+    assert actual_ratio == pytest.approx(expected_ratio, rel=1e-2), (
         f"Expected probability ratio {expected_ratio:.2e}, "
         f"observed {actual_ratio:.2e}"
     )
