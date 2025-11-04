@@ -1611,7 +1611,8 @@ bool GCMCSimulation::performSingleMove() {
         // Effective volume (box volume)
         const auto& box = params_->get_space_info().box_size;
         double boxVol = box[0] * box[1] * box[2];
-        rec.vEff = boxVol;
+        double effVolume = result.effectiveVolume > 0.0 ? result.effectiveVolume : boxVol;
+        rec.vEff = effVolume;
         rec.bias = result.bias;
 
         // Acceptance probability and random number

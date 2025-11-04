@@ -97,6 +97,24 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         return result;
     }
     
+    double baseVolume = getBoxVolume();
+    if (baseVolume <= 0.0) {
+        baseVolume = 1.0;
+    }
+    if (acceptanceCalculator_) {
+        double configuredVolume = acceptanceCalculator_->getVolume();
+        if (configuredVolume > 0.0) {
+            baseVolume = configuredVolume;
+        } else {
+            acceptanceCalculator_->setVolume(baseVolume);
+            baseVolume = acceptanceCalculator_->getVolume();
+            if (baseVolume <= 0.0) {
+                baseVolume = 1.0;
+            }
+        }
+    }
+    result.effectiveVolume = baseVolume;
+
     // CRITICAL FIX: Get N BEFORE insertion for correct acceptance calculation
     int N_before = reservoir_->getActiveCount(typeId);
 
@@ -132,7 +150,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     Vector3 position;
     Quaternion orientation;
     double cbmcBias = 1.0;
-    double cavityBias = 1.0;
+    double cavityVolumeFraction = 1.0;
 
     if (useConfBias_ && numTrials > 1) {
         // Use CBMC to select configuration
@@ -170,6 +188,11 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         }
     }
 
+    if (useCavityBias_ && cavityManager_) {
+        cavityVolumeFraction = std::max(1e-12, cavityManager_->getCavityVolumeFraction(*state_));
+    }
+    result.effectiveVolume = baseVolume * cavityVolumeFraction;
+
     result.position = position;
     
     // Calculate energy before insertion
@@ -199,17 +222,11 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         result.deltaE = result.energyAfter - result.energyBefore;
     }
     
-    // Calculate cavity bias component separately for detailed balance tracking
-    if (cavityManager_ && useCavityBias_) {
-        movement::Vector3 pos(position.x, position.y, position.z);
-        cavityBias = cavityManager_->getCavityScore(pos);
-    }
-
     // Calculate total bias (cavity bias * CBMC bias * proposal bias)
     result.bias = calculateInsertionBias(*tmpl, position, orientation) * cbmcBias;
 
     // Store individual components for detailed balance verification
-    double cavityFraction = std::max(cavityBias, 1e-30);
+    double cavityFraction = cavityVolumeFraction;
     result.rosenbluthWeight = cbmcBias;
     result.cavityBiasComponent = cavityFraction;
 
@@ -323,9 +340,27 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     Quaternion savedOrientation = instance->orientation;
     result.position = savedPosition;
 
+    double baseVolume = getBoxVolume();
+    if (baseVolume <= 0.0) {
+        baseVolume = 1.0;
+    }
+    if (acceptanceCalculator_) {
+        double configuredVolume = acceptanceCalculator_->getVolume();
+        if (configuredVolume > 0.0) {
+            baseVolume = configuredVolume;
+        } else {
+            acceptanceCalculator_->setVolume(baseVolume);
+            baseVolume = acceptanceCalculator_->getVolume();
+            if (baseVolume <= 0.0) {
+                baseVolume = 1.0;
+            }
+        }
+    }
+    result.effectiveVolume = baseVolume;
+
     // Calculate CBMC bias for deletion if enabled
     double cbmcBias = 1.0;
-    double cavityBias = 1.0;
+    double cavityVolumeFraction = 1.0;
     int numTrials = 1;
     if (useConfBias_ && typeId < static_cast<int>(cbmcTrialsPerType_.size())) {
         numTrials = cbmcTrialsPerType_[typeId];
@@ -414,17 +449,17 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     }
     
     // Calculate cavity bias component separately for detailed balance tracking
-    if (cavityManager_ && useCavityBias_) {
-        movement::Vector3 pos(savedPosition.x, savedPosition.y, savedPosition.z);
-        cavityBias = cavityManager_->getCavityScore(pos);
+    if (useCavityBias_ && cavityManager_) {
+        cavityVolumeFraction = std::max(1e-12, cavityManager_->getCavityVolumeFraction(*state_));
     }
+    result.effectiveVolume = baseVolume * cavityVolumeFraction;
 
     // CRITICAL FIX: Calculate deletion bias using saved position for robustness
     // Include CBMC bias in total bias
     result.bias = calculateDeletionBiasAtPosition(savedPosition) * cbmcBias;
 
     // Store individual components for detailed balance verification
-    double cavityFraction = std::max(cavityBias, 1e-30);
+    double cavityFraction = cavityVolumeFraction;
     result.rosenbluthWeight = cbmcBias;
     result.cavityBiasComponent = cavityFraction;
 
@@ -1194,6 +1229,23 @@ double GCMCEngine::calculateRegrowthBias(int residueIdx) {
     double insertionBias = 1.0;
     
     return deletionBias * insertionBias;
+}
+
+double GCMCEngine::getBoxVolume() const {
+    if (!state_) {
+        return 0.0;
+    }
+    double ax = static_cast<double>(state_->info.box[0]);
+    double by = static_cast<double>(state_->info.box[1]);
+    double cz = static_cast<double>(state_->info.box[2]);
+    if (ax > 0.0 && by > 0.0 && cz > 0.0) {
+        return ax * by * cz;
+    }
+    double fallback = static_cast<double>(state_->info.volume);
+    if (fallback > 0.0) {
+        return fallback;
+    }
+    return 0.0;
 }
 
 // Accept move

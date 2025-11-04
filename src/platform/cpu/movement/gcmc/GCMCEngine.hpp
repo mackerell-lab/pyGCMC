@@ -64,10 +64,14 @@ public:
         // Cavity bias component (for detailed balance verification)
         double cavityBiasComponent;
 
+        // Effective volume used in acceptance ratio (V_eff = V_box * f_cav)
+        double effectiveVolume;
+
         MoveResult() : type(INSERT), accepted(false), energyBefore(0),
                       energyAfter(0), deltaE(0), bias(1.0),
                       acceptanceProbability(0.0), fragmentType(-1), residueIndex(-1),
-                      rosenbluthWeight(1.0), cavityBiasComponent(1.0) {}
+                      rosenbluthWeight(1.0), cavityBiasComponent(1.0),
+                      effectiveVolume(0.0) {}
     };
     
     // Constructor
@@ -176,6 +180,7 @@ public:
         return totalMoves_ > 0 ? 
                static_cast<double>(acceptedMoves_) / totalMoves_ : 0.0;
     }
+    double getBoxVolume() const;
     
     // Dynamic configuration
     void setConfigValue(const std::string& key, double value);
