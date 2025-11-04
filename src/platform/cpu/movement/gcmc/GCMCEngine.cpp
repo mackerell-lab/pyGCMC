@@ -222,19 +222,22 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         result.deltaE = result.energyAfter - result.energyBefore;
     }
     
-    // Calculate total bias (cavity bias * CBMC bias * proposal bias)
-    result.bias = calculateInsertionBias(*tmpl, position, orientation) * cbmcBias;
+    const int trialsUsed = std::max(numTrials, 1);
+    result.cbmcTrialsUsed = trialsUsed;
+
+    // Calculate scheduler/config bias components (exclude cavity handled separately)
+    double schedulerBias = calculateInsertionBias(*tmpl, position, orientation);
 
     // Store individual components for detailed balance verification
     double cavityFraction = cavityVolumeFraction;
     result.rosenbluthWeight = cbmcBias;
     result.cavityBiasComponent = cavityFraction;
+    result.bias = schedulerBias * cbmcBias;
 
     // Calculate acceptance probability using proper GCMC formula
     bool accept = false;
     double prob = 0.0;
     if (acceptanceCalculator_) {
-        const int trialsUsed = std::max(numTrials, 1);
         double proposalBias = getConfigValue("proposalBias");
         double proposalLogRatio = 0.0;
         if (proposalBias > 0.0) {
@@ -259,7 +262,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         // Fallback to simple acceptance (should not be used in production)
         double beta = 1.0 / (8.314e-3 * temperature_);
         double activity = 100.0; // Default activity
-        prob = std::min(1.0, (activity * state_->info.volume / (N_before + 1)) * 
+        double effectiveVolume = std::max(result.effectiveVolume, 1e-12);
+        prob = std::min(1.0, (activity * effectiveVolume / (N_before + 1)) *
                        std::exp(-beta * result.deltaE) * result.bias);
         // Apply same probability storage logic as main branch
         result.acceptanceProbability = shouldStoreProbability() ? prob : -1.0;
@@ -454,9 +458,13 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     }
     result.effectiveVolume = baseVolume * cavityVolumeFraction;
 
+    const int trialsUsed = std::max(numTrials, 1);
+    result.cbmcTrialsUsed = trialsUsed;
+
     // CRITICAL FIX: Calculate deletion bias using saved position for robustness
-    // Include CBMC bias in total bias
-    result.bias = calculateDeletionBiasAtPosition(savedPosition) * cbmcBias;
+    // Include CBMC bias in total bias (cavity handled separately)
+    double schedulerBias = calculateDeletionBiasAtPosition(savedPosition);
+    result.bias = schedulerBias * cbmcBias;
 
     // Store individual components for detailed balance verification
     double cavityFraction = cavityVolumeFraction;
@@ -467,7 +475,6 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     bool accept = false;
     double prob = 0.0;
     if (acceptanceCalculator_) {
-        const int trialsUsed = std::max(numTrials, 1);
         double proposalBias = getConfigValue("proposalBias");
         double proposalLogRatio = 0.0;
         if (proposalBias > 0.0) {
@@ -492,7 +499,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
         // Fallback to simple acceptance (should not be used in production)
         double beta = 1.0 / (8.314e-3 * temperature_);
         double activity = 100.0; // Default activity
-        prob = std::min(1.0, (N_before / (activity * state_->info.volume)) * 
+        double effectiveVolume = std::max(result.effectiveVolume, 1e-12);
+        prob = std::min(1.0, (N_before / (activity * effectiveVolume)) *
                        std::exp(-beta * result.deltaE) * result.bias);
         // Apply same probability storage logic as main branch
         result.acceptanceProbability = shouldStoreProbability() ? prob : -1.0;
@@ -1154,17 +1162,10 @@ double GCMCEngine::calculateInsertionBias(const FragmentTemplate& tmpl,
                                          const Quaternion& orientation) {
     // Suppress unused parameter warnings
     (void)tmpl;
+    (void)position;
     (void)orientation;
 
     double bias = 1.0;
-
-    // CRITICAL: Only apply cavity bias if enabled
-    if (cavityManager_ && useCavityBias_) {
-        // Use position-based cavity score (O(1)) instead of volume calculation (O(n³))
-        // This is much faster and was the original implementation
-        movement::Vector3 pos(position.x, position.y, position.z);
-        bias *= cavityManager_->getCavityScore(pos);
-    }
 
     if (configBias_) {
         // Config bias calculation would go here
@@ -1187,11 +1188,7 @@ double GCMCEngine::calculateDeletionBiasAtPosition(const Vector3& position) {
 
     // CRITICAL: For detailed balance, deletion bias must match insertion bias
     // at the same position
-    if (cavityManager_ && useCavityBias_) {
-        movement::Vector3 pos(position.x, position.y, position.z);
-        // Use the same cavity score calculation as insertion
-        bias *= cavityManager_->getCavityScore(pos);
-    }
+    (void)position;
 
     if (configBias_) {
         // Config bias calculation would go here (must match insertion)

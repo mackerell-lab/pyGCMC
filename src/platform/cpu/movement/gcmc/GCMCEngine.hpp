@@ -66,12 +66,14 @@ public:
 
         // Effective volume used in acceptance ratio (V_eff = V_box * f_cav)
         double effectiveVolume;
+        // Actual number of CBMC trials used in this move
+        int cbmcTrialsUsed;
 
         MoveResult() : type(INSERT), accepted(false), energyBefore(0),
                       energyAfter(0), deltaE(0), bias(1.0),
                       acceptanceProbability(0.0), fragmentType(-1), residueIndex(-1),
                       rosenbluthWeight(1.0), cavityBiasComponent(1.0),
-                      effectiveVolume(0.0) {}
+                      effectiveVolume(0.0), cbmcTrialsUsed(1) {}
     };
     
     // Constructor

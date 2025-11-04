@@ -1594,6 +1594,9 @@ bool GCMCSimulation::performSingleMove() {
             rec.z = 1.0;
             rec.cbmcTrials = 1;
         }
+        if (result.cbmcTrialsUsed > 0) {
+            rec.cbmcTrials = result.cbmcTrialsUsed;
+        }
 
         // CBMC Rosenbluth weights from engine
         // For insertion: qForward = W_new/K
@@ -1609,9 +1612,13 @@ bool GCMCSimulation::performSingleMove() {
         rec.proposalRatio = 1.0;  // Will be qForward/qReverse from paired moves
 
         // Effective volume (box volume)
-        const auto& box = params_->get_space_info().box_size;
-        double boxVol = box[0] * box[1] * box[2];
-        double effVolume = result.effectiveVolume > 0.0 ? result.effectiveVolume : boxVol;
+        double effVolume = result.effectiveVolume;
+        if (effVolume <= 0.0) {
+            const auto& box = params_->get_space_info().box_size;
+            effVolume = box[0] * box[1] * box[2];
+        }
+        double cavityFrac = std::max(result.cavityBiasComponent, 1e-12);
+        rec.vBox = effVolume / cavityFrac;
         rec.vEff = effVolume;
         rec.bias = result.bias;
 
@@ -1631,14 +1638,8 @@ bool GCMCSimulation::performSingleMove() {
             rec.wReverse = result.cavityBiasComponent;
         }
 
-        // Calculate cavity volume fraction for wCavity field
-        // Note: This can be expensive for fine grids, so we use the cached value
-        // from the last grid calculation rather than recalculating every move
-        if (cavityManager_ && cavityManager_->isCacheValid()) {
-            rec.wCavity = cavityManager_->getStatistics().cavityRatio;
-        } else {
-            rec.wCavity = 1.0;  // No cavity bias or cache invalid
-        }
+        // Record cavity volume fraction (already computed in move result)
+        rec.wCavity = result.cavityBiasComponent;
 
         // Add to circular buffer
         if (acceptanceBuffer_.size() < bufferSize_) {
@@ -2770,6 +2771,7 @@ void GCMCSimulation::dumpAcceptanceLog(const std::string& filename) const {
             << "\"qForward\":" << rec.qForward << ","
             << "\"qReverse\":" << rec.qReverse << ","
             << "\"proposalRatio\":" << rec.proposalRatio << ","
+            << "\"vBox\":" << rec.vBox << ","
             << "\"vEff\":" << rec.vEff << ","
             << "\"bias\":" << rec.bias << ","
             << "\"pAcc\":" << rec.pAcc << ","

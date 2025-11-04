@@ -138,6 +138,7 @@ public:
         double qReverse;   // Reverse proposal probability
         double proposalRatio;
         double vEff;       // Effective volume
+        double vBox = 0.0; // Base box volume at time of move
         double pAcc;       // Calculated acceptance probability
         double bias = 1.0; // Total bias factor applied in acceptance
         double u;          // Random number used
