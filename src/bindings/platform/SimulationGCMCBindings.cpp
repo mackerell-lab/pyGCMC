@@ -68,6 +68,9 @@ void init_gcmc_bindings(py::module& m) {
         .def("setCavityManager", &GCMCEngine::setCavityManager,
              py::arg("manager"), py::keep_alive<1, 2>(),
              "Set the cavity manager")
+        .def("setCBMCTrialsPerType", &GCMCEngine::setCBMCTrialsPerType,
+             py::arg("trials"),
+             "Set CBMC trial numbers per fragment type")
         .def("getAcceptanceRate", &GCMCEngine::getAcceptanceRate,
              "Get the overall acceptance rate")
         .def("synchronizeStateWithReservoir", &GCMCEngine::synchronizeStateWithReservoir,

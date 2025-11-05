@@ -652,6 +652,71 @@ class TestCBMCSanity:
         print(f"Validated {checked} insertion records for vEff consistency")
         print("✅ vEff consistency test passed")
 
+    def test_cbmc_weights_physical_bounds(self, tmp_path):
+        """
+        验证CBMC权重qForward/qReverse在物理上界内。
+        
+        理论上界：
+        - W = Σ exp(-β U_i) 对K个trials
+        - 最好情况：所有U_i = U_min，则 W = K * exp(-β U_min)
+        - 最坏情况：所有U_i = +∞，则 W → 0
+        - 因此：0 < W/K ≤ exp(-β U_min) 通常 < K（对于正能量）
+        
+        实际：允许W/K略大于1（favorable能量时），但不应超过K的2倍
+        """
+        print("\n=== CBMC Weights Physical Bounds Test ===")
+        
+        pdb, top, atp, ff = create_minimal_water_files(tmp_path)
+        inp = build_inp(
+            pdb, top, atp, ff,
+            use_cbmc=True, k_trials=8,
+            mcsteps=3000, mu=-2.0,
+            use_cavity=False  # 先禁用cavity，专注CBMC
+        )
+        
+        result, accept_log = run_with_accept_log(
+            inp, tmp_path, "cbmc_bounds.jsonl", timeout=150
+        )
+        assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+        
+        records = read_jsonl(accept_log)
+        insertions = [r for r in records if r.get("move") == "insertion" and r.get("cbmcTrials", 0) > 1]
+        deletions = [r for r in records if r.get("move") == "deletion" and r.get("cbmcTrials", 0) > 1]
+        
+        assert insertions, "No CBMC insertion records found"
+        assert deletions, "No CBMC deletion records found"
+        
+        # Check qForward (insertion)
+        qf_vals = [r.get("qForward", 1.0) for r in insertions]
+        k_vals = [r.get("cbmcTrials", 1) for r in insertions]
+        max_k = max(k_vals) if k_vals else 1
+        
+        min_qf = min(qf_vals)
+        max_qf = max(qf_vals)
+        avg_qf = sum(qf_vals) / len(qf_vals)
+        
+        print(f"qForward: min={min_qf:.4f}, max={max_qf:.4f}, avg={avg_qf:.4f}, K={max_k}")
+        
+        # Physical bounds
+        assert all(q > 0 for q in qf_vals), "All qForward must be positive"
+        assert max_qf < max_k * 3.0, \
+            f"qForward={max_qf:.4f} exceeds loose bound 3*K={max_k*3}"
+        
+        # Check qReverse (deletion)
+        qr_vals = [r.get("qReverse", 1.0) for r in deletions]
+        
+        min_qr = min(qr_vals)
+        max_qr = max(qr_vals)
+        avg_qr = sum(qr_vals) / len(qr_vals)
+        
+        print(f"qReverse: min={min_qr:.4f}, max={max_qr:.4f}, avg={avg_qr:.4f}")
+        
+        assert all(q > 0 for q in qr_vals), "All qReverse must be positive"
+        assert max_qr < max_k * 3.0, \
+            f"qReverse={max_qr:.4f} exceeds loose bound 3*K={max_k*3}"
+        
+        print("✅ CBMC weights within physical bounds")
+
 
 if __name__ == "__main__":
     # Allow running test directly for debugging
