@@ -255,3 +255,89 @@ def test_engine_acceptance_matches_formula():
     )
 
     assert max_error < 1e-4, f"Max error {max_error:.2e} exceeds tolerance 1e-4"
+
+
+def test_lambda_scaling_matches_theory():
+    """Ensure acceptance probability scales with Lambda^{-3} as expected."""
+    state, reservoir = _build_simple_state(box_size=3.0)
+
+    engine = pygcmc.GCMCEngine()
+    engine.initialize(state, reservoir)
+    engine.setSeed(22222)
+    engine.setTemperature(298.15)
+
+    acceptance = pygcmc.GCMCAcceptance()
+    acceptance.setTemperature(298.15)
+    volume = float(np.prod(state.info.box))
+    acceptance.setVolume(volume)
+
+    mu = -11.0  # Strongly negative to keep probabilities < 1 for smallest lambda
+    acceptance.setChemicalPotential(0, mu)
+    acceptance.setSeed(22223)
+    engine.setAcceptanceCalculator(acceptance)
+
+    engine.setConfigValue("storeProbabilities", 1.0)
+
+    # Pre-populate system to keep N ~ 5 for stable statistics
+    target_population = 5
+    while reservoir.getActiveCount(0) < target_population:
+        if engine.attemptInsertion(0).accepted:
+            continue
+
+    beta = 1.0 / (KB * 298.15)
+    activity = math.exp(beta * mu)
+    lambda_values = [0.5, 1.0, 2.0]
+    mean_actual = []
+
+    for lam in lambda_values:
+        acceptance.setThermalLambda(0, lam)
+        lam_cubed = lam ** 3
+
+        samples_actual = []
+        samples_expected = []
+
+        for _ in range(60):
+            n_before = reservoir.getActiveCount(0)
+            result = engine.attemptInsertion(0)
+
+            if result.acceptanceProbability < 0.0:
+                continue
+
+            v_eff = result.effectiveVolume if result.effectiveVolume > 0 else volume
+            rosen = max(result.rosenbluthWeight, 1e-30)
+            ratio = (
+                activity
+                * v_eff
+                / ((n_before + 1) * lam_cubed)
+                * math.exp(-beta * result.deltaE)
+                * rosen
+            )
+            ratio = min(1.0, ratio)
+
+            samples_actual.append(result.acceptanceProbability)
+            samples_expected.append(ratio)
+
+            if result.accepted:
+                # Revert to keep population near target for the next sample
+                engine.attemptDeletion(0)
+
+        assert samples_actual, f"No samples collected for lambda={lam}"
+
+        max_error = max(abs(a - e) for a, e in zip(samples_actual, samples_expected))
+        mean_a = sum(samples_actual) / len(samples_actual)
+        mean_e = sum(samples_expected) / len(samples_expected)
+
+        assert max_error < 5e-3, (
+            f"Lambda scaling mismatch: lambda={lam}, max_error={max_error:.2e}"
+        )
+        assert abs(mean_a - mean_e) < 2e-3, (
+            f"Lambda scaling mean mismatch: lambda={lam}, "
+            f"mean_actual={mean_a:.4f}, mean_expected={mean_e:.4f}"
+        )
+
+        mean_actual.append(mean_a)
+
+    assert mean_actual[0] > mean_actual[1] > mean_actual[2], (
+        "Acceptance probability did not decrease monotonically with lambda^{-3}: "
+        f"means={mean_actual}"
+    )
