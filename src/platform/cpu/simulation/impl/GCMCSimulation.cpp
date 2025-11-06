@@ -1066,37 +1066,28 @@ bool GCMCSimulation::setupAcceptance() {
     acceptance_->setVolume(volume);
     
     // Set activities for each fragment type (initial)
+    const double beta = params_->get_mc_info().beta;
+
     for (auto& frag : fragmentTypes_) {
         // Calculate activity based on concentration and/or chemical potential
         // When both are specified: activity = concentration * exp(beta * mu_excess)
         // This treats mu_excess as the excess chemical potential relative to ideal gas
 
         double baseActivity = 1e-3;  // Default activity
+        const double NA_CONV = 6.022e-1;  // Conversion factor: M -> molecules / nm^3
 
         if (frag.concentration > 0.0 && frag.chemicalPotential == 0.0) {
             // Concentration-only mode: use ideal gas activity
-            // Convert concentration (M) to ideal gas activity (molecules/nm³)
-            // 1 M = 1 mol/L = 6.022e23 molecules/L = 6.022e-1 molecules/nm³
-            const double NA_CONV = 6.022e-1;  // Conversion factor: M to molecules/nm³
             baseActivity = frag.concentration * NA_CONV;
         } else if (frag.concentration > 0.0 && frag.chemicalPotential != 0.0) {
-            // Nbar mode: both concentration and chemical potential specified
-            // Use a moderate activity to allow equilibration
-            // The concentration sets the target, mu provides a bias
-            // For negative mu, use a smaller activity to prevent overflow
-            const double NA_CONV = 6.022e-1;
-            if (frag.chemicalPotential < 0) {
-                // Negative mu: use reduced activity for stability
-                baseActivity = 10.0;  // Fixed moderate activity for nbar with negative mu
-            } else {
-                // Positive mu: use concentration-based activity
-                baseActivity = frag.concentration * NA_CONV;
-            }
+            // Nbar mode: concentration target scaled by exp(beta * mu_ex)
+            const double idealActivity = frag.concentration * NA_CONV;
+            baseActivity = idealActivity * std::exp(beta * frag.chemicalPotential);
             log("Nbar mode: concentration=", frag.concentration, " mu=", frag.chemicalPotential,
                 " activity=", baseActivity);
         } else if (frag.chemicalPotential != 0.0) {
             // Only chemical potential specified, use it directly
-            baseActivity = std::exp(params_->get_mc_info().beta * frag.chemicalPotential);
+            baseActivity = std::exp(beta * frag.chemicalPotential);
         }
 
         frag.activity = baseActivity;

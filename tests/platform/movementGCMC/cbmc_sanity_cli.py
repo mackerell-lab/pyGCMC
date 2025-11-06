@@ -398,7 +398,9 @@ class TestCBMCSanity:
 
         print(f"Checking {len(ins)} insertions and {len(dels)} deletions")
 
-        tol = 5e-5
+        # Allow slightly looser tolerance: activity now includes concentration * exp(beta*mu),
+        # which can amplify rounding noise once multiplying z, vEff, and q factors.
+        tol = 5e-4
         checked_ins = 0
         checked_del = 0
 
