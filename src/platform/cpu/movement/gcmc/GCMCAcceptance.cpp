@@ -63,6 +63,19 @@ double GCMCAcceptance::getThermalLambda(int typeId) const {
     return 1.0;
 }
 
+double GCMCAcceptance::getActivity(int typeId) const {
+    auto it = activities_.find(typeId);
+    if (it != activities_.end()) {
+        return it->second;
+    }
+    auto muIt = chemicalPotentials_.find(typeId);
+    if (muIt != chemicalPotentials_.end()) {
+        double beta = getBeta();
+        return std::exp(beta * muIt->second);
+    }
+    return 1.0;
+}
+
 // Calculate insertion probability
 double GCMCAcceptance::calculateInsertionProbability(
     int typeId,

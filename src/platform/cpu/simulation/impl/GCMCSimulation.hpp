@@ -252,6 +252,7 @@ private:
     // Proposal probabilities for detailed balance with target_numwaters
     double lastProposalPInsert_ = 0.25;
     double lastProposalPDelete_ = 0.25;
+    double currentProposalRatio_ = 1.0;
 
     // Diagnostics
     bool diagnosticsEnabled_ = false;

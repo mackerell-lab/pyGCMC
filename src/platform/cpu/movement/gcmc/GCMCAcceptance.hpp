@@ -68,6 +68,7 @@ public:
     void setActivity(int typeId, double activity);
     void setThermalLambda(int typeId, double lambdaNm);
     double getThermalLambda(int typeId) const;
+    double getActivity(int typeId) const;
     
     // Calculate acceptance probability
     double calculateInsertionProbability(

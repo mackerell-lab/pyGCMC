@@ -1424,15 +1424,20 @@ bool GCMCSimulation::performSingleMove() {
         }
     }
 
+    currentProposalRatio_ = 1.0;
     bool accepted = false;
     GCMCEngine::MoveResult result;
 
     // Save nBefore for diagnostics (before move modifies currentCount)
     int nBefore = -1;
-    if (diagnosticsEnabled_ && (moveType == INSERT || moveType == DELETE)) {
-        if (fragType >= 0 && static_cast<size_t>(fragType) < fragmentTypes_.size()) {
-            nBefore = fragmentTypes_[fragType].currentCount;
+    auto captureCountForDiagnostics = [&](int typeId) {
+        if (!diagnosticsEnabled_) return;
+        if (typeId >= 0 && static_cast<size_t>(typeId) < fragmentTypes_.size()) {
+            nBefore = fragmentTypes_[typeId].currentCount;
         }
+    };
+    if (moveType == INSERT) {
+        captureCountForDiagnostics(fragType);
     }
 
     // Increment total move attempts
@@ -1440,15 +1445,19 @@ bool GCMCSimulation::performSingleMove() {
 
     switch (moveType) {
         case INSERT: {
-            // Apply proposal bias for detailed balance when using target_numwaters
+            double proposalBias = 1.0;
             if (params_->get_fragment_info().target_num_waters > 0 &&
                 lastProposalPInsert_ > 0 && lastProposalPDelete_ > 0) {
-                // For insertion, bias = p_delete/p_insert compensates for biased selection
-                double proposalBias = lastProposalPDelete_ / lastProposalPInsert_;
-                engine_->setConfigValue("proposalBias", proposalBias);
-            } else {
-                engine_->setConfigValue("proposalBias", 1.0);
+                proposalBias = lastProposalPDelete_ / lastProposalPInsert_;
             }
+            double speciesInsertProb = fragmentTypes_[fragType].probability;
+            if (speciesInsertProb <= 0.0) speciesInsertProb = 1.0;
+            double totalActive = static_cast<double>(std::max(1, reservoir_->getActiveCount()));
+            double speciesDeleteProb = fragmentTypes_[fragType].currentCount / totalActive;
+            if (speciesDeleteProb <= 0.0) speciesDeleteProb = 1.0;
+            proposalBias *= speciesDeleteProb / speciesInsertProb;
+            engine_->setConfigValue("proposalBias", proposalBias);
+            currentProposalRatio_ = proposalBias;
 
             result = engine_->attemptInsertion(fragType);
 
@@ -1468,19 +1477,26 @@ bool GCMCSimulation::performSingleMove() {
         }
 
         case DELETE: {
-            int fragType = -1;
+            fragType = -1;
             if (reservoir_->getActiveCount() > 0) {
-                fragType = selectActiveFragment();
-                if (fragType >= 0) {
-                    // Apply proposal bias for detailed balance when using target_numwaters
+                int selectedType = selectActiveFragment();
+                if (selectedType >= 0) {
+                    fragType = selectedType;
+                    fragmentTypes_[fragType].currentCount = reservoir_->activeCount(fragType);
+                    captureCountForDiagnostics(fragType);
+                    double proposalBias = 1.0;
                     if (params_->get_fragment_info().target_num_waters > 0 &&
                         lastProposalPInsert_ > 0 && lastProposalPDelete_ > 0) {
-                        // For deletion, bias = p_insert/p_delete compensates for biased selection
-                        double proposalBias = lastProposalPInsert_ / lastProposalPDelete_;
-                        engine_->setConfigValue("proposalBias", proposalBias);
-                    } else {
-                        engine_->setConfigValue("proposalBias", 1.0);
+                        proposalBias = lastProposalPInsert_ / lastProposalPDelete_;
                     }
+                    double totalActive = static_cast<double>(std::max(1, reservoir_->getActiveCount()));
+                    double speciesDeleteProb = fragmentTypes_[fragType].currentCount / totalActive;
+                    if (speciesDeleteProb <= 0.0) speciesDeleteProb = 1.0;
+                    double speciesInsertProb = fragmentTypes_[fragType].probability;
+                    if (speciesInsertProb <= 0.0) speciesInsertProb = 1.0;
+                    proposalBias *= speciesInsertProb / speciesDeleteProb;
+                    engine_->setConfigValue("proposalBias", proposalBias);
+                    currentProposalRatio_ = proposalBias;
 
                     result = engine_->attemptDeletion(fragType);
 
@@ -1577,7 +1593,11 @@ bool GCMCSimulation::performSingleMove() {
         if (fragType >= 0 && static_cast<size_t>(fragType) < fragmentTypes_.size()) {
             rec.mu = fragmentTypes_[fragType].chemicalPotential;
             rec.betaMu = rec.mu * beta;
-            rec.z = fragmentTypes_[fragType].activity;
+            if (acceptance_) {
+                rec.z = acceptance_->getActivity(fragType);
+            } else {
+                rec.z = fragmentTypes_[fragType].activity;
+            }
             rec.cbmcTrials = fragmentTypes_[fragType].confBiasTrials;
         } else {
             rec.mu = 0.0;
@@ -1600,7 +1620,7 @@ bool GCMCSimulation::performSingleMove() {
             rec.qForward = 1.0;  // Not applicable for single move
             rec.qReverse = result.rosenbluthWeight;
         }
-        rec.proposalRatio = 1.0;  // Will be qForward/qReverse from paired moves
+        rec.proposalRatio = currentProposalRatio_;
 
         // Effective volume (box volume)
         const auto& box = params_->get_space_info().box_size;
