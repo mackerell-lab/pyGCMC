@@ -1436,7 +1436,7 @@ bool GCMCSimulation::performSingleMove() {
             nBefore = fragmentTypes_[typeId].currentCount;
         }
     };
-    if (moveType == INSERT) {
+    if (moveType == INSERT || moveType == DELETE) {
         captureCountForDiagnostics(fragType);
     }
 
@@ -1450,12 +1450,6 @@ bool GCMCSimulation::performSingleMove() {
                 lastProposalPInsert_ > 0 && lastProposalPDelete_ > 0) {
                 proposalBias = lastProposalPDelete_ / lastProposalPInsert_;
             }
-            double speciesInsertProb = fragmentTypes_[fragType].probability;
-            if (speciesInsertProb <= 0.0) speciesInsertProb = 1.0;
-            double totalActive = static_cast<double>(std::max(1, reservoir_->getActiveCount()));
-            double speciesDeleteProb = fragmentTypes_[fragType].currentCount / totalActive;
-            if (speciesDeleteProb <= 0.0) speciesDeleteProb = 1.0;
-            proposalBias *= speciesDeleteProb / speciesInsertProb;
             engine_->setConfigValue("proposalBias", proposalBias);
             currentProposalRatio_ = proposalBias;
 
@@ -1477,35 +1471,22 @@ bool GCMCSimulation::performSingleMove() {
         }
 
         case DELETE: {
-            fragType = -1;
-            if (reservoir_->getActiveCount() > 0) {
-                int selectedType = selectActiveFragment();
-                if (selectedType >= 0) {
-                    fragType = selectedType;
-                    fragmentTypes_[fragType].currentCount = reservoir_->activeCount(fragType);
-                    captureCountForDiagnostics(fragType);
-                    double proposalBias = 1.0;
-                    if (params_->get_fragment_info().target_num_waters > 0 &&
-                        lastProposalPInsert_ > 0 && lastProposalPDelete_ > 0) {
-                        proposalBias = lastProposalPInsert_ / lastProposalPDelete_;
-                    }
-                    double totalActive = static_cast<double>(std::max(1, reservoir_->getActiveCount()));
-                    double speciesDeleteProb = fragmentTypes_[fragType].currentCount / totalActive;
-                    if (speciesDeleteProb <= 0.0) speciesDeleteProb = 1.0;
-                    double speciesInsertProb = fragmentTypes_[fragType].probability;
-                    if (speciesInsertProb <= 0.0) speciesInsertProb = 1.0;
-                    proposalBias *= speciesInsertProb / speciesDeleteProb;
-                    engine_->setConfigValue("proposalBias", proposalBias);
-                    currentProposalRatio_ = proposalBias;
+            if (reservoir_->getActiveCount() > 0 && fragType >= 0) {
+                double proposalBias = 1.0;
+                if (params_->get_fragment_info().target_num_waters > 0 &&
+                    lastProposalPInsert_ > 0 && lastProposalPDelete_ > 0) {
+                    proposalBias = lastProposalPInsert_ / lastProposalPDelete_;
+                }
+                engine_->setConfigValue("proposalBias", proposalBias);
+                currentProposalRatio_ = proposalBias;
 
-                    result = engine_->attemptDeletion(fragType);
+                result = engine_->attemptDeletion(fragType);
 
-                    fragmentTypes_[fragType].deleteAttempts++;
-                    if (result.accepted) {
-                        fragmentTypes_[fragType].deleteAccepted++;
-                        fragmentTypes_[fragType].currentCount--;
-                        accepted = true;
-                    }
+                fragmentTypes_[fragType].deleteAttempts++;
+                if (result.accepted) {
+                    fragmentTypes_[fragType].deleteAccepted++;
+                    fragmentTypes_[fragType].currentCount--;
+                    accepted = true;
                 }
             }
             
