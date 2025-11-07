@@ -1,0 +1,26 @@
+# Benzene insertion/removal test case
+par:{DATA_DIR}/charmm36.ff/ffnonbonded.itp
+atomtypes:{DATA_DIR}/charmm36.ff/atomtypes.atp
+top:{DATA_DIR}/gcmc_examples/empty.top
+pdb:{DATA_DIR}/gcmc_examples/empty.pdb
+protitp:{DATA_DIR}/gcmc_examples/empty.top
+
+box: 25.0 25.0 25.0
+temperature: 300.0
+
+fragname: BENZ
+fragmuex: -18.0
+fragitp:{DATA_DIR}/charmm36.ff/mol/benz.itp
+
+use_conf_bias: yes
+fragconf: 5
+use_cavity_bias: yes
+cavity_grid_dx: 2.0
+cavity_probe_radius: 1.4
+
+mcsteps: 2000
+moves_per_step: 1
+nprint: 500
+mc_move_prob: 0.5 0.5 0 0
+
+seed: 20240503
