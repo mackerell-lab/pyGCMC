@@ -117,7 +117,7 @@ def test_ideal_gas_mean_particle_number():
                 
                 # Equilibration phase - reduced
                 for _ in range(1000):
-                    if np.random.random() < 0.5:
+                    if rng.random() < 0.5:
                         mover.attemptInsertion(state)
                     else:
                         mover.attemptDeletion(state)
@@ -126,7 +126,7 @@ def test_ideal_gas_mean_particle_number():
                 particle_counts = []
                 for i in range(2000):
                     # Balanced insertion/deletion attempts
-                    if np.random.random() < 0.5:
+                    if rng.random() < 0.5:
                         mover.attemptInsertion(state)
                     else:
                         mover.attemptDeletion(state)

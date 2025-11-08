@@ -4,15 +4,17 @@ Test GCMC region constraint functionality
 
 import pytest
 import tempfile
-import os
-import numpy as np
 from pathlib import Path
+
+
+TEST_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+GCMC_CPU_PATH = Path(__file__).resolve().parents[3] / "build" / "bin" / "gcmc_cpu"
 
 
 def test_gcmc_region_sphere(tmp_path):
     """Test sphere region constraint"""
     # Get path to fragment itp file
-    fragitp_path = Path(__file__).parent.parent / "data/charmm36.ff/mol/sol.itp"
+    fragitp_path = TEST_DATA_DIR / "charmm36.ff/mol/sol.itp"
 
     # Create a simple inp file with gcmc_region
     inp_content = f"""
@@ -36,7 +38,7 @@ fragitp: {fragitp_path}
     import subprocess
 
     # Run gcmc_cpu with the inp file
-    gcmc_executable = Path(__file__).parent.parent.parent / "build/bin/gcmc_cpu"
+    gcmc_executable = GCMC_CPU_PATH
     if gcmc_executable.exists():
         result = subprocess.run(
             [str(gcmc_executable), "--inp", str(inp_file)],
@@ -61,7 +63,7 @@ fragitp: {fragitp_path}
 def test_gcmc_region_box(tmp_path):
     """Test box region constraint"""
     # Get path to fragment itp file
-    fragitp_path = Path(__file__).parent.parent / "data/charmm36.ff/mol/sol.itp"
+    fragitp_path = TEST_DATA_DIR / "charmm36.ff/mol/sol.itp"
 
     # Create a simple inp file with box region
     inp_content = f"""
@@ -85,7 +87,7 @@ fragitp: {fragitp_path}
     import subprocess
 
     # Run gcmc_cpu with the inp file
-    gcmc_executable = Path(__file__).parent.parent.parent / "build/bin/gcmc_cpu"
+    gcmc_executable = GCMC_CPU_PATH
     if gcmc_executable.exists():
         result = subprocess.run(
             [str(gcmc_executable), "--inp", str(inp_file)],
@@ -110,7 +112,7 @@ fragitp: {fragitp_path}
 def test_gcmc_region_cylinder(tmp_path):
     """Test cylinder region constraint"""
     # Get path to fragment itp file
-    fragitp_path = Path(__file__).parent.parent / "data/charmm36.ff/mol/sol.itp"
+    fragitp_path = TEST_DATA_DIR / "charmm36.ff/mol/sol.itp"
 
     # Create a simple inp file with cylinder region
     inp_content = f"""
@@ -134,7 +136,7 @@ fragitp: {fragitp_path}
     import subprocess
 
     # Run gcmc_cpu with the inp file
-    gcmc_executable = Path(__file__).parent.parent.parent / "build/bin/gcmc_cpu"
+    gcmc_executable = GCMC_CPU_PATH
     if gcmc_executable.exists():
         result = subprocess.run(
             [str(gcmc_executable), "--inp", str(inp_file)],

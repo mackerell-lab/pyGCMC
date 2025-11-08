@@ -15,8 +15,8 @@ from typing import Dict, List
 import pytest
 
 
-GCMC_CPU = Path(__file__).resolve().parents[2] / "build" / "bin" / "gcmc_cpu"
-DATA_DIR = Path(__file__).resolve().parents[1] / "data"
+GCMC_CPU = Path(__file__).resolve().parents[3] / "build" / "bin" / "gcmc_cpu"
+DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 TEMPLATE_DIR = DATA_DIR / "gcmc_examples"
 
 

@@ -10,8 +10,8 @@ import os
 import tempfile
 from pathlib import Path
 
-GCMC_CPU_PATH = Path(__file__).parent.parent.parent / "build/bin/gcmc_cpu"
-TEST_DATA_DIR = Path(__file__).parent.parent / "data"
+GCMC_CPU_PATH = Path(__file__).resolve().parents[3] / "build" / "bin" / "gcmc_cpu"
+TEST_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
 
 class TestGCMCIntegration:

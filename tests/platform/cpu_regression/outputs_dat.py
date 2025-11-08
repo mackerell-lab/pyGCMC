@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 # Path to gcmc_cpu executable
-GCMC_CPU_PATH = Path(__file__).parent.parent.parent / "build" / "bin" / "gcmc_cpu"
+GCMC_CPU_PATH = Path(__file__).resolve().parents[3] / "build" / "bin" / "gcmc_cpu"
 
 
 class TestOutputDAT:
