@@ -199,6 +199,30 @@ def test_params_repr():
         assert "MovementParams" in repr_str or "Params" in repr_str
         # Should contain key parameters
         assert "350" in repr_str or "T=" in repr_str.lower()
+
+def test_target_fragment_counts_bias_insertion_when_below_target():
+        """Bias should favor insertions when population is below the target."""
+        params = pygcmc.movement.MovementParams()
+        params.targetFragmentCounts = [10]
+        base = params.get_move_probability_set(0)
+        biased = params.get_move_probability_set_biased(0, population_before=2)
+
+        assert biased.insertion > base.insertion
+        assert biased.deletion < base.deletion
+        total = biased.insertion + biased.deletion + biased.translation + biased.rotation
+        assert total == pytest.approx(1.0)
+
+def test_target_fragment_counts_bias_deletion_when_above_target():
+        """Bias should favor deletions when population is above the target."""
+        params = pygcmc.movement.MovementParams()
+        params.targetFragmentCounts = [5]
+        base = params.get_move_probability_set(0)
+        biased = params.get_move_probability_set_biased(0, population_before=20)
+
+        assert biased.deletion > base.deletion
+        assert biased.insertion < base.insertion
+        total = biased.insertion + biased.deletion + biased.translation + biased.rotation
+        assert total == pytest.approx(1.0)
     
 def test_validation_without_cavity_bias():
         """Test that cavity parameters are not validated when cavity bias is off."""

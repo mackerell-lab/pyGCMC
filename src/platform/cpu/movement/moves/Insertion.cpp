@@ -10,6 +10,7 @@
 #include "../gcmc/GCMCAcceptance.hpp"
 #include "../../../../model/montecarlo/MCMain.hpp"
 #include <cmath>
+#include <algorithm>
 
 namespace pygcmc {
 namespace platform {
@@ -23,6 +24,24 @@ namespace {
 
 inline double logSafe(double value) {
     return std::log(std::max(value, 1e-30));
+}
+
+int countActiveResiduesOfType(const MCState& state, int moleculeType) {
+    if (moleculeType < 0) {
+        return state.activeResidueCount;
+    }
+    int count = 0;
+    int maxResidues = std::min(state.activeResidueCount, static_cast<int>(state.residues.size()));
+    for (int i = 0; i < maxResidues; ++i) {
+        const MCResidue& residue = state.residues[i];
+        if (!residue.active) {
+            continue;
+        }
+        if (residue.type == moleculeType) {
+            ++count;
+        }
+    }
+    return count;
 }
 
 void finalizeInsertionAcceptance(
@@ -110,11 +129,11 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
     MovementResult result;
     result.moveType = "insert";
     result.moleculeType = moleculeType;
-    const auto scheduler = params.getMoveProbabilitySet(moleculeType);
+    const int speciesCountBefore = countActiveResiduesOfType(state, moleculeType);
+    const auto scheduler = params.getBiasedMoveProbabilitySet(moleculeType, speciesCountBefore);
     result.logProposalForward = utils::safeLogProbability(scheduler.insertion);
     result.logProposalReverse = utils::safeLogProbability(scheduler.deletion);
 
-    const int nBeforeGlobal = state.activeResidueCount;
     result.lambdaNm = (params.thermalLambdaNm > 0.0) ? params.thermalLambdaNm : 1.0;
     result.logLambda3 = (std::abs(result.lambdaNm - 1.0) > 1e-12)
         ? 3.0 * std::log(result.lambdaNm)
@@ -210,7 +229,7 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
     result.logWForward = 0.0;
     result.logWReverse = 0.0;
 
-    finalizeInsertionAcceptance(result, paramsWithVolume, moleculeType, nBeforeGlobal);
+    finalizeInsertionAcceptance(result, paramsWithVolume, moleculeType, speciesCountBefore);
     
     // Accept or reject
     bool accepted = utils::RandomUtils::metropolisAccept(result.acceptanceProbability);
@@ -262,7 +281,10 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
     MovementResult result;
     result.moveType = "insert";
     result.moleculeType = moleculeType;
-    const int nBeforeGlobal = state.activeResidueCount;
+    const int speciesCountBefore = countActiveResiduesOfType(state, moleculeType);
+    const auto scheduler = params.getBiasedMoveProbabilitySet(moleculeType, speciesCountBefore);
+    result.logProposalForward = utils::safeLogProbability(scheduler.insertion);
+    result.logProposalReverse = utils::safeLogProbability(scheduler.deletion);
     result.lambdaNm = (params.thermalLambdaNm > 0.0) ? params.thermalLambdaNm : 1.0;
     result.logLambda3 = (std::abs(result.lambdaNm - 1.0) > 1e-12)
         ? 3.0 * std::log(result.lambdaNm)
@@ -423,7 +445,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         result.logWReverse = 0.0;
         result.energyChange = deltaEnergies[selectedIdx];  // For statistics only
 
-        finalizeInsertionAcceptance(result, params, moleculeType, nBeforeGlobal);
+        finalizeInsertionAcceptance(result, params, moleculeType, speciesCountBefore);
         
         // Final decision
         bool accepted = utils::RandomUtils::metropolisAccept(result.acceptanceProbability);
@@ -541,7 +563,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
     result.rosenbluthWeight = 1.0;
     result.logWForward = 0.0;
     result.logWReverse = 0.0;
-    finalizeInsertionAcceptance(result, paramsWithVolume, moleculeType, state.activeResidueCount - 1);
+    finalizeInsertionAcceptance(result, paramsWithVolume, moleculeType, speciesCountBefore);
     
     // Accept or reject
     bool accepted = utils::RandomUtils::metropolisAccept(result.acceptanceProbability);

@@ -87,6 +87,7 @@ struct MovementParams {
     std::vector<double> attemptProbDeletion;
     std::vector<double> attemptProbTranslation;
     std::vector<double> attemptProbRotation;
+    std::vector<int> targetFragmentCounts; // Soft population targets per fragment (negative disables)
     
     // Multi-insertion CBMC parameters
     bool useMultiInsertionCBMC = false;    // Enable multi-insertion mode
@@ -197,6 +198,50 @@ struct MovementParams {
         set.translation = wTrn * inv;
         set.rotation = wRot * inv;
         return set;
+    }
+
+    MoveProbabilitySet getBiasedMoveProbabilitySet(int fragmentType, int populationBefore) const {
+        MoveProbabilitySet set = getMoveProbabilitySet(fragmentType);
+        int target = getTargetCount(fragmentType);
+        if (target <= 0 || populationBefore < 0) {
+            return set;
+        }
+
+        int diff = populationBefore - target;
+        if (diff == 0) {
+            return set;
+        }
+
+        constexpr double biasStrength = 0.1;
+        constexpr double scalingWindow = 10.0;
+        double magnitude = std::min(1.0, std::abs(static_cast<double>(diff)) / scalingWindow);
+        double adjustment = biasStrength * magnitude;
+
+        if (diff < 0) {
+            set.insertion += adjustment;
+            set.deletion = std::max(0.0, set.deletion - adjustment);
+        } else {
+            set.deletion += adjustment;
+            set.insertion = std::max(0.0, set.insertion - adjustment);
+        }
+
+        double sum = set.insertion + set.deletion + set.translation + set.rotation;
+        if (sum <= 0.0) sum = 1.0;
+        double inv = 1.0 / sum;
+        set.insertion *= inv;
+        set.deletion *= inv;
+        set.translation *= inv;
+        set.rotation *= inv;
+        return set;
+    }
+
+    int getTargetCount(int fragmentType) const {
+        if (fragmentType >= 0 &&
+            fragmentType < static_cast<int>(targetFragmentCounts.size()) &&
+            targetFragmentCounts[fragmentType] >= 0) {
+            return targetFragmentCounts[fragmentType];
+        }
+        return -1;
     }
 
     CavityFragmentConfig getCavityConfigForSpecies(int fragmentType) const {

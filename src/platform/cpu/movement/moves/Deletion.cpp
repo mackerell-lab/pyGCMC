@@ -8,6 +8,7 @@
 #include "../gcmc/GCMCAcceptance.hpp"
 #include "../../../../model/montecarlo/MCMain.hpp"
 #include <limits>
+#include <algorithm>
 
 namespace pygcmc {
 namespace platform {
@@ -21,6 +22,24 @@ namespace {
 
 inline double logSafe(double value) {
     return std::log(std::max(value, 1e-30));
+}
+
+int countActiveResiduesOfType(const MCState& state, int moleculeType) {
+    if (moleculeType < 0) {
+        return state.activeResidueCount;
+    }
+    int count = 0;
+    int maxResidues = std::min(state.activeResidueCount, static_cast<int>(state.residues.size()));
+    for (int i = 0; i < maxResidues; ++i) {
+        const MCResidue& residue = state.residues[i];
+        if (!residue.active) {
+            continue;
+        }
+        if (residue.type == moleculeType) {
+            ++count;
+        }
+    }
+    return count;
 }
 
 struct DeletionCbmcResult {
@@ -249,15 +268,10 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     
     result.residueIndex = targetResIdx;
     result.moleculeType = state.residues[targetResIdx].type;
-    const auto scheduler = params.getMoveProbabilitySet(result.moleculeType);
+    const int speciesCountBefore = countActiveResiduesOfType(state, result.moleculeType);
+    const auto scheduler = params.getBiasedMoveProbabilitySet(result.moleculeType, speciesCountBefore);
     result.logProposalForward = utils::safeLogProbability(scheduler.deletion);
     result.logProposalReverse = utils::safeLogProbability(scheduler.insertion);
-    int speciesCountBefore = 0;
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        if (state.residues[i].active && state.residues[i].type == result.moleculeType) {
-            ++speciesCountBefore;
-        }
-    }
     
     // Calculate energy before deletion
     platform::cpu::computeSystemEnergyPBCCutoff(state);

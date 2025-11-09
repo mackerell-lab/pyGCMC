@@ -64,6 +64,13 @@ void init_movement_bindings(py::module& m) {
         .def_readwrite("probeRadiusNm", &MovementParams::CavityFragmentConfig::probeRadiusNm)
         .def_readwrite("maskId", &MovementParams::CavityFragmentConfig::maskId);
 
+    py::class_<MovementParams::MoveProbabilitySet>(movement, "MoveProbabilitySet")
+        .def(py::init<>())
+        .def_readwrite("insertion", &MovementParams::MoveProbabilitySet::insertion)
+        .def_readwrite("deletion", &MovementParams::MoveProbabilitySet::deletion)
+        .def_readwrite("translation", &MovementParams::MoveProbabilitySet::translation)
+        .def_readwrite("rotation", &MovementParams::MoveProbabilitySet::rotation);
+
     // Bind MovementParams class - comprehensive binding of all members
     py::class_<MovementParams>(movement, "MovementParams")
         .def(py::init<>())
@@ -116,6 +123,7 @@ void init_movement_bindings(py::module& m) {
         .def_readwrite("attemptProbDeletion", &MovementParams::attemptProbDeletion)
         .def_readwrite("attemptProbTranslation", &MovementParams::attemptProbTranslation)
         .def_readwrite("attemptProbRotation", &MovementParams::attemptProbRotation)
+        .def_readwrite("targetFragmentCounts", &MovementParams::targetFragmentCounts)
         // Multi-insertion CBMC parameters
         .def_readwrite("useMultiInsertionCBMC", &MovementParams::useMultiInsertionCBMC)
         .def_readwrite("maxParallelInsertions", &MovementParams::maxParallelInsertions)
@@ -137,6 +145,13 @@ void init_movement_bindings(py::module& m) {
         .def_readwrite("fillProposalInfo", &MovementParams::fillProposalInfo)
         .def_readwrite("cavityFragmentConfigs", &MovementParams::cavityFragmentConfigs)
         // Methods
+        .def("get_move_probability_set",
+             &MovementParams::getMoveProbabilitySet,
+             py::arg("fragment_type"))
+        .def("get_move_probability_set_biased",
+             &MovementParams::getBiasedMoveProbabilitySet,
+             py::arg("fragment_type"),
+             py::arg("population_before"))
         .def("updateDerivedParameters", &MovementParams::updateDerivedParameters)
         .def("validateParameters", &MovementParams::validateParameters);
     
