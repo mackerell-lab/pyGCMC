@@ -5,6 +5,7 @@
 #include "../bias/CavityBiasCore.hpp"  // New cavity bias implementation
 #include "../bias/UnifiedAcceptance.hpp"  // Unified acceptance probability
 #include "../common/MovementUtils.hpp"
+#include "../gcmc/GCMCAcceptance.hpp"
 #include "../../../../model/montecarlo/MCMain.hpp"
 
 namespace pygcmc {
@@ -13,6 +14,52 @@ namespace cpu {
 namespace movement {
 
 using namespace model::montecarlo;
+using gcmc::GCMCAcceptance;
+
+namespace {
+
+inline double logSafe(double value) {
+    return std::log(std::max(value, 1e-30));
+}
+
+void finalizeDeletionAcceptance(
+    MovementResult& result,
+    const MovementParams& params,
+    int moleculeType,
+    int countBefore) {
+
+    result.grandTerms.speciesId = moleculeType;
+    result.grandTerms.countBefore = countBefore;
+    result.grandTerms.countAfter = std::max(countBefore - 1, 0);
+    result.grandTerms.beta = params.beta;
+    result.grandTerms.chemicalPotential = params.chemicalPotential;
+    result.grandTerms.deltaEnergy = result.energyChange;
+    result.grandTerms.logVolume = result.logVolume;
+    result.grandTerms.logLambda3 = result.logLambda3;
+    result.grandTerms.logProposalForward = result.logProposalForward;
+    result.grandTerms.logProposalReverse = result.logProposalReverse;
+    result.grandTerms.logCavityForward = 0.0;
+    result.grandTerms.logCavityReverse = result.logCavityFactor;
+    result.grandTerms.logRosenbluthForward = 0.0;
+    result.grandTerms.logRosenbluthReverse = result.logWReverse;
+    result.grandTerms.logExtraForward = 0.0;
+    result.grandTerms.logExtraReverse = 0.0;
+
+    result.grandEvaluation = GCMCAcceptance::evaluate(
+        result.grandTerms,
+        GCMCAcceptance::MoveType::DELETION);
+    result.logAcceptanceRatio = result.grandEvaluation.logRatio;
+    result.acceptanceProbability = result.grandEvaluation.probability;
+}
+
+inline double getStoredRosenbluthWeight(const MCState& state, int residueIndex) {
+    if (residueIndex >= 0 && residueIndex < state.activeResidueCount) {
+        return state.residues[residueIndex].cbmcInsertionWeight;
+    }
+    return 1.0;
+}
+
+} // namespace
 
 DeletionMove::DeletionMove(ActivePool* activePool, CavityManager* cavityManager, 
                            EnergyInterface* energyCalc, CavityBiasCore* cavityCore)
@@ -33,7 +80,6 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     MovementResult result;
     result.moveType = "delete";
 
-    const int nBeforeGlobal = state.activeResidueCount;
     result.lambdaNm = (params.thermalLambdaNm > 0.0) ? params.thermalLambdaNm : 1.0;
     result.logLambda3 = (std::abs(result.lambdaNm - 1.0) > 1e-12)
         ? 3.0 * std::log(result.lambdaNm)
@@ -72,6 +118,7 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     }
     
     result.residueIndex = targetResIdx;
+    result.moleculeType = state.residues[targetResIdx].type;
     
     // Calculate energy before deletion
     int n_before = state.activeResidueCount;  // Store n before deletion
@@ -126,14 +173,11 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     double Vcav_after = Vbox;
     
     if (paramsWithVolume.useCavityBias && cavityCore_) {
-        // Use new CavityBiasCore - calculate after-state cavity volume
-        // Prefer FAST_APPROX here to reduce discretization bias in DB tests
         cavityCore_->invalidateCache();
         CavityMode mode = CavityMode::FAST_APPROX;
         Vcav_after = std::max(1e-30, cavityCore_->calculateCavityVolume(state, mode));
         cavityBias = Vcav_after / Vbox;
     } else if (paramsWithVolume.useCavityBias && cavityManager_) {
-        // Fallback to legacy CavityManager
         cavityManager_->invalidateCache();
         cavityBias = cavityManager_->calculateCavityBiasFactor(state);
         Vcav_after = cavityBias * Vbox;
@@ -141,45 +185,11 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     
     // Restore active flag before acceptance decision
     state.residues[targetResIdx].active = true;
-    
-    // Calculate deletion acceptance probability (match legacy LogSpace path)
-    double acceptProb;
+
+    result.cavityBiasFactor = cavityBias;
     bool useCavityBiasFlag = paramsWithVolume.useCavityBias && (cavityCore_ || cavityManager_);
-    if (useCavityBiasFlag && paramsWithVolume.thermalLambdaNm != 1.0) {
-        // With cavity + Lambda³
-        acceptProb = utils::LogSpaceCalculator::calculateDeletionProbabilityWithCavityAndLambda(
-            n_before,
-            deltaE,
-            paramsWithVolume.beta,
-            paramsWithVolume.chemicalPotential,
-            cavityBias,                // fraction Vcav_after/V
-            paramsWithVolume.volumeNm3,
-            paramsWithVolume.thermalLambdaNm,
-            paramsWithVolume.useLogSpace
-        );
-    } else if (useCavityBiasFlag) {
-        // With cavity only
-        acceptProb = utils::LogSpaceCalculator::calculateDeletionProbabilityWithCavity(
-            n_before,
-            deltaE,
-            paramsWithVolume.beta,
-            paramsWithVolume.chemicalPotential,
-            cavityBias,                // fraction Vcav_after/V
-            paramsWithVolume.volumeNm3,
-            paramsWithVolume.useLogSpace
-        );
-    } else {
-        // No cavity
-        acceptProb = calculateDeletionProbability(
-            n_before,
-            deltaE,
-            paramsWithVolume
-        );
-    }
-    result.acceptanceProbability = acceptProb;
-    result.cavityBiasFactor = cavityBias;  // Store cavity bias factor in result
     if (useCavityBiasFlag) {
-        result.logCavityFactor = std::log(std::max(cavityBias, 1e-30));
+        result.logCavityFactor = logSafe(cavityBias);
         result.cavityVolumeNm3 = Vcav_after;
         result.effectiveVolumeNm3 = Vcav_after;
     } else {
@@ -187,20 +197,19 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
         result.cavityVolumeNm3 = result.volumeNm3;
         result.effectiveVolumeNm3 = result.volumeNm3;
     }
-    const double logN = std::log(static_cast<double>(std::max(nBeforeGlobal, 1)));
-    result.logAcceptanceRatio = paramsWithVolume.beta * deltaE
-        - paramsWithVolume.beta * paramsWithVolume.chemicalPotential
-        + logN - result.logVolume - result.logCavityFactor + result.logLambda3;
+
+    double storedWeight = std::max(getStoredRosenbluthWeight(state, targetResIdx), 1e-30);
+    result.rosenbluthWeight = storedWeight;
     result.cbmcTrialsUsed = 1;
     result.logWForward = 0.0;
-    result.logWReverse = (result.rosenbluthWeight > 0.0)
-        ? std::log(result.rosenbluthWeight)
-        : 0.0;
+    result.logWReverse = logSafe(storedWeight);
     result.logProposalForward = 0.0;
     result.logProposalReverse = 0.0;
+
+    finalizeDeletionAcceptance(result, paramsWithVolume, result.moleculeType, n_before);
     
     // Accept or reject
-    bool accepted = utils::RandomUtils::metropolisAccept(acceptProb);
+    bool accepted = utils::RandomUtils::metropolisAccept(result.acceptanceProbability);
     result.accepted = accepted;
     
     if (accepted) {

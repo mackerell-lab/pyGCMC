@@ -33,6 +33,31 @@ void init_movement_bindings(py::module& m) {
     // Create movement submodule
     auto movement = m.def_submodule("movement", "GCMC Movement operations");
     
+    // Expose unified grand-canonical bookkeeping types
+    py::class_<gcmc::GrandCanonicalTerms>(movement, "GrandCanonicalTerms")
+        .def(py::init<>())
+        .def_readwrite("speciesId", &gcmc::GrandCanonicalTerms::speciesId)
+        .def_readwrite("countBefore", &gcmc::GrandCanonicalTerms::countBefore)
+        .def_readwrite("countAfter", &gcmc::GrandCanonicalTerms::countAfter)
+        .def_readwrite("beta", &gcmc::GrandCanonicalTerms::beta)
+        .def_readwrite("chemicalPotential", &gcmc::GrandCanonicalTerms::chemicalPotential)
+        .def_readwrite("deltaEnergy", &gcmc::GrandCanonicalTerms::deltaEnergy)
+        .def_readwrite("logVolume", &gcmc::GrandCanonicalTerms::logVolume)
+        .def_readwrite("logLambda3", &gcmc::GrandCanonicalTerms::logLambda3)
+        .def_readwrite("logProposalForward", &gcmc::GrandCanonicalTerms::logProposalForward)
+        .def_readwrite("logProposalReverse", &gcmc::GrandCanonicalTerms::logProposalReverse)
+        .def_readwrite("logCavityForward", &gcmc::GrandCanonicalTerms::logCavityForward)
+        .def_readwrite("logCavityReverse", &gcmc::GrandCanonicalTerms::logCavityReverse)
+        .def_readwrite("logRosenbluthForward", &gcmc::GrandCanonicalTerms::logRosenbluthForward)
+        .def_readwrite("logRosenbluthReverse", &gcmc::GrandCanonicalTerms::logRosenbluthReverse)
+        .def_readwrite("logExtraForward", &gcmc::GrandCanonicalTerms::logExtraForward)
+        .def_readwrite("logExtraReverse", &gcmc::GrandCanonicalTerms::logExtraReverse);
+
+    py::class_<gcmc::GrandCanonicalEvaluation>(movement, "GrandCanonicalEvaluation")
+        .def(py::init<>())
+        .def_readwrite("probability", &gcmc::GrandCanonicalEvaluation::probability)
+        .def_readwrite("logRatio", &gcmc::GrandCanonicalEvaluation::logRatio);
+
     // Bind MovementParams class - comprehensive binding of all members
     py::class_<MovementParams>(movement, "MovementParams")
         .def(py::init<>())
@@ -132,6 +157,8 @@ void init_movement_bindings(py::module& m) {
         .def_readonly("logLambda3", &MovementResult::logLambda3)
         .def_readonly("logWForward", &MovementResult::logWForward)
         .def_readonly("logWReverse", &MovementResult::logWReverse)
+        .def_readonly("grandTerms", &MovementResult::grandTerms)
+        .def_readonly("grandEvaluation", &MovementResult::grandEvaluation)
         .def_readonly("computeTimeMs", &MovementResult::computeTimeMs)
         .def_readonly("rejectReason", &MovementResult::rejectReason)
         .def_readonly("numericalError", &MovementResult::numericalError)

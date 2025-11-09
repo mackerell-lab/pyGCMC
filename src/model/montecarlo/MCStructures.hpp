@@ -281,6 +281,7 @@ struct MCAtom {
 struct MCResidue {
     int   atomStart{-1};
     int   atomCount{0};
+    double cbmcInsertionWeight{1.0};  // Stored W_new/K for reverse CBMC weighting
     bool  active{false};
     bool  fixed{false};
     float center[3]{0.0f};

@@ -5,10 +5,12 @@
 
 #include "../../../../model/montecarlo/MCMain.hpp"
 #include "../common/MovementParams.hpp"
+#include "../gcmc/GCMCAcceptance.hpp"
 #include <vector>
 #include <array>
 #include <random>
 #include <memory>
+#include <limits>
 
 // Forward declare CavityManager
 namespace pygcmc {
@@ -57,6 +59,13 @@ struct InsertionRegion {
     int selectedConfig = -1;
     double rosenbluthWeight = 0.0;
     bool accepted = false;
+    double acceptanceProbability = 0.0;
+    double logAcceptanceRatio = -std::numeric_limits<double>::infinity();
+    int countBefore = 0;
+    int effectiveTrials = 0;
+    double selectedEnergy = 0.0;
+    gcmc::GrandCanonicalTerms grandTerms;
+    gcmc::GrandCanonicalEvaluation grandEval;
 };
 
 class MultiInsertionCBMC {
@@ -122,7 +131,9 @@ private:
         std::vector<InsertionRegion>& regions,
         const model::montecarlo::MCState& state,
         double beta,
-        double chemicalPotential);
+        double chemicalPotential,
+        double lambdaNm,
+        int moleculeType);
     
     // Utility functions
     std::vector<model::montecarlo::MCAtom> createMolecule(

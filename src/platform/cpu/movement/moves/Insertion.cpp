@@ -7,6 +7,7 @@
 #include "../bias/CavityBiasCore.hpp"  // New cavity bias implementation
 #include "../bias/UnifiedAcceptance.hpp"  // Unified acceptance probability
 #include "../common/MovementUtils.hpp"
+#include "../gcmc/GCMCAcceptance.hpp"
 #include "../../../../model/montecarlo/MCMain.hpp"
 #include <cmath>
 
@@ -16,6 +17,56 @@ namespace cpu {
 namespace movement {
 
 using namespace model::montecarlo;
+using gcmc::GCMCAcceptance;
+
+namespace {
+
+inline double logSafe(double value) {
+    return std::log(std::max(value, 1e-30));
+}
+
+void finalizeInsertionAcceptance(
+    MovementResult& result,
+    const MovementParams& params,
+    int moleculeType,
+    int countBefore) {
+
+    result.grandTerms.speciesId = moleculeType;
+    result.grandTerms.countBefore = countBefore;
+    result.grandTerms.countAfter = countBefore + 1;
+    result.grandTerms.beta = params.beta;
+    result.grandTerms.chemicalPotential = params.chemicalPotential;
+    result.grandTerms.deltaEnergy = result.energyChange;
+    result.grandTerms.logVolume = result.logVolume;
+    result.grandTerms.logLambda3 = result.logLambda3;
+    result.grandTerms.logProposalForward = result.logProposalForward;
+    result.grandTerms.logProposalReverse = result.logProposalReverse;
+    result.grandTerms.logCavityForward = result.logCavityFactor;
+    result.grandTerms.logCavityReverse = 0.0;
+    result.grandTerms.logRosenbluthForward = result.logWForward;
+    result.grandTerms.logRosenbluthReverse = 0.0;
+    result.grandTerms.logExtraForward = 0.0;
+    result.grandTerms.logExtraReverse = 0.0;
+
+    result.grandEvaluation = GCMCAcceptance::evaluate(
+        result.grandTerms,
+        GCMCAcceptance::MoveType::INSERTION);
+    result.logAcceptanceRatio = result.grandEvaluation.logRatio;
+    result.acceptanceProbability = result.grandEvaluation.probability;
+}
+
+inline void syncInsertedResidueWeight(
+    MCState& state,
+    int residueIndex,
+    const MovementResult& result) {
+    if (residueIndex >= 0 &&
+        residueIndex < state.activeResidueCount &&
+        result.rosenbluthWeight > 0.0) {
+        state.residues[residueIndex].cbmcInsertionWeight = result.rosenbluthWeight;
+    }
+}
+
+} // namespace
 
 InsertionMove::InsertionMove(ActivePool* activePool, 
                              CavityManager* cavityManager,
@@ -144,29 +195,23 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
     if (result.cavityVolumeNm3 <= 0.0) {
         result.cavityVolumeNm3 = result.effectiveVolumeNm3;
     }
-    
-    // Calculate acceptance probability
-    double cavityBiasFactor = 1.0;  // No cavity bias in simple insertion
-    double acceptProb = calculateInsertionProbability(
-        nBeforeGlobal,  // n before insertion
-        deltaE,
-        paramsWithVolume,
-        cavityBiasFactor
-    );
-    result.acceptanceProbability = acceptProb;
-    const double logNplus1 = std::log(static_cast<double>(nBeforeGlobal + 1));
-    result.logAcceptanceRatio = -paramsWithVolume.beta * deltaE
-        + paramsWithVolume.beta * paramsWithVolume.chemicalPotential
-        + result.logVolume + result.logCavityFactor
-        - logNplus1 - result.logLambda3;
+    result.volumeNm3 = paramsWithVolume.volumeNm3;
+    result.logVolume = std::log(std::max(result.volumeNm3, 1e-30));
+    result.cavityBiasFactor = 1.0;
+    result.logCavityFactor = 0.0;
+    result.effectiveVolumeNm3 = result.volumeNm3;
+    result.cavityVolumeNm3 = result.volumeNm3;
     result.cbmcTrialsUsed = 1;
+    result.rosenbluthWeight = 1.0;
     result.logWForward = 0.0;
     result.logWReverse = 0.0;
     result.logProposalForward = 0.0;
     result.logProposalReverse = 0.0;
+
+    finalizeInsertionAcceptance(result, paramsWithVolume, moleculeType, nBeforeGlobal);
     
     // Accept or reject
-    bool accepted = utils::RandomUtils::metropolisAccept(acceptProb);
+    bool accepted = utils::RandomUtils::metropolisAccept(result.acceptanceProbability);
     result.accepted = accepted;
     
     if (accepted) {
@@ -176,6 +221,7 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
             // Sync state with pool to maintain consistency
             activePool_->syncToState(state);
             result.residueIndex = tempResIdx;
+            syncInsertedResidueWeight(state, tempResIdx, result);
             stats_.acceptedInsertions++;
             
             // Invalidate cavity cache since system changed
@@ -205,7 +251,7 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
     // Update statistics
     stats_.totalAttempts++;
     stats_.randomInsertions++;
-    updateStatistics(accepted, false, deltaE, cavityBiasFactor);
+    updateStatistics(accepted, false, deltaE, result.cavityBiasFactor);
     
     return result;
 }
@@ -364,33 +410,23 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         result.effectiveVolumeNm3 = result.volumeNm3 * std::max(result.cavityBiasFactor, 0.0);
         result.cavityVolumeNm3 = result.effectiveVolumeNm3;
 
-        const double logNplus1 = std::log(static_cast<double>(nBeforeGlobal + 1));
         const double logK = std::log(static_cast<double>(std::max(Keff, 1)));
-        double logRatio = result.logCavityFactor
-                        - logNplus1
-                        + params.beta * params.chemicalPotential
-                        + result.logVolume
-                        - result.logLambda3
-                        + logWnew - logK;
-
-        double acceptProb = (logRatio >= 0.0)
-            ? 1.0
-            : std::exp(std::max(logRatio, -700.0));
+        double logWForward = logWnew - logK;
         
-        result.acceptanceProbability = acceptProb;
-        result.configBiasFactor = std::exp(logWnew) / Keff;
+        result.configBiasFactor = std::exp(logWForward);
         result.numConfigTrials = Keff;
         result.cbmcTrialsUsed = Keff;
         result.rosenbluthWeight = result.configBiasFactor;
-        result.logWForward = logWnew;
-        result.logAcceptanceRatio = logRatio;
+        result.logWForward = logWForward;
+        result.logWReverse = 0.0;
         result.logProposalForward = 0.0;
         result.logProposalReverse = 0.0;
-        result.logWReverse = 0.0;
         result.energyChange = deltaEnergies[selectedIdx];  // For statistics only
+
+        finalizeInsertionAcceptance(result, params, moleculeType, nBeforeGlobal);
         
         // Final decision
-        bool accepted = utils::RandomUtils::metropolisAccept(acceptProb);
+        bool accepted = utils::RandomUtils::metropolisAccept(result.acceptanceProbability);
         result.accepted = accepted;
         
         if (accepted) {
@@ -399,6 +435,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
             if (poolResIdx >= 0) {
                 activePool_->syncToState(state);
                 result.residueIndex = tempResIdx;
+                syncInsertedResidueWeight(state, tempResIdx, result);
                 stats_.acceptedInsertions++;
                 
                 // Invalidate cavity cache since system changed
@@ -495,19 +532,21 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         paramsWithVolume.volumeNm3 = state.info.box[0] * state.info.box[1] * state.info.box[2];
     }
     
-    // Calculate acceptance probability with cavity bias
-    // If cavity bias factor is effectively 1.0, cavity bias is not working - use standard formula
-    bool useCavityBias = params.useCavityBias && (abs(result.cavityBiasFactor - 1.0) > 1e-6);
-    double acceptProb = calculateInsertionProbability(
-        state.activeResidueCount - 1,
-        deltaE,
-        paramsWithVolume,
-        useCavityBias ? result.cavityBiasFactor : 1.0
-    );
-    result.acceptanceProbability = acceptProb;
+    bool useCavityBias = params.useCavityBias && (std::abs(result.cavityBiasFactor - 1.0) > 1e-6);
+    if (!useCavityBias) {
+        result.cavityBiasFactor = 1.0;
+        result.logCavityFactor = 0.0;
+    }
+    result.cbmcTrialsUsed = 1;
+    result.rosenbluthWeight = 1.0;
+    result.logWForward = 0.0;
+    result.logWReverse = 0.0;
+    result.logProposalForward = 0.0;
+    result.logProposalReverse = 0.0;
+    finalizeInsertionAcceptance(result, paramsWithVolume, moleculeType, state.activeResidueCount - 1);
     
     // Accept or reject
-    bool accepted = utils::RandomUtils::metropolisAccept(acceptProb);
+    bool accepted = utils::RandomUtils::metropolisAccept(result.acceptanceProbability);
     result.accepted = accepted;
     
     if (accepted) {
@@ -517,6 +556,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
             // Sync state with pool to maintain consistency
             activePool_->syncToState(state);
             result.residueIndex = tempResIdx;
+            syncInsertedResidueWeight(state, tempResIdx, result);
             stats_.acceptedInsertions++;
             
             // Invalidate cavity cache since system changed

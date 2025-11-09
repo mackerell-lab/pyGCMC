@@ -5,6 +5,7 @@
 #include <random>
 #include <map>
 #include <vector>
+#include "../common/GrandCanonicalTerms.hpp"
 
 namespace pygcmc {
 namespace platform {
@@ -23,6 +24,11 @@ namespace gcmc {
  */
 class GCMCAcceptance {
 public:
+    enum class MoveType {
+        INSERTION,
+        DELETION
+    };
+
     struct GrandCanonicalInsertionTerms {
         int typeId = -1;
         int countBefore = 0;
@@ -93,6 +99,12 @@ public:
     double calculateDeletionProbabilityDetailed(
         const GrandCanonicalDeletionTerms& terms,
         double* logRatioOut = nullptr
+    );
+
+    // Unified evaluator shared by MovementModule and CLI engine
+    static gcmc::GrandCanonicalEvaluation evaluate(
+        const gcmc::GrandCanonicalTerms& terms,
+        MoveType moveType
     );
     
     double calculateTranslationProbability(
@@ -199,6 +211,7 @@ private:
     double getDeBroglieWavelength(double mass) const;
     double safeLog(double value) const;
     double safeExp(double logValue) const;
+    double getChemicalPotentialInternal(int typeId) const;
 };
 
 /**

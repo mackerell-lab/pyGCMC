@@ -2,6 +2,7 @@
 #define PYGCMC_PLATFORM_CPU_MOVEMENT_RESULT_HPP
 
 #include <string>
+#include "GrandCanonicalTerms.hpp"
 
 namespace pygcmc {
 namespace platform {
@@ -67,6 +68,10 @@ struct MovementResult {
     // Optional detailed information
     std::string rejectReason;             // Reason for rejection (if applicable)
     bool numericalError = false;          // Flag for numerical issues
+
+    // Unified grand-canonical bookkeeping
+    gcmc::GrandCanonicalTerms grandTerms;                // Logged factors for this move
+    gcmc::GrandCanonicalEvaluation grandEvaluation;      // Cached evaluation result
     
     // Constructor
     MovementResult() = default;

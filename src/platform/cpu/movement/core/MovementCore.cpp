@@ -15,6 +15,7 @@
 #endif
 #include <random>
 #include <chrono>
+#include <cmath>
 
 namespace pygcmc {
 namespace platform {
@@ -362,7 +363,9 @@ std::vector<MovementResult> MovementModule::attemptMultiInsertionCBMC(MCState& s
             newRes.atomCount = region.trialConfigs[region.selectedConfig].size();
             newRes.type = moleculeType;
             newRes.active = true;
-            state.addResidue(newRes);
+            int newResidueIndex = state.addResidue(newRes);
+            state.residues[newResidueIndex].cbmcInsertionWeight =
+                region.rosenbluthWeight > 0.0 ? region.rosenbluthWeight : 1.0;
         }
     }
     
@@ -377,14 +380,35 @@ std::vector<MovementResult> MovementModule::attemptMultiInsertionCBMC(MCState& s
         cavityManager_->invalidateCache();
     }
     
-    // Create result entries
+    const double perRegionTime = regions.empty() ? 0.0 : totalTimeMs / regions.size();
+
     for (const auto& region : regions) {
         MovementResult result;
         result.moveType = "multi_insert";
+        result.moleculeType = moleculeType;
         result.accepted = region.accepted;
-        result.energyChange = region.accepted ? region.trialEnergies[region.selectedConfig] : 0.0;
+        result.energyChange = region.selectedEnergy;
         result.residueIndex = -1;  // Multiple residues
-        result.computeTimeMs = totalTimeMs / regions.size();  // Average time per region
+        result.computeTimeMs = perRegionTime;
+        result.numConfigTrials = region.effectiveTrials > 0 ? region.effectiveTrials : params_.numConfigTrials;
+        result.cbmcTrialsUsed = region.effectiveTrials > 0 ? region.effectiveTrials : 1;
+        result.rosenbluthWeight = (region.rosenbluthWeight > 0.0) ? region.rosenbluthWeight : 1.0;
+        result.logWForward = std::log(std::max(result.rosenbluthWeight, 1e-30));
+        result.logWReverse = 0.0;
+        result.cavityBiasFactor = 1.0;
+        result.logCavityFactor = 0.0;
+        result.volumeNm3 = std::exp(region.grandTerms.logVolume);
+        result.logVolume = region.grandTerms.logVolume;
+        result.effectiveVolumeNm3 = result.volumeNm3;
+        result.cavityVolumeNm3 = result.volumeNm3;
+        result.lambdaNm = std::exp(region.grandTerms.logLambda3 / 3.0);
+        result.logLambda3 = region.grandTerms.logLambda3;
+        result.logProposalForward = region.grandTerms.logProposalForward;
+        result.logProposalReverse = region.grandTerms.logProposalReverse;
+        result.grandTerms = region.grandTerms;
+        result.grandEvaluation = region.grandEval;
+        result.logAcceptanceRatio = region.grandEval.logRatio;
+        result.acceptanceProbability = region.grandEval.probability;
         results.push_back(result);
         
         updateStatistics("multi_insert", result.accepted, result.energyChange);

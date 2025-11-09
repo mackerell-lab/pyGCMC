@@ -27,6 +27,7 @@ namespace cpu {
 namespace movement {
 
 using namespace model::montecarlo;
+using gcmc::GCMCAcceptance;
 
 MultiInsertionCBMC::MultiInsertionCBMC(const MultiInsertionConfig& config,
                                        CavityManager* cavityManager)
@@ -91,7 +92,13 @@ std::pair<int, std::vector<InsertionRegion>> MultiInsertionCBMC::performMultiIns
     selectOptimalConfigurations(selectedRegions, params.beta);
     
     // 6. Accept insertions
-    auto acceptedRegions = acceptInsertions(selectedRegions, state, params.beta, params.chemicalPotential);
+    auto acceptedRegions = acceptInsertions(
+        selectedRegions,
+        state,
+        params.beta,
+        params.chemicalPotential,
+        params.thermalLambdaNm,
+        moleculeType);
     
     // Count accepts
     int acceptCount = 0;
@@ -368,7 +375,9 @@ std::vector<InsertionRegion> MultiInsertionCBMC::acceptInsertions(
     std::vector<InsertionRegion>& regions,
     const MCState& state,
     double beta,
-    double chemicalPotential) {
+    double chemicalPotential,
+    double lambdaNm,
+    int moleculeType) {
     
     // Count current molecules
     int currentN = state.activeResidueCount;
@@ -376,6 +385,9 @@ std::vector<InsertionRegion> MultiInsertionCBMC::acceptInsertions(
     // Precompute box volume in nm^3
     double Vbox = state.info.box[0] * state.info.box[1] * state.info.box[2];
     
+    double lambda = (lambdaNm > 0.0) ? lambdaNm : 1.0;
+    double logLambda3 = 3.0 * std::log(lambda);
+
     // Process each region independently
     for (auto& region : regions) {
         // Find max log weight for numerical stability
@@ -391,6 +403,7 @@ std::vector<InsertionRegion> MultiInsertionCBMC::acceptInsertions(
         // If all energies are infinite, reject
         if (!std::isfinite(maxLogW)) {
             region.accepted = false;
+            region.acceptanceProbability = 0.0;
             continue;
         }
         
@@ -406,23 +419,51 @@ std::vector<InsertionRegion> MultiInsertionCBMC::acceptInsertions(
         
         if (Keff == 0) {
             region.accepted = false;
+            region.acceptanceProbability = 0.0;
             continue;
         }
         
         double logW = maxLogW + std::log(sumExp);
         
-        // Use standard CBMC insertion acceptance with uniform-in-box proposal
-        // lnA = ln(Vbox) - ln(N+1) + beta*mu + lnW - ln(Keff)
-        double lnA = std::log(std::max(1e-30, Vbox))
-                   - std::log(currentN + 1.0)
-                   + beta * chemicalPotential
-                   + logW
-                   - std::log(std::max(1, Keff));
-        
-        double acceptProb = lnA >= 0.0 ? 1.0 : std::exp(lnA);
-        
+        region.countBefore = currentN;
+        region.effectiveTrials = Keff;
+        if (region.selectedConfig >= 0 &&
+            region.selectedConfig < static_cast<int>(region.trialEnergies.size())) {
+            region.selectedEnergy = region.trialEnergies[region.selectedConfig];
+        } else {
+            region.selectedEnergy = 0.0;
+        }
+
+        double logVolume = std::log(std::max(1e-30, Vbox));
+        double logKeff = std::log(static_cast<double>(std::max(Keff, 1)));
+        double logRosen = logW - logKeff;
+        region.rosenbluthWeight = std::exp(logRosen);
+
+        region.grandTerms.speciesId = moleculeType;
+        region.grandTerms.countBefore = region.countBefore;
+        region.grandTerms.countAfter = region.countBefore + 1;
+        region.grandTerms.beta = beta;
+        region.grandTerms.chemicalPotential = chemicalPotential;
+        region.grandTerms.deltaEnergy = region.selectedEnergy;
+        region.grandTerms.logVolume = logVolume;
+        region.grandTerms.logLambda3 = logLambda3;
+        region.grandTerms.logProposalForward = 0.0;
+        region.grandTerms.logProposalReverse = 0.0;
+        region.grandTerms.logCavityForward = 0.0;
+        region.grandTerms.logCavityReverse = 0.0;
+        region.grandTerms.logRosenbluthForward = logRosen;
+        region.grandTerms.logRosenbluthReverse = 0.0;
+        region.grandTerms.logExtraForward = 0.0;
+        region.grandTerms.logExtraReverse = 0.0;
+
+        region.grandEval = GCMCAcceptance::evaluate(
+            region.grandTerms,
+            GCMCAcceptance::MoveType::INSERTION);
+        region.logAcceptanceRatio = region.grandEval.logRatio;
+        region.acceptanceProbability = region.grandEval.probability;
+
         // Accept or reject
-        region.accepted = (uniform_(rng_) < acceptProb);
+        region.accepted = (uniform_(rng_) < region.acceptanceProbability);
         
         // Update molecule count if accepted
         if (region.accepted) {

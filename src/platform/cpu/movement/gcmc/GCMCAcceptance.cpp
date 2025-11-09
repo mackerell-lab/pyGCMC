@@ -104,40 +104,39 @@ double GCMCAcceptance::calculateInsertionProbabilityDetailed(
         return 0.0;
     }
 
-    double beta = getBeta();
+    gcmc::GrandCanonicalTerms unified;
+    unified.speciesId = terms.typeId;
+    unified.countBefore = terms.countBefore;
+    unified.countAfter = terms.countBefore + 1;
+    unified.beta = getBeta();
+    unified.chemicalPotential = getChemicalPotentialInternal(terms.typeId);
+    unified.deltaEnergy = terms.deltaE;
 
-    double activity = 1.0;
-    auto actIt = activities_.find(terms.typeId);
-    if (actIt != activities_.end()) {
-        activity = actIt->second;
-    } else {
-        auto muIt = chemicalPotentials_.find(terms.typeId);
-        if (muIt != chemicalPotentials_.end()) {
-            activity = std::exp(beta * muIt->second);
-            activities_[terms.typeId] = activity;
-        }
-    }
+    double volume = volume_ > 0.0 ? volume_ : 1.0;
+    unified.logVolume = safeLog(volume);
 
-    double logZ = safeLog(activity);
-    double logNplus1 = safeLog(static_cast<double>(terms.countBefore + 1));
-    double logVolume = safeLog(volume_);
-    double logCavity = safeLog(terms.cavityFraction);
+    double cavityFraction = std::max(terms.cavityFraction, 1e-30);
+    unified.logCavityForward = safeLog(cavityFraction);
+    unified.logCavityReverse = 0.0;
+
     double lambdaNm = terms.lambdaNm > 0.0 ? terms.lambdaNm : getThermalLambda(terms.typeId);
-    double logLambda3 = 3.0 * safeLog(lambdaNm);
-    double logWForward = safeLog(terms.rosenbluthWeight);
+    unified.logLambda3 = 3.0 * safeLog(lambdaNm);
 
-    double logRatio = terms.proposalLogRatio
-        - beta * terms.deltaE
-        + logZ
-        + (logVolume + logCavity)
-        - logNplus1
-        + logWForward
-        - logLambda3;
+    unified.logProposalForward = 0.0;
+    unified.logProposalReverse = terms.proposalLogRatio;
 
+    double rosen = std::max(terms.rosenbluthWeight, 1e-30);
+    unified.logRosenbluthForward = safeLog(rosen);
+    unified.logRosenbluthReverse = 0.0;
+
+    unified.logExtraForward = 0.0;
+    unified.logExtraReverse = 0.0;
+
+    auto eval = evaluate(unified, MoveType::INSERTION);
     if (logRatioOut) {
-        *logRatioOut = logRatio;
+        *logRatioOut = eval.logRatio;
     }
-    return safeExp(logRatio);
+    return eval.probability;
 }
 
 // Calculate deletion probability
@@ -170,40 +169,39 @@ double GCMCAcceptance::calculateDeletionProbabilityDetailed(
         return 0.0;
     }
 
-    double beta = getBeta();
+    gcmc::GrandCanonicalTerms unified;
+    unified.speciesId = terms.typeId;
+    unified.countBefore = terms.countBefore;
+    unified.countAfter = std::max(terms.countBefore - 1, 0);
+    unified.beta = getBeta();
+    unified.chemicalPotential = getChemicalPotentialInternal(terms.typeId);
+    unified.deltaEnergy = terms.deltaE;
 
-    double activity = 1.0;
-    auto actIt = activities_.find(terms.typeId);
-    if (actIt != activities_.end()) {
-        activity = actIt->second;
-    } else {
-        auto muIt = chemicalPotentials_.find(terms.typeId);
-        if (muIt != chemicalPotentials_.end()) {
-            activity = std::exp(beta * muIt->second);
-            activities_[terms.typeId] = activity;
-        }
-    }
+    double volume = volume_ > 0.0 ? volume_ : 1.0;
+    unified.logVolume = safeLog(volume);
 
-    double logZ = safeLog(activity);
-    double logN = safeLog(static_cast<double>(terms.countBefore));
-    double logVolume = safeLog(volume_);
-    double logCavity = safeLog(terms.cavityFraction);
+    double cavityFraction = std::max(terms.cavityFraction, 1e-30);
+    unified.logCavityForward = 0.0;
+    unified.logCavityReverse = safeLog(cavityFraction);
+
     double lambdaNm = terms.lambdaNm > 0.0 ? terms.lambdaNm : getThermalLambda(terms.typeId);
-    double logLambda3 = 3.0 * safeLog(lambdaNm);
-    double logWReverse = safeLog(terms.rosenbluthWeight);
+    unified.logLambda3 = 3.0 * safeLog(lambdaNm);
 
-    double logRatio = terms.proposalLogRatio
-        + beta * terms.deltaE
-        - logZ
-        + logN
-        - (logVolume + logCavity)
-        - logWReverse
-        + logLambda3;
+    unified.logProposalForward = 0.0;
+    unified.logProposalReverse = terms.proposalLogRatio;
 
+    double rosen = std::max(terms.rosenbluthWeight, 1e-30);
+    unified.logRosenbluthForward = 0.0;
+    unified.logRosenbluthReverse = safeLog(rosen);
+
+    unified.logExtraForward = 0.0;
+    unified.logExtraReverse = 0.0;
+
+    auto eval = evaluate(unified, MoveType::DELETION);
     if (logRatioOut) {
-        *logRatioOut = logRatio;
+        *logRatioOut = eval.logRatio;
     }
-    return safeExp(logRatio);
+    return eval.probability;
 }
 
 // Calculate translation probability
@@ -385,6 +383,84 @@ double GCMCAcceptance::safeExp(double logValue) const {
     }
     const double lowerBound = -700.0;
     return std::exp(std::max(logValue, lowerBound));
+}
+
+gcmc::GrandCanonicalEvaluation GCMCAcceptance::evaluate(
+    const gcmc::GrandCanonicalTerms& terms,
+    MoveType moveType) {
+    
+    auto safeLogLocal = [](double value) {
+        return std::log(std::max(value, 1e-30));
+    };
+    auto safeExpLocal = [](double logValue) {
+        if (logValue >= 0.0) {
+            return 1.0;
+        }
+        const double lowerBound = -700.0;
+        return std::exp(std::max(logValue, lowerBound));
+    };
+
+    gcmc::GrandCanonicalEvaluation eval;
+    
+    if (moveType == MoveType::INSERTION) {
+        int countAfter = terms.countAfter > 0 ? terms.countAfter : terms.countBefore + 1;
+        if (countAfter <= 0) {
+            eval.probability = 0.0;
+            eval.logRatio = -std::numeric_limits<double>::infinity();
+            return eval;
+        }
+        double logNplus1 = safeLogLocal(static_cast<double>(countAfter));
+        double logRatio =
+            (terms.logProposalReverse - terms.logProposalForward)
+            - terms.beta * terms.deltaEnergy
+            + terms.beta * terms.chemicalPotential
+            + terms.logVolume
+            + (terms.logCavityForward - terms.logCavityReverse)
+            - logNplus1
+            + (terms.logRosenbluthForward - terms.logRosenbluthReverse)
+            - terms.logLambda3
+            + (terms.logExtraForward - terms.logExtraReverse);
+        eval.logRatio = logRatio;
+        eval.probability = safeExpLocal(logRatio);
+        return eval;
+    }
+
+    if (terms.countBefore <= 0) {
+        eval.probability = 0.0;
+        eval.logRatio = -std::numeric_limits<double>::infinity();
+        return eval;
+    }
+
+    double logN = safeLogLocal(static_cast<double>(terms.countBefore));
+    double logRatio =
+        (terms.logProposalReverse - terms.logProposalForward)
+        + terms.beta * terms.deltaEnergy
+        - terms.beta * terms.chemicalPotential
+        + logN
+        - terms.logVolume
+        + (terms.logCavityForward - terms.logCavityReverse)
+        + (terms.logRosenbluthForward - terms.logRosenbluthReverse)
+        + terms.logLambda3
+        + (terms.logExtraForward - terms.logExtraReverse);
+    eval.logRatio = logRatio;
+    eval.probability = safeExpLocal(logRatio);
+    return eval;
+}
+
+double GCMCAcceptance::getChemicalPotentialInternal(int typeId) const {
+    auto muIt = chemicalPotentials_.find(typeId);
+    if (muIt != chemicalPotentials_.end()) {
+        return muIt->second;
+    }
+    auto actIt = activities_.find(typeId);
+    if (actIt != activities_.end()) {
+        double activity = std::max(actIt->second, 1e-30);
+        double beta = getBeta();
+        if (beta > 0.0) {
+            return std::log(activity) / beta;
+        }
+    }
+    return 0.0;
 }
 
 // ============================================================================

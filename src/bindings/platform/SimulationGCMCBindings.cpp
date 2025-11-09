@@ -47,6 +47,8 @@ void init_gcmc_bindings(py::module& m) {
         .def(py::init<>())
         .def("initialize", &GCMCEngine::initialize,
              py::arg("state"), py::arg("reservoir"),
+             py::keep_alive<1, 2>(),  // Keep MCState alive as long as the engine exists
+             py::keep_alive<1, 3>(),  // Keep FragmentReservoir alive as long as the engine exists
              "Initialize the GCMC engine with state and reservoir")
         .def("setSeed", &GCMCEngine::setSeed,
              py::arg("seed"), "Set random seed")
