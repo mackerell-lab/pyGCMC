@@ -58,7 +58,13 @@ fragmuex:{mu}
 """)
 
             cmd = [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "42"]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=tmpdir
+            )
 
             # Parse results
             count_match = re.search(r"Fragment counts:\s*WAT:\s*(\d+)", result.stdout)

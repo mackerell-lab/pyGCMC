@@ -69,6 +69,11 @@ MovementResult RotationMove::performSimpleRotation(MCState& state, const Movemen
     }
     
     result.residueIndex = targetResIdx;
+    int fragmentType = state.residues[targetResIdx].type;
+    const auto scheduler = params.getMoveProbabilitySet(fragmentType);
+    double logProb = utils::safeLogProbability(scheduler.rotation);
+    result.logProposalForward = logProb;
+    result.logProposalReverse = logProb;
     
     // Save original configuration
     RotationConfig originalConfig = saveConfiguration(state, targetResIdx);
@@ -150,6 +155,11 @@ MovementResult RotationMove::performConfigBiasRotation(MCState& state, const Mov
     }
     
     result.residueIndex = targetResIdx;
+    int fragmentType = state.residues[targetResIdx].type;
+    const auto scheduler = params.getMoveProbabilitySet(fragmentType);
+    double logProb = utils::safeLogProbability(scheduler.rotation);
+    result.logProposalForward = logProb;
+    result.logProposalReverse = logProb;
     
     // Perform configurational bias rotation
     ConfigBiasRotationResult biasResult = performConfigBiasRotationInternal(state, targetResIdx, params);

@@ -1244,6 +1244,33 @@ bool GCMCSimulation::setupEngine() {
         log("  Exclude hydrogens: ", space.exclude_hydrogens_from_grid);
         log("  Use VDW radius: ", space.use_vdw_radius_for_grid);
 
+        const auto& fragInfo = params_->get_fragment_info();
+        auto getOverride = [](const std::vector<float>& vec, size_t idx) -> double {
+            if (idx < vec.size() && vec[idx] > 0.0f) {
+                return static_cast<double>(vec[idx]);
+            }
+            return -1.0;
+        };
+        auto getMask = [](const std::vector<int>& vec, size_t idx) -> int {
+            if (idx < vec.size()) {
+                return vec[idx];
+            }
+            return -1;
+        };
+
+        for (size_t i = 0; i < fragmentTypes_.size(); ++i) {
+            int typeId = fragmentTypes_[i].typeId;
+            double gridOverride = getOverride(fragInfo.cavity_grid_dx_list, i);
+            double probeOverride = getOverride(fragInfo.cavity_probe_radius_list, i);
+            int maskFlags = getMask(fragInfo.cavity_mask_list, i);
+            if (gridOverride <= 0.0 && probeOverride <= 0.0 && maskFlags < 0) {
+                continue;
+            }
+            double gridAngstrom = gridOverride > 0.0 ? gridOverride * 10.0 : -1.0;
+            double probeAngstrom = probeOverride > 0.0 ? probeOverride * 10.0 : -1.0;
+            cavityManager_->setSpeciesParameters(typeId, gridAngstrom, probeAngstrom, maskFlags);
+        }
+
         // Initialize cavity grid (will output statistics to stdout)
         // This is needed to pre-build the cavity cache and output stats for testing
         try {

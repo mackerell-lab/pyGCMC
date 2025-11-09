@@ -505,6 +505,11 @@ public:
     }
 };
 
+inline double safeLogProbability(double value) {
+    constexpr double kMinProb = 1e-30;
+    return std::log(std::max(value, kMinProb));
+}
+
 } // namespace utils
 } // namespace movement
 } // namespace cpu

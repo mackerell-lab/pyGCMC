@@ -22,6 +22,12 @@ static constexpr double NM_TO_ANGSTROM = 10.0;
 CavityManager::CavityManager(double gridSpacing, double probeRadius)
     : gridSpacing_(gridSpacing),      // in Angstroms
       probeRadius_(probeRadius),      // in Angstroms
+      activeGridSpacing_(gridSpacing),
+      activeProbeRadius_(probeRadius),
+      activeExcludeProtein_(false),
+      activeExcludeHydrogens_(false),
+      activeUseVDWRadius_(false),
+      activeSpeciesId_(-1),
       cacheValid_(false),
       lastBoxSize_(-1, -1, -1) {      // Initialize to invalid size
     resetStatistics();
@@ -29,9 +35,10 @@ CavityManager::CavityManager(double gridSpacing, double probeRadius)
 
 CavityManager::~CavityManager() = default;
 
-std::vector<Vector3> CavityManager::findCavities(const MCState& state) {
+std::vector<Vector3> CavityManager::findCavities(const MCState& state, int speciesId) {
     // Note: Thread safety issue if called concurrently - would need mutex
     // std::lock_guard<std::mutex> guard(cacheMutex_);
+    applySpeciesParameters(speciesId);
     
     // Get box dimensions from MCState (already in nm!)
     Vector3 boxSizeNm(state.info.box[0], 
@@ -90,8 +97,8 @@ std::vector<Vector3> CavityManager::findCavities(const MCState& state) {
     return cavityCache_;
 }
 
-double CavityManager::calculateCavityBiasFactor(const MCState& state) {
-    auto cavities = findCavities(state);
+double CavityManager::calculateCavityBiasFactor(const MCState& state, int speciesId) {
+    auto cavities = findCavities(state, speciesId);
     
     if (stats_.totalGridPoints == 0) {
         return 1.0;  // No bias if no grid
@@ -177,7 +184,7 @@ std::vector<CavityManager::CavityCluster> CavityManager::findCavityClusters(cons
 
 void CavityManager::initializeGrid(const Vector3& boxSize) {
     // Box size is in nm, grid spacing is in Angstroms, convert to nm
-    double spacingNm = gridSpacing_ * ANGSTROM_TO_NM;
+    double spacingNm = activeGridSpacing_ * ANGSTROM_TO_NM;
     
     // Calculate grid dimensions
     grid_.nx = std::max(1, static_cast<int>(std::ceil(boxSize.x / spacingNm)));
@@ -202,9 +209,9 @@ void CavityManager::markOccupiedRegions(const MCState& state) {
     for (const MCResidue& residue : state.residues) {
         if (!residue.active) continue;
 
-        // Skip non-protein residues if excludeProtein_ is enabled
+        // Skip non-protein residues if excludeProtein flag is enabled
         // Consider a residue as protein if it's fixed or has a large chain
-        if (excludeProtein_ && !residue.fixed) {
+        if (activeExcludeProtein_ && !residue.fixed) {
             // Only process protein (fixed) residues when excludeProtein_ is true
             continue;
         }
@@ -214,8 +221,8 @@ void CavityManager::markOccupiedRegions(const MCState& state) {
         for (int atomIdx = residue.atomStart; atomIdx < atomEnd && atomIdx < state.activeAtomCount; ++atomIdx) {
             const MCAtom& atom = state.atoms[atomIdx];
 
-            // Skip hydrogens if excludeHydrogens_ is enabled
-            if (excludeHydrogens_) {
+            // Skip hydrogens if excludeHydrogens flag is enabled
+            if (activeExcludeHydrogens_) {
                 // Check if atom is hydrogen based on name or mass
                 if (atom.mass < 2.0 ||
                     (atom.name.length() > 0 && atom.name[0] == 'H')) {
@@ -226,10 +233,10 @@ void CavityManager::markOccupiedRegions(const MCState& state) {
             // Position is in nm (same as box dimensions)
             Vector3 posNm(atom.x, atom.y, atom.z);
             
-            // Determine radius based on useVDWRadius_ flag
+            // Determine radius based on active mask flags
             double radiusNm = 0.15;  // Default fallback in nm (1.5 Angstroms)
 
-            if (useVDWRadius_) {
+            if (activeUseVDWRadius_) {
                 // Use VDW radius based on element type
                 // Common VDW radii in nm (converted from Angstroms)
                 if (atom.name.length() > 0) {
@@ -259,7 +266,7 @@ void CavityManager::markOccupiedRegions(const MCState& state) {
             }
             
             // Add probe radius (convert from Angstroms to nm)
-            double totalRadius = radiusNm + probeRadius_ * ANGSTROM_TO_NM;
+            double totalRadius = radiusNm + activeProbeRadius_ * ANGSTROM_TO_NM;
             markOccupiedRegion(posNm, totalRadius);
         }
     }
@@ -317,7 +324,7 @@ Vector3 CavityManager::gridToPosition(int i, int j, int k) const {
 bool CavityManager::checkCavity(const Vector3& position, const MCState& state) const {
     // Position is in nm
     // Simple check: ensure minimum distance from all atoms
-    double minDist = probeRadius_ * ANGSTROM_TO_NM;  // Convert probe radius to nm
+    double minDist = activeProbeRadius_ * ANGSTROM_TO_NM;  // Convert probe radius to nm
     double minDistSq = minDist * minDist;
     
     // Use same global atom array as markOccupiedRegions for consistency
@@ -548,7 +555,7 @@ std::vector<CavityManager::CavityCluster> CavityManager::findCavityClustersFlood
                 // Calculate cluster properties
                 if (count > 0) {
                     cluster.center = centerSum * (1.0 / count);
-                    double spacingNm = gridSpacing_ * ANGSTROM_TO_NM;
+                    double spacingNm = activeGridSpacing_ * ANGSTROM_TO_NM;
                     cluster.volume = count * spacingNm * spacingNm * spacingNm;
                     
                     // Only keep clusters with significant volume
@@ -648,7 +655,7 @@ std::vector<Vector3> CavityManager::selectIndependentCavities(
     findCavities(state);
     
     // Calculate color grid size
-    double spacingNm = gridSpacing_ * ANGSTROM_TO_NM;
+    double spacingNm = activeGridSpacing_ * ANGSTROM_TO_NM;
     int colorSize = std::max(1, static_cast<int>(std::ceil(minSeparationNm / spacingNm)));
     
     // First, count cavities in each color class to enable weighted selection
@@ -876,6 +883,78 @@ double CavityManager::getCavityVolumeFraction(const MCState& state) {
     }
     
     return cavityVolume / boxVolume;
+}
+
+void CavityManager::setSpeciesParameters(int speciesId, double gridSpacingAngstrom, double probeRadiusAngstrom, int maskFlags) {
+    if (speciesId < 0) {
+        return;
+    }
+    SpeciesConfig cfg;
+    cfg.gridSpacingAngstrom = gridSpacingAngstrom;
+    cfg.probeRadiusAngstrom = probeRadiusAngstrom;
+    cfg.maskFlags = maskFlags;
+    speciesConfigs_[speciesId] = cfg;
+    cacheValid_ = false;
+}
+
+void CavityManager::clearSpeciesParameters() {
+    speciesConfigs_.clear();
+    activeSpeciesId_ = -1;
+    activeGridSpacing_ = gridSpacing_;
+    activeProbeRadius_ = probeRadius_;
+    activeExcludeProtein_ = excludeProtein_;
+    activeExcludeHydrogens_ = excludeHydrogens_;
+    activeUseVDWRadius_ = useVDWRadius_;
+    cacheValid_ = false;
+}
+
+CavityManager::SpeciesConfig CavityManager::resolveSpeciesConfig(int speciesId) const {
+    auto it = speciesConfigs_.find(speciesId);
+    if (it != speciesConfigs_.end()) {
+        return it->second;
+    }
+    return {};
+}
+
+void CavityManager::applySpeciesParameters(int speciesId) {
+    double spacing = gridSpacing_;
+    double probe = probeRadius_;
+    int maskFlags = -1;
+    if (speciesId >= 0) {
+        SpeciesConfig cfg = resolveSpeciesConfig(speciesId);
+        if (cfg.gridSpacingAngstrom > 0.0) {
+            spacing = cfg.gridSpacingAngstrom;
+        }
+        if (cfg.probeRadiusAngstrom > 0.0) {
+            probe = cfg.probeRadiusAngstrom;
+        }
+        maskFlags = cfg.maskFlags;
+    }
+
+    bool excludeProtein = excludeProtein_;
+    bool excludeHydrogens = excludeHydrogens_;
+    bool useVDW = useVDWRadius_;
+    if (maskFlags >= 0) {
+        excludeProtein = (maskFlags & 0x1) != 0;
+        excludeHydrogens = (maskFlags & 0x2) != 0;
+        useVDW = (maskFlags & 0x4) != 0;
+    }
+
+    const bool changed = (speciesId != activeSpeciesId_) ||
+                         (std::abs(spacing - activeGridSpacing_) > 1e-9) ||
+                         (std::abs(probe - activeProbeRadius_) > 1e-9) ||
+                         (excludeProtein != activeExcludeProtein_) ||
+                         (excludeHydrogens != activeExcludeHydrogens_) ||
+                         (useVDW != activeUseVDWRadius_);
+    if (changed) {
+        activeSpeciesId_ = speciesId;
+        activeGridSpacing_ = spacing;
+        activeProbeRadius_ = probe;
+        activeExcludeProtein_ = excludeProtein;
+        activeExcludeHydrogens_ = excludeHydrogens;
+        activeUseVDWRadius_ = useVDW;
+        invalidateCache();
+    }
 }
 
 } // namespace movement

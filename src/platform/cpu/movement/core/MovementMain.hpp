@@ -110,6 +110,7 @@ private:
     void initializeComponents();
     void updateStatistics(const std::string& moveType, bool accepted, double energyChange);
     void fillBasicProposalStats(std::map<std::string, double>& result) const;
+    void applyCavitySpeciesParams();
 };
 
 } // namespace movement

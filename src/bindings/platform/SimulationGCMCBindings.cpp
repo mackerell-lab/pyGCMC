@@ -266,7 +266,8 @@ void init_gcmc_bindings(py::module& m) {
              py::arg("gridSpacing") = 2.0, py::arg("probeRadius") = 1.4,
              "Create cavity manager with grid spacing and probe radius")
         .def("findCavities", &CavityManager::findCavities,
-             py::arg("state"), "Find cavities in the system")
+             py::arg("state"), py::arg("speciesId") = -1,
+             "Find cavities in the system (optionally for a species)")
         .def("invalidateCache", &CavityManager::invalidateCache,
              "Invalidate the cavity cache")
         .def("getCavityVolume", &CavityManager::getCavityVolume,

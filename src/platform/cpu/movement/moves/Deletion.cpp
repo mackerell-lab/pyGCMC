@@ -7,6 +7,7 @@
 #include "../common/MovementUtils.hpp"
 #include "../gcmc/GCMCAcceptance.hpp"
 #include "../../../../model/montecarlo/MCMain.hpp"
+#include <limits>
 
 namespace pygcmc {
 namespace platform {
@@ -22,11 +23,140 @@ inline double logSafe(double value) {
     return std::log(std::max(value, 1e-30));
 }
 
+struct DeletionCbmcResult {
+    double logWeight = 0.0;
+    double weight = 1.0;
+    int trialsUsed = 1;
+    bool computed = false;
+};
+
+DeletionCbmcResult computeDeletionCbmcWeight(
+    MCState& state,
+    int residueIndex,
+    const MovementParams& params,
+    const std::vector<MCAtom>& savedAtoms) {
+    DeletionCbmcResult result;
+    if (!params.useConfigBias || !params.useConfigBiasForInsertion || params.numConfigTrials <= 1) {
+        return result;
+    }
+    const int numTrials = std::max(params.numConfigTrials, 1);
+    if (savedAtoms.empty() || residueIndex < 0 || residueIndex >= state.activeResidueCount) {
+        return result;
+    }
+
+    const MCResidue& residue = state.residues[residueIndex];
+    const int atomCount = std::min(residue.atomCount, static_cast<int>(savedAtoms.size()));
+    if (atomCount <= 0) {
+        return result;
+    }
+
+    std::vector<Vector3> originalPositions;
+    originalPositions.reserve(atomCount);
+    for (int i = 0; i < atomCount; ++i) {
+        originalPositions.emplace_back(savedAtoms[i].x, savedAtoms[i].y, savedAtoms[i].z);
+    }
+
+    Vector3 center(0.0, 0.0, 0.0);
+    for (const auto& pos : originalPositions) {
+        center.x += pos.x;
+        center.y += pos.y;
+        center.z += pos.z;
+    }
+    center.x /= static_cast<double>(atomCount);
+    center.y /= static_cast<double>(atomCount);
+    center.z /= static_cast<double>(atomCount);
+
+    std::vector<Vector3> relativePositions = originalPositions;
+    for (auto& pos : relativePositions) {
+        pos = pos - center;
+    }
+
+    auto applyPositions = [&](const std::vector<Vector3>& positions) {
+        for (int i = 0; i < atomCount; ++i) {
+            int atomIdx = residue.atomStart + i;
+            if (atomIdx < 0 || atomIdx >= state.activeAtomCount) continue;
+            state.atoms[atomIdx].x = static_cast<float>(positions[i].x);
+            state.atoms[atomIdx].y = static_cast<float>(positions[i].y);
+            state.atoms[atomIdx].z = static_cast<float>(positions[i].z);
+            if (i < static_cast<int>(state.residues[residueIndex].atoms.size())) {
+                auto& atom = state.residues[residueIndex].atoms[i];
+                atom.x = state.atoms[atomIdx].x;
+                atom.y = state.atoms[atomIdx].y;
+                atom.z = state.atoms[atomIdx].z;
+            }
+        }
+    };
+
+    auto restoreOriginal = [&]() {
+        applyPositions(originalPositions);
+    };
+
+    auto computeResidueEnergy = [&]() -> double {
+        platform::cpu::computeResidueEnergyCutoffPBC(state, residueIndex);
+        const auto& res = state.residues[residueIndex];
+        return static_cast<double>(res.energy_vdw + res.energy_elec);
+    };
+
+    restoreOriginal();
+
+    std::vector<double> logWeights;
+    logWeights.reserve(numTrials);
+
+    double energy = computeResidueEnergy();
+    if (std::isfinite(energy)) {
+        logWeights.push_back(-params.beta * energy);
+    }
+
+    Vector3 box(state.info.box[0], state.info.box[1], state.info.box[2]);
+    std::vector<Vector3> trialPositions(atomCount);
+
+    for (int trial = 1; trial < numTrials; ++trial) {
+        Quaternion quat = utils::RotationUtils::generateRandomQuaternion();
+        double matrix[3][3];
+        utils::RotationUtils::quaternionToMatrix(quat, matrix);
+        Vector3 translation = center;
+        if (params.configTranslationRange > 0.0) {
+            translation = translation + utils::RandomUtils::randomVector(params.configTranslationRange);
+        }
+
+        for (int i = 0; i < atomCount; ++i) {
+            Vector3 rotated = utils::RotationUtils::rotateVector(relativePositions[i], matrix);
+            Vector3 placed = translation + rotated;
+            if (box.x > 0.0 && box.y > 0.0 && box.z > 0.0) {
+                placed = utils::PBCUtils::applyPBC(placed, box);
+            }
+            trialPositions[i] = placed;
+        }
+
+        applyPositions(trialPositions);
+        double trialEnergy = computeResidueEnergy();
+        if (std::isfinite(trialEnergy)) {
+            logWeights.push_back(-params.beta * trialEnergy);
+        }
+    }
+
+    restoreOriginal();
+
+    const int keff = static_cast<int>(logWeights.size());
+    if (keff == 0) {
+        return result;
+    }
+
+    double logW = utils::LogSpaceCalculator::logSumExp(logWeights);
+    double logK = std::log(static_cast<double>(std::max(keff, 1)));
+    result.logWeight = logW - logK;
+    result.weight = std::exp(result.logWeight);
+    result.trialsUsed = keff;
+    result.computed = true;
+    return result;
+}
+
 void finalizeDeletionAcceptance(
     MovementResult& result,
     const MovementParams& params,
     int moleculeType,
     int countBefore) {
+    result.hasGrandTerms = true;
 
     result.grandTerms.speciesId = moleculeType;
     result.grandTerms.countBefore = countBefore;
@@ -119,9 +249,17 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     
     result.residueIndex = targetResIdx;
     result.moleculeType = state.residues[targetResIdx].type;
+    const auto scheduler = params.getMoveProbabilitySet(result.moleculeType);
+    result.logProposalForward = utils::safeLogProbability(scheduler.deletion);
+    result.logProposalReverse = utils::safeLogProbability(scheduler.insertion);
+    int speciesCountBefore = 0;
+    for (int i = 0; i < state.activeResidueCount; ++i) {
+        if (state.residues[i].active && state.residues[i].type == result.moleculeType) {
+            ++speciesCountBefore;
+        }
+    }
     
     // Calculate energy before deletion
-    int n_before = state.activeResidueCount;  // Store n before deletion
     platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyBefore = 0.0;
     for (int i = 0; i < state.activeResidueCount; ++i) {
@@ -139,6 +277,19 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
             savedAtoms.push_back(state.atoms[atomIdx]);
         }
     }
+
+    double storedWeight = std::max(getStoredRosenbluthWeight(state, targetResIdx), 1e-30);
+    DeletionCbmcResult cbmcInfo = computeDeletionCbmcWeight(state, targetResIdx, params, savedAtoms);
+    if (cbmcInfo.computed) {
+        result.cbmcTrialsUsed = cbmcInfo.trialsUsed;
+        result.rosenbluthWeight = cbmcInfo.weight;
+        result.logWReverse = cbmcInfo.logWeight;
+    } else {
+        result.cbmcTrialsUsed = 1;
+        result.rosenbluthWeight = storedWeight;
+        result.logWReverse = logSafe(storedWeight);
+    }
+    result.logWForward = 0.0;
     
     // Temporarily mark residue as inactive
     state.residues[targetResIdx].active = false;
@@ -175,11 +326,11 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     if (paramsWithVolume.useCavityBias && cavityCore_) {
         cavityCore_->invalidateCache();
         CavityMode mode = CavityMode::FAST_APPROX;
-        Vcav_after = std::max(1e-30, cavityCore_->calculateCavityVolume(state, mode));
+        Vcav_after = std::max(1e-30, cavityCore_->calculateCavityVolume(state, mode, result.moleculeType));
         cavityBias = Vcav_after / Vbox;
     } else if (paramsWithVolume.useCavityBias && cavityManager_) {
         cavityManager_->invalidateCache();
-        cavityBias = cavityManager_->calculateCavityBiasFactor(state);
+        cavityBias = cavityManager_->calculateCavityBiasFactor(state, result.moleculeType);
         Vcav_after = cavityBias * Vbox;
     }
     
@@ -188,25 +339,18 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
 
     result.cavityBiasFactor = cavityBias;
     bool useCavityBiasFlag = paramsWithVolume.useCavityBias && (cavityCore_ || cavityManager_);
+    const double populationNorm = std::max(1, speciesCountBefore);
     if (useCavityBiasFlag) {
         result.logCavityFactor = logSafe(cavityBias);
         result.cavityVolumeNm3 = Vcav_after;
-        result.effectiveVolumeNm3 = Vcav_after;
+        result.effectiveVolumeNm3 = Vcav_after / populationNorm;
     } else {
         result.logCavityFactor = 0.0;
         result.cavityVolumeNm3 = result.volumeNm3;
-        result.effectiveVolumeNm3 = result.volumeNm3;
+        result.effectiveVolumeNm3 = result.volumeNm3 / populationNorm;
     }
 
-    double storedWeight = std::max(getStoredRosenbluthWeight(state, targetResIdx), 1e-30);
-    result.rosenbluthWeight = storedWeight;
-    result.cbmcTrialsUsed = 1;
-    result.logWForward = 0.0;
-    result.logWReverse = logSafe(storedWeight);
-    result.logProposalForward = 0.0;
-    result.logProposalReverse = 0.0;
-
-    finalizeDeletionAcceptance(result, paramsWithVolume, result.moleculeType, n_before);
+    finalizeDeletionAcceptance(result, paramsWithVolume, result.moleculeType, speciesCountBefore);
     
     // Accept or reject
     bool accepted = utils::RandomUtils::metropolisAccept(result.acceptanceProbability);

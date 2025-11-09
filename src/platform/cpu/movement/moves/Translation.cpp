@@ -62,6 +62,10 @@ MovementResult TranslationMove::performTranslation(MCState& state, const Movemen
     
     result.residueIndex = targetResIdx;
     MCResidue& residue = state.residues[targetResIdx];
+    const auto scheduler = params.getMoveProbabilitySet(residue.type);
+    double logProb = utils::safeLogProbability(scheduler.translation);
+    result.logProposalForward = logProb;
+    result.logProposalReverse = logProb;
     
     // Save original atom positions
     std::vector<Vector3> originalPositions = saveAtomPositions(state, targetResIdx);

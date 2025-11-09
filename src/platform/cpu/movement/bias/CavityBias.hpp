@@ -5,6 +5,7 @@
 #include <memory>
 #include <set>
 #include <mutex>
+#include <unordered_map>
 #include "../common/MovementUtils.hpp"
 
 // Forward declarations
@@ -64,10 +65,10 @@ public:
     ~CavityManager();
     
     // Main cavity finding function
-    std::vector<Vector3> findCavities(const MCState& state);
+    std::vector<Vector3> findCavities(const MCState& state, int speciesId = -1);
     
     // Calculate cavity bias factor for acceptance probability
-    double calculateCavityBiasFactor(const MCState& state);
+    double calculateCavityBiasFactor(const MCState& state, int speciesId = -1);
     
     // Check if a position is in a cavity
     bool isInCavity(const Vector3& position, const MCState& state);
@@ -81,15 +82,17 @@ public:
     void updateAfterDeletion(const Vector3& position, const MCState& state);
     
     // Configuration
-    void setGridSpacing(double spacing) { gridSpacing_ = spacing; invalidateCache(); }
-    void setProbeRadius(double radius) { probeRadius_ = radius; invalidateCache(); }
+    void setGridSpacing(double spacing) { gridSpacing_ = spacing; activeGridSpacing_ = spacing; activeSpeciesId_ = -1; invalidateCache(); }
+    void setProbeRadius(double radius) { probeRadius_ = radius; activeProbeRadius_ = radius; activeSpeciesId_ = -1; invalidateCache(); }
     double getGridSpacing() const { return gridSpacing_; }
     double getProbeRadius() const { return probeRadius_; }
+    void setSpeciesParameters(int speciesId, double gridSpacingAngstrom, double probeRadiusAngstrom, int maskFlags = -1);
+    void clearSpeciesParameters();
 
     // Cavity exclusion options
-    void setExcludeProtein(bool exclude) { excludeProtein_ = exclude; invalidateCache(); }
-    void setExcludeHydrogens(bool exclude) { excludeHydrogens_ = exclude; invalidateCache(); }
-    void setUseVDWRadius(bool use) { useVDWRadius_ = use; invalidateCache(); }
+    void setExcludeProtein(bool exclude) { excludeProtein_ = exclude; activeExcludeProtein_ = exclude; invalidateCache(); }
+    void setExcludeHydrogens(bool exclude) { excludeHydrogens_ = exclude; activeExcludeHydrogens_ = exclude; invalidateCache(); }
+    void setUseVDWRadius(bool use) { useVDWRadius_ = use; activeUseVDWRadius_ = use; invalidateCache(); }
     bool getExcludeProtein() const { return excludeProtein_; }
     bool getExcludeHydrogens() const { return excludeHydrogens_; }
     bool getUseVDWRadius() const { return useVDWRadius_; }
@@ -171,12 +174,25 @@ public:
     double getCavityVolumeFraction(const MCState& state);
     
 private:
+    struct SpeciesConfig {
+        double gridSpacingAngstrom = -1.0;
+        double probeRadiusAngstrom = -1.0;
+        int maskFlags = -1;
+    };
+
     // Configuration
     double gridSpacing_;                    // Grid spacing in Angstroms
     double probeRadius_;                    // Probe radius for cavity detection
     bool excludeProtein_ = false;           // Only exclude protein atoms from grid
     bool excludeHydrogens_ = false;         // Exclude hydrogen atoms from grid
     bool useVDWRadius_ = false;             // Use VDW radius instead of LJ sigma
+    double activeGridSpacing_;
+    double activeProbeRadius_;
+    bool activeExcludeProtein_;
+    bool activeExcludeHydrogens_;
+    bool activeUseVDWRadius_;
+    int activeSpeciesId_;
+    std::unordered_map<int, SpeciesConfig> speciesConfigs_;
     
     // Grid structure
     Grid3D grid_;
@@ -198,6 +214,9 @@ private:
     void markOccupiedRegion(const Vector3& center, double radius);
     Vector3 gridToPosition(int i, int j, int k) const;
     bool checkCavity(const Vector3& position, const MCState& state) const;
+    SpeciesConfig resolveSpeciesConfig(int speciesId) const;
+    void applySpeciesParameters(int speciesId);
+    void applyMaskFlags(int maskFlags);
     
     // Distance calculation with PBC
     double distance(const Vector3& pos1, const Vector3& pos2) const;

@@ -369,14 +369,15 @@ fragmuex:-5.0
         
         assert result.returncode == 0, "CI smoke test failed"
     
-    def test_version_output(self):
+    def test_version_output(self, tmp_path):
         """Test version information (when implemented)"""
         # This would test --version flag when implemented
         # For now, just check that help works
         result = subprocess.run(
             [str(GCMC_CPU_PATH), "--help"],
             capture_output=True,
-            text=True
+            text=True,
+            cwd=tmp_path
         )
         
         # Help might return 1 instead of 0

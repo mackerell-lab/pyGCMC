@@ -90,7 +90,13 @@ fragmuex:2.0
                 "--prefix", str(tmp_path / f"run_{run}")
             ]
 
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                cwd=str(tmp_path)
+            )
 
             # Parse water count and positions
             count_match = re.search(r"Fragment counts:\s*WAT:\s*(\d+)", result.stdout)
@@ -175,7 +181,14 @@ probRotate:0.0
         cmd = [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "54321"]
         env = os.environ.copy()
         env['GCMC_VERBOSE_STATS'] = '1'
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10, env=env)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env=env,
+            cwd=str(tmp_path)
+        )
 
         # Parse acceptance rates from final statistics (take last occurrence)
         total_matches = re.findall(r"Total acceptance rate:\s*([\d.]+)%", result.stdout)
@@ -284,7 +297,13 @@ fragmuex:10.0
 """)
 
         cmd = [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "11111"]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            cwd=str(tmp_path)
+        )
 
         # Look for signs of hitting the limit
         final_count_match = re.search(r"Fragment counts:\s*WAT:\s*(\d+)", result.stdout)
@@ -366,7 +385,14 @@ fragmuex:2.303
         env = os.environ.copy()
         env['GCMC_ENABLE_DIAGNOSTICS'] = '1'
         env['GCMC_DUMP_ACCEPT'] = str(accept_log)
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10, env=env)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env=env,
+            cwd=str(tmp_path)
+        )
 
         # For ideal gas with ΔE≈0:
         # P_insert(N=0→1) = min(1, z*V) = min(1, activity * volume)
@@ -459,7 +485,14 @@ fragmuex:0.0
     cmd = [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "12345", "--prefix", str(tmp_path / "test")]
     env = os.environ.copy()
     env['GCMC_DUMP_LJ'] = '1'
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=10, env=env)
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+        cwd=str(tmp_path)
+    )
 
     # Check if LJ matrix was exported
     lj_file = tmp_path / "test_lj.csv"
@@ -545,7 +578,13 @@ fragmuex:-5.0
 """)
 
         cmd = [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", str(seed)]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=str(tmp_path)
+        )
 
         # Parse volume and density
         volume_match = re.search(r"GCMC region:.*\(volume:\s*([\d.]+)\s*nm", result.stdout)

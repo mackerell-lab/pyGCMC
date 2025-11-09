@@ -24,7 +24,12 @@ def get_gcmc_cpu_path():
         return str(gcmc_cpu)
     
     # Try in PATH
-    result = subprocess.run(["which", "gcmc_cpu"], capture_output=True, text=True)
+    result = subprocess.run(
+        ["which", "gcmc_cpu"],
+        capture_output=True,
+        text=True,
+        cwd=str(Path(__file__).parent)
+    )
     if result.returncode == 0:
         return result.stdout.strip()
     

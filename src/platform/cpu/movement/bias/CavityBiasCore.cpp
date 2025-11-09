@@ -14,9 +14,15 @@ namespace movement {
 using namespace model::montecarlo;
 
 CavityBiasCore::CavityBiasCore(double gridSpacing, double probeRadius)
-    : gridSpacing_(gridSpacing), probeRadius_(probeRadius), cacheValid_(false) {}
+    : gridSpacing_(gridSpacing),
+      probeRadius_(probeRadius),
+      activeGridSpacing_(gridSpacing),
+      activeProbeRadius_(probeRadius),
+      activeSpeciesId_(-1),
+      cacheValid_(false) {}
 
-double CavityBiasCore::calculateCavityVolume(const MCState& state, CavityMode mode) {
+double CavityBiasCore::calculateCavityVolume(const MCState& state, CavityMode mode, int speciesId) {
+    applySpeciesParameters(speciesId);
     // Auto-detect ideal gas and use appropriate mode
     CavityMode effectiveMode = mode;
     if (mode == CavityMode::CLUSTER_VOLUME || mode == CavityMode::LOCAL_VEFF) {
@@ -43,6 +49,7 @@ double CavityBiasCore::calculateCavityVolume(const MCState& state, CavityMode mo
 }
 
 Vector3 CavityBiasCore::proposeCavityPosition(const MCState& state, CavityMode mode) {
+    applySpeciesParameters(activeSpeciesId_);
     if (!cacheValid_) {
         buildGrid(state);
     }
@@ -80,7 +87,10 @@ void CavityBiasCore::buildGrid(const MCState& state) {
     }
     
     // Ensure grid spacing is positive
-    double spacing = gridSpacing_ > 0 ? gridSpacing_ : 0.25;  // Default to 0.25 nm
+    double spacing = activeGridSpacing_ > 0 ? activeGridSpacing_ : gridSpacing_;
+    if (spacing <= 0.0) {
+        spacing = 0.25;  // Default to 0.25 nm
+    }
     
     // Box is already in nm in MCState
     grid_.box = Vector3(state.info.box[0],
@@ -192,7 +202,7 @@ void CavityBiasCore::markOccupied(const MCState& state) {
             Vector3 pos(atom.x, atom.y, atom.z);  // Already in nm
             
             // Get effective radius (use LJ sigma if available)
-            double radius = probeRadius_;
+            double radius = activeProbeRadius_;
             if (atom.type < state.forcefield.numTotalTypes && 
                 !state.forcefield.ljSigma.empty()) {
                 // ljSigma is an NxN matrix, get diagonal element
@@ -552,6 +562,58 @@ bool CavityBiasCore::isIdealGas(const MCState& state) const {
     //           << ", result=" << (isIdeal ? "true" : "false") << std::endl;
     
     return isIdeal;
+}
+
+void CavityBiasCore::setSpeciesParameters(int speciesId, double gridSpacing, double probeRadius, int maskId) {
+    if (speciesId < 0) {
+        return;
+    }
+    SpeciesParameters cfg;
+    cfg.gridSpacingNm = gridSpacing;
+    cfg.probeRadiusNm = probeRadius;
+    cfg.maskId = maskId;
+    speciesParams_[speciesId] = cfg;
+    cacheValid_ = false;
+}
+
+void CavityBiasCore::clearSpeciesParameters() {
+    speciesParams_.clear();
+    activeSpeciesId_ = -1;
+    activeGridSpacing_ = gridSpacing_;
+    activeProbeRadius_ = probeRadius_;
+    cacheValid_ = false;
+}
+
+CavityBiasCore::SpeciesParameters CavityBiasCore::resolveSpeciesParameters(int speciesId) const {
+    auto it = speciesParams_.find(speciesId);
+    if (it != speciesParams_.end()) {
+        return it->second;
+    }
+    return {};
+}
+
+void CavityBiasCore::applySpeciesParameters(int speciesId) {
+    double spacing = gridSpacing_;
+    double probe = probeRadius_;
+    if (speciesId >= 0) {
+        SpeciesParameters cfg = resolveSpeciesParameters(speciesId);
+        if (cfg.gridSpacingNm > 0.0) {
+            spacing = cfg.gridSpacingNm;
+        }
+        if (cfg.probeRadiusNm > 0.0) {
+            probe = cfg.probeRadiusNm;
+        }
+    }
+
+    const bool changed = (speciesId != activeSpeciesId_) ||
+                         (std::abs(spacing - activeGridSpacing_) > 1e-12) ||
+                         (std::abs(probe - activeProbeRadius_) > 1e-12);
+    if (changed) {
+        activeSpeciesId_ = speciesId;
+        activeGridSpacing_ = spacing;
+        activeProbeRadius_ = probe;
+        cacheValid_ = false;
+    }
 }
 
 } // namespace movement

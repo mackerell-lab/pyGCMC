@@ -164,6 +164,9 @@ struct FragmentInfo {
     std::vector<int> confs_list;
     std::vector<int> cavity_index_list;
     std::vector<float> cavity_list;
+    std::vector<float> cavity_grid_dx_list;
+    std::vector<float> cavity_probe_radius_list;
+    std::vector<int> cavity_mask_list;
 
     std::vector<float> conc_list;
     std::vector<float> muex_list;

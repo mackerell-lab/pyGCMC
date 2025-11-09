@@ -30,6 +30,7 @@ void finalizeInsertionAcceptance(
     const MovementParams& params,
     int moleculeType,
     int countBefore) {
+    result.hasGrandTerms = true;
 
     result.grandTerms.speciesId = moleculeType;
     result.grandTerms.countBefore = countBefore;
@@ -109,6 +110,9 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
     MovementResult result;
     result.moveType = "insert";
     result.moleculeType = moleculeType;
+    const auto scheduler = params.getMoveProbabilitySet(moleculeType);
+    result.logProposalForward = utils::safeLogProbability(scheduler.insertion);
+    result.logProposalReverse = utils::safeLogProbability(scheduler.deletion);
 
     const int nBeforeGlobal = state.activeResidueCount;
     result.lambdaNm = (params.thermalLambdaNm > 0.0) ? params.thermalLambdaNm : 1.0;
@@ -205,8 +209,6 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
     result.rosenbluthWeight = 1.0;
     result.logWForward = 0.0;
     result.logWReverse = 0.0;
-    result.logProposalForward = 0.0;
-    result.logProposalReverse = 0.0;
 
     finalizeInsertionAcceptance(result, paramsWithVolume, moleculeType, nBeforeGlobal);
     
@@ -290,7 +292,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         // Use new CavityBiasCore with selectable mode
         // Prefer FAST_APPROX here to reduce discretization bias in DB tests
         CavityMode mode = CavityMode::FAST_APPROX;
-        Vcav_before = std::max(1e-30, cavityCore_->calculateCavityVolume(state, mode));
+        Vcav_before = std::max(1e-30, cavityCore_->calculateCavityVolume(state, mode, moleculeType));
         double cavityRatio = Vcav_before / Vbox;
         
         // Debug output
@@ -321,7 +323,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         // Fallback to legacy CavityBiasInsertion
         position = cavityBiasInsertion_->selectInsertionPosition(state, usedCavity);
         if (cavityManager_) {
-            result.cavityBiasFactor = cavityManager_->calculateCavityBiasFactor(state);
+        result.cavityBiasFactor = cavityManager_->calculateCavityBiasFactor(state, moleculeType);
             Vcav_before = result.cavityBiasFactor * Vbox;
             result.cavityVolumeNm3 = Vcav_before;
         }
@@ -419,8 +421,6 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         result.rosenbluthWeight = result.configBiasFactor;
         result.logWForward = logWForward;
         result.logWReverse = 0.0;
-        result.logProposalForward = 0.0;
-        result.logProposalReverse = 0.0;
         result.energyChange = deltaEnergies[selectedIdx];  // For statistics only
 
         finalizeInsertionAcceptance(result, params, moleculeType, nBeforeGlobal);
@@ -541,8 +541,6 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
     result.rosenbluthWeight = 1.0;
     result.logWForward = 0.0;
     result.logWReverse = 0.0;
-    result.logProposalForward = 0.0;
-    result.logProposalReverse = 0.0;
     finalizeInsertionAcceptance(result, paramsWithVolume, moleculeType, state.activeResidueCount - 1);
     
     // Accept or reject

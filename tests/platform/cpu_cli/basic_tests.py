@@ -7,9 +7,14 @@ import subprocess
 import os
 
 
-def test_gcmc_cpu_help(gcmc_cpu):
+def test_gcmc_cpu_help(gcmc_cpu, temp_dir):
     """Test that gcmc_cpu shows help"""
-    result = subprocess.run([gcmc_cpu, "--help"], capture_output=True, text=True)
+    result = subprocess.run(
+        [gcmc_cpu, "--help"],
+        capture_output=True,
+        text=True,
+        cwd=temp_dir
+    )
     
     assert result.returncode != 0  # Help exits with non-zero
     output = result.stdout + result.stderr
@@ -19,9 +24,14 @@ def test_gcmc_cpu_help(gcmc_cpu):
     assert "--seed" in output
 
 
-def test_gcmc_cpu_missing_inp(gcmc_cpu):
+def test_gcmc_cpu_missing_inp(gcmc_cpu, temp_dir):
     """Test that gcmc_cpu fails without input file"""
-    result = subprocess.run([gcmc_cpu], capture_output=True, text=True)
+    result = subprocess.run(
+        [gcmc_cpu],
+        capture_output=True,
+        text=True,
+        cwd=temp_dir
+    )
     
     assert result.returncode != 0
     output = result.stdout + result.stderr

@@ -70,6 +70,7 @@ struct MovementResult {
     bool numericalError = false;          // Flag for numerical issues
 
     // Unified grand-canonical bookkeeping
+    bool hasGrandTerms = false;                          // Whether grandTerms/logs are valid
     gcmc::GrandCanonicalTerms grandTerms;                // Logged factors for this move
     gcmc::GrandCanonicalEvaluation grandEvaluation;      // Cached evaluation result
     

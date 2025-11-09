@@ -10,9 +10,11 @@ Run from build directory:
 import subprocess
 import sys
 import os
+from pathlib import Path
 
-def run_test_isolated(test_name):
+def run_test_isolated(test_name, workdir=None):
     """Run a single test in an isolated process"""
+    workdir = Path(workdir or Path.cwd())
     cmd = [
         sys.executable, "-m", "pytest",
         f"../tests/simulation/test_energy_PGP.py::{test_name}",
@@ -27,7 +29,7 @@ def run_test_isolated(test_name):
     print(f"Running {test_name} in isolated process...")
     print('='*70)
     
-    result = subprocess.run(cmd, env=env)
+    result = subprocess.run(cmd, env=env, cwd=str(workdir))
     return result.returncode == 0
 
 def main():
@@ -49,8 +51,9 @@ def main():
     passed = 0
     failed = 0
     
+    workdir = Path.cwd()
     for test in tests:
-        if run_test_isolated(test):
+        if run_test_isolated(test, workdir=workdir):
             passed += 1
             print(f"✓ {test}")
         else:

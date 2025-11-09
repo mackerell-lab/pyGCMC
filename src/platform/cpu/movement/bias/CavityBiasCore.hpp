@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <memory>
+#include <unordered_map>
 #include "../../../../model/montecarlo/MCMain.hpp"
 #include "../common/MovementUtils.hpp"
 
@@ -44,7 +45,7 @@ public:
     ~CavityBiasCore() = default;
     
     // Main interface
-    double calculateCavityVolume(const MCState& state, CavityMode mode);
+    double calculateCavityVolume(const MCState& state, CavityMode mode, int speciesId = -1);
     Vector3 proposeCavityPosition(const MCState& state, CavityMode mode);
     void invalidateCache() { cacheValid_ = false; }
     
@@ -57,8 +58,17 @@ public:
         probeRadius_ = radius; 
         invalidateCache();  // Invalidate cache when parameters change
     }
+
+    void setSpeciesParameters(int speciesId, double gridSpacing, double probeRadius, int maskId = -1);
+    void clearSpeciesParameters();
     
 private:
+    struct SpeciesParameters {
+        double gridSpacingNm = -1.0;
+        double probeRadiusNm = -1.0;
+        int maskId = -1;
+    };
+
     // Grid building
     void buildGrid(const MCState& state);
     void markOccupied(const MCState& state);
@@ -77,10 +87,16 @@ private:
     std::vector<std::vector<int>> findClusters();
     double distance(const Vector3& a, const Vector3& b) const;
     bool isIdealGas(const MCState& state) const;
+    SpeciesParameters resolveSpeciesParameters(int speciesId) const;
+    void applySpeciesParameters(int speciesId);
     
     // Member variables
     double gridSpacing_;  // nm
     double probeRadius_;  // nm
+    double activeGridSpacing_;
+    double activeProbeRadius_;
+    int activeSpeciesId_;
+    std::unordered_map<int, SpeciesParameters> speciesParams_;
     CavityGrid grid_;
     std::vector<Vector3> cavityPoints_;
     std::vector<std::vector<int>> clusters_;

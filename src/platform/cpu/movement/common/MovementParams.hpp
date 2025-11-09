@@ -5,6 +5,9 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <vector>
+#include <limits>
+#include <algorithm>
 
 namespace pygcmc {
 namespace platform {
@@ -15,6 +18,19 @@ namespace movement {
  * Parameters for GCMC movement operations
  */
 struct MovementParams {
+    struct MoveProbabilitySet {
+        double insertion = 0.25;
+        double deletion = 0.25;
+        double translation = 0.25;
+        double rotation = 0.25;
+    };
+
+    struct CavityFragmentConfig {
+        double gridSpacingNm = -1.0;
+        double probeRadiusNm = -1.0;
+        int maskId = -1;
+    };
+
     // Basic thermodynamic parameters
     double temperature = 298.15;           // Temperature in Kelvin
     double beta = 1.0 / (8.314e-3 * 298.15);  // 1/kT in mol/kJ
@@ -65,6 +81,12 @@ struct MovementParams {
     double deletionProbability = 0.25;
     double translationProbability = 0.25;
     double rotationProbability = 0.25;
+
+    // Per-fragment move probability weights (optional overrides)
+    std::vector<double> attemptProbInsertion;
+    std::vector<double> attemptProbDeletion;
+    std::vector<double> attemptProbTranslation;
+    std::vector<double> attemptProbRotation;
     
     // Multi-insertion CBMC parameters
     bool useMultiInsertionCBMC = false;    // Enable multi-insertion mode
@@ -89,6 +111,9 @@ struct MovementParams {
     
     // Diagnostic options
     bool fillProposalInfo = false;            // Fill detailed proposal info in result
+
+    // Species-specific cavity overrides
+    std::vector<CavityFragmentConfig> cavityFragmentConfigs;
     
     // Parameter validation
     void validateParameters() {
@@ -138,6 +163,47 @@ struct MovementParams {
     void updateDerivedParameters() {
         beta = 1.0 / (8.314e-3 * temperature);  // Update beta when temperature changes
         validateParameters();  // Validate after update
+    }
+
+    MoveProbabilitySet getMoveProbabilitySet(int fragmentType) const {
+        MoveProbabilitySet set;
+        const double fallbackTotal = std::max(1e-12,
+            insertionProbability + deletionProbability +
+            translationProbability + rotationProbability);
+        auto fetch = [&](const std::vector<double>& values, double fallback) -> double {
+            if (fragmentType >= 0 && fragmentType < static_cast<int>(values.size()) && values[fragmentType] > 0.0) {
+                return values[fragmentType];
+            }
+            return fallback;
+        };
+
+        double wIns = fetch(attemptProbInsertion, insertionProbability);
+        double wDel = fetch(attemptProbDeletion, deletionProbability);
+        double wTrn = fetch(attemptProbTranslation, translationProbability);
+        double wRot = fetch(attemptProbRotation, rotationProbability);
+
+        double sum = wIns + wDel + wTrn + wRot;
+        if (sum <= 0.0) {
+            wIns = insertionProbability;
+            wDel = deletionProbability;
+            wTrn = translationProbability;
+            wRot = rotationProbability;
+            sum = fallbackTotal;
+        }
+
+        const double inv = 1.0 / sum;
+        set.insertion = wIns * inv;
+        set.deletion = wDel * inv;
+        set.translation = wTrn * inv;
+        set.rotation = wRot * inv;
+        return set;
+    }
+
+    CavityFragmentConfig getCavityConfigForSpecies(int fragmentType) const {
+        if (fragmentType >= 0 && fragmentType < static_cast<int>(cavityFragmentConfigs.size())) {
+            return cavityFragmentConfigs[fragmentType];
+        }
+        return CavityFragmentConfig{};
     }
     
     // Constructor with default values

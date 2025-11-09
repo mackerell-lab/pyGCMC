@@ -170,12 +170,23 @@ def test_gcmc_cpu_parameter_validation(gcmc_cpu, test_data_dir, temp_dir):
 
     # Test 1: Invalid seed - should fail
     cmd = [gcmc_cpu, "--inp", inp_file, "--seed", "not_a_number"]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        cwd=temp_dir
+    )
     assert result.returncode != 0, "Invalid seed should cause failure"
 
     # Test 2: Negative print-freq should fallback to INP's nprint
     cmd = [gcmc_cpu, "--inp", inp_file, "--print-freq", "-100", "--seed", "12345"]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=5,
+        cwd=temp_dir
+    )
 
     # Verify it ran successfully
     assert result.returncode == 0, "Negative print-freq should be handled gracefully"

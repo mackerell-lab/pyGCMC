@@ -58,6 +58,12 @@ void init_movement_bindings(py::module& m) {
         .def_readwrite("probability", &gcmc::GrandCanonicalEvaluation::probability)
         .def_readwrite("logRatio", &gcmc::GrandCanonicalEvaluation::logRatio);
 
+    py::class_<MovementParams::CavityFragmentConfig>(movement, "CavityFragmentConfig")
+        .def(py::init<>())
+        .def_readwrite("gridSpacingNm", &MovementParams::CavityFragmentConfig::gridSpacingNm)
+        .def_readwrite("probeRadiusNm", &MovementParams::CavityFragmentConfig::probeRadiusNm)
+        .def_readwrite("maskId", &MovementParams::CavityFragmentConfig::maskId);
+
     // Bind MovementParams class - comprehensive binding of all members
     py::class_<MovementParams>(movement, "MovementParams")
         .def(py::init<>())
@@ -106,6 +112,10 @@ void init_movement_bindings(py::module& m) {
         .def_readwrite("deletionProbability", &MovementParams::deletionProbability)
         .def_readwrite("translationProbability", &MovementParams::translationProbability)
         .def_readwrite("rotationProbability", &MovementParams::rotationProbability)
+        .def_readwrite("attemptProbInsertion", &MovementParams::attemptProbInsertion)
+        .def_readwrite("attemptProbDeletion", &MovementParams::attemptProbDeletion)
+        .def_readwrite("attemptProbTranslation", &MovementParams::attemptProbTranslation)
+        .def_readwrite("attemptProbRotation", &MovementParams::attemptProbRotation)
         // Multi-insertion CBMC parameters
         .def_readwrite("useMultiInsertionCBMC", &MovementParams::useMultiInsertionCBMC)
         .def_readwrite("maxParallelInsertions", &MovementParams::maxParallelInsertions)
@@ -125,6 +135,7 @@ void init_movement_bindings(py::module& m) {
         .def_readwrite("useColorClassFastPath", &MovementParams::useColorClassFastPath)
         // Diagnostic options
         .def_readwrite("fillProposalInfo", &MovementParams::fillProposalInfo)
+        .def_readwrite("cavityFragmentConfigs", &MovementParams::cavityFragmentConfigs)
         // Methods
         .def("updateDerivedParameters", &MovementParams::updateDerivedParameters)
         .def("validateParameters", &MovementParams::validateParameters);
@@ -157,6 +168,7 @@ void init_movement_bindings(py::module& m) {
         .def_readonly("logLambda3", &MovementResult::logLambda3)
         .def_readonly("logWForward", &MovementResult::logWForward)
         .def_readonly("logWReverse", &MovementResult::logWReverse)
+        .def_readonly("hasGrandTerms", &MovementResult::hasGrandTerms)
         .def_readonly("grandTerms", &MovementResult::grandTerms)
         .def_readonly("grandEvaluation", &MovementResult::grandEvaluation)
         .def_readonly("computeTimeMs", &MovementResult::computeTimeMs)
@@ -419,9 +431,16 @@ void init_movement_bindings(py::module& m) {
              py::arg("gridSpacing") = 0.25, 
              py::arg("probeRadius") = 0.14,
              "Create CavityBiasCore with grid spacing and probe radius in nm")
-        .def("calculateCavityVolume", &CavityBiasCore::calculateCavityVolume,
-             py::arg("state"), 
+        .def("calculateCavityVolume",
+             [](CavityBiasCore& core,
+                const model::montecarlo::MCState& state,
+                CavityMode mode,
+                int speciesId) {
+                 return core.calculateCavityVolume(state, mode, speciesId);
+             },
+             py::arg("state"),
              py::arg("mode"),
+             py::arg("speciesId") = -1,
              "Calculate cavity volume in nm^3")
         .def("proposeCavityPosition", &CavityBiasCore::proposeCavityPosition,
              py::arg("state"),
@@ -435,6 +454,14 @@ void init_movement_bindings(py::module& m) {
         .def("setProbeRadius", &CavityBiasCore::setProbeRadius,
              py::arg("radius"),
              "Set probe radius in nm")
+        .def("setSpeciesParameters", &CavityBiasCore::setSpeciesParameters,
+             py::arg("speciesId"),
+             py::arg("gridSpacing"),
+             py::arg("probeRadius"),
+             py::arg("maskId") = -1,
+             "Override parameters for a specific species index")
+        .def("clearSpeciesParameters", &CavityBiasCore::clearSpeciesParameters,
+             "Clear species-specific overrides")
         .def("__repr__", [](const CavityBiasCore& /*c*/) {
             return std::string("CavityBiasCore(gridSpacing=0.25, probeRadius=0.14)");
         });

@@ -70,11 +70,15 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
     } else if (key == "cavity_grid_dx") {
         // Map to grid_dx if given (fallback)
         space_info.grid_spacing = std::stof(value);  // Already in nm
+    } else if (key == "cavity_grid_dx_frag") {
+        frag_info.cavity_grid_dx_list = InpParserStructures::parse_float_vector(value);
     } else if (key == "probe_radius") {
         // Map to sigma (approximate) if present
         float r = std::stof(value);  // Already in nm
         bias_info.sigma = r;
         bias_info.sigma_squared = r * r;
+    } else if (key == "cavity_probe_radius_frag") {
+        frag_info.cavity_probe_radius_list = InpParserStructures::parse_float_vector(value);
     } else if (key == "wdens") {
         // Water density output control
         mc_info.wdens = std::stof(value);
@@ -84,6 +88,8 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
     } else if (key == "target_numwaters" || key == "target_num_waters") {
         // Target number of water molecules - store in both places
         frag_info.target_num_waters = std::stoi(value);
+    } else if (key == "cavity_mask_frag") {
+        frag_info.cavity_mask_list = InpParserStructures::parse_int_vector(value);
     } else if (key == "gcmc_region") {
         // GCMC insertion region (sphere/box specification)
         space_info.gcmc_region = value;
@@ -220,6 +226,8 @@ void InpParserGCMC::enhance_param(model::param::Param& param) {
     auto& file_info = param.get_file_info();
     auto& energy_info = param.get_energy_info();
     auto& bias_info = param.get_bias_info();
+    auto& space_info = param.get_space_info();
+    auto& fragment_info = param.get_fragment_info();
 
     // Clamp insertion/deletion ratio into [0,1] and mirror to translation/rotation ratio
     mc_info.insertion_deletion_frac = std::max(0.0f, std::min(1.0f, mc_info.insertion_deletion_frac));
@@ -287,6 +295,28 @@ void InpParserGCMC::enhance_param(model::param::Param& param) {
         mc_info.attempt_prob_trn.assign(fragment_count, trn_prob);
         mc_info.attempt_prob_rot.assign(fragment_count, rot_prob);
     }
+
+    const size_t fragment_count = file_info.fragment_names.empty() ? 1 : file_info.fragment_names.size();
+    auto ensureFloatList = [&](std::vector<float>& vec, float fallback) {
+        if (vec.empty()) {
+            vec.assign(fragment_count, fallback);
+        } else if (vec.size() < fragment_count) {
+            vec.resize(fragment_count, fallback);
+        }
+    };
+    auto ensureIntList = [&](std::vector<int>& vec, int fallback) {
+        if (vec.empty()) {
+            vec.assign(fragment_count, fallback);
+        } else if (vec.size() < fragment_count) {
+            vec.resize(fragment_count, fallback);
+        }
+    };
+
+    const float defaultGrid = space_info.grid_spacing > 0.0f ? space_info.grid_spacing : 0.2f;
+    const float defaultProbe = bias_info.sigma > 0.0f ? bias_info.sigma : 0.14f;
+    ensureFloatList(fragment_info.cavity_grid_dx_list, defaultGrid);
+    ensureFloatList(fragment_info.cavity_probe_radius_list, defaultProbe);
+    ensureIntList(fragment_info.cavity_mask_list, -1);
 
     // Ensure mc_time_cumulative if mc_time_list provided
     if (!mc_info.mc_time_list.empty()) {

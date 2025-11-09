@@ -120,6 +120,40 @@ void MovementModule::initializeComponents() {
     stats_["translate"] = Statistics();
     stats_["rotate"] = Statistics();
     stats_["multi_insert"] = Statistics();
+
+    applyCavitySpeciesParams();
+}
+
+void MovementModule::applyCavitySpeciesParams() {
+    if (cavityCore_) {
+        cavityCore_->clearSpeciesParameters();
+    }
+    if (cavityManager_) {
+        cavityManager_->clearSpeciesParameters();
+    }
+
+    for (size_t i = 0; i < params_.cavityFragmentConfigs.size(); ++i) {
+        const auto& cfg = params_.cavityFragmentConfigs[i];
+        const bool hasOverride =
+            (cfg.gridSpacingNm > 0.0) || (cfg.probeRadiusNm > 0.0) || (cfg.maskId >= 0);
+        if (!hasOverride) {
+            continue;
+        }
+        if (cavityCore_) {
+            cavityCore_->setSpeciesParameters(static_cast<int>(i),
+                                              cfg.gridSpacingNm,
+                                              cfg.probeRadiusNm,
+                                              cfg.maskId);
+        }
+        if (cavityManager_) {
+            double gridAngstrom = (cfg.gridSpacingNm > 0.0) ? cfg.gridSpacingNm * 10.0 : -1.0;
+            double probeAngstrom = (cfg.probeRadiusNm > 0.0) ? cfg.probeRadiusNm * 10.0 : -1.0;
+            cavityManager_->setSpeciesParameters(static_cast<int>(i),
+                                                 gridAngstrom,
+                                                 probeAngstrom,
+                                                 cfg.maskId);
+        }
+    }
 }
 
 MovementResult MovementModule::attemptInsertion(MCState& state, int moleculeType) {
@@ -296,6 +330,8 @@ void MovementModule::setParams(const MovementParams& params) {
     configBiasManager_->setNumTrials(params_.numConfigTrials);
     configBiasManager_->setTranslationRange(params_.configTranslationRange * 10.0);
     activePool_->setFragmentationThreshold(params_.fragmentationThreshold);
+
+    applyCavitySpeciesParams();
 }
 
 MovementParams MovementModule::getParams() const {
@@ -405,6 +441,7 @@ std::vector<MovementResult> MovementModule::attemptMultiInsertionCBMC(MCState& s
         result.logLambda3 = region.grandTerms.logLambda3;
         result.logProposalForward = region.grandTerms.logProposalForward;
         result.logProposalReverse = region.grandTerms.logProposalReverse;
+        result.hasGrandTerms = region.grandTerms.speciesId >= 0;
         result.grandTerms = region.grandTerms;
         result.grandEvaluation = region.grandEval;
         result.logAcceptanceRatio = region.grandEval.logRatio;

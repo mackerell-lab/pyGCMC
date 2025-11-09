@@ -8,6 +8,7 @@ import sys
 import os
 import subprocess
 import textwrap
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -95,13 +96,15 @@ def compute_pme_with_state_isolation(n_residues, residue_config):
         build_path = os.path.join(project_root, 'build')
         existing_path = os.environ.get('PYTHONPATH', '')
         combined_pythonpath = build_path if not existing_path else os.pathsep.join([build_path, existing_path])
-        result = subprocess.run(
-            [sys.executable, '-c', script],
-            capture_output=True,
-            text=True,
-            check=False,
-            env={**os.environ, 'PYTHONPATH': combined_pythonpath}
-        )
+        with tempfile.TemporaryDirectory(prefix="pme_residue_") as tmpdir:
+            result = subprocess.run(
+                [sys.executable, '-c', script],
+                capture_output=True,
+                text=True,
+                check=False,
+                env={**os.environ, 'PYTHONPATH': combined_pythonpath},
+                cwd=tmpdir
+            )
 
         print("SUBPROCESS STDOUT:", result.stdout)
         print("SUBPROCESS STDERR:", result.stderr)
