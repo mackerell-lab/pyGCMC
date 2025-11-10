@@ -1,9 +1,37 @@
 # tests/simulation/movementCPP/movement_result_funcs.py
 """Movement result diagnostics and field consistency tests - extracted functions."""
 
+import math
+
 import pytest
 from .conftest import setup_system_with_params
 import pygcmc
+
+
+def _add_dummy_particle(state, offset=0.0):
+        """Add a single dummy particle (residue+atom) to the MCState."""
+        atom_index = state.activeAtomCount
+
+        residue = pygcmc.MCResidue()
+        residue.atomStart = atom_index
+        residue.atomCount = 1
+        residue.active = True
+        residue.type = 0
+        state.addResidue(residue)
+
+        atom = pygcmc.MCAtom()
+        base = 0.1 + 0.2 * offset
+        box = state.info.box
+        atom.x = base % box[0]
+        atom.y = (base * 1.3) % box[1]
+        atom.z = (base * 1.7) % box[2]
+        atom.type = 0
+        state.addAtom(atom)
+
+
+def _safe_log_probability(value):
+        """Mirror utils::safeLogProbability from C++ implementation."""
+        return math.log(max(value, 1e-30))
 
 @pytest.fixture
 def setup_system():
@@ -200,6 +228,51 @@ def test_default_diagnostic_values(setup_system_with_params):
         assert isinstance(result.energyChange, float)
         assert isinstance(result.computeTimeMs, float)
         assert result.computeTimeMs >= 0
+
+def test_insertion_log_proposals_reflect_target_bias(setup_system_with_params):
+        """Insertion log proposal terms should include target-fragment bias."""
+        state, params = setup_system_with_params
+        params.targetFragmentCounts = [10]
+        params.seed = 111
+        mover = pygcmc.movement.MovementModule()
+        mover.setParams(params)
+
+        population_before = state.activeResidueCount
+        result = mover.attemptInsertion(state)
+
+        biased = params.get_move_probability_set_biased(0, population_before)
+        assert biased.insertion > biased.deletion, "Bias should favor insertion when below target"
+
+        expected_forward = _safe_log_probability(biased.insertion)
+        expected_reverse = _safe_log_probability(biased.deletion)
+
+        assert math.isclose(result.logProposalForward, expected_forward, rel_tol=0.0, abs_tol=1e-12)
+        assert math.isclose(result.logProposalReverse, expected_reverse, rel_tol=0.0, abs_tol=1e-12)
+
+def test_deletion_log_proposals_reflect_target_bias(setup_system_with_params):
+        """Deletion log proposal terms should include target bias when above target."""
+        state, params = setup_system_with_params
+        # Pre-populate the box with a few dummy particles
+        for idx in range(3):
+            _add_dummy_particle(state, offset=idx)
+        assert state.activeResidueCount >= 3, "Failed to seed dummy particles for deletion test"
+
+        params.targetFragmentCounts = [1]
+        params.seed = 222
+        mover = pygcmc.movement.MovementModule()
+        mover.setParams(params)
+
+        population_before = state.activeResidueCount
+        result = mover.attemptDeletion(state)
+
+        biased = params.get_move_probability_set_biased(0, population_before)
+        assert biased.deletion > biased.insertion, "Bias should favor deletion when above target"
+
+        expected_forward = _safe_log_probability(biased.deletion)
+        expected_reverse = _safe_log_probability(biased.insertion)
+
+        assert math.isclose(result.logProposalForward, expected_forward, rel_tol=0.0, abs_tol=1e-12)
+        assert math.isclose(result.logProposalReverse, expected_reverse, rel_tol=0.0, abs_tol=1e-12)
     
 def test_move_type_consistency(setup_system_with_params):
         """Test that moveType field correctly identifies the operation."""
