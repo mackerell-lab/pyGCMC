@@ -16,6 +16,7 @@
 #include <random>
 #include <chrono>
 #include <cmath>
+#include <algorithm>
 
 namespace pygcmc {
 namespace platform {
@@ -158,6 +159,8 @@ void MovementModule::applyCavitySpeciesParams() {
 
 MovementResult MovementModule::attemptInsertion(MCState& state, int moleculeType) {
     auto startTime = std::chrono::high_resolution_clock::now();
+
+    applyLifecycleControls(state);
     
     if (moleculeType >= 0) {
         pImpl_->insertionMove->setMoleculeType(moleculeType);
@@ -178,6 +181,8 @@ MovementResult MovementModule::attemptInsertion(MCState& state, int moleculeType
 
 MovementResult MovementModule::attemptDeletion(MCState& state, int residueIndex) {
     auto startTime = std::chrono::high_resolution_clock::now();
+
+    applyLifecycleControls(state);
     
     // For standard GCMC, deletion target should be selected uniformly at random
     // The previous "last inserted" preference was non-standard and biased the ensemble
@@ -201,6 +206,8 @@ MovementResult MovementModule::attemptDeletion(MCState& state, int residueIndex)
 
 MovementResult MovementModule::attemptTranslation(MCState& state, int residueIndex) {
     auto startTime = std::chrono::high_resolution_clock::now();
+
+    applyLifecycleControls(state);
     
     MovementResult result = pImpl_->translationMove->performTranslation(state, params_, residueIndex);
     
@@ -220,6 +227,8 @@ MovementResult MovementModule::attemptTranslation(MCState& state, int residueInd
 
 MovementResult MovementModule::attemptRotation(MCState& state, int residueIndex) {
     auto startTime = std::chrono::high_resolution_clock::now();
+
+    applyLifecycleControls(state);
     
     MovementResult result;
     
@@ -303,12 +312,17 @@ void MovementModule::resetStatistics() {
     activePool_->resetStatistics();
     cavityManager_->resetStatistics();
     configBiasManager_->resetStatistics();
+    forcedInitialRemovals_.clear();
+    forcedExcessRemovals_.clear();
 }
 
 void MovementModule::setParams(const MovementParams& params) {
     params_ = params;
     // Ensure derived values and validation are up-to-date
     params_.updateDerivedParameters();
+    initialRemovalApplied_ = false;
+    forcedInitialRemovals_.clear();
+    forcedExcessRemovals_.clear();
     
     // Reseed RNGs when a non-zero seed is provided
     if (params_.seed != 0) {
@@ -345,6 +359,8 @@ std::map<std::string, MovementModule::Statistics> MovementModule::getStatistics(
 
 std::vector<MovementResult> MovementModule::attemptMultiInsertionCBMC(MCState& state, int moleculeType) {
     std::vector<MovementResult> results;
+
+    applyLifecycleControls(state);
     
     if (!pImpl_->multiInsertionCBMC) {
         // Initialize if not already done
@@ -462,6 +478,132 @@ void MovementModule::updateStatistics(const std::string& moveType, bool accepted
         stat.accepts++;
     }
     stat.totalEnergyChange += energyChange;
+}
+
+void MovementModule::applyLifecycleControls(MCState& state) {
+    bool mutated = false;
+
+    if (!initialRemovalApplied_) {
+        initialRemovalApplied_ = true;
+        mutated = applyInitialRemoval(state);
+    }
+
+    if (trimExcessPopulation(state)) {
+        mutated = true;
+    }
+
+    if (mutated && activePool_) {
+        activePool_->syncFromState(state);
+    }
+}
+
+bool MovementModule::applyInitialRemoval(MCState& state) {
+    if (params_.removeInitFlags.empty()) {
+        return false;
+    }
+
+    bool mutated = false;
+    for (int idx = state.activeResidueCount - 1; idx >= 0; --idx) {
+        if (idx < 0 || idx >= static_cast<int>(state.residues.size())) {
+            continue;
+        }
+        const auto& residue = state.residues[idx];
+        if (!residue.active) {
+            continue;
+        }
+        if (!params_.shouldRemoveInit(residue.type)) {
+            continue;
+        }
+        state.removeResidue(idx);
+        forcedInitialRemovals_[residue.type]++;
+        mutated = true;
+    }
+    return mutated;
+}
+
+bool MovementModule::trimExcessPopulation(MCState& state) {
+    if (params_.removeExcessFlags.empty()) {
+        return false;
+    }
+
+    bool mutated = false;
+    const int maxTypes = static_cast<int>(std::max({
+        params_.removeExcessFlags.size(),
+        params_.targetFragmentCounts.size(),
+        params_.excessRemovalThresholds.size()
+    }));
+
+    for (int type = 0; type < maxTypes; ++type) {
+        if (!params_.shouldRemoveExcess(type)) {
+            continue;
+        }
+        int limit = params_.getExcessLimit(type);
+        if (limit < 0) {
+            continue;
+        }
+        int current = countActiveResiduesOfType(state, type);
+        int toRemove = current - limit;
+        if (toRemove <= 0) {
+            continue;
+        }
+        mutated = true;
+        forcedExcessRemovals_[type] += toRemove;
+        for (int idx = state.activeResidueCount - 1; idx >= 0 && toRemove > 0; --idx) {
+            if (idx < 0 || idx >= static_cast<int>(state.residues.size())) {
+                continue;
+            }
+            const auto& residue = state.residues[idx];
+            if (!residue.active || residue.type != type) {
+                continue;
+            }
+            state.removeResidue(idx);
+            --toRemove;
+        }
+    }
+
+    return mutated;
+}
+
+int MovementModule::countActiveResiduesOfType(const MCState& state, int moleculeType) {
+    if (moleculeType < 0) {
+        return state.activeResidueCount;
+    }
+
+    int count = 0;
+    const int maxResidues = std::min(state.activeResidueCount,
+                                     static_cast<int>(state.residues.size()));
+    for (int i = 0; i < maxResidues; ++i) {
+        const auto& residue = state.residues[i];
+        if (residue.active && residue.type == moleculeType) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+std::map<std::string, double> MovementModule::getPopulationControlStatsMap() const {
+    std::map<std::string, double> result;
+    int totalInitial = 0;
+    for (const auto& entry : forcedInitialRemovals_) {
+        std::string key = "initial.type" + std::to_string(entry.first);
+        result[key] = static_cast<double>(entry.second);
+        totalInitial += entry.second;
+    }
+    if (totalInitial > 0) {
+        result["initial.total"] = static_cast<double>(totalInitial);
+    }
+
+    int totalExcess = 0;
+    for (const auto& entry : forcedExcessRemovals_) {
+        std::string key = "excess.type" + std::to_string(entry.first);
+        result[key] = static_cast<double>(entry.second);
+        totalExcess += entry.second;
+    }
+    if (totalExcess > 0) {
+        result["excess.total"] = static_cast<double>(totalExcess);
+    }
+
+    return result;
 }
 
 } // namespace movement

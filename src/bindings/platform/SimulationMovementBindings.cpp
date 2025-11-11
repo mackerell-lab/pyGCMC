@@ -124,6 +124,10 @@ void init_movement_bindings(py::module& m) {
         .def_readwrite("attemptProbTranslation", &MovementParams::attemptProbTranslation)
         .def_readwrite("attemptProbRotation", &MovementParams::attemptProbRotation)
         .def_readwrite("targetFragmentCounts", &MovementParams::targetFragmentCounts)
+        .def_readwrite("removeInitFlags", &MovementParams::removeInitFlags)
+        .def_readwrite("removeExcessFlags", &MovementParams::removeExcessFlags)
+        .def_readwrite("excessRemovalThresholds", &MovementParams::excessRemovalThresholds)
+        .def_readwrite("defaultExcessThreshold", &MovementParams::defaultExcessThreshold)
         // Multi-insertion CBMC parameters
         .def_readwrite("useMultiInsertionCBMC", &MovementParams::useMultiInsertionCBMC)
         .def_readwrite("maxParallelInsertions", &MovementParams::maxParallelInsertions)
@@ -233,6 +237,8 @@ void init_movement_bindings(py::module& m) {
              "Get proposal statistics as a map")
         .def("getCavityStats", &MovementModule::getCavityStatsMap,
              "Get cavity statistics as a map")
+        .def("getPopulationControlStatsMap", &MovementModule::getPopulationControlStatsMap,
+             "Get population control enforcement counters")
         .def("__repr__", [](const MovementModule&) {
             return std::string("MovementModule(temperature=300.0)");
         });

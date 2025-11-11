@@ -88,6 +88,10 @@ struct MovementParams {
     std::vector<double> attemptProbTranslation;
     std::vector<double> attemptProbRotation;
     std::vector<int> targetFragmentCounts; // Soft population targets per fragment (negative disables)
+    std::vector<int> removeInitFlags;      // Remove initial fragments per species (0/1)
+    std::vector<int> removeExcessFlags;    // Enable excess trimming per species (0/1)
+    std::vector<int> excessRemovalThresholds; // Allowed over-population before trimming
+    int defaultExcessThreshold = 0;        // Global fallback for excess trimming window
     
     // Multi-insertion CBMC parameters
     bool useMultiInsertionCBMC = false;    // Enable multi-insertion mode
@@ -243,6 +247,43 @@ struct MovementParams {
         }
         return -1;
     }
+
+    bool shouldRemoveInit(int fragmentType) const {
+        return fragmentType >= 0 &&
+               fragmentType < static_cast<int>(removeInitFlags.size()) &&
+               removeInitFlags[fragmentType] > 0;
+    }
+
+    bool shouldRemoveExcess(int fragmentType) const {
+        return fragmentType >= 0 &&
+               fragmentType < static_cast<int>(removeExcessFlags.size()) &&
+               removeExcessFlags[fragmentType] > 0;
+    }
+
+    int getExcessThreshold(int fragmentType) const {
+        if (fragmentType >= 0 &&
+            fragmentType < static_cast<int>(excessRemovalThresholds.size()) &&
+            excessRemovalThresholds[fragmentType] >= 0) {
+            return excessRemovalThresholds[fragmentType];
+        }
+        return std::max(0, defaultExcessThreshold);
+    }
+
+    int getExcessLimit(int fragmentType) const {
+        if (!shouldRemoveExcess(fragmentType)) {
+            return -1;
+        }
+        const int threshold = std::max(0, getExcessThreshold(fragmentType));
+        const int target = getTargetCount(fragmentType);
+        if (target > 0) {
+            return target + threshold;
+        }
+        if (threshold > 0) {
+            return threshold;
+        }
+        return -1;
+    }
+
 
     CavityFragmentConfig getCavityConfigForSpecies(int fragmentType) const {
         if (fragmentType >= 0 && fragmentType < static_cast<int>(cavityFragmentConfigs.size())) {

@@ -78,6 +78,7 @@ public:
     // P2: Enhanced statistics access (returns map for binding conversion)
     std::map<std::string, double> getProposalStatsMap() const;
     std::map<std::string, double> getCavityStatsMap() const;
+    std::map<std::string, double> getPopulationControlStatsMap() const;
     
     // Active pool management
     ActivePool* getActivePool() { return activePool_.get(); }
@@ -101,16 +102,23 @@ private:
     std::unique_ptr<class ProposalMain> proposalMain_;
 #endif
     
-    // Statistics tracking
-    std::map<std::string, Statistics> stats_;
-    
-    // Removed non-standard "last inserted" tracking to ensure uniform deletion selection
-    
     // Helper functions
     void initializeComponents();
     void updateStatistics(const std::string& moveType, bool accepted, double energyChange);
     void fillBasicProposalStats(std::map<std::string, double>& result) const;
     void applyCavitySpeciesParams();
+    void applyLifecycleControls(model::montecarlo::MCState& state);
+    bool applyInitialRemoval(model::montecarlo::MCState& state);
+    bool trimExcessPopulation(model::montecarlo::MCState& state);
+    static int countActiveResiduesOfType(const model::montecarlo::MCState& state, int moleculeType);
+
+    // Statistics tracking
+    std::map<std::string, Statistics> stats_;
+    bool initialRemovalApplied_ = false;
+    std::map<int, int> forcedInitialRemovals_;
+    std::map<int, int> forcedExcessRemovals_;
+    
+    // Removed non-standard "last inserted" tracking to ensure uniform deletion selection
 };
 
 } // namespace movement

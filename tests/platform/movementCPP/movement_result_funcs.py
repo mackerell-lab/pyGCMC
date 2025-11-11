@@ -29,6 +29,12 @@ def _add_dummy_particle(state, offset=0.0):
         state.addAtom(atom)
 
 
+def _seed_dummy_population(state, count):
+        """Populate the MCState with a fixed number of one-atom residues."""
+        for idx in range(count):
+                _add_dummy_particle(state, offset=idx)
+
+
 def _safe_log_probability(value):
         """Mirror utils::safeLogProbability from C++ implementation."""
         return math.log(max(value, 1e-30))
@@ -371,3 +377,59 @@ def test_result_repr(setup_system_with_params):
         repr_str = str(result)
         assert "MovementResult" in repr_str
         assert ("accepted" in repr_str or "rejected" in repr_str)
+
+def test_initial_removal_runs_before_moves(setup_system_with_params):
+        """removeInitFlags should clear the seeded molecules before any move executes."""
+        state, params = setup_system_with_params
+        _seed_dummy_population(state, 3)
+        params.removeInitFlags = [1]
+
+        mover = pygcmc.movement.MovementModule()
+        mover.setParams(params)
+
+        result = mover.attemptInsertion(state)
+        stats = mover.getPopulationControlStatsMap()
+
+        assert result.grandTerms.countBefore == 0
+        assert stats.get("initial.total", 0.0) == pytest.approx(3.0)
+
+def test_excess_population_trimming_respects_target(setup_system_with_params):
+        """removeExcessFlags should clamp the population to target + threshold."""
+        state, params = setup_system_with_params
+        _seed_dummy_population(state, 5)
+        params.targetFragmentCounts = [2]
+        params.removeExcessFlags = [1]
+        params.excessRemovalThresholds = [0]
+
+        mover = pygcmc.movement.MovementModule()
+        mover.setParams(params)
+
+        mover.attemptRotation(state)
+        stats = mover.getPopulationControlStatsMap()
+
+        assert state.activeResidueCount == 2
+        assert stats.get("excess.total", 0.0) == pytest.approx(3.0)
+
+def test_insert_delete_logratio_symmetry(setup_system_with_params):
+        """Insertion/deletion detailed logs should remain exact opposites."""
+        state, params = setup_system_with_params
+        params.chemicalPotential = 25.0
+        params.useCavityBias = False
+        params.seed = 2024
+
+        mover = pygcmc.movement.MovementModule()
+        mover.setParams(params)
+
+        insert_result = mover.attemptInsertion(state)
+        assert insert_result.hasGrandTerms
+        assert insert_result.accepted
+
+        delete_result = mover.attemptDeletion(state)
+        assert delete_result.hasGrandTerms
+
+        assert math.isclose(insert_result.logAcceptanceRatio,
+                            -delete_result.logAcceptanceRatio,
+                            rel_tol=0.0, abs_tol=1e-12)
+        assert math.isclose(insert_result.grandTerms.deltaEnergy,
+                            -delete_result.grandTerms.deltaEnergy,
+                            rel_tol=0.0, abs_tol=1e-9)
