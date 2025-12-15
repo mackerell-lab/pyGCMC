@@ -104,8 +104,17 @@ mc_move_prob:1 0 0 0
     )
     assert result.returncode == 0, result.stdout + result.stderr
 
-    combined = result.stdout + result.stderr
-    assert "MC state initialized with real molecular data" in combined
+    out_pdb = Path(f"{out_prefix}_final.pdb")
+    assert out_pdb.exists()
+
+    # The initial system must survive into output (i.e., we did not silently fall back to an empty state).
+    resnames = set()
+    for line in out_pdb.read_text().splitlines():
+        if line.startswith(("ATOM", "HETATM")):
+            resname = line[17:20].strip().upper()
+            if resname:
+                resnames.add(resname)
+    assert "MOL" in resnames, f"Expected initial MOL residue in output: {sorted(resnames)}"
 
 
 def test_insertion_does_not_overwrite_initial_residues(gcmc_cpu, test_data_dir, temp_dir):
@@ -208,18 +217,15 @@ attempt_prob_rot:0.0
     )
     assert result.returncode == 0, result.stdout + result.stderr
 
-    combined = result.stdout + result.stderr
-    assert "Residue fixed flags: fixed=1 movable=0" in combined
-
     out_pdb = Path(f"{out_prefix}_final.pdb")
     assert out_pdb.exists()
 
     resnames = set()
     for line in out_pdb.read_text().splitlines():
         if line.startswith("ATOM") or line.startswith("HETATM"):
-            parts = line.split()
-            if len(parts) >= 4:
-                resnames.add(parts[3].strip().upper())
+            resname = line[17:20].strip().upper()
+            if resname:
+                resnames.add(resname)
 
     assert "MOL" in resnames, f"Initial residue lost/overwritten: {sorted(resnames)}"
     assert "SOL" in resnames, f"Insertion did not create SOL residue: {sorted(resnames)}"

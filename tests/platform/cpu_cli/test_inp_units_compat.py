@@ -6,7 +6,7 @@ These are end-to-end (CLI) tests that exercise InpParserGCMC via gcmc_cpu.
 
 from __future__ import annotations
 
-import re
+import json
 import subprocess
 from pathlib import Path
 
@@ -86,6 +86,7 @@ def test_inp_units_gcmc_gpu_fragmuex_kcal_to_kj_log(gcmc_cpu, test_data_dir, tem
 
     out_prefix = work / "out" / "gcmc"
     out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    accept_log = work / "out" / "acceptance.jsonl"
 
     inp = work / "test.inp"
     _write_inp(
@@ -109,7 +110,7 @@ attempt_prob_rot:0.0
     )
 
     result = subprocess.run(
-        [gcmc_cpu, "--inp", str(inp), "--prefix", str(out_prefix), "--verbose"],
+        [gcmc_cpu, "--inp", str(inp), "--prefix", str(out_prefix), "--dump-accept", str(accept_log)],
         cwd=str(work),
         capture_output=True,
         text=True,
@@ -117,11 +118,21 @@ attempt_prob_rot:0.0
     )
     assert result.returncode == 0, result.stdout + result.stderr
 
-    combined = result.stdout + result.stderr
-    m = re.search(r"Chemical potential:\s+(-?\d+(?:\.\d+)?)\s+kJ/mol", combined)
-    assert m, combined
-    mu_kj = float(m.group(1))
-    assert mu_kj == pytest.approx(-4.184, rel=1e-3, abs=1e-3)
+    assert accept_log.exists()
+    records = [
+        json.loads(line)
+        for line in accept_log.read_text().splitlines()
+        if line.strip()
+    ]
+    assert records, "Acceptance log unexpectedly empty"
+
+    mu_values = [
+        float(r["mu"])
+        for r in records
+        if str(r.get("species", "")).strip().upper() == "SOL"
+    ]
+    assert mu_values, f"No SOL moves found in acceptance log: {records[:3]}"
+    assert mu_values[0] == pytest.approx(-4.184, rel=1e-3, abs=1e-3)
 
 
 def test_inp_random_seed_used_when_cli_missing(gcmc_cpu, test_data_dir, temp_dir):
@@ -129,7 +140,7 @@ def test_inp_random_seed_used_when_cli_missing(gcmc_cpu, test_data_dir, temp_dir
     itp = test_data_dir / "charmm36.ff" / "mol" / "sol.itp"
     assert itp.exists()
 
-    def run_once(work: Path) -> bytes:
+    def run_once(work: Path, seed: int) -> tuple[tuple[str, str, int, float, float, float], ...]:
         work.mkdir(parents=True, exist_ok=True)
         out_prefix = work / "out" / "gcmc"
         out_prefix.parent.mkdir(parents=True, exist_ok=True)
@@ -139,7 +150,7 @@ def test_inp_random_seed_used_when_cli_missing(gcmc_cpu, test_data_dir, temp_dir
             inp,
             f"""
 inp_units:gcmc_gpu
-random_seed:123
+random_seed:{seed}
 fragitp:{itp}
 box_size:30.0 30.0 30.0
 cutoff:12.0
@@ -148,7 +159,8 @@ moves_per_step:1
 mcsteps:10
 nprint:5
 fragname:SOL
-fragmuex:2.0
+fragconc:55.0
+fragmuex:50.0
 attempt_prob_ins:1.0
 attempt_prob_del:0.0
 attempt_prob_trn:0.0
@@ -167,8 +179,24 @@ attempt_prob_rot:0.0
 
         out_pdb = Path(f"{out_prefix}_final.pdb")
         assert out_pdb.exists()
-        return out_pdb.read_bytes()
+        atoms: list[tuple[str, str, int, float, float, float]] = []
+        for line in out_pdb.read_text().splitlines():
+            if not line.startswith(("ATOM", "HETATM")):
+                continue
+            atom_name = line[12:16].strip().upper()
+            resname = line[17:20].strip().upper()
+            resid = int(line[22:26])
+            x = float(line[30:38])
+            y = float(line[38:46])
+            z = float(line[46:54])
+            atoms.append((resname, atom_name, resid, round(x, 3), round(y, 3), round(z, 3)))
+        return tuple(sorted(atoms))
 
     run1 = Path(temp_dir) / "seed_run1"
     run2 = Path(temp_dir) / "seed_run2"
-    assert run_once(run1) == run_once(run2)
+    assert run_once(run1, 123) == run_once(run2, 123)
+
+    # And with a different seed, we should almost certainly get a different trajectory/output.
+    run3 = Path(temp_dir) / "seed_run3"
+    run4 = Path(temp_dir) / "seed_run4"
+    assert run_once(run3, 123) != run_once(run4, 124)

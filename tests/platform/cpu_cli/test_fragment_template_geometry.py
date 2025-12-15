@@ -68,7 +68,7 @@ moves_per_step:1
 mcsteps:1
 nprint:1
 fragname:SOL
-fragmuex:5.0
+fragmuex:50.0
 attempt_prob_ins:1.0
 attempt_prob_del:0.0
 attempt_prob_trn:0.0
@@ -92,17 +92,29 @@ attempt_prob_rot:0.0
     atoms = _parse_first_residue_coords(out_pdb)
     assert len(atoms) >= 3, f"Expected >=3 atoms in first residue, got {len(atoms)}"
 
-    # Use first 3 atoms (TIP3P-like water): OW, HW1, HW2. Distances are in Angstrom in PDB.
+    template_pdb = mol_dir / "sol.pdb"
+    assert template_pdb.exists()
+    template_atoms = _parse_first_residue_coords(template_pdb)
+    assert len(template_atoms) >= 3, f"Expected >=3 atoms in template, got {len(template_atoms)}"
+
+    # Use first 3 atoms. Distances are in Angstrom in PDB.
+    # Keep this generalized by deriving expected geometry from the template PDB itself.
     a0 = (atoms[0][1], atoms[0][2], atoms[0][3])
     a1 = (atoms[1][1], atoms[1][2], atoms[1][3])
     a2 = (atoms[2][1], atoms[2][2], atoms[2][3])
+
+    t0 = (template_atoms[0][1], template_atoms[0][2], template_atoms[0][3])
+    t1 = (template_atoms[1][1], template_atoms[1][2], template_atoms[1][3])
+    t2 = (template_atoms[2][1], template_atoms[2][2], template_atoms[2][3])
 
     d01 = _dist(a0, a1)
     d02 = _dist(a0, a2)
     d12 = _dist(a1, a2)
 
-    # Expected geometry from the template PDB (≈0.957 Å bonds, ≈1.514 Å H-H)
-    assert d01 == pytest.approx(0.957, abs=0.05)
-    assert d02 == pytest.approx(0.957, abs=0.05)
-    assert d12 == pytest.approx(1.514, abs=0.08)
+    td01 = _dist(t0, t1)
+    td02 = _dist(t0, t2)
+    td12 = _dist(t1, t2)
 
+    assert d01 == pytest.approx(td01, abs=0.02)
+    assert d02 == pytest.approx(td02, abs=0.02)
+    assert d12 == pytest.approx(td12, abs=0.02)
