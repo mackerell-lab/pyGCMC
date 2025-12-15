@@ -271,7 +271,7 @@ void SimulationIO::writeFinalReport(const MCState& state,
     file << "System Configuration:\n";
     file << "  Box: " << state.info.box[0] << " x " << state.info.box[1] 
          << " x " << state.info.box[2] << " nm\n";
-    file << "  Temperature: " << (1.0 / (state.info.beta * 0.00831446)) << " K\n";
+    file << "  Temperature: " << (1.0 / (state.info.beta * 8.314e-3)) << " K\n";
     file << "  Cutoff: " << state.info.cutoff << " nm\n\n";
     
     file << "Final Statistics:\n";

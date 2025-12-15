@@ -35,15 +35,18 @@ using model::montecarlo::MCResidue;
 struct FragmentTemplate {
     // Basic properties
     std::string name;                      // Fragment name (e.g., "WAT", "NA+")
-    int typeId;                            // Type ID for force field
+    int typeId{-1};                        // Type ID for force field
     std::vector<MCAtom> atoms;            // Atom template
-    double molecularWeight;                // Molecular weight (g/mol)
-    double radius;                         // Effective radius (Å)
+    // Per-atom force field type names (e.g., GROMACS ITP "type" column), same order as atoms.
+    // This enables remapping to MCState atom type indices after force field initialization.
+    std::vector<std::string> atomTypeNames;
+    double molecularWeight{0.0};           // Molecular weight (g/mol)
+    double radius{0.0};                    // Effective radius (Å)
     
     // Thermodynamic properties
-    double chemicalPotential;             // Chemical potential μ (kJ/mol)
-    double activity;                       // Activity z = exp(β*μ)
-    double concentration;                  // Target concentration (M)
+    double chemicalPotential{0.0};         // Chemical potential μ (kJ/mol)
+    double activity{1.0};                  // Activity z = exp(β*μ)
+    double concentration{0.0};             // Target concentration (M)
     
     // Topology information
     struct Bond {
@@ -226,6 +229,10 @@ public:
     int createInstance(int templateId, 
                       const Vector3& position,
                       const Quaternion& orientation = Quaternion());
+
+    // Reserve leading instance IDs so instanceId can be used as a stable residue index
+    // in MCState even when the system is initialized with pre-existing residues (e.g., protein).
+    void reserveInstanceIds(int startIndex);
     
     // Create with configurational bias
     int createInstanceCBMC(int templateId,

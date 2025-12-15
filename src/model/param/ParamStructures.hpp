@@ -21,6 +21,11 @@ struct BasicInfo {
     bool print_logfile = false;
     std::string param_file;
     std::string log_file;
+    // INP unit system for compatibility with legacy gcmc_gpu style inputs.
+    // Supported values (case-insensitive): "nm" (default), "auto", "gcmc_gpu"/"a"/"angstrom".
+    std::string inp_units = "nm";
+    // Internal flag to make enhance_param() idempotent for unit conversion.
+    bool inp_units_converted = false;
     unsigned int random_seed = 0;
     int num_threads = 1;
     bool is_box = false;
@@ -99,7 +104,7 @@ struct MCParams {
     int rotate_dih_status = 0;
 
     // Physical constants (use kJ/mol/K to match platform energy units)
-    float BOLTZMANN = 0.00831446f;
+    float BOLTZMANN = 8.314e-3f;
     float KCAL_TO_KJ = 4.184f;
 };
 

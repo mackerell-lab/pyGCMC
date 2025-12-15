@@ -54,6 +54,9 @@ void GCMCEngine::initialize(MCState* state, FragmentReservoir* reservoir) {
     state_ = state;
     reservoir_ = reservoir;
     energyCache_.invalidate();
+    if (state_ && reservoir_) {
+        reservoir_->reserveInstanceIds(std::max(0, state_->activeResidueCount));
+    }
 }
 
 // Set seed - unified for all RNG components

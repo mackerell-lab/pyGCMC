@@ -3,17 +3,64 @@
 #include <sstream>
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 
 namespace pygcmc {
 namespace io {
 namespace topology {
+
+namespace {
+
+constexpr double kAngstromToNm = 0.1;
+
+struct PdbAtomCoord {
+    std::string name;
+    double xA{0.0};
+    double yA{0.0};
+    double zA{0.0};
+};
+
+std::string trimCopy(const std::string& s) {
+    size_t b = 0;
+    while (b < s.size() && std::isspace(static_cast<unsigned char>(s[b]))) ++b;
+    size_t e = s.size();
+    while (e > b && std::isspace(static_cast<unsigned char>(s[e - 1]))) --e;
+    return s.substr(b, e - b);
+}
+
+std::vector<PdbAtomCoord> readPdbAtomCoords(const std::string& path) {
+    std::ifstream in(path);
+    if (!in.good()) return {};
+
+    std::vector<PdbAtomCoord> atoms;
+    std::string line;
+    while (std::getline(in, line)) {
+        if (!(line.rfind("ATOM", 0) == 0 || line.rfind("HETATM", 0) == 0)) continue;
+        if (line.size() < 54) continue;
+
+        PdbAtomCoord a;
+        a.name = trimCopy(line.substr(12, 4));
+        try {
+            a.xA = std::stod(line.substr(30, 8));
+            a.yA = std::stod(line.substr(38, 8));
+            a.zA = std::stod(line.substr(46, 8));
+        } catch (const std::exception&) {
+            continue;
+        }
+        atoms.push_back(std::move(a));
+    }
+    return atoms;
+}
+
+} // namespace
 
 void FragmentLibrary::addTemplate(const TemplateData& t) {
     byName_[t.name] = t;
     if (t.typeId >= 0) byType_[t.typeId] = t.name;
 }
 
-bool FragmentLibrary::loadFromITP(const std::string& path, const std::string& name, int typeId) {
+bool FragmentLibrary::loadFromITP(const std::string& path, const std::string& name, int typeId,
+                                  const std::string& coordinatePdbFile) {
     std::ifstream file(path);
     if (!file.good()) return false;
     
@@ -24,7 +71,6 @@ bool FragmentLibrary::loadFromITP(const std::string& path, const std::string& na
     std::string line, section;
     double totalMass = 0.0;
     double totalCharge = 0.0;
-    std::vector<double> positions_x, positions_y, positions_z;
     
     while (std::getline(file, line)) {
         // Remove comments
@@ -66,7 +112,8 @@ bool FragmentLibrary::loadFromITP(const std::string& path, const std::string& na
                 model::montecarlo::MCAtom atom;
                 atom.charge = static_cast<float>(charge);
                 atom.mass = static_cast<float>(mass);
-                atom.type = 0;  // TODO: Map atomType string to type index
+                // Placeholder until remapped to MCState atom type indices.
+                atom.type = 0;
                 atom.name = atomname;
                 
                 // Initialize position to zero (will be set from PDB if available)
@@ -76,13 +123,9 @@ bool FragmentLibrary::loadFromITP(const std::string& path, const std::string& na
                 atom.updatePosition();
                 
                 tmpl.atoms.push_back(atom);
+                tmpl.atomTypeNames.push_back(atomType);
                 totalMass += mass;
                 totalCharge += charge;
-                
-                // Store for radius calculation (if we had positions)
-                positions_x.push_back(atom.position.x);
-                positions_y.push_back(atom.position.y);
-                positions_z.push_back(atom.position.z);
             }
         }
         // Note: bonds section parsing could be added here if needed for connectivity
@@ -96,10 +139,86 @@ bool FragmentLibrary::loadFromITP(const std::string& path, const std::string& na
     // Calculate molecular weight and radius
     tmpl.molecularWeight = totalMass;
     
-    // Calculate radius of gyration if we have atoms
-    if (!tmpl.atoms.empty()) {
-        // Since positions are not in ITP, use a default radius estimate
-        // based on number of atoms (rough approximation)
+    bool coordsLoaded = false;
+    if (!coordinatePdbFile.empty() && !tmpl.atoms.empty()) {
+        const auto pdbAtoms = readPdbAtomCoords(coordinatePdbFile);
+        if (!pdbAtoms.empty()) {
+            // Map coordinates to ITP atoms. Prefer 1:1 ordering when sizes match.
+            std::vector<std::array<double, 3>> coordsNm(tmpl.atoms.size(), {0.0, 0.0, 0.0});
+            bool mapped = false;
+
+            if (pdbAtoms.size() == tmpl.atoms.size()) {
+                for (size_t i = 0; i < tmpl.atoms.size(); ++i) {
+                    coordsNm[i] = {pdbAtoms[i].xA * kAngstromToNm,
+                                   pdbAtoms[i].yA * kAngstromToNm,
+                                   pdbAtoms[i].zA * kAngstromToNm};
+                }
+                mapped = true;
+            } else {
+                // Name-based sequential matching fallback.
+                size_t p = 0;
+                mapped = true;
+                for (size_t i = 0; i < tmpl.atoms.size(); ++i) {
+                    const std::string& want = tmpl.atoms[i].name;
+                    while (p < pdbAtoms.size() && pdbAtoms[p].name != want) ++p;
+                    if (p >= pdbAtoms.size()) {
+                        mapped = false;
+                        break;
+                    }
+                    coordsNm[i] = {pdbAtoms[p].xA * kAngstromToNm,
+                                   pdbAtoms[p].yA * kAngstromToNm,
+                                   pdbAtoms[p].zA * kAngstromToNm};
+                    ++p;
+                }
+            }
+
+            if (mapped) {
+                // Center to COM in nm (use masses from ITP; fallback to geometric center)
+                double mSum = 0.0;
+                double cx = 0.0, cy = 0.0, cz = 0.0;
+                for (size_t i = 0; i < tmpl.atoms.size(); ++i) {
+                    const double m = static_cast<double>(tmpl.atoms[i].mass);
+                    if (m > 0.0) {
+                        mSum += m;
+                        cx += m * coordsNm[i][0];
+                        cy += m * coordsNm[i][1];
+                        cz += m * coordsNm[i][2];
+                    }
+                }
+                if (mSum > 0.0) {
+                    cx /= mSum;
+                    cy /= mSum;
+                    cz /= mSum;
+                } else {
+                    for (const auto& c : coordsNm) {
+                        cx += c[0];
+                        cy += c[1];
+                        cz += c[2];
+                    }
+                    cx /= static_cast<double>(coordsNm.size());
+                    cy /= static_cast<double>(coordsNm.size());
+                    cz /= static_cast<double>(coordsNm.size());
+                }
+
+                double maxDist = 0.0;
+                for (size_t i = 0; i < tmpl.atoms.size(); ++i) {
+                    const double x = coordsNm[i][0] - cx;
+                    const double y = coordsNm[i][1] - cy;
+                    const double z = coordsNm[i][2] - cz;
+                    tmpl.atoms[i].x = static_cast<float>(x);
+                    tmpl.atoms[i].y = static_cast<float>(y);
+                    tmpl.atoms[i].z = static_cast<float>(z);
+                    tmpl.atoms[i].updatePosition();
+                    maxDist = std::max(maxDist, std::sqrt(x * x + y * y + z * z));
+                }
+                tmpl.radius = maxDist;
+                coordsLoaded = true;
+            }
+        }
+    }
+
+    // Fallback radius estimate if coordinates were not loaded.
+    if (!coordsLoaded && !tmpl.atoms.empty()) {
         tmpl.radius = 0.15 * std::sqrt(static_cast<double>(tmpl.atoms.size()));
     }
     

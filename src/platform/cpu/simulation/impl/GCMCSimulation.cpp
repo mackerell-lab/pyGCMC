@@ -23,7 +23,7 @@ namespace simulation {
 using namespace movement::gcmc;
 
 // Constants
-constexpr double kB = 8.314462618e-3;  // Boltzmann constant in kJ/(mol*K)
+constexpr double kB = 8.314e-3;  // Boltzmann constant in kJ/(mol*K)
 constexpr double NA = 6.02214076e23;   // Avogadro's number
 
 GCMCSimulation::GCMCSimulation(const Config& config) 
@@ -112,8 +112,8 @@ bool GCMCSimulation::initialize() {
             log("Loaded ", fragmentTemplatesFromBuilder_.size(), " fragment templates from ITP files");
         }
         
-    } catch (const std::exception& e) {
-        log("Warning: SimulationInputBuilder encountered error: ", e.what());
+	    } catch (const std::exception& e) {
+	        log("Warning: SimulationInputBuilder encountered error: ", e.what());
 
         // Mirror error to stdout so tests can match 'not found'/'Failed to load'
         std::string errorMsg = e.what();
@@ -135,15 +135,24 @@ bool GCMCSimulation::initialize() {
 
         // Fall back to legacy loader for parameters
         log("Using fallback parameter loading...");
-        if (!loadParameters()) {
-            log("ERROR: Failed to load parameters");
-            return false;
-        }
-    }
-    // If print frequency wasn't explicitly set via CLI, use INP nprint
-    if (config_.printFrequency <= 0) {
-        config_.printFrequency = params_->get_mc_info().print_freq;
-        if (config_.printFrequency <= 0) {
+	        if (!loadParameters()) {
+	            log("ERROR: Failed to load parameters");
+	            return false;
+	        }
+	    }
+
+	    // If CLI did not provide a seed, allow legacy INP keys (random_seed/seed) to drive RNG determinism.
+	    if (config_.randomSeed < 0 && params_) {
+	        const unsigned int inpSeed = params_->get_basic_info().random_seed;
+	        if (inpSeed > 0) {
+	            config_.randomSeed = static_cast<int>(inpSeed);
+	            rng_.seed(inpSeed);
+	        }
+	    }
+	    // If print frequency wasn't explicitly set via CLI, use INP nprint
+	    if (config_.printFrequency <= 0) {
+	        config_.printFrequency = params_->get_mc_info().print_freq;
+	        if (config_.printFrequency <= 0) {
             config_.printFrequency = 100;  // Default fallback
         }
     }
@@ -648,9 +657,15 @@ bool GCMCSimulation::setupSystem() {
                 }
             }
         }
-    } else {
-        log("Using force field from pre-populated MC state");
-    }
+	    } else {
+	        // Pre-populated state (e.g., built by SimulationInputBuilder).
+	        // Ensure we also have a typeName->index mapping for fragment template remapping.
+	        atomTypeNameToIndex_.clear();
+	        for (size_t i = 0; i < state_->atomTypes.atomTypes.size(); ++i) {
+	            atomTypeNameToIndex_[state_->atomTypes.atomTypes[i]] = i;
+	        }
+	        log("Using force field from pre-populated MC state");
+	    }
 
     // Setup switching function if enabled
     const auto& mc = params_->get_mc_info();
@@ -818,38 +833,59 @@ bool GCMCSimulation::setupFragments() {
             builderTemplateIt = fragmentTemplatesFromBuilder_.find(lowerName);
         }
 
-        if (builderTemplateIt != fragmentTemplatesFromBuilder_.end()) {
-            // Use template from builder (loaded from ITP)
-            tmpl = builderTemplateIt->second;
-            usingBuilderTemplate = true;
-            log("Using ITP template for fragment ", frag.name,
-                " with ", tmpl.atoms.size(), " atoms");
+	        if (builderTemplateIt != fragmentTemplatesFromBuilder_.end()) {
+	            // Use template from builder (loaded from ITP)
+	            tmpl = builderTemplateIt->second;
+	            usingBuilderTemplate = true;
+                // Always override thermodynamic parameters from INP-derived fragment info.
+                // The fragment template name (and ITP filename stem) may differ from INP fragname
+                // (e.g., WAT vs sol.itp), and activity is maintained by the acceptance calculator.
+                tmpl.name = frag.name;
+                tmpl.typeId = frag.typeId;
+                tmpl.concentration = frag.concentration;
+                tmpl.chemicalPotential = frag.chemicalPotential;
+                tmpl.activity = frag.activity;
+	            log("Using ITP template for fragment ", frag.name,
+	                " with ", tmpl.atoms.size(), " atoms");
 
-            // CRITICAL FIX: Remap atom types from ITP (which are hardcoded as 0)
-            // to the correct force field indices based on atom names
-            for (auto& atom : tmpl.atoms) {
-                // Map atom type based on name
-                bool typeFound = false;
-                for (const auto& [typeName, idx] : atomTypeNameToIndex_) {
-                    // Match by atom name (e.g., "OW" for water oxygen, "HW" for water hydrogen)
-                    if (atom.name == typeName ||
-                        (atom.name == "O" && (typeName == "OW" || typeName == "O_TIP3P")) ||
-                        (atom.name == "H" && (typeName == "HW" || typeName == "H_TIP3P")) ||
-                        (atom.name == "H1" && (typeName == "HW" || typeName == "H_TIP3P")) ||
-                        (atom.name == "H2" && (typeName == "HW" || typeName == "H_TIP3P"))) {
-                        atom.type = idx;
-                        typeFound = true;
-                        break;
-                    }
-                }
-                if (!typeFound && config_.verbose) {
-                    log("WARNING: Could not find type mapping for atom ", atom.name, ", keeping type ", atom.type);
-                }
-            }
-        } else {
-            // Fall back to creating template from parameters
-            tmpl.name = frag.name;
-            tmpl.typeId = frag.typeId;
+	            // Remap template atom types to MCState atom type indices.
+	            // Preferred: use ITP "type" column (tmpl.atomTypeNames) which matches force field atomtypes.
+	            if (!tmpl.atomTypeNames.empty() && tmpl.atomTypeNames.size() == tmpl.atoms.size()) {
+	                for (size_t ai = 0; ai < tmpl.atoms.size(); ++ai) {
+	                    const std::string& typeName = tmpl.atomTypeNames[ai];
+	                    auto it = atomTypeNameToIndex_.find(typeName);
+	                    if (it != atomTypeNameToIndex_.end()) {
+	                        tmpl.atoms[ai].type = static_cast<int>(it->second);
+	                    } else if (config_.verbose) {
+	                        log("WARNING: Could not find type mapping for ITP type ", typeName,
+	                            " (atom ", tmpl.atoms[ai].name, "), keeping type ", tmpl.atoms[ai].type);
+	                    }
+	                }
+	            } else {
+	                // Fallback: legacy heuristic based on atom names (mostly for simple water templates).
+	                for (auto& atom : tmpl.atoms) {
+	                    bool typeFound = false;
+	                    for (const auto& [typeName, idx] : atomTypeNameToIndex_) {
+	                        if (atom.name == typeName ||
+	                            (atom.name == "O" && (typeName == "OW" || typeName == "O_TIP3P")) ||
+	                            (atom.name == "H" && (typeName == "HW" || typeName == "H_TIP3P")) ||
+	                            (atom.name == "H1" && (typeName == "HW" || typeName == "H_TIP3P")) ||
+	                            (atom.name == "H2" && (typeName == "HW" || typeName == "H_TIP3P"))) {
+	                            atom.type = static_cast<int>(idx);
+	                            typeFound = true;
+	                            break;
+	                        }
+	                    }
+	                    if (!typeFound && config_.verbose) {
+	                        log("WARNING: Could not find type mapping for atom ", atom.name,
+	                            ", keeping type ", atom.type);
+	                    }
+	                }
+	            }
+	        } else {
+	            // Fall back to creating template from parameters
+	            tmpl.name = frag.name;
+	            tmpl.typeId = frag.typeId;
             tmpl.chemicalPotential = frag.chemicalPotential;
             tmpl.activity = frag.activity;
             tmpl.concentration = frag.concentration;
@@ -2199,18 +2235,16 @@ void GCMCSimulation::saveTrajectory(const std::string& filename) const {
             }
 
             // Format atom name with proper spacing
-            if (atomName.length() < 4) {
-                out << " " << std::left << std::setw(3) << atomName;
-            } else {
-                out << std::left << std::setw(4) << atomName.substr(0, 4);
-            }
+            out << std::left << std::setw(4) << atomName.substr(0, 4);
 
             // Residue name and number
             out << std::right;
+            out << " ";  // altLoc
             out << std::setw(3) << res.resname.substr(0, 3);
-            out << " A";  // Chain ID
+            out << " A";  // space + Chain ID
             out << std::setw(4) << res.resid;
-            out << "    ";
+            out << " ";   // iCode
+            out << "   "; // padding to coordinate columns
 
             // Coordinates (nm to Angstrom)
             out << std::fixed << std::setprecision(3);
@@ -2767,6 +2801,9 @@ void GCMCSimulation::dumpAcceptanceLog(const std::string& filename) const {
         log("ERROR: Failed to open acceptance log file: ", filename);
         return;
     }
+
+    // Use enough precision to make pAcc reproducible from the logged fields in tests.
+    ofs << std::setprecision(17);
 
     // Write JSONL format
     for (const auto& rec : acceptanceBuffer_) {

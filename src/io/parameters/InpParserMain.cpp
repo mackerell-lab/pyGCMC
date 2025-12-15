@@ -1,6 +1,8 @@
 // src/io/parameters/InpParserMain.cpp
 
 #include "InpParserMain.hpp"
+#include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -80,6 +82,9 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
     // File paths
     if (key == "par") {
         file_info.par_files.push_back(value);
+    } else if (key == "fragmqtr") {
+        // Legacy gcmc_gpu key: additional MQTR input files
+        file_info.fragment_mqtr_files.push_back(value);
     } else if (key == "fragitp") {
         file_info.fragment_top_files.push_back(value);
     } else if (key == "atomtypes") {
@@ -96,6 +101,25 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
         file_info.output_top_file = value;
     } else if (key == "op_pdb") {
         file_info.output_pdb_file = value;
+    } else if (key == "conc_norm") {
+        file_info.conc_norm = value;
+    } else if (key == "conc_region") {
+        file_info.conc_region = value;
+    } else if (key == "inp_units" || key == "units") {
+        // Store raw unit system string for later conversion in InpParserGCMC::enhance_param
+        std::string v = value;
+        std::transform(v.begin(), v.end(), v.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        basic_info.inp_units = v;
+    } else if (key == "random_seed" || key == "seed") {
+        // Prefer compatibility with gcmc_gpu's "random_seed" key.
+        // Use 0 as "auto" (matches existing behavior for unsigned random_seed).
+        try {
+            const int s = std::stoi(value);
+            basic_info.random_seed = s > 0 ? static_cast<unsigned int>(s) : 0u;
+        } catch (const std::exception&) {
+            // Ignore invalid seed values
+        }
     }
     // Space parameters
     else if (key == "grid_dx") {
@@ -156,7 +180,7 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
     } else if (key == "temperature") {
         mc_info.temperature = std::stof(value);
         // Calculate beta from temperature (beta = 1/(kB*T) in kJ/mol units)
-        mc_info.beta = 1.0f / (0.00831446f * mc_info.temperature);
+        mc_info.beta = 1.0f / (mc_info.BOLTZMANN * mc_info.temperature);
     } else if (key == "eqsteps") {
         // Store equilibration steps if needed
         // Currently not used in MCParams, but parsed for compatibility

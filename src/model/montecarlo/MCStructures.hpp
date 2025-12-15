@@ -137,7 +137,7 @@ struct MCInfo {
         int acceptedDeletions{0};
     } stats;
 
-    static constexpr float BOLTZMANN = 0.00831446f;
+    static constexpr float BOLTZMANN = 8.314e-3f;
     static constexpr float MOLES_TO_MOLECULES = 0.0006023f;
     static constexpr float MOLECULES_TO_MOLES = 1660.539f;
 

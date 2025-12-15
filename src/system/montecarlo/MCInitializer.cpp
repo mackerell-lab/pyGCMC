@@ -14,10 +14,18 @@ void MCInitializer::initializeFromMolecular(model::MCState& state, const std::sh
     }
     
     // Set box dimensions from molecular system
-    state.info.box[0] = molecular->boxDimensions[0] * ANGSTROM_TO_NM;  // Convert Å to nm
-    state.info.box[1] = molecular->boxDimensions[1] * ANGSTROM_TO_NM;  // Convert Å to nm
-    state.info.box[2] = molecular->boxDimensions[2] * ANGSTROM_TO_NM;  // Convert Å to nm
-    state.info.volume = state.info.box[0] * state.info.box[1] * state.info.box[2];
+    if (molecular->boxDimensions.size() >= 3) {
+        state.info.box[0] = molecular->boxDimensions[0] * ANGSTROM_TO_NM;  // Convert Å to nm
+        state.info.box[1] = molecular->boxDimensions[1] * ANGSTROM_TO_NM;  // Convert Å to nm
+        state.info.box[2] = molecular->boxDimensions[2] * ANGSTROM_TO_NM;  // Convert Å to nm
+        state.info.volume = state.info.box[0] * state.info.box[1] * state.info.box[2];
+    } else {
+        // Some minimal inputs omit CRYST1; the active box can be provided by INP instead.
+        state.info.box[0] = 0.0f;
+        state.info.box[1] = 0.0f;
+        state.info.box[2] = 0.0f;
+        state.info.volume = 0.0f;
+    }
 
     // Convert residues and atoms
     auto convertedData = convertMolecularData(state, molecular);
@@ -136,15 +144,27 @@ MCInitializer::convertMolecularData(model::MCState& state, const std::shared_ptr
     
     size_t atomStart = 0;
     const size_t numResidues = molecular->get_num_residues();
+
+    if (molecular->residues.size() < numResidues || molecular->topology_residues.size() < numResidues) {
+        throw std::runtime_error(
+            "Inconsistent molecular data: residue count mismatch between structure and topology");
+    }
     
     for (size_t i = 0; i < numResidues; ++i) {
         const auto& molRes = molecular->residues[i];
         const auto& topRes = molecular->topology_residues[i];
+
+        if (!molRes) {
+            throw std::runtime_error("Null residue encountered in molecular structure data");
+        }
         
         model::MCResidue mcRes;
         mcRes.atomStart = atomStart;
         mcRes.atomCount = molRes->atom_count();
         mcRes.active = true;
+        mcRes.fixed = false;
+        mcRes.resname = molRes->get_resname();
+        mcRes.resid = molRes->get_ires();
         
         // Initialize energy components and GCMC parameters in GROMACS units
         mcRes.energy_vdw = 0.0f;   // kJ/mole
@@ -153,11 +173,22 @@ MCInitializer::convertMolecularData(model::MCState& state, const std::shared_ptr
         mcRes.concentration = 0.0f; // mol/L
         mcRes.radius = 0.0f;       // nm
         
+        mcRes.atoms.clear();
+        mcRes.atoms.reserve(molRes->atom_count());
+
         // Convert atoms for this residue
         const auto& molAtoms = molRes->get_atoms();
+        if (topRes.atoms.size() != molAtoms.size()) {
+            throw std::runtime_error(
+                "Inconsistent molecular data: residue atom count mismatch between structure and topology");
+        }
         for (size_t j = 0; j < molAtoms.size(); j++) {
             const auto& molAtom = molAtoms[j];
-            const auto& topAtom = molecular->topology_atoms[topRes.atoms[j]];
+            const int topAtomIdx = topRes.atoms[j];
+            if (topAtomIdx < 0 || static_cast<size_t>(topAtomIdx) >= molecular->topology_atoms.size()) {
+                throw std::runtime_error("Invalid topology atom index while initializing MC state");
+            }
+            const auto& topAtom = molecular->topology_atoms[static_cast<size_t>(topAtomIdx)];
             
             model::MCAtom mcAtom;
             // Convert coordinates from Å to nm
@@ -166,8 +197,12 @@ MCInitializer::convertMolecularData(model::MCState& state, const std::shared_ptr
             mcAtom.z = molAtom->get_z() * ANGSTROM_TO_NM;
             mcAtom.charge = topAtom.charge;  // Charge unit (e) remains the same
             mcAtom.type = state.atomTypes.getOrAddType(topAtom.type);
+            mcAtom.name = topAtom.name;
+            mcAtom.mass = static_cast<float>(topAtom.mass);
+            mcAtom.updatePosition();
             
             tempAtoms.push_back(mcAtom);
+            mcRes.atoms.push_back(mcAtom);
         }
 
         // Set residue type

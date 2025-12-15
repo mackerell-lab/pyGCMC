@@ -1,7 +1,10 @@
 #include "InpParserGCMC.hpp"
 #include "../../model/param/ParamOperations.hpp"
 #include <algorithm>
+#include <cctype>
+#include <cmath>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 
 namespace pygcmc {
@@ -38,8 +41,10 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
     auto& bias_info = param.get_bias_info();
     auto& space_info = param.get_space_info();
     auto& energy_info = param.get_energy_info();
+    auto& file_info = param.get_file_info();
+    auto& basic_info = param.get_basic_info();
 
-    if (key == "mctime") {
+    if (key == "mctime" || key == "mc_time") {
         // Support accumulation of multiple mctime lines
         auto times = InpParserStructures::parse_float_vector(value);
         for (float t : times) {
@@ -218,6 +223,66 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
         energy_info.energy_sw_ref = std::stof(value) * 4.184f;
     } else if (key == "sw_scale" || key == "SW_scale") {
         energy_info.energy_sw_scale = std::stof(value) * 4.184f;
+    } else if (key == "rotate_dihedral" || key == "rotate_dih_status") {
+        // Legacy switch: enable/disable dihedral rotation
+        if (value == "yes" || value == "true" || value == "1") {
+            mc_info.rotate_dih_status = 1;
+        } else if (value == "no" || value == "false" || value == "0") {
+            mc_info.rotate_dih_status = 0;
+        } else {
+            // Allow numeric value passthrough
+            try {
+                mc_info.rotate_dih_status = std::stoi(value);
+            } catch (const std::exception&) {
+                mc_info.rotate_dih_status = 0;
+            }
+        }
+    } else if (key == "remove_init") {
+        frag_info.remove_init = InpParserStructures::parse_int_vector(value);
+        frag_info.flag_remove_init = 1;
+    } else if (key == "remove_excess") {
+        frag_info.remove_excess = InpParserStructures::parse_int_vector(value);
+        frag_info.flag_remove_excess = 1;
+    } else if (key == "initial_fragments_cutoff") {
+        const float cutoff = std::stof(value);
+        frag_info.init_cutoff = cutoff;
+        frag_info.init_cutoff_squared = cutoff * cutoff;
+    } else if (key == "excess_fragments_threshold") {
+        frag_info.excess_threshold = std::stof(value);
+    } else if (key == "gcmc_cutoff") {
+        frag_info.gcmc_cutoff = std::stof(value);
+        frag_info.gcmc_cutoff_squared = frag_info.gcmc_cutoff * frag_info.gcmc_cutoff;
+    } else if (key == "use_gcmc_cutoff") {
+        frag_info.use_gcmc_cutoff = (value == "yes" || value == "true" || value == "1");
+    } else if (key == "target_volume") {
+        space_info.target_volume = std::stof(value);
+    } else if (key == "use_const_water_nbar") {
+        // gcmc_gpu compatibility: allow either yes/no or an integer value
+        try {
+            const int n = std::stoi(value);
+            if (n > 0) {
+                frag_info.use_const_water_nbar = true;
+                frag_info.const_water_nbar = n;
+            } else {
+                frag_info.use_const_water_nbar = false;
+            }
+        } catch (const std::exception&) {
+            frag_info.use_const_water_nbar = (value == "yes" || value == "true" || value == "1");
+        }
+    } else if (key == "use_number_water_nbar") {
+        frag_info.use_number_water_nbar = (value == "yes" || value == "true" || value == "1");
+        if (frag_info.use_number_water_nbar) {
+            frag_info.use_const_water_nbar = false;
+        }
+    } else if (key == "fragmqtr") {
+        // Legacy: per-fragment MQTR file(s)
+        file_info.fragment_mqtr_files.push_back(value);
+    } else if (key == "inp_units" || key == "units") {
+        // Override unit system ("auto", "nm", "gcmc_gpu"/"angstrom"/"a")
+        std::string v = value;
+        std::transform(v.begin(), v.end(), v.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        basic_info.inp_units = v;
     }
 }
 
@@ -228,6 +293,173 @@ void InpParserGCMC::enhance_param(model::param::Param& param) {
     auto& bias_info = param.get_bias_info();
     auto& space_info = param.get_space_info();
     auto& fragment_info = param.get_fragment_info();
+    auto& basic_info = param.get_basic_info();
+
+    auto toLower = [](std::string s) {
+        std::transform(s.begin(), s.end(), s.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return s;
+    };
+
+    // --- Unit conversion layer (gcmc_gpu compatibility) ---
+    // Internal convention: nm + kJ/mol. Legacy gcmc_gpu INP commonly uses Å + kcal/mol.
+    // We make conversion idempotent to tolerate repeated enhance_param calls.
+    if (!basic_info.inp_units_converted) {
+        enum class UnitMode { NmKj, AngstromKcal };
+
+        UnitMode mode = UnitMode::NmKj;
+        const std::string u = toLower(basic_info.inp_units);
+
+        const auto isNm = [&]() {
+            return (u == "nm" || u == "nm_kj" || u == "nm/kj" || u == "native");
+        };
+        const auto isAngstrom = [&]() {
+            return (u == "a" || u == "ang" || u == "angstrom" || u == "gcmc_gpu" || u == "a_kcal");
+        };
+
+        if (isNm()) {
+            mode = UnitMode::NmKj;
+        } else if (isAngstrom()) {
+            mode = UnitMode::AngstromKcal;
+        } else {
+            // auto heuristic: legacy gcmc_gpu inputs are typically in Å and have "large" boxes/centers (~30-50).
+            // Prefer not converting ambiguous small boxes (<= ~25) unless the user explicitly requests it.
+            const float maxBox = std::max({std::abs(space_info.box_size[0]),
+                                           std::abs(space_info.box_size[1]),
+                                           std::abs(space_info.box_size[2])});
+            const float maxGc = std::max({std::abs(space_info.gc_center[0]),
+                                          std::abs(space_info.gc_center[1]),
+                                          std::abs(space_info.gc_center[2])});
+            const float maxSys = std::max({std::abs(space_info.sys_center[0]),
+                                           std::abs(space_info.sys_center[1]),
+                                           std::abs(space_info.sys_center[2])});
+            const float maxCrystal = std::max({std::abs(space_info.crystal_dim[0]),
+                                               std::abs(space_info.crystal_dim[1]),
+                                               std::abs(space_info.crystal_dim[2])});
+            const float maxLen = std::max({maxBox, maxGc, maxSys, maxCrystal});
+
+            if (maxLen > 25.0f) {
+                mode = UnitMode::AngstromKcal;
+            } else if (maxLen == 0.0f && space_info.cutoff > 5.0f) {
+                // No geometry provided but cutoff resembles Å-style defaults.
+                mode = UnitMode::AngstromKcal;
+            }
+        }
+
+        const float LEN = (mode == UnitMode::AngstromKcal) ? 0.1f : 1.0f;      // Å -> nm
+        const float VOL = (mode == UnitMode::AngstromKcal) ? 0.001f : 1.0f;    // Å^3 -> nm^3
+        const float ENE = (mode == UnitMode::AngstromKcal) ? 4.184f : 1.0f;    // kcal -> kJ
+
+        auto scale3 = [&](std::array<float, 3>& a) {
+            a[0] *= LEN;
+            a[1] *= LEN;
+            a[2] *= LEN;
+        };
+        auto scaleList = [&](std::vector<float>& v) {
+            for (auto& x : v) x *= LEN;
+        };
+
+        // SpaceInfo
+        space_info.grid_spacing *= LEN;
+        scale3(space_info.gc_center);
+        scale3(space_info.sys_center);
+        scale3(space_info.crystal_dim);
+        scale3(space_info.box_size);
+        space_info.cutoff *= LEN;
+        space_info.target_volume *= VOL;
+        model::param::ParamOperations::updateVolume(space_info);
+
+        // MC switching distances
+        mc_info.switch_r_on *= LEN;
+        mc_info.switch_r_off *= LEN;
+
+        // Energy cutoffs and pairlists
+        energy_info.fragment_cutoff *= LEN;
+        energy_info.protein_cutoff *= LEN;
+        energy_info.pairlist_cutoff *= LEN;
+        energy_info.pair_list_cutoff_fragment *= LEN;
+        energy_info.pair_list_cutoff_protein *= LEN;
+        energy_info.switch_dist_fragment *= LEN;
+        energy_info.switch_dist_protein *= LEN;
+
+        // Bias radii
+        bias_info.sigma *= LEN;
+
+        // Fragment radii & cavity params
+        scaleList(fragment_info.radius_list);
+        scaleList(fragment_info.cavity_grid_dx_list);
+        scaleList(fragment_info.cavity_probe_radius_list);
+        fragment_info.init_cutoff *= LEN;
+        fragment_info.gcmc_cutoff *= LEN;
+
+        // Chemical potentials
+        for (auto& mu : fragment_info.muex_list) mu *= ENE;
+
+        // Region constraint string (sphere/box/cylinder) numeric values
+        if (mode == UnitMode::AngstromKcal && !space_info.gcmc_region.empty()) {
+            std::istringstream iss(space_info.gcmc_region);
+            std::vector<std::string> toks;
+            std::string t;
+            while (iss >> t) toks.push_back(t);
+
+            auto toFloat = [&](const std::string& s) -> float {
+                return std::stof(s);
+            };
+
+            try {
+                if (!toks.empty()) {
+                    const std::string type = toks[0];
+                    std::ostringstream oss;
+                    oss << type;
+                    if (type == "sphere" && toks.size() == 5) {
+                        for (size_t i = 1; i < toks.size(); ++i) {
+                            oss << " " << (toFloat(toks[i]) * LEN);
+                        }
+                        space_info.gcmc_region = oss.str();
+                    } else if (type == "box" && toks.size() == 7) {
+                        for (size_t i = 1; i < toks.size(); ++i) {
+                            oss << " " << (toFloat(toks[i]) * LEN);
+                        }
+                        space_info.gcmc_region = oss.str();
+                    } else if (type == "cylinder" && toks.size() == 7) {
+                        // cylinder x y z r h axis
+                        for (size_t i = 1; i < 6; ++i) {
+                            oss << " " << (toFloat(toks[i]) * LEN);
+                        }
+                        oss << " " << toks[6];
+                        space_info.gcmc_region = oss.str();
+                    }
+                }
+            } catch (const std::exception&) {
+                // Best-effort: keep original region string if parsing fails.
+            }
+        }
+
+        // gcmc_gpu compatibility: if gcmc_region not provided, derive a box region from gc_center + box_size.
+        if (space_info.gcmc_region.empty() &&
+            (space_info.box_size[0] > 0.0f || space_info.box_size[1] > 0.0f || space_info.box_size[2] > 0.0f)) {
+            const bool hasGcCenter = (space_info.gc_center[0] != 0.0f || space_info.gc_center[1] != 0.0f || space_info.gc_center[2] != 0.0f);
+            const bool hasSysCenter = (space_info.sys_center[0] != 0.0f || space_info.sys_center[1] != 0.0f || space_info.sys_center[2] != 0.0f);
+            const auto& c = hasGcCenter ? space_info.gc_center : space_info.sys_center;
+            if (hasGcCenter || hasSysCenter) {
+                const float hx = 0.5f * space_info.box_size[0];
+                const float hy = 0.5f * space_info.box_size[1];
+                const float hz = 0.5f * space_info.box_size[2];
+                std::ostringstream oss;
+                oss << "box "
+                    << (c[0] - hx) << " " << (c[1] - hy) << " " << (c[2] - hz) << " "
+                    << (c[0] + hx) << " " << (c[1] + hy) << " " << (c[2] + hz);
+                space_info.gcmc_region = oss.str();
+            }
+        }
+
+        // Update derived squared values after conversion
+        model::param::ParamOperations::updateEnergySquaredValues(energy_info);
+        model::param::ParamOperations::updateFragmentSquaredValues(fragment_info);
+        model::param::ParamOperations::updateBiasSquaredValues(bias_info);
+
+        basic_info.inp_units_converted = true;
+    }
 
     // Clamp insertion/deletion ratio into [0,1] and mirror to translation/rotation ratio
     mc_info.insertion_deletion_frac = std::max(0.0f, std::min(1.0f, mc_info.insertion_deletion_frac));
@@ -331,8 +563,9 @@ void InpParserGCMC::enhance_param(model::param::Param& param) {
         }
     }
 
-    // Update derived squared quantities
+    // Update derived squared quantities (safe to repeat; units conversion is idempotent)
     model::param::ParamOperations::updateEnergySquaredValues(energy_info);
+    model::param::ParamOperations::updateFragmentSquaredValues(fragment_info);
     model::param::ParamOperations::updateBiasSquaredValues(bias_info);
 }
 

@@ -13,6 +13,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <filesystem>
+#include <unordered_set>
 
 namespace pygcmc {
 namespace platform {
@@ -139,7 +140,8 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
             resolvedFragFiles.push_back(resolveFilePath(fragFile, baseDir));
         }
         result.fragmentTemplates = loadFragmentTemplates(resolvedFragFiles, 
-                                                         result.parameters);
+                                                         result.parameters,
+                                                         baseDir);
         log("Loaded " + std::to_string(result.fragmentTemplates.size()) + " fragment templates");
     }
     
@@ -163,22 +165,135 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
     log("Initializing MC state");
     result.mcState = std::make_shared<montecarlo::MCState>();
     
-    // Only use MCInitializer if we have complete molecular data with actual atoms
+    // Use MCInitializer if we have complete molecular data with actual atoms.
+    // NOTE: This should work even when force field parameters are provided as GROMACS ITP
+    // (via ItpNonbondedParser) and no CHARMM ForceField object is available.
+    bool useMolecularInit = false;
     if (result.molecular && result.structureLoaded && result.topologyLoaded &&
-        result.molecular->atoms.size() > 0 && result.forceField) {
-        // Use MCInitializer to populate from real molecular data
-        system::montecarlo::MCInitializer initializer;
-        initializer.initializeFromMolecular(*result.mcState, result.molecular);
-        
-        initializer.initializeForceField(*result.mcState, *result.forceField);
-        
-        log("MC state initialized with real molecular data");
-    } else {
+        result.molecular->get_num_atoms() > 0) {
+        auto hasConsistentTopologyMapping = [&]() -> bool {
+            const size_t nRes = result.molecular->get_num_residues();
+            if (nRes == 0) return false;
+            if (result.molecular->residues.size() < nRes) return false;
+            if (result.molecular->topology_residues.size() < nRes) return false;
+
+            const size_t nTopAtoms = result.molecular->topology_atoms.size();
+            for (size_t ri = 0; ri < nRes; ++ri) {
+                const auto& molRes = result.molecular->residues[ri];
+                if (!molRes) return false;
+                const auto& topRes = result.molecular->topology_residues[ri];
+                const auto& molAtoms = molRes->get_atoms();
+                if (topRes.atoms.size() != molAtoms.size()) return false;
+                for (int idx : topRes.atoms) {
+                    if (idx < 0 || static_cast<size_t>(idx) >= nTopAtoms) return false;
+                }
+            }
+            return true;
+        };
+
+        useMolecularInit = hasConsistentTopologyMapping();
+        if (!useMolecularInit) {
+            log("Warning: Incomplete topology mapping for structure residues; "
+                "skipping MCInitializer and using INP-only initialization");
+        }
+    }
+
+    if (useMolecularInit) {
+        try {
+            // Pre-allocate MCState arrays for MCCore::addInitialResidues() capacity checks.
+            const size_t initialAtoms = result.molecular->get_num_atoms();
+            const size_t initialResidues = result.molecular->get_num_residues();
+
+            result.mcState->info.maxAtoms = static_cast<int>(initialAtoms);
+            result.mcState->info.maxResidues = static_cast<int>(initialResidues);
+            result.mcState->atoms.resize(initialAtoms);
+            result.mcState->residues.resize(initialResidues);
+
+            // Use MCInitializer to populate from real molecular data
+            system::montecarlo::MCInitializer initializer;
+            initializer.initializeFromMolecular(*result.mcState, result.molecular);
+
+            // Set beta/cutoff from INP (units already normalized by InpParserGCMC).
+            const auto& mcInfo = result.parameters->get_mc_info();
+            result.mcState->info.beta = mcInfo.beta;
+            const auto& spaceInfo = result.parameters->get_space_info();
+            result.mcState->info.cutoff = spaceInfo.cutoff;
+
+            // Prefer INP box_size when provided, even if the input PDB has CRYST1.
+            // This matches common workflows (including gcmc_gpu) where INP defines the active box.
+            const bool inpBoxProvided = (spaceInfo.box_size[0] > 0.0f ||
+                                         spaceInfo.box_size[1] > 0.0f ||
+                                         spaceInfo.box_size[2] > 0.0f);
+            if (inpBoxProvided) {
+                result.mcState->setBoxDimensions(
+                    spaceInfo.box_size[0],
+                    spaceInfo.box_size[1],
+                    spaceInfo.box_size[2]
+                );
+                log("Overriding box dimensions from INP: " +
+                    std::to_string(spaceInfo.box_size[0]) + " x " +
+                    std::to_string(spaceInfo.box_size[1]) + " x " +
+                    std::to_string(spaceInfo.box_size[2]) + " nm");
+            } else {
+                // Ensure periodicBox is initialized (some movement/energy code indexes it directly).
+                result.mcState->setBoxDimensions(
+                    result.mcState->info.box[0],
+                    result.mcState->info.box[1],
+                    result.mcState->info.box[2]
+                );
+            }
+
+            // Mark pre-existing residues as fixed (protein) unless they match INP fragment names.
+            // This supports cavity-bias "exclude protein" and prevents protein from being moved/deleted.
+            if (result.parameters) {
+                std::unordered_set<std::string> fragmentNamesLower;
+                for (const auto& n : result.parameters->get_file_info().fragment_names) {
+                    std::string key = n;
+                    std::transform(key.begin(), key.end(), key.begin(),
+                                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                    fragmentNamesLower.insert(key);
+                }
+
+                size_t fixedCount = 0;
+                size_t movableCount = 0;
+                const int nRes = std::min(result.mcState->activeResidueCount,
+                                          static_cast<int>(result.mcState->residues.size()));
+                for (int i = 0; i < nRes; ++i) {
+                    auto& res = result.mcState->residues[i];
+                    std::string resName = res.resname;
+                    if (resName.empty()) {
+                        resName = result.mcState->residueTypes.getTypeName(res.type);
+                    }
+                    std::transform(resName.begin(), resName.end(), resName.begin(),
+                                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                    const bool isFragment = fragmentNamesLower.find(resName) != fragmentNamesLower.end();
+                    res.fixed = !isFragment;
+                    if (res.fixed) {
+                        ++fixedCount;
+                    } else {
+                        ++movableCount;
+                    }
+                }
+                log("Residue fixed flags: fixed=" + std::to_string(fixedCount) +
+                    " movable=" + std::to_string(movableCount));
+            }
+
+            if (result.forceField) {
+                initializer.initializeForceField(*result.mcState, *result.forceField);
+            }
+
+            log("MC state initialized with real molecular data");
+        } catch (const std::exception& e) {
+            log(std::string("Warning: Failed to initialize MC state from molecular data: ") +
+                e.what() + " (falling back to INP-only initialization)");
+            useMolecularInit = false;
+        }
+    }
+
+    if (!useMolecularInit) {
         // Fall back to empty state with box dimensions from INP
         const auto& spaceInfo = result.parameters->get_space_info();
-        result.mcState->info.box[0] = spaceInfo.box_size[0];
-        result.mcState->info.box[1] = spaceInfo.box_size[1];
-        result.mcState->info.box[2] = spaceInfo.box_size[2];
+        result.mcState->setBoxDimensions(spaceInfo.box_size[0], spaceInfo.box_size[1], spaceInfo.box_size[2]);
         
         // Set temperature
         const auto& mcInfo = result.parameters->get_mc_info();
@@ -256,7 +371,8 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
 
 std::map<std::string, platform::cpu::movement::FragmentTemplate> SimulationInputBuilder::loadFragmentTemplates(
     const std::vector<std::string>& fragItpFiles,
-    const std::shared_ptr<model::param::Param>& parameters) {
+    const std::shared_ptr<model::param::Param>& parameters,
+    const std::filesystem::path& baseDir) {
     
     std::map<std::string, platform::cpu::movement::FragmentTemplate> templates;
     
@@ -268,6 +384,12 @@ std::map<std::string, platform::cpu::movement::FragmentTemplate> SimulationInput
     const auto& fragNames = parameters->get_file_info().fragment_names;
     const auto& fragConcs = parameters->get_fragment_info().conc_list;
     const auto& fragMuexs = parameters->get_fragment_info().muex_list;
+    const auto& monomerDir = parameters->get_file_info().monomer_dir;
+
+    std::filesystem::path monomerDirResolved;
+    if (!monomerDir.empty()) {
+        monomerDirResolved = std::filesystem::path(resolveFilePath(monomerDir, baseDir));
+    }
     
     for (size_t i = 0; i < fragItpFiles.size(); ++i) {
         const auto& itpFile = fragItpFiles[i];
@@ -281,13 +403,45 @@ std::map<std::string, platform::cpu::movement::FragmentTemplate> SimulationInput
         }
         file.close();
         
-        // Extract fragment name from filename
+        // Resolve fragment name: prefer INP fragname list (aligned by index with fragitp),
+        // fallback to ITP filename stem if missing.
         std::filesystem::path itpPath(itpFile);
-        std::string fragName = itpPath.stem().string();
+        const std::string itpStem = itpPath.stem().string();
+        std::string fragName = (i < fragNames.size() && !fragNames[i].empty()) ? fragNames[i] : itpStem;
+
+        // Try to find fragment coordinate PDB from monomerdir/<frag>.pdb (gcmc_gpu behavior).
+        // Many inputs use fragname that differs from the ITP filename stem (e.g., WAT vs sol.itp),
+        // so we try multiple name candidates deterministically.
+        auto lower = [](std::string s) {
+            std::transform(s.begin(), s.end(), s.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            return s;
+        };
+        const std::vector<std::string> pdbNameCandidates = {
+            fragName,
+            lower(fragName),
+            itpStem,
+            lower(itpStem),
+        };
+        std::filesystem::path coordPdb;
+        for (const auto& n : pdbNameCandidates) {
+            if (n.empty()) continue;
+            std::filesystem::path candidate;
+            if (!monomerDirResolved.empty()) {
+                candidate = monomerDirResolved / (n + ".pdb");
+            } else {
+                candidate = itpPath.parent_path() / (n + ".pdb");
+            }
+            if (std::filesystem::exists(candidate)) {
+                coordPdb = candidate;
+                break;
+            }
+        }
+        const std::string coordPdbPath = !coordPdb.empty() ? coordPdb.string() : "";
         
         // Use FragmentLibrary to load the ITP file
         io::topology::FragmentLibrary fragLib;
-        if (!fragLib.loadFromITP(itpFile, fragName, templates.size())) {
+        if (!fragLib.loadFromITP(itpFile, fragName, templates.size(), coordPdbPath)) {
             throw std::runtime_error("Failed to parse fragment template: " + itpFile);
         }
         
@@ -302,23 +456,20 @@ std::map<std::string, platform::cpu::movement::FragmentTemplate> SimulationInput
         tmpl.name = fragmentData->name;
         tmpl.typeId = fragmentData->typeId;
         tmpl.atoms = fragmentData->atoms;
+        tmpl.atomTypeNames = fragmentData->atomTypeNames;
         tmpl.molecularWeight = fragmentData->molecularWeight;
         tmpl.radius = fragmentData->radius;
         
-        // Find matching fragment in parameters to get concentration and chemical potential
-        auto nameIt = std::find(fragNames.begin(), fragNames.end(), fragName);
-        if (nameIt != fragNames.end()) {
-            size_t idx = std::distance(fragNames.begin(), nameIt);
-            if (idx < fragConcs.size()) {
-                tmpl.concentration = fragConcs[idx];
-            }
-            if (idx < fragMuexs.size()) {
-                tmpl.chemicalPotential = fragMuexs[idx];
-                // Calculate activity: z = exp(β*μ)
-                double beta = parameters->get_mc_info().beta;
-                tmpl.activity = std::exp(beta * tmpl.chemicalPotential);
-            }
+        // Assign concentration and chemical potential by index (fragitp order).
+        if (i < fragConcs.size()) {
+            tmpl.concentration = fragConcs[i];
         }
+        if (i < fragMuexs.size()) {
+            tmpl.chemicalPotential = fragMuexs[i];
+        }
+        // Calculate activity: z = exp(β*μ) (acceptance uses its own activity model; this is for completeness)
+        const double beta = parameters->get_mc_info().beta;
+        tmpl.activity = std::exp(beta * tmpl.chemicalPotential);
         
         templates[tmpl.name] = tmpl;
         log("Loaded fragment " + tmpl.name + " with " + 
@@ -337,7 +488,6 @@ std::map<std::string, platform::cpu::movement::FragmentTemplate> SimulationInput
 std::shared_ptr<param::Param> SimulationInputBuilder::parseINP(const std::string& filename) {
     auto params = std::make_shared<param::Param>();
     parameters::InpParserGCMC::parse_to_param(filename, *params);
-    parameters::InpParserGCMC::enhance_param(*params);
     return params;
 }
 

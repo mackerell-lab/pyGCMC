@@ -94,6 +94,10 @@ FragmentReservoir::FragmentReservoir(const Config& config, std::shared_ptr<Activ
 
 FragmentReservoir::~FragmentReservoir() = default;
 
+void FragmentReservoir::reserveInstanceIds(int startIndex) {
+    nextInstanceId_ = std::max(nextInstanceId_, std::max(0, startIndex));
+}
+
 // Template management
 int FragmentReservoir::addTemplate(const FragmentTemplate& tmpl) {
     int id = nextTemplateId_++;

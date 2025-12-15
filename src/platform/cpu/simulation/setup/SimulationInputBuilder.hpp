@@ -75,7 +75,8 @@ public:
      */
     std::map<std::string, platform::cpu::movement::FragmentTemplate> loadFragmentTemplates(
         const std::vector<std::string>& fragItpFiles,
-        const std::shared_ptr<model::param::Param>& parameters);
+        const std::shared_ptr<model::param::Param>& parameters,
+        const std::filesystem::path& baseDir);
 
 private:
     Config config_;
