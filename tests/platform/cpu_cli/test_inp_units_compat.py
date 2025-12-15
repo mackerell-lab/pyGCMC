@@ -7,6 +7,7 @@ These are end-to-end (CLI) tests that exercise InpParserGCMC via gcmc_cpu.
 from __future__ import annotations
 
 import json
+import math
 import subprocess
 from pathlib import Path
 
@@ -24,6 +25,17 @@ def _read_cryst1_box_angstrom(pdb_path: Path) -> tuple[float, float, float]:
             assert len(parts) >= 4, f"Unexpected CRYST1 format: {line}"
             return float(parts[1]), float(parts[2]), float(parts[3])
     raise AssertionError(f"CRYST1 not found in {pdb_path}")
+
+def _count_residues_by_resname(pdb_path: Path, resname: str) -> int:
+    want = resname.strip().upper()
+    resids: set[int] = set()
+    for line in pdb_path.read_text().splitlines():
+        if not line.startswith(("ATOM", "HETATM")):
+            continue
+        if line[17:20].strip().upper() != want:
+            continue
+        resids.add(int(line[22:26]))
+    return len(resids)
 
 def _run_gcmc_cpu(
     gcmc_cpu: str,
@@ -153,6 +165,172 @@ attempt_prob_rot:0.0
     ]
     assert mu_values, f"No SOL moves found in acceptance log: {records[:3]}"
     assert mu_values[0] == pytest.approx(-4.184, rel=1e-3, abs=1e-3)
+
+def test_fragmuex_scales_activity_and_acceptance_in_ideal_gas_limit(
+    gcmc_cpu, test_data_dir, temp_dir
+):
+    """
+    Behavior-driven check that fragmuex influences acceptance probability via activity.
+
+    Use an empty 1 nm^3 box with a single-atom fragment so deltaU ~= 0 and:
+        pAcc = min(1, z * V / (nBefore+1))
+    For small z (z<1), this reduces to pAcc == z, and changing μ should scale z by exp(beta*μ).
+    """
+    itp = test_data_dir / "charmm36.ff" / "mol" / "na.itp"
+    assert itp.exists()
+
+    conc_m = 0.1
+    temperature_k = 300.0
+
+    def run_once(muex_kcal_mol: float) -> dict:
+        tag = "mu0" if muex_kcal_mol == 0.0 else "mu_nonzero"
+        work = Path(temp_dir) / "muex_pacc_effect" / tag
+        work.mkdir(parents=True, exist_ok=True)
+
+        out_prefix = work / "out" / "gcmc"
+        out_prefix.parent.mkdir(parents=True, exist_ok=True)
+        accept_log = work / "out" / "acceptance.jsonl"
+
+        inp = work / "test.inp"
+        _write_inp(
+            inp,
+            f"""
+inp_units:gcmc_gpu
+random_seed:123
+fragitp:{itp}
+fragname:NA
+fragconc:{conc_m}
+fragmuex:{muex_kcal_mol}
+
+box_size:10.0 10.0 10.0
+cutoff:4.0
+temperature:{temperature_k}
+moves_per_step:1
+mcsteps:1
+nprint:1
+mc_move_prob:1 0 0 0
+""",
+        )
+
+        result = _run_gcmc_cpu(
+            gcmc_cpu,
+            workdir=work,
+            inp=inp,
+            out_prefix=out_prefix,
+            extra_args=["--dump-accept", str(accept_log)],
+            timeout=30,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+        rec = _first_accept_record(accept_log, move="insertion", species="NA")
+        return rec
+
+    rec_mu0 = run_once(0.0)
+    rec_mu1 = run_once(-1.0)
+
+    # Ideal-gas-ish: in an empty box, insertion should have no interaction energy.
+    assert float(rec_mu0["deltaU"]) == pytest.approx(0.0, abs=1e-12)
+    assert float(rec_mu1["deltaU"]) == pytest.approx(0.0, abs=1e-12)
+    assert int(rec_mu0["nBefore"]) == 0
+    assert int(rec_mu1["nBefore"]) == 0
+    assert float(rec_mu0["vBox"]) == pytest.approx(1.0, abs=1e-12)
+    assert float(rec_mu1["vBox"]) == pytest.approx(1.0, abs=1e-12)
+    assert float(rec_mu0["cavityFraction"]) == pytest.approx(1.0, abs=1e-12)
+    assert float(rec_mu1["cavityFraction"]) == pytest.approx(1.0, abs=1e-12)
+    assert float(rec_mu0["rosenbluthWeight"]) == pytest.approx(1.0, abs=1e-12)
+    assert float(rec_mu1["rosenbluthWeight"]) == pytest.approx(1.0, abs=1e-12)
+    assert float(rec_mu0["proposalRatio"]) == pytest.approx(1.0, abs=1e-12)
+    assert float(rec_mu1["proposalRatio"]) == pytest.approx(1.0, abs=1e-12)
+
+    # Activity should follow z = conc * (M->nm^-3) * exp(beta*mu).
+    # (The implementation uses a rounded conversion constant, so keep tolerances loose for absolute z.)
+    beta = 1.0 / (8.314e-3 * temperature_k)  # mol/kJ
+    expected_z0 = conc_m * 0.6022
+    assert float(rec_mu0["mu"]) == pytest.approx(0.0, abs=1e-12)
+    assert float(rec_mu0["z"]) == pytest.approx(expected_z0, rel=1e-4, abs=1e-12)
+
+    expected_mu1_kj = -4.184  # -1.0 kcal/mol -> kJ/mol
+    assert float(rec_mu1["mu"]) == pytest.approx(expected_mu1_kj, rel=1e-6, abs=1e-6)
+    expected_z1 = float(rec_mu0["z"]) * math.exp(beta * expected_mu1_kj)
+    assert float(rec_mu1["z"]) == pytest.approx(expected_z1, rel=1e-6, abs=1e-12)
+
+    # In this limit, pAcc should reduce to z*V/(n+1). With V=1 and n=0, pAcc==z.
+    assert float(rec_mu0["pAcc"]) == pytest.approx(float(rec_mu0["z"]), rel=1e-12, abs=1e-12)
+    assert float(rec_mu1["pAcc"]) == pytest.approx(float(rec_mu1["z"]), rel=1e-12, abs=1e-12)
+
+    # And changing μ should scale pAcc by exp(beta*Δμ) (and here Δμ == μ1 since μ0==0).
+    pacc_ratio = float(rec_mu1["pAcc"]) / float(rec_mu0["pAcc"])
+    assert float(rec_mu0["pAcc"]) < 0.2
+    assert float(rec_mu1["pAcc"]) < float(rec_mu0["pAcc"])
+    assert pacc_ratio == pytest.approx(math.exp(beta * float(rec_mu1["mu"])), rel=1e-6, abs=1e-12)
+
+def test_dump_accept_log_consistent_with_final_pdb_counts(gcmc_cpu, test_data_dir, temp_dir):
+    """
+    No-cheating consistency check: the acceptance log 'accepted' flags must match the final system state.
+
+    Run with a single-atom fragment (NA) and only insertion/deletion moves enabled.
+
+    Verify: final molecule count (from *_final.pdb) == (#accepted insertions - #accepted deletions).
+    """
+    work = Path(temp_dir) / "accept_log_consistency"
+    work.mkdir(parents=True, exist_ok=True)
+
+    itp = test_data_dir / "charmm36.ff" / "mol" / "na.itp"
+    assert itp.exists()
+
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    accept_log = work / "out" / "acceptance.jsonl"
+
+    inp = work / "test.inp"
+    _write_inp(
+        inp,
+        f"""
+inp_units:gcmc_gpu
+random_seed:999
+fragitp:{itp}
+fragname:NA
+fragconc:55.0
+fragmuex:0.0
+
+box_size:10.0 10.0 10.0
+cutoff:4.0
+temperature:300.0
+moves_per_step:1
+mcsteps:20
+nprint:1000
+mc_move_prob:1 1 0 0
+""",
+    )
+
+    result = _run_gcmc_cpu(
+        gcmc_cpu,
+        workdir=work,
+        inp=inp,
+        out_prefix=out_prefix,
+        extra_args=["--dump-accept", str(accept_log)],
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    records = [json.loads(line) for line in accept_log.read_text().splitlines() if line.strip()]
+    na_records = [r for r in records if str(r.get("species", "")).strip().upper() == "NA"]
+    assert na_records
+
+    assert any(r.get("move") == "insertion" for r in na_records)
+    assert any(r.get("move") == "deletion" for r in na_records)
+    assert any(bool(r.get("accepted")) for r in na_records if r.get("move") == "insertion")
+
+    accepted_insert = sum(1 for r in na_records if r.get("move") == "insertion" and bool(r.get("accepted")))
+    accepted_delete = sum(1 for r in na_records if r.get("move") == "deletion" and bool(r.get("accepted")))
+    expected_final = accepted_insert - accepted_delete
+    assert expected_final >= 0
+
+    out_pdb = Path(f"{out_prefix}_final.pdb")
+    assert out_pdb.exists()
+    final_count = _count_residues_by_resname(out_pdb, "NA")
+
+    assert final_count == expected_final
 
 
 def test_inp_random_seed_used_when_cli_missing(gcmc_cpu, test_data_dir, temp_dir):
@@ -582,8 +760,25 @@ mc_move_prob:1 0 0 0
     assert active.exists()
     assert muex.exists()
 
-    active_first = active.read_text().splitlines()[0].strip()
-    assert int(active_first) >= 0
+    active_lines = [line.strip() for line in active.read_text().splitlines() if line.strip()]
+    muex_lines = [line.strip() for line in muex.read_text().splitlines() if line.strip()]
+    assert active_lines, "active_<frag>.dat unexpectedly empty"
+    assert muex_lines, "muex_<frag>.dat unexpectedly empty"
 
-    muex_first = float(muex.read_text().splitlines()[0].strip())
-    assert muex_first == pytest.approx(-1.0, abs=0.02)
+    active_last = int(active_lines[-1])
+    assert active_last >= 0
+
+    out_pdb = Path(f"{out_prefix}_final.pdb")
+    assert out_pdb.exists()
+    sol_resids = set()
+    for line in out_pdb.read_text().splitlines():
+        if not line.startswith(("ATOM", "HETATM")):
+            continue
+        resname = line[17:20].strip().upper()
+        if resname != "SOL":
+            continue
+        sol_resids.add(int(line[22:26]))
+    assert active_last == len(sol_resids)
+
+    muex_last = float(muex_lines[-1])
+    assert muex_last == pytest.approx(-1.0, abs=0.02)

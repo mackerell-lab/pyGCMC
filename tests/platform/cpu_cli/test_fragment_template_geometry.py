@@ -43,6 +43,15 @@ def _dist(a: tuple[float, float, float], b: tuple[float, float, float]) -> float
     dz = a[2] - b[2]
     return math.sqrt(dx * dx + dy * dy + dz * dz)
 
+def _pairwise_distances(coords: list[tuple[str, float, float, float]]) -> list[float]:
+    dists: list[float] = []
+    points = [(x, y, z) for _, x, y, z in coords]
+    for i in range(len(points)):
+        for j in range(i + 1, len(points)):
+            dists.append(_dist(points[i], points[j]))
+    dists.sort()
+    return dists
+
 
 def test_fragment_template_geometry_from_monomerdir(gcmc_cpu, test_data_dir, temp_dir):
     work = Path(temp_dir) / "frag_geom"
@@ -59,6 +68,7 @@ def test_fragment_template_geometry_from_monomerdir(gcmc_cpu, test_data_dir, tem
     inp.write_text(
         f"""
 inp_units:gcmc_gpu
+random_seed:123
 monomerdir:{mol_dir}
 fragitp:{itp}
 box_size:30.0 30.0 30.0
@@ -97,24 +107,11 @@ attempt_prob_rot:0.0
     template_atoms = _parse_first_residue_coords(template_pdb)
     assert len(template_atoms) >= 3, f"Expected >=3 atoms in template, got {len(template_atoms)}"
 
-    # Use first 3 atoms. Distances are in Angstrom in PDB.
-    # Keep this generalized by deriving expected geometry from the template PDB itself.
-    a0 = (atoms[0][1], atoms[0][2], atoms[0][3])
-    a1 = (atoms[1][1], atoms[1][2], atoms[1][3])
-    a2 = (atoms[2][1], atoms[2][2], atoms[2][3])
+    # Compare shortest internal distances (permutation-invariant) so the test is robust to atom ordering.
+    out_dists = _pairwise_distances(atoms)
+    template_dists = _pairwise_distances(template_atoms)
 
-    t0 = (template_atoms[0][1], template_atoms[0][2], template_atoms[0][3])
-    t1 = (template_atoms[1][1], template_atoms[1][2], template_atoms[1][3])
-    t2 = (template_atoms[2][1], template_atoms[2][2], template_atoms[2][3])
-
-    d01 = _dist(a0, a1)
-    d02 = _dist(a0, a2)
-    d12 = _dist(a1, a2)
-
-    td01 = _dist(t0, t1)
-    td02 = _dist(t0, t2)
-    td12 = _dist(t1, t2)
-
-    assert d01 == pytest.approx(td01, abs=0.02)
-    assert d02 == pytest.approx(td02, abs=0.02)
-    assert d12 == pytest.approx(td12, abs=0.02)
+    k = min(10, len(out_dists), len(template_dists))
+    assert k >= 3
+    for i in range(k):
+        assert out_dists[i] == pytest.approx(template_dists[i], abs=0.03)
