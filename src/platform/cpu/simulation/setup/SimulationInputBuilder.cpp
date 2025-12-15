@@ -2,11 +2,14 @@
 #include "../../../../io/parameters/InpParserGCMC.hpp"
 #include "../../../../io/structure/PdbParserMain.hpp"
 #include "../../../../io/topology/topParserMain.hpp"
+#include "../../../../io/forcefield/ItpNonbondedParser.hpp"
 #include "../../../../io/forcefield/PrmParserMain.hpp"
 #include "../../../../io/topology/FragmentLibrary.hpp"
 #include "../../../../system/molecular/MolecularCombiner.hpp"
 #include "../../../../system/montecarlo/MCInitializer.hpp"
 #include "../../../../system/log/LogMain.hpp"
+#include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <stdexcept>
 #include <filesystem>
@@ -41,6 +44,8 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
     }
     
     const auto& fileInfo = result.parameters->get_file_info();
+    io::ItpNonbondedParser::Result itpNonbonded;
+    bool itpNonbondedLoaded = false;
     
     // Step 2: Load PDB structure if available
     std::shared_ptr<Structure> structure;
@@ -77,17 +82,49 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
     }
     
     // Step 4: Load PAR force field parameters if available
+    // NOTE: gcmc_gpu uses GROMACS .itp for nonbonded; existing PRMParser targets CHARMM .prm/.str.
     if (config_.loadParameters && !fileInfo.par_files.empty()) {
         log("Loading force field parameters");
         try {
-            std::vector<std::string> resolvedParFiles;
+            std::vector<std::string> resolvedPrmFiles;
+            std::vector<std::string> resolvedItpFiles;
+
             for (const auto& parFile : fileInfo.par_files) {
-                resolvedParFiles.push_back(resolveFilePath(parFile, baseDir));
+                std::string resolved = resolveFilePath(parFile, baseDir);
+                std::filesystem::path p(resolved);
+                std::string ext = p.extension().string();
+                std::transform(ext.begin(), ext.end(), ext.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+                if (ext == ".itp") {
+                    resolvedItpFiles.push_back(resolved);
+                } else {
+                    resolvedPrmFiles.push_back(resolved);
+                }
             }
-            result.forceField = loadParameters(resolvedParFiles);
-            if (result.forceField) {
-                result.parametersLoaded = true;
-                log("Loaded force field parameters");
+
+            if (!resolvedPrmFiles.empty()) {
+                result.forceField = loadParameters(resolvedPrmFiles);
+                if (result.forceField) {
+                    const bool anyLJ = result.forceField->get_num_lj_params() > 0;
+                    const bool anyNBFix = result.forceField->get_num_nbfix() > 0;
+                    result.parametersLoaded = anyLJ || anyNBFix;
+                    if (result.parametersLoaded) {
+                        log("Loaded force field parameters from PRM/STR files");
+                    } else {
+                        log("Warning: No usable LJ/NBFIX parameters found in PRM/STR files");
+                    }
+                }
+            }
+
+            if (!resolvedItpFiles.empty()) {
+                itpNonbonded = io::ItpNonbondedParser::parse_files(resolvedItpFiles);
+                itpNonbondedLoaded = !itpNonbonded.atomTypes.empty() || !itpNonbonded.pairOverrides.empty();
+                if (itpNonbondedLoaded) {
+                    log("Loaded nonbonded parameters from GROMACS ITP files");
+                } else {
+                    log("Warning: No atomtypes/pair overrides found in GROMACS ITP files");
+                }
             }
         } catch (const std::exception& e) {
             log("Warning: Failed to load parameters: " + std::string(e.what()));
@@ -160,6 +197,58 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
         }
 
         log("MC state initialized with INP parameters only");
+    }
+
+    // Step 6b: Apply GROMACS ITP nonbonded parameters to MC state if available.
+    // Only apply when the MCState force field is still empty to avoid overriding a fully
+    // initialized CHARMM (PRM/STR) force field path.
+    if (itpNonbondedLoaded && !itpNonbonded.atomTypes.empty() && result.mcState &&
+        (result.mcState->forcefield.numTotalTypes == 0 || result.mcState->forcefield.ljSigma.empty())) {
+        // Deterministic type indexing (std::map iteration order).
+        for (const auto& [typeName, lj] : itpNonbonded.atomTypes) {
+            (void)lj;
+            result.mcState->getOrAddAtomType(typeName);
+        }
+
+        const int n = static_cast<int>(result.mcState->atomTypes.atomTypes.size());
+        result.mcState->forcefield.numTotalTypes = n;
+        result.mcState->forcefield.numMovementTypes = n;
+        result.mcState->forcefield.mixingRule = montecarlo::MCForceField::MixingRule::LorentzBerthelot;
+        result.mcState->forcefield.ljSigmaType.assign(static_cast<size_t>(n), 0.0f);
+        result.mcState->forcefield.ljEpsType.assign(static_cast<size_t>(n), 0.0f);
+        result.mcState->forcefield.nbfix.clear();
+
+        for (const auto& [typeName, lj] : itpNonbonded.atomTypes) {
+            auto it = result.mcState->atomTypes.atomTypeIndices.find(typeName);
+            if (it == result.mcState->atomTypes.atomTypeIndices.end()) {
+                continue;
+            }
+            const int idx = it->second;
+            if (idx >= 0 && idx < n) {
+                result.mcState->forcefield.ljSigmaType[static_cast<size_t>(idx)] =
+                    static_cast<float>(lj.sigma_nm);
+                result.mcState->forcefield.ljEpsType[static_cast<size_t>(idx)] =
+                    static_cast<float>(lj.epsilon_kj);
+            }
+        }
+
+        for (const auto& [pair, lj] : itpNonbonded.pairOverrides) {
+            auto it1 = result.mcState->atomTypes.atomTypeIndices.find(pair.first);
+            auto it2 = result.mcState->atomTypes.atomTypeIndices.find(pair.second);
+            if (it1 == result.mcState->atomTypes.atomTypeIndices.end() ||
+                it2 == result.mcState->atomTypes.atomTypeIndices.end()) {
+                continue;
+            }
+            result.mcState->forcefield.addNBFix(
+                it1->second,
+                it2->second,
+                static_cast<float>(lj.sigma_nm),
+                static_cast<float>(lj.epsilon_kj)
+            );
+        }
+
+        result.mcState->forcefield.rebuildLJMatrix();
+        log("Applied GROMACS ITP nonbonded parameters to MCState (types=" + std::to_string(n) + ")");
     }
     
     return result;
