@@ -212,6 +212,7 @@ public:
     std::vector<AcceptanceRecord> getMoves(size_t n) const;
     void dumpLJMatrix() const;
     void dumpAcceptanceLog(const std::string& filename) const;
+    void dumpParamsJson(const std::string& filename) const;
 
 private:
     // Statistics output

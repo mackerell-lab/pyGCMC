@@ -92,10 +92,10 @@ def compute_pme_with_state_isolation(n_residues, residue_config):
 
     # Run in subprocess
     try:
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
-        build_path = os.path.join(project_root, 'build')
+        # Ensure the subprocess can import the same built/installed pygcmc module regardless of build layout.
+        module_dir = os.path.dirname(os.path.abspath(pygcmc.__file__))
         existing_path = os.environ.get('PYTHONPATH', '')
-        combined_pythonpath = build_path if not existing_path else os.pathsep.join([build_path, existing_path])
+        combined_pythonpath = module_dir if not existing_path else os.pathsep.join([module_dir, existing_path])
         with tempfile.TemporaryDirectory(prefix="pme_residue_") as tmpdir:
             result = subprocess.run(
                 [sys.executable, '-c', script],

@@ -158,7 +158,7 @@ target_link_libraries(pygcmc
 # Set binding properties
 set_property(TARGET pygcmc PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_target_properties(pygcmc PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/modules/bindings
     VERSION ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
     LINKER_LANGUAGE CXX

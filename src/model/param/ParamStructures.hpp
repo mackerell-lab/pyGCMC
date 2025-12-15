@@ -64,7 +64,7 @@ struct SpaceInfo {
  */
 struct MCParams {
     int mc_steps = 1;
-    int moves_per_step = 10;  // Number of GCMC moves per MC step
+    int moves_per_step = 1;  // Number of GCMC moves per MC step
     int current_step = 0;
     int print_freq = 1;
     int save_freq = 10000;  // nsave: trajectory save frequency

@@ -21,6 +21,7 @@ struct Options {
     std::string prefix = "gcmc";
     std::string resume_checkpoint;  // Checkpoint file to resume from
     std::string dump_accept;  // Acceptance log output file
+    std::string dump_params;  // Params JSON output file
     int print_freq = -1; // -1 means: use INP nprint
     int traj_freq = 10000;
     int checkpoint_freq = 0;  // Disabled by default
@@ -42,6 +43,7 @@ void print_usage(const char* prog) {
     std::cout << "  --prefix <str>             Output prefix (default: gcmc)\n";
     std::cout << "  --resume <path>            Resume from checkpoint file\n";
     std::cout << "  --dump-accept <path>       Dump acceptance log (JSONL format)\n";
+    std::cout << "  --dump-params <path>       Dump parsed parameters (JSON)\n";
     std::cout << "  --seed <int>               RNG seed (-1 = auto)\n";
     std::cout << "  --verbose                  Verbose logging\n";
     std::cout << "  --no-stats                 Disable statistics collection\n";
@@ -89,6 +91,10 @@ bool parse_args(int argc, char** argv, Options& opt) {
             const char* v = need("--dump-accept");
             if (!v) return false;
             opt.dump_accept = v;
+        } else if (a == "--dump-params") {
+            const char* v = need("--dump-params");
+            if (!v) return false;
+            opt.dump_params = v;
         } else if (a == "--print-freq") {
             const char* v = need("--print-freq");
             if (!v || !parse_int(v, opt.print_freq)) return false;
@@ -162,6 +168,10 @@ int main(int argc, char** argv) {
     if (!opt.dump_accept.empty()) {
         sim.enableDiagnostics(65536);  // Buffer size for acceptance log
         std::cout << "Diagnostics enabled for acceptance log export" << std::endl;
+    }
+
+    if (!opt.dump_params.empty()) {
+        sim.dumpParamsJson(opt.dump_params);
     }
 
     // Load checkpoint if specified

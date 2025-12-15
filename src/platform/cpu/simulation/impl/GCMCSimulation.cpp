@@ -8,11 +8,13 @@
 #include <iomanip>
 #include <cmath>
 #include <algorithm>
+#include <cctype>
 #include <random>
 #include <map>
 #include <set>
 #include <thread>
 #include <chrono>
+#include <filesystem>
 #include <cstdlib>  // for std::getenv
 
 namespace pygcmc {
@@ -2022,6 +2024,43 @@ void GCMCSimulation::writeStatisticsDAT(int step) {
         << std::setw(10) << rotAcc << "\n";
 
     out.close();
+
+    // gcmc_gpu-style per-fragment outputs (written next to the prefix path, not in repo root)
+    // - active_<frag>.dat: active molecule count per print point
+    // - muex_<frag>.dat: chemical potential in kcal/mol (gcmc_gpu compatibility)
+    try {
+        std::filesystem::path prefixPath(config_.outputPrefix);
+        std::filesystem::path outDir = prefixPath.has_parent_path() ? prefixPath.parent_path() : std::filesystem::path(".");
+
+        auto sanitize = [](std::string s) {
+            for (char& c : s) {
+                const bool ok = (std::isalnum(static_cast<unsigned char>(c)) != 0) || c == '_' || c == '-';
+                if (!ok) c = '_';
+            }
+            return s;
+        };
+
+        for (const auto& frag : fragmentTypes_) {
+            const std::string fragName = sanitize(frag.name);
+            if (fragName.empty()) continue;
+
+            {
+                std::ofstream fa(outDir / ("active_" + fragName + ".dat"), std::ios::app);
+                if (fa) {
+                    fa << frag.currentCount << "\n";
+                }
+            }
+            {
+                std::ofstream fm(outDir / ("muex_" + fragName + ".dat"), std::ios::app);
+                if (fm) {
+                    // Internal μ is kJ/mol; gcmc_gpu writes kcal/mol.
+                    fm << std::fixed << std::setprecision(2) << (frag.chemicalPotential / 4.184) << "\n";
+                }
+            }
+        }
+    } catch (const std::exception&) {
+        // Best effort: do not fail the simulation on auxiliary output errors.
+    }
 }
 
 void GCMCSimulation::writeTrajectory(int step) {
@@ -2673,35 +2712,52 @@ void GCMCSimulation::updateActivitiesForNbar() {
         return;  // Standard GCMC, activities are already set
     }
 
-    // Count waters for nbar modes
-    int waterCount = 0;
-    for (const auto& f : fragmentTypes_) {
-        if (isWaterName(f.name)) waterCount += f.currentCount;
-    }
-
     double volume = acceptance_->getVolume();
     if (volume <= 0) {
         volume = state_->info.box[0] * state_->info.box[1] * state_->info.box[2];
         if (volume <= 0) volume = 1.0;
     }
 
-    for (size_t i = 0; i < fragmentTypes_.size(); ++i) {
-        auto& f = fragmentTypes_[i];
+    // Determine reference water nbar (in molecules) for the chosen mode.
+    double nbarWater = 0.0;
+    if (fragPar.use_const_water_nbar && fragPar.const_water_nbar > 0) {
+        nbarWater = static_cast<double>(fragPar.const_water_nbar);
+    } else if (fragPar.use_number_water_nbar) {
+        // Count waters for number-based mode. If none exist yet, do not override the base activities;
+        // this preserves bootstrapping insertions from an empty state.
+        int waterCount = 0;
+        for (const auto& f : fragmentTypes_) {
+            if (isWaterName(f.name)) waterCount += f.currentCount;
+        }
+        if (waterCount <= 0) {
+            return;
+        }
+        nbarWater = static_cast<double>(waterCount);
+    }
 
-        if (!isWaterName(f.name)) continue;
+    if (nbarWater <= 0.0) {
+        return;
+    }
 
-        double nbar = 0.0;
-        if (fragPar.use_const_water_nbar && fragPar.const_water_nbar > 0) {
-            nbar = fragPar.const_water_nbar;
-        } else if (fragPar.use_number_water_nbar) {
-            nbar = static_cast<double>(waterCount);
+    const double waterDensity = (fragPar.water_density > 0.0f) ? static_cast<double>(fragPar.water_density) : 55.0;
+    const double beta = params_->get_mc_info().beta;
+
+    // Apply nbar scaling to every fragment type using its own fragconc (gcmc_gpu semantics):
+    //   nbar_i = nbarWater / waterDensity * conc_i
+    //   activity_i = (nbar_i / V) * exp(beta * muex_i)
+    for (auto& f : fragmentTypes_) {
+        if (f.concentration <= 0.0) {
+            continue;
         }
 
-        if (nbar > 0) {
-            double a_eff = nbar / std::max(1e-30, volume);
-            acceptance_->setActivity(f.typeId, a_eff);
-            f.activity = a_eff;
+        const double nbar_i = nbarWater / std::max(1e-30, waterDensity) * static_cast<double>(f.concentration);
+        if (nbar_i <= 0.0) {
+            continue;
         }
+
+        const double a_eff = (nbar_i / std::max(1e-30, volume)) * std::exp(beta * static_cast<double>(f.chemicalPotential));
+        acceptance_->setActivity(f.typeId, a_eff);
+        f.activity = a_eff;
     }
 }
 
@@ -2852,6 +2908,120 @@ void GCMCSimulation::dumpAcceptanceLog(const std::string& filename) const {
 
     ofs.close();
     log("Acceptance log written to: ", filename);
+}
+
+namespace {
+
+std::string escapeJsonString(const std::string& s) {
+    std::string out;
+    out.reserve(s.size() + 8);
+    for (char c : s) {
+        switch (c) {
+            case '\\': out += "\\\\"; break;
+            case '"':  out += "\\\""; break;
+            case '\b': out += "\\b"; break;
+            case '\f': out += "\\f"; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            case '\t': out += "\\t"; break;
+            default:
+                if (static_cast<unsigned char>(c) < 0x20) {
+                    // Control characters: emit as \u00XX
+                    const char hex[] = "0123456789abcdef";
+                    out += "\\u00";
+                    out += hex[(c >> 4) & 0xF];
+                    out += hex[c & 0xF];
+                } else {
+                    out += c;
+                }
+        }
+    }
+    return out;
+}
+
+void writeJsonFloatArray(std::ostream& os, const std::array<float, 3>& v) {
+    os << "[" << v[0] << "," << v[1] << "," << v[2] << "]";
+}
+
+void writeJsonFloatVector(std::ostream& os, const std::vector<float>& v) {
+    os << "[";
+    for (size_t i = 0; i < v.size(); ++i) {
+        if (i) os << ",";
+        os << v[i];
+    }
+    os << "]";
+}
+
+} // namespace
+
+void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
+    std::ofstream ofs(filename);
+    if (!ofs) {
+        log("ERROR: Failed to open params JSON file: ", filename);
+        return;
+    }
+
+    // Keep enough precision for unit conversion assertions.
+    ofs << std::setprecision(17);
+
+    if (!params_) {
+        ofs << "{}\n";
+        return;
+    }
+
+    const auto& basic = params_->get_basic_info();
+    const auto& space = params_->get_space_info();
+    const auto& energy = params_->get_energy_info();
+    const auto& bias = params_->get_bias_info();
+    const auto& frag = params_->get_fragment_info();
+    const auto& files = params_->get_file_info();
+
+    ofs << "{";
+
+    ofs << "\"basic\":{"
+        << "\"inp_units\":\"" << escapeJsonString(basic.inp_units) << "\","
+        << "\"random_seed\":" << basic.random_seed
+        << "},";
+
+    ofs << "\"space\":{"
+        << "\"box_size_nm\":";
+    writeJsonFloatArray(ofs, space.box_size);
+    ofs << ",\"cutoff_nm\":" << space.cutoff
+        << ",\"grid_spacing_nm\":" << space.grid_spacing
+        << ",\"target_volume_nm3\":" << space.target_volume
+        << ",\"gcmc_region\":\"" << escapeJsonString(space.gcmc_region) << "\""
+        << "},";
+
+    ofs << "\"energy\":{"
+        << "\"fragment_cutoff_nm\":" << energy.fragment_cutoff
+        << ",\"protein_cutoff_nm\":" << energy.protein_cutoff
+        << ",\"pairlist_cutoff_nm\":" << energy.pairlist_cutoff
+        << "},";
+
+    ofs << "\"bias\":{"
+        << "\"use_cavity_bias\":" << (bias.use_cavity_bias ? "true" : "false")
+        << ",\"use_conf_bias\":" << (bias.use_conf_bias ? "true" : "false")
+        << ",\"probe_radius_nm\":" << bias.sigma
+        << ",\"num_conf_bias_trials\":" << bias.num_conf_bias_trials
+        << "},";
+
+    ofs << "\"fragment\":{"
+        << "\"use_number_water_nbar\":" << (frag.use_number_water_nbar ? "true" : "false")
+        << ",\"use_const_water_nbar\":" << (frag.use_const_water_nbar ? "true" : "false")
+        << ",\"const_water_nbar\":" << frag.const_water_nbar
+        << ",\"water_density_M\":" << frag.water_density
+        << ",\"conc_list_M\":";
+    writeJsonFloatVector(ofs, frag.conc_list);
+    ofs << ",\"muex_list_kj_mol\":";
+    writeJsonFloatVector(ofs, frag.muex_list);
+    ofs << "},";
+
+    ofs << "\"files\":{"
+        << "\"top\":\"" << escapeJsonString(files.topology_file) << "\","
+        << "\"pdb\":\"" << escapeJsonString(files.input_pdb_file) << "\""
+        << "}";
+
+    ofs << "}\n";
 }
 
 } // namespace simulation
