@@ -1,0 +1,44 @@
+# Derived from `pygcmc_dev/tmp/gcmc_cpu_gpu_examples/water_tip3p.inp`
+# Intent: exercise gcmc_gpu-style keys + units (Å, kcal/mol) end-to-end via gcmc_cpu.
+# Note: this template is rendered by pytest by substituting `{DATA_DIR}` with an absolute path.
+
+version: gcmc_2.0
+
+# Force field parameters (GROMACS)
+par:{DATA_DIR}/charmm36.ff/ffnonbonded.itp
+fragitp:{DATA_DIR}/charmm36.ff/tip3p.itp
+atomtypes:{DATA_DIR}/charmm36.ff/atomtypes.atp
+monomerdir:{DATA_DIR}/charmm36.ff/mol
+
+# System topology and structure
+top:{DATA_DIR}/gcmc_examples/empty.top
+pdb:{DATA_DIR}/gcmc_examples/empty.pdb
+protitp:{DATA_DIR}/gcmc_examples/empty.top
+
+# Box parameters (Å)
+box_size: 30.0 30.0 30.0
+gc_center: 15.0 15.0 15.0
+sys_center: 15.0 15.0 15.0
+cutoff: 12.0
+grid_dx: 1.0
+
+# Fragment definitions (fragmuex in kcal/mol for gcmc_gpu)
+fragname: SOL
+fragconc: 55.0
+fragmuex: 50.0
+
+# GCMC parameters
+temperature: 300
+mcsteps: 20
+nprint: 20
+insdel_frac: 1.0
+random_seed: 123
+
+# Output filenames (gcmc_gpu convention)
+op_top: water_tip3p.top
+op_pdb: water_tip3p.pdb
+
+# Options
+use_cavity_bias: no
+use_conf_bias: no
+

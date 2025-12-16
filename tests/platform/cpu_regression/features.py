@@ -564,7 +564,26 @@ fragitp: {}/charmm36.ff/mol/sol.itp
                 # Should contain fragment name, count, concentration, chemical potential
                 assert "WAT" in top_content or "SOL" in top_content
                 assert "55.00" in top_content  # concentration
-                assert "-10.00" in top_content  # chemical potential
+                frag_row = None
+                in_frag = False
+                for line in top_content.splitlines():
+                    if line.strip() == "[ fragments ]":
+                        in_frag = True
+                        continue
+                    if in_frag:
+                        if line.startswith("["):
+                            break
+                        if not line.strip() or line.lstrip().startswith(";"):
+                            continue
+                        cols = line.split()
+                        if not cols:
+                            continue
+                        if cols[0].upper() in {"WAT", "SOL"} and len(cols) >= 5:
+                            frag_row = cols
+                            break
+                assert frag_row is not None, "Missing fragment row in [ fragments ] section"
+                chem_pot_kj = float(frag_row[-1])
+                assert chem_pot_kj == pytest.approx(-10.0 * 4.184, abs=0.02)
 
 
 if __name__ == "__main__":

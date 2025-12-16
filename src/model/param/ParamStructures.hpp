@@ -24,6 +24,9 @@ struct BasicInfo {
     // INP unit system for compatibility with legacy gcmc_gpu style inputs.
     // Supported values (case-insensitive): "nm" (default), "auto", "gcmc_gpu"/"a"/"angstrom".
     std::string inp_units = "nm";
+    // Whether the user explicitly specified inp_units/units in the INP.
+    // This is used to avoid overriding user intent when applying legacy version heuristics.
+    bool inp_units_explicit = false;
     // Internal flag to make enhance_param() idempotent for unit conversion.
     bool inp_units_converted = false;
     unsigned int random_seed = 0;

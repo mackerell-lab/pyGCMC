@@ -65,7 +65,8 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
             energy_info.protein_cutoff_squared = cutoff * cutoff;
         }
     } else if (key == "fragradius") {
-        frag_info.radius_list = InpParserStructures::parse_float_vector(value);  // Already in nm
+        // Raw value; normalized to internal nm in enhance_param.
+        frag_info.radius_list = InpParserStructures::parse_float_vector(value);
     } else if (key == "fragconf" || key == "fragconfs") {
         // keep both for compatibility
         frag_info.conf_list = InpParserStructures::parse_int_vector(value);
@@ -74,12 +75,14 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
         bias_info.num_conf_bias_trials = static_cast<unsigned int>(std::stoi(value));
     } else if (key == "cavity_grid_dx") {
         // Map to grid_dx if given (fallback)
-        space_info.grid_spacing = std::stof(value);  // Already in nm
+        // Raw value; normalized to internal nm in enhance_param.
+        space_info.grid_spacing = std::stof(value);
     } else if (key == "cavity_grid_dx_frag") {
         frag_info.cavity_grid_dx_list = InpParserStructures::parse_float_vector(value);
     } else if (key == "probe_radius") {
         // Map to sigma (approximate) if present
-        float r = std::stof(value);  // Already in nm
+        // Raw value; normalized to internal nm in enhance_param.
+        float r = std::stof(value);
         bias_info.sigma = r;
         bias_info.sigma_squared = r * r;
     } else if (key == "cavity_probe_radius_frag") {
@@ -283,6 +286,7 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
         std::transform(v.begin(), v.end(), v.begin(),
                        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         basic_info.inp_units = v;
+        basic_info.inp_units_explicit = true;
     }
 }
 
@@ -308,7 +312,30 @@ void InpParserGCMC::enhance_param(model::param::Param& param) {
         enum class UnitMode { NmKj, AngstromKcal };
 
         UnitMode mode = UnitMode::NmKj;
-        const std::string u = toLower(basic_info.inp_units);
+        std::string u = toLower(basic_info.inp_units);
+
+        // If the INP declares a legacy gcmc_gpu-style version (e.g., "gcmc_2.0"),
+        // assume Å + kcal/mol unless the user explicitly overrides via inp_units.
+        // Note: The native pygcmc_dev default version is "gcmc_v2.0" (with a 'v').
+        const auto looksLikeLegacyGcmcGpuVersion = [&]() -> bool {
+            const std::string v = toLower(basic_info.version);
+            if (v == "gcmc_gpu") {
+                return true;
+            }
+            if (v.rfind("gcmc_", 0) == 0) {
+                // Treat "gcmc_2.0", "gcmc_3.1", ... as legacy (but not "gcmc_v2.0").
+                if (v.size() > 5) {
+                    const unsigned char c = static_cast<unsigned char>(v[5]);
+                    return std::isdigit(c) != 0;
+                }
+            }
+            return false;
+        };
+
+        if (!basic_info.inp_units_explicit && looksLikeLegacyGcmcGpuVersion()) {
+            u = "gcmc_gpu";
+            basic_info.inp_units = u;
+        }
 
         const auto isNm = [&]() {
             return (u == "nm" || u == "nm_kj" || u == "nm/kj" || u == "native");

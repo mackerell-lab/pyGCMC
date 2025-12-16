@@ -240,6 +240,18 @@ fragmuex:2.0
                     break
 
         if output_pdb.exists():
+            # Exclude residues that were present in the initial system: region constraints
+            # apply to insertions, but the input PDB may contain atoms outside the region.
+            initial_resids: set[int] = set()
+            with open(pdb, "r") as fh:
+                for line in fh:
+                    if not line.startswith(("ATOM", "HETATM")):
+                        continue
+                    try:
+                        initial_resids.add(int(line[22:26]))
+                    except ValueError:
+                        continue
+
             # Parse PDB and check coordinates
             with open(output_pdb, 'r') as f:
                 lines = f.readlines()
@@ -249,6 +261,12 @@ fragmuex:2.0
                 if line.startswith(("ATOM", "HETATM")):
                     atom_name = line[12:16].strip()
                     if atom_name in ["O", "OW", "OH2"]:
+                        try:
+                            resid = int(line[22:26])
+                        except ValueError:
+                            continue
+                        if resid in initial_resids:
+                            continue
                         # Parse coordinates (in Angstroms in PDB)
                         x = float(line[30:38]) / 10.0  # Convert to nm
                         y = float(line[38:46]) / 10.0  # Convert to nm
@@ -257,6 +275,7 @@ fragmuex:2.0
 
             # Verify all waters are within the sphere (with small tolerance)
             tolerance = 0.5  # nm, to account for water molecule size
+            assert water_oxygens, "No inserted water molecules found in output PDB"
             for i, (x, y, z) in enumerate(water_oxygens):
                 distance = np.sqrt(
                     (x - sphere_center[0])**2 +

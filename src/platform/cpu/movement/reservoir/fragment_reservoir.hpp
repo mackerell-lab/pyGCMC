@@ -41,7 +41,7 @@ struct FragmentTemplate {
     // This enables remapping to MCState atom type indices after force field initialization.
     std::vector<std::string> atomTypeNames;
     double molecularWeight{0.0};           // Molecular weight (g/mol)
-    double radius{0.0};                    // Effective radius (Å)
+    double radius{0.0};                    // Effective radius (nm)
     
     // Thermodynamic properties
     double chemicalPotential{0.0};         // Chemical potential μ (kJ/mol)

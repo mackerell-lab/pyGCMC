@@ -15,6 +15,7 @@
 #include <thread>
 #include <chrono>
 #include <filesystem>
+#include <system_error>
 #include <cstdlib>  // for std::getenv
 
 namespace pygcmc {
@@ -2171,6 +2172,43 @@ void GCMCSimulation::finalize() {
     std::string topFile = config_.outputPrefix + "_final.top";
     saveTopology(topFile);
 
+    // gcmc_gpu compatibility: honor op_pdb/op_top (final snapshot filenames).
+    // These are treated as additional outputs and do not replace the --prefix outputs.
+    if (params_) {
+        const auto& fi = params_->get_file_info();
+        const std::filesystem::path baseDir = std::filesystem::path(config_.inputFile).parent_path();
+
+        auto resolveOutputPath = [&](const std::string& raw) -> std::filesystem::path {
+            std::filesystem::path p(raw);
+            if (p.empty()) {
+                return p;
+            }
+            if (p.is_relative() && !baseDir.empty()) {
+                p = baseDir / p;
+            }
+            return p;
+        };
+
+        auto ensureParentDir = [&](const std::filesystem::path& p) {
+            const auto parent = p.parent_path();
+            if (!parent.empty()) {
+                std::error_code ec;
+                std::filesystem::create_directories(parent, ec);
+            }
+        };
+
+        if (!fi.output_pdb_file.empty()) {
+            const auto outPdb = resolveOutputPath(fi.output_pdb_file);
+            ensureParentDir(outPdb);
+            saveTrajectory(outPdb.string());
+        }
+        if (!fi.output_top_file.empty()) {
+            const auto outTop = resolveOutputPath(fi.output_top_file);
+            ensureParentDir(outTop);
+            saveTopology(outTop.string());
+        }
+    }
+
     // Save final results summary (only when reference files are used)
     bool shouldWriteFinal = false;
     if (params_) {
@@ -2979,7 +3017,10 @@ void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
     ofs << "{";
 
     ofs << "\"basic\":{"
+        << "\"version\":\"" << escapeJsonString(basic.version) << "\","
         << "\"inp_units\":\"" << escapeJsonString(basic.inp_units) << "\","
+        << "\"inp_units_explicit\":" << (basic.inp_units_explicit ? "true" : "false") << ","
+        << "\"inp_units_converted\":" << (basic.inp_units_converted ? "true" : "false") << ","
         << "\"random_seed\":" << basic.random_seed
         << "},";
 

@@ -1,0 +1,42 @@
+# Derived from `pygcmc_dev/tmp/gcmc_cpu_gpu_examples/benzene_box.inp`
+# Intent: validate that "version:gcmc_2.0" inputs are interpreted as gcmc_gpu-style units.
+
+version: gcmc_2.0
+
+# Force field parameters (GROMACS)
+par:{DATA_DIR}/charmm36.ff/ffnonbonded.itp
+fragitp:{DATA_DIR}/charmm36.ff/mol/benz.itp
+atomtypes:{DATA_DIR}/charmm36.ff/atomtypes.atp
+monomerdir:{DATA_DIR}/charmm36.ff/mol
+
+# System topology and structure
+top:{DATA_DIR}/gcmc_examples/empty.top
+pdb:{DATA_DIR}/gcmc_examples/empty.pdb
+protitp:{DATA_DIR}/gcmc_examples/empty.top
+
+# Box parameters (Å) -- intentionally 25Å to exercise "version"-based unit selection.
+box: 25.0 25.0 25.0
+cutoff: 12.0
+grid_dx: 5.0
+
+# Fragment definition (fragmuex in kcal/mol)
+fragname: BENZ
+fragconc: 0.1
+fragmuex: 50.0
+
+# Bias settings (gcmc_gpu keys)
+use_conf_bias: yes
+fragconf: 5
+use_cavity_bias: yes
+fragradius: 1.0
+
+# Simulation control
+mcsteps: 1
+nprint: 1
+insdel_frac: 1.0
+random_seed: 90909
+
+# Output filenames (gcmc_gpu convention)
+op_top: benzene_box.top
+op_pdb: benzene_box.pdb
+

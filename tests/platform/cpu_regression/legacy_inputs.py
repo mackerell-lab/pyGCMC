@@ -309,8 +309,12 @@ fragitp: {}/charmm36.ff/mol/sol.itp
         cryst1_lines = [l for l in pdb_lines if l.startswith("CRYST1")]
         assert len(cryst1_lines) == 1
         cryst1 = cryst1_lines[0]
-        # Check box dimensions (should be 200.000 Angstrom)
-        assert "200.000" in cryst1
+        parts = cryst1.split()
+        assert len(parts) >= 4, f"Unexpected CRYST1 format: {cryst1}"
+        lx, ly, lz = float(parts[1]), float(parts[2]), float(parts[3])
+        assert lx == pytest.approx(20.0, abs=1e-3)
+        assert ly == pytest.approx(20.0, abs=1e-3)
+        assert lz == pytest.approx(20.0, abs=1e-3)
 
         # Check TOP file format
         top_file = Path(temp_dir) / "format_final.top"
@@ -325,8 +329,30 @@ fragitp: {}/charmm36.ff/mol/sol.itp
 
         # Check fragment information
         assert "WAT" in top_content or "SOL" in top_content
-        assert "55.00" in top_content  # concentration
-        assert "-10.00" in top_content  # chemical potential
+        assert "55.00" in top_content  # concentration (printed with 2 decimals)
+
+        # ChemPot in topology is in kJ/mol; for version:gcmc_2.0 inputs, fragmuex is kcal/mol.
+        frag_lines = top_content.splitlines()
+        in_frag = False
+        frag_row = None
+        for line in frag_lines:
+            if line.strip() == "[ fragments ]":
+                in_frag = True
+                continue
+            if in_frag:
+                if line.startswith("["):
+                    break
+                if not line.strip() or line.lstrip().startswith(";"):
+                    continue
+                cols = line.split()
+                if not cols:
+                    continue
+                if cols[0].upper() in {"WAT", "SOL"} and len(cols) >= 5:
+                    frag_row = cols
+                    break
+        assert frag_row is not None, "Missing fragment row in [ fragments ] section"
+        chem_pot_kj = float(frag_row[-1])
+        assert chem_pot_kj == pytest.approx(-10.0 * 4.184, abs=0.02)
 
     def test_error_handling(self, temp_dir):
         """Test error handling for invalid inputs"""

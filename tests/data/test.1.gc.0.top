@@ -1,0 +1,46 @@
+; GCMC Topology File
+; Generated at step: 100
+; Box dimensions: 36.736 40.85 49.379 nm
+
+[ system ]
+; Name
+GCMC System
+
+[ molecules ]
+; Compound        #mols
+ALA              2
+ASN              1
+BENX             1
+GLN              2
+PRO              3
+PRPX             2
+SOL              10
+VAL              1
+benx             1
+form             1
+imia             2
+meoh             3
+prpx             1
+sol              12
+
+; Total atoms: 299
+; Total molecules: 44
+
+[ fragments ]
+; Fragment     Count   Target  Conc(M)  ChemPot(kJ/mol)
+benx             1     150    0.25     -0.79
+prpx             1     200    0.25      1.96
+dmee             0     100    0.25     -1.79
+meoh             3      30    0.25     -5.36
+form             1      30    0.25    -10.92
+imia             2      30    0.25    -14.18
+acey             0      30    0.25    -97.31
+mamy             0      30    0.25    -68.49
+sol             12      30   55.00     -5.60
+
+[ statistics ]
+; Move type      Attempts  Accepted  Rate(%)
+deletion             23         0     0.0
+insertion            23        20    87.0
+rotation             28        28   100.0
+translation          26        26   100.0

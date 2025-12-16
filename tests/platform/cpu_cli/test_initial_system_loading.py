@@ -331,8 +331,8 @@ mcsteps:1
 nprint:1
 
 use_cavity_bias:yes
-cavity_grid_dx:5.0
-probe_radius:1.0
+grid_dx:5.0
+fragradius:1.0
 
 fragname:NA
 fragconc:0.01
@@ -437,8 +437,8 @@ mcsteps:1
 nprint:1
 
 use_cavity_bias:yes
-cavity_grid_dx:5.0
-probe_radius:1.0
+grid_dx:5.0
+fragradius:1.0
 
 use_conf_bias:yes
 fragconf:7

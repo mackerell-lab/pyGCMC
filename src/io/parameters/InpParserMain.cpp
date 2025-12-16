@@ -111,6 +111,10 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
         std::transform(v.begin(), v.end(), v.begin(),
                        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         basic_info.inp_units = v;
+        basic_info.inp_units_explicit = true;
+    } else if (key == "version") {
+        // Keep raw version string; InpParserGCMC may use this as a hint for legacy gcmc_gpu unit mode.
+        basic_info.version = value;
     } else if (key == "random_seed" || key == "seed") {
         // Prefer compatibility with gcmc_gpu's "random_seed" key.
         // Use 0 as "auto" (matches existing behavior for unsigned random_seed).
@@ -123,20 +127,22 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
     }
     // Space parameters
     else if (key == "grid_dx") {
-        space_info.grid_spacing = std::stof(value);  // Already in nm
+        // Raw value; normalized to internal nm in InpParserGCMC::enhance_param.
+        space_info.grid_spacing = std::stof(value);
     } else if (key == "box_size" || key == "box") {
         space_info.box_size = InpParserStructures::parse_float_array(value);
-        // INP files use nanometers for consistency with PDB CRYST1 records
-        // Calculate volume in nm³
+        // Raw value; normalized to internal nm in InpParserGCMC::enhance_param.
+        // Calculate volume in the same raw units; it will be normalized later.
         space_info.volume = space_info.box_size[0] * space_info.box_size[1] * space_info.box_size[2];
     } else if (key == "cutoff") {
-        space_info.cutoff = std::stof(value);  // Already in nanometers
+        // Raw value; normalized to internal nm in InpParserGCMC::enhance_param.
+        space_info.cutoff = std::stof(value);
     } else if (key == "gc_center") {
         space_info.gc_center = InpParserStructures::parse_float_array(value);
-        // Already in nanometers
+        // Raw value; normalized to internal nm in InpParserGCMC::enhance_param.
     } else if (key == "sys_center") {
         space_info.sys_center = InpParserStructures::parse_float_array(value);
-        // Already in nanometers
+        // Raw value; normalized to internal nm in InpParserGCMC::enhance_param.
     }
     // Fragment parameters - support both single and multiple entries
     else if (key == "fragname") {

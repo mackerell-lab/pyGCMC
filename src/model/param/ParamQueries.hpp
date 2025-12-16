@@ -70,8 +70,8 @@ public:
         ss << "  Temperature: " << mc_params.temperature << " K\n";
         ss << "  MC Steps: " << mc_params.mc_steps << "\n";
         ss << "  Box Size: [" << space_info.box_size[0] << ", " 
-           << space_info.box_size[1] << ", " << space_info.box_size[2] << "] Å\n";
-        ss << "  Cutoff: " << space_info.cutoff << " Å\n";
+           << space_info.box_size[1] << ", " << space_info.box_size[2] << "] nm\n";
+        ss << "  Cutoff: " << space_info.cutoff << " nm\n";
         ss << "  Number of fragments: " << file_info.fragment_names.size();
         return ss.str();
     }
