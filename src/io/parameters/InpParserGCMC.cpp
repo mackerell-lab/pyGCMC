@@ -60,6 +60,8 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
             energy_info.protein_cutoff_squared = cutoff * cutoff;
             // Mirror into the global cutoff so that energy calculations stay consistent.
             space_info.cutoff = cutoff;
+            space_info.cutoff_explicit = true;
+            space_info.cutoff_from_energy_cutoff = true;
         }
     } else if (key == "energy_cutoff_frag" || key == "energy_cutoff_fragment") {
         float cutoff = std::stof(value);
@@ -68,12 +70,16 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
             energy_info.fragment_cutoff_squared = cutoff * cutoff;
             // Mirror fragment cutoff into the global cutoff so that energy calculations stay consistent
             space_info.cutoff = cutoff;
+            space_info.cutoff_explicit = true;
+            space_info.cutoff_from_energy_cutoff = true;
         }
     } else if (key == "energy_cutoff_prot" || key == "energy_cutoff_protein") {
         float cutoff = std::stof(value);
         if (cutoff > 0.0f) {
             energy_info.protein_cutoff = cutoff;
             energy_info.protein_cutoff_squared = cutoff * cutoff;
+            space_info.cutoff_explicit = true;
+            space_info.cutoff_from_energy_cutoff = true;
         }
     } else if (key == "fragradius") {
         // Raw value; normalized to internal nm in enhance_param.
@@ -360,28 +366,18 @@ void InpParserGCMC::enhance_param(model::param::Param& param) {
         } else if (isAngstrom()) {
             mode = UnitMode::AngstromKcal;
         } else {
-            // auto heuristic: legacy gcmc_gpu inputs are typically in Å and have "large" boxes/centers (~30-50).
-            // Prefer not converting ambiguous small boxes (<= ~25) unless the user explicitly requests it.
-            const float maxBox = std::max({std::abs(space_info.box_size[0]),
-                                           std::abs(space_info.box_size[1]),
-                                           std::abs(space_info.box_size[2])});
-            const float maxGc = std::max({std::abs(space_info.gc_center[0]),
-                                          std::abs(space_info.gc_center[1]),
-                                          std::abs(space_info.gc_center[2])});
-            const float maxSys = std::max({std::abs(space_info.sys_center[0]),
-                                           std::abs(space_info.sys_center[1]),
-                                           std::abs(space_info.sys_center[2])});
-            const float maxCrystal = std::max({std::abs(space_info.crystal_dim[0]),
-                                               std::abs(space_info.crystal_dim[1]),
-                                               std::abs(space_info.crystal_dim[2])});
-            const float maxLen = std::max({maxBox, maxGc, maxSys, maxCrystal});
-
-            if (maxLen > 25.0f) {
-                mode = UnitMode::AngstromKcal;
-            } else if (maxLen == 0.0f && space_info.cutoff > 5.0f) {
-                // No geometry provided but cutoff resembles Å-style defaults.
+            // auto heuristic:
+            // - Legacy gcmc_opencl decks typically specify energy_cutoff* (Å) instead of cutoff:.
+            // - Otherwise default to nm to avoid surprising unit conversions for native decks/tests.
+            if (space_info.cutoff_from_energy_cutoff) {
                 mode = UnitMode::AngstromKcal;
             }
+        }
+
+        // Materialize the inferred unit mode for downstream consumers (e.g., --dump-params).
+        // If the user explicitly specified inp_units, preserve the literal setting.
+        if (!basic_info.inp_units_explicit && u == "auto") {
+            basic_info.inp_units = (mode == UnitMode::AngstromKcal) ? "gcmc_gpu" : "nm";
         }
 
         const float LEN = (mode == UnitMode::AngstromKcal) ? 0.1f : 1.0f;      // Å -> nm

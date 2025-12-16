@@ -64,6 +64,13 @@ from cpu_cli.gcmc_gpu_inp_examples import (
     test_gcmc_opencl_style_alias_keys_are_honored,
 )
 
+# gcmc_opencl example deck smoke tests (3 functions)
+from cpu_cli.gcmc_opencl_examples import (
+    test_opencl_twowater_example_runs_and_preserves_pdb_cryst1,
+    test_opencl_waterbox_hollow_example_smoke_runs,
+    test_opencl_test_mg_example_smoke_runs_and_converts_cutoff_units,
+)
+
 # Initial system builder regressions and bias-term consistency (4 functions)
 from cpu_cli.initial_system_loading import (
     test_builder_initial_system_loaded_with_itp_par,

@@ -1,0 +1,26 @@
+
+par:charmm36.ff/ffnonbonded.itp
+par:charmm36.ff/silcs.itp
+par:charmm36.ff/nbfix.itp
+fragitp:charmm36.ff/mol/mg.itp
+atomtypes:charmm36.ff/atomtypes.atp
+monomerdir:charmm36.ff/mol
+top:solution.1.top
+pdb:solution.1.pdb
+op_top:out.top
+op_pdb:out.pdb
+grid_dx:   1.000
+box_size:  60.0 60.0 60.0
+gc_center:  42.3 52.5 46.0
+sys_center:  42.3 52.5 46.0
+energy_cutoff_frag:  12.000
+mcsteps:200000
+nprint:10000
+use_vdw_radii_for_grid:yes
+exclude_hydrogens_from_grid:no
+fragname:              mg
+fragconc:           0.500
+fragmuex:           0.000
+fragradius:         2.500
+fragconfs:            100
+

@@ -170,16 +170,26 @@ bool PdbParserStructureRecords::parseSSBondRecord(const std::string& line, model
 
 bool PdbParserStructureRecords::parseCryst1Record(const std::string& line, model::Structure& structure) {
     try {
-        if (line.length() < 54) return false;
-        
-        double a = std::stod(line.substr(6, 9));
-        double b = std::stod(line.substr(15, 9));
-        double c = std::stod(line.substr(24, 9));
-        double alpha = std::stod(line.substr(33, 7));
-        double beta = std::stod(line.substr(40, 7));
-        double gamma = std::stod(line.substr(47, 7));
-        
-        // Set box dimensions - include all 6 values
+        // Many PDBs follow the fixed-column CRYST1 format, but some minimal/legacy writers emit
+        // whitespace-separated values. Prefer robust token parsing to avoid silent mis-parses.
+        std::istringstream iss(line);
+        std::string record;
+        iss >> record;
+        if (record != "CRYST1") return false;
+
+        double a = 0.0, b = 0.0, c = 0.0;
+        if (!(iss >> a >> b >> c)) {
+            return false;
+        }
+
+        // Angles are optional in some minimal files; default to orthorhombic.
+        double alpha = 90.0, beta = 90.0, gamma = 90.0;
+        if (!(iss >> alpha >> beta >> gamma)) {
+            alpha = 90.0;
+            beta = 90.0;
+            gamma = 90.0;
+        }
+
         structure.set_box_dimensions({a, b, c, alpha, beta, gamma});
         return true;
         

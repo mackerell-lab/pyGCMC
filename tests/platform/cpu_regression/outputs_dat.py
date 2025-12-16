@@ -79,6 +79,7 @@ atomtypes:{atp_file}
 top:{top_file}
 pdb:{pdb_file}
 protitp:{top_file}
+inp_units:nm
 
 fragname: water
 fragconc: 55.0
@@ -275,12 +276,18 @@ seed: {seed}
             box_z = float(cryst_match.group(3))
             print(f"✅ Box dimensions: {box_x} × {box_y} × {box_z} Å")
 
-            # Should match input (20.0 nm = 200.0 Å)
-            expected_box = 200.0
+            # In inp_units:nm mode, periodic box comes from INP box_size (written to PDB in Å).
+            inp_content = (tmp_path / "test.inp").read_text()
+            inp_match = re.search(r"^box_size:\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)", inp_content, re.M)
+            assert inp_match, "Missing box_size line in input INP"
+            expected_x = float(inp_match.group(1)) * 10.0
+            expected_y = float(inp_match.group(2)) * 10.0
+            expected_z = float(inp_match.group(3)) * 10.0
+
             tolerance = 1.0
-            assert abs(box_x - expected_box) < tolerance, f"Box X mismatch: {box_x} vs {expected_box}"
-            assert abs(box_y - expected_box) < tolerance, f"Box Y mismatch: {box_y} vs {expected_box}"
-            assert abs(box_z - expected_box) < tolerance, f"Box Z mismatch: {box_z} vs {expected_box}"
+            assert abs(box_x - expected_x) < tolerance, f"Box X mismatch: {box_x} vs {expected_x}"
+            assert abs(box_y - expected_y) < tolerance, f"Box Y mismatch: {box_y} vs {expected_y}"
+            assert abs(box_z - expected_z) < tolerance, f"Box Z mismatch: {box_z} vs {expected_z}"
             print(f"✅ Box dimensions match input")
 
         print(f"\n✅ PDB format verification passed!")

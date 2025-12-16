@@ -1,0 +1,24 @@
+
+par:charmm36.ff/ffnonbonded.itp
+par:charmm36.ff/silcs.itp
+par:charmm36.ff/nbfix.itp
+fragitp:charmm36.ff/mol/sol.itp
+atomtypes:charmm36.ff/atomtypes.atp
+monomerdir:charmm36.ff/mol
+top:twowater.top
+pdb:twowater.pdb
+op_top:out.top
+op_pdb:out.pdb
+grid_dx:   1.000
+box_size:  3 3 3
+gc_center:  0.0 0.0 0.0
+sys_center:  0.0 0.0 0.0
+energy_cutoff:  8.000
+mcsteps:1000
+nprint:100
+use_cavity_bias:no
+use_vdw_radii_for_grid:yes
+exclude_hydrogens_from_grid:no
+fragname:             sol
+fragconc:          55.000
+fragmuex:          -5.000

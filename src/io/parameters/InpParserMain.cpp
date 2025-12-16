@@ -137,6 +137,7 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
     } else if (key == "cutoff") {
         // Raw value; normalized to internal nm in InpParserGCMC::enhance_param.
         space_info.cutoff = std::stof(value);
+        space_info.cutoff_explicit = true;
     } else if (key == "gc_center") {
         space_info.gc_center = InpParserStructures::parse_float_array(value);
         // Raw value; normalized to internal nm in InpParserGCMC::enhance_param.

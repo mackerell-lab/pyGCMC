@@ -219,28 +219,69 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
             const auto& spaceInfo = result.parameters->get_space_info();
             result.mcState->info.cutoff = spaceInfo.cutoff;
 
-            // Prefer INP box_size when provided, even if the input PDB has CRYST1.
-            // This matches common workflows (including gcmc_gpu) where INP defines the active box.
+            // Periodic box semantics (unit-mode aware):
+            // - inp_units == nm: INP box_size is the intended periodic box; CRYST1 in minimal/legacy PDBs may be a stub.
+            // - inp_units == gcmc_gpu: PDB CRYST1 is the periodic box; INP box_size commonly describes the *GCMC region*
+            //   (active box / grid) rather than the periodic unit cell.
             const bool inpBoxProvided = (spaceInfo.box_size[0] > 0.0f ||
                                          spaceInfo.box_size[1] > 0.0f ||
                                          spaceInfo.box_size[2] > 0.0f);
-            if (inpBoxProvided) {
-                result.mcState->setBoxDimensions(
-                    spaceInfo.box_size[0],
-                    spaceInfo.box_size[1],
-                    spaceInfo.box_size[2]
-                );
-                log("Overriding box dimensions from INP: " +
-                    std::to_string(spaceInfo.box_size[0]) + " x " +
-                    std::to_string(spaceInfo.box_size[1]) + " x " +
-                    std::to_string(spaceInfo.box_size[2]) + " nm");
+            const bool pdbBoxProvided = (result.mcState->info.box[0] > 0.0f &&
+                                         result.mcState->info.box[1] > 0.0f &&
+                                         result.mcState->info.box[2] > 0.0f);
+
+            auto toLower = [](std::string s) {
+                std::transform(s.begin(), s.end(), s.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                return s;
+            };
+
+            bool preferPdbBox = false;
+            if (result.parameters) {
+                const std::string u = toLower(result.parameters->get_basic_info().inp_units);
+                preferPdbBox = (u == "gcmc_gpu" || u == "angstrom" || u == "ang" || u == "a" || u == "a_kcal");
+            }
+
+            if (!preferPdbBox) {
+                // nm/native: prefer INP box_size when present.
+                if (inpBoxProvided) {
+                    result.mcState->setBoxDimensions(spaceInfo.box_size[0],
+                                                     spaceInfo.box_size[1],
+                                                     spaceInfo.box_size[2]);
+                    log("Set periodic box from INP box_size: " +
+                        std::to_string(spaceInfo.box_size[0]) + " x " +
+                        std::to_string(spaceInfo.box_size[1]) + " x " +
+                        std::to_string(spaceInfo.box_size[2]) + " nm");
+                } else if (pdbBoxProvided) {
+                    result.mcState->setBoxDimensions(result.mcState->info.box[0],
+                                                     result.mcState->info.box[1],
+                                                     result.mcState->info.box[2]);
+                } else {
+                    // Ensure periodicBox exists even if box is unset.
+                    result.mcState->setBoxDimensions(result.mcState->info.box[0],
+                                                     result.mcState->info.box[1],
+                                                     result.mcState->info.box[2]);
+                }
             } else {
-                // Ensure periodicBox is initialized (some movement/energy code indexes it directly).
-                result.mcState->setBoxDimensions(
-                    result.mcState->info.box[0],
-                    result.mcState->info.box[1],
-                    result.mcState->info.box[2]
-                );
+                // gcmc_gpu/opencl: prefer CRYST1 when present.
+                if (pdbBoxProvided) {
+                    result.mcState->setBoxDimensions(result.mcState->info.box[0],
+                                                     result.mcState->info.box[1],
+                                                     result.mcState->info.box[2]);
+                } else if (inpBoxProvided) {
+                    result.mcState->setBoxDimensions(spaceInfo.box_size[0],
+                                                     spaceInfo.box_size[1],
+                                                     spaceInfo.box_size[2]);
+                    log("Set periodic box from INP box_size (no CRYST1): " +
+                        std::to_string(spaceInfo.box_size[0]) + " x " +
+                        std::to_string(spaceInfo.box_size[1]) + " x " +
+                        std::to_string(spaceInfo.box_size[2]) + " nm");
+                } else {
+                    // Ensure periodicBox is initialized (some movement/energy code indexes it directly).
+                    result.mcState->setBoxDimensions(result.mcState->info.box[0],
+                                                     result.mcState->info.box[1],
+                                                     result.mcState->info.box[2]);
+                }
             }
 
             // Mark pre-existing residues as fixed (protein) unless they match INP fragment names.

@@ -3,6 +3,7 @@ Test SimulationInputBuilder with real test data files
 Tests that the builder correctly loads and processes various input file formats
 """
 import pytest
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -265,6 +266,7 @@ fragmuex:-5.0
         # Create a more complete INP file with fragment ITPs
         inp_file.write_text(f"""
 fragitp:{test_paths['itp_sol']}
+inp_units:nm
 box_size:12.34 23.45 34.56
 temperature:310.0
 mcsteps:1000
@@ -275,9 +277,18 @@ fragmuex:-2.5
 nprint:50
 cutoff:14.0
 """)
-        
+
+        params_json = tmp_path / "params.json"
         result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "42", "--verbose"],
+            [
+                str(GCMC_CPU_PATH),
+                "--inp",
+                str(inp_file),
+                "--seed",
+                "42",
+                "--dump-params",
+                str(params_json),
+            ],
             cwd=tmp_path,  # Run in temp directory
             capture_output=True,
             text=True,
@@ -286,13 +297,22 @@ cutoff:14.0
         
         # Clean up any generated files
         cleanup_generated_files(tmp_path)
-        
-        output = result.stdout + result.stderr
-        
-        # Check key parameters are loaded (more flexible matching)
-        assert "12.34" in output or "box_size:12.34" in output.lower()
-        assert "310" in output or "temperature:310" in output.lower()
-        assert "1000" in output or "mcsteps:1000" in output.lower() or "steps: 1000" in output
+
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert params_json.exists()
+
+        params = json.loads(params_json.read_text())
+        assert params["basic"]["inp_units"] == "nm"
+        assert [float(x) for x in params["space"]["box_size_nm"]] == pytest.approx(
+            [12.34, 23.45, 34.56], abs=1e-5
+        )
+        assert float(params["space"]["cutoff_nm"]) == pytest.approx(14.0, abs=1e-6)
+        assert [float(x) for x in params["fragment"]["conc_list_M"]] == pytest.approx(
+            [10.0], abs=1e-6
+        )
+        assert [float(x) for x in params["fragment"]["muex_list_kj_mol"]] == pytest.approx(
+            [-2.5], abs=1e-6
+        )
     
     def test_mixed_input_sources(self, test_paths, tmp_path):
         """Test mixing different input sources (INP + PDB + ITP)"""

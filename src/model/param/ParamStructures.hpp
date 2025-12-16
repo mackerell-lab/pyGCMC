@@ -22,8 +22,8 @@ struct BasicInfo {
     std::string param_file;
     std::string log_file;
     // INP unit system for compatibility with legacy gcmc_gpu style inputs.
-    // Supported values (case-insensitive): "nm" (default), "auto", "gcmc_gpu"/"a"/"angstrom".
-    std::string inp_units = "nm";
+    // Supported values (case-insensitive): "auto" (default), "nm", "gcmc_gpu"/"a"/"angstrom".
+    std::string inp_units = "auto";
     // Whether the user explicitly specified inp_units/units in the INP.
     // This is used to avoid overriding user intent when applying legacy version heuristics.
     bool inp_units_explicit = false;
@@ -60,6 +60,10 @@ struct SpaceInfo {
 
     float tmp_prob = 0.0;
     float cutoff = 12.0;
+    bool cutoff_explicit = false;
+    // True when the cutoff was provided via legacy gcmc_opencl keys (energy_cutoff*),
+    // which are interpreted as Å in inp_units:auto mode.
+    bool cutoff_from_energy_cutoff = false;
 };
 
 /**
