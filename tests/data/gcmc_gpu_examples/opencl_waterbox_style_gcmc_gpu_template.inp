@@ -1,0 +1,51 @@
+# Derived from `pygcmc_dev/tmp/gcmc_opencl/examples/waterbox/gcmc.inp`
+# Intent: exercise gcmc_opencl-style alias keys (energy_cutoff, use_vdw_radii_for_grid) under gcmc_gpu units.
+
+version: gcmc_2.0
+
+# Force field parameters (GROMACS)
+par:{DATA_DIR}/charmm36.ff/ffnonbonded.itp
+par:{DATA_DIR}/charmm36.ff/silcs.itp
+par:{DATA_DIR}/charmm36.ff/nbfix.itp
+atomtypes:{DATA_DIR}/charmm36.ff/atomtypes.atp
+monomerdir:{DATA_DIR}/charmm36.ff/mol
+
+# Fragment definition (water)
+fragitp:{DATA_DIR}/charmm36.ff/mol/sol.itp
+
+# System topology and structure (empty initial system)
+top:{DATA_DIR}/gcmc_examples/empty.top
+pdb:{DATA_DIR}/gcmc_examples/empty.pdb
+protitp:{DATA_DIR}/gcmc_examples/empty.top
+
+# Geometry (Å)
+box_size:30.0 30.0 30.0
+gc_center:15.0 15.0 15.0
+sys_center:15.0 15.0 15.0
+grid_dx:1.0
+
+# Legacy alias key (Å) - should map to cutoff internally
+energy_cutoff:8.0
+
+# Legacy alias key (plural form)
+use_vdw_radii_for_grid:yes
+exclude_hydrogens_from_grid:no
+
+fragname:SOL
+fragconc:55.0
+fragmuex:-5.00
+
+temperature:300.0
+mcsteps:1
+nprint:1
+insdel_frac:1.0
+mc_move_prob:1.0 0.0 0.0 0.0
+random_seed:12345
+
+# Output filenames (gcmc_gpu convention)
+op_top:opencl_waterbox_style.top
+op_pdb:opencl_waterbox_style.pdb
+
+use_cavity_bias:yes
+use_conf_bias:no
+

@@ -50,6 +50,17 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
         for (float t : times) {
             mc_info.mc_time_list.push_back(t);
         }
+    } else if (key == "energy_cutoff") {
+        // Legacy gcmc_opencl key: treat as a shared cutoff for fragment/protein.
+        float cutoff = std::stof(value);
+        if (cutoff > 0.0f) {
+            energy_info.fragment_cutoff = cutoff;
+            energy_info.fragment_cutoff_squared = cutoff * cutoff;
+            energy_info.protein_cutoff = cutoff;
+            energy_info.protein_cutoff_squared = cutoff * cutoff;
+            // Mirror into the global cutoff so that energy calculations stay consistent.
+            space_info.cutoff = cutoff;
+        }
     } else if (key == "energy_cutoff_frag" || key == "energy_cutoff_fragment") {
         float cutoff = std::stof(value);
         if (cutoff > 0.0f) {
@@ -104,7 +115,7 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
     } else if (key == "exclude_protein_volume") {
         // Exclude protein volume from cavity bias
         space_info.exclude_protein_volume = (value == "yes" || value == "true" || value == "1");
-    } else if (key == "use_vdw_radius_for_grid") {
+    } else if (key == "use_vdw_radius_for_grid" || key == "use_vdw_radii_for_grid") {
         // Use VDW radii for grid generation
         space_info.use_vdw_radius_for_grid = (value == "yes" || value == "true" || value == "1");
     } else if (key == "exclude_hydrogens_from_grid") {

@@ -155,3 +155,117 @@ def test_gcmc_gpu_version_gcmc_2_0_implies_angstrom_units_and_op_outputs(
     rec = _first_accept_record(accept_log, move="insertion", species="BENZ")
     assert int(rec["cbmcTrials"]) == 5
 
+
+def test_gcmc_gpu_multi_salt_runs_and_converts_muex_list(gcmc_cpu, test_data_dir, temp_dir):
+    templates = test_data_dir / "gcmc_gpu_examples"
+    template = templates / "multi_salt_gcmc_gpu_template.inp"
+    assert template.exists()
+
+    work = Path(temp_dir) / "gcmc_gpu_multi_salt"
+    work.mkdir(parents=True, exist_ok=True)
+
+    inp = _render_template(template, data_dir=test_data_dir, dst_dir=work)
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    params_json = work / "out" / "params.json"
+
+    result = subprocess.run(
+        [
+            gcmc_cpu,
+            "--inp",
+            str(inp),
+            "--prefix",
+            str(out_prefix),
+            "--dump-params",
+            str(params_json),
+            "--store-probabilities",
+        ],
+        cwd=str(work),
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    final_pdb = Path(f"{out_prefix}_final.pdb")
+    assert final_pdb.exists()
+    lx, ly, lz = _read_cryst1_box_angstrom(final_pdb)
+    assert lx == pytest.approx(30.0, abs=1e-3)
+    assert ly == pytest.approx(30.0, abs=1e-3)
+    assert lz == pytest.approx(30.0, abs=1e-3)
+
+    op_pdb = work / "multi_salt.pdb"
+    op_top = work / "multi_salt.top"
+    assert op_pdb.exists()
+    assert op_top.exists()
+    assert op_top.read_text().strip(), "op_top unexpectedly empty"
+    assert _count_atom_records(op_pdb) == _count_atom_records(final_pdb)
+
+    assert params_json.exists()
+    params = json.loads(params_json.read_text())
+
+    assert params["basic"]["inp_units"] == "gcmc_gpu"
+    assert [float(x) for x in params["fragment"]["conc_list_M"]] == pytest.approx(
+        [55.5, 0.15, 0.15], abs=1e-6
+    )
+    expected_muex_kj = [-5.60 * 4.184, -12.00 * 4.184, -11.50 * 4.184]
+    assert [float(x) for x in params["fragment"]["muex_list_kj_mol"]] == pytest.approx(
+        expected_muex_kj, abs=1e-5
+    )
+
+
+def test_gcmc_opencl_style_alias_keys_are_honored(gcmc_cpu, test_data_dir, temp_dir):
+    templates = test_data_dir / "gcmc_gpu_examples"
+    template = templates / "opencl_waterbox_style_gcmc_gpu_template.inp"
+    assert template.exists()
+
+    work = Path(temp_dir) / "gcmc_opencl_waterbox_style"
+    work.mkdir(parents=True, exist_ok=True)
+
+    inp = _render_template(template, data_dir=test_data_dir, dst_dir=work)
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    params_json = work / "out" / "params.json"
+
+    result = subprocess.run(
+        [
+            gcmc_cpu,
+            "--inp",
+            str(inp),
+            "--prefix",
+            str(out_prefix),
+            "--dump-params",
+            str(params_json),
+            "--store-probabilities",
+        ],
+        cwd=str(work),
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    final_pdb = Path(f"{out_prefix}_final.pdb")
+    assert final_pdb.exists()
+    lx, ly, lz = _read_cryst1_box_angstrom(final_pdb)
+    assert lx == pytest.approx(30.0, abs=1e-3)
+    assert ly == pytest.approx(30.0, abs=1e-3)
+    assert lz == pytest.approx(30.0, abs=1e-3)
+
+    op_pdb = work / "opencl_waterbox_style.pdb"
+    op_top = work / "opencl_waterbox_style.top"
+    assert op_pdb.exists()
+    assert op_top.exists()
+    assert op_top.read_text().strip(), "op_top unexpectedly empty"
+    assert _count_atom_records(op_pdb) == _count_atom_records(final_pdb)
+
+    assert params_json.exists()
+    params = json.loads(params_json.read_text())
+
+    # energy_cutoff:8Å -> cutoff_nm:0.8nm under gcmc_gpu unit mode.
+    assert float(params["space"]["cutoff_nm"]) == pytest.approx(0.8, abs=1e-6)
+    assert float(params["energy"]["fragment_cutoff_nm"]) == pytest.approx(0.8, abs=1e-6)
+
+    # use_vdw_radii_for_grid (plural alias) should map to SpaceInfo.use_vdw_radius_for_grid.
+    assert params["space"]["use_vdw_radius_for_grid"] is True
+    assert params["space"]["exclude_hydrogens_from_grid"] is False

@@ -3030,6 +3030,9 @@ void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
     ofs << ",\"cutoff_nm\":" << space.cutoff
         << ",\"grid_spacing_nm\":" << space.grid_spacing
         << ",\"target_volume_nm3\":" << space.target_volume
+        << ",\"use_vdw_radius_for_grid\":" << (space.use_vdw_radius_for_grid ? "true" : "false")
+        << ",\"exclude_hydrogens_from_grid\":" << (space.exclude_hydrogens_from_grid ? "true" : "false")
+        << ",\"exclude_protein_volume\":" << (space.exclude_protein_volume ? "true" : "false")
         << ",\"gcmc_region\":\"" << escapeJsonString(space.gcmc_region) << "\""
         << "},";
 

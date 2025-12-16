@@ -1,0 +1,51 @@
+# Derived from `pygcmc_dev/tmp/gcmc_cpu_gpu_examples/multi_salt.inp`
+# Intent: exercise multi-fragment parsing (SOL/NA/CL) in gcmc_gpu-style units (Å, kcal/mol).
+
+version: gcmc_2.0
+
+# Force field parameters (GROMACS)
+par:{DATA_DIR}/charmm36.ff/ffnonbonded.itp
+par:{DATA_DIR}/charmm36.ff/nbfix.itp
+par:{DATA_DIR}/charmm36.ff/silcs.itp
+atomtypes:{DATA_DIR}/charmm36.ff/atomtypes.atp
+monomerdir:{DATA_DIR}/charmm36.ff/mol
+
+# Fragment definitions (ITP)
+fragitp:{DATA_DIR}/charmm36.ff/mol/sol.itp
+fragitp:{DATA_DIR}/charmm36.ff/mol/na.itp
+fragitp:{DATA_DIR}/charmm36.ff/mol/cl.itp
+
+# System topology and structure (empty initial system)
+top:{DATA_DIR}/gcmc_examples/empty.top
+pdb:{DATA_DIR}/gcmc_examples/empty.pdb
+protitp:{DATA_DIR}/gcmc_examples/empty.top
+
+# Geometry (Å)
+box_size:30.0 30.0 30.0
+gc_center:15.0 15.0 15.0
+sys_center:15.0 15.0 15.0
+cutoff:12.0
+grid_dx:2.0
+
+# Multi-fragment lists (fragmuex in kcal/mol for gcmc_gpu)
+fragname:SOL NA CL
+fragconc:55.5 0.15 0.15
+fragmuex:-5.60 -12.00 -11.50
+mctime:0.8 0.1 0.1
+
+# Simulation control
+temperature:298.0
+mcsteps:50
+nprint:50
+insdel_frac:1.0
+mc_move_prob:0.5 0.5 0.0 0.0
+random_seed:202502
+
+# Output filenames (gcmc_gpu convention)
+op_top:multi_salt.top
+op_pdb:multi_salt.pdb
+
+# Bias options
+use_cavity_bias:no
+use_conf_bias:no
+
