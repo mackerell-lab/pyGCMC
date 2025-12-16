@@ -51,6 +51,7 @@ from cpu_cli.inp_units_compat import (
     test_inp_units_gcmc_gpu_gcmc_region_numeric_conversion_affects_volume,
     test_nbar_volume_based_mode_sets_activity_from_concentration,
     test_nbar_const_water_nbar_scales_all_fragments_by_fragconc,
+    test_nbar_const_water_nbar_scales_multiple_fragments_in_one_run,
     test_nbar_number_water_nbar_updates_activity_after_first_insertion,
     test_gcmc_gpu_active_and_muex_files_are_written,
 )
@@ -74,4 +75,10 @@ from cpu_cli.initial_system_loading import (
 # Fragment template geometry regression (1 function)
 from cpu_cli.fragment_template_geometry import (
     test_fragment_template_geometry_from_monomerdir,
+)
+
+# ITP nonbonded -> forcefield/LJ energy wiring (2 functions)
+from cpu_cli.itp_nonbonded_forcefield import (
+    test_itp_atomtypes_builds_lj_matrix_and_deltaU_matches_analytic_lj,
+    test_itp_nonbond_params_override_applies_nbfix_in_lj_matrix,
 )

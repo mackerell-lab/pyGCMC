@@ -110,6 +110,11 @@ def test_combined_translation_rotation():
     # 执行旋转
     quaternion = create_random_quaternion()
     q0, q1, q2, q3 = quaternion
+
+    # Ensure unit quaternion (numerical stability with float-backed coordinates)
+    norm = math.sqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3)
+    if norm > 0:
+        q0, q1, q2, q3 = q0 / norm, q1 / norm, q2 / norm, q3 / norm
     
     R = [
         [1-2*(q2*q2+q3*q3), 2*(q1*q2-q0*q3), 2*(q1*q3+q0*q2)],
@@ -215,6 +220,11 @@ def test_rotation_preserves_bond_lengths():
     for _ in range(10):
         quaternion = create_random_quaternion()
         q0, q1, q2, q3 = quaternion
+
+        # Ensure unit quaternion (numerical stability with float-backed coordinates)
+        norm = math.sqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3)
+        if norm > 0:
+            q0, q1, q2, q3 = q0 / norm, q1 / norm, q2 / norm, q3 / norm
         
         R = [
             [1-2*(q2*q2+q3*q3), 2*(q1*q2-q0*q3), 2*(q1*q3+q0*q2)],
