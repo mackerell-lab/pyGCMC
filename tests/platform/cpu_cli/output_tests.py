@@ -28,7 +28,6 @@ def test_gcmc_cpu_verbose_output(gcmc_cpu, test_data_dir, temp_dir):
     inp = work / "run.inp"
     inp.write_text(
         f"""
-inp_units:gcmc_gpu
 fragitp:{itp}
 fragname:NA
 fragconc:55.0
@@ -79,7 +78,6 @@ def test_gcmc_cpu_logging_regression(gcmc_cpu, test_data_dir, temp_dir):
     inp = work / "run.inp"
     inp.write_text(
         """
-inp_units:gcmc_gpu
 fragitp:na.itp
 fragname:NA
 fragconc:55.0
@@ -127,7 +125,6 @@ def test_gcmc_cpu_output_files(gcmc_cpu, test_data_dir, temp_dir):
     inp = work / "run.inp"
     inp.write_text(
         f"""
-inp_units:gcmc_gpu
 fragitp:{itp}
 fragname:NA
 fragconc:55.0

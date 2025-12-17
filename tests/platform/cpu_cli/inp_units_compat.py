@@ -16,6 +16,7 @@ from .inp_units_compat_box import (
     test_inp_units_gcmc_gpu_fragmuex_kcal_to_kj_log,
 )
 from .inp_units_compat_dump_region import (
+    test_inp_units_auto_defaults_to_gcmc_gpu_angstrom_for_inp_files,
     test_inp_units_gcmc_gpu_converts_grid_dx_and_cutoffs_and_target_volume,
     test_inp_units_gcmc_gpu_gcmc_region_numeric_conversion_affects_volume,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "test_fragmuex_scales_activity_and_acceptance_in_ideal_gas_limit",
     "test_dump_accept_log_consistent_with_final_pdb_counts",
     "test_inp_random_seed_used_when_cli_missing",
+    "test_inp_units_auto_defaults_to_gcmc_gpu_angstrom_for_inp_files",
     "test_inp_units_gcmc_gpu_converts_grid_dx_and_cutoffs_and_target_volume",
     "test_inp_units_gcmc_gpu_gcmc_region_numeric_conversion_affects_volume",
     "test_nbar_volume_based_mode_sets_activity_from_concentration",

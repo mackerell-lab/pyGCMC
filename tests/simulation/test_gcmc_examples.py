@@ -119,6 +119,7 @@ WAT     2
 
         # Run GCMC at standard conditions (reduced steps for faster testing)
         inp_content = f"""# TIP3P water at standard conditions
+inp_units:nm
 pdb:{str(pdb_file)}
 top:{str(top_file)}
 fragitp:{str(itp_file)}
@@ -200,6 +201,7 @@ MOL2   1
 
         # Test with different chemical potentials
         inp_content = f"""# Multi-component test
+inp_units:nm
 pdb:{str(pdb_file)}
 top:{str(top_file)}
 op_pdb:multi.pdb
@@ -274,6 +276,7 @@ WAT    2
 
         # Define cavity region (sphere in center of box)
         inp_content = f"""# Protein cavity filling
+inp_units:nm
 pdb:{str(water_pdb)}
 top:{str(top_file)}
 op_pdb:cavity_filled.pdb
@@ -350,6 +353,7 @@ GAS    1
 
         for T in temperatures:
             inp_content = f"""# Temperature test at {T}K
+inp_units:nm
 pdb:{str(pdb_file)}
 top:{str(top_file)}
 op_pdb:temp_{T}.pdb
@@ -421,6 +425,7 @@ Cl-    1
 
         # Test ion pair insertion
         inp_content = f"""# Ion pair insertion test
+inp_units:nm
 pdb:{str(pdb_file)}
 top:{str(top_file)}
 op_pdb:ions.pdb
@@ -487,6 +492,7 @@ WAT    2
         top_file.write_text(top_content)
 
         base_inp = f"""# CBMC comparison test
+inp_units:nm
 pdb:{str(pdb_file)}
 top:{str(top_file)}
 op_pdb:output.pdb

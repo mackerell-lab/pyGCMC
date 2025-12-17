@@ -79,7 +79,6 @@ def test_builder_initial_system_loaded_with_itp_par(gcmc_cpu, temp_dir):
     inp = work / "run.inp"
     inp.write_text(
         f"""
-inp_units:gcmc_gpu
 par:{par}
 top:{top}
 pdb:{pdb}
@@ -190,7 +189,6 @@ def test_insertion_does_not_overwrite_initial_residues(gcmc_cpu, test_data_dir, 
     inp = work / "run.inp"
     inp.write_text(
         f"""
-inp_units:gcmc_gpu
 par:{par}
 top:{top}
 pdb:{pdb}
@@ -316,7 +314,6 @@ def test_cavity_bias_fraction_matches_simple_grid_occupancy(gcmc_cpu, test_data_
     inp = work / "run.inp"
     inp.write_text(
         f"""
-inp_units:gcmc_gpu
 random_seed:123
 par:{par}
 top:{top}
@@ -422,7 +419,6 @@ def test_cbmc_and_cavity_terms_reconstruct_insertion_pacc(gcmc_cpu, test_data_di
     inp = work / "run.inp"
     inp.write_text(
         f"""
-inp_units:gcmc_gpu
 random_seed:777
 par:{par}
 top:{top}

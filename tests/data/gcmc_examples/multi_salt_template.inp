@@ -1,4 +1,4 @@
-# Water + NaCl mixture with CBMC/cavity
+# Water + NaCl mixture with CBMC/cavity (CHARMM / gcmc_gpu-style units)
 par:{DATA_DIR}/charmm36.ff/ffnonbonded.itp
 atomtypes:{DATA_DIR}/charmm36.ff/atomtypes.atp
 top:{DATA_DIR}/gcmc_examples/empty.top
@@ -7,7 +7,7 @@ protitp:{DATA_DIR}/gcmc_examples/empty.top
 
 box: 30.0 30.0 30.0
 temperature: 298.0
-cutoff: 1.4
+cutoff: 14.0
 
 use_conf_bias: yes
 fragconf: 5
@@ -17,7 +17,7 @@ cavity_probe_radius: 1.4
 
 fragname: WAT
 fragconc: 55.5
-fragmuex: -22.7
+fragmuex: -5.60
 mctime: 0.8
 fragitp:{DATA_DIR}/mols/sol.itp
 

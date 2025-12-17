@@ -12,6 +12,59 @@ import pytest
 from .inp_units_compat_helpers import _run_gcmc_cpu, _write_inp
 
 
+def test_inp_units_auto_defaults_to_gcmc_gpu_angstrom_for_inp_files(gcmc_cpu, test_data_dir, temp_dir):
+    """
+    gcmc_gpu/opencl INP files do not declare units; all length-like fields are in Å.
+
+    Assert that inp_units:auto resolves to gcmc_gpu and that key lengths are converted to internal nm.
+    """
+    work = Path(temp_dir) / "units_auto_default"
+    work.mkdir(parents=True, exist_ok=True)
+
+    itp = test_data_dir / "charmm36.ff" / "mol" / "na.itp"
+    assert itp.exists()
+
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    params_json = work / "out" / "params.json"
+
+    inp = work / "test.inp"
+    _write_inp(
+        inp,
+        f"""
+fragitp:{itp}
+fragname:NA
+fragconc:1.0
+fragmuex:0.0
+
+box_size:10.0 10.0 10.0
+cutoff:12.0
+grid_dx:1.0
+
+temperature:300.0
+moves_per_step:1
+mcsteps:1
+nprint:1
+mc_move_prob:1 0 0 0
+""",
+    )
+
+    result = _run_gcmc_cpu(
+        gcmc_cpu,
+        workdir=work,
+        inp=inp,
+        out_prefix=out_prefix,
+        extra_args=["--dump-params", str(params_json)],
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    params = json.loads(params_json.read_text())
+    assert params["basic"]["inp_units"] == "gcmc_gpu"
+    assert [float(x) for x in params["space"]["box_size_nm"]] == pytest.approx([1.0, 1.0, 1.0], abs=1e-6)
+    assert float(params["space"]["grid_spacing_nm"]) == pytest.approx(0.1, abs=1e-6)
+    assert float(params["space"]["cutoff_nm"]) == pytest.approx(1.2, abs=1e-6)
+
+
 def test_inp_units_gcmc_gpu_converts_grid_dx_and_cutoffs_and_target_volume(
     gcmc_cpu, test_data_dir, temp_dir
 ):
@@ -35,7 +88,6 @@ def test_inp_units_gcmc_gpu_converts_grid_dx_and_cutoffs_and_target_volume(
     _write_inp(
         inp,
         f"""
-inp_units:gcmc_gpu
 fragitp:{itp}
 fragname:NA
 fragconc:1.0
@@ -74,6 +126,119 @@ mc_move_prob:1 0 0 0
     assert float(params["space"]["target_volume_nm3"]) == pytest.approx(1.0, abs=1e-6)
 
 
+def test_inp_units_openmm_alias_behaves_like_nm_kj(gcmc_cpu, test_data_dir, temp_dir):
+    """
+    "openmm" is an alias for the native/internal unit system (nm + kJ/mol).
+    This keeps the default user-facing INP mode as gcmc_gpu (Å + kcal/mol) while allowing
+    explicit nm/kJ decks for internal/theory tests.
+    """
+    work = Path(temp_dir) / "units_openmm_alias"
+    work.mkdir(parents=True, exist_ok=True)
+
+    itp = test_data_dir / "charmm36.ff" / "mol" / "na.itp"
+    assert itp.exists()
+
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    params_json = work / "out" / "params.json"
+
+    inp = work / "test.inp"
+    _write_inp(
+        inp,
+        f"""
+inp_units:openmm
+fragitp:{itp}
+fragname:NA
+fragconc:1.0
+fragmuex:-4.184
+
+box_size:1.0 1.0 1.0
+cutoff:1.2
+grid_dx:0.1
+
+temperature:300.0
+moves_per_step:1
+mcsteps:1
+nprint:1
+mc_move_prob:1 0 0 0
+""",
+    )
+
+    result = _run_gcmc_cpu(
+        gcmc_cpu,
+        workdir=work,
+        inp=inp,
+        out_prefix=out_prefix,
+        extra_args=["--dump-params", str(params_json)],
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    params = json.loads(params_json.read_text())
+    assert params["basic"]["inp_units"] == "nm"
+    assert params["basic"]["inp_units_explicit"] is True
+    assert [float(x) for x in params["space"]["box_size_nm"]] == pytest.approx([1.0, 1.0, 1.0], abs=1e-6)
+    assert float(params["space"]["cutoff_nm"]) == pytest.approx(1.2, abs=1e-6)
+    assert float(params["space"]["grid_spacing_nm"]) == pytest.approx(0.1, abs=1e-6)
+    assert [float(x) for x in params["fragment"]["muex_list_kj_mol"]] == pytest.approx([-4.184], abs=1e-6)
+
+
+def test_inp_units_charmm_alias_behaves_like_gcmc_gpu_angstrom_kcal(gcmc_cpu, test_data_dir, temp_dir):
+    """
+    "charmm" is an alias for the default gcmc_gpu/opencl user-facing unit system:
+    - length-like fields in Å
+    - fragmuex in kcal/mol
+    """
+    work = Path(temp_dir) / "units_charmm_alias"
+    work.mkdir(parents=True, exist_ok=True)
+
+    itp = test_data_dir / "charmm36.ff" / "mol" / "na.itp"
+    assert itp.exists()
+
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    params_json = work / "out" / "params.json"
+
+    inp = work / "test.inp"
+    _write_inp(
+        inp,
+        f"""
+inp_units:charmm
+fragitp:{itp}
+fragname:NA
+fragconc:1.0
+fragmuex:-1.0
+
+box_size:10.0 10.0 10.0
+cutoff:12.0
+grid_dx:1.0
+
+temperature:300.0
+moves_per_step:1
+mcsteps:1
+nprint:1
+mc_move_prob:1 0 0 0
+""",
+    )
+
+    result = _run_gcmc_cpu(
+        gcmc_cpu,
+        workdir=work,
+        inp=inp,
+        out_prefix=out_prefix,
+        extra_args=["--dump-params", str(params_json)],
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    params = json.loads(params_json.read_text())
+    assert params["basic"]["inp_units"] == "charmm"
+    assert params["basic"]["inp_units_explicit"] is True
+
+    assert [float(x) for x in params["space"]["box_size_nm"]] == pytest.approx([1.0, 1.0, 1.0], abs=1e-6)
+    assert float(params["space"]["cutoff_nm"]) == pytest.approx(1.2, abs=1e-6)
+    assert float(params["space"]["grid_spacing_nm"]) == pytest.approx(0.1, abs=1e-6)
+    assert [float(x) for x in params["fragment"]["muex_list_kj_mol"]] == pytest.approx([-4.184], abs=1e-6)
+
+
 @pytest.mark.parametrize(
     ("region_spec_angstrom", "expected_volume_nm3"),
     [
@@ -104,7 +269,6 @@ def test_inp_units_gcmc_gpu_gcmc_region_numeric_conversion_affects_volume(
     _write_inp(
         inp,
         f"""
-inp_units:gcmc_gpu
 random_seed:123
 fragitp:{itp}
 fragname:SOL
@@ -146,4 +310,3 @@ mc_move_prob:1 0 0 0
     assert ins is not None, f"Expected a SOL insertion record, got: {records[:3]}"
     assert float(ins["cavityFraction"]) == pytest.approx(1.0, abs=1e-12)
     assert float(ins["vEff"]) == pytest.approx(expected_volume_nm3, rel=1e-6, abs=1e-6)
-

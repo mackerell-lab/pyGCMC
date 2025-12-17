@@ -40,13 +40,14 @@ from cpu_cli.validation_tests import (
     test_gcmc_cpu_parameter_validation
 )
 
-# gcmc_gpu-style INP compatibility and unit semantics tests (10 functions + param cases)
+# gcmc_gpu-style INP compatibility and unit semantics tests (11 functions + param cases)
 from cpu_cli.inp_units_compat import (
     test_inp_units_gcmc_gpu_box_roundtrip_cryst1,
     test_inp_units_gcmc_gpu_fragmuex_kcal_to_kj_log,
     test_fragmuex_scales_activity_and_acceptance_in_ideal_gas_limit,
     test_dump_accept_log_consistent_with_final_pdb_counts,
     test_inp_random_seed_used_when_cli_missing,
+    test_inp_units_auto_defaults_to_gcmc_gpu_angstrom_for_inp_files,
     test_inp_units_gcmc_gpu_converts_grid_dx_and_cutoffs_and_target_volume,
     test_inp_units_gcmc_gpu_gcmc_region_numeric_conversion_affects_volume,
     test_nbar_volume_based_mode_sets_activity_from_concentration,

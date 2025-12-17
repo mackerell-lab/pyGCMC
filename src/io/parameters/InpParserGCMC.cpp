@@ -90,13 +90,13 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
         frag_info.fragconf_list = frag_info.conf_list;
     } else if (key == "num_conf_bias_trial" || key == "confbias_trials") {
         bias_info.num_conf_bias_trials = static_cast<unsigned int>(std::stoi(value));
-    } else if (key == "cavity_grid_dx") {
+    } else if (key == "cavity_grid_dx" || key == "cavity_grid_spacing") {
         // Map to grid_dx if given (fallback)
         // Raw value; normalized to internal nm in enhance_param.
         space_info.grid_spacing = std::stof(value);
     } else if (key == "cavity_grid_dx_frag") {
         frag_info.cavity_grid_dx_list = InpParserStructures::parse_float_vector(value);
-    } else if (key == "probe_radius") {
+    } else if (key == "probe_radius" || key == "cavity_probe_radius") {
         // Map to sigma (approximate) if present
         // Raw value; normalized to internal nm in enhance_param.
         float r = std::stof(value);
@@ -323,13 +323,20 @@ void InpParserGCMC::enhance_param(model::param::Param& param) {
     };
 
     // --- Unit conversion layer (gcmc_gpu compatibility) ---
-    // Internal convention: nm + kJ/mol. Legacy gcmc_gpu INP commonly uses Å + kcal/mol.
+    // Internal convention: nm + kJ/mol.
+    // NOTE: gcmc_gpu/gcmc_opencl INP decks use Å for all length-like fields (box_size/cutoff/grid_dx/centers/radii/...).
     // We make conversion idempotent to tolerate repeated enhance_param calls.
     if (!basic_info.inp_units_converted) {
         enum class UnitMode { NmKj, AngstromKcal };
 
         UnitMode mode = UnitMode::NmKj;
         std::string u = toLower(basic_info.inp_units);
+
+        // Alias: "openmm" is treated as native nm + kJ/mol (internal unit system).
+        if (u == "openmm") {
+            u = "nm";
+            basic_info.inp_units = u;
+        }
 
         // If the INP declares a legacy gcmc_gpu-style version (e.g., "gcmc_2.0"),
         // assume Å + kcal/mol unless the user explicitly overrides via inp_units.
@@ -358,25 +365,25 @@ void InpParserGCMC::enhance_param(model::param::Param& param) {
             return (u == "nm" || u == "nm_kj" || u == "nm/kj" || u == "native");
         };
         const auto isAngstrom = [&]() {
-            return (u == "a" || u == "ang" || u == "angstrom" || u == "gcmc_gpu" || u == "a_kcal");
+            return (u == "a" || u == "ang" || u == "angstrom" ||
+                    u == "gcmc_gpu" || u == "charmm" ||
+                    u == "a_kcal" || u == "a/kcal" || u == "akcal");
         };
 
         if (isNm()) {
             mode = UnitMode::NmKj;
         } else if (isAngstrom()) {
             mode = UnitMode::AngstromKcal;
+        } else if (u == "auto") {
+            // Default to gcmc_gpu-style units (Å + kcal/mol). Native nm/kJ decks should explicitly set inp_units:nm.
+            mode = UnitMode::AngstromKcal;
         } else {
-            // auto heuristic:
-            // - Legacy gcmc_opencl decks typically specify energy_cutoff* (Å) instead of cutoff:.
-            // - Otherwise default to nm to avoid surprising unit conversions for native decks/tests.
-            if (space_info.cutoff_from_energy_cutoff) {
-                mode = UnitMode::AngstromKcal;
-            }
+            // Unknown unit tag: fall back to internal nm/kJ without conversion.
         }
 
-        // Materialize the inferred unit mode for downstream consumers (e.g., --dump-params).
-        // If the user explicitly specified inp_units, preserve the literal setting.
-        if (!basic_info.inp_units_explicit && u == "auto") {
+        // Materialize the inferred unit mode for downstream consumers (e.g., --dump-params, periodic-box policy).
+        // Preserve explicit concrete units; resolve "auto" to a concrete mode.
+        if (u == "auto") {
             basic_info.inp_units = (mode == UnitMode::AngstromKcal) ? "gcmc_gpu" : "nm";
         }
 

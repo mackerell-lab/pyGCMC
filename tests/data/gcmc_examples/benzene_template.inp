@@ -9,7 +9,8 @@ box: 25.0 25.0 25.0
 temperature: 300.0
 
 fragname: BENZ
-fragmuex: -18.0
+fragconc: 1.0
+fragmuex: 0.0
 fragitp:{DATA_DIR}/charmm36.ff/mol/benz.itp
 
 use_conf_bias: yes

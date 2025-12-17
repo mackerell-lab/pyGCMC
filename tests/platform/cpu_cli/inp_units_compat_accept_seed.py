@@ -32,7 +32,6 @@ def test_dump_accept_log_consistent_with_final_pdb_counts(gcmc_cpu, test_data_di
     _write_inp(
         inp,
         f"""
-inp_units:gcmc_gpu
 random_seed:999
 fragitp:{itp}
 fragname:NA
@@ -93,7 +92,6 @@ def test_inp_random_seed_used_when_cli_missing(gcmc_cpu, test_data_dir, temp_dir
         _write_inp(
             inp,
             f"""
-inp_units:gcmc_gpu
 random_seed:{seed}
 fragitp:{itp}
 box_size:30.0 30.0 30.0
@@ -143,4 +141,3 @@ attempt_prob_rot:0.0
     run3 = Path(temp_dir) / "seed_run3"
     run4 = Path(temp_dir) / "seed_run4"
     assert run_once(run3, 123) != run_once(run4, 124)
-

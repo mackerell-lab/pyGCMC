@@ -41,7 +41,6 @@ def test_fragmuex_scales_activity_and_acceptance_in_ideal_gas_limit(
         _write_inp(
             inp,
             f"""
-inp_units:gcmc_gpu
 random_seed:123
 fragitp:{itp}
 fragname:NA
@@ -109,4 +108,3 @@ mc_move_prob:1 0 0 0
     assert float(rec_mu0["pAcc"]) < 0.2
     assert float(rec_mu1["pAcc"]) < float(rec_mu0["pAcc"])
     assert pacc_ratio == pytest.approx(math.exp(beta * float(rec_mu1["mu"])), rel=1e-6, abs=1e-12)
-

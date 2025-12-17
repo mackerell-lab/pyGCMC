@@ -58,7 +58,6 @@ def test_gcmc_cpu_basic_run(gcmc_cpu, test_data_dir, temp_dir):
     inp = work / "run.inp"
     inp.write_text(
         f"""
-inp_units:gcmc_gpu
 fragitp:{itp}
 fragname:NA
 fragconc:55.0

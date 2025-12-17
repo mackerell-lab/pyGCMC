@@ -67,7 +67,6 @@ def test_fragment_template_geometry_from_monomerdir(gcmc_cpu, test_data_dir, tem
     inp = work / "test.inp"
     inp.write_text(
         f"""
-inp_units:gcmc_gpu
 random_seed:123
 monomerdir:{mol_dir}
 fragitp:{itp}

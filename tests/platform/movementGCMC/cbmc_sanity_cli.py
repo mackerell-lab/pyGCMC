@@ -78,12 +78,13 @@ def acceptance_statistics(records: List[Dict[str, Any]]) -> Dict[str, Dict[str, 
 def create_minimal_water_files(tmpdir: Path):
     """Create minimal TIP3P water files for CBMC testing."""
     # PDB file
+    # gcmc_gpu/opencl convention: PDB is Å and CRYST1 carries the periodic box in Å.
     pdb_file = tmpdir / "water.pdb"
     pdb_file.write_text(
-        "CRYST1   10.000   10.000   10.000  90.00  90.00  90.00 P 1           1\n"
-        "ATOM      1  O   WAT     1       5.000   5.000   5.000  1.00  0.00           O\n"
-        "ATOM      2  H1  WAT     1       5.757   5.586   5.000  1.00  0.00           H\n"
-        "ATOM      3  H2  WAT     1       4.243   5.586   5.000  1.00  0.00           H\n"
+        "CRYST1  100.000  100.000  100.000  90.00  90.00  90.00 P 1           1\n"
+        "ATOM      1  O   WAT     1      50.000  50.000  50.000  1.00  0.00           O\n"
+        "ATOM      2  H1  WAT     1      50.757  50.586  50.000  1.00  0.00           H\n"
+        "ATOM      3  H2  WAT     1      49.243  50.586  50.000  1.00  0.00           H\n"
         "END\n"
     )
 
@@ -142,10 +143,16 @@ fragconf:{k_trials}"""
     else:
         cbmc_block = "use_conf_bias:no"
 
+    # Input unit policy:
+    # - INP uses gcmc_gpu/opencl style (Å for lengths, kcal/mol for fragmuex)
+    # - Internal simulation uses nm + kJ/mol (converted during INP parsing)
+    nm_to_angstrom = 10.0
+    kj_to_kcal = 1.0 / 4.184
+
     cavity_block = (
         f"""use_cavity_bias:yes
-cavity_grid_spacing:{grid_spacing}
-cavity_probe_radius:{probe_radius}"""
+cavity_grid_spacing:{grid_spacing * nm_to_angstrom}
+cavity_probe_radius:{probe_radius * nm_to_angstrom}"""
         if use_cavity
         else "use_cavity_bias:no"
     )
@@ -158,11 +165,11 @@ protitp:{top}
 
 fragname: water
 fragconc: 55.0
-fragmuex: {mu}
+fragmuex: {mu * kj_to_kcal}
 {cbmc_block}
 
-box_size: 10.0 10.0 10.0
-cutoff: 4.5
+box_size: {10.0 * nm_to_angstrom} {10.0 * nm_to_angstrom} {10.0 * nm_to_angstrom}
+cutoff: {4.5 * nm_to_angstrom}
 temperature: 300.0
 mcsteps: {mcsteps}
 nprint: {max(1, mcsteps // 2)}

@@ -239,7 +239,9 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
             bool preferPdbBox = false;
             if (result.parameters) {
                 const std::string u = toLower(result.parameters->get_basic_info().inp_units);
-                preferPdbBox = (u == "gcmc_gpu" || u == "angstrom" || u == "ang" || u == "a" || u == "a_kcal");
+                preferPdbBox = (u == "gcmc_gpu" || u == "charmm" ||
+                                u == "angstrom" || u == "ang" || u == "a" ||
+                                u == "a_kcal" || u == "a/kcal" || u == "akcal");
             }
 
             if (!preferPdbBox) {

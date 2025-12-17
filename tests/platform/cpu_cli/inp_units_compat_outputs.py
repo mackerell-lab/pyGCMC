@@ -32,7 +32,6 @@ def test_gcmc_gpu_active_and_muex_files_are_written(gcmc_cpu, test_data_dir, tem
     _write_inp(
         inp,
         f"""
-inp_units:gcmc_gpu
 random_seed:321
 fragitp:{itp}
 fragname:SOL
@@ -85,4 +84,3 @@ mc_move_prob:1 0 0 0
 
     muex_last = float(muex_lines[-1])
     assert muex_last == pytest.approx(-1.0, abs=0.02)
-

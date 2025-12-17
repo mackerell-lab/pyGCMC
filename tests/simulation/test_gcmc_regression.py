@@ -38,6 +38,7 @@ END
         
         inp_path = tmp_path / "reference.inp"
         inp_content = """# Reference simulation for regression testing
+inp_units:nm
 top:reference.top
 pdb:reference.pdb
 op_top:output.top
@@ -110,6 +111,7 @@ fragmuex:-5.0
         # Create an INP file with minimal required fields
         old_inp_path = reference_setup["dir"] / "old_style.inp"
         old_content = """# Minimal old-style INP
+inp_units:nm
 top:reference.top
 pdb:reference.pdb
 box_size:20.0 20.0 20.0

@@ -10,6 +10,11 @@ import time
 import statistics
 from pathlib import Path
 import json
+
+try:
+    import resource  # Unix-only
+except ImportError:  # pragma: no cover (Windows)
+    resource = None
 # Optional imports for visualization (not required for tests)
 try:
     import matplotlib.pyplot as plt
@@ -76,7 +81,11 @@ class TestPerformanceBenchmark:
         results = []
         
         for run in range(num_runs):
-            start_time = time.time()
+            start_wall = time.time()
+            start_cpu = None
+            if resource is not None:
+                before = resource.getrusage(resource.RUSAGE_CHILDREN)
+                start_cpu = before.ru_utime + before.ru_stime
             
             result = subprocess.run(
                 [
@@ -92,7 +101,14 @@ class TestPerformanceBenchmark:
                 timeout=120
             )
             
-            elapsed = time.time() - start_time
+            elapsed_wall = time.time() - start_wall
+            elapsed_cpu = None
+            if resource is not None and start_cpu is not None:
+                after = resource.getrusage(resource.RUSAGE_CHILDREN)
+                elapsed_cpu = (after.ru_utime + after.ru_stime) - start_cpu
+
+            # Prefer CPU time for stability under xdist/parallel load; fall back to wall time.
+            elapsed = elapsed_cpu if (elapsed_cpu is not None and elapsed_cpu > 0.0) else elapsed_wall
             
             if result.returncode == 0:
                 # Parse output for statistics
@@ -232,9 +248,10 @@ fragmuex:-5.0
         
         for n_frags in frag_counts:
             # Generate fragment definitions
-            frag_names = ','.join([f"frag{i}" for i in range(n_frags)])
-            frag_concs = ','.join(["10.0"] * n_frags)
-            frag_muex = ','.join([f"{-5.0 - i*0.5}" for i in range(n_frags)])
+            # gcmc_gpu/opencl examples use whitespace-separated lists in INP.
+            frag_names = ' '.join([f"frag{i}" for i in range(n_frags)])
+            frag_concs = ' '.join(["10.0"] * n_frags)
+            frag_muex = ' '.join([f"{-5.0 - i*0.5}" for i in range(n_frags)])
             
             inp_path = benchmark_dir / f"frags_{n_frags}.inp"
             inp_content = f"""# {n_frags} fragments benchmark

@@ -1,4 +1,4 @@
-# TIP3P water in a 3x3x3 nm box
+# TIP3P water in a 30x30x30 Å box (CHARMM / gcmc_gpu-style units)
 par:{DATA_DIR}/charmm36.ff/ffnonbonded.itp
 fragitp:{DATA_DIR}/charmm36.ff/tip3p.itp
 atomtypes:{DATA_DIR}/charmm36.ff/atomtypes.atp
@@ -6,11 +6,11 @@ top:{DATA_DIR}/gcmc_examples/empty.top
 pdb:{DATA_DIR}/gcmc_examples/empty.pdb
 protitp:{DATA_DIR}/gcmc_examples/empty.top
 
-box_size: 3.0 3.0 3.0
-cutoff: 1.2
-grid_dx: 0.1
-gc_center: 1.5 1.5 1.5
-sys_center: 1.5 1.5 1.5
+box_size: 30.0 30.0 30.0
+cutoff: 12.0
+grid_dx: 1.0
+gc_center: 15.0 15.0 15.0
+sys_center: 15.0 15.0 15.0
 
 fragname: SOL
 fragconc: 55.0

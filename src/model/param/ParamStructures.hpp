@@ -22,7 +22,10 @@ struct BasicInfo {
     std::string param_file;
     std::string log_file;
     // INP unit system for compatibility with legacy gcmc_gpu style inputs.
-    // Supported values (case-insensitive): "auto" (default), "nm", "gcmc_gpu"/"a"/"angstrom".
+    // Supported values (case-insensitive):
+    // - "auto" (default) => assume gcmc_gpu/opencl style (Å + kcal/mol)
+    // - "nm" (alias: "openmm") => native/internal nm + kJ/mol decks
+    // - "gcmc_gpu"/"charmm"/"a"/"angstrom" => Å + kcal/mol decks
     std::string inp_units = "auto";
     // Whether the user explicitly specified inp_units/units in the INP.
     // This is used to avoid overriding user intent when applying legacy version heuristics.

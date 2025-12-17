@@ -23,7 +23,6 @@ def test_gcmc_cpu_deterministic_seed(gcmc_cpu, test_data_dir, temp_dir):
         inp = work / "run.inp"
         inp.write_text(
             f"""
-inp_units:gcmc_gpu
 fragitp:{itp}
 fragname:NA
 fragconc:55.0
@@ -112,7 +111,6 @@ def test_gcmc_cpu_parameter_validation(gcmc_cpu, test_data_dir, temp_dir):
     inp_file = work / "param_test.inp"
     inp_file.write_text(
         f"""
-inp_units:gcmc_gpu
 fragitp:{itp}
 fragname:NA
 fragconc:55.0

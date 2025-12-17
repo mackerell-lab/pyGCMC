@@ -30,7 +30,6 @@ def test_inp_units_gcmc_gpu_box_roundtrip_cryst1(gcmc_cpu, test_data_dir, temp_d
     _write_inp(
         inp,
         f"""
-inp_units:gcmc_gpu
 fragitp:{itp}
 box_size:30.0 31.0 32.0
 cutoff:12.0
@@ -81,7 +80,6 @@ def test_inp_units_gcmc_gpu_fragmuex_kcal_to_kj_log(gcmc_cpu, test_data_dir, tem
     _write_inp(
         inp,
         f"""
-inp_units:gcmc_gpu
 fragitp:{itp}
 box_size:30.0 30.0 30.0
 cutoff:12.0
@@ -122,4 +120,3 @@ attempt_prob_rot:0.0
     ]
     assert mu_values, f"No SOL moves found in acceptance log: {records[:3]}"
     assert mu_values[0] == pytest.approx(-4.184, rel=1e-3, abs=1e-3)
-

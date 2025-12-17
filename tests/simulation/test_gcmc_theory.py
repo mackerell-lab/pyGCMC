@@ -87,6 +87,8 @@ WAT     2
     def run_gcmc(inp_content, tmpdir, steps=1000, seed=12345):
         """Run GCMC simulation and return metrics"""
         inp_file = tmpdir / "test.inp"
+        if not re.search(r"(?m)^\\s*(inp_units|units)\\s*:", inp_content):
+            inp_content = "inp_units:nm\n" + inp_content
         inp_file.write_text(inp_content)
 
         result = subprocess.run(

@@ -28,6 +28,7 @@ class TestGCMCIntegration:
         # Create INP file for water box with absolute paths
         fragitp_path = TEST_DATA_DIR / "charmm36.ff/mol/sol.itp"
         inp_content = f"""# Water box test - fragitp mode
+inp_units:nm
 box: 3.0 3.0 3.0
 temperature: 298.15
 fragname: SOL
@@ -74,6 +75,7 @@ fragitp: {fragitp_path}
         na_itp = TEST_DATA_DIR / "charmm36.ff/mol/na.itp"
         cl_itp = TEST_DATA_DIR / "charmm36.ff/mol/cl.itp"
         inp_content = f"""# Salt water test - multiple fragments
+inp_units:nm
 box: 4.0 4.0 4.0
 temperature: 298.15
 fragname: SOL
@@ -126,6 +128,7 @@ fragitp: {cl_itp}
         fragitp_path = TEST_DATA_DIR / "charmm36.ff/mol/sol.itp"
         parfile_path = TEST_DATA_DIR / "charmm36.ff/toppar_water_ions.str"
         inp_content = f"""# Test with force field parameters
+inp_units:nm
 box: 3.0 3.0 3.0
 temperature: 300.0
 fragname: SOL
@@ -168,6 +171,7 @@ parfile: {parfile_path}
         """Test various box sizes and verify volume calculation"""
         fragitp_path = TEST_DATA_DIR / "charmm36.ff/mol/sol.itp"
         inp_content = f"""# Box size test
+inp_units:nm
 box: {box_size[0]} {box_size[1]} {box_size[2]}
 temperature: 298.15
 fragname: SOL
@@ -207,6 +211,7 @@ fragitp: {fragitp_path}
         """Test simulation can run with only fragitp files (no PDB/TOP)"""
         fragitp_path = TEST_DATA_DIR / "charmm36.ff/mol/sol.itp"
         inp_content = f"""# Test fragitp-only mode
+inp_units:nm
 box: 3.0 3.0 3.0
 temperature: 298.15
 fragname: SOL
@@ -241,6 +246,7 @@ fragitp: {fragitp_path}
         """Test that same seed produces deterministic results"""
         fragitp_path = TEST_DATA_DIR / "charmm36.ff/mol/sol.itp"
         inp_content = f"""# Deterministic test
+inp_units:nm
 box: 2.5 2.5 2.5
 temperature: 298.15
 fragname: SOL
@@ -297,6 +303,7 @@ fragitp: {fragitp_path}
         """Test that longer simulations complete without errors"""
         fragitp_path = TEST_DATA_DIR / "charmm36.ff/mol/sol.itp"
         inp_content = f"""# Stability test
+inp_units:nm
 box: 3.0 3.0 3.0
 temperature: 298.15
 fragname: SOL

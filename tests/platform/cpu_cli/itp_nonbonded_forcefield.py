@@ -142,7 +142,6 @@ NA      11      22.990   0.000    A        {sigma_na:.6f}  {eps_na:.6f}
     _write_text(
         inp,
         f"""
-inp_units:gcmc_gpu
 random_seed:123
 par:{par}
 top:{top}
@@ -283,7 +282,6 @@ C   NA   1   {sigma_override:.6f}  {eps_override:.6f}
     _write_text(
         inp,
         f"""
-inp_units:gcmc_gpu
 random_seed:123
 par:{par}
 top:{top}
@@ -331,4 +329,3 @@ mc_move_prob:1 0 0 0
 
     expected = _lj_energy_kj_mol(r_nm=r_nm, sigma_nm=sigma_override, eps_kj_mol=eps_override)
     assert float(rec["deltaU"]) == pytest.approx(expected, rel=5e-4, abs=5e-4)
-

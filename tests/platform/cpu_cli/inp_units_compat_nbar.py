@@ -31,7 +31,6 @@ def test_nbar_volume_based_mode_sets_activity_from_concentration(gcmc_cpu, test_
     _write_inp(
         inp,
         f"""
-inp_units:gcmc_gpu
 random_seed:7
 fragitp:{itp}
 fragname:NA
@@ -82,7 +81,6 @@ def test_nbar_const_water_nbar_scales_all_fragments_by_fragconc(gcmc_cpu, test_d
     _write_inp(
         inp,
         f"""
-inp_units:gcmc_gpu
 random_seed:11
 use_const_water_nbar:55
 fragitp:{itp}
@@ -137,7 +135,6 @@ def test_nbar_const_water_nbar_scales_multiple_fragments_in_one_run(gcmc_cpu, te
     _write_inp(
         inp,
         f"""
-inp_units:gcmc_gpu
 random_seed:77
 use_const_water_nbar:55
 fragitp:{na_itp}
@@ -209,7 +206,6 @@ def test_nbar_number_water_nbar_updates_activity_after_first_insertion(gcmc_cpu,
     _write_inp(
         inp,
         f"""
-inp_units:gcmc_gpu
 random_seed:123
 use_number_water_nbar:yes
 fragitp:{itp}
@@ -246,4 +242,3 @@ mc_move_prob:1 0 0 0
 
     # Second move: after 1 accepted insertion, number-water nbar sets activity to N/V (N=1, V=1 nm^3).
     assert float(sol_ins[1]["z"]) == pytest.approx(1.0, abs=1e-12)
-
