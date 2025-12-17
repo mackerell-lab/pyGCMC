@@ -245,7 +245,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         double proposalBias = getConfigValue("proposalBias");
         double proposalLogRatio = 0.0;
         if (proposalBias > 0.0) {
-            proposalLogRatio = -std::log(proposalBias);
+            proposalLogRatio = std::log(proposalBias);
         }
         GCMCAcceptance::GrandCanonicalInsertionTerms terms;
         terms.typeId = typeId;
@@ -1185,14 +1185,14 @@ double GCMCEngine::calculateDeletionBiasAtPosition(const Vector3& position) {
         bias *= 1.0;
     }
 
-    // Proposal bias for detailed balance when using target_numwaters
-    // For deletion: multiply by p_insert/p_delete ratio (inverse of insertion)
-    double proposalBias = getConfigValue("proposalBias");
-    if (proposalBias > 0) {
-        bias *= (1.0 / proposalBias);  // This is p_insert/p_delete for deletion
-    }
+	// Proposal bias for detailed balance when using target_numwaters
+	// For deletion: multiply by p_insert/p_delete ratio
+	double proposalBias = getConfigValue("proposalBias");
+	if (proposalBias > 0) {
+	    bias *= proposalBias;
+	}
 
-    return bias;
+	return bias;
 }
 
 // Calculate deletion bias (legacy - depends on reservoir state)

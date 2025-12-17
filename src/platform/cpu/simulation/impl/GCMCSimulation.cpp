@@ -1512,8 +1512,7 @@ bool GCMCSimulation::performSingleMove() {
     switch (moveType) {
         case INSERT: {
             double proposalBias = 1.0;
-            if (params_->get_fragment_info().target_num_waters > 0 &&
-                lastProposalPInsert_ > 0 && lastProposalPDelete_ > 0) {
+            if (lastProposalPInsert_ > 0 && lastProposalPDelete_ > 0) {
                 proposalBias = lastProposalPDelete_ / lastProposalPInsert_;
             }
             engine_->setConfigValue("proposalBias", proposalBias);
@@ -1539,8 +1538,7 @@ bool GCMCSimulation::performSingleMove() {
         case DELETE: {
             if (reservoir_->getActiveCount() > 0 && fragType >= 0) {
                 double proposalBias = 1.0;
-                if (params_->get_fragment_info().target_num_waters > 0 &&
-                    lastProposalPInsert_ > 0 && lastProposalPDelete_ > 0) {
+                if (lastProposalPInsert_ > 0 && lastProposalPDelete_ > 0) {
                     proposalBias = lastProposalPInsert_ / lastProposalPDelete_;
                 }
                 engine_->setConfigValue("proposalBias", proposalBias);
@@ -2727,6 +2725,11 @@ GCMCSimulation::MoveType GCMCSimulation::selectMoveForFragment(int fragType) {
             cdf[3] = 1.0;
         }
     }
+
+    // Record the final insertion/deletion proposal probabilities for MH correction.
+    // These probabilities correspond to the final move-selection distribution used for this fragment.
+    lastProposalPInsert_ = std::max(0.0, std::min(1.0, cdf[0]));
+    lastProposalPDelete_ = std::max(0.0, std::min(1.0, cdf[1] - cdf[0]));
 
     double r = uniform_(rng_);
     if (r < cdf[0]) return INSERT;

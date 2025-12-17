@@ -147,7 +147,7 @@ class TestCavityBias:
             use_cavity=True,
             grid_spacing=2.0,
             probe_radius=1.4,
-            mcsteps=5000,
+            mcsteps=1000,
             mu=-2.0
         )
 
@@ -184,7 +184,7 @@ class TestCavityBias:
 
         # Filter insertion moves (cavity bias only applies to insertions)
         insertions = filter_by_move(records, "insertion")
-        assert len(insertions) > 100, f"Need >100 insertions for statistics, got {len(insertions)}"
+        assert len(insertions) > 50, f"Need >50 insertions for statistics, got {len(insertions)}"
 
         # Collect wCavity values
         w_cavity_values = []

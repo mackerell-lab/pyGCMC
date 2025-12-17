@@ -475,7 +475,7 @@ mc_move_prob:1 0 0 0
     n_before = int(rec["nBefore"])
 
     proposal_ratio = float(rec.get("proposalRatio", 1.0))
-    proposal_log_ratio = -math.log(proposal_ratio) if proposal_ratio > 0.0 else 0.0
+    proposal_log_ratio = math.log(proposal_ratio) if proposal_ratio > 0.0 else 0.0
 
     log_ratio = (
         proposal_log_ratio

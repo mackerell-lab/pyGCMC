@@ -44,7 +44,8 @@ from movementGCMC.acceptance_tests import (
 
 from movementGCMC.acceptance_formula_engine import (
     test_insertion_probability_detailed_matches_formula,
-    test_deletion_probability_detailed_matches_formula
+    test_deletion_probability_detailed_matches_formula,
+    test_deletion_log_ratio_decreases_with_positive_delta_energy,
 )
 
 # Energy calculation tests (3 functions)

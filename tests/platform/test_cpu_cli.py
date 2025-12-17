@@ -65,6 +65,11 @@ from cpu_cli.gcmc_gpu_inp_examples import (
     test_gcmc_opencl_style_alias_keys_are_honored,
 )
 
+# MH proposal-bias regressions (1 function)
+from cpu_cli.asymmetric_proposal_bias import (
+    test_asymmetric_attempt_prob_enters_mh_proposal_ratio_and_pacc,
+)
+
 # gcmc_opencl example deck smoke tests (3 functions)
 from cpu_cli.gcmc_opencl_examples import (
     test_opencl_twowater_example_runs_and_preserves_pdb_cryst1,

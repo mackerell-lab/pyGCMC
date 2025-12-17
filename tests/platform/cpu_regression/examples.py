@@ -74,6 +74,7 @@ def _load_acceptance_records(path: Path) -> List[Dict]:
 
 def _probability_diffs(records: List[Dict], max_samples: int = 400) -> List[float]:
     diffs: List[float] = []
+    eps = 1e-30  # match GCMCAcceptance::safeLog lower bound
     for rec in records:
         move = rec.get("move")
         if move not in {"insertion", "deletion"}:
@@ -90,16 +91,16 @@ def _probability_diffs(records: List[Dict], max_samples: int = 400) -> List[floa
         if move == "insertion":
             if n_before + 1 <= 0:
                 continue
-            q_forward = rec.get("qForward", 1.0)
+            q_forward = max(rec.get("qForward", 1.0) or 1.0, eps)
             expected = (
                 z * v_eff / (n_before + 1.0) * math.exp(-beta_delta) * q_forward * proposal_ratio
             )
         else:
             if n_before <= 0 or z * v_eff <= 0:
                 continue
-            q_reverse = rec.get("qReverse", 1.0) or 1.0
+            q_reverse = max(rec.get("qReverse", 1.0) or 1.0, eps)
             expected = (
-                n_before / (z * v_eff) * math.exp(beta_delta) / q_reverse * proposal_ratio
+                n_before / (z * v_eff) * math.exp(-beta_delta) / q_reverse * proposal_ratio
             )
         diffs.append(abs(min(1.0, expected) - actual))
         if len(diffs) >= max_samples:

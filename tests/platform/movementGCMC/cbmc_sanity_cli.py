@@ -440,7 +440,7 @@ class TestCBMCSanity:
 
             # Engine records qReverse = W_old / K, so detailed balance uses its reciprocal.
             effective_qr = qr if qr > 0 else 1.0
-            expected = min(1.0, n_before / (z * v_eff) * math.exp(beta_delta_u) / effective_qr)
+            expected = min(1.0, n_before / (z * v_eff) * math.exp(-beta_delta_u) / effective_qr)
             actual = r.get("pAcc", 0.0)
 
             if actual < 0:  # Skip if probability not stored

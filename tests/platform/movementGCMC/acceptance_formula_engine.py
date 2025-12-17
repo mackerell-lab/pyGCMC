@@ -59,7 +59,7 @@ def _expected_deletion(
 ) -> float:
     log_ratio = (
         proposal_log_ratio
-        + beta * delta_e
+        - beta * delta_e
         - beta * mu
         + math.log(n_before)
         - (math.log(volume_nm3) + math.log(cavity_fraction))
@@ -83,7 +83,7 @@ def test_insertion_probability_detailed_matches_formula() -> None:
     rosenbluth_weight = 2.5  # W_new / K
     cbmc_trials = 6
     proposal_ratio = 1.8  # p_delete / p_insert
-    proposal_log_ratio = -math.log(proposal_ratio)
+    proposal_log_ratio = math.log(proposal_ratio)
 
     acc.setTemperature(temperature)
     acc.setVolume(volume_nm3)
@@ -168,7 +168,7 @@ def test_deletion_probability_detailed_matches_formula() -> None:
 
     expected_log_ratio = (
         proposal_log_ratio
-        + beta * delta_e
+        - beta * delta_e
         - beta * mu
         + math.log(n_before)
         - (math.log(volume_nm3) + math.log(cavity_fraction))
@@ -193,4 +193,52 @@ def test_deletion_probability_detailed_matches_formula() -> None:
 
     assert math.isclose(
         result_cpp["logRatio"], expected_log_ratio, rel_tol=1e-12, abs_tol=1e-12
+    )
+
+
+def test_deletion_log_ratio_decreases_with_positive_delta_energy() -> None:
+    acc = pygcmc.GCMCAcceptance()
+    temperature = 300.0
+    beta = 1.0 / (KB * temperature)
+
+    type_id = 0
+    mu = 0.0  # keep other terms fixed
+    volume_nm3 = 100.0
+    cavity_fraction = 1.0
+    lambda_nm = 1.0
+    rosenbluth_weight = 1.0
+    cbmc_trials = 1
+    proposal_log_ratio = 0.0
+    n_before = 5
+
+    acc.setTemperature(temperature)
+    acc.setVolume(volume_nm3)
+    acc.setChemicalPotential(type_id, mu)
+    acc.setThermalLambda(type_id, lambda_nm)
+
+    res_low = acc.calculate_deletion_probability_detailed(
+        type_id,
+        n_before,
+        0.0,
+        cavity_fraction,
+        lambda_nm,
+        rosenbluth_weight,
+        cbmc_trials,
+        proposal_log_ratio,
+    )
+
+    res_high = acc.calculate_deletion_probability_detailed(
+        type_id,
+        n_before,
+        5.0,  # kJ/mol
+        cavity_fraction,
+        lambda_nm,
+        rosenbluth_weight,
+        cbmc_trials,
+        proposal_log_ratio,
+    )
+
+    assert res_high["logRatio"] < res_low["logRatio"]
+    assert math.isclose(
+        res_high["logRatio"] - res_low["logRatio"], -beta * 5.0, rel_tol=1e-12, abs_tol=1e-12
     )

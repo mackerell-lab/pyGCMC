@@ -431,14 +431,14 @@ gcmc::GrandCanonicalEvaluation GCMCAcceptance::evaluate(
         return eval;
     }
 
-    double logN = safeLogLocal(static_cast<double>(terms.countBefore));
-    double logRatio =
-        (terms.logProposalReverse - terms.logProposalForward)
-        + terms.beta * terms.deltaEnergy
-        - terms.beta * terms.chemicalPotential
-        + logN
-        - terms.logVolume
-        + (terms.logCavityForward - terms.logCavityReverse)
+	double logN = safeLogLocal(static_cast<double>(terms.countBefore));
+	double logRatio =
+	    (terms.logProposalReverse - terms.logProposalForward)
+	    - terms.beta * terms.deltaEnergy
+	    - terms.beta * terms.chemicalPotential
+	    + logN
+	    - terms.logVolume
+	    + (terms.logCavityForward - terms.logCavityReverse)
         + (terms.logRosenbluthForward - terms.logRosenbluthReverse)
         + terms.logLambda3
         + (terms.logExtraForward - terms.logExtraReverse);
