@@ -1,591 +1,481 @@
-#!/usr/bin/env python3
 """
-Feature tests for gcmc_cpu functionality
-Tests specific features that are critical for GCMC simulations
+Feature tests for gcmc_cpu.
+
+These tests are file-driven and validate behavior via output files / structured dumps,
+not stdout/stderr log text.
 """
 
-import pytest
+from __future__ import annotations
+
+import json
+import math
 import subprocess
 import tempfile
-import numpy as np
 from pathlib import Path
-import json
-import re
+
+import pytest
+
 
 GCMC_CPU_PATH = Path(__file__).resolve().parents[3] / "build" / "bin" / "gcmc_cpu"
 TEST_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
 
+def _require_binary() -> None:
+    if not GCMC_CPU_PATH.exists():
+        pytest.skip(f"gcmc_cpu not built: {GCMC_CPU_PATH}")
+
+
+def _run_gcmc(inp: Path, *, cwd: Path, prefix: Path, extra_args: list[str] | None = None, timeout: int = 120):
+    _require_binary()
+    args = [str(GCMC_CPU_PATH), "--inp", str(inp), "--prefix", str(prefix)]
+    if extra_args:
+        args.extend(extra_args)
+    result = subprocess.run(
+        args,
+        cwd=str(cwd),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def _pdb_atom_lines(pdb_path: Path) -> list[str]:
+    return [line for line in pdb_path.read_text().splitlines() if line.startswith(("ATOM", "HETATM"))]
+
+
+def _group_atoms_by_residue(pdb_path: Path) -> dict[tuple[str, str], list[dict[str, float | str]]]:
+    residues: dict[tuple[str, str], list[dict[str, float | str]]] = {}
+    for line in _pdb_atom_lines(pdb_path):
+        if len(line) < 54:
+            continue
+        resname = line[17:20].strip().upper()
+        resid = line[22:26].strip()
+        atom_name = line[12:16].strip()
+        residues.setdefault((resname, resid), []).append(
+            {
+                "name": atom_name,
+                "x": float(line[30:38]),
+                "y": float(line[38:46]),
+                "z": float(line[46:54]),
+            }
+        )
+    return residues
+
+
+def _dist_angstrom(a: dict[str, float | str], b: dict[str, float | str]) -> float:
+    dx = float(a["x"]) - float(b["x"])
+    dy = float(a["y"]) - float(b["y"])
+    dz = float(a["z"]) - float(b["z"])
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
+
+
 class TestWaterInsertion:
-    """Test water insertion and deletion mechanics"""
+    """Water insertion output sanity checks."""
 
     @pytest.fixture
     def temp_dir(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            yield tmpdir
+            yield Path(tmpdir)
 
-    def test_water_molecule_structure(self, temp_dir):
-        """Test that water molecules maintain correct structure"""
-        inp_content = """
-version: gcmc_2.0
-box: 30.0 30.0 30.0
-temperature: 300.0
-fragname: WAT
-fragmuex: -10.0
-fragconc: 55.0
-mcsteps: 100
-nprint: 20
-nsave: 50
-fragitp: {}/charmm36.ff/mol/sol.itp
-""".format(TEST_DATA_DIR)
+    def test_inserted_water_has_reasonable_geometry(self, temp_dir: Path):
+        sol_itp = TEST_DATA_DIR / "charmm36.ff" / "mol" / "sol.itp"
+        assert sol_itp.exists()
 
-        inp_file = Path(temp_dir) / "water_struct.inp"
-        inp_file.write_text(inp_content)
+        inp = temp_dir / "water_struct.inp"
+        inp.write_text(
+            f"""
+version:gcmc_2.0
+box_size:30.0 30.0 30.0
+temperature:300.0
+fragitp:{sol_itp}
+fragname:SOL
+fragconc:55.0
+fragmuex:1000.0
 
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--prefix", "water", "--seed", "42"],
-            cwd=temp_dir,
-            capture_output=True,
-            text=True
+moves_per_step:1
+mcsteps:1
+nprint:1
+
+attempt_prob_ins:1.0
+attempt_prob_del:0.0
+attempt_prob_trn:0.0
+attempt_prob_rot:0.0
+""".strip()
+            + "\n"
         )
 
-        assert result.returncode == 0, f"Failed: {result.stderr}"
+        prefix = temp_dir / "out" / "water"
+        prefix.parent.mkdir(parents=True, exist_ok=True)
+        _run_gcmc(inp, cwd=temp_dir, prefix=prefix, extra_args=["--seed", "42"], timeout=60)
 
-        # Check PDB for water structure
-        pdb_file = Path(temp_dir) / "water_final.pdb"
-        if pdb_file.exists():
-            pdb_content = pdb_file.read_text()
-            atom_lines = [l for l in pdb_content.split('\n') if l.startswith('ATOM')]
+        pdb = Path(f"{prefix}_final.pdb")
+        assert pdb.exists()
+        residues = _group_atoms_by_residue(pdb)
 
-            # Group atoms by residue
-            residues = {}
-            for line in atom_lines:
-                if len(line) > 54:
-                    res_id = line[22:26].strip()
-                    atom_name = line[12:16].strip()
-                    if res_id not in residues:
-                        residues[res_id] = []
-                    residues[res_id].append({
-                        'name': atom_name,
-                        'x': float(line[30:38]),
-                        'y': float(line[38:46]),
-                        'z': float(line[46:54])
-                    })
+        water_res = [
+            atoms
+            for (resname, _), atoms in residues.items()
+            if resname in {"SOL", "WAT"} and len(atoms) == 3
+        ]
+        assert water_res, "No 3-atom water residues found in final PDB"
 
-            # Check each water molecule
-            for res_id, atoms in residues.items():
-                if len(atoms) == 3:  # Water has 3 atoms
-                    # Check atom names
-                    names = [a['name'] for a in atoms]
-                    assert 'OW' in names or 'O' in names, f"No oxygen in water {res_id}"
-                    h_count = sum(1 for n in names if 'H' in n)
-                    assert h_count == 2, f"Wrong number of hydrogens in water {res_id}: {names}"
+        for atoms in water_res:
+            oxygen = next((a for a in atoms if "O" in str(a["name"]).upper()), None)
+            hydrogens = [a for a in atoms if "H" in str(a["name"]).upper()]
+            assert oxygen is not None
+            assert len(hydrogens) == 2
+            for h in hydrogens:
+                dist = _dist_angstrom(oxygen, h)
+                assert 0.8 < dist < 1.2, f"Unexpected O-H distance: {dist} Å"
 
-                    # Check O-H distances (should be ~0.957 Angstrom)
-                    o_atom = next((a for a in atoms if 'O' in a['name']), None)
-                    h_atoms = [a for a in atoms if 'H' in a['name']]
+    def test_wdens_writes_density_dat(self, temp_dir: Path):
+        sol_itp = TEST_DATA_DIR / "charmm36.ff" / "mol" / "sol.itp"
+        assert sol_itp.exists()
 
-                    if o_atom and len(h_atoms) == 2:
-                        for h in h_atoms:
-                            dist = np.sqrt((o_atom['x']-h['x'])**2 +
-                                         (o_atom['y']-h['y'])**2 +
-                                         (o_atom['z']-h['z'])**2)
-                            assert 0.8 < dist < 1.2, f"Invalid O-H distance: {dist} Å"
-
-    def test_water_density_calculation(self, temp_dir):
-        """Test water density calculation and output"""
-        inp_content = """
-version: gcmc_2.0
-box: 30.0 30.0 30.0
-temperature: 300.0
-fragname: WAT
-fragmuex: -10.0
-fragconc: 55.0
-wdens: 1.0
-mcsteps: 100
-nprint: 20
-fragitp: {}/charmm36.ff/mol/sol.itp
-""".format(TEST_DATA_DIR)
-
-        inp_file = Path(temp_dir) / "density.inp"
-        inp_file.write_text(inp_content)
-
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--prefix", "density", "--verbose"],
-            cwd=temp_dir,
-            capture_output=True,
-            text=True
+        inp = temp_dir / "density.inp"
+        inp.write_text(
+            f"""
+version:gcmc_2.0
+box_size:30.0 30.0 30.0
+temperature:300.0
+fragitp:{sol_itp}
+fragname:SOL
+fragconc:55.0
+fragmuex:-10.0
+wdens:1.0
+mcsteps:50
+nprint:10
+""".strip()
+            + "\n"
         )
 
-        assert result.returncode == 0, f"Failed: {result.stderr}"
+        prefix = temp_dir / "out" / "density"
+        prefix.parent.mkdir(parents=True, exist_ok=True)
+        _run_gcmc(inp, cwd=temp_dir, prefix=prefix, extra_args=["--seed", "7"], timeout=120)
 
-        # Check for density output
-        if "density" in result.stdout.lower():
-            # Parse density values
-            density_pattern = r"density.*?(\d+\.?\d*)\s*molecules"
-            matches = re.findall(density_pattern, result.stdout.lower())
+        density_dat = Path(f"{prefix}_density.dat")
+        assert density_dat.exists()
 
-            if matches:
-                densities = [float(m) for m in matches]
-                # Density should be non-negative
-                assert all(d >= 0 for d in densities), f"Negative densities: {densities}"
+        data_rows = [
+            line.strip()
+            for line in density_dat.read_text().splitlines()
+            if line.strip() and not line.startswith("#")
+        ]
+        assert data_rows, "density.dat contains no data rows"
+        cols = data_rows[-1].split()
+        assert len(cols) >= 2, f"Unexpected density.dat row: {data_rows[-1]}"
+        assert float(cols[1]) >= 0.0
 
 
 class TestCavityBias:
-    """Test cavity bias functionality"""
+    """Cavity bias parameter parsing via --dump-params."""
 
     @pytest.fixture
     def temp_dir(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            yield tmpdir
+            yield Path(tmpdir)
 
-    def test_cavity_bias_grid(self, temp_dir):
-        """Test cavity bias grid generation"""
-        inp_content = """
-version: gcmc_2.0
-box: 20.0 20.0 20.0
-temperature: 300.0
-fragname: WAT
-fragmuex: -10.0
-fragconc: 55.0
-use_cavity_bias: yes
-cavity_grid_dx: 2.0
-probe_radius: 1.4
-mcsteps: 50
-nprint: 10
-fragitp: {}/charmm36.ff/mol/sol.itp
-""".format(TEST_DATA_DIR)
+    def test_cavity_bias_and_exclusion_flags_in_dump_params(self, temp_dir: Path):
+        sol_itp = TEST_DATA_DIR / "charmm36.ff" / "mol" / "sol.itp"
+        assert sol_itp.exists()
 
-        inp_file = Path(temp_dir) / "cavity.inp"
-        inp_file.write_text(inp_content)
+        inp = temp_dir / "cavity.inp"
+        inp.write_text(
+            f"""
+version:gcmc_2.0
+box_size:20.0 20.0 20.0
+temperature:300.0
+fragitp:{sol_itp}
+fragname:SOL
+fragconc:55.0
+fragmuex:-10.0
 
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--prefix", "cavity", "--verbose"],
-            cwd=temp_dir,
-            capture_output=True,
-            text=True
+use_cavity_bias:yes
+cavity_grid_dx:2.0
+probe_radius:1.4
+exclude_protein_volume:yes
+exclude_hydrogens_from_grid:yes
+use_vdw_radius_for_grid:yes
+
+mcsteps:0
+nprint:1
+""".strip()
+            + "\n"
         )
 
-        assert result.returncode == 0, f"Failed: {result.stderr}"
+        prefix = temp_dir / "out" / "cavity"
+        prefix.parent.mkdir(parents=True, exist_ok=True)
+        params_json = temp_dir / "out" / "params.json"
 
-        # With verbose, should mention cavity bias
-        if "--verbose" in str(["--verbose"]):
-            # Check that cavity bias is being used
-            assert "cavity" in result.stdout.lower() or result.returncode == 0
+        _run_gcmc(inp, cwd=temp_dir, prefix=prefix, extra_args=["--dump-params", str(params_json)], timeout=120)
 
-    def test_exclusion_flags(self, temp_dir):
-        """Test protein and hydrogen exclusion flags"""
-        inp_content = """
-version: gcmc_2.0
-box: 30.0 30.0 30.0
-temperature: 300.0
-fragname: WAT
-fragmuex: -10.0
-fragconc: 55.0
-use_cavity_bias: yes
-exclude_protein_volume: yes
-exclude_hydrogens_from_grid: yes
-use_vdw_radius_for_grid: yes
-mcsteps: 50
-nprint: 10
-fragitp: {}/charmm36.ff/mol/sol.itp
-""".format(TEST_DATA_DIR)
-
-        inp_file = Path(temp_dir) / "exclusion.inp"
-        inp_file.write_text(inp_content)
-
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--prefix", "exclusion"],
-            cwd=temp_dir,
-            capture_output=True,
-            text=True
-        )
-
-        assert result.returncode == 0, f"Failed: {result.stderr}"
-        assert "Simulation completed" in result.stdout
+        params = json.loads(params_json.read_text())
+        assert params["bias"]["use_cavity_bias"] is True
+        assert float(params["space"]["grid_spacing_nm"]) == pytest.approx(0.2, abs=1e-6)
+        assert float(params["bias"]["probe_radius_nm"]) == pytest.approx(0.14, abs=1e-6)
+        assert params["space"]["exclude_protein_volume"] is True
+        assert params["space"]["exclude_hydrogens_from_grid"] is True
+        assert params["space"]["use_vdw_radius_for_grid"] is True
 
 
 class TestRegionConstraints:
-    """Test GCMC region constraints"""
+    """GCMC region conversion checks via --dump-params."""
 
     @pytest.fixture
     def temp_dir(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            yield tmpdir
+            yield Path(tmpdir)
 
-    def test_sphere_region(self, temp_dir):
-        """Test sphere region constraint"""
-        inp_content = """
-version: gcmc_2.0
-box: 50.0 50.0 50.0
-temperature: 300.0
-fragname: WAT
-fragmuex: -10.0
-fragconc: 55.0
-gcmc_region: sphere 25.0 25.0 25.0 10.0
-mcsteps: 100
-nprint: 20
-fragitp: {}/charmm36.ff/mol/sol.itp
-""".format(TEST_DATA_DIR)
+    @pytest.mark.parametrize(
+        ("region_spec", "expected"),
+        [
+            ("sphere 25.0 25.0 25.0 10.0", ("sphere", [2.5, 2.5, 2.5, 1.0])),
+            ("box 10.0 10.0 10.0 40.0 40.0 40.0", ("box", [1.0, 1.0, 1.0, 4.0, 4.0, 4.0])),
+            ("cylinder 25.0 25.0 25.0 10.0 30.0 z", ("cylinder", [2.5, 2.5, 2.5, 1.0, 3.0, "z"])),
+        ],
+    )
+    def test_region_is_converted_to_nm_in_dump_params(self, temp_dir: Path, region_spec: str, expected):
+        sol_itp = TEST_DATA_DIR / "charmm36.ff" / "mol" / "sol.itp"
+        assert sol_itp.exists()
 
-        inp_file = Path(temp_dir) / "sphere.inp"
-        inp_file.write_text(inp_content)
-
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--prefix", "sphere", "--seed", "123"],
-            cwd=temp_dir,
-            capture_output=True,
-            text=True
+        inp = temp_dir / "region.inp"
+        inp.write_text(
+            f"""
+version:gcmc_2.0
+box_size:50.0 50.0 50.0
+temperature:300.0
+fragitp:{sol_itp}
+fragname:SOL
+fragconc:55.0
+fragmuex:-10.0
+gcmc_region:{region_spec}
+mcsteps:0
+nprint:1
+""".strip()
+            + "\n"
         )
 
-        assert result.returncode == 0, f"Failed: {result.stderr}"
+        prefix = temp_dir / "out" / "region"
+        prefix.parent.mkdir(parents=True, exist_ok=True)
+        params_json = temp_dir / "out" / "params.json"
 
-        # Verify molecules are within sphere
-        pdb_file = Path(temp_dir) / "sphere_final.pdb"
-        if pdb_file.exists():
-            self._check_sphere_constraint(pdb_file, center=(25.0, 25.0, 25.0), radius=10.0)
+        _run_gcmc(inp, cwd=temp_dir, prefix=prefix, extra_args=["--dump-params", str(params_json)], timeout=60)
 
-    def test_box_region(self, temp_dir):
-        """Test box region constraint"""
-        inp_content = """
-version: gcmc_2.0
-box: 50.0 50.0 50.0
-temperature: 300.0
-fragname: WAT
-fragmuex: -10.0
-fragconc: 55.0
-gcmc_region: box 10.0 10.0 10.0 40.0 40.0 40.0
-mcsteps: 100
-nprint: 20
-fragitp: {}/charmm36.ff/mol/sol.itp
-""".format(TEST_DATA_DIR)
-
-        inp_file = Path(temp_dir) / "box.inp"
-        inp_file.write_text(inp_content)
-
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--prefix", "box", "--seed", "456"],
-            cwd=temp_dir,
-            capture_output=True,
-            text=True
-        )
-
-        assert result.returncode == 0, f"Failed: {result.stderr}"
-
-        # Verify molecules are within box
-        pdb_file = Path(temp_dir) / "box_final.pdb"
-        if pdb_file.exists():
-            self._check_box_constraint(pdb_file, min_coord=(10.0, 10.0, 10.0), max_coord=(40.0, 40.0, 40.0))
-
-    def test_cylinder_region(self, temp_dir):
-        """Test cylinder region constraint"""
-        inp_content = """
-version: gcmc_2.0
-box: 50.0 50.0 50.0
-temperature: 300.0
-fragname: WAT
-fragmuex: -10.0
-fragconc: 55.0
-gcmc_region: cylinder 25.0 25.0 25.0 10.0 30.0 z
-mcsteps: 100
-nprint: 20
-fragitp: {}/charmm36.ff/mol/sol.itp
-""".format(TEST_DATA_DIR)
-
-        inp_file = Path(temp_dir) / "cylinder.inp"
-        inp_file.write_text(inp_content)
-
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--prefix", "cylinder", "--seed", "789"],
-            cwd=temp_dir,
-            capture_output=True,
-            text=True
-        )
-
-        assert result.returncode == 0, f"Failed: {result.stderr}"
-
-    def _check_sphere_constraint(self, pdb_file, center, radius):
-        """Helper to check atoms are within sphere"""
-        pdb_content = pdb_file.read_text()
-        atom_lines = [l for l in pdb_content.split('\n') if l.startswith('ATOM')]
-
-        for line in atom_lines:
-            if len(line) > 54:
-                x = float(line[30:38]) / 10.0  # Angstrom to nm
-                y = float(line[38:46]) / 10.0
-                z = float(line[46:54]) / 10.0
-
-                # Calculate distance from center (in nm)
-                dist = np.sqrt((x-center[0])**2 + (y-center[1])**2 + (z-center[2])**2)
-                assert dist <= radius + 0.05, f"Atom at ({x},{y},{z}) nm outside sphere, dist={dist}"
-
-    def _check_box_constraint(self, pdb_file, min_coord, max_coord):
-        """Helper to check atoms are within box"""
-        pdb_content = pdb_file.read_text()
-        atom_lines = [l for l in pdb_content.split('\n') if l.startswith('ATOM')]
-
-        for line in atom_lines:
-            if len(line) > 54:
-                x = float(line[30:38]) / 10.0  # Angstrom to nm
-                y = float(line[38:46]) / 10.0
-                z = float(line[46:54]) / 10.0
-
-                # Check within box boundaries (in nm)
-                assert min_coord[0] - 0.05 <= x <= max_coord[0] + 0.05, f"X coord {x} nm outside box"
-                assert min_coord[1] - 0.05 <= y <= max_coord[1] + 0.05, f"Y coord {y} nm outside box"
-                assert min_coord[2] - 0.05 <= z <= max_coord[2] + 0.05, f"Z coord {z} nm outside box"
+        params = json.loads(params_json.read_text())
+        toks = params["space"]["gcmc_region"].split()
+        assert toks[0] == expected[0]
+        if expected[0] == "cylinder":
+            assert [float(x) for x in toks[1:6]] == pytest.approx([float(x) for x in expected[1][:5]], abs=1e-6)
+            assert toks[6] == expected[1][5]
+        else:
+            assert [float(x) for x in toks[1:]] == pytest.approx([float(x) for x in expected[1]], abs=1e-6)
 
 
 class TestTargetControl:
-    """Test target number control features"""
+    """Target water count parsing via --dump-params."""
 
     @pytest.fixture
     def temp_dir(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            yield tmpdir
+            yield Path(tmpdir)
 
-    def test_target_numwaters(self, temp_dir):
-        """Test target number of waters control"""
-        inp_content = """
-version: gcmc_2.0
-box: 30.0 30.0 30.0
-temperature: 300.0
-fragname: WAT
-fragmuex: -10.0
-fragconc: 55.0
-target_numwaters: 50
-mcsteps: 200
-nprint: 40
-fragitp: {}/charmm36.ff/mol/sol.itp
-""".format(TEST_DATA_DIR)
+    def test_target_numwaters_is_exposed_in_dump_params(self, temp_dir: Path):
+        sol_itp = TEST_DATA_DIR / "charmm36.ff" / "mol" / "sol.itp"
+        assert sol_itp.exists()
 
-        inp_file = Path(temp_dir) / "target.inp"
-        inp_file.write_text(inp_content)
-
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--prefix", "target", "--seed", "333"],
-            cwd=temp_dir,
-            capture_output=True,
-            text=True
+        inp = temp_dir / "target.inp"
+        inp.write_text(
+            f"""
+version:gcmc_2.0
+box_size:30.0 30.0 30.0
+temperature:300.0
+fragitp:{sol_itp}
+fragname:SOL
+fragconc:55.0
+fragmuex:-10.0
+target_numwaters:50
+mcsteps:0
+nprint:1
+""".strip()
+            + "\n"
         )
 
-        assert result.returncode == 0, f"Failed: {result.stderr}"
+        prefix = temp_dir / "out" / "target"
+        prefix.parent.mkdir(parents=True, exist_ok=True)
+        params_json = temp_dir / "out" / "params.json"
+        _run_gcmc(inp, cwd=temp_dir, prefix=prefix, extra_args=["--dump-params", str(params_json)], timeout=60)
 
-        # Check final water count
-        pdb_file = Path(temp_dir) / "target_final.pdb"
-        if pdb_file.exists():
-            pdb_content = pdb_file.read_text()
-            # Extract water count from REMARK
-            water_count_pattern = r"REMARK Water molecules:\s*(\d+)"
-            match = re.search(water_count_pattern, pdb_content)
-            if match:
-                water_count = int(match.group(1))
-                # Should be biased toward target
-                assert 0 <= water_count <= 200, f"Unexpected water count: {water_count}"
+        params = json.loads(params_json.read_text())
+        assert int(params["fragment"]["target_num_waters"]) == 50
 
 
 class TestParameterParsing:
-    """Test parameter parsing and validation"""
+    """Parameter parsing checks via --dump-params."""
 
     @pytest.fixture
     def temp_dir(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            yield tmpdir
+            yield Path(tmpdir)
 
-    def test_all_parameters(self, temp_dir):
-        """Test parsing of all supported parameters"""
-        inp_content = """
-version: gcmc_2.0
-box: 30.0 30.0 30.0
-temperature: 298.15
-fragname: WAT
-fragmuex: -10.5
-fragconc: 55.0
-mctime: 0.8
-fragname: NA
-fragmuex: -8.0
-fragconc: 0.15
-mctime: 0.1
-fragname: CL
-fragmuex: -7.5
-fragconc: 0.15
-mctime: 0.1
-mcsteps: 50
-nprint: 10
-nsave: 25
-use_cavity_bias: yes
-cavity_grid_dx: 1.5
-probe_radius: 1.4
-use_switching: yes
-switch_r_on: 8.0
-switch_r_off: 10.0
-pairlist_freq: 500
-target_numwaters: 100
-wdens: 1.0
-gcmc_region: sphere 15.0 15.0 15.0 5.0
-exclude_protein_volume: yes
-exclude_hydrogens_from_grid: yes
-use_vdw_radius_for_grid: yes
-fragitp: {}/charmm36.ff/mol/sol.itp
-fragitp: {}/charmm36.ff/mol/na.itp
-fragitp: {}/charmm36.ff/mol/cl.itp
-""".format(TEST_DATA_DIR, TEST_DATA_DIR, TEST_DATA_DIR)
+    def test_switching_and_pairlist_frequency_in_dump_params(self, temp_dir: Path):
+        sol_itp = TEST_DATA_DIR / "charmm36.ff" / "mol" / "sol.itp"
+        assert sol_itp.exists()
 
-        inp_file = Path(temp_dir) / "all_params.inp"
-        inp_file.write_text(inp_content)
+        inp = temp_dir / "params.inp"
+        inp.write_text(
+            f"""
+version:gcmc_2.0
+box_size:30.0 30.0 30.0
+temperature:298.15
+fragitp:{sol_itp}
+fragname:SOL
+fragconc:55.0
+fragmuex:-10.0
 
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--prefix", "params", "--verbose"],
-            cwd=temp_dir,
-            capture_output=True,
-            text=True
+use_switching:yes
+switch_r_on:8.0
+switch_r_off:10.0
+
+pairlist_freq:500
+use_group_cutoff:no
+
+mcsteps:0
+nprint:1
+""".strip()
+            + "\n"
         )
 
-        assert result.returncode == 0, f"Failed: {result.stderr}"
+        prefix = temp_dir / "out" / "params"
+        prefix.parent.mkdir(parents=True, exist_ok=True)
+        params_json = temp_dir / "out" / "params.json"
+        _run_gcmc(inp, cwd=temp_dir, prefix=prefix, extra_args=["--dump-params", str(params_json)], timeout=60)
 
-        # Check that key parameters were parsed (if verbose output)
-        if "--verbose" in str(["--verbose"]):
-            # Check various parameters mentioned in output
-            expected_keywords = ["temperature", "298.15", "fragment", "cavity",
-                               "switching", "pairlist", "region"]
-            found_count = sum(1 for kw in expected_keywords if kw.lower() in result.stdout.lower())
-            assert found_count > 3, f"Not enough parameters recognized in output"
+        params = json.loads(params_json.read_text())
+        assert params["mc"]["use_switching"] is True
+        assert float(params["mc"]["switch_r_on_nm"]) == pytest.approx(0.8, abs=1e-6)
+        assert float(params["mc"]["switch_r_off_nm"]) == pytest.approx(1.0, abs=1e-6)
+        assert int(params["energy"]["pairlist_freq"]) == 500
+        assert params["energy"]["use_group_cutoff"] is False
 
-    def test_invalid_parameter_handling(self, temp_dir):
-        """Test handling of invalid parameters"""
-        inp_content = """
-version: gcmc_2.0
-box: 30.0 30.0 30.0
-temperature: -100.0  # Invalid temperature
-fragname: WAT
-fragmuex: -10.0
-fragconc: 55.0
-mcsteps: 10
-fragitp: {}/charmm36.ff/mol/sol.itp
-""".format(TEST_DATA_DIR)
-
-        inp_file = Path(temp_dir) / "invalid.inp"
-        inp_file.write_text(inp_content)
-
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--prefix", "invalid"],
-            cwd=temp_dir,
-            capture_output=True,
-            text=True
+    def test_invalid_missing_fragment_definitions_fail(self, temp_dir: Path):
+        _require_binary()
+        inp = temp_dir / "invalid.inp"
+        inp.write_text(
+            """
+version:gcmc_2.0
+box_size:30.0 30.0 30.0
+temperature:300.0
+mcsteps:1
+nprint:1
+""".strip()
+            + "\n"
         )
 
-        # Should either fail or handle gracefully
-        # Negative temperature might cause issues
-        assert result.returncode != 0 or "warning" in result.stdout.lower() or result.returncode == 0
+        prefix = temp_dir / "out" / "invalid"
+        prefix.parent.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run(
+            [str(GCMC_CPU_PATH), "--inp", str(inp), "--prefix", str(prefix)],
+            cwd=str(temp_dir),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert result.returncode != 0
 
 
 class TestOutputValidation:
-    """Test output file validation"""
+    """Output file invariants that should not depend on logging."""
 
     @pytest.fixture
     def temp_dir(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            yield tmpdir
+            yield Path(tmpdir)
 
-    def test_pdb_atom_numbering(self, temp_dir):
-        """Test PDB atom numbering is sequential"""
-        inp_content = """
-version: gcmc_2.0
-box: 20.0 20.0 20.0
-temperature: 300.0
-fragname: WAT
-fragmuex: -10.0
-fragconc: 55.0
-mcsteps: 50
-nprint: 10
-fragitp: {}/charmm36.ff/mol/sol.itp
-""".format(TEST_DATA_DIR)
+    def test_pdb_atom_numbering_is_sequential_when_atoms_present(self, temp_dir: Path):
+        sol_itp = TEST_DATA_DIR / "charmm36.ff" / "mol" / "sol.itp"
+        assert sol_itp.exists()
 
-        inp_file = Path(temp_dir) / "numbering.inp"
-        inp_file.write_text(inp_content)
-
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--prefix", "num", "--seed", "111"],
-            cwd=temp_dir,
-            capture_output=True,
-            text=True
+        inp = temp_dir / "numbering.inp"
+        inp.write_text(
+            f"""
+version:gcmc_2.0
+box_size:20.0 20.0 20.0
+temperature:300.0
+fragitp:{sol_itp}
+fragname:SOL
+fragconc:55.0
+fragmuex:1000.0
+moves_per_step:1
+mcsteps:1
+nprint:1
+attempt_prob_ins:1.0
+attempt_prob_del:0.0
+attempt_prob_trn:0.0
+attempt_prob_rot:0.0
+""".strip()
+            + "\n"
         )
 
-        assert result.returncode == 0, f"Failed: {result.stderr}"
+        prefix = temp_dir / "out" / "num"
+        prefix.parent.mkdir(parents=True, exist_ok=True)
+        _run_gcmc(inp, cwd=temp_dir, prefix=prefix, extra_args=["--seed", "111"], timeout=60)
 
-        pdb_file = Path(temp_dir) / "num_final.pdb"
-        if pdb_file.exists():
-            pdb_content = pdb_file.read_text()
-            atom_lines = [l for l in pdb_content.split('\n') if l.startswith('ATOM')]
+        pdb = Path(f"{prefix}_final.pdb")
+        assert pdb.exists()
+        atom_lines = _pdb_atom_lines(pdb)
+        assert atom_lines, "No ATOM/HETATM lines captured"
+        for i, line in enumerate(atom_lines, 1):
+            assert int(line[6:11].strip()) == i
 
-            # Check sequential numbering
-            for i, line in enumerate(atom_lines, 1):
-                atom_num = int(line[6:11].strip())
-                assert atom_num == i, f"Atom numbering not sequential: expected {i}, got {atom_num}"
+    def test_top_file_statistics_section_contains_fragment_row(self, temp_dir: Path):
+        sol_itp = TEST_DATA_DIR / "charmm36.ff" / "mol" / "sol.itp"
+        assert sol_itp.exists()
 
-    def test_top_file_statistics(self, temp_dir):
-        """Test TOP file statistics section"""
-        inp_content = """
-version: gcmc_2.0
-box: 20.0 20.0 20.0
-temperature: 300.0
-fragname: WAT
-fragmuex: -10.0
-fragconc: 55.0
-mcsteps: 100
-nprint: 20
-fragitp: {}/charmm36.ff/mol/sol.itp
-""".format(TEST_DATA_DIR)
-
-        inp_file = Path(temp_dir) / "stats.inp"
-        inp_file.write_text(inp_content)
-
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--prefix", "stats", "--seed", "222"],
-            cwd=temp_dir,
-            capture_output=True,
-            text=True
+        inp = temp_dir / "stats.inp"
+        inp.write_text(
+            f"""
+version:gcmc_2.0
+box_size:20.0 20.0 20.0
+temperature:300.0
+fragitp:{sol_itp}
+fragname:SOL
+fragconc:55.0
+fragmuex:-10.0
+mcsteps:0
+nprint:1
+""".strip()
+            + "\n"
         )
 
-        assert result.returncode == 0, f"Failed: {result.stderr}"
+        prefix = temp_dir / "out" / "stats"
+        prefix.parent.mkdir(parents=True, exist_ok=True)
+        _run_gcmc(inp, cwd=temp_dir, prefix=prefix, extra_args=["--seed", "222"], timeout=60)
 
-        top_file = Path(temp_dir) / "stats_final.top"
-        if top_file.exists():
-            top_content = top_file.read_text()
+        top_file = Path(f"{prefix}_final.top")
+        assert top_file.exists()
+        top_content = top_file.read_text()
 
-            # Check required sections
-            assert "[ system ]" in top_content
-            assert "[ molecules ]" in top_content
-            assert "[ fragments ]" in top_content
-            assert "[ statistics ]" in top_content
+        assert "[ system ]" in top_content
+        assert "[ molecules ]" in top_content
+        assert "[ fragments ]" in top_content
+        assert "[ statistics ]" in top_content
 
-            # Check fragment info
-            if "[ fragments ]" in top_content:
-                # Should contain fragment name, count, concentration, chemical potential
-                assert "WAT" in top_content or "SOL" in top_content
-                assert "55.00" in top_content  # concentration
-                frag_row = None
-                in_frag = False
-                for line in top_content.splitlines():
-                    if line.strip() == "[ fragments ]":
-                        in_frag = True
-                        continue
-                    if in_frag:
-                        if line.startswith("["):
-                            break
-                        if not line.strip() or line.lstrip().startswith(";"):
-                            continue
-                        cols = line.split()
-                        if not cols:
-                            continue
-                        if cols[0].upper() in {"WAT", "SOL"} and len(cols) >= 5:
-                            frag_row = cols
-                            break
-                assert frag_row is not None, "Missing fragment row in [ fragments ] section"
-                chem_pot_kj = float(frag_row[-1])
-                assert chem_pot_kj == pytest.approx(-10.0 * 4.184, abs=0.02)
-
-
-if __name__ == "__main__":
-    # Run tests with pytest
-    pytest.main([__file__, "-v"])
+        frag_row = None
+        in_frag = False
+        for line in top_content.splitlines():
+            if line.strip() == "[ fragments ]":
+                in_frag = True
+                continue
+            if in_frag:
+                if line.startswith("["):
+                    break
+                if not line.strip() or line.lstrip().startswith(";"):
+                    continue
+                cols = line.split()
+                if cols and cols[0].upper() in {"WAT", "SOL"} and len(cols) >= 5:
+                    frag_row = cols
+                    break
+        assert frag_row is not None, "Missing fragment row in [ fragments ] section"
+        chem_pot_kj = float(frag_row[-1])
+        assert chem_pot_kj == pytest.approx(-10.0 * 4.184, abs=0.02)

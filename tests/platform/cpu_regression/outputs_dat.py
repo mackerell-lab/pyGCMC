@@ -79,7 +79,6 @@ atomtypes:{atp_file}
 top:{top_file}
 pdb:{pdb_file}
 protitp:{top_file}
-inp_units:nm
 
 fragname: water
 fragconc: 55.0
@@ -276,13 +275,13 @@ seed: {seed}
             box_z = float(cryst_match.group(3))
             print(f"✅ Box dimensions: {box_x} × {box_y} × {box_z} Å")
 
-            # In inp_units:nm mode, periodic box comes from INP box_size (written to PDB in Å).
+            # Default (gcmc_gpu/charmm) mode: INP box_size is in Å and should round-trip into CRYST1 as-is.
             inp_content = (tmp_path / "test.inp").read_text()
             inp_match = re.search(r"^box_size:\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)", inp_content, re.M)
             assert inp_match, "Missing box_size line in input INP"
-            expected_x = float(inp_match.group(1)) * 10.0
-            expected_y = float(inp_match.group(2)) * 10.0
-            expected_z = float(inp_match.group(3)) * 10.0
+            expected_x = float(inp_match.group(1))
+            expected_y = float(inp_match.group(2))
+            expected_z = float(inp_match.group(3))
 
             tolerance = 1.0
             assert abs(box_x - expected_x) < tolerance, f"Box X mismatch: {box_x} vs {expected_x}"

@@ -117,6 +117,88 @@ mc_move_prob:1 0 0 0
         ratio = float(rec_na["z"]) / float(rec_cl["z"])
         assert ratio == pytest.approx(expected_ratio, rel=1e-6, abs=1e-12)
 
+    def test_activity_ratio_conc_and_muex(self, tmp_path):
+        """
+        When both concentration and excess chemical potential are supplied, acceptance uses:
+            z = conc(M) * NA_CONV * exp(beta * mu_ex)
+        so z_i/z_j = (conc_i/conc_j) * exp(beta*(mu_i-mu_j)).
+        """
+        work = tmp_path / "multi_component_activity_conc_mu"
+        work.mkdir(parents=True, exist_ok=True)
+
+        test_data_dir = Path(__file__).parent.parent / "data"
+        na_itp = test_data_dir / "charmm36.ff" / "mol" / "na.itp"
+        cl_itp = test_data_dir / "charmm36.ff" / "mol" / "cl.itp"
+        assert na_itp.exists()
+        assert cl_itp.exists()
+
+        mu_na_kj = -3.0
+        mu_cl_kj = -1.0
+        conc_na = 0.20
+        conc_cl = 0.10
+        temperature_k = 300.0
+        beta = 1.0 / (8.314e-3 * temperature_k)  # mol/kJ
+
+        expected_ratio = (conc_na / conc_cl) * math.exp(beta * (mu_na_kj - mu_cl_kj))
+
+        kj_to_kcal = 1.0 / 4.184
+        mu_na_kcal = mu_na_kj * kj_to_kcal
+        mu_cl_kcal = mu_cl_kj * kj_to_kcal
+
+        out_prefix = work / "out" / "gcmc"
+        out_prefix.parent.mkdir(parents=True, exist_ok=True)
+        accept_log = work / "out" / "acceptance.jsonl"
+
+        inp_file = work / "test.inp"
+        inp_file.write_text(
+            f"""
+fragitp:{na_itp}
+fragitp:{cl_itp}
+fragname:NA CL
+fragconc:{conc_na:.6f} {conc_cl:.6f}
+fragmuex:{mu_na_kcal:.8f} {mu_cl_kcal:.8f}
+mctime:1 1
+
+box_size:100.0 100.0 100.0
+cutoff:12.0
+temperature:{temperature_k}
+moves_per_step:1
+mcsteps:200
+nprint:1000
+mc_move_prob:1 0 0 0
+""".strip()
+            + "\n"
+        )
+
+        result = subprocess.run(
+            [
+                str(GCMC_CPU_PATH),
+                "--inp",
+                str(inp_file),
+                "--prefix",
+                str(out_prefix),
+                "--dump-accept",
+                str(accept_log),
+                "--seed",
+                "321",
+            ],
+            cwd=str(work),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert accept_log.exists()
+
+        rec_na = self._first_accept_record(accept_log, move="insertion", species="NA")
+        rec_cl = self._first_accept_record(accept_log, move="insertion", species="CL")
+
+        assert float(rec_na["mu"]) == pytest.approx(mu_na_kj, rel=1e-6, abs=1e-6)
+        assert float(rec_cl["mu"]) == pytest.approx(mu_cl_kj, rel=1e-6, abs=1e-6)
+
+        ratio = float(rec_na["z"]) / float(rec_cl["z"])
+        assert ratio == pytest.approx(expected_ratio, rel=1e-6, abs=1e-12)
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

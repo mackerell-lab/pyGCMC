@@ -1,0 +1,33 @@
+;
+;	File 'topol.top' was generated
+;	By user: sunhwan (501)
+;	On host: Jo.local
+;	At date: Mon Jul 26 10:39:43 2021
+;
+;	This is a standalone topology file
+;
+;	Created by:
+;	                :-) GROMACS - gmx pdb2gmx, 2021.2-MODIFIED (-:
+;	
+;	Executable:   /usr/local/bin/../Cellar/gromacs/2021.2/bin/gmx
+;	Data prefix:  /usr/local/bin/../Cellar/gromacs/2021.2
+;	Working dir:  /Users/sunhwan/work/silcsbio/gcmc/gcmc_cpu_2021/examples/waterbox
+;	Command line:
+;	  gmx pdb2gmx -f waterbox.pdb
+;	Force field was read from current directory or a relative path - path added.
+;
+
+; Include forcefield parameters
+#include "./charmm36.ff/forcefield.itp"
+
+; Include topology for ions
+#include "./charmm36.ff/ions.itp"
+#include "charmm36.ff/mol/sol.itp"
+
+[ system ]
+; Name
+Protein
+
+[ molecules ]
+; Compound        #mols
+SOL  		1868

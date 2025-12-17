@@ -3009,6 +3009,7 @@ void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
 
     const auto& basic = params_->get_basic_info();
     const auto& space = params_->get_space_info();
+    const auto& mc = params_->get_mc_info();
     const auto& energy = params_->get_energy_info();
     const auto& bias = params_->get_bias_info();
     const auto& frag = params_->get_fragment_info();
@@ -3036,10 +3037,26 @@ void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
         << ",\"gcmc_region\":\"" << escapeJsonString(space.gcmc_region) << "\""
         << "},";
 
+    ofs << "\"mc\":{"
+        << "\"mcsteps\":" << mc.mc_steps
+        << ",\"moves_per_step\":" << mc.moves_per_step
+        << ",\"print_freq\":" << mc.print_freq
+        << ",\"temperature_K\":" << mc.temperature
+        << ",\"wdens\":" << mc.wdens
+        << ",\"use_switching\":" << (mc.use_switching ? "true" : "false")
+        << ",\"switch_r_on_nm\":" << mc.switch_r_on
+        << ",\"switch_r_off_nm\":" << mc.switch_r_off
+        << "},";
+
     ofs << "\"energy\":{"
-        << "\"fragment_cutoff_nm\":" << energy.fragment_cutoff
+        << "\"use_group_cutoff\":" << (energy.use_group_cutoff ? "true" : "false")
+        << ",\"fragment_cutoff_nm\":" << energy.fragment_cutoff
         << ",\"protein_cutoff_nm\":" << energy.protein_cutoff
         << ",\"pairlist_cutoff_nm\":" << energy.pairlist_cutoff
+        << ",\"pairlist_freq\":" << energy.pairlist_freq
+        << ",\"use_switching\":" << (energy.use_switching ? "true" : "false")
+        << ",\"switch_dist_fragment_nm\":" << energy.switch_dist_fragment
+        << ",\"switch_dist_protein_nm\":" << energy.switch_dist_protein
         << "},";
 
     ofs << "\"bias\":{"
@@ -3053,6 +3070,7 @@ void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
         << "\"use_number_water_nbar\":" << (frag.use_number_water_nbar ? "true" : "false")
         << ",\"use_const_water_nbar\":" << (frag.use_const_water_nbar ? "true" : "false")
         << ",\"const_water_nbar\":" << frag.const_water_nbar
+        << ",\"target_num_waters\":" << frag.target_num_waters
         << ",\"water_density_M\":" << frag.water_density
         << ",\"conc_list_M\":";
     writeJsonFloatVector(ofs, frag.conc_list);

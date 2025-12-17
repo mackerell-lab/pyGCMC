@@ -1,0 +1,25 @@
+
+par:charmm36.ff/ffnonbonded.itp
+par:charmm36.ff/silcs.itp
+par:charmm36.ff/nbfix.itp
+fragitp:charmm36.ff/mol/benx.itp
+fragitp:charmm36.ff/mol/sol.itp
+atomtypes:charmm36.ff/atomtypes.atp
+monomerdir:charmm36.ff/mol
+top:waterbox.top
+pdb:waterbox.pdb
+op_top:out.top
+op_pdb:out.pdb
+grid_dx:   1.000
+box_size:  18.856 18.856 18.856
+gc_center:  18.856 18.856 18.856
+sys_center:  18.856 18.856 18.856
+energy_cutoff:  8.000
+mcsteps:1000000
+nprint:1000
+use_group_cutoff:yes
+use_cavity_bias:no
+use_conf_bias:no
+fragname:    benx          sol
+fragconc:   1.000       50.000
+fragmuex:   -0.79       -5.6

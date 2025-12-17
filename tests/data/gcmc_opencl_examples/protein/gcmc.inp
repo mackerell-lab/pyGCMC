@@ -1,0 +1,42 @@
+
+par:charmm36.ff/ffnonbonded.itp
+par:charmm36.ff/silcs.itp
+par:charmm36.ff/nbfix.itp
+fragitp:charmm36.ff/mol/benx.itp
+fragitp:charmm36.ff/mol/prpx.itp
+fragitp:charmm36.ff/mol/dmee.itp
+fragitp:charmm36.ff/mol/meoh.itp
+fragitp:charmm36.ff/mol/form.itp
+fragitp:charmm36.ff/mol/imia.itp
+fragitp:charmm36.ff/mol/acey.itp
+fragitp:charmm36.ff/mol/mamy.itp
+fragitp:charmm36.ff/mol/sol.itp
+atomtypes:charmm36.ff/atomtypes.atp
+monomerdir:charmm36.ff/mol
+top:181L_apo_silcs.1.top
+pdb:181L_apo_silcs.1.pdb
+protitp:181L_apo_silcs.1.top
+grid_dx:   1.000
+box_size:  36.736   40.850   49.379
+gc_center:  33.368   35.425   39.690
+sys_center:  33.368   35.425   39.690
+energy_cutoff_frag:  8.000
+energy_cutoff_prot:  8.000
+use_group_cutoff:yes
+use_cavity_bias:yes
+use_conf_bias:yes
+num_conf_bias_trial:10
+use_number_water_nbar:yes
+fragname:     benx   prpx   dmee   meoh   form   imia   acey   mamy    sol 
+fragconc:     0.25   0.25   0.25   0.25   0.25   0.25   0.25   0.25  55.00 
+fragmuex:    -0.79   1.96  -1.79  -5.36 -10.92 -14.18 -97.31 -68.49  -5.60 
+mctime:       0.70   0.70   0.70   0.70   0.70   0.70   0.70   0.70   0.30
+insdel_frac:0.8
+mcsteps:50000
+nprint:1000
+conserve_frags:no
+map_generation:no
+op_top:examples/lysozyme/181L_apo_silcs.1.gc.0.top
+op_pdb:examples/lysozyme/181L_apo_silcs.1.gc.0.pdb
+initcycle:yes
+map_filename_prefix:gc_maps/181L_apo_silcs.gc.1.0

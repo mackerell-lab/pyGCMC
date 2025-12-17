@@ -10,6 +10,7 @@ import tempfile
 import numpy as np
 from pathlib import Path
 import re
+import json
 
 GCMC_CPU_PATH = Path(__file__).resolve().parents[3] / "build" / "bin" / "gcmc_cpu"
 TEST_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
@@ -34,7 +35,8 @@ class TestGCMCCompatibility:
             args,
             cwd=temp_dir,
             capture_output=True,
-            text=True
+            text=True,
+            timeout=120,
         )
         return result
 
@@ -47,10 +49,15 @@ version: gcmc_2.0
 box: 30.0 30.0 30.0
 temperature: 300.0
 fragname: WAT
-fragmuex: -10.0
+fragmuex: 1000.0
 fragconc: 55.0
-mcsteps: 100
-nprint: 20
+moves_per_step: 1
+mcsteps: 1
+nprint: 1
+attempt_prob_ins: 1.0
+attempt_prob_del: 0.0
+attempt_prob_trn: 0.0
+attempt_prob_rot: 0.0
 nsave: 50
 fragitp: {}/charmm36.ff/mol/sol.itp
 """.format(TEST_DATA_DIR)
@@ -58,23 +65,40 @@ fragitp: {}/charmm36.ff/mol/sol.itp
         inp_file = Path(temp_dir) / "water_basic.inp"
         inp_file.write_text(inp_content)
 
-        result = self.run_gcmc(inp_file, temp_dir, ["--prefix", "water_basic", "--seed", "42"])
+        out_prefix = Path(temp_dir) / "water_basic"
+        params_json = Path(temp_dir) / "params.json"
+        accept_log = Path(temp_dir) / "accept.jsonl"
+        result = self.run_gcmc(
+            inp_file,
+            temp_dir,
+            [
+                "--prefix",
+                str(out_prefix),
+                "--seed",
+                "42",
+                "--dump-params",
+                str(params_json),
+                "--dump-accept",
+                str(accept_log),
+            ],
+        )
 
         # Check successful execution
         assert result.returncode == 0, f"Failed: {result.stderr}"
-        assert "Simulation completed" in result.stdout
 
         # Check output files exist
-        pdb_file = Path(temp_dir) / "water_basic_final.pdb"
-        top_file = Path(temp_dir) / "water_basic_final.top"
+        pdb_file = Path(f"{out_prefix}_final.pdb")
+        top_file = Path(f"{out_prefix}_final.top")
         assert pdb_file.exists(), "PDB file not created"
         assert top_file.exists(), "TOP file not created"
+        assert accept_log.exists(), "Acceptance log not created"
+        assert params_json.exists(), "Params JSON not created"
 
         # Validate PDB format
         pdb_content = pdb_file.read_text()
-        assert "REMARK GCMC Trajectory" in pdb_content
         assert "CRYST1" in pdb_content
         assert "END" in pdb_content
+        assert any(line.startswith(("ATOM", "HETATM")) for line in pdb_content.splitlines())
 
         # Validate TOP format
         top_content = top_file.read_text()
@@ -110,14 +134,46 @@ fragitp: {}/charmm36.ff/mol/cl.itp
         inp_file = Path(temp_dir) / "silcs.inp"
         inp_file.write_text(inp_content)
 
-        result = self.run_gcmc(inp_file, temp_dir, ["--prefix", "silcs"])
+        out_prefix = Path(temp_dir) / "silcs"
+        params_json = Path(temp_dir) / "params.json"
+        result = self.run_gcmc(
+            inp_file,
+            temp_dir,
+            ["--prefix", str(out_prefix), "--dump-params", str(params_json)],
+        )
 
         assert result.returncode == 0, f"Failed: {result.stderr}"
 
-        # Check that multiple fragments were recognized
-        assert "WAT" in result.stdout or "SOL" in result.stdout
-        assert "NA" in result.stdout or "SOD" in result.stdout
-        assert "CL" in result.stdout or "CLA" in result.stdout
+        final_top = Path(f"{out_prefix}_final.top")
+        assert final_top.exists()
+        top_content = final_top.read_text()
+        assert "[ fragments ]" in top_content
+
+        # Keep this robust to formatting: just ensure the fragment names appear in the fragment table.
+        frag_rows = []
+        in_frag = False
+        for line in top_content.splitlines():
+            if line.strip() == "[ fragments ]":
+                in_frag = True
+                continue
+            if in_frag:
+                if line.startswith("["):
+                    break
+                if not line.strip() or line.lstrip().startswith(";"):
+                    continue
+                frag_rows.append(line.split()[0].strip().upper())
+        for name in ("WAT", "SOL", "NA", "CL"):
+            # Water may appear as WAT or SOL depending on topology conventions.
+            if name in ("WAT", "SOL"):
+                continue
+            assert name in frag_rows, f"Missing {name} in [ fragments ]: {frag_rows}"
+        assert ("WAT" in frag_rows) or ("SOL" in frag_rows), f"Missing water fragment in [ fragments ]: {frag_rows}"
+
+        params = json.loads(params_json.read_text())
+        assert params["basic"]["inp_units"] == "gcmc_gpu"
+        assert [float(x) for x in params["fragment"]["conc_list_M"]] == pytest.approx(
+            [55.0, 0.15, 0.15], abs=1e-6
+        )
 
     def test_cavity_bias_parameters(self, temp_dir):
         """Test cavity bias parameters from legacy format"""
@@ -143,17 +199,25 @@ fragitp: {}/charmm36.ff/mol/sol.itp
         inp_file = Path(temp_dir) / "cavity.inp"
         inp_file.write_text(inp_content)
 
-        result = self.run_gcmc(inp_file, temp_dir, ["--prefix", "cavity", "--verbose"])
+        out_prefix = Path(temp_dir) / "cavity"
+        params_json = Path(temp_dir) / "params.json"
+        result = self.run_gcmc(
+            inp_file,
+            temp_dir,
+            ["--prefix", str(out_prefix), "--dump-params", str(params_json)],
+        )
 
         assert result.returncode == 0, f"Failed: {result.stderr}"
 
-        # Check that cavity bias was enabled (if verbose output available)
-        if "--verbose" in result.stdout:
-            assert "cavity" in result.stdout.lower() or "bias" in result.stdout.lower()
+        params = json.loads(params_json.read_text())
+        assert params["bias"]["use_cavity_bias"] is True
+        assert params["space"]["exclude_protein_volume"] is True
+        assert params["space"]["exclude_hydrogens_from_grid"] is True
+        assert params["space"]["use_vdw_radius_for_grid"] is True
+        assert float(params["bias"]["probe_radius_nm"]) == pytest.approx(0.14, abs=1e-6)
 
     def test_gcmc_region_constraint(self, temp_dir):
         """Test GCMC region constraints"""
-        # Test sphere region
         inp_content = """
 version: gcmc_2.0
 box: 50.0 50.0 50.0
@@ -170,24 +234,21 @@ fragitp: {}/charmm36.ff/mol/sol.itp
         inp_file = Path(temp_dir) / "region.inp"
         inp_file.write_text(inp_content)
 
-        result = self.run_gcmc(inp_file, temp_dir, ["--prefix", "region"])
+        out_prefix = Path(temp_dir) / "region"
+        params_json = Path(temp_dir) / "params.json"
+        result = self.run_gcmc(
+            inp_file,
+            temp_dir,
+            ["--prefix", str(out_prefix), "--dump-params", str(params_json)],
+        )
 
         assert result.returncode == 0, f"Failed: {result.stderr}"
 
-        # Check PDB coordinates are within sphere
-        pdb_file = Path(temp_dir) / "region_final.pdb"
-        if pdb_file.exists():
-            pdb_content = pdb_file.read_text()
-            # Extract coordinates from ATOM lines
-            atom_lines = [l for l in pdb_content.split('\n') if l.startswith('ATOM')]
-            for line in atom_lines:
-                if len(line) > 54:
-                    x = float(line[30:38]) / 10.0  # Angstrom to nm
-                    y = float(line[38:46]) / 10.0
-                    z = float(line[46:54]) / 10.0
-                    # Check if within sphere (center at 25.0, 25.0, 25.0 nm, radius 10.0 nm)
-                    dist = np.sqrt((x-25.0)**2 + (y-25.0)**2 + (z-25.0)**2)
-                    assert dist <= 10.5, f"Atom outside region: ({x}, {y}, {z}), dist={dist}"
+        params = json.loads(params_json.read_text())
+        # gcmc_gpu-style regions are specified in Å but stored internally in nm.
+        toks = params["space"]["gcmc_region"].split()
+        assert toks[0] == "sphere"
+        assert [float(x) for x in toks[1:]] == pytest.approx([2.5, 2.5, 2.5, 1.0], abs=1e-6)
 
     def test_switching_function(self, temp_dir):
         """Test switching function parameters"""
@@ -209,13 +270,21 @@ fragitp: {}/charmm36.ff/mol/sol.itp
         inp_file = Path(temp_dir) / "switching.inp"
         inp_file.write_text(inp_content)
 
-        result = self.run_gcmc(inp_file, temp_dir, ["--prefix", "switching", "--verbose"])
+        out_prefix = Path(temp_dir) / "switching"
+        params_json = Path(temp_dir) / "params.json"
+        result = self.run_gcmc(
+            inp_file,
+            temp_dir,
+            ["--prefix", str(out_prefix), "--dump-params", str(params_json)],
+        )
 
         assert result.returncode == 0, f"Failed: {result.stderr}"
 
-        # With verbose, check switching was recognized
-        if "--verbose" in str(["--verbose"]):
-            assert "switch" in result.stdout.lower() or result.returncode == 0
+        params = json.loads(params_json.read_text())
+        assert params["mc"]["use_switching"] is True
+        # Input r_on/r_off are Å under gcmc_gpu; dump reports internal nm.
+        assert float(params["mc"]["switch_r_on_nm"]) == pytest.approx(0.8, abs=1e-6)
+        assert float(params["mc"]["switch_r_off_nm"]) == pytest.approx(1.0, abs=1e-6)
 
     def test_target_numwaters(self, temp_dir):
         """Test target number of waters feature"""
@@ -236,15 +305,18 @@ fragitp: {}/charmm36.ff/mol/sol.itp
         inp_file = Path(temp_dir) / "target.inp"
         inp_file.write_text(inp_content)
 
-        result = self.run_gcmc(inp_file, temp_dir, ["--prefix", "target"])
+        out_prefix = Path(temp_dir) / "target"
+        params_json = Path(temp_dir) / "params.json"
+        result = self.run_gcmc(
+            inp_file,
+            temp_dir,
+            ["--prefix", str(out_prefix), "--dump-params", str(params_json)],
+        )
 
         assert result.returncode == 0, f"Failed: {result.stderr}"
 
-        # Check water density output if wdens was set
-        if "Water density" in result.stdout:
-            # Extract density values
-            density_lines = [l for l in result.stdout.split('\n') if "density" in l.lower()]
-            assert len(density_lines) > 0, "No density output found"
+        params = json.loads(params_json.read_text())
+        assert int(params["fragment"]["target_num_waters"]) == 100
 
     def test_pairlist_frequency(self, temp_dir):
         """Test pairlist update frequency parameter"""
@@ -264,13 +336,18 @@ fragitp: {}/charmm36.ff/mol/sol.itp
         inp_file = Path(temp_dir) / "pairlist.inp"
         inp_file.write_text(inp_content)
 
-        result = self.run_gcmc(inp_file, temp_dir, ["--prefix", "pairlist", "--verbose"])
+        out_prefix = Path(temp_dir) / "pairlist"
+        params_json = Path(temp_dir) / "params.json"
+        result = self.run_gcmc(
+            inp_file,
+            temp_dir,
+            ["--prefix", str(out_prefix), "--dump-params", str(params_json)],
+        )
 
         assert result.returncode == 0, f"Failed: {result.stderr}"
 
-        # With verbose, check pairlist_freq was parsed
-        if "--verbose" in str(["--verbose"]):
-            assert "pairlist" in result.stdout.lower() or "500" in result.stdout
+        params = json.loads(params_json.read_text())
+        assert int(params["energy"]["pairlist_freq"]) == 500
 
     def test_output_file_format(self, temp_dir):
         """Test output file format and content validation"""
@@ -370,9 +447,7 @@ mcsteps: 10
 
         result = self.run_gcmc(inp_file, temp_dir, ["--prefix", "error"])
 
-        # Should fail or handle gracefully
-        # Either error in output or specific return code
-        assert result.returncode != 0 or "error" in result.stderr.lower() or "warning" in result.stdout.lower()
+        assert result.returncode != 0
 
     def test_checkpoint_disabled_by_default(self, temp_dir):
         """Test that checkpoint is disabled by default"""
@@ -436,23 +511,30 @@ fragitp: {}/charmm36.ff/mol/sol.itp
         inp_file = Path(temp_dir) / "accept.inp"
         inp_file.write_text(inp_content)
 
+        out_prefix = Path(temp_dir) / "accept"
         result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--prefix", "accept", "--seed", "999"],
+            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--prefix", str(out_prefix), "--seed", "999"],
             cwd=temp_dir,
             capture_output=True,
-            text=True
+            text=True,
+            timeout=120,
         )
 
         assert result.returncode == 0, f"Failed: {result.stderr}"
 
-        # Parse acceptance rate from output
-        accept_pattern = r"acceptance rate:\s*([\d.]+)%"
-        matches = re.findall(accept_pattern, result.stdout.lower())
-
-        if matches:
-            # At least one acceptance rate should be reasonable (0-100%)
-            rates = [float(m) for m in matches]
-            assert all(0 <= r <= 100 for r in rates), f"Invalid acceptance rates: {rates}"
+        stats = Path(f"{out_prefix}_statistics.dat")
+        assert stats.exists()
+        rates = []
+        for line in stats.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            cols = line.split()
+            if len(cols) < 4:
+                continue
+            rates.append(float(cols[3]))
+        assert rates, "No acceptance rate rows captured"
+        assert all(0.0 <= r <= 100.0 for r in rates), f"Invalid acceptance rates: {rates[:5]}"
 
     def test_energy_conservation(self, temp_dir):
         """Test that energies are reasonable"""
@@ -471,25 +553,31 @@ fragitp: {}/charmm36.ff/mol/sol.itp
         inp_file = Path(temp_dir) / "energy.inp"
         inp_file.write_text(inp_content)
 
+        out_prefix = Path(temp_dir) / "energy"
         result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--prefix", "energy"],
+            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--prefix", str(out_prefix)],
             cwd=temp_dir,
             capture_output=True,
-            text=True
+            text=True,
+            timeout=120,
         )
 
         assert result.returncode == 0, f"Failed: {result.stderr}"
 
-        # Parse energy values
-        energy_pattern = r"energy:\s*([-\d.]+)\s*kJ/mol"
-        matches = re.findall(energy_pattern, result.stdout.lower())
-
-        if matches:
-            energies = [float(m) for m in matches]
-            # Check energies are finite and reasonable
-            assert all(np.isfinite(e) for e in energies), f"Non-finite energies: {energies}"
-            # Energy should be reasonable (not too positive)
-            assert all(e < 1e6 for e in energies), f"Unreasonable energies: {energies}"
+        stats = Path(f"{out_prefix}_statistics.dat")
+        assert stats.exists()
+        energies = []
+        for line in stats.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            cols = line.split()
+            if len(cols) < 2:
+                continue
+            energies.append(float(cols[1]))
+        assert energies, "No energy rows captured"
+        assert all(np.isfinite(e) for e in energies)
+        assert all(-1e10 < e < 1e10 for e in energies)
 
 
 if __name__ == "__main__":

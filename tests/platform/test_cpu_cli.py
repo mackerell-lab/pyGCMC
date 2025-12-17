@@ -70,6 +70,9 @@ from cpu_cli.gcmc_opencl_examples import (
     test_opencl_twowater_example_runs_and_preserves_pdb_cryst1,
     test_opencl_waterbox_hollow_example_smoke_runs,
     test_opencl_test_mg_example_smoke_runs_and_converts_cutoff_units,
+    test_opencl_waterbox_example_smoke_runs_and_enables_cavity_bias,
+    test_opencl_benz_example_smoke_runs_and_parses_multi_fragment_lists,
+    test_opencl_protein_example_dump_params_parses_complex_deck,
 )
 
 # Initial system builder regressions and bias-term consistency (4 functions)
