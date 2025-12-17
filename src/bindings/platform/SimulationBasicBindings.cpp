@@ -87,6 +87,11 @@ void init_basic_bindings(py::module& m) {
     
     m.def("getTotalEnergyComponents", &::pygcmc::platform::cpu::energy::getTotalEnergyComponents,
           "Get the total electrostatic and van der Waals energy components as a tuple (elec, vdw)");
+
+    // Total energy helpers (do not recompute energies; uses current state fields)
+    m.def("getTotalEnergyUniquePairs", &::pygcmc::platform::cpu::energy::getTotalEnergyUniquePairs,
+          py::arg("state"), py::arg("method"),
+          "Get total energy using a unique-pairs convention for pair interactions");
     
     // CHARMM switching function related bindings have been removed
     // Please use the set_switching_function and calculate_switching_function methods in the MonteCarloSystem class

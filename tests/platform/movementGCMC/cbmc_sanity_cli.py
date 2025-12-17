@@ -75,6 +75,61 @@ def acceptance_statistics(records: List[Dict[str, Any]]) -> Dict[str, Dict[str, 
     return result
 
 
+def _clamp_log(value: float, log_lower: float = math.log(1e-30), log_upper: float = 700.0) -> float:
+    return min(max(value, log_lower), log_upper)
+
+
+def _assert_cbmc_rosenbluth_closure(records: List[Dict[str, Any]], *, tol: float = 5e-10, max_samples: int = 400) -> None:
+    """
+    Validate the CBMC "route B" closure:
+      log(rosen) == clamp(log(W/K) + beta * u_selected)
+
+    where:
+      - r["cbmcLogWOverK"] is log(W/K) computed from the CBMC trial energies
+      - r["cbmcSelectedEnergy"] is u_selected (insertion) or u_current (deletion)
+      - r["beta"] is 1/(kT) in (kJ/mol)^-1
+      - rosen is qForward (insertion) or qReverse (deletion)
+    """
+    checked = 0
+    for rec in records:
+        if rec.get("cbmcTrials", 1) <= 1:
+            continue
+        move = rec.get("move")
+        if move not in {"insertion", "deletion"}:
+            continue
+
+        beta = rec.get("beta")
+        u_sel = rec.get("cbmcSelectedEnergy")
+        log_w_over_k = rec.get("cbmcLogWOverK")
+        if beta is None or u_sel is None or log_w_over_k is None:
+            continue
+
+        rosen = rec.get("qForward") if move == "insertion" else rec.get("qReverse")
+        if rosen is None or not (rosen > 0.0) or not math.isfinite(rosen):
+            raise AssertionError(f"Invalid rosen value in record: move={move}, rosen={rosen}")
+
+        expected_log_rosen = _clamp_log(log_w_over_k + beta * u_sel)
+        actual_log_rosen = math.log(rosen)
+
+        if not (math.isfinite(expected_log_rosen) and math.isfinite(actual_log_rosen)):
+            raise AssertionError(
+                "Non-finite CBMC closure terms: "
+                f"move={move}, beta={beta}, u_sel={u_sel}, logWOverK={log_w_over_k}, rosen={rosen}"
+            )
+
+        assert abs(expected_log_rosen - actual_log_rosen) < tol, (
+            "CBMC closure mismatch: "
+            f"move={move}, expected_log_rosen={expected_log_rosen:.12e}, "
+            f"actual_log_rosen={actual_log_rosen:.12e}"
+        )
+
+        checked += 1
+        if checked >= max_samples:
+            break
+
+    assert checked > 0, "No CBMC records validated for Rosenbluth closure"
+
+
 def create_minimal_water_files(tmpdir: Path):
     """Create minimal TIP3P water files for CBMC testing."""
     # PDB file
@@ -255,8 +310,7 @@ class TestCBMCSanity:
             print(f"qReverse sample (n={len(qr)}): min={min(qr):.6f}, max={max(qr):.6f}, mean={sum(qr)/len(qr):.6f}")
             # Should vary across attempts
             assert min(qr) < max(qr), "qReverse should vary across deletion attempts"
-            # Check reasonable range (0 < W/K <= 1 typically)
-            assert all(0 < x <= 1.5 for x in qr), f"qReverse out of reasonable range: {[x for x in qr if x > 1.5]}"
+            assert all((x > 0.0) and math.isfinite(x) for x in qr), "qReverse must be finite and > 0"
 
         print("✅ CBMC weights variation test passed")
 
@@ -588,10 +642,7 @@ class TestCBMCSanity:
             min_qf = min(q_forward)
             max_qf = max(q_forward)
             print(f"qForward range: min={min_qf:.4f}, max={max_qf:.4f}, trials={max_trials}")
-            assert all(q > 0.0 for q in q_forward), "CBMC qForward must be positive"
-            assert max_qf < max_trials * 2.0, (
-                f"qForward={max_qf:.4f} exceeds loose upper bound (2*K={max_trials*2.0})"
-            )
+            assert all((q > 0.0) and math.isfinite(q) for q in q_forward), "CBMC qForward must be finite and > 0"
 
         if deletions:
             q_reverse = [r.get("qReverse", 1.0) for r in deletions if r.get("qReverse") is not None]
@@ -600,11 +651,9 @@ class TestCBMCSanity:
             min_qr = min(q_reverse)
             max_qr = max(q_reverse)
             print(f"qReverse range: min={min_qr:.4f}, max={max_qr:.4f}, trials={max_trials}")
-            assert all(q > 0.0 for q in q_reverse), "CBMC qReverse must be positive"
-            assert max_qr < max_trials * 2.0, (
-                f"qReverse={max_qr:.4f} exceeds loose upper bound (2*K={max_trials*2.0})"
-            )
+            assert all((q > 0.0) and math.isfinite(q) for q in q_reverse), "CBMC qReverse must be finite and > 0"
 
+        _assert_cbmc_rosenbluth_closure(records)
         print("✅ CBMC Rosenbluth weights within expected bounds")
 
     def test_v_eff_matches_cavity_fraction(self, tmp_path):
@@ -708,8 +757,6 @@ class TestCBMCSanity:
         
         # Physical bounds
         assert all(q > 0 for q in qf_vals), "All qForward must be positive"
-        assert max_qf < max_k * 3.0, \
-            f"qForward={max_qf:.4f} exceeds loose bound 3*K={max_k*3}"
         
         # Check qReverse (deletion)
         qr_vals = [r.get("qReverse", 1.0) for r in deletions]
@@ -721,10 +768,8 @@ class TestCBMCSanity:
         print(f"qReverse: min={min_qr:.4f}, max={max_qr:.4f}, avg={avg_qr:.4f}")
         
         assert all(q > 0 for q in qr_vals), "All qReverse must be positive"
-        assert max_qr < max_k * 3.0, \
-            f"qReverse={max_qr:.4f} exceeds loose bound 3*K={max_k*3}"
-        
-        print("✅ CBMC weights within physical bounds")
+        _assert_cbmc_rosenbluth_closure(records)
+        print("✅ CBMC weights satisfy Rosenbluth closure")
 
 
 if __name__ == "__main__":

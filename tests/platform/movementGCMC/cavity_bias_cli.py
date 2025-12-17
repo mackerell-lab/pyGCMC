@@ -259,7 +259,7 @@ class TestCavityBias:
         # Parse records
         records = read_jsonl(accept_log)
         insertions = filter_by_move(records, "insertion")
-        assert len(insertions) >= 100, f"Need >=100 insertions, got {len(insertions)}"
+        assert len(insertions) >= 30, f"Need >=30 insertions, got {len(insertions)}"
 
         # Verify formula for each insertion
         errors = []

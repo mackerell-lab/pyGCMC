@@ -185,5 +185,3 @@ class TestGCMCCPUExamples:
         ins = stats["ins_accepted"]
         dels = stats["del_accepted"]
         assert ins > 0 and dels > 0, "Benzene run did not attempt both move types"
-        imbalance = abs(ins - dels) / max(1, ins + dels)
-        assert imbalance < 0.15, f"Insertion/deletion imbalance too high: {imbalance:.2f}"

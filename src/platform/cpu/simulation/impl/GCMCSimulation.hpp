@@ -129,6 +129,7 @@ public:
         int nBefore;       // Number of molecules of this species before the move
         int cbmcTrials;    // Number of CBMC trial configurations (K)
         int step;
+        double beta;       // 1/(kT) in (kJ/mol)^-1
         double deltaU;
         double betaDeltaU;
         double mu;
@@ -141,6 +142,8 @@ public:
         double vBox = 0.0; // Base box volume at time of move
         double cavityFraction = 1.0; // Recorded cavity fraction (f_cav)
         double rosenbluthWeight = 1.0; // Recorded Rosenbluth ratio (W/K or K/W)
+        double cbmcSelectedEnergy = 0.0; // u_selected (ins) or u_current (del), kJ/mol
+        double cbmcLogWOverK = 0.0;      // log(W/K) from CBMC trial energies
         double pAcc;       // Calculated acceptance probability
         double bias = 1.0; // Total bias factor applied in acceptance
         double u;          // Random number used

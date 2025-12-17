@@ -1630,8 +1630,10 @@ bool GCMCSimulation::performSingleMove() {
         rec.step = stats_.totalSteps;
         rec.deltaU = result.deltaE;
 
-        // Get beta from params (beta = 1/kT)
-        double beta = params_->get_mc_info().beta;
+        // Use a double-precision beta consistent with the acceptance engine
+        // (kB = 8.314e-3 kJ/(mol*K), internal energies are kJ/mol).
+        const double beta = 1.0 / (8.314e-3 * static_cast<double>(params_->get_mc_info().temperature));
+        rec.beta = beta;
         rec.betaDeltaU = result.deltaE * beta;
 
         // Get chemical potential, activity, and CBMC trials for this fragment type
@@ -1654,10 +1656,9 @@ bool GCMCSimulation::performSingleMove() {
             rec.cbmcTrials = result.cbmcTrialsUsed;
         }
 
-        // CBMC Rosenbluth weights from engine
-        // For insertion: qForward = W_new/K
-        // For deletion: qReverse = W_old/K
-        // proposalRatio will be calculated from paired qForward/qReverse in tests
+        // CBMC Rosenbluth factor from engine (avoid double-counting exp(-βΔU)):
+        //   insertion: qForward = (W_new/K)/exp(-β u_selected)
+        //   deletion:  qReverse = (W_old/K)/exp(-β u_current)
         if (moveType == INSERT) {
             rec.qForward = result.rosenbluthWeight;
             rec.qReverse = 1.0;  // Not applicable for single move
@@ -1685,6 +1686,8 @@ bool GCMCSimulation::performSingleMove() {
         rec.wCavity = cavityFrac;
         rec.cavityFraction = cavityFrac;
         rec.rosenbluthWeight = result.rosenbluthWeight;
+        rec.cbmcSelectedEnergy = result.cbmcSelectedEnergy;
+        rec.cbmcLogWOverK = result.cbmcLogWOverK;
         rec.bias = result.bias;
 
         // Acceptance probability and random number
@@ -2925,6 +2928,7 @@ void GCMCSimulation::dumpAcceptanceLog(const std::string& filename) const {
             << "\"nBefore\":" << rec.nBefore << ","
             << "\"cbmcTrials\":" << rec.cbmcTrials << ","
             << "\"step\":" << rec.step << ","
+            << "\"beta\":" << rec.beta << ","
             << "\"deltaU\":" << rec.deltaU << ","
             << "\"betaDeltaU\":" << rec.betaDeltaU << ","
             << "\"mu\":" << rec.mu << ","
@@ -2937,6 +2941,8 @@ void GCMCSimulation::dumpAcceptanceLog(const std::string& filename) const {
             << "\"vEff\":" << rec.vEff << ","
             << "\"cavityFraction\":" << rec.cavityFraction << ","
             << "\"rosenbluthWeight\":" << rec.rosenbluthWeight << ","
+            << "\"cbmcSelectedEnergy\":" << rec.cbmcSelectedEnergy << ","
+            << "\"cbmcLogWOverK\":" << rec.cbmcLogWOverK << ","
             << "\"bias\":" << rec.bias << ","
             << "\"pAcc\":" << rec.pAcc << ","
             << "\"u\":" << rec.u << ","

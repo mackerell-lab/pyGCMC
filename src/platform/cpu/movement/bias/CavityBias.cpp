@@ -882,7 +882,8 @@ double CavityManager::getCavityVolumeFraction(const MCState& state) {
         return 0.0;
     }
     
-    return cavityVolume / boxVolume;
+    const double fraction = cavityVolume / boxVolume;
+    return std::min(1.0, std::max(0.0, fraction));
 }
 
 void CavityManager::setSpeciesParameters(int speciesId, double gridSpacingAngstrom, double probeRadiusAngstrom, int maskFlags) {

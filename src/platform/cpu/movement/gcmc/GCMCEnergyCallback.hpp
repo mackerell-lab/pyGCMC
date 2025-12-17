@@ -51,13 +51,13 @@ public:
         // Use the energy module to calculate system energy
         if (energyMethod_ == EnergyMethod::PME) {
             computeSystemEnergy(state, EnergyMethod::PME);
-            return energy::getTotalEnergy(state, EnergyMethod::PME);
+            return energy::getTotalEnergyUniquePairs(state, EnergyMethod::PME);
         } else if (energyMethod_ == EnergyMethod::EWALD) {
             computeSystemEnergy(state, EnergyMethod::EWALD);
-            return energy::getTotalEnergy(state, EnergyMethod::EWALD);
+            return energy::getTotalEnergyUniquePairs(state, EnergyMethod::EWALD);
         } else {
             computeSystemEnergy(state, EnergyMethod::DIRECT, useCutoff_, usePBC_);
-            return energy::getTotalEnergy(state, EnergyMethod::DIRECT);
+            return energy::getTotalEnergyUniquePairs(state, EnergyMethod::DIRECT);
         }
     }
     

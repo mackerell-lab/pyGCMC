@@ -153,7 +153,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
 
     Vector3 position;
     Quaternion orientation;
-    double cbmcBias = 1.0;
+    double cbmcRosen = 1.0;
     double cavityVolumeFraction = 1.0;
 
     if (useConfBias_ && numTrials > 1) {
@@ -161,7 +161,9 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         TrialConfiguration selected = performCBMCInsertion(typeId, numTrials);
         position = selected.position;
         orientation = selected.orientation;
-        cbmcBias = selected.weight;  // W_new / K (already normalized by performCBMCInsertion)
+        cbmcRosen = selected.weight;
+        result.cbmcSelectedEnergy = selected.energy;
+        result.cbmcLogWOverK = selected.logWOverK;
     } else {
         // Original single configuration generation
         // Try multiple times to find a placement fully inside region (if configured)
@@ -185,7 +187,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
             early.deltaE = 0.0;
             early.energyBefore = 0.0;
             early.energyAfter = 0.0;
-            early.bias = cbmcBias;
+            early.bias = cbmcRosen;
             early.acceptanceProbability = shouldStoreProbability() ? 0.0 : -1.0;
             totalMoves_++;
             return early;
@@ -234,9 +236,9 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
 
     // Store individual components for detailed balance verification
     double cavityFraction = cavityVolumeFraction;
-    result.rosenbluthWeight = cbmcBias;
+    result.rosenbluthWeight = cbmcRosen;
     result.cavityBiasComponent = cavityFraction;
-    result.bias = schedulerBias * cbmcBias;
+    result.bias = schedulerBias * cbmcRosen;
 
     // Calculate acceptance probability using proper GCMC formula
     bool accept = false;
@@ -253,7 +255,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         terms.deltaE = result.deltaE;
         terms.cavityFraction = cavityFraction;
         terms.lambdaNm = acceptanceCalculator_->getThermalLambda(typeId);
-        terms.rosenbluthWeight = std::max(cbmcBias, 1e-30);
+        terms.rosenbluthWeight = std::max(cbmcRosen, 1e-30);
         terms.cbmcTrials = trialsUsed;
         terms.proposalLogRatio = proposalLogRatio;
         prob = acceptanceCalculator_->calculateInsertionProbabilityDetailed(terms);
@@ -360,7 +362,9 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     result.effectiveVolume = baseVolume;
 
     // Calculate CBMC bias for deletion if enabled
-    double cbmcBias = 1.0;
+    double cbmcRosen = 1.0;
+    double cbmcSelectedEnergy = 0.0;
+    double cbmcLogWOverK = 0.0;
     double cavityVolumeFraction = 1.0;
     int numTrials = 1;
     if (useConfBias_ && typeId < static_cast<int>(cbmcTrialsPerType_.size())) {
@@ -368,22 +372,38 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     }
 
     if (useConfBias_ && numTrials > 1) {
-        // For deletion, calculate W_old: energy of current config + K-1 trial configs
+        // For deletion, compute CBMC retracing weights in the post-deletion environment
+        // (i.e., excluding the current molecule) to match the reverse insertion proposal.
         std::vector<TrialConfiguration> trials;
         trials.reserve(numTrials);
 
-        // Add current configuration as first trial
         TrialConfiguration current;
+        current.weight = 0.0;
+        current.logWOverK = 0.0;
         current.position = savedPosition;
         current.orientation = savedOrientation;
         current.energy = calculateFragmentEnergy(instanceId);
         trials.push_back(current);
+        cbmcSelectedEnergy = current.energy;
 
-        // Generate K-1 additional trials
+        // Temporarily deactivate this residue in MCState so trial energies do not
+        // include interactions with the molecule being deleted.
+        bool restoredActive = false;
+        int restoredAtomCount = 0;
+        if (state_ && instanceId >= 0 && instanceId < static_cast<int>(state_->residues.size())) {
+            auto& residue = state_->residues[instanceId];
+            restoredActive = residue.active;
+            restoredAtomCount = residue.atomCount;
+            residue.active = false;
+            residue.atomCount = 0;
+        }
+
         FragmentTemplate* tmpl = reservoir_->getTemplate(typeId);
         if (tmpl) {
             for (int k = 1; k < numTrials; ++k) {
                 TrialConfiguration trial;
+                trial.weight = 0.0;
+                trial.logWOverK = 0.0;
                 trial.position = (useCavityBias_ && cavityManager_) ?
                                 generateCavityPosition() : generateRandomPosition();
                 applyPeriodicBoundary(trial.position);
@@ -409,19 +429,35 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
             }
         }
 
-        // Calculate W_old (sum of Boltzmann factors)
+        // Restore residue activity for the actual deletion attempt.
+        if (state_ && instanceId >= 0 && instanceId < static_cast<int>(state_->residues.size())) {
+            auto& residue = state_->residues[instanceId];
+            residue.active = restoredActive;
+            residue.atomCount = restoredAtomCount;
+        }
+
         if (trials.size() == static_cast<size_t>(numTrials)) {
-            double beta = 1.0 / (8.314e-3 * temperature_);
+            const double beta = 1.0 / (8.314e-3 * temperature_);
             double minEnergy = std::numeric_limits<double>::max();
             for (const auto& trial : trials) {
                 minEnergy = std::min(minEnergy, trial.energy);
             }
 
-            double sumBoltzmann = 0.0;
+            double sumScaled = 0.0;
             for (const auto& trial : trials) {
-                sumBoltzmann += std::exp(-beta * (trial.energy - minEnergy));
+                sumScaled += std::exp(-beta * (trial.energy - minEnergy));
             }
-            cbmcBias = sumBoltzmann / numTrials * std::exp(beta * minEnergy);  // W_old / K
+
+            const double avgScaled = sumScaled / static_cast<double>(numTrials);
+            const double safeAvgScaled = std::max(avgScaled, 1e-30);
+            cbmcLogWOverK = std::log(safeAvgScaled) - beta * minEnergy;
+
+            // rosen = (W/K)/exp(-β u_current) = exp(log(W/K) + β u_current)
+            const double logLower = std::log(1e-30);
+            const double logUpper = 700.0;
+            const double logRosen = cbmcLogWOverK + beta * current.energy;
+            const double logRosenClamped = std::min(std::max(logRosen, logLower), logUpper);
+            cbmcRosen = std::exp(logRosenClamped);
         }
     }
 
@@ -461,11 +497,13 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     // CRITICAL FIX: Calculate deletion bias using saved position for robustness
     // Include CBMC bias in total bias (cavity handled separately)
     double schedulerBias = calculateDeletionBiasAtPosition(savedPosition);
-    result.bias = schedulerBias * cbmcBias;
+    result.bias = schedulerBias * cbmcRosen;
 
     // Store individual components for detailed balance verification
     double cavityFraction = cavityVolumeFraction;
-    result.rosenbluthWeight = cbmcBias;
+    result.rosenbluthWeight = cbmcRosen;
+    result.cbmcSelectedEnergy = cbmcSelectedEnergy;
+    result.cbmcLogWOverK = cbmcLogWOverK;
     result.cavityBiasComponent = cavityFraction;
 
     // Calculate acceptance probability using proper GCMC formula
@@ -483,7 +521,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
         terms.deltaE = result.deltaE;
         terms.cavityFraction = cavityFraction;
         terms.lambdaNm = acceptanceCalculator_->getThermalLambda(typeId);
-        terms.rosenbluthWeight = std::max(cbmcBias, 1e-30);
+        terms.rosenbluthWeight = std::max(cbmcRosen, 1e-30);
         terms.cbmcTrials = trialsUsed;
         terms.proposalLogRatio = proposalLogRatio;
         prob = acceptanceCalculator_->calculateDeletionProbabilityDetailed(terms);
@@ -1059,11 +1097,7 @@ double GCMCEngine::calculateSystemEnergy() {
         }
         
         // Get total energy from state
-        if (energyMethod_ == EnergyMethod::EWALD || energyMethod_ == EnergyMethod::PME) {
-            totalEnergy = energy::getTotalEnergy(*state_, energyMethod_);
-        } else {
-            totalEnergy = energy::getTotalEnergy(*state_, EnergyMethod::DIRECT);
-        }
+        totalEnergy = energy::getTotalEnergyUniquePairs(*state_, energyMethod_);
     }
     
     energyCache_.totalEnergy = totalEnergy;
@@ -1621,13 +1655,15 @@ GCMCEngine::TrialConfiguration GCMCEngine::performCBMCInsertion(int typeId, int 
     FragmentTemplate* tmpl = reservoir_->getTemplate(typeId);
     if (!tmpl) {
         // Return default configuration if template not found
-        return TrialConfiguration{Vector3(0,0,0), Quaternion(1,0,0,0), 0.0, 1.0};
+        return TrialConfiguration{Vector3(0,0,0), Quaternion(1,0,0,0), 0.0, 1.0, 0.0};
     }
 
     // Generate K trial configurations
     double minEnergy = std::numeric_limits<double>::max();
     for (int k = 0; k < numTrials; ++k) {
         TrialConfiguration trial;
+        trial.weight = 0.0;
+        trial.logWOverK = 0.0;
 
         // Generate position and orientation
         trial.position = (useCavityBias_ && cavityManager_) ?
@@ -1667,12 +1703,13 @@ GCMCEngine::TrialConfiguration GCMCEngine::performCBMCInsertion(int typeId, int 
             generateRandomPosition(),
             generateRandomOrientation(),
             0.0,  // energy
-            1.0   // weight (unbiased)
+            1.0,  // rosenbluthWeight (unbiased)
+            0.0,  // log(W/K)
         };
     }
 
     // Calculate Boltzmann weights (subtract minEnergy for numerical stability)
-    double beta = 1.0 / (8.314e-3 * temperature_);
+    const double beta = 1.0 / (8.314e-3 * temperature_);
     double totalWeight = 0.0;
     for (auto& trial : trials) {
         trial.weight = std::exp(-beta * (trial.energy - minEnergy));
@@ -1682,7 +1719,7 @@ GCMCEngine::TrialConfiguration GCMCEngine::performCBMCInsertion(int typeId, int 
     // Select configuration based on weights
     double r = uniform_(rng_) * totalWeight;
     double cumWeight = 0.0;
-    TrialConfiguration selected;
+    TrialConfiguration selected = trials.back();
     for (const auto& trial : trials) {
         cumWeight += trial.weight;
         if (cumWeight >= r) {
@@ -1691,14 +1728,20 @@ GCMCEngine::TrialConfiguration GCMCEngine::performCBMCInsertion(int typeId, int 
         }
     }
 
-    // If no selection made (numerical edge case), use last trial
-    if (cumWeight == 0.0) {
-        selected = trials.back();
-    }
+    // Convert selection weight into a Rosenbluth factor compatible with exp(-βΔU)
+    // to avoid double-counting the selected configuration's Boltzmann term:
+    //   rosen = (W/K) / exp(-β u_selected)
+    const double avgScaled = totalWeight / static_cast<double>(numTrials);
+    const double safeAvgScaled = std::max(avgScaled, 1e-30);
+    const double logWOverK = std::log(safeAvgScaled) - beta * minEnergy;
 
-    // Store total Rosenbluth weight for detailed balance
-    // Note: selected.weight contains individual trial weight, but we need total weight W
-    selected.weight = totalWeight / numTrials;  // Store W/K for later multiplication
+    // rosen = (W/K)/exp(-β u_selected) = exp(log(W/K) + β u_selected)
+    const double logLower = std::log(1e-30);
+    const double logUpper = 700.0;
+    const double logRosen = logWOverK + beta * selected.energy;
+    const double logRosenClamped = std::min(std::max(logRosen, logLower), logUpper);
+    selected.weight = std::exp(logRosenClamped);
+    selected.logWOverK = logWOverK;
 
     return selected;
 }
@@ -1722,7 +1765,7 @@ double GCMCEngine::calculateCBMCBias(const std::vector<TrialConfiguration>& tria
     }
 
     // Return W_new / K for insertion
-    return sumBoltzmann / trials.size() * std::exp(beta * minEnergy);
+    return (sumBoltzmann / trials.size()) * std::exp(-beta * minEnergy);
 }
 
 // Get residue position

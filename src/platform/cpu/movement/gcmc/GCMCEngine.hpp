@@ -58,8 +58,16 @@ public:
         int residueIndex;
         Vector3 position;
 
-        // CBMC (Configurational Bias) Rosenbluth weights for detailed balance
-        double rosenbluthWeight;  // W_new/K for insertion, W_old/K for deletion
+        // CBMC (Configurational Bias) terms for detailed balance.
+        // `rosenbluthWeight` is defined to avoid double-counting the selected configuration's
+        // Boltzmann factor already included in exp(-βΔU):
+        //   insertion: (W_new/K) / exp(-β u_selected)
+        //   deletion:  (W_old/K) / exp(-β u_current)
+        // so that the acceptance formula uses exp(-βΔU) * rosenbluthWeight (ins) and
+        // exp(-βΔU) / rosenbluthWeight (del).
+        double rosenbluthWeight;
+        double cbmcSelectedEnergy;  // u_selected (ins) or u_current (del), kJ/mol
+        double cbmcLogWOverK;       // log(W/K) from CBMC trial energies
 
         // Cavity bias component (for detailed balance verification)
         double cavityBiasComponent;
@@ -72,8 +80,8 @@ public:
         MoveResult() : type(INSERT), accepted(false), energyBefore(0),
                       energyAfter(0), deltaE(0), bias(1.0),
                       acceptanceProbability(0.0), fragmentType(-1), residueIndex(-1),
-                      rosenbluthWeight(1.0), cavityBiasComponent(1.0),
-                      effectiveVolume(0.0), cbmcTrialsUsed(1) {}
+                      rosenbluthWeight(1.0), cbmcSelectedEnergy(0.0), cbmcLogWOverK(0.0),
+                      cavityBiasComponent(1.0), effectiveVolume(0.0), cbmcTrialsUsed(1) {}
     };
     
     // Constructor
@@ -264,6 +272,7 @@ private:
         Quaternion orientation;
         double energy;
         double weight;
+        double logWOverK;
     };
     TrialConfiguration performCBMCInsertion(int typeId, int numTrials);
     double calculateCBMCBias(const std::vector<TrialConfiguration>& trials, int selectedIdx);

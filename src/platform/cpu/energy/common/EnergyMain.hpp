@@ -62,7 +62,39 @@ inline double getTotalEnergy(const model::MCState& state, pygcmc::platform::cpu:
     }
 }
 
+/**
+ * @brief Get total energy using a unique-pairs convention for pair interactions
+ *
+ * Semantics:
+ * - DIRECT: residue energies are stored one-to-all (double-counted for pair terms),
+ *   so total unique energy is 0.5 * sum(residue energies).
+ * - EWALD/PME: electrostatics total is stored in state.ewald_energy.total (real+reciprocal+self),
+ *   while VdW residue energies are one-to-all; total unique energy is
+ *   state.ewald_energy.total + 0.5 * sum(VdW residue energies).
+ *
+ * This keeps the existing double-counted APIs intact while providing a safe total energy
+ * for ΔU = E_after - E_before paths (e.g., GCMC insertion/deletion in EWALD/PME modes).
+ */
+inline double getTotalEnergyUniquePairs(const model::MCState& state, pygcmc::platform::cpu::EnergyMethod method) {
+    double vdwSum = 0.0;
+    double elecSum = 0.0;
+    for (const auto& residue : state.residues) {
+        if (!residue.active) continue;
+        vdwSum += residue.energy_vdw;
+        elecSum += residue.energy_elec;
+    }
+
+    if (method == pygcmc::platform::cpu::EnergyMethod::EWALD || method == pygcmc::platform::cpu::EnergyMethod::PME) {
+        // Electrostatics total is tracked separately for Ewald/PME; residue electrostatics
+        // are only a partitioning of the real-space part and should not be halved here.
+        return state.ewald_energy.total + 0.5 * vdwSum;
+    }
+
+    // DIRECT: both VdW and electrostatics are stored as one-to-all (double-counted).
+    return 0.5 * (vdwSum + elecSum);
+}
+
 } // namespace energy
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc
