@@ -241,7 +241,6 @@ def test_insertion_deletion_pairwise_balance(setup_system_with_params):
     # Just ensure we're getting some accepts and some rejects
     assert 0.001 < acceptance_rate <= 1.0, f"Acceptance rate {acceptance_rate:.3f} is too low"
 
-@pytest.mark.slow
 @pytest.mark.timeout(60)
 def test_insertion_deletion_flux_balance(setup_system_with_params):
     """Test global flux balance at equilibrium using statistical tests.
@@ -730,7 +729,6 @@ def test_config_bias_fields_present(setup_system_with_params):
     # Basic sanity check - config bias insertions should work
     assert accepts_with_bias >= 0, "Config bias insertions should at least run"
 
-@pytest.mark.slow
 @pytest.mark.timeout(60)
 def test_ensemble_convergence(setup_system_with_params):
     """Test that ensemble averages converge to stable values using statistical tests."""

@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 # Path to gcmc_cpu executable
-GCMC_CPU_PATH = Path(__file__).parent.parent.parent / "build" / "bin" / "gcmc_cpu"
+GCMC_CPU_PATH = Path(__file__).parent.parent.parent.parent / "build" / "bin" / "gcmc_cpu"
 
 # Physical constants
 KB = 8.314e-3  # kJ/mol/K
@@ -433,7 +433,6 @@ number_water_nbar:yes
         print(f"\n✅ All three modes produced different distributions")
         print(f"Const mode std: {std_const:.1f}, Default std: {std_default:.1f}")
 
-    @pytest.mark.slow
     def test_nbar_const_vs_default(self, tmp_path):
         """
         P1验收测试：const vs default模式趋势对比

@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 import numpy as np
 
-GCMC_CPU_PATH = Path(__file__).parent.parent.parent / "build/bin/gcmc_cpu"
+GCMC_CPU_PATH = Path(__file__).parent.parent.parent.parent / "build" / "bin" / "gcmc_cpu"
 
 class TestRegression:
     """Regression test suite"""

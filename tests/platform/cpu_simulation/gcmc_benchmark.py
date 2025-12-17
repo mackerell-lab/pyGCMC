@@ -23,7 +23,7 @@ try:
 except ImportError:
     HAS_PLOTTING = False
 
-GCMC_CPU_PATH = Path(__file__).parent.parent.parent / "build/bin/gcmc_cpu"
+GCMC_CPU_PATH = Path(__file__).parent.parent.parent.parent / "build" / "bin" / "gcmc_cpu"
 
 class BenchmarkResult:
     """Store and analyze benchmark results"""

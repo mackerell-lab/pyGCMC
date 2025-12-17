@@ -14,7 +14,7 @@ import math
 
 
 # Path to gcmc_cpu executable
-GCMC_CPU_PATH = Path(__file__).parent.parent.parent / "build" / "bin" / "gcmc_cpu"
+GCMC_CPU_PATH = Path(__file__).parent.parent.parent.parent / "build" / "bin" / "gcmc_cpu"
 
 
 class TestMulticomponentActivity:
@@ -45,7 +45,7 @@ class TestMulticomponentActivity:
         work = tmp_path / "multi_component_activity"
         work.mkdir(parents=True, exist_ok=True)
 
-        test_data_dir = Path(__file__).parent.parent / "data"
+        test_data_dir = Path(__file__).parent.parent.parent / "data"
         na_itp = test_data_dir / "charmm36.ff" / "mol" / "na.itp"
         cl_itp = test_data_dir / "charmm36.ff" / "mol" / "cl.itp"
         assert na_itp.exists()
@@ -126,7 +126,7 @@ mc_move_prob:1 0 0 0
         work = tmp_path / "multi_component_activity_conc_mu"
         work.mkdir(parents=True, exist_ok=True)
 
-        test_data_dir = Path(__file__).parent.parent / "data"
+        test_data_dir = Path(__file__).parent.parent.parent / "data"
         na_itp = test_data_dir / "charmm36.ff" / "mol" / "na.itp"
         cl_itp = test_data_dir / "charmm36.ff" / "mol" / "cl.itp"
         assert na_itp.exists()
