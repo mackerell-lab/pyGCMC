@@ -91,7 +91,7 @@ class TestPerformanceBenchmark:
                 [
                     str(GCMC_CPU_PATH),
                     "--inp", str(inp_file),
-                    "--prefix", f"bench_run{run}",
+                    "--prefix", str(Path(work_dir) / f"bench_run{run}"),
                     "--seed", str(1000 + run),
                     "--no-stats"
                 ],
@@ -365,7 +365,7 @@ fragmuex:-5.0
             [
                 str(GCMC_CPU_PATH),
                 "--inp", str(inp_path),
-                "--prefix", "long",
+                "--prefix", str(benchmark_dir / "long"),
                 "--seed", "999999",
                 "--stats-interval", "500",
                 "--print-freq", "500"
@@ -415,7 +415,7 @@ fragmuex:-5.0
             [
                 str(GCMC_CPU_PATH),
                 "--inp", str(inp_path),
-                "--prefix", "report",
+                "--prefix", str(benchmark_dir / "report"),
                 "--seed", "42",
                 "--no-stats"
             ],
@@ -487,7 +487,7 @@ fragmuex:-5.0
                 [
                     str(GCMC_CPU_PATH),
                     "--inp", str(inp_path),
-                    "--prefix", f"mem_{i}",
+                    "--prefix", str(tmp_path / f"mem_{i}"),
                     "--seed", str(i),
                     "--no-stats"
                 ],

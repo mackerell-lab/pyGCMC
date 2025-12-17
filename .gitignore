@@ -362,6 +362,15 @@ perf.data*
 # =============================================================================
 # Add any project-specific files or patterns here
 
+# GCMC CLI runtime outputs (keep these under tmp/ or a user-chosen --prefix dir)
+/active_*.dat
+/muex_*.dat
+/bench*_statistics.dat
+/*_statistics.dat
+/*_final.*
+/*_traj_*.pdb
+/*_checkpoint_*.dat
+
 # Test outputs
 test_output/
 test_results/
