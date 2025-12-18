@@ -242,3 +242,82 @@ def test_deletion_log_ratio_decreases_with_positive_delta_energy() -> None:
     assert math.isclose(
         res_high["logRatio"] - res_low["logRatio"], -beta * 5.0, rel_tol=1e-12, abs_tol=1e-12
     )
+
+
+def test_activity_semantics_do_not_double_count_lambda_in_detailed_terms() -> None:
+    """
+    P1 回归：当使用 setActivity(z) 直接指定 grand-canonical activity（z=exp(βμ)/Λ³）时，
+    detailed 接受率中的 Λ³ 因子不应再被额外扣一次（否则会退化成 z/Λ³）。
+
+    这个测试刻意设置 thermalLambda!=1，并在调用 detailed 接口时传入同样的 lambdaNm，
+    以模拟 engine 路径（engine 会把 getThermalLambda(typeId) 传入 terms）。
+    """
+    type_id = 0
+    temperature = 298.15
+    beta = 1.0 / (KB * temperature)
+
+    volume_nm3 = 8.0
+    cavity_fraction = 0.25
+    lambda_nm = 0.6
+    mu = -6.0  # kJ/mol
+
+    z = math.exp(beta * mu) / (lambda_nm**3)
+
+    n_before = 6
+    delta_e = 1.3
+    rosenbluth_weight = 1.4
+    cbmc_trials = 5
+    proposal_log_ratio = math.log(0.8)
+
+    acc = pygcmc.GCMCAcceptance()
+    acc.setTemperature(temperature)
+    acc.setVolume(volume_nm3)
+    acc.setActivity(type_id, z)
+    acc.setThermalLambda(type_id, lambda_nm)
+
+    expected_ins_log_ratio = (
+        proposal_log_ratio
+        - beta * delta_e
+        + math.log(z)
+        + math.log(volume_nm3)
+        + math.log(cavity_fraction)
+        - math.log(n_before + 1.0)
+        + math.log(rosenbluth_weight)
+    )
+
+    ins = acc.calculate_insertion_probability_detailed(
+        typeId=type_id,
+        currentNumber=n_before,
+        deltaE=delta_e,
+        cavityFraction=cavity_fraction,
+        lambdaNm=lambda_nm,
+        rosenbluthWeight=rosenbluth_weight,
+        cbmcTrials=cbmc_trials,
+        proposalLogRatio=proposal_log_ratio,
+    )
+    assert math.isclose(
+        ins["logRatio"], expected_ins_log_ratio, rel_tol=1e-12, abs_tol=1e-12
+    )
+
+    expected_del_log_ratio = (
+        proposal_log_ratio
+        - beta * delta_e
+        - math.log(z)
+        + math.log(float(n_before))
+        - (math.log(volume_nm3) + math.log(cavity_fraction))
+        - math.log(rosenbluth_weight)
+    )
+
+    dele = acc.calculate_deletion_probability_detailed(
+        typeId=type_id,
+        currentNumber=n_before,
+        deltaE=delta_e,
+        cavityFraction=cavity_fraction,
+        lambdaNm=lambda_nm,
+        rosenbluthWeight=rosenbluth_weight,
+        cbmcTrials=cbmc_trials,
+        proposalLogRatio=proposal_log_ratio,
+    )
+    assert math.isclose(
+        dele["logRatio"], expected_del_log_ratio, rel_tol=1e-12, abs_tol=1e-12
+    )

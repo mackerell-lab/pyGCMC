@@ -28,9 +28,7 @@ GCMCAcceptance::~GCMCAcceptance() {
 // Set chemical potential for a type
 void GCMCAcceptance::setChemicalPotential(int typeId, double mu) {
     chemicalPotentials_[typeId] = mu;
-    // Update activity
-    double beta = getBeta();
-    activities_[typeId] = std::exp(beta * mu);
+    thermodynamicInputMode_[typeId] = ThermodynamicInput::CHEMICAL_POTENTIAL;
     if (thermalLambdaNm_.find(typeId) == thermalLambdaNm_.end()) {
         thermalLambdaNm_[typeId] = 1.0;
     }
@@ -39,7 +37,8 @@ void GCMCAcceptance::setChemicalPotential(int typeId, double mu) {
 // Set activity for a type
 void GCMCAcceptance::setActivity(int typeId, double activity) {
     activities_[typeId] = activity;
-    // Update chemical potential
+    thermodynamicInputMode_[typeId] = ThermodynamicInput::ACTIVITY;
+    // Update chemical potential (note: Λ-dependent offset handled in detailed evaluator)
     double beta = getBeta();
     chemicalPotentials_[typeId] = std::log(activity) / beta;
     if (thermalLambdaNm_.find(typeId) == thermalLambdaNm_.end()) {
@@ -64,6 +63,18 @@ double GCMCAcceptance::getThermalLambda(int typeId) const {
 }
 
 double GCMCAcceptance::getActivity(int typeId) const {
+    auto modeIt = thermodynamicInputMode_.find(typeId);
+    if (modeIt != thermodynamicInputMode_.end() &&
+        modeIt->second == ThermodynamicInput::CHEMICAL_POTENTIAL) {
+        auto muIt = chemicalPotentials_.find(typeId);
+        if (muIt != chemicalPotentials_.end()) {
+            double beta = getBeta();
+            double lambdaNm = getThermalLambda(typeId);
+            double lambda3 = (lambdaNm > 0.0) ? (lambdaNm * lambdaNm * lambdaNm) : 1.0;
+            return std::exp(beta * muIt->second) / lambda3;
+        }
+    }
+
     auto it = activities_.find(typeId);
     if (it != activities_.end()) {
         return it->second;
@@ -71,7 +82,9 @@ double GCMCAcceptance::getActivity(int typeId) const {
     auto muIt = chemicalPotentials_.find(typeId);
     if (muIt != chemicalPotentials_.end()) {
         double beta = getBeta();
-        return std::exp(beta * muIt->second);
+        double lambdaNm = getThermalLambda(typeId);
+        double lambda3 = (lambdaNm > 0.0) ? (lambdaNm * lambdaNm * lambdaNm) : 1.0;
+        return std::exp(beta * muIt->second) / lambda3;
     }
     return 1.0;
 }
@@ -84,7 +97,7 @@ double GCMCAcceptance::calculateInsertionProbability(
     double bias) {
     
     double beta = getBeta();
-    double activity = activities_[typeId];
+    double activity = getActivity(typeId);
     
     // Grand canonical acceptance: min(1, (zV/(N+1)) * exp(-beta*deltaE) * bias)
     double prefactor = activity * volume_ / (currentNumber + 1);
@@ -109,7 +122,6 @@ double GCMCAcceptance::calculateInsertionProbabilityDetailed(
     unified.countBefore = terms.countBefore;
     unified.countAfter = terms.countBefore + 1;
     unified.beta = getBeta();
-    unified.chemicalPotential = getChemicalPotentialInternal(terms.typeId);
     unified.deltaEnergy = terms.deltaE;
 
     double volume = volume_ > 0.0 ? volume_ : 1.0;
@@ -121,6 +133,17 @@ double GCMCAcceptance::calculateInsertionProbabilityDetailed(
 
     double lambdaNm = terms.lambdaNm > 0.0 ? terms.lambdaNm : getThermalLambda(terms.typeId);
     unified.logLambda3 = 3.0 * safeLog(lambdaNm);
+
+    auto modeIt = thermodynamicInputMode_.find(terms.typeId);
+    if (modeIt != thermodynamicInputMode_.end() &&
+        modeIt->second == ThermodynamicInput::ACTIVITY) {
+        // setActivity(z) treats z as exp(βμ)/Λ³; therefore we must ensure that
+        // (βμ - logΛ³) reduces to log(z) even if Λ is set/non-default.
+        double activity = std::max(getActivity(terms.typeId), 1e-30);
+        unified.chemicalPotential = (safeLog(activity) + unified.logLambda3) / unified.beta;
+    } else {
+        unified.chemicalPotential = getChemicalPotentialInternal(terms.typeId);
+    }
 
     unified.logProposalForward = 0.0;
     unified.logProposalReverse = terms.proposalLogRatio;
@@ -149,7 +172,7 @@ double GCMCAcceptance::calculateDeletionProbability(
     if (currentNumber == 0) return 0.0;
     
     double beta = getBeta();
-    double activity = activities_[typeId];
+    double activity = getActivity(typeId);
     
     // Grand canonical acceptance: min(1, (N/(zV)) * exp(-beta*deltaE) * bias)
     double prefactor = currentNumber / (activity * volume_);
@@ -174,7 +197,6 @@ double GCMCAcceptance::calculateDeletionProbabilityDetailed(
     unified.countBefore = terms.countBefore;
     unified.countAfter = std::max(terms.countBefore - 1, 0);
     unified.beta = getBeta();
-    unified.chemicalPotential = getChemicalPotentialInternal(terms.typeId);
     unified.deltaEnergy = terms.deltaE;
 
     double volume = volume_ > 0.0 ? volume_ : 1.0;
@@ -186,6 +208,15 @@ double GCMCAcceptance::calculateDeletionProbabilityDetailed(
 
     double lambdaNm = terms.lambdaNm > 0.0 ? terms.lambdaNm : getThermalLambda(terms.typeId);
     unified.logLambda3 = 3.0 * safeLog(lambdaNm);
+
+    auto modeIt = thermodynamicInputMode_.find(terms.typeId);
+    if (modeIt != thermodynamicInputMode_.end() &&
+        modeIt->second == ThermodynamicInput::ACTIVITY) {
+        double activity = std::max(getActivity(terms.typeId), 1e-30);
+        unified.chemicalPotential = (safeLog(activity) + unified.logLambda3) / unified.beta;
+    } else {
+        unified.chemicalPotential = getChemicalPotentialInternal(terms.typeId);
+    }
 
     unified.logProposalForward = 0.0;
     unified.logProposalReverse = terms.proposalLogRatio;

@@ -24,6 +24,11 @@ namespace gcmc {
  */
 class GCMCAcceptance {
 public:
+    enum class ThermodynamicInput {
+        CHEMICAL_POTENTIAL,
+        ACTIVITY
+    };
+
     enum class MoveType {
         INSERTION,
         DELETION
@@ -188,6 +193,7 @@ protected:
     std::map<int, double> chemicalPotentials_;
     std::map<int, double> activities_;
     std::map<int, double> thermalLambdaNm_;
+    std::map<int, ThermodynamicInput> thermodynamicInputMode_;
     
     // Configuration
     CriterionType criterionType_;

@@ -4,6 +4,7 @@
 #include <pybind11/stl.h>
 #include <pybind11/stl_bind.h>
 #include <pybind11/numpy.h>
+#include <utility>
 // Use new EnergyAPI instead of simulation.hpp
 #include "../../platform/cpu/energy/EnergyAPI.hpp"
 #include "../../platform/cpu/energy/common/EnergyInterface.hpp"
@@ -56,6 +57,22 @@ void init_gcmc_bindings(py::module& m) {
              py::arg("temperature"), "Set temperature in Kelvin")
         .def("setCutoff", &GCMCEngine::setCutoff,
              py::arg("cutoff"), "Set cutoff distance in Angstroms")
+        .def(
+            "setRegionConstraintFromSpec",
+            [](GCMCEngine& self,
+               const std::string& regionSpec,
+               double boxX,
+               double boxY,
+               double boxZ) {
+                using RegionConstraint = ::pygcmc::platform::cpu::movement::RegionConstraint;
+                auto constraint = RegionConstraint::parseRegion(regionSpec, Vector3(boxX, boxY, boxZ));
+                self.setRegionConstraint(std::move(constraint));
+            },
+            py::arg("regionSpec"),
+            py::arg("boxX"),
+            py::arg("boxY"),
+            py::arg("boxZ"),
+            "Set a region constraint from a gcmc_region spec (nm units)")
         .def("attemptInsertion", &GCMCEngine::attemptInsertion,
              py::arg("typeId"), "Attempt an insertion move")
         .def("attemptDeletion", &GCMCEngine::attemptDeletion,

@@ -46,6 +46,7 @@ from movementGCMC.acceptance_formula_engine import (
     test_insertion_probability_detailed_matches_formula,
     test_deletion_probability_detailed_matches_formula,
     test_deletion_log_ratio_decreases_with_positive_delta_energy,
+    test_activity_semantics_do_not_double_count_lambda_in_detailed_terms,
 )
 
 # Energy calculation tests (3 functions)
@@ -115,4 +116,8 @@ from movementGCMC.temperature_scaling import (
     test_metropolis_criterion,
     test_temperature_effect_on_acceptance,
     test_zero_temperature_limit
+)
+
+from movementGCMC.region_strict_balance import (
+    test_strict_region_balance_blocks_deletion_fallback_when_region_empty,
 )

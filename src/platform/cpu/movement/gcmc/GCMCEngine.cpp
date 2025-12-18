@@ -900,10 +900,13 @@ int GCMCEngine::selectRandomInstance(int typeId) {
             }
         }
 
-        // Use filtered list if not empty, otherwise fall back to all instances
-        // (this prevents deletion from being completely blocked if all molecules drift outside)
+        // Use filtered list if not empty; otherwise (optionally) fall back to all instances.
+        // NOTE: Falling back violates strict region detailed balance when the target
+        // distribution is defined only over the constrained region.
         if (!filteredInstances.empty()) {
             instances = filteredInstances;
+        } else if (getConfigValue("strict_region_balance") > 0.5) {
+            return -1;
         }
     }
 
