@@ -56,6 +56,10 @@ from movementGCMC.energy_tests import (
     test_system_energy_consistency
 )
 
+from movementGCMC.energy_cycle_unique_pairs import (
+    test_insert_then_delete_matches_unique_total_energy_diff,
+)
+
 # Cavity bias tests (4 functions)
 from movementGCMC.cavity_bias_tests import (
     test_cavity_detection,
