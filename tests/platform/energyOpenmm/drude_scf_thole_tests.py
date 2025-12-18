@@ -117,55 +117,32 @@ def test_drude_scf_force_balance():
 
 def test_thole_screened_force():
     """Test that Thole screening reduces dipole-dipole forces"""
-    # This test checks the general behavior rather than exact values
+    # This test checks the general behavior rather than exact values.
+    #
+    # Important: avoid a perfectly symmetric "neutral dipole with zero permanent field"
+    # setup, which has a valid zero-polarization fixed point. Use full SWM4-NDP
+    # water charges so the Drude particles see a non-zero intermolecular field.
     state = pygcmc.MCState()
     
-    # Two water molecules
-    atoms = []
-    
-    # Water 1
-    # Oxygen
-    o1 = pygcmc.MCAtom()
-    o1.x, o1.y, o1.z = 0.0, 0.0, 0.0
-    o1.charge = 1.71636
-    o1.type = 0
-    atoms.append(o1)
-    
-    # Drude
-    d1 = pygcmc.MCAtom()
-    d1.x, d1.y, d1.z = 0.0, 0.0, 0.0
-    d1.charge = -1.71636
-    d1.type = 1
-    atoms.append(d1)
-    
-    # Water 2 - 0.4 nm away
-    o2 = pygcmc.MCAtom()
-    o2.x, o2.y, o2.z = 0.4, 0.0, 0.0
-    o2.charge = 1.71636
-    o2.type = 0
-    atoms.append(o2)
-    
-    d2 = pygcmc.MCAtom()
-    d2.x, d2.y, d2.z = 0.4, 0.0, 0.0
-    d2.charge = -1.71636
-    d2.type = 1
-    atoms.append(d2)
+    # Two SWM4-NDP water molecules (5 atoms each: O, D, H, H, M)
+    distance = 0.25  # nm: close enough for measurable Thole effect
+    atoms = create_swm4_water((0.0, 0.0, 0.0)) + create_swm4_water((distance, 0.0, 0.0))
     
     state.atoms = atoms
-    state.activeAtomCount = 4
+    state.activeAtomCount = len(atoms)
     state.info.box = [3.0, 3.0, 3.0]
     state.info.cutoff = 2.0
     
     # Setup residues
     res1 = pygcmc.MCResidue()
     res1.atomStart = 0
-    res1.atomCount = 2
+    res1.atomCount = 5
     res1.active = True
     res1.type = 0
     
     res2 = pygcmc.MCResidue()
-    res2.atomStart = 2
-    res2.atomCount = 2
+    res2.atomStart = 5
+    res2.atomCount = 5
     res2.active = True
     res2.type = 1
     
@@ -174,17 +151,24 @@ def test_thole_screened_force():
     
     # Test with and without Thole screening
     energies = {}
+    max_displacements = {}
     
     for use_thole in [False, True]:
         pygcmc.DrudeComplete.clear()
         
+        # Reset Drude positions to parent before each run (SCF mutates the state in-place)
+        for drude_idx, parent_idx in ((1, 0), (6, 5)):
+            state.atoms[drude_idx].x = state.atoms[parent_idx].x
+            state.atoms[drude_idx].y = state.atoms[parent_idx].y
+            state.atoms[drude_idx].z = state.atoms[parent_idx].z
+        
         # Add Drude particles
         for i in range(2):
             p = pygcmc.DrudeParticle()
-            p.drudeIndex = i * 2 + 1
-            p.parentIndex = i * 2
-            p.charge = -1.71636
-            p.polarizability = 0.978e-3
+            p.drudeIndex = i * 5 + 1
+            p.parentIndex = i * 5
+            p.charge = OPENMM_PARAMS['charges']['D']
+            p.polarizability = OPENMM_PARAMS['polarizability']
             p.computeSpringConstants()
             pygcmc.DrudeComplete.addParticle(p)
         
@@ -201,18 +185,27 @@ def test_thole_screened_force():
         params.tolerance = 1e-5
         params.maxIterations = 500
         params.maxDrudeDistance = 0.02
+        params.includeCoulombEnergy = True
         pygcmc.DrudeComplete.setParameters(params)
         
         # Calculate energy
         energy = pygcmc.DrudeComplete.calculateEnergy(state)
         energies['thole' if use_thole else 'no_thole'] = energy
+        
+        # Track max Drude displacement for a simple behavior check.
+        max_disp = 0.0
+        for drude_idx, parent_idx in ((1, 0), (6, 5)):
+            dx = state.atoms[drude_idx].x - state.atoms[parent_idx].x
+            dy = state.atoms[drude_idx].y - state.atoms[parent_idx].y
+            dz = state.atoms[drude_idx].z - state.atoms[parent_idx].z
+            max_disp = max(max_disp, math.sqrt(dx*dx + dy*dy + dz*dz))
+        max_displacements['thole' if use_thole else 'no_thole'] = max_disp
     
-    # Thole screening changes the potential energy surface and SCF convergence
-    # The exact effect depends on the configuration and convergence
-    # Just check that Thole screening has some effect
+    # Thole screening should measurably change the polarized state (energy/displacement).
     assert abs(energies['thole'] - energies['no_thole']) > 0.1, \
         f"Thole screening should affect the energy: {energies['thole']} vs {energies['no_thole']}"
+    assert max_displacements['thole'] <= max_displacements['no_thole'] + 1e-12, \
+        "Thole screening should not increase Drude displacement in this setup"
     
     pygcmc.DrudeComplete.clear()
-
 

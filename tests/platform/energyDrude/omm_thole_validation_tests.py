@@ -86,6 +86,7 @@ def test_thole_screening_validation():
     params.tolerance = 0.01
     params.maxIterations = 100
     params.enableHardWall = False
+    params.includeCoulombEnergy = True
     pygcmc.DrudeComplete.setParameters(params)
     
     # Calculate energy with Thole screening
@@ -110,9 +111,10 @@ def test_thole_screening_validation():
     print(f"Energy with Thole screening: {energy_with_thole:.6f} kJ/mol")
     print(f"Energy without Thole screening: {energy_without_thole:.6f} kJ/mol")
     
-    # Thole screening should reduce the interaction energy
-    assert energy_with_thole > energy_without_thole, \
-        "Thole screening should reduce attractive interaction"
+    # Thole screening should reduce the *magnitude* of interaction energy (closer to 0),
+    # independent of whether the unscreened interaction is attractive or repulsive.
+    assert abs(energy_with_thole) <= abs(energy_without_thole) + 1e-10
+    assert abs(energy_with_thole - energy_without_thole) > 1e-10
     
     pygcmc.DrudeComplete.clear()
 

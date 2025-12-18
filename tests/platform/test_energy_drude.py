@@ -99,6 +99,12 @@ from energyDrude.thole_screening_tests import (
     test_thole_distance_dependence
 )
 
+# Strong regression: Thole application semantics (four-charge point model)
+from energyDrude.thole_charmm_four_charge_energy import (
+    test_thole_screening_energy_standard_s1_uses_four_charge_pairs,
+    test_thole_screening_energy_openmmcompat_screens_only_drude_involving_pairs,
+)
+
 # CI tests - Fast
 from energyDrude.ci_fast_tests import (
     test_ci_fast_single_drude_external_field,

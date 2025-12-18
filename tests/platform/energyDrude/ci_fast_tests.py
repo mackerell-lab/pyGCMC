@@ -91,53 +91,75 @@ def test_ci_fast_double_drude_with_thole():
         atom.charge = 1.0 if i % 2 == 0 else -1.0
         atom.type = i % 2
     
+    # Add a small external charge near dipole 1 to induce polarization and make
+    # dipole-dipole coupling measurable (no reliance on spontaneous symmetry breaking).
+    ext = pygcmc.MCAtom()
+    ext.x = -0.2
+    ext.y = ext.z = 0.0
+    ext.charge = 0.4
+    ext.type = 0
+    atoms.append(ext)
     state.atoms = atoms
-    state.activeAtomCount = 4
+    state.activeAtomCount = len(atoms)
     
-    # Two residues
+    # Three residues (two dipoles + external)
     for i in range(2):
         res = pygcmc.MCResidue()
         res.atomStart = i * 2
         res.atomCount = 2
         res.active = True
         state.residues.append(res)
-    state.activeResidueCount = 2
-    
-    # Setup Drude particles
-    pygcmc.DrudeComplete.clear()
-    for i in range(2):
-        p = pygcmc.DrudeParticle()
-        p.drudeIndex = i * 2 + 1
-        p.parentIndex = i * 2
-        p.charge = -1.0
-        p.polarizability = 0.001
-        p.computeSpringConstants()
-        pygcmc.DrudeComplete.addParticle(p)
-    
-    # Add Thole screening
-    pair = pygcmc.ScreenedPair()
-    pair.dipole1 = 0
-    pair.dipole2 = 1
-    pair.thole = 1.3
-    pygcmc.DrudeComplete.addScreenedPair(pair)
+    res_ext = pygcmc.MCResidue()
+    res_ext.atomStart = 4
+    res_ext.atomCount = 1
+    res_ext.active = True
+    state.residues.append(res_ext)
+    state.activeResidueCount = 3
     
     params = pygcmc.DrudeSCFParams()
     params.tolerance = 0.01
     params.maxIterations = 100
     params.dampingFactor = 0.5
+    params.includeCoulombEnergy = True
     pygcmc.DrudeComplete.setParameters(params)
-    
-    energy = pygcmc.DrudeComplete.calculateEnergy(state)
-    
-    d1 = state.atoms[1].x - state.atoms[0].x
-    d2 = state.atoms[3].x - state.atoms[2].x
-    
-    # Check symmetry
-    assert abs(abs(d1) - abs(d2)) < 1e-6, "Displacements should be symmetric"
-    # Check attraction (opposite signs)
-    assert d1 * d2 < 0, "Dipoles should attract"
-    # Check reasonable magnitude
-    assert 0.001 < abs(d1) < 0.1, "Displacement magnitude should be reasonable"
+
+    def run(with_thole: bool) -> float:
+        pygcmc.DrudeComplete.clear()
+        for i in range(2):
+            p = pygcmc.DrudeParticle()
+            p.drudeIndex = i * 2 + 1
+            p.parentIndex = i * 2
+            p.charge = -1.0
+            p.polarizability = 0.001
+            p.computeSpringConstants()
+            pygcmc.DrudeComplete.addParticle(p)
+
+        if with_thole:
+            pair = pygcmc.ScreenedPair()
+            pair.dipole1 = 0
+            pair.dipole2 = 1
+            pair.thole = 1.3
+            pygcmc.DrudeComplete.addScreenedPair(pair)
+
+        pygcmc.DrudeComplete.setParameters(params)
+        pygcmc.DrudeComplete.calculateEnergy(state)
+        return abs(state.atoms[3].x - state.atoms[2].x)
+
+    # Reset Drude positions before each run (SCF mutates the state in-place).
+    for idx in (1, 3):
+        state.atoms[idx].x = state.atoms[idx - 1].x
+        state.atoms[idx].y = state.atoms[idx - 1].y
+        state.atoms[idx].z = state.atoms[idx - 1].z
+    disp2_no_thole = run(with_thole=False)
+
+    for idx in (1, 3):
+        state.atoms[idx].x = state.atoms[idx - 1].x
+        state.atoms[idx].y = state.atoms[idx - 1].y
+        state.atoms[idx].z = state.atoms[idx - 1].z
+    disp2_with_thole = run(with_thole=True)
+
+    assert disp2_no_thole > 1e-6, "Dipole 2 should be polarized via coupling"
+    assert disp2_with_thole < disp2_no_thole, "Thole screening should reduce coupling-induced polarization"
 
 def test_ci_fast_water_dimer_scan_minimal():
     """Test 3: Water dimer scan - minimal points (< 1s)"""

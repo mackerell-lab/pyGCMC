@@ -46,11 +46,20 @@ def test_thole_screening_effect():
     drude2.charge = -1.0
     drude2.type = 1
     atoms.append(drude2)
+
+    # Add a small external charge near dipole 1 to break symmetry and induce polarization.
+    # This avoids relying on unphysical "spontaneous polarization" in a perfectly symmetric setup.
+    external = pygcmc.MCAtom()
+    external.x = -0.2
+    external.y = external.z = 0.0
+    external.charge = 0.4
+    external.type = 0
+    atoms.append(external)
     
     state.atoms = atoms
-    state.activeAtomCount = 4
+    state.activeAtomCount = 5
     
-    # Two residues
+    # Three residues (two dipoles + external)
     residues = []
     for i in range(2):
         res = pygcmc.MCResidue()
@@ -59,9 +68,16 @@ def test_thole_screening_effect():
         res.active = True
         res.type = 0
         residues.append(res)
+
+    res_ext = pygcmc.MCResidue()
+    res_ext.atomStart = 4
+    res_ext.atomCount = 1
+    res_ext.active = True
+    res_ext.type = 1
+    residues.append(res_ext)
     
     state.residues = residues
-    state.activeResidueCount = 2
+    state.activeResidueCount = 3
     
     # Setup Drude particles
     pygcmc.DrudeComplete.clear()
@@ -83,6 +99,7 @@ def test_thole_screening_effect():
     params.maxIterations = 100
     params.enableHardWall = False
     params.dampingFactor = 0.5
+    params.includeCoulombEnergy = True
     pygcmc.DrudeComplete.setParameters(params)
     
     # Calculate WITHOUT Thole screening
@@ -130,15 +147,10 @@ def test_thole_screening_effect():
     print(f"  Drude 1 displacement: {disp1_with_thole:.6f} nm")
     print(f"  Drude 2 displacement: {disp2_with_thole:.6f} nm")
     
-    # Thole screening reduces dipole-dipole interaction
-    # This changes the energy but the effect on displacement depends on configuration
-    # The key test is that Thole screening changes the system
-    assert abs(energy_with_thole - energy_no_thole) > 0.001, "Thole should change energy"
-    
-    # At least one displacement should change significantly
-    disp_change1 = abs(disp1_with_thole - disp1_no_thole)
-    disp_change2 = abs(disp2_with_thole - disp2_no_thole)
-    assert disp_change1 > 1e-6 or disp_change2 > 1e-6, "Thole should affect displacements"
+    # Thole screening reduces dipole-dipole coupling, so the *remote* dipole response
+    # (dipole 2) should be reduced when screening is enabled.
+    assert disp2_no_thole > 1e-6, "Dipole 2 should respond to induced polarization"
+    assert disp2_with_thole < disp2_no_thole, "Thole screening should reduce induced coupling"
     
     pygcmc.DrudeComplete.clear()
 

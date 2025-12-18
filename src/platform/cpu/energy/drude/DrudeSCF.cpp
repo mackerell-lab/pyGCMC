@@ -197,62 +197,90 @@ void DrudeSCF::calculateInducedField(
     const std::vector<ScreenedPair>& screenedPairs,
     std::vector<Vec3>& electricField
 ) const {
-    // Field from Drude-Drude interactions with Thole screening
+    // External field already includes *unscreened* Coulomb contributions from all atoms
+    // (including other Drude and parent atoms). Here we apply a *correction* for
+    // the configured screened dipole pairs: add (screened - unscreened) field.
+    //
+    // For a screened Coulomb energy U = k*q1*q2*S1(u)/r with u = a*r/α_eff,
+    // the corresponding force/field damping factor is:
+    //   D(u) = S1(u) - u*S1'(u) = 1 - (1 + u + u^2/2) * exp(-u)
+    // This fixes the historical missing (u^2/2) term and avoids double counting.
+    const std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
+
     for (const auto& pair : screenedPairs) {
-        // Check pair indices are valid
         if (pair.dipole1 < 0 || static_cast<size_t>(pair.dipole1) >= particles.size() ||
             pair.dipole2 < 0 || static_cast<size_t>(pair.dipole2) >= particles.size()) {
             continue;
         }
-        
-        const auto& particle1 = particles[pair.dipole1];
-        const auto& particle2 = particles[pair.dipole2];
-        
-        // Bounds check
-        if (particle1.drudeIndex < 0 || particle1.drudeIndex >= state.activeAtomCount ||
-            particle2.drudeIndex < 0 || particle2.drudeIndex >= state.activeAtomCount) {
+
+        const auto& dipole1 = particles[pair.dipole1];
+        const auto& dipole2 = particles[pair.dipole2];
+
+        if (dipole1.drudeIndex < 0 || dipole1.drudeIndex >= state.activeAtomCount ||
+            dipole1.parentIndex < 0 || dipole1.parentIndex >= state.activeAtomCount ||
+            dipole2.drudeIndex < 0 || dipole2.drudeIndex >= state.activeAtomCount ||
+            dipole2.parentIndex < 0 || dipole2.parentIndex >= state.activeAtomCount) {
             continue;
         }
-        
-        const auto& drude1 = state.atoms[particle1.drudeIndex];
-        const auto& drude2 = state.atoms[particle2.drudeIndex];
-        
-        // Calculate distance
-        double dx = drude2.x - drude1.x;
-        double dy = drude2.y - drude1.y;
-        double dz = drude2.z - drude1.z;
-        std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
-        applyPBC(dx, dy, dz, box);
-        
-        double r2 = dx*dx + dy*dy + dz*dz;
-        if (r2 < 1e-12) continue;
-        
-        double r = std::sqrt(r2);
-        
-        // Calculate Thole screening and its derivative
-        double alpha_ij = std::pow(particle1.polarizability * particle2.polarizability, 1.0/6.0);
-        double u = pair.thole * r / alpha_ij;  // u = thole * r / alpha_eff
-        double exp_u = std::exp(-u);
-        
-        // Thole damping function for dipole field
-        // For dipole field: damping = 1 - exp(-u) * (1 + u)
-        double damping = 1.0 - exp_u * (1.0 + u);
-        
-        // Electric field from dipole 2 at dipole 1
-        // dx points from drude1 to drude2, but field should point from drude2 to drude1
-        double factor = DrudeConstants::ONE_4PI_EPS0 * particle2.charge * damping / (r2 * r);
-        
-        electricField[pair.dipole1][0] -= factor * dx;
-        electricField[pair.dipole1][1] -= factor * dy;
-        electricField[pair.dipole1][2] -= factor * dz;
-        
-        // Electric field from dipole 1 at dipole 2
-        // Field should point from drude1 to drude2, which is the direction of dx
-        factor = DrudeConstants::ONE_4PI_EPS0 * particle1.charge * damping / (r2 * r);
-        
-        electricField[pair.dipole2][0] += factor * dx;
-        electricField[pair.dipole2][1] += factor * dy;
-        electricField[pair.dipole2][2] += factor * dz;
+
+        const double alphaEff = std::pow(dipole1.polarizability * dipole2.polarizability, 1.0 / 6.0);
+        if (alphaEff < 1e-14) {
+            continue;
+        }
+
+        auto applyCorrectionFromSource = [&](int fieldDipoleIndex, int fieldAtomIndex, int sourceAtomIndex) {
+            // Match calculateExternalField() skip semantics: if the base unscreened term
+            // was skipped, do not attempt to "correct" it.
+            if (inSameMolecule(fieldAtomIndex, sourceAtomIndex, state)) {
+                return;
+            }
+
+            const auto& fieldAtom = state.atoms[fieldAtomIndex];
+            const auto& sourceAtom = state.atoms[sourceAtomIndex];
+
+            if (std::abs(sourceAtom.charge) < 1e-14) {
+                return;
+            }
+
+            double dx = fieldAtom.x - sourceAtom.x;
+            double dy = fieldAtom.y - sourceAtom.y;
+            double dz = fieldAtom.z - sourceAtom.z;
+            applyPBC(dx, dy, dz, box);
+
+            const double r2 = dx * dx + dy * dy + dz * dz;
+            if (r2 < 1e-12) {
+                return;
+            }
+
+            const double r = std::sqrt(r2);
+            const double invR3 = 1.0 / (r2 * r);
+
+            // Unscreened field contribution from the source charge.
+            const double unscreenedFactor = DrudeConstants::ONE_4PI_EPS0 * sourceAtom.charge * invR3;
+
+            // Compute D(u) for screened Coulomb field (screened - unscreened correction).
+            double damping = 1.0;
+            if (pair.thole != 0.0) {
+                const double u = pair.thole * r / alphaEff;
+                if (u <= 50.0) {
+                    const double expu = std::exp(-u);
+                    damping = 1.0 - expu * (1.0 + u + 0.5 * u * u);
+                }
+            }
+
+            const double deltaFactor = (damping - 1.0) * unscreenedFactor;
+            electricField[fieldDipoleIndex][0] += deltaFactor * dx;
+            electricField[fieldDipoleIndex][1] += deltaFactor * dy;
+            electricField[fieldDipoleIndex][2] += deltaFactor * dz;
+        };
+
+        // Field at Drude of dipole1: correct interactions with parent2 and drude2.
+        applyCorrectionFromSource(pair.dipole1, dipole1.drudeIndex, dipole2.parentIndex);
+        applyCorrectionFromSource(pair.dipole1, dipole1.drudeIndex, dipole2.drudeIndex);
+
+        // Field at Drude of dipole2: correct interactions with parent1 and drude1.
+        applyCorrectionFromSource(pair.dipole2, dipole2.drudeIndex, dipole1.parentIndex);
+        applyCorrectionFromSource(pair.dipole2, dipole2.drudeIndex, dipole1.drudeIndex);
     }
 }
 

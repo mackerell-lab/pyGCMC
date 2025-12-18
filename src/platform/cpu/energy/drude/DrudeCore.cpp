@@ -444,28 +444,21 @@ for (const auto& pair : m_screenedPairs) {
     // Get all four atoms involved
     int atoms1[2] = {particle1.parentIndex, particle1.drudeIndex};
     int atoms2[2] = {particle2.parentIndex, particle2.drudeIndex};
-    
-    // Calculate Drude-Drude distance for screening
-    const auto& drude1 = state.atoms[particle1.drudeIndex];
-    const auto& drude2 = state.atoms[particle2.drudeIndex];
-    
-    double dx_dd = drude2.x - drude1.x;
-    double dy_dd = drude2.y - drude1.y;
-    double dz_dd = drude2.z - drude1.z;
+
     std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
-    applyPBC(dx_dd, dy_dd, dz_dd, box);
-    
-    double r_dd = std::sqrt(dx_dd*dx_dd + dy_dd*dy_dd + dz_dd*dz_dd);
-    if (r_dd < 1e-6) continue;
-    
-    // Calculate screening factor
-    double screening = computeTholeScreening(r_dd, particle1.polarizability, 
-                                            particle2.polarizability, pair.thole);
-    
-    // Apply Thole screening ONLY to the Drude-Drude interaction (j=1, k=1)
-    // Other interactions (parent-parent, parent-drude, drude-parent) are not screened
+
+    const bool screenParents = (m_params.tholeMode == TholeMode::StandardS1);
+
+    // Apply Thole screening as a correction to the already-included unscreened Coulomb terms.
+    // StandardS1: screen all 4 charge-charge interactions between dipoles.
+    // OpenMMCompat: screen only interactions involving at least one Drude particle.
     for (int j = 0; j < 2; ++j) {
         for (int k = 0; k < 2; ++k) {
+            const bool involvesDrude = (j == 1 || k == 1);
+            if (!screenParents && !involvesDrude) {
+                continue;  // OpenMMCompat: leave parent-parent unscreened
+            }
+
             // Skip intramolecular interactions if they're in the same molecule
             if (inSameMolecule(atoms1[j], atoms2[k], state)) {
                 continue;
@@ -492,13 +485,17 @@ for (const auto& pair : m_screenedPairs) {
             
             // Calculate unscreened Coulomb energy
             double coulomb = DrudeConstants::ONE_4PI_EPS0 * atom1.charge * atom2.charge / r;
-            
-            // Apply screening ONLY to Drude-Drude interaction (j=1, k=1)
-            if (j == 1 && k == 1) {
-                // This is the Drude-Drude interaction, apply screening
-                energy += coulomb * (screening - 1.0);
-            }
-            // All other interactions are already included in the main loop
+
+            // Per-interaction screening factor S1(u) (see THOLE_CHARMM_IMPLEMENTATION.md).
+            double screening = computeTholeScreening(
+                r,
+                particle1.polarizability,
+                particle2.polarizability,
+                pair.thole
+            );
+
+            // Replace unscreened Coulomb with screened Coulomb by adding the delta.
+            energy += coulomb * (screening - 1.0);
         }
     }
 }

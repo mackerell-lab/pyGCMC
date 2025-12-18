@@ -137,17 +137,21 @@ def test_many_body_polarization():
                 y = j * spacing
                 z = k * spacing
                 
-                # Parent
+                # Parent (permanent charge)
                 parent = pygcmc.MCAtom()
                 parent.x, parent.y, parent.z = x, y, z
-                parent.charge = charge_pattern[idx % 2]
+                parent_charge = charge_pattern[idx % 2]
+                parent.charge = parent_charge
                 parent.type = 0
                 atoms.append(parent)
                 
                 # Drude
+                # Use a smaller magnitude Drude charge so each ion has a net charge and
+                # a non-zero local electric field (avoids the trivial "neutral pairs at
+                # same position => zero field" fixed point).
                 drude = pygcmc.MCAtom()
                 drude.x, drude.y, drude.z = x, y, z
-                drude.charge = -parent.charge
+                drude.charge = -0.2 * parent_charge
                 drude.type = 1
                 atoms.append(drude)
                 
@@ -179,7 +183,7 @@ def test_many_body_polarization():
         p = pygcmc.DrudeParticle()
         p.drudeIndex = i * 2 + 1
         p.parentIndex = i * 2
-        p.charge = -charge_pattern[i % 2]
+        p.charge = -0.2 * charge_pattern[i % 2]
         p.polarizability = 0.001
         p.computeSpringConstants()
         pygcmc.DrudeComplete.addParticle(p)
