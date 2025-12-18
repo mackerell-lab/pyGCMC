@@ -1334,8 +1334,13 @@ bool GCMCSimulation::setupEngine() {
     log("Energy callback configured: DIRECT method with cutoff and PBC");
 
     // Configure engine parameters for optimal performance
-    engine_->setConfigValue("maxTranslation", 0.2);  // nm
-    engine_->setConfigValue("maxRotation", 15.0);    // degrees
+    // NOTE: INP decks (inp_units:auto/gcmc_gpu) provide max_translation in Å and max_rotation in degrees;
+    // enhance_param normalizes lengths to nm, so we only need to convert degrees -> radians here.
+    engine_->setConfigValue("maxTranslation", params_->get_mc_info().max_translation_dist);  // nm
+    constexpr double kPi = 3.14159265358979323846;
+    const double maxRotationRad =
+        static_cast<double>(params_->get_mc_info().max_rotation_angle) * (kPi / 180.0);
+    engine_->setConfigValue("maxRotation", maxRotationRad);  // radians
     engine_->setConfigValue("useCavityBias", params_->get_bias_info().use_cavity_bias ? 1.0 : 0.0);
 
     // Enable energy caching for better performance
@@ -1490,7 +1495,8 @@ bool GCMCSimulation::setupEngine() {
 
     log("GCMC engine configured:");
     log("  Max translation: ", engine_->getConfigValue("maxTranslation"), " nm");
-    log("  Max rotation: ", engine_->getConfigValue("maxRotation"), " degrees");
+    log("  Max rotation: ", params_->get_mc_info().max_rotation_angle, " degrees (",
+        engine_->getConfigValue("maxRotation"), " rad)");
     log("  Cavity bias: ", (params_->get_bias_info().use_cavity_bias ? "enabled" : "disabled"));
 
     // Ensure deterministic RNG when seed provided with non-overlapping seeds
@@ -1816,9 +1822,9 @@ bool GCMCSimulation::performSingleMove() {
         stats_.acceptedMoves++;
     }
 
-    // Record to acceptance buffer if diagnostics enabled
-    if (diagnosticsEnabled_ && moveType != TRANSLATE && moveType != ROTATE) {
-        // Only record INSERT/DELETE moves for now (TRANSLATE/ROTATE lack fragment type info)
+    // Record to acceptance buffer if diagnostics enabled.
+    // This is the stable, structured test/diagnostics API and must not depend on stdout/stderr text.
+    if (diagnosticsEnabled_) {
         AcceptanceRecord rec;
 
         // Map local MoveType to AcceptanceRecord::MoveType
@@ -1829,9 +1835,24 @@ bool GCMCSimulation::performSingleMove() {
             case ROTATE:    rec.moveType = AcceptanceRecord::ROTATE; break;
         }
 
-        // Get fragment type (valid for INSERT/DELETE)
-        rec.species = fragType;
-        rec.nBefore = nBefore;  // Number of molecules before the move
+        // Species index for this move:
+        // - INSERT/DELETE operate on the selected fragment type (fragType)
+        // - TRANSLATE/ROTATE operate on a specific instance; engine reports its fragmentType
+        int species = -1;
+        if (moveType == INSERT || moveType == DELETE) {
+            species = fragType;
+        } else {
+            species = result.fragmentType;
+        }
+        rec.species = species;
+
+        // Number of molecules before the move (only meaningful for INSERT/DELETE, but we keep a
+        // sensible value for TRANSLATE/ROTATE for completeness).
+        if ((moveType == TRANSLATE || moveType == ROTATE) &&
+            species >= 0 && static_cast<size_t>(species) < fragmentTypes_.size()) {
+            nBefore = fragmentTypes_[species].currentCount;
+        }
+        rec.nBefore = nBefore;
         rec.step = stats_.totalSteps;
         rec.deltaU = result.deltaE;
 
@@ -1841,24 +1862,33 @@ bool GCMCSimulation::performSingleMove() {
         rec.beta = beta;
         rec.betaDeltaU = result.deltaE * beta;
 
-        // Get chemical potential, activity, and CBMC trials for this fragment type
-        if (fragType >= 0 && static_cast<size_t>(fragType) < fragmentTypes_.size()) {
-            rec.mu = fragmentTypes_[fragType].chemicalPotential;
-            rec.betaMu = rec.mu * beta;
-            if (acceptance_) {
-                rec.z = acceptance_->getActivity(fragType);
+        // Thermodynamic inputs:
+        // - INSERT/DELETE: meaningful per species and required for acceptance closure
+        // - TRANSLATE/ROTATE: not used by the Metropolis criterion; keep neutral defaults
+        if (moveType == INSERT || moveType == DELETE) {
+            if (species >= 0 && static_cast<size_t>(species) < fragmentTypes_.size()) {
+                rec.mu = fragmentTypes_[species].chemicalPotential;
+                rec.betaMu = rec.mu * beta;
+                if (acceptance_) {
+                    rec.z = acceptance_->getActivity(species);
+                } else {
+                    rec.z = fragmentTypes_[species].activity;
+                }
+                rec.cbmcTrials = fragmentTypes_[species].confBiasTrials;
             } else {
-                rec.z = fragmentTypes_[fragType].activity;
+                rec.mu = 0.0;
+                rec.betaMu = 0.0;
+                rec.z = 1.0;
+                rec.cbmcTrials = 1;
             }
-            rec.cbmcTrials = fragmentTypes_[fragType].confBiasTrials;
+            if (result.cbmcTrialsUsed > 0) {
+                rec.cbmcTrials = result.cbmcTrialsUsed;
+            }
         } else {
             rec.mu = 0.0;
             rec.betaMu = 0.0;
             rec.z = 1.0;
             rec.cbmcTrials = 1;
-        }
-        if (result.cbmcTrialsUsed > 0) {
-            rec.cbmcTrials = result.cbmcTrialsUsed;
         }
 
         // CBMC Rosenbluth factor from engine (avoid double-counting exp(-βΔU)):
@@ -1866,12 +1896,17 @@ bool GCMCSimulation::performSingleMove() {
         //   deletion:  qReverse = (W_old/K)/exp(-β u_current)
         if (moveType == INSERT) {
             rec.qForward = result.rosenbluthWeight;
-            rec.qReverse = 1.0;  // Not applicable for single move
-        } else {  // DELETE
-            rec.qForward = 1.0;  // Not applicable for single move
+            rec.qReverse = 1.0;
+            rec.proposalRatio = currentProposalRatio_;
+        } else if (moveType == DELETE) {
+            rec.qForward = 1.0;
             rec.qReverse = result.rosenbluthWeight;
+            rec.proposalRatio = currentProposalRatio_;
+        } else {
+            rec.qForward = 1.0;
+            rec.qReverse = 1.0;
+            rec.proposalRatio = 1.0;
         }
-        rec.proposalRatio = currentProposalRatio_;
 
         // Effective volume (box volume)
         const auto& box = params_->get_space_info().box_size;
@@ -1906,9 +1941,12 @@ bool GCMCSimulation::performSingleMove() {
         if (moveType == INSERT) {
             rec.wForward = result.cavityBiasComponent;
             rec.wReverse = 1.0;  // Will be from paired deletion
-        } else {  // DELETE
+        } else if (moveType == DELETE) {
             rec.wForward = 1.0;  // Will be from paired insertion
             rec.wReverse = result.cavityBiasComponent;
+        } else {
+            rec.wForward = 1.0;
+            rec.wReverse = 1.0;
         }
 
         // Record cavity volume fraction (already computed in move result)
@@ -3268,11 +3306,22 @@ void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
         << ",\"moves_per_step\":" << mc.moves_per_step
         << ",\"print_freq\":" << mc.print_freq
         << ",\"temperature_K\":" << mc.temperature
+        << ",\"max_translation_nm\":" << mc.max_translation_dist
+        << ",\"max_rotation_deg\":" << mc.max_rotation_angle
         << ",\"wdens\":" << mc.wdens
         << ",\"use_switching\":" << (mc.use_switching ? "true" : "false")
         << ",\"switch_r_on_nm\":" << mc.switch_r_on
         << ",\"switch_r_off_nm\":" << mc.switch_r_off
         << "},";
+
+    ofs << "\"engine\":{";
+    if (engine_) {
+        ofs << "\"max_translation_nm\":" << engine_->getConfigValue("maxTranslation")
+            << ",\"max_rotation_rad\":" << engine_->getConfigValue("maxRotation");
+    } else {
+        ofs << "\"max_translation_nm\":0,\"max_rotation_rad\":0";
+    }
+    ofs << "},";
 
     ofs << "\"energy\":{"
         << "\"use_group_cutoff\":" << (energy.use_group_cutoff ? "true" : "false")

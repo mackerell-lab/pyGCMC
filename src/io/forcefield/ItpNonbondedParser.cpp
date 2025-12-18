@@ -77,6 +77,11 @@ ItpNonbondedParser::Result ItpNonbondedParser::parse_file(const std::string& fil
     }
 
     Result result;
+    // Track overrides by section so we can apply a deterministic precedence.
+    // For compatibility with the planned "strict-gromacs" path (and to match the intended
+    // gcmc_gpu behavior), treat nonbond_params as NBFIX and let it override pairtypes.
+    std::map<std::pair<std::string, std::string>, LJ> pairtypesOverrides;
+    std::map<std::pair<std::string, std::string>, LJ> nbfixOverrides;
     std::string section;
     std::string line;
 
@@ -136,11 +141,22 @@ ItpNonbondedParser::Result ItpNonbondedParser::parse_file(const std::string& fil
             try {
                 const double sigma = std::stod(tokens[tokens.size() - 2]);
                 const double eps = std::stod(tokens[tokens.size() - 1]);
-                result.pairOverrides[canonicalPair(t1, t2)] = LJ{sigma, eps};
+                const auto key = canonicalPair(t1, t2);
+                if (section == "pairtypes") {
+                    pairtypesOverrides[key] = LJ{sigma, eps};
+                } else {
+                    nbfixOverrides[key] = LJ{sigma, eps};
+                }
             } catch (const std::exception&) {
                 continue;
             }
         }
+    }
+
+    // Merge overrides with precedence: pairtypes first, then nonbond_params (NBFIX).
+    result.pairOverrides = std::move(pairtypesOverrides);
+    for (const auto& [pair, lj] : nbfixOverrides) {
+        result.pairOverrides[pair] = lj;
     }
 
     return result;
@@ -162,4 +178,3 @@ ItpNonbondedParser::Result ItpNonbondedParser::parse_files(const std::vector<std
 
 } // namespace io
 } // namespace pygcmc
-

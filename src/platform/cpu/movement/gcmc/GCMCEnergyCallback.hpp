@@ -71,12 +71,17 @@ public:
         if (residueIdx < 0 || residueIdx >= static_cast<int>(state.residues.size())) {
             return 0.0;
         }
-        
-        // Mark residue as moved for movement energy calculation
-        // Note: moved flag may not exist in MCResidue
-        // state.residues[residueIdx].moved = true;
-        
-        // Calculate movement energy
+
+        // DIRECT path: compute this residue's interaction energy against the rest.
+        // This must not depend on MCState.movementResidues being populated.
+        if (energyMethod_ == EnergyMethod::DIRECT) {
+            computeResidueNonbondedEnergy(state, residueIdx, useCutoff_, usePBC_, false);
+            const auto& residue = state.residues[residueIdx];
+            return residue.energy_vdw + residue.energy_elec;
+        }
+
+        // Long-range methods: fall back to the existing movement energy entrypoint.
+        // (Per-residue energy interfaces for PME/EWALD are not yet exposed here.)
         if (energyMethod_ == EnergyMethod::PME) {
             computeMovementEnergy(state, EnergyMethod::PME);
         } else if (energyMethod_ == EnergyMethod::EWALD) {
@@ -84,11 +89,7 @@ public:
         } else {
             computeMovementEnergy(state, EnergyMethod::DIRECT, useCutoff_, usePBC_);
         }
-        
-        // Reset moved flag
-        // state.residues[residueIdx].moved = false;
-        
-        // Return residue energy
+
         const auto& residue = state.residues[residueIdx];
         return residue.energy_vdw + residue.energy_elec;
     }

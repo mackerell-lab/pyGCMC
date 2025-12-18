@@ -94,11 +94,23 @@ from cpu_cli.fragment_template_geometry import (
     test_fragment_template_geometry_from_monomerdir,
 )
 
+# Movement acceptance + energy closure for TRANSLATE/ROTATE (2 functions)
+from cpu_cli.movement_energy_translation_rotation import (
+    test_translation_move_deltaU_matches_analytic_lj_and_is_logged_in_dump_accept,
+    test_rotation_move_deltaU_matches_analytic_lj_for_multi_atom_fragment,
+)
+
+# Movement step-size parameter compatibility (1 function)
+from cpu_cli.movement_step_params_compat import (
+    test_max_translation_and_rotation_keys_are_parsed_converted_and_applied,
+)
+
 # ITP nonbonded -> forcefield/LJ energy wiring (2 functions)
 from cpu_cli.itp_nonbonded_forcefield import (
     test_itp_atomtypes_builds_lj_matrix_and_deltaU_matches_analytic_lj,
     test_itp_nonbond_params_override_applies_nbfix_in_lj_matrix,
     test_itp_pairtypes_override_applies_nbfix_in_lj_matrix,
+    test_itp_nonbond_params_take_precedence_over_pairtypes_for_same_pair,
 )
 
 # ITP nonbonded insertion->deletion closure regression (1 function)

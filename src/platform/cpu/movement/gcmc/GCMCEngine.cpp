@@ -1407,6 +1407,10 @@ void GCMCEngine::updateFragmentPosition(int residueIdx, const Vector3& newPos) {
     if (!reservoir_) return;
     
     reservoir_->updatePosition(residueIdx, newPos);
+    if (auto* instance = reservoir_->getInstance(residueIdx)) {
+        // Position change invalidates any per-instance cached energy for this MC move.
+        instance->lastEnergyUpdate = -1.0;
+    }
     energyCache_.invalidate();
     
     // Update atom coordinates without adding new atoms
@@ -1418,6 +1422,10 @@ void GCMCEngine::updateFragmentOrientation(int residueIdx, const Quaternion& new
     if (!reservoir_) return;
     
     reservoir_->updateOrientation(residueIdx, newOrient);
+    if (auto* instance = reservoir_->getInstance(residueIdx)) {
+        // Orientation change invalidates any per-instance cached energy for this MC move.
+        instance->lastEnergyUpdate = -1.0;
+    }
     energyCache_.invalidate();
     
     // Update atom coordinates without adding new atoms

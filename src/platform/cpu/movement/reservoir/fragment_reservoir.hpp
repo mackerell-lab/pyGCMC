@@ -122,7 +122,7 @@ struct FragmentInstance {
     double energy_vdw = 0.0;              // van der Waals energy
     double energy_elec = 0.0;             // Electrostatic energy  
     double energy_total = 0.0;            // Total energy
-    double lastEnergyUpdate = 0.0;        // MC step of last energy update
+    double lastEnergyUpdate = -1.0;       // MC step of last energy update (-1 => invalid/uncomputed)
     
     // Neighbor lists (cached)
     std::vector<int> proteinNeighbors;    // Neighboring protein atoms

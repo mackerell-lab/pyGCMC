@@ -276,6 +276,14 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
         } else {
             frag_info.conc_list.push_back(concM);
         }
+    } else if (key == "max_translation" || key == "max_translation_dist") {
+        handled = true;
+        // Raw value; normalized to internal nm in enhance_param.
+        mc_info.max_translation_dist = std::stof(value);
+    } else if (key == "max_rotation" || key == "max_rotation_angle") {
+        handled = true;
+        // Rotation angles are treated as degrees in legacy INP decks (converted to radians where needed).
+        mc_info.max_rotation_angle = std::stof(value);
     } else if (key == "insdel_frac" || key == "insdel_fraction") {
         handled = true;
         float frac = std::stof(value);
@@ -492,6 +500,8 @@ void InpParserGCMC::enhance_param(model::param::Param& param) {
         // MC switching distances
         mc_info.switch_r_on *= LEN;
         mc_info.switch_r_off *= LEN;
+        // MC move step sizes
+        mc_info.max_translation_dist *= LEN;
 
         // Energy cutoffs and pairlists
         energy_info.fragment_cutoff *= LEN;
