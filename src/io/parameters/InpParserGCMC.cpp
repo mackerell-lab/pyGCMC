@@ -292,12 +292,18 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
     } else if (key == "attempt_prob_frag") {
         handled = true;
         mc_info.fragment_prob = InpParserStructures::parse_float_vector(value);
+        // Legacy compatibility key; currently not used by gcmc_cpu (move scheduling uses attempt_prob_*).
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "attempt_prob_water") {
         handled = true;
         mc_info.water_prob = InpParserStructures::parse_float_vector(value);
+        // Legacy compatibility key; currently not used by gcmc_cpu.
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "attempt_prob_atom") {
         handled = true;
         mc_info.atom_prob = InpParserStructures::parse_float_vector(value);
+        // Legacy compatibility key; currently not used by gcmc_cpu.
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "test_energy") {
         handled = true;
         energy_info.test_energy = (value == "yes" || value == "true" || value == "1");
@@ -329,29 +335,39 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
                 mc_info.rotate_dih_status = 0;
             }
         }
+        // Dihedral rotation moves are not implemented in gcmc_cpu yet.
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "remove_init") {
         handled = true;
         frag_info.remove_init = InpParserStructures::parse_int_vector(value);
         frag_info.flag_remove_init = 1;
+        // Initial-fragment removal logic is not implemented in gcmc_cpu yet.
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "remove_excess") {
         handled = true;
         frag_info.remove_excess = InpParserStructures::parse_int_vector(value);
         frag_info.flag_remove_excess = 1;
+        // Excess-fragment removal logic is not implemented in gcmc_cpu yet.
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "initial_fragments_cutoff") {
         handled = true;
         const float cutoff = std::stof(value);
         frag_info.init_cutoff = cutoff;
         frag_info.init_cutoff_squared = cutoff * cutoff;
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "excess_fragments_threshold") {
         handled = true;
         frag_info.excess_threshold = std::stof(value);
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "gcmc_cutoff") {
         handled = true;
         frag_info.gcmc_cutoff = std::stof(value);
         frag_info.gcmc_cutoff_squared = frag_info.gcmc_cutoff * frag_info.gcmc_cutoff;
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "use_gcmc_cutoff") {
         handled = true;
         frag_info.use_gcmc_cutoff = (value == "yes" || value == "true" || value == "1");
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "target_volume") {
         handled = true;
         space_info.target_volume = std::stof(value);
@@ -379,6 +395,8 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
         handled = true;
         // Legacy: per-fragment MQTR file(s)
         file_info.fragment_mqtr_files.push_back(value);
+        // MQTR functionality is not implemented in gcmc_cpu yet.
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "inp_units" || key == "units") {
         handled = true;
         // Override unit system ("auto", "nm", "gcmc_gpu"/"angstrom"/"a")

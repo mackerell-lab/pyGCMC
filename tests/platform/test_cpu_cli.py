@@ -39,6 +39,9 @@ from cpu_cli.validation_tests import (
     test_gcmc_cpu_invalid_inp,
     test_gcmc_cpu_parameter_validation,
     test_dump_params_reports_unknown_inp_keys,
+    test_dump_params_reports_ignored_inp_keys,
+    test_strict_inp_keys_fails_on_unknown_or_ignored_keys,
+    test_strict_inp_keys_passes_when_no_unknown_or_ignored_keys,
 )
 
 # gcmc_gpu-style INP compatibility and unit semantics tests (11 functions + param cases)

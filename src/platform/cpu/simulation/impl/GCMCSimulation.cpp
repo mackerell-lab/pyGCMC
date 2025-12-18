@@ -287,13 +287,26 @@ bool GCMCSimulation::initialize() {
             log("Note: Initial system capacity exceeded, continuing with adjusted settings");
         }
 
-        // Fall back to legacy loader for parameters
-        log("Using fallback parameter loading...");
-	        if (!loadParameters()) {
-	            log("ERROR: Failed to load parameters");
-	            return false;
-	        }
-	    }
+	        // Fall back to legacy loader for parameters
+	        log("Using fallback parameter loading...");
+		        if (!loadParameters()) {
+		            log("ERROR: Failed to load parameters");
+		            return false;
+		        }
+		    }
+
+        if (!params_) {
+            log("ERROR: Failed to load parameters (params_ is null)");
+            return false;
+        }
+
+        if (config_.strictInpKeys) {
+            const auto& basic = params_->get_basic_info();
+            if (!basic.inp_keys_unknown.empty() || !basic.inp_keys_ignored.empty()) {
+                log("ERROR: Strict INP key mode enabled; unsupported keys detected.");
+                return false;
+            }
+        }
 
 	    // If CLI did not provide a seed, allow legacy INP keys (random_seed/seed) to drive RNG determinism.
 	    if (config_.randomSeed < 0 && params_) {
@@ -3278,16 +3291,18 @@ void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
 
     ofs << "{";
 
-    ofs << "\"basic\":{"
-        << "\"version\":\"" << escapeJsonString(basic.version) << "\","
-        << "\"inp_units\":\"" << escapeJsonString(basic.inp_units) << "\","
-        << "\"inp_units_explicit\":" << (basic.inp_units_explicit ? "true" : "false") << ","
-        << "\"inp_units_converted\":" << (basic.inp_units_converted ? "true" : "false") << ","
-        << "\"unknown_inp_keys\":";
-    writeJsonStringVector(ofs, basic.inp_keys_unknown);
-    ofs << ","
-        << "\"random_seed\":" << basic.random_seed
-        << "},";
+	    ofs << "\"basic\":{"
+	        << "\"version\":\"" << escapeJsonString(basic.version) << "\","
+	        << "\"inp_units\":\"" << escapeJsonString(basic.inp_units) << "\","
+	        << "\"inp_units_explicit\":" << (basic.inp_units_explicit ? "true" : "false") << ","
+	        << "\"inp_units_converted\":" << (basic.inp_units_converted ? "true" : "false") << ","
+	        << "\"unknown_inp_keys\":";
+	    writeJsonStringVector(ofs, basic.inp_keys_unknown);
+	    ofs << ",\"ignored_inp_keys\":";
+	    writeJsonStringVector(ofs, basic.inp_keys_ignored);
+	    ofs << ","
+	        << "\"random_seed\":" << basic.random_seed
+	        << "},";
 
     ofs << "\"space\":{"
         << "\"box_size_nm\":";

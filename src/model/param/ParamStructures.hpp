@@ -37,6 +37,9 @@ struct BasicInfo {
     std::vector<std::string> inp_keys_seen;
     std::vector<std::string> inp_keys_handled;
     std::vector<std::string> inp_keys_unknown;
+    // Keys that are recognized during parsing but currently not implemented/used by the engine.
+    // This separates "unknown" from "parsed-but-ignored" to avoid silent semantic drift.
+    std::vector<std::string> inp_keys_ignored;
     unsigned int random_seed = 0;
     int num_threads = 1;
     bool is_box = false;

@@ -34,6 +34,7 @@ void InpParserMain::parse_to_param(const std::string& filename, model::Param& pa
     basic_info.inp_keys_seen.clear();
     basic_info.inp_keys_handled.clear();
     basic_info.inp_keys_unknown.clear();
+    basic_info.inp_keys_ignored.clear();
 
     auto pushUnique = [](std::vector<std::string>& v, const std::string& s) {
         if (std::find(v.begin(), v.end(), s) == v.end()) {
@@ -71,6 +72,7 @@ void InpParserMain::parse_string_to_param(const std::string& content, model::Par
     basic_info.inp_keys_seen.clear();
     basic_info.inp_keys_handled.clear();
     basic_info.inp_keys_unknown.clear();
+    basic_info.inp_keys_ignored.clear();
 
     auto pushUnique = [](std::vector<std::string>& v, const std::string& s) {
         if (std::find(v.begin(), v.end(), s) == v.end()) {
@@ -149,9 +151,13 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
     } else if (key == "conc_norm") {
         handled = true;
         file_info.conc_norm = value;
+        // Legacy compatibility key; currently not used by gcmc_cpu.
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "conc_region") {
         handled = true;
         file_info.conc_region = value;
+        // Legacy compatibility key; currently not used by gcmc_cpu.
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "inp_units" || key == "units") {
         handled = true;
         // Store raw unit system string for later conversion in InpParserGCMC::enhance_param
@@ -255,6 +261,7 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
         handled = true;
         // Store equilibration steps if needed
         // Currently not used in MCParams, but parsed for compatibility
+        pushUnique(basic_info.inp_keys_ignored, key);
     }
     // Bias parameters
     else if (key == "use_cavity_bias") {
@@ -268,15 +275,19 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
     else if (key == "initcycle") {
         handled = true;
         basic_info.init_cycle = (value == "yes");
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "conserve_frags") {
         handled = true;
         basic_info.conserve_fragments = (value == "yes");
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "map_generation") {
         handled = true;
         file_info.generate_maps = (value == "yes");
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "map_filename_prefix") {
         handled = true;
         file_info.map_prefix = value;
+        pushUnique(basic_info.inp_keys_ignored, key);
     }
 
     if (handled) {

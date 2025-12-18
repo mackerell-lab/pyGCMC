@@ -227,3 +227,238 @@ mc_move_prob:1 0 0 0
     params = json.loads(params_json.read_text())
     unknown = params["basic"]["unknown_inp_keys"]
     assert unknown_key in set(unknown)
+
+
+def test_dump_params_reports_ignored_inp_keys(gcmc_cpu, test_data_dir, temp_dir):
+    """Recognized-but-unimplemented INP keys must be visible via --dump-params (no log parsing)."""
+    itp = test_data_dir / "charmm36.ff" / "mol" / "na.itp"
+    if not itp.exists():
+        pytest.skip(f"Required ITP not found: {itp}")
+
+    work = Path(temp_dir) / "ignored_inp_keys"
+    work.mkdir(parents=True, exist_ok=True)
+
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    params_json = work / "out" / "params.json"
+
+    inp = work / "run.inp"
+    inp.write_text(
+        f"""
+eqsteps:10
+initcycle:yes
+conserve_frags:yes
+map_generation:yes
+map_filename_prefix:gc_maps/test
+
+attempt_prob_frag:0.1 0.2 0.3 0.4
+rotate_dihedral:yes
+use_gcmc_cutoff:yes
+gcmc_cutoff:12.0
+initial_fragments_cutoff:10.0
+excess_fragments_threshold:1.5
+remove_init:1
+remove_excess:1
+
+fragitp:{itp}
+fragname:NA
+fragconc:55.0
+fragmuex:0.0
+
+box_size:10.0 10.0 10.0
+cutoff:12.0
+temperature:300.0
+moves_per_step:1
+mcsteps:0
+nprint:1
+mc_move_prob:1 0 0 0
+""".strip()
+        + "\n"
+    )
+
+    result = subprocess.run(
+        [gcmc_cpu, "--inp", str(inp), "--prefix", str(out_prefix), "--dump-params", str(params_json)],
+        capture_output=True,
+        text=True,
+        cwd=str(work),
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    params = json.loads(params_json.read_text())
+    assert params["basic"]["unknown_inp_keys"] == []
+    ignored = set(params["basic"]["ignored_inp_keys"])
+    for key in (
+        "eqsteps",
+        "initcycle",
+        "conserve_frags",
+        "map_generation",
+        "map_filename_prefix",
+        "attempt_prob_frag",
+        "rotate_dihedral",
+        "use_gcmc_cutoff",
+        "gcmc_cutoff",
+        "initial_fragments_cutoff",
+        "excess_fragments_threshold",
+        "remove_init",
+        "remove_excess",
+    ):
+        assert key in ignored
+
+
+def test_strict_inp_keys_fails_on_unknown_or_ignored_keys(gcmc_cpu, test_data_dir, temp_dir):
+    """
+    Strict mode is a safety switch: fail fast if the INP contains keys that are unknown
+    or currently recognized-but-ignored.
+
+    This prevents "runs but silently wrong" behavior during compatibility work.
+    """
+    itp = test_data_dir / "charmm36.ff" / "mol" / "na.itp"
+    if not itp.exists():
+        pytest.skip(f"Required ITP not found: {itp}")
+
+    work = Path(temp_dir) / "strict_inp_keys"
+    work.mkdir(parents=True, exist_ok=True)
+
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    params_json = work / "out" / "params.json"
+
+    unknown_key = "__definitely_unknown_key__"
+
+    # Case 1: unknown key => must fail
+    inp_unknown = work / "unknown.inp"
+    inp_unknown.write_text(
+        f"""
+{unknown_key}:123
+fragitp:{itp}
+fragname:NA
+fragconc:55.0
+fragmuex:0.0
+
+box_size:10.0 10.0 10.0
+cutoff:12.0
+temperature:300.0
+moves_per_step:1
+mcsteps:0
+nprint:1
+mc_move_prob:1 0 0 0
+""".strip()
+        + "\n"
+    )
+
+    result = subprocess.run(
+        [
+            gcmc_cpu,
+            "--inp",
+            str(inp_unknown),
+            "--prefix",
+            str(out_prefix),
+            "--dump-params",
+            str(params_json),
+            "--strict-inp-keys",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(work),
+        timeout=30,
+    )
+    assert result.returncode != 0
+    params = json.loads(params_json.read_text())
+    assert unknown_key in set(params["basic"]["unknown_inp_keys"])
+
+    # Case 2: ignored-but-recognized keys => must fail
+    inp_ignored = work / "ignored.inp"
+    inp_ignored.write_text(
+        f"""
+eqsteps:10
+fragitp:{itp}
+fragname:NA
+fragconc:55.0
+fragmuex:0.0
+
+box_size:10.0 10.0 10.0
+cutoff:12.0
+temperature:300.0
+moves_per_step:1
+mcsteps:0
+nprint:1
+mc_move_prob:1 0 0 0
+""".strip()
+        + "\n"
+    )
+
+    params_json2 = work / "out" / "params_ignored.json"
+    result2 = subprocess.run(
+        [
+            gcmc_cpu,
+            "--inp",
+            str(inp_ignored),
+            "--prefix",
+            str(out_prefix),
+            "--dump-params",
+            str(params_json2),
+            "--strict-inp-keys",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(work),
+        timeout=30,
+    )
+    assert result2.returncode != 0
+    params2 = json.loads(params_json2.read_text())
+    assert "eqsteps" in set(params2["basic"]["ignored_inp_keys"])
+
+
+def test_strict_inp_keys_passes_when_no_unknown_or_ignored_keys(gcmc_cpu, test_data_dir, temp_dir):
+    """Strict mode should not block minimal legacy-compatible decks."""
+    itp = test_data_dir / "charmm36.ff" / "mol" / "na.itp"
+    if not itp.exists():
+        pytest.skip(f"Required ITP not found: {itp}")
+
+    work = Path(temp_dir) / "strict_inp_keys_clean"
+    work.mkdir(parents=True, exist_ok=True)
+
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    params_json = work / "out" / "params.json"
+
+    inp = work / "run.inp"
+    inp.write_text(
+        f"""
+fragitp:{itp}
+fragname:NA
+fragconc:55.0
+fragmuex:0.0
+
+box_size:10.0 10.0 10.0
+cutoff:12.0
+temperature:300.0
+moves_per_step:1
+mcsteps:0
+nprint:1
+mc_move_prob:1 0 0 0
+""".strip()
+        + "\n"
+    )
+
+    result = subprocess.run(
+        [
+            gcmc_cpu,
+            "--inp",
+            str(inp),
+            "--prefix",
+            str(out_prefix),
+            "--dump-params",
+            str(params_json),
+            "--strict-inp-keys",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(work),
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    params = json.loads(params_json.read_text())
+    assert params["basic"]["unknown_inp_keys"] == []
+    assert params["basic"]["ignored_inp_keys"] == []
