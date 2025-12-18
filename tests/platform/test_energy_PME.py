@@ -108,6 +108,11 @@ from energyPME.debug_state_creation import (
     test_state_with_residues
 )
 
+# Pairtypes strict (1-4) behavior
+from energyPME.pairtypes_14_strict import (
+    test_pairtypes_14_override_applies_to_dihedral_pair
+)
+
 # Support direct execution for testing
 if __name__ == "__main__":
     import pytest

@@ -3296,6 +3296,10 @@ void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
 	        << "\"inp_units\":\"" << escapeJsonString(basic.inp_units) << "\","
 	        << "\"inp_units_explicit\":" << (basic.inp_units_explicit ? "true" : "false") << ","
 	        << "\"inp_units_converted\":" << (basic.inp_units_converted ? "true" : "false") << ","
+	        << "\"itp_pairtypes_mode\":\"" << escapeJsonString(basic.itp_pairtypes_mode) << "\","
+	        << "\"gromacs_defaults_present\":" << (basic.gromacs_defaults_present ? "true" : "false") << ","
+	        << "\"gromacs_nbfunc\":" << basic.gromacs_nbfunc << ","
+	        << "\"gromacs_comb_rule\":" << basic.gromacs_comb_rule << ","
 	        << "\"unknown_inp_keys\":";
 	    writeJsonStringVector(ofs, basic.inp_keys_unknown);
 	    ofs << ",\"ignored_inp_keys\":";

@@ -42,6 +42,7 @@ EnergyComponents PMEComplete::computeCompleteEnergy(model::MCState& state) {
             res.energy_vdw = 0.0;
         }
     }
+    const bool usePairtypes14 = state.forcefield.pairtypes14Enabled;
     
     // Calculate all LJ pairwise interactions (including intramolecular)
     for (int i = 0; i < state.activeAtomCount - 1; ++i) {
@@ -93,6 +94,11 @@ EnergyComponents PMEComplete::computeCompleteEnergy(model::MCState& state) {
                 
                 double sigma = state.forcefield.ljSigma[pair_idx];
                 double epsilon = state.forcefield.ljEps[pair_idx];
+                if (usePairtypes14 && state.isPair14(i, j) &&
+                    state.forcefield.hasPairtype14(type_i, type_j)) {
+                    sigma = state.forcefield.ljSigma14[pair_idx];
+                    epsilon = state.forcefield.ljEps14[pair_idx];
+                }
                 
                 double sr = sigma / r;
                 double sr6 = sr * sr * sr * sr * sr * sr;
@@ -127,6 +133,7 @@ EnergyComponents PMEComplete::computeCompleteEnergyCutoff(model::MCState& state)
             res.energy_vdw = 0.0;
         }
     }
+    const bool usePairtypes14 = state.forcefield.pairtypes14Enabled;
     
     // Calculate all pairwise interactions (including intramolecular)
     for (int i = 0; i < state.activeAtomCount - 1; ++i) {
@@ -178,6 +185,11 @@ EnergyComponents PMEComplete::computeCompleteEnergyCutoff(model::MCState& state)
                 
                 double sigma = state.forcefield.ljSigma[pair_idx];
                 double epsilon = state.forcefield.ljEps[pair_idx];
+                if (usePairtypes14 && state.isPair14(i, j) &&
+                    state.forcefield.hasPairtype14(type_i, type_j)) {
+                    sigma = state.forcefield.ljSigma14[pair_idx];
+                    epsilon = state.forcefield.ljEps14[pair_idx];
+                }
                 
                 double sr = sigma / r;
                 double sr6 = sr * sr * sr * sr * sr * sr;

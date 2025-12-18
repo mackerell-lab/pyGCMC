@@ -154,6 +154,10 @@ struct MCForceField {
     int numMovementTypes{0};
     std::vector<float> ljSigma;  // NxN matrix of sigma values (nm)
     std::vector<float> ljEps;    // NxN matrix of epsilon values (kJ/mol)
+    std::vector<float> ljSigma14;  // NxN matrix of 1-4 sigma overrides (nm)
+    std::vector<float> ljEps14;    // NxN matrix of 1-4 epsilon overrides (kJ/mol)
+    std::vector<uint8_t> pairtypes14Mask;  // NxN mask for 1-4 overrides
+    bool pairtypes14Enabled{false};
     
     // NBFIX support and mixing rules
     struct NBFixEntry {
@@ -230,6 +234,49 @@ struct MCForceField {
         }
         
         ljMatrixInitialized = true;
+    }
+
+    inline void ensurePairtypes14Matrix() {
+        const int n = numTotalTypes;
+        const size_t expected = static_cast<size_t>(n) * n;
+        if (ljSigma14.size() != expected || ljEps14.size() != expected ||
+            pairtypes14Mask.size() != expected) {
+            ljSigma14.assign(expected, 0.0f);
+            ljEps14.assign(expected, 0.0f);
+            pairtypes14Mask.assign(expected, 0);
+        }
+    }
+
+    inline void clearPairtypes14() {
+        ljSigma14.clear();
+        ljEps14.clear();
+        pairtypes14Mask.clear();
+        pairtypes14Enabled = false;
+    }
+
+    inline void setPairtype14(int type1, int type2, float sigma, float eps) {
+        if (type1 < 0 || type2 < 0 || type1 >= numTotalTypes || type2 >= numTotalTypes) {
+            return;
+        }
+        ensurePairtypes14Matrix();
+        const int idx1 = type1 * numTotalTypes + type2;
+        const int idx2 = type2 * numTotalTypes + type1;
+        ljSigma14[idx1] = ljSigma14[idx2] = sigma;
+        ljEps14[idx1] = ljEps14[idx2] = eps;
+        pairtypes14Mask[idx1] = pairtypes14Mask[idx2] = 1;
+        pairtypes14Enabled = true;
+    }
+
+    inline bool hasPairtype14(int type1, int type2) const {
+        if (!pairtypes14Enabled) return false;
+        if (type1 < 0 || type2 < 0 || type1 >= numTotalTypes || type2 >= numTotalTypes) {
+            return false;
+        }
+        const int idx = type1 * numTotalTypes + type2;
+        if (idx < 0 || static_cast<size_t>(idx) >= pairtypes14Mask.size()) {
+            return false;
+        }
+        return pairtypes14Mask[static_cast<size_t>(idx)] != 0;
     }
     
     /**

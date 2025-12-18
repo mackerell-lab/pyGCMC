@@ -175,6 +175,7 @@ static void calculateCompleteLJEnergy(model::MCState& state) {
     const auto& forcefield = state.forcefield;
     const auto& atoms = state.atoms;
     const double cutoff2 = state.info.cutoff * state.info.cutoff;
+    const bool usePairtypes14 = forcefield.pairtypes14Enabled;
     
     // Reset all VDW energies
     for (auto& residue : residues) {
@@ -234,8 +235,13 @@ static void calculateCompleteLJEnergy(model::MCState& state) {
                 continue;
             }
             
-            const double eps = forcefield.ljEps[param_index];
-            const double sigma = forcefield.ljSigma[param_index];
+            double eps = forcefield.ljEps[param_index];
+            double sigma = forcefield.ljSigma[param_index];
+            if (usePairtypes14 && state.isPair14(atom_i, atom_j) &&
+                forcefield.hasPairtype14(type_i, type_j)) {
+                sigma = forcefield.ljSigma14[param_index];
+                eps = forcefield.ljEps14[param_index];
+            }
             
             // Skip if no LJ interaction
             if (eps == 0.0 || sigma == 0.0) continue;

@@ -113,6 +113,7 @@ from cpu_cli.itp_nonbonded_forcefield import (
     test_itp_atomtypes_builds_lj_matrix_and_deltaU_matches_analytic_lj,
     test_itp_nonbond_params_override_applies_nbfix_in_lj_matrix,
     test_itp_pairtypes_override_applies_nbfix_in_lj_matrix,
+    test_itp_pairtypes_strict_mode_does_not_override_inter_residue,
     test_itp_nonbond_params_take_precedence_over_pairtypes_for_same_pair,
     test_itp_defaults_comb_rule_geometric_sigma_mixing,
     test_itp_defaults_comb_rule_one_converts_c6_c12_and_overrides,

@@ -32,6 +32,11 @@ struct BasicInfo {
     bool inp_units_explicit = false;
     // Internal flag to make enhance_param() idempotent for unit conversion.
     bool inp_units_converted = false;
+    // GROMACS ITP handling
+    std::string itp_pairtypes_mode = "compat";  // compat (gcmc_gpu) or strict (1-4 only)
+    int gromacs_nbfunc = 1;
+    int gromacs_comb_rule = 2;
+    bool gromacs_defaults_present = false;
     // Diagnostics: capture INP keys seen/handled/unknown during parsing.
     // These are used to avoid silently ignoring legacy keys during gcmc_gpu/opencl compatibility work.
     std::vector<std::string> inp_keys_seen;
@@ -228,6 +233,7 @@ struct FileInfo {
     std::string conc_norm = "water";
     std::string conc_region = "total";
     std::vector<std::string> par_files;
+    std::vector<std::string> itp_defaults_files;
 
     std::vector<std::string> protein_top_files;
     std::vector<std::string> fragment_top_files;

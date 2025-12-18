@@ -480,6 +480,262 @@ mc_move_prob:1 0 0 0
     assert float(rec["deltaU"]) == pytest.approx(expected, rel=5e-4, abs=5e-4)
 
 
+def test_itp_pairtypes_strict_mode_does_not_override_inter_residue(gcmc_cpu, temp_dir):
+    """
+    Strict GROMACS mode: [ pairtypes ] must not override inter-residue LJ.
+
+    This regression ensures pairtypes are reserved for 1-4 interactions only.
+    """
+    work = Path(temp_dir) / "itp_nonbonded_energy" / "pairtypes_strict_mode"
+    work.mkdir(parents=True, exist_ok=True)
+
+    pdb = work / "sys.pdb"
+    _write_text(
+        pdb,
+        """
+CRYST1   30.000   30.000   30.000  90.00  90.00  90.00 P 1           1
+ATOM      1  C   MOL A   1      15.000  15.000  15.000  1.00  0.00           C
+END
+""",
+    )
+
+    top = work / "sys.top"
+    _write_text(
+        top,
+        """
+[ defaults ]
+1 2 yes 0.5 0.8333
+
+[ moleculetype ]
+MOL  2
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge    mass
+1   C     1      MOL      C     1     0.000   12.011
+
+[ system ]
+Minimal
+
+[ molecules ]
+MOL  1
+""",
+    )
+
+    frag_itp = work / "na.itp"
+    _write_text(
+        frag_itp,
+        """
+[ moleculetype ]
+NA  1
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge  mass
+1   NA    1      NA       NA    1     0.000   22.9898
+""",
+    )
+
+    sigma_c = 0.300
+    eps_c = 1.000
+    sigma_na = 0.400
+    eps_na = 2.000
+
+    sigma_override = 0.410
+    eps_override = 50.000
+
+    par = work / "ffnonbonded.itp"
+    _write_text(
+        par,
+        f"""
+[ atomtypes ]
+; name  at.num  mass     charge   ptype    sigma      epsilon
+C       6       12.011   0.000    A        {sigma_c:.6f}   {eps_c:.6f}
+NA      11      22.990   0.000    A        {sigma_na:.6f}  {eps_na:.6f}
+
+[ pairtypes ]
+; type1  type2  func  sigma  epsilon
+C   NA   1   {sigma_override:.6f}  {eps_override:.6f}
+""",
+    )
+
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    accept_log = work / "out" / "acceptance.jsonl"
+
+    inp = work / "run.inp"
+    _write_text(
+        inp,
+        f"""
+random_seed:123
+par:{par}
+top:{top}
+pdb:{pdb}
+fragitp:{frag_itp}
+itp_pairtypes_mode:strict
+
+box_size:30.0 30.0 30.0
+cutoff:12.0
+gcmc_region:box 20.0 12.5 12.5 25.0 17.5 17.5
+
+temperature:300.0
+moves_per_step:1
+mcsteps:1
+nprint:1
+
+fragname:NA
+fragconc:0.01
+fragmuex:10.0
+mc_move_prob:1 0 0 0
+""",
+    )
+
+    result = subprocess.run(
+        [gcmc_cpu, "--inp", str(inp), "--prefix", str(out_prefix), "--dump-accept", str(accept_log)],
+        cwd=str(work),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    rec = _first_accept_record(accept_log, move="insertion", species="NA")
+    assert bool(rec.get("accepted")) is True
+
+    final_pdb = Path(f"{out_prefix}_final.pdb")
+    assert final_pdb.exists()
+
+    x0, y0, z0 = _first_atom_xyz_angstrom(final_pdb, resname="MOL")
+    x1, y1, z1 = _first_atom_xyz_angstrom(final_pdb, resname="NA")
+
+    dx = (x1 - x0) / 10.0
+    dy = (y1 - y0) / 10.0
+    dz = (z1 - z0) / 10.0
+    r_nm = math.sqrt(dx * dx + dy * dy + dz * dz)
+
+    sigma_mixed = 0.5 * (sigma_c + sigma_na)
+    eps_mixed = math.sqrt(eps_c * eps_na)
+    expected = _lj_energy_kj_mol(r_nm=r_nm, sigma_nm=sigma_mixed, eps_kj_mol=eps_mixed)
+
+    assert float(rec["deltaU"]) == pytest.approx(expected, rel=5e-4, abs=5e-4)
+
+
+def test_dump_params_reports_itp_defaults_comb_rule(gcmc_cpu, temp_dir):
+    """
+    Ensure [defaults] from a separate ITP file is visible in --dump-params.
+    """
+    work = Path(temp_dir) / "itp_nonbonded_energy" / "defaults_dump_params"
+    work.mkdir(parents=True, exist_ok=True)
+
+    pdb = work / "sys.pdb"
+    _write_text(
+        pdb,
+        """
+CRYST1   30.000   30.000   30.000  90.00  90.00  90.00 P 1           1
+ATOM      1  C   MOL A   1      15.000  15.000  15.000  1.00  0.00           C
+END
+""",
+    )
+
+    top = work / "sys.top"
+    _write_text(
+        top,
+        """
+[ defaults ]
+1 2 yes 0.5 0.8333
+
+[ moleculetype ]
+MOL  2
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge    mass
+1   C     1      MOL      C     1     0.000   12.011
+
+[ system ]
+Minimal
+
+[ molecules ]
+MOL  1
+""",
+    )
+
+    frag_itp = work / "na.itp"
+    _write_text(
+        frag_itp,
+        """
+[ moleculetype ]
+NA  1
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge  mass
+1   NA    1      NA       NA    1     0.000   22.9898
+""",
+    )
+
+    defaults_itp = work / "forcefield.itp"
+    _write_text(
+        defaults_itp,
+        """
+[ defaults ]
+1 3 yes 1.0 1.0
+""",
+    )
+
+    par = work / "ffnonbonded.itp"
+    _write_text(
+        par,
+        """
+[ atomtypes ]
+; name  at.num  mass     charge   ptype    sigma      epsilon
+C       6       12.011   0.000    A        0.300000   1.000000
+NA      11      22.990   0.000    A        0.400000   2.000000
+""",
+    )
+
+    dump_params = work / "params.json"
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+
+    inp = work / "run.inp"
+    _write_text(
+        inp,
+        f"""
+random_seed:123
+par:{par}
+itp_defaults:{defaults_itp}
+top:{top}
+pdb:{pdb}
+fragitp:{frag_itp}
+
+box_size:30.0 30.0 30.0
+cutoff:12.0
+gcmc_region:box 20.0 12.5 12.5 25.0 17.5 17.5
+
+temperature:300.0
+moves_per_step:1
+mcsteps:1
+nprint:1
+
+fragname:NA
+fragconc:0.01
+fragmuex:10.0
+mc_move_prob:1 0 0 0
+""",
+    )
+
+    result = subprocess.run(
+        [gcmc_cpu, "--inp", str(inp), "--prefix", str(out_prefix), "--dump-params", str(dump_params)],
+        cwd=str(work),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    params = json.loads(dump_params.read_text())
+    assert params["basic"]["gromacs_defaults_present"] is True
+    assert params["basic"]["gromacs_nbfunc"] == 1
+    assert params["basic"]["gromacs_comb_rule"] == 3
+
+
 def test_itp_nonbond_params_take_precedence_over_pairtypes_for_same_pair(gcmc_cpu, temp_dir):
     """
     Regression for override precedence.

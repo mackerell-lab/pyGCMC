@@ -37,7 +37,8 @@ public:
 
     struct Result {
         std::map<std::string, LJ> atomTypes;
-        std::map<std::pair<std::string, std::string>, LJ> pairOverrides;
+        std::map<std::pair<std::string, std::string>, LJ> nbfixOverrides;
+        std::map<std::pair<std::string, std::string>, LJ> pairtypesOverrides;
         Defaults defaults;
     };
 

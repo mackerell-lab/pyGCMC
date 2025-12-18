@@ -143,6 +143,7 @@ static void calculateLJPGPComplete(model::MCState& state, bool movement_only) {
     auto& residues = state.residues;
     const float* box = state.info.box;
     const double cutoff2 = state.info.cutoff * state.info.cutoff;
+    const bool usePairtypes14 = forcefield.pairtypes14Enabled;
     
     platform::log(LogLevel::DEBUG, "calculateLJPGPComplete: movement_only=", movement_only);
     platform::log(LogLevel::DEBUG, "Active residue count: ", state.activeResidueCount);
@@ -202,8 +203,13 @@ static void calculateLJPGPComplete(model::MCState& state, bool movement_only) {
                         continue;
                     }
                     
-                    const double sigma = forcefield.ljSigma[param_idx];
-                    const double epsilon = forcefield.ljEps[param_idx];
+                    double sigma = forcefield.ljSigma[param_idx];
+                    double epsilon = forcefield.ljEps[param_idx];
+                    if (usePairtypes14 && state.isPair14(i, j) &&
+                        forcefield.hasPairtype14(type_i, type_j)) {
+                        sigma = forcefield.ljSigma14[param_idx];
+                        epsilon = forcefield.ljEps14[param_idx];
+                    }
                     
                     
                     if (epsilon == 0.0 || sigma == 0.0) {

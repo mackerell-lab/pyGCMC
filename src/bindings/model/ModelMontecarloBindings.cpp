@@ -107,6 +107,7 @@ void init_montecarlo_bindings(py::module& m, py::module&) {
             new_state.activeResidueCount = state.activeResidueCount;
             new_state.info = state.info;
             new_state.forcefield = state.forcefield;
+            new_state.pair14 = state.pair14;
             new_state.movementResidues = state.movementResidues;
             new_state.movementAtomTypes = state.movementAtomTypes;
             new_state.numMovementAtomTypes = state.numMovementAtomTypes;
@@ -159,6 +160,11 @@ void init_montecarlo_bindings(py::module& m, py::module&) {
             })
         .def_readwrite("movementAtomTypes", &pygcmc::model::MCState::movementAtomTypes)
         .def_readwrite("numMovementAtomTypes", &pygcmc::model::MCState::numMovementAtomTypes)
+        .def("clearPair14", &pygcmc::model::MCState::clearPair14)
+        .def("addPair14", &pygcmc::model::MCState::addPair14,
+             py::arg("atom1"), py::arg("atom2"))
+        .def("isPair14", &pygcmc::model::MCState::isPair14,
+             py::arg("atom1"), py::arg("atom2"))
         .def_property_readonly("ewald_energy", [](const pygcmc::model::MCState& state) {
             py::dict result;
             result["real_space"] = state.ewald_energy.real_space;
@@ -194,6 +200,7 @@ void init_montecarlo_bindings(py::module& m, py::module&) {
         .def_readwrite("numMovementTypes", &pygcmc::model::MCForceField::numMovementTypes)
         .def_readwrite("ljSigma", &pygcmc::model::MCForceField::ljSigma)
         .def_readwrite("ljEps", &pygcmc::model::MCForceField::ljEps)
+        .def_readwrite("pairtypes14Enabled", &pygcmc::model::MCForceField::pairtypes14Enabled)
         .def_readwrite("nbfix", &pygcmc::model::MCForceField::nbfix)
         .def_readwrite("ljSigmaType", &pygcmc::model::MCForceField::ljSigmaType)
         .def_readwrite("ljEpsType", &pygcmc::model::MCForceField::ljEpsType)
@@ -201,6 +208,9 @@ void init_montecarlo_bindings(py::module& m, py::module&) {
         .def_readwrite("ljMatrixInitialized", &pygcmc::model::MCForceField::ljMatrixInitialized)
         .def("rebuildLJMatrix", &pygcmc::model::MCForceField::rebuildLJMatrix,
              "Rebuild the NxN LJ parameter matrix from per-type values and NBFIX overrides")
+        .def("clearPairtypes14", &pygcmc::model::MCForceField::clearPairtypes14)
+        .def("setPairtype14", &pygcmc::model::MCForceField::setPairtype14,
+             py::arg("type1"), py::arg("type2"), py::arg("sigma"), py::arg("eps"))
         .def("addNBFix", &pygcmc::model::MCForceField::addNBFix,
              py::arg("type1"), py::arg("type2"), py::arg("sigma"), py::arg("eps"),
              "Add an NBFIX override for a specific atom pair")

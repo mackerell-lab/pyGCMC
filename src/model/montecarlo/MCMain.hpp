@@ -4,6 +4,7 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <unordered_set>
 
 /**
  * @file   MCMain.hpp
@@ -32,6 +33,7 @@ struct MCState {
     MCForceField forcefield;
     EwaldEnergy ewald_energy;
     std::vector<double> periodicBox;  // Box dimensions [x, y, z] in nm
+    std::unordered_set<uint64_t> pair14;  // Atom index pairs for 1-4 overrides
 
     MCState() = default;
 
@@ -114,6 +116,28 @@ struct MCState {
             forcefield.ljSigma[sym_index] = sigma;
             forcefield.ljEps[sym_index] = epsilon;
         }
+    }
+
+    void clearPair14() {
+        pair14.clear();
+    }
+
+    void addPair14(int atom1, int atom2) {
+        if (atom1 < 0 || atom2 < 0) return;
+        uint64_t a = static_cast<uint64_t>(atom1);
+        uint64_t b = static_cast<uint64_t>(atom2);
+        if (b < a) std::swap(a, b);
+        uint64_t key = (a << 32) | b;
+        pair14.insert(key);
+    }
+
+    bool isPair14(int atom1, int atom2) const {
+        if (atom1 < 0 || atom2 < 0) return false;
+        uint64_t a = static_cast<uint64_t>(atom1);
+        uint64_t b = static_cast<uint64_t>(atom2);
+        if (b < a) std::swap(a, b);
+        uint64_t key = (a << 32) | b;
+        return pair14.find(key) != pair14.end();
     }
 
     // === Type Management ===

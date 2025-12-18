@@ -75,6 +75,12 @@ public:
     void validateParameters(const model::ForceField& ff, const std::shared_ptr<model::Molecular>& molecular);
 
 private:
+    struct ConversionResult {
+        std::vector<model::MCResidue> residues;
+        std::vector<model::MCAtom> atoms;
+        std::vector<int> topologyToMc;
+    };
+
     // Unit conversion constants
     static constexpr float ANGSTROM_TO_NM = 0.1f;    ///< 1 Å = 0.1 nm
     static constexpr float KCAL_TO_KJ = 4.184f;      ///< 1 kcal/mol = 4.184 kJ/mol
@@ -86,8 +92,7 @@ private:
      * @param molecular Source molecular system
      * @return Pair of (converted residues, converted atoms)
      */
-    std::pair<std::vector<model::MCResidue>, std::vector<model::MCAtom>>
-    convertMolecularData(model::MCState& state, const std::shared_ptr<model::Molecular>& molecular);
+    ConversionResult convertMolecularData(model::MCState& state, const std::shared_ptr<model::Molecular>& molecular);
 };
 
 } // namespace montecarlo

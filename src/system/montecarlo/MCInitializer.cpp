@@ -31,15 +31,31 @@ void MCInitializer::initializeFromMolecular(model::MCState& state, const std::sh
     auto convertedData = convertMolecularData(state, molecular);
     
     // Check capacity
-    if (convertedData.first.size() > static_cast<size_t>(state.info.maxResidues) ||
-        convertedData.second.size() > static_cast<size_t>(state.info.maxAtoms)) {
+    if (convertedData.residues.size() > static_cast<size_t>(state.info.maxResidues) ||
+        convertedData.atoms.size() > static_cast<size_t>(state.info.maxAtoms)) {
         throw std::runtime_error("Initial system exceeds max capacity");
     }
 
     // Initialize the system with converted data using MCCore
     MCCore core;
-    core.addInitialResidues(state, convertedData.first.data(), convertedData.first.size(),
-                           convertedData.second.data(), convertedData.second.size());
+    core.addInitialResidues(state, convertedData.residues.data(), convertedData.residues.size(),
+                           convertedData.atoms.data(), convertedData.atoms.size());
+
+    state.clearPair14();
+    if (convertedData.topologyToMc.size() == molecular->topology_atoms.size()) {
+        for (const auto& dih : molecular->dihedrals) {
+            if (dih.improper) continue;
+            if (dih.atom1 < 0 || dih.atom4 < 0) continue;
+            if (static_cast<size_t>(dih.atom1) >= convertedData.topologyToMc.size() ||
+                static_cast<size_t>(dih.atom4) >= convertedData.topologyToMc.size()) {
+                continue;
+            }
+            const int mc1 = convertedData.topologyToMc[static_cast<size_t>(dih.atom1)];
+            const int mc4 = convertedData.topologyToMc[static_cast<size_t>(dih.atom4)];
+            if (mc1 < 0 || mc4 < 0) continue;
+            state.addPair14(mc1, mc4);
+        }
+    }
 }
 
 void MCInitializer::initializeForceField(model::MCState& state, const model::ForceField& ff) {
@@ -137,10 +153,11 @@ void MCInitializer::validateParameters(const model::ForceField& ff, const std::s
     }
 }
 
-std::pair<std::vector<model::MCResidue>, std::vector<model::MCAtom>>
+MCInitializer::ConversionResult
 MCInitializer::convertMolecularData(model::MCState& state, const std::shared_ptr<model::Molecular>& molecular) {
-    std::vector<model::MCResidue> tempResidues;
-    std::vector<model::MCAtom> tempAtoms;
+    ConversionResult result;
+    std::vector<model::MCResidue>& tempResidues = result.residues;
+    std::vector<model::MCAtom>& tempAtoms = result.atoms;
     
     size_t atomStart = 0;
     const size_t numResidues = molecular->get_num_residues();
@@ -150,6 +167,8 @@ MCInitializer::convertMolecularData(model::MCState& state, const std::shared_ptr
             "Inconsistent molecular data: residue count mismatch between structure and topology");
     }
     
+    result.topologyToMc.assign(molecular->topology_atoms.size(), -1);
+
     for (size_t i = 0; i < numResidues; ++i) {
         const auto& molRes = molecular->residues[i];
         const auto& topRes = molecular->topology_residues[i];
@@ -202,6 +221,8 @@ MCInitializer::convertMolecularData(model::MCState& state, const std::shared_ptr
             mcAtom.updatePosition();
             
             tempAtoms.push_back(mcAtom);
+            result.topologyToMc[static_cast<size_t>(topAtomIdx)] =
+                static_cast<int>(tempAtoms.size() - 1);
             mcRes.atoms.push_back(mcAtom);
         }
 
@@ -227,7 +248,7 @@ MCInitializer::convertMolecularData(model::MCState& state, const std::shared_ptr
         atomStart += mcRes.atomCount;
     }
 
-    return std::make_pair(std::move(tempResidues), std::move(tempAtoms));
+    return result;
 }
 
 } // namespace montecarlo

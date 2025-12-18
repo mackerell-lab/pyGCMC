@@ -89,6 +89,7 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
         try {
             std::vector<std::string> resolvedPrmFiles;
             std::vector<std::string> resolvedItpFiles;
+            std::vector<std::string> resolvedDefaultsFiles;
 
             for (const auto& parFile : fileInfo.par_files) {
                 std::string resolved = resolveFilePath(parFile, baseDir);
@@ -102,6 +103,11 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
                 } else {
                     resolvedPrmFiles.push_back(resolved);
                 }
+            }
+
+            for (const auto& defaultsFile : fileInfo.itp_defaults_files) {
+                if (defaultsFile.empty()) continue;
+                resolvedDefaultsFiles.push_back(resolveFilePath(defaultsFile, baseDir));
             }
 
             if (!resolvedPrmFiles.empty()) {
@@ -118,13 +124,24 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
                 }
             }
 
-            if (!resolvedItpFiles.empty()) {
-                itpNonbonded = io::ItpNonbondedParser::parse_files(resolvedItpFiles);
-                itpNonbondedLoaded = !itpNonbonded.atomTypes.empty() || !itpNonbonded.pairOverrides.empty();
+            if (!resolvedItpFiles.empty() || !resolvedDefaultsFiles.empty()) {
+                std::vector<std::string> itpInputs = resolvedItpFiles;
+                itpInputs.insert(itpInputs.begin(), resolvedDefaultsFiles.begin(), resolvedDefaultsFiles.end());
+                itpNonbonded = io::ItpNonbondedParser::parse_files(itpInputs);
+                itpNonbondedLoaded = !itpNonbonded.atomTypes.empty() ||
+                                     !itpNonbonded.nbfixOverrides.empty() ||
+                                     !itpNonbonded.pairtypesOverrides.empty() ||
+                                     itpNonbonded.defaults.present;
                 if (itpNonbondedLoaded) {
                     log("Loaded nonbonded parameters from GROMACS ITP files");
                 } else {
                     log("Warning: No atomtypes/pair overrides found in GROMACS ITP files");
+                }
+                if (result.parameters) {
+                    auto& basic = result.parameters->get_basic_info();
+                    basic.gromacs_defaults_present = itpNonbonded.defaults.present;
+                    basic.gromacs_nbfunc = itpNonbonded.defaults.nbfunc;
+                    basic.gromacs_comb_rule = itpNonbonded.defaults.combRule;
                 }
             }
         } catch (const std::exception& e) {
@@ -379,6 +396,7 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
         result.mcState->forcefield.ljSigmaType.assign(static_cast<size_t>(n), 0.0f);
         result.mcState->forcefield.ljEpsType.assign(static_cast<size_t>(n), 0.0f);
         result.mcState->forcefield.nbfix.clear();
+        result.mcState->forcefield.clearPairtypes14();
 
         for (const auto& [typeName, lj] : itpNonbonded.atomTypes) {
             auto it = result.mcState->atomTypes.atomTypeIndices.find(typeName);
@@ -394,7 +412,30 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
             }
         }
 
-        for (const auto& [pair, lj] : itpNonbonded.pairOverrides) {
+        const auto& basicInfo = result.parameters->get_basic_info();
+        std::string pairtypesMode = basicInfo.itp_pairtypes_mode;
+        std::transform(pairtypesMode.begin(), pairtypesMode.end(), pairtypesMode.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        const bool strictPairtypes = (pairtypesMode == "strict");
+
+        if (!strictPairtypes) {
+            for (const auto& [pair, lj] : itpNonbonded.pairtypesOverrides) {
+                auto it1 = result.mcState->atomTypes.atomTypeIndices.find(pair.first);
+                auto it2 = result.mcState->atomTypes.atomTypeIndices.find(pair.second);
+                if (it1 == result.mcState->atomTypes.atomTypeIndices.end() ||
+                    it2 == result.mcState->atomTypes.atomTypeIndices.end()) {
+                    continue;
+                }
+                result.mcState->forcefield.addNBFix(
+                    it1->second,
+                    it2->second,
+                    static_cast<float>(lj.sigma_nm),
+                    static_cast<float>(lj.epsilon_kj)
+                );
+            }
+        }
+
+        for (const auto& [pair, lj] : itpNonbonded.nbfixOverrides) {
             auto it1 = result.mcState->atomTypes.atomTypeIndices.find(pair.first);
             auto it2 = result.mcState->atomTypes.atomTypeIndices.find(pair.second);
             if (it1 == result.mcState->atomTypes.atomTypeIndices.end() ||
@@ -407,6 +448,23 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
                 static_cast<float>(lj.sigma_nm),
                 static_cast<float>(lj.epsilon_kj)
             );
+        }
+
+        if (strictPairtypes) {
+            for (const auto& [pair, lj] : itpNonbonded.pairtypesOverrides) {
+                auto it1 = result.mcState->atomTypes.atomTypeIndices.find(pair.first);
+                auto it2 = result.mcState->atomTypes.atomTypeIndices.find(pair.second);
+                if (it1 == result.mcState->atomTypes.atomTypeIndices.end() ||
+                    it2 == result.mcState->atomTypes.atomTypeIndices.end()) {
+                    continue;
+                }
+                result.mcState->forcefield.setPairtype14(
+                    it1->second,
+                    it2->second,
+                    static_cast<float>(lj.sigma_nm),
+                    static_cast<float>(lj.epsilon_kj)
+                );
+            }
         }
 
         result.mcState->forcefield.rebuildLJMatrix();

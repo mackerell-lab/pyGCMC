@@ -90,7 +90,11 @@ void applyDefaults(ItpNonbondedParser::Result& result) {
             for (auto& [name, lj] : result.atomTypes) {
                 lj = ljFromC6C12(lj.sigma_nm, lj.epsilon_kj);
             }
-            for (auto& [pair, lj] : result.pairOverrides) {
+            for (auto& [pair, lj] : result.nbfixOverrides) {
+                (void)pair;
+                lj = ljFromC6C12(lj.sigma_nm, lj.epsilon_kj);
+            }
+            for (auto& [pair, lj] : result.pairtypesOverrides) {
                 (void)pair;
                 lj = ljFromC6C12(lj.sigma_nm, lj.epsilon_kj);
             }
@@ -197,11 +201,8 @@ ItpNonbondedParser::Result parseFileRaw(const std::string& filename) {
         }
     }
 
-    // Merge overrides with precedence: pairtypes first, then nonbond_params (NBFIX).
-    result.pairOverrides = std::move(pairtypesOverrides);
-    for (const auto& [pair, lj] : nbfixOverrides) {
-        result.pairOverrides[pair] = lj;
-    }
+    result.pairtypesOverrides = std::move(pairtypesOverrides);
+    result.nbfixOverrides = std::move(nbfixOverrides);
 
     return result;
 }
@@ -221,8 +222,11 @@ ItpNonbondedParser::Result ItpNonbondedParser::parse_files(const std::vector<std
         for (const auto& [name, lj] : r.atomTypes) {
             merged.atomTypes[name] = lj;
         }
-        for (const auto& [pair, lj] : r.pairOverrides) {
-            merged.pairOverrides[pair] = lj;
+        for (const auto& [pair, lj] : r.nbfixOverrides) {
+            merged.nbfixOverrides[pair] = lj;
+        }
+        for (const auto& [pair, lj] : r.pairtypesOverrides) {
+            merged.pairtypesOverrides[pair] = lj;
         }
         if (r.defaults.present) {
             if (!merged.defaults.present) {

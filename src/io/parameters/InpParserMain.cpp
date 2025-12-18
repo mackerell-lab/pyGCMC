@@ -120,6 +120,9 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
     if (key == "par") {
         handled = true;
         file_info.par_files.push_back(value);
+    } else if (key == "itp_defaults" || key == "itp_defaults_file") {
+        handled = true;
+        file_info.itp_defaults_files.push_back(value);
     } else if (key == "fragmqtr") {
         handled = true;
         // Legacy gcmc_gpu key: additional MQTR input files
@@ -172,6 +175,16 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
                        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         basic_info.inp_units = v;
         basic_info.inp_units_explicit = true;
+    } else if (key == "itp_pairtypes_mode" || key == "pairtypes_mode") {
+        handled = true;
+        std::string v = value;
+        std::transform(v.begin(), v.end(), v.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (v != "compat" && v != "strict") {
+            throw std::runtime_error("Invalid itp_pairtypes_mode: " + value +
+                                     " (expected 'compat' or 'strict')");
+        }
+        basic_info.itp_pairtypes_mode = v;
     } else if (key == "version") {
         handled = true;
         // Keep raw version string; InpParserGCMC may use this as a hint for legacy gcmc_gpu unit mode.
