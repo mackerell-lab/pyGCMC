@@ -235,12 +235,19 @@ def test_dump_params_reports_ignored_inp_keys(gcmc_cpu, test_data_dir, temp_dir)
     if not itp.exists():
         pytest.skip(f"Required ITP not found: {itp}")
 
+    atp = test_data_dir / "charmm36.ff" / "atomtypes.atp"
+    if not atp.exists():
+        pytest.skip(f"Required atomtypes file not found: {atp}")
+
     work = Path(temp_dir) / "ignored_inp_keys"
     work.mkdir(parents=True, exist_ok=True)
 
     out_prefix = work / "out" / "gcmc"
     out_prefix.parent.mkdir(parents=True, exist_ok=True)
     params_json = work / "out" / "params.json"
+
+    protitp = work / "prot.itp"
+    protitp.write_text("[ moleculetype ]\n; dummy\nPROT  3\n\n")
 
     inp = work / "run.inp"
     inp.write_text(
@@ -260,6 +267,8 @@ excess_fragments_threshold:1.5
 remove_init:1
 remove_excess:1
 
+atomtypes:{atp}
+protitp:{protitp}
 fragitp:{itp}
 fragname:NA
 fragconc:55.0
@@ -302,6 +311,8 @@ mc_move_prob:1 0 0 0
         "excess_fragments_threshold",
         "remove_init",
         "remove_excess",
+        "atomtypes",
+        "protitp",
     ):
         assert key in ignored
 

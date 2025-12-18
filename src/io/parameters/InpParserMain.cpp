@@ -130,6 +130,8 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
     } else if (key == "atomtypes") {
         handled = true;
         file_info.atomtype_file = value;
+        // Legacy compatibility key; currently not used by gcmc_cpu.
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "monomerdir") {
         handled = true;
         file_info.monomer_dir = value;
@@ -142,6 +144,8 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
     } else if (key == "protitp") {
         handled = true;
         file_info.protein_top_files.push_back(value);
+        // Legacy compatibility key; currently not used by gcmc_cpu.
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "op_top") {
         handled = true;
         file_info.output_top_file = value;
