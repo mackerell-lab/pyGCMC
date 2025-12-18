@@ -32,6 +32,11 @@ struct BasicInfo {
     bool inp_units_explicit = false;
     // Internal flag to make enhance_param() idempotent for unit conversion.
     bool inp_units_converted = false;
+    // Diagnostics: capture INP keys seen/handled/unknown during parsing.
+    // These are used to avoid silently ignoring legacy keys during gcmc_gpu/opencl compatibility work.
+    std::vector<std::string> inp_keys_seen;
+    std::vector<std::string> inp_keys_handled;
+    std::vector<std::string> inp_keys_unknown;
     unsigned int random_seed = 0;
     int num_threads = 1;
     bool is_box = false;

@@ -4,6 +4,7 @@ Input validation and error handling tests for gcmc_cpu
 
 from __future__ import annotations
 
+import json
 import pytest
 import subprocess
 from pathlib import Path
@@ -177,3 +178,52 @@ mc_move_prob:1 0 0 0
     assert 50 in steps
     assert 75 in steps
     assert all(s % expected_nprint == 0 for s in steps)
+
+
+def test_dump_params_reports_unknown_inp_keys(gcmc_cpu, test_data_dir, temp_dir):
+    """Unknown/unsupported INP keys must be visible via --dump-params (no stdout parsing)."""
+    itp = test_data_dir / "charmm36.ff" / "mol" / "na.itp"
+    if not itp.exists():
+        pytest.skip(f"Required ITP not found: {itp}")
+
+    work = Path(temp_dir) / "unknown_inp_keys"
+    work.mkdir(parents=True, exist_ok=True)
+
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    params_json = work / "out" / "params.json"
+
+    unknown_key = "__definitely_unknown_key__"
+
+    inp = work / "run.inp"
+    inp.write_text(
+        f"""
+{unknown_key}:123
+fragitp:{itp}
+fragname:NA
+fragconc:55.0
+fragmuex:0.0
+
+box_size:10.0 10.0 10.0
+cutoff:12.0
+temperature:300.0
+moves_per_step:1
+mcsteps:0
+nprint:1
+mc_move_prob:1 0 0 0
+""".strip()
+        + "\n"
+    )
+
+    result = subprocess.run(
+        [gcmc_cpu, "--inp", str(inp), "--prefix", str(out_prefix), "--dump-params", str(params_json)],
+        capture_output=True,
+        text=True,
+        cwd=str(work),
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    params = json.loads(params_json.read_text())
+    unknown = params["basic"]["unknown_inp_keys"]
+    assert unknown_key in set(unknown)

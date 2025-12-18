@@ -3204,6 +3204,15 @@ void writeJsonFloatVector(std::ostream& os, const std::vector<float>& v) {
     os << "]";
 }
 
+void writeJsonStringVector(std::ostream& os, const std::vector<std::string>& v) {
+    os << "[";
+    for (size_t i = 0; i < v.size(); ++i) {
+        if (i) os << ",";
+        os << "\"" << escapeJsonString(v[i]) << "\"";
+    }
+    os << "]";
+}
+
 } // namespace
 
 void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
@@ -3236,6 +3245,9 @@ void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
         << "\"inp_units\":\"" << escapeJsonString(basic.inp_units) << "\","
         << "\"inp_units_explicit\":" << (basic.inp_units_explicit ? "true" : "false") << ","
         << "\"inp_units_converted\":" << (basic.inp_units_converted ? "true" : "false") << ","
+        << "\"unknown_inp_keys\":";
+    writeJsonStringVector(ofs, basic.inp_keys_unknown);
+    ofs << ","
         << "\"random_seed\":" << basic.random_seed
         << "},";
 

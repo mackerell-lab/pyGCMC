@@ -37,7 +37,8 @@ from cpu_cli.output_tests import (
 from cpu_cli.validation_tests import (
     test_gcmc_cpu_deterministic_seed,
     test_gcmc_cpu_invalid_inp,
-    test_gcmc_cpu_parameter_validation
+    test_gcmc_cpu_parameter_validation,
+    test_dump_params_reports_unknown_inp_keys,
 )
 
 # gcmc_gpu-style INP compatibility and unit semantics tests (11 functions + param cases)
@@ -97,6 +98,7 @@ from cpu_cli.fragment_template_geometry import (
 from cpu_cli.itp_nonbonded_forcefield import (
     test_itp_atomtypes_builds_lj_matrix_and_deltaU_matches_analytic_lj,
     test_itp_nonbond_params_override_applies_nbfix_in_lj_matrix,
+    test_itp_pairtypes_override_applies_nbfix_in_lj_matrix,
 )
 
 # ITP nonbonded insertion->deletion closure regression (1 function)

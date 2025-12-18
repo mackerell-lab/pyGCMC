@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <vector>
 
 namespace pygcmc {
 namespace io {
@@ -33,6 +34,16 @@ void InpParserGCMC::parse_to_param(const std::string& filename, model::param::Pa
         parse_line_ext(key, value, param);
     }
     enhance_param(param);
+
+    // Derive unknown INP keys after both base + GCMC-specific parsing passes.
+    auto& basic_info = param.get_basic_info();
+    basic_info.inp_keys_unknown.clear();
+    for (const auto& k : basic_info.inp_keys_seen) {
+        if (std::find(basic_info.inp_keys_handled.begin(), basic_info.inp_keys_handled.end(), k) ==
+            basic_info.inp_keys_handled.end()) {
+            basic_info.inp_keys_unknown.push_back(k);
+        }
+    }
 }
 
 void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& value, model::param::Param& param) {
@@ -43,14 +54,23 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
     auto& energy_info = param.get_energy_info();
     auto& file_info = param.get_file_info();
     auto& basic_info = param.get_basic_info();
+    bool handled = false;
+
+    auto pushUnique = [](std::vector<std::string>& v, const std::string& s) {
+        if (std::find(v.begin(), v.end(), s) == v.end()) {
+            v.push_back(s);
+        }
+    };
 
     if (key == "mctime" || key == "mc_time") {
+        handled = true;
         // Support accumulation of multiple mctime lines
         auto times = InpParserStructures::parse_float_vector(value);
         for (float t : times) {
             mc_info.mc_time_list.push_back(t);
         }
     } else if (key == "energy_cutoff") {
+        handled = true;
         // Legacy gcmc_opencl key: treat as a shared cutoff for fragment/protein.
         float cutoff = std::stof(value);
         if (cutoff > 0.0f) {
@@ -64,6 +84,7 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
             space_info.cutoff_from_energy_cutoff = true;
         }
     } else if (key == "energy_cutoff_frag" || key == "energy_cutoff_fragment") {
+        handled = true;
         float cutoff = std::stof(value);
         if (cutoff > 0.0f) {
             energy_info.fragment_cutoff = cutoff;
@@ -74,6 +95,7 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
             space_info.cutoff_from_energy_cutoff = true;
         }
     } else if (key == "energy_cutoff_prot" || key == "energy_cutoff_protein") {
+        handled = true;
         float cutoff = std::stof(value);
         if (cutoff > 0.0f) {
             energy_info.protein_cutoff = cutoff;
@@ -82,100 +104,129 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
             space_info.cutoff_from_energy_cutoff = true;
         }
     } else if (key == "fragradius") {
+        handled = true;
         // Raw value; normalized to internal nm in enhance_param.
         frag_info.radius_list = InpParserStructures::parse_float_vector(value);
     } else if (key == "fragconf" || key == "fragconfs") {
+        handled = true;
         // keep both for compatibility
         frag_info.conf_list = InpParserStructures::parse_int_vector(value);
         frag_info.fragconf_list = frag_info.conf_list;
     } else if (key == "num_conf_bias_trial" || key == "confbias_trials") {
+        handled = true;
         bias_info.num_conf_bias_trials = static_cast<unsigned int>(std::stoi(value));
     } else if (key == "cavity_grid_dx" || key == "cavity_grid_spacing") {
+        handled = true;
         // Map to grid_dx if given (fallback)
         // Raw value; normalized to internal nm in enhance_param.
         space_info.grid_spacing = std::stof(value);
     } else if (key == "cavity_grid_dx_frag") {
+        handled = true;
         frag_info.cavity_grid_dx_list = InpParserStructures::parse_float_vector(value);
     } else if (key == "probe_radius" || key == "cavity_probe_radius") {
+        handled = true;
         // Map to sigma (approximate) if present
         // Raw value; normalized to internal nm in enhance_param.
         float r = std::stof(value);
         bias_info.sigma = r;
         bias_info.sigma_squared = r * r;
     } else if (key == "cavity_probe_radius_frag") {
+        handled = true;
         frag_info.cavity_probe_radius_list = InpParserStructures::parse_float_vector(value);
     } else if (key == "wdens") {
+        handled = true;
         // Water density output control
         mc_info.wdens = std::stof(value);
     } else if (key == "eps" || key == "epsilon") {
+        handled = true;
         // Dielectric constant
         frag_info.epsilon = std::stof(value);
     } else if (key == "target_numwaters" || key == "target_num_waters") {
+        handled = true;
         // Target number of water molecules - store in both places
         frag_info.target_num_waters = std::stoi(value);
     } else if (key == "cavity_mask_frag") {
+        handled = true;
         frag_info.cavity_mask_list = InpParserStructures::parse_int_vector(value);
     } else if (key == "gcmc_region") {
+        handled = true;
         // GCMC insertion region (sphere/box specification)
         space_info.gcmc_region = value;
     } else if (key == "exclude_protein_volume") {
+        handled = true;
         // Exclude protein volume from cavity bias
         space_info.exclude_protein_volume = (value == "yes" || value == "true" || value == "1");
     } else if (key == "use_vdw_radius_for_grid" || key == "use_vdw_radii_for_grid") {
+        handled = true;
         // Use VDW radii for grid generation
         space_info.use_vdw_radius_for_grid = (value == "yes" || value == "true" || value == "1");
     } else if (key == "exclude_hydrogens_from_grid") {
+        handled = true;
         // Exclude hydrogens from grid occupancy
         space_info.exclude_hydrogens_from_grid = (value == "yes" || value == "true" || value == "1");
     } else if (key == "use_switching") {
+        handled = true;
         // Enable switching function
         mc_info.use_switching = (value == "yes" || value == "true" || value == "1");
     } else if (key == "switch_r_on" || key == "switch_ron") {
+        handled = true;
         // Switching function r_on
         mc_info.switch_r_on = std::stof(value);  // Already in nm
     } else if (key == "switch_r_off" || key == "switch_roff") {
+        handled = true;
         // Switching function r_off
         mc_info.switch_r_off = std::stof(value);  // Already in nm
     } else if (key == "switch_dist_frag" || key == "switch_dist_fragment") {
+        handled = true;
         float dist = std::stof(value);
         energy_info.switch_dist_fragment = dist;
         energy_info.switch_dist_fragment_squared = dist * dist;
         energy_info.use_switching = true;
     } else if (key == "switch_dist_prot" || key == "switch_dist_protein") {
+        handled = true;
         float dist = std::stof(value);
         energy_info.switch_dist_protein = dist;
         energy_info.switch_dist_protein_squared = dist * dist;
         energy_info.use_switching = true;
     } else if (key == "pairlist_freq") {
+        handled = true;
         // Pairlist update frequency
         energy_info.pairlist_freq = static_cast<unsigned int>(std::stoi(value));
     } else if (key == "use_group_cutoff") {
+        handled = true;
         // Use group-based cutoff instead of atom-based
         energy_info.use_group_cutoff = (value == "yes" || value == "true" || value == "1");
     } else if (key == "pairlist_cutoff") {
+        handled = true;
         // Pairlist cutoff distance for fragments
         energy_info.pairlist_cutoff = std::stof(value);  // Already in nm
         energy_info.pairlist_cutoff_squared = energy_info.pairlist_cutoff * energy_info.pairlist_cutoff;
         energy_info.pair_list_cutoff_fragment = energy_info.pairlist_cutoff;
         energy_info.pair_list_cutoff_fragment_squared = energy_info.pairlist_cutoff_squared;
     } else if (key == "pairlist_cutoff_protein") {
+        handled = true;
         // Pairlist cutoff distance for protein
         float cutoff = std::stof(value);  // Already in nm
         energy_info.pair_list_cutoff_protein = cutoff;
         energy_info.pair_list_cutoff_protein_squared = cutoff * cutoff;
     } else if (key == "attempt_prob_ins") {
+        handled = true;
         // Per-fragment insertion attempt probabilities
         mc_info.attempt_prob_ins = InpParserStructures::parse_float_vector(value);
     } else if (key == "attempt_prob_del") {
+        handled = true;
         // Per-fragment deletion attempt probabilities
         mc_info.attempt_prob_del = InpParserStructures::parse_float_vector(value);
     } else if (key == "attempt_prob_trn") {
+        handled = true;
         // Per-fragment translation attempt probabilities
         mc_info.attempt_prob_trn = InpParserStructures::parse_float_vector(value);
     } else if (key == "attempt_prob_rot") {
+        handled = true;
         // Per-fragment rotation attempt probabilities
         mc_info.attempt_prob_rot = InpParserStructures::parse_float_vector(value);
     } else if (key == "mc_move_prob") {
+        handled = true;
         // Legacy format: four weights [insert, delete, translate, rotate]
         // Store in attempt_prob_* temporarily, will be broadcasted in enhance_param
         auto probs = InpParserStructures::parse_float_vector(value);
@@ -202,16 +253,19 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
                       << probs.size() << std::endl;
         }
     } else if (key == "const_water_nbar") {
+        handled = true;
         // Fixed target number of water molecules
         frag_info.use_const_water_nbar = true;
         frag_info.const_water_nbar = static_cast<int>(std::stoi(value));
     } else if (key == "number_water_nbar") {
+        handled = true;
         // Toggle number-based nbar (use current water count as target)
         frag_info.use_number_water_nbar = (value == "yes" || value == "true" || value == "1");
         if (frag_info.use_number_water_nbar) {
             frag_info.use_const_water_nbar = false;
         }
     } else if (key == "volume_water_nbar") {
+        handled = true;
         // Volume-based nbar via target concentration (M)
         // Use this to override water concentration for volume projection mode
         // (default mode already uses concentration, but we record explicitly)
@@ -223,27 +277,37 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
             frag_info.conc_list.push_back(concM);
         }
     } else if (key == "insdel_frac" || key == "insdel_fraction") {
+        handled = true;
         float frac = std::stof(value);
         mc_info.insertion_deletion_frac = std::max(0.0f, std::min(1.0f, frac));
         mc_info.translation_rotation_frac = 1.0f - mc_info.insertion_deletion_frac;
     } else if (key == "attempt_prob_frag") {
+        handled = true;
         mc_info.fragment_prob = InpParserStructures::parse_float_vector(value);
     } else if (key == "attempt_prob_water") {
+        handled = true;
         mc_info.water_prob = InpParserStructures::parse_float_vector(value);
     } else if (key == "attempt_prob_atom") {
+        handled = true;
         mc_info.atom_prob = InpParserStructures::parse_float_vector(value);
     } else if (key == "test_energy") {
+        handled = true;
         energy_info.test_energy = (value == "yes" || value == "true" || value == "1");
     } else if (key == "test_sw_filters" || key == "test_SW_filters") {
+        handled = true;
         energy_info.test_sw_filters = (value == "yes" || value == "true" || value == "1");
     } else if (key == "apply_sw_filters" || key == "apply_SW_filters") {
+        handled = true;
         energy_info.apply_sw_filters = (value == "yes" || value == "true" || value == "1");
     } else if (key == "sw_reference" || key == "SW_reference") {
+        handled = true;
         // Legacy inputs provide kcal/mol – convert to kJ/mol for internal use
         energy_info.energy_sw_ref = std::stof(value) * 4.184f;
     } else if (key == "sw_scale" || key == "SW_scale") {
+        handled = true;
         energy_info.energy_sw_scale = std::stof(value) * 4.184f;
     } else if (key == "rotate_dihedral" || key == "rotate_dih_status") {
+        handled = true;
         // Legacy switch: enable/disable dihedral rotation
         if (value == "yes" || value == "true" || value == "1") {
             mc_info.rotate_dih_status = 1;
@@ -258,25 +322,33 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
             }
         }
     } else if (key == "remove_init") {
+        handled = true;
         frag_info.remove_init = InpParserStructures::parse_int_vector(value);
         frag_info.flag_remove_init = 1;
     } else if (key == "remove_excess") {
+        handled = true;
         frag_info.remove_excess = InpParserStructures::parse_int_vector(value);
         frag_info.flag_remove_excess = 1;
     } else if (key == "initial_fragments_cutoff") {
+        handled = true;
         const float cutoff = std::stof(value);
         frag_info.init_cutoff = cutoff;
         frag_info.init_cutoff_squared = cutoff * cutoff;
     } else if (key == "excess_fragments_threshold") {
+        handled = true;
         frag_info.excess_threshold = std::stof(value);
     } else if (key == "gcmc_cutoff") {
+        handled = true;
         frag_info.gcmc_cutoff = std::stof(value);
         frag_info.gcmc_cutoff_squared = frag_info.gcmc_cutoff * frag_info.gcmc_cutoff;
     } else if (key == "use_gcmc_cutoff") {
+        handled = true;
         frag_info.use_gcmc_cutoff = (value == "yes" || value == "true" || value == "1");
     } else if (key == "target_volume") {
+        handled = true;
         space_info.target_volume = std::stof(value);
     } else if (key == "use_const_water_nbar") {
+        handled = true;
         // gcmc_gpu compatibility: allow either yes/no or an integer value
         try {
             const int n = std::stoi(value);
@@ -290,20 +362,27 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
             frag_info.use_const_water_nbar = (value == "yes" || value == "true" || value == "1");
         }
     } else if (key == "use_number_water_nbar") {
+        handled = true;
         frag_info.use_number_water_nbar = (value == "yes" || value == "true" || value == "1");
         if (frag_info.use_number_water_nbar) {
             frag_info.use_const_water_nbar = false;
         }
     } else if (key == "fragmqtr") {
+        handled = true;
         // Legacy: per-fragment MQTR file(s)
         file_info.fragment_mqtr_files.push_back(value);
     } else if (key == "inp_units" || key == "units") {
+        handled = true;
         // Override unit system ("auto", "nm", "gcmc_gpu"/"angstrom"/"a")
         std::string v = value;
         std::transform(v.begin(), v.end(), v.begin(),
                        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         basic_info.inp_units = v;
         basic_info.inp_units_explicit = true;
+    }
+
+    if (handled) {
+        pushUnique(basic_info.inp_keys_handled, key);
     }
 }
 

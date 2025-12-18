@@ -6,6 +6,7 @@
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <vector>
 
 namespace pygcmc {
 namespace io {
@@ -29,6 +30,17 @@ void InpParserMain::parse_to_param(const std::string& filename, model::Param& pa
         throw std::runtime_error("Failed to open input file: " + filename);
     }
 
+    auto& basic_info = param.get_basic_info();
+    basic_info.inp_keys_seen.clear();
+    basic_info.inp_keys_handled.clear();
+    basic_info.inp_keys_unknown.clear();
+
+    auto pushUnique = [](std::vector<std::string>& v, const std::string& s) {
+        if (std::find(v.begin(), v.end(), s) == v.end()) {
+            v.push_back(s);
+        }
+    };
+
     std::string line;
     while (std::getline(file, line)) {
         line = InpParserStructures::trim(line);
@@ -39,6 +51,8 @@ void InpParserMain::parse_to_param(const std::string& filename, model::Param& pa
 
         std::string key = InpParserStructures::trim(tokens[0]);
         std::string value = InpParserStructures::trim(tokens[1]);
+
+        pushUnique(basic_info.inp_keys_seen, key);
 
         try {
             parse_line(key, value, param);
@@ -52,6 +66,18 @@ void InpParserMain::parse_to_param(const std::string& filename, model::Param& pa
 void InpParserMain::parse_string_to_param(const std::string& content, model::Param& param) {
     std::istringstream iss(content);
     std::string line;
+
+    auto& basic_info = param.get_basic_info();
+    basic_info.inp_keys_seen.clear();
+    basic_info.inp_keys_handled.clear();
+    basic_info.inp_keys_unknown.clear();
+
+    auto pushUnique = [](std::vector<std::string>& v, const std::string& s) {
+        if (std::find(v.begin(), v.end(), s) == v.end()) {
+            v.push_back(s);
+        }
+    };
+
     while (std::getline(iss, line)) {
         line = InpParserStructures::trim(line);
         if (line.empty() || line[0] == '#') continue;
@@ -61,6 +87,8 @@ void InpParserMain::parse_string_to_param(const std::string& content, model::Par
 
         std::string key = InpParserStructures::trim(tokens[0]);
         std::string value = InpParserStructures::trim(tokens[1]);
+
+        pushUnique(basic_info.inp_keys_seen, key);
 
         try {
             parse_line(key, value, param);
@@ -78,34 +106,54 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
     auto& mc_info = param.get_mc_info();
     auto& bias_info = param.get_bias_info();
     auto& basic_info = param.get_basic_info();
+    bool handled = false;
+
+    auto pushUnique = [](std::vector<std::string>& v, const std::string& s) {
+        if (std::find(v.begin(), v.end(), s) == v.end()) {
+            v.push_back(s);
+        }
+    };
 
     // File paths
     if (key == "par") {
+        handled = true;
         file_info.par_files.push_back(value);
     } else if (key == "fragmqtr") {
+        handled = true;
         // Legacy gcmc_gpu key: additional MQTR input files
         file_info.fragment_mqtr_files.push_back(value);
     } else if (key == "fragitp") {
+        handled = true;
         file_info.fragment_top_files.push_back(value);
     } else if (key == "atomtypes") {
+        handled = true;
         file_info.atomtype_file = value;
     } else if (key == "monomerdir") {
+        handled = true;
         file_info.monomer_dir = value;
     } else if (key == "top") {
+        handled = true;
         file_info.topology_file = value;
     } else if (key == "pdb") {
+        handled = true;
         file_info.input_pdb_file = value;
     } else if (key == "protitp") {
+        handled = true;
         file_info.protein_top_files.push_back(value);
     } else if (key == "op_top") {
+        handled = true;
         file_info.output_top_file = value;
     } else if (key == "op_pdb") {
+        handled = true;
         file_info.output_pdb_file = value;
     } else if (key == "conc_norm") {
+        handled = true;
         file_info.conc_norm = value;
     } else if (key == "conc_region") {
+        handled = true;
         file_info.conc_region = value;
     } else if (key == "inp_units" || key == "units") {
+        handled = true;
         // Store raw unit system string for later conversion in InpParserGCMC::enhance_param
         std::string v = value;
         std::transform(v.begin(), v.end(), v.begin(),
@@ -113,9 +161,11 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
         basic_info.inp_units = v;
         basic_info.inp_units_explicit = true;
     } else if (key == "version") {
+        handled = true;
         // Keep raw version string; InpParserGCMC may use this as a hint for legacy gcmc_gpu unit mode.
         basic_info.version = value;
     } else if (key == "random_seed" || key == "seed") {
+        handled = true;
         // Prefer compatibility with gcmc_gpu's "random_seed" key.
         // Use 0 as "auto" (matches existing behavior for unsigned random_seed).
         try {
@@ -127,32 +177,39 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
     }
     // Space parameters
     else if (key == "grid_dx") {
+        handled = true;
         // Raw value; normalized to internal nm in InpParserGCMC::enhance_param.
         space_info.grid_spacing = std::stof(value);
     } else if (key == "box_size" || key == "box") {
+        handled = true;
         space_info.box_size = InpParserStructures::parse_float_array(value);
         // Raw value; normalized to internal nm in InpParserGCMC::enhance_param.
         // Calculate volume in the same raw units; it will be normalized later.
         space_info.volume = space_info.box_size[0] * space_info.box_size[1] * space_info.box_size[2];
     } else if (key == "cutoff") {
+        handled = true;
         // Raw value; normalized to internal nm in InpParserGCMC::enhance_param.
         space_info.cutoff = std::stof(value);
         space_info.cutoff_explicit = true;
     } else if (key == "gc_center") {
+        handled = true;
         space_info.gc_center = InpParserStructures::parse_float_array(value);
         // Raw value; normalized to internal nm in InpParserGCMC::enhance_param.
     } else if (key == "sys_center") {
+        handled = true;
         space_info.sys_center = InpParserStructures::parse_float_array(value);
         // Raw value; normalized to internal nm in InpParserGCMC::enhance_param.
     }
     // Fragment parameters - support both single and multiple entries
     else if (key == "fragname") {
+        handled = true;
         // Support both single fragment and comma-separated list
         auto names = InpParserStructures::parse_string_vector(value);
         for (const auto& name : names) {
             file_info.fragment_names.push_back(name);
         }
     } else if (key == "fragconc") {
+        handled = true;
         // For single-component systems, override previous values
         // For multi-component, accumulate values
         auto concs = InpParserStructures::parse_float_vector(value);
@@ -164,6 +221,7 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
             fragment_info.conc_list.push_back(conc);
         }
     } else if (key == "fragmuex") {
+        handled = true;
         // For single-component systems, override previous values
         // For multi-component, accumulate values
         auto muexs = InpParserStructures::parse_float_vector(value);
@@ -177,36 +235,52 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
     }
     // MC parameters
     else if (key == "nprint") {
+        handled = true;
         mc_info.print_freq = std::stoi(value);
     } else if (key == "nsave") {
+        handled = true;
         mc_info.save_freq = std::stoi(value);
     } else if (key == "mcsteps") {
+        handled = true;
         mc_info.mc_steps = std::stoi(value);
     } else if (key == "moves_per_step" || key == "movesPerStep") {
+        handled = true;
         mc_info.moves_per_step = std::stoi(value);
     } else if (key == "temperature") {
+        handled = true;
         mc_info.temperature = std::stof(value);
         // Calculate beta from temperature (beta = 1/(kB*T) in kJ/mol units)
         mc_info.beta = 1.0f / (mc_info.BOLTZMANN * mc_info.temperature);
     } else if (key == "eqsteps") {
+        handled = true;
         // Store equilibration steps if needed
         // Currently not used in MCParams, but parsed for compatibility
     }
     // Bias parameters
     else if (key == "use_cavity_bias") {
+        handled = true;
         bias_info.use_cavity_bias = (value == "yes");
     } else if (key == "use_conf_bias") {
+        handled = true;
         bias_info.use_conf_bias = (value == "yes");
     }
     // Basic info parameters
     else if (key == "initcycle") {
+        handled = true;
         basic_info.init_cycle = (value == "yes");
     } else if (key == "conserve_frags") {
+        handled = true;
         basic_info.conserve_fragments = (value == "yes");
     } else if (key == "map_generation") {
+        handled = true;
         file_info.generate_maps = (value == "yes");
     } else if (key == "map_filename_prefix") {
+        handled = true;
         file_info.map_prefix = value;
+    }
+
+    if (handled) {
+        pushUnique(basic_info.inp_keys_handled, key);
     }
 }
 
