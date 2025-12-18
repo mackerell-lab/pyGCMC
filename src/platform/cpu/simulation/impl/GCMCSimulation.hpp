@@ -307,6 +307,7 @@ private:
     std::vector<std::array<double, 4>> fragmentMoveCDF_;
     void buildPerFragmentMoveCDF();
     MoveType selectMoveForFragment(int fragType);
+    void seedReservoirFromInitialState();
 
     // === Added: nbar modes integration ===
     void updateActivitiesForNbar();

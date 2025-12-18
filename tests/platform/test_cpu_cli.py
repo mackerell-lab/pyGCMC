@@ -98,3 +98,8 @@ from cpu_cli.itp_nonbonded_forcefield import (
     test_itp_atomtypes_builds_lj_matrix_and_deltaU_matches_analytic_lj,
     test_itp_nonbond_params_override_applies_nbfix_in_lj_matrix,
 )
+
+# ITP nonbonded insertion->deletion closure regression (1 function)
+from cpu_cli.itp_nonbonded_energy_closure import (
+    test_itp_atomtypes_insertion_then_deletion_deltaU_matches_analytic_lj_pair_energy,
+)

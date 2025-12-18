@@ -98,6 +98,37 @@ void FragmentReservoir::reserveInstanceIds(int startIndex) {
     nextInstanceId_ = std::max(nextInstanceId_, std::max(0, startIndex));
 }
 
+int FragmentReservoir::createInstanceWithId(int templateId,
+                                            int instanceId,
+                                            const Vector3& position,
+                                            const Quaternion& orientation) {
+    auto* tmpl = getTemplate(templateId);
+    if (!tmpl) return -1;
+    if (instanceId < 0) return -1;
+    if (instances_.find(instanceId) != instances_.end()) return -1;
+
+    // Ensure future auto-assigned IDs never collide with this fixed ID.
+    nextInstanceId_ = std::max(nextInstanceId_, instanceId + 1);
+
+    FragmentInstance instance;
+    instance.templateId = templateId;
+    instance.instanceId = instanceId;
+    instance.position = position;
+    instance.centerOfMass = position;
+    instance.orientation = orientation;
+    instance.isActive = true;
+    instance.isGhost = false;
+    instance.insertionTime = currentStep_;
+    instance.residueIndex = instanceId;  // Stable mapping: instanceId == residueIndex
+
+    instances_[instanceId] = instance;
+    activeInstances_.insert(instanceId);
+    templateInstances_[templateId].insert(instanceId);
+    perTypeActiveCount_[templateId]++;
+
+    return instanceId;
+}
+
 // Template management
 int FragmentReservoir::addTemplate(const FragmentTemplate& tmpl) {
     int id = nextTemplateId_++;

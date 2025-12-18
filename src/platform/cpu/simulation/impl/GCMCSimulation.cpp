@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cctype>
 #include <random>
+#include <unordered_map>
 #include <map>
 #include <set>
 #include <thread>
@@ -28,6 +29,156 @@ using namespace movement::gcmc;
 // Constants
 constexpr double kB = 8.314e-3;  // Boltzmann constant in kJ/(mol*K)
 constexpr double NA = 6.02214076e23;   // Avogadro's number
+
+namespace {
+
+std::string normalizeName(std::string value) {
+    auto isSpace = [](unsigned char c) { return std::isspace(c) != 0; };
+    value.erase(value.begin(), std::find_if(value.begin(), value.end(), [&](unsigned char c) {
+        return !isSpace(c);
+    }));
+    value.erase(std::find_if(value.rbegin(), value.rend(), [&](unsigned char c) {
+        return !isSpace(c);
+    }).base(), value.end());
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return value;
+}
+
+struct RigidPose {
+    movement::Vector3 translationNm;
+    movement::Quaternion orientation;
+};
+
+RigidPose fitTemplateToResiduePose(
+    const std::vector<model::montecarlo::MCAtom>& templateAtoms,
+    const model::montecarlo::MCState& state,
+    const model::montecarlo::MCResidue& residue
+) {
+    RigidPose pose;
+    pose.translationNm = movement::Vector3(0.0, 0.0, 0.0);
+    pose.orientation = movement::Quaternion(1.0, 0.0, 0.0, 0.0);
+
+    const int atomStart = residue.atomStart;
+    const int atomCount = residue.atomCount;
+    if (atomStart < 0 || atomCount <= 0) {
+        return pose;
+    }
+    if (atomStart + atomCount > state.activeAtomCount) {
+        return pose;
+    }
+
+    const int n = std::min<int>(static_cast<int>(templateAtoms.size()), atomCount);
+    if (n <= 0) {
+        return pose;
+    }
+
+    // Mass-weighted centroids in template and actual coordinates.
+    double wSum = 0.0;
+    movement::Vector3 cT(0.0, 0.0, 0.0);
+    movement::Vector3 cA(0.0, 0.0, 0.0);
+    for (int i = 0; i < n; ++i) {
+        const auto& ta = templateAtoms[i];
+        const auto& aa = state.atoms[atomStart + i];
+        double w = aa.mass;
+        if (!(w > 0.0)) {
+            w = 1.0;
+        }
+        wSum += w;
+        cT.x += w * ta.x;
+        cT.y += w * ta.y;
+        cT.z += w * ta.z;
+        cA.x += w * aa.x;
+        cA.y += w * aa.y;
+        cA.z += w * aa.z;
+    }
+    if (wSum <= 0.0) {
+        wSum = 1.0;
+    }
+    cT.x /= wSum;
+    cT.y /= wSum;
+    cT.z /= wSum;
+    cA.x /= wSum;
+    cA.y /= wSum;
+    cA.z /= wSum;
+
+    // Compute covariance matrix H = Σ w_i (t_i - cT) (a_i - cA)^T
+    double sxx = 0.0, sxy = 0.0, sxz = 0.0;
+    double syx = 0.0, syy = 0.0, syz = 0.0;
+    double szx = 0.0, szy = 0.0, szz = 0.0;
+    for (int i = 0; i < n; ++i) {
+        const auto& ta = templateAtoms[i];
+        const auto& aa = state.atoms[atomStart + i];
+        double w = aa.mass;
+        if (!(w > 0.0)) {
+            w = 1.0;
+        }
+        const double tx = ta.x - cT.x;
+        const double ty = ta.y - cT.y;
+        const double tz = ta.z - cT.z;
+        const double ax = aa.x - cA.x;
+        const double ay = aa.y - cA.y;
+        const double az = aa.z - cA.z;
+
+        sxx += w * tx * ax;
+        sxy += w * tx * ay;
+        sxz += w * tx * az;
+
+        syx += w * ty * ax;
+        syy += w * ty * ay;
+        syz += w * ty * az;
+
+        szx += w * tz * ax;
+        szy += w * tz * ay;
+        szz += w * tz * az;
+    }
+
+    // Horn/Davenport quaternion method: build symmetric 4x4 matrix and take top eigenvector.
+    const double tr = sxx + syy + szz;
+    const double k00 = tr;
+    const double k01 = syz - szy;
+    const double k02 = szx - sxz;
+    const double k03 = sxy - syx;
+
+    const double k11 = sxx - syy - szz;
+    const double k12 = sxy + syx;
+    const double k13 = szx + sxz;
+
+    const double k22 = -sxx + syy - szz;
+    const double k23 = syz + szy;
+
+    const double k33 = -sxx - syy + szz;
+
+    // Power iteration for largest eigenvector (4x4 is tiny; this is stable enough for tests).
+    std::array<double, 4> q = {1.0, 0.0, 0.0, 0.0};
+    for (int iter = 0; iter < 40; ++iter) {
+        std::array<double, 4> qn;
+        qn[0] = k00 * q[0] + k01 * q[1] + k02 * q[2] + k03 * q[3];
+        qn[1] = k01 * q[0] + k11 * q[1] + k12 * q[2] + k13 * q[3];
+        qn[2] = k02 * q[0] + k12 * q[1] + k22 * q[2] + k23 * q[3];
+        qn[3] = k03 * q[0] + k13 * q[1] + k23 * q[2] + k33 * q[3];
+
+        const double norm = std::sqrt(qn[0] * qn[0] + qn[1] * qn[1] + qn[2] * qn[2] + qn[3] * qn[3]);
+        if (norm < 1e-14) {
+            break;
+        }
+        q[0] = qn[0] / norm;
+        q[1] = qn[1] / norm;
+        q[2] = qn[2] / norm;
+        q[3] = qn[3] / norm;
+    }
+
+    pose.orientation = movement::Quaternion(q[0], q[1], q[2], q[3]);
+    pose.orientation.normalize();
+
+    // Translation: t = cA - R*cT
+    const movement::Vector3 cTrot = pose.orientation.rotate(cT);
+    pose.translationNm = movement::Vector3(cA.x - cTrot.x, cA.y - cTrot.y, cA.z - cTrot.z);
+    return pose;
+}
+
+} // namespace
 
 GCMCSimulation::GCMCSimulation(const Config& config) 
     : config_(config), uniform_(0.0, 1.0) {
@@ -1163,6 +1314,10 @@ bool GCMCSimulation::setupEngine() {
     log("  MC state: ", state_->atoms.size(), " atoms, ", state_->residues.size(), " residues");
     log("  Reservoir: ", fragmentTypes_.size(), " fragment types");
 
+    // Seed reservoir and per-fragment current counts from any pre-existing fragments
+    // in the initial structure/topology (e.g., restarting from a *_final.pdb).
+    seedReservoirFromInitialState();
+
     // Set acceptance calculator
     engine_->setAcceptanceCalculator(acceptance_.get());
 
@@ -1352,6 +1507,56 @@ bool GCMCSimulation::setupEngine() {
     }
 
     return true;
+}
+
+void GCMCSimulation::seedReservoirFromInitialState() {
+    if (!state_ || !reservoir_ || fragmentTypes_.empty()) {
+        return;
+    }
+
+    std::unordered_map<std::string, int> fragByLowerName;
+    fragByLowerName.reserve(fragmentTypes_.size());
+    for (const auto& frag : fragmentTypes_) {
+        fragByLowerName.emplace(normalizeName(frag.name), frag.typeId);
+    }
+
+    int seeded = 0;
+    for (int residueIdx = 0; residueIdx < state_->activeResidueCount; ++residueIdx) {
+        const auto& residue = state_->residues[residueIdx];
+        if (!residue.active || residue.atomCount <= 0) {
+            continue;
+        }
+
+        const auto it = fragByLowerName.find(normalizeName(residue.resname));
+        if (it == fragByLowerName.end()) {
+            continue;
+        }
+
+        const int typeId = it->second;
+        const auto* tmpl = reservoir_->getTemplate(typeId);
+        if (!tmpl || tmpl->atoms.empty()) {
+            continue;
+        }
+
+        const RigidPose pose = fitTemplateToResiduePose(tmpl->atoms, *state_, residue);
+
+        // Ensure instanceId matches residueIdx so engine methods can use residueIdx directly.
+        const int instanceId = reservoir_->createInstanceWithId(typeId, residueIdx, pose.translationNm, pose.orientation);
+        if (instanceId < 0) {
+            continue;
+        }
+
+        if (typeId >= 0 && static_cast<size_t>(typeId) < fragmentTypes_.size()) {
+            fragmentTypes_[typeId].currentCount++;
+        }
+        seeded++;
+    }
+
+    if (seeded > 0) {
+        // The initial system is not part of MC insertion statistics.
+        reservoir_->resetStatistics();
+        log("Seeded reservoir with ", seeded, " initial fragment instances");
+    }
 }
 
 bool GCMCSimulation::run() {

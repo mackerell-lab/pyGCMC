@@ -233,6 +233,15 @@ public:
     // Reserve leading instance IDs so instanceId can be used as a stable residue index
     // in MCState even when the system is initialized with pre-existing residues (e.g., protein).
     void reserveInstanceIds(int startIndex);
+
+    // Create a fragment instance using a fixed instanceId.
+    // This is primarily used to seed the reservoir when the initial MCState already
+    // contains GCMC fragments (restart from an existing structure/topology).
+    // Returns the instanceId on success, or -1 on failure.
+    int createInstanceWithId(int templateId,
+                             int instanceId,
+                             const Vector3& position,
+                             const Quaternion& orientation = Quaternion());
     
     // Create with configurational bias
     int createInstanceCBMC(int templateId,
