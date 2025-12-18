@@ -257,6 +257,16 @@ initcycle:yes
 conserve_frags:yes
 map_generation:yes
 map_filename_prefix:gc_maps/test
+pairlist_freq:500
+use_group_cutoff:no
+pairlist_cutoff:9.0
+pairlist_cutoff_protein:10.0
+target_volume:1000.0
+test_energy:yes
+test_sw_filters:yes
+apply_sw_filters:yes
+sw_reference:0.5
+sw_scale:2.0
 
 attempt_prob_frag:0.1 0.2 0.3 0.4
 rotate_dihedral:yes
@@ -303,6 +313,16 @@ mc_move_prob:1 0 0 0
         "conserve_frags",
         "map_generation",
         "map_filename_prefix",
+        "pairlist_freq",
+        "use_group_cutoff",
+        "pairlist_cutoff",
+        "pairlist_cutoff_protein",
+        "target_volume",
+        "test_energy",
+        "test_sw_filters",
+        "apply_sw_filters",
+        "sw_reference",
+        "sw_scale",
         "attempt_prob_frag",
         "rotate_dihedral",
         "use_gcmc_cutoff",

@@ -124,6 +124,8 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
         handled = true;
         // Legacy gcmc_gpu key: additional MQTR input files
         file_info.fragment_mqtr_files.push_back(value);
+        // MQTR functionality is not implemented in gcmc_cpu yet.
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "fragitp") {
         handled = true;
         file_info.fragment_top_files.push_back(value);

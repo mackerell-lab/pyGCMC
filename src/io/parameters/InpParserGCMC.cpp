@@ -192,10 +192,14 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
         handled = true;
         // Pairlist update frequency
         energy_info.pairlist_freq = static_cast<unsigned int>(std::stoi(value));
+        // Pairlist rebuild scheduling is not implemented in gcmc_cpu yet.
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "use_group_cutoff") {
         handled = true;
         // Use group-based cutoff instead of atom-based
         energy_info.use_group_cutoff = (value == "yes" || value == "true" || value == "1");
+        // Group cutoff mode is not implemented in gcmc_cpu yet.
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "pairlist_cutoff") {
         handled = true;
         // Pairlist cutoff distance for fragments
@@ -203,12 +207,16 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
         energy_info.pairlist_cutoff_squared = energy_info.pairlist_cutoff * energy_info.pairlist_cutoff;
         energy_info.pair_list_cutoff_fragment = energy_info.pairlist_cutoff;
         energy_info.pair_list_cutoff_fragment_squared = energy_info.pairlist_cutoff_squared;
+        // Pairlist cutoff is not used by gcmc_cpu yet.
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "pairlist_cutoff_protein") {
         handled = true;
         // Pairlist cutoff distance for protein
         float cutoff = std::stof(value);  // Already in nm
         energy_info.pair_list_cutoff_protein = cutoff;
         energy_info.pair_list_cutoff_protein_squared = cutoff * cutoff;
+        // Protein pairlist cutoff is not used by gcmc_cpu yet.
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "attempt_prob_ins") {
         handled = true;
         // Per-fragment insertion attempt probabilities
@@ -307,19 +315,29 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
     } else if (key == "test_energy") {
         handled = true;
         energy_info.test_energy = (value == "yes" || value == "true" || value == "1");
+        // Energy diagnostic mode is not implemented in gcmc_cpu yet.
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "test_sw_filters" || key == "test_SW_filters") {
         handled = true;
         energy_info.test_sw_filters = (value == "yes" || value == "true" || value == "1");
+        // Switching filter diagnostics are not implemented in gcmc_cpu yet.
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "apply_sw_filters" || key == "apply_SW_filters") {
         handled = true;
         energy_info.apply_sw_filters = (value == "yes" || value == "true" || value == "1");
+        // Switching filter application is not implemented in gcmc_cpu yet.
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "sw_reference" || key == "SW_reference") {
         handled = true;
         // Legacy inputs provide kcal/mol – convert to kJ/mol for internal use
         energy_info.energy_sw_ref = std::stof(value) * 4.184f;
+        // Switching filter reference is not used by gcmc_cpu yet.
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "sw_scale" || key == "SW_scale") {
         handled = true;
         energy_info.energy_sw_scale = std::stof(value) * 4.184f;
+        // Switching filter scale is not used by gcmc_cpu yet.
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "rotate_dihedral" || key == "rotate_dih_status") {
         handled = true;
         // Legacy switch: enable/disable dihedral rotation
@@ -371,6 +389,8 @@ void InpParserGCMC::parse_line_ext(const std::string& key, const std::string& va
     } else if (key == "target_volume") {
         handled = true;
         space_info.target_volume = std::stof(value);
+        // Target volume is not used by gcmc_cpu yet (stored for compatibility only).
+        pushUnique(basic_info.inp_keys_ignored, key);
     } else if (key == "use_const_water_nbar") {
         handled = true;
         // gcmc_gpu compatibility: allow either yes/no or an integer value
