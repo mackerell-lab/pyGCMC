@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -68,20 +69,50 @@ std::string parseSectionName(const std::string& headerLine) {
     return toLower(trim(inside));
 }
 
-} // namespace
+ItpNonbondedParser::LJ ljFromC6C12(double c6, double c12) {
+    ItpNonbondedParser::LJ lj;
+    if (c6 == 0.0 || c12 == 0.0) {
+        return lj;
+    }
+    lj.sigma_nm = std::pow(c12 / c6, 1.0 / 6.0);
+    lj.epsilon_kj = (c6 * c6) / (4.0 * c12);
+    return lj;
+}
 
-ItpNonbondedParser::Result ItpNonbondedParser::parse_file(const std::string& filename) {
+void applyDefaults(ItpNonbondedParser::Result& result) {
+    if (result.defaults.present) {
+        if (result.defaults.nbfunc != 1) {
+            throw std::runtime_error(
+                "Unsupported GROMACS nbfunc=" + std::to_string(result.defaults.nbfunc) +
+                " (only nbfunc=1 Lennard-Jones is supported)");
+        }
+        if (result.defaults.combRule == 1) {
+            for (auto& [name, lj] : result.atomTypes) {
+                lj = ljFromC6C12(lj.sigma_nm, lj.epsilon_kj);
+            }
+            for (auto& [pair, lj] : result.pairOverrides) {
+                (void)pair;
+                lj = ljFromC6C12(lj.sigma_nm, lj.epsilon_kj);
+            }
+        } else if (result.defaults.combRule != 2 && result.defaults.combRule != 3) {
+            throw std::runtime_error(
+                "Unsupported GROMACS comb-rule=" + std::to_string(result.defaults.combRule));
+        }
+    }
+}
+
+ItpNonbondedParser::Result parseFileRaw(const std::string& filename) {
     std::ifstream file(filename);
     if (!file.is_open()) {
         throw std::runtime_error("Failed to open ITP file: " + filename);
     }
 
-    Result result;
+    ItpNonbondedParser::Result result;
     // Track overrides by section so we can apply a deterministic precedence.
     // For compatibility with the planned "strict-gromacs" path (and to match the intended
     // gcmc_gpu behavior), treat nonbond_params as NBFIX and let it override pairtypes.
-    std::map<std::pair<std::string, std::string>, LJ> pairtypesOverrides;
-    std::map<std::pair<std::string, std::string>, LJ> nbfixOverrides;
+    std::map<std::pair<std::string, std::string>, ItpNonbondedParser::LJ> pairtypesOverrides;
+    std::map<std::pair<std::string, std::string>, ItpNonbondedParser::LJ> nbfixOverrides;
     std::string section;
     std::string line;
 
@@ -118,6 +149,19 @@ ItpNonbondedParser::Result ItpNonbondedParser::parse_file(const std::string& fil
             continue;
         }
 
+        if (section == "defaults") {
+            if (!result.defaults.present && tokens.size() >= 2) {
+                try {
+                    result.defaults.nbfunc = std::stoi(tokens[0]);
+                    result.defaults.combRule = std::stoi(tokens[1]);
+                    result.defaults.present = true;
+                } catch (const std::exception&) {
+                    continue;
+                }
+            }
+            continue;
+        }
+
         if (section == "atomtypes") {
             // Typical format: name bond_type mass charge ptype sigma epsilon
             if (tokens.size() < 3) {
@@ -127,12 +171,12 @@ ItpNonbondedParser::Result ItpNonbondedParser::parse_file(const std::string& fil
             try {
                 const double sigma = std::stod(tokens[tokens.size() - 2]);
                 const double eps = std::stod(tokens[tokens.size() - 1]);
-                result.atomTypes[typeName] = LJ{sigma, eps};
+                result.atomTypes[typeName] = ItpNonbondedParser::LJ{sigma, eps};
             } catch (const std::exception&) {
                 continue;
             }
         } else if (section == "pairtypes" || section == "nonbond_params") {
-            // Typical format: type1 type2 func sigma epsilon
+            // Typical format: type1 type2 func sigma epsilon (or C6/C12 if comb-rule=1)
             if (tokens.size() < 4) {
                 continue;
             }
@@ -143,9 +187,9 @@ ItpNonbondedParser::Result ItpNonbondedParser::parse_file(const std::string& fil
                 const double eps = std::stod(tokens[tokens.size() - 1]);
                 const auto key = canonicalPair(t1, t2);
                 if (section == "pairtypes") {
-                    pairtypesOverrides[key] = LJ{sigma, eps};
+                    pairtypesOverrides[key] = ItpNonbondedParser::LJ{sigma, eps};
                 } else {
-                    nbfixOverrides[key] = LJ{sigma, eps};
+                    nbfixOverrides[key] = ItpNonbondedParser::LJ{sigma, eps};
                 }
             } catch (const std::exception&) {
                 continue;
@@ -162,17 +206,34 @@ ItpNonbondedParser::Result ItpNonbondedParser::parse_file(const std::string& fil
     return result;
 }
 
+} // namespace
+
+ItpNonbondedParser::Result ItpNonbondedParser::parse_file(const std::string& filename) {
+    Result result = parseFileRaw(filename);
+    applyDefaults(result);
+    return result;
+}
+
 ItpNonbondedParser::Result ItpNonbondedParser::parse_files(const std::vector<std::string>& filenames) {
     Result merged;
     for (const auto& f : filenames) {
-        Result r = parse_file(f);
+        Result r = parseFileRaw(f);
         for (const auto& [name, lj] : r.atomTypes) {
             merged.atomTypes[name] = lj;
         }
         for (const auto& [pair, lj] : r.pairOverrides) {
             merged.pairOverrides[pair] = lj;
         }
+        if (r.defaults.present) {
+            if (!merged.defaults.present) {
+                merged.defaults = r.defaults;
+            } else if (merged.defaults.nbfunc != r.defaults.nbfunc ||
+                       merged.defaults.combRule != r.defaults.combRule) {
+                throw std::runtime_error("Conflicting GROMACS [defaults] across ITP files");
+            }
+        }
     }
+    applyDefaults(merged);
     return merged;
 }
 

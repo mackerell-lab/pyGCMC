@@ -59,6 +59,20 @@ def _lj_energy_kj_mol(*, r_nm: float, sigma_nm: float, eps_kj_mol: float) -> flo
     return 4.0 * eps_kj_mol * (sigma_r12 - sigma_r6)
 
 
+def _c6_c12_from_sigma_eps(*, sigma_nm: float, eps_kj_mol: float) -> tuple[float, float]:
+    c6 = 4.0 * eps_kj_mol * (sigma_nm**6)
+    c12 = 4.0 * eps_kj_mol * (sigma_nm**12)
+    return c6, c12
+
+
+def _sigma_eps_from_c6_c12(*, c6: float, c12: float) -> tuple[float, float]:
+    if c6 == 0.0 or c12 == 0.0:
+        return 0.0, 0.0
+    sigma = (c12 / c6) ** (1.0 / 6.0)
+    eps = (c6 * c6) / (4.0 * c12)
+    return sigma, eps
+
+
 def test_itp_atomtypes_builds_lj_matrix_and_deltaU_matches_analytic_lj(
     gcmc_cpu, temp_dir
 ):
@@ -607,4 +621,285 @@ mc_move_prob:1 0 0 0
     r_nm = math.sqrt(dx * dx + dy * dy + dz * dz)
 
     expected = _lj_energy_kj_mol(r_nm=r_nm, sigma_nm=sigma_nbfix, eps_kj_mol=eps_nbfix)
+    assert float(rec["deltaU"]) == pytest.approx(expected, rel=5e-4, abs=5e-4)
+
+
+def test_itp_defaults_comb_rule_geometric_sigma_mixing(gcmc_cpu, temp_dir):
+    """
+    Regression for [defaults] comb-rule=3 (geometric sigma).
+
+    With comb-rule 3, sigma and epsilon should both be mixed geometrically.
+    """
+    work = Path(temp_dir) / "itp_nonbonded_energy" / "comb_rule_geom_sigma"
+    work.mkdir(parents=True, exist_ok=True)
+
+    pdb = work / "sys.pdb"
+    _write_text(
+        pdb,
+        """
+CRYST1   30.000   30.000   30.000  90.00  90.00  90.00 P 1           1
+ATOM      1  C   MOL A   1      15.000  15.000  15.000  1.00  0.00           C
+END
+""",
+    )
+
+    top = work / "sys.top"
+    _write_text(
+        top,
+        """
+[ defaults ]
+1 2 yes 0.5 0.8333
+
+[ moleculetype ]
+MOL  2
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge    mass
+1   C     1      MOL      C     1     0.000   12.011
+
+[ system ]
+Minimal
+
+[ molecules ]
+MOL  1
+""",
+    )
+
+    frag_itp = work / "na.itp"
+    _write_text(
+        frag_itp,
+        """
+[ moleculetype ]
+NA  1
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge  mass
+1   NA    1      NA       NA    1     0.000   22.9898
+""",
+    )
+
+    sigma_c = 0.200
+    eps_c = 1.200
+    sigma_na = 0.600
+    eps_na = 2.500
+
+    par = work / "ffnonbonded.itp"
+    _write_text(
+        par,
+        f"""
+[ defaults ]
+1 3 yes 1.0 1.0
+
+[ atomtypes ]
+; name  at.num  mass     charge   ptype    sigma      epsilon
+C       6       12.011   0.000    A        {sigma_c:.6f}   {eps_c:.6f}
+NA      11      22.990   0.000    A        {sigma_na:.6f}  {eps_na:.6f}
+""",
+    )
+
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    accept_log = work / "out" / "acceptance.jsonl"
+
+    inp = work / "run.inp"
+    _write_text(
+        inp,
+        f"""
+random_seed:123
+par:{par}
+top:{top}
+pdb:{pdb}
+fragitp:{frag_itp}
+
+box_size:30.0 30.0 30.0
+cutoff:12.0
+gcmc_region:box 20.0 12.5 12.5 25.0 17.5 17.5
+
+temperature:300.0
+moves_per_step:1
+mcsteps:1
+nprint:1
+
+fragname:NA
+fragconc:0.01
+fragmuex:30.0
+mc_move_prob:1 0 0 0
+""",
+    )
+
+    result = subprocess.run(
+        [gcmc_cpu, "--inp", str(inp), "--prefix", str(out_prefix), "--dump-accept", str(accept_log)],
+        cwd=str(work),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    rec = _first_accept_record(accept_log, move="insertion", species="NA")
+    assert bool(rec.get("accepted")) is True
+
+    final_pdb = Path(f"{out_prefix}_final.pdb")
+    assert final_pdb.exists()
+
+    x0, y0, z0 = _first_atom_xyz_angstrom(final_pdb, resname="MOL")
+    x1, y1, z1 = _first_atom_xyz_angstrom(final_pdb, resname="NA")
+
+    dx = (x1 - x0) / 10.0
+    dy = (y1 - y0) / 10.0
+    dz = (z1 - z0) / 10.0
+    r_nm = math.sqrt(dx * dx + dy * dy + dz * dz)
+
+    sigma_mixed = math.sqrt(sigma_c * sigma_na)
+    eps_mixed = math.sqrt(eps_c * eps_na)
+    expected = _lj_energy_kj_mol(r_nm=r_nm, sigma_nm=sigma_mixed, eps_kj_mol=eps_mixed)
+
+    assert float(rec["deltaU"]) == pytest.approx(expected, rel=5e-4, abs=5e-4)
+
+
+def test_itp_defaults_comb_rule_one_converts_c6_c12_and_overrides(gcmc_cpu, temp_dir):
+    """
+    Regression for [defaults] comb-rule=1 (C6/C12 -> sigma/epsilon).
+
+    Ensures both atomtypes and nonbond_params are converted from C6/C12
+    into sigma/epsilon before building the LJ matrix.
+    """
+    work = Path(temp_dir) / "itp_nonbonded_energy" / "comb_rule_c6_c12"
+    work.mkdir(parents=True, exist_ok=True)
+
+    pdb = work / "sys.pdb"
+    _write_text(
+        pdb,
+        """
+CRYST1   30.000   30.000   30.000  90.00  90.00  90.00 P 1           1
+ATOM      1  C   MOL A   1      15.000  15.000  15.000  1.00  0.00           C
+END
+""",
+    )
+
+    top = work / "sys.top"
+    _write_text(
+        top,
+        """
+[ defaults ]
+1 2 yes 0.5 0.8333
+
+[ moleculetype ]
+MOL  2
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge    mass
+1   C     1      MOL      C     1     0.000   12.011
+
+[ system ]
+Minimal
+
+[ molecules ]
+MOL  1
+""",
+    )
+
+    frag_itp = work / "na.itp"
+    _write_text(
+        frag_itp,
+        """
+[ moleculetype ]
+NA  1
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge  mass
+1   NA    1      NA       NA    1     0.000   22.9898
+""",
+    )
+
+    sigma_c = 0.280
+    eps_c = 1.100
+    sigma_na = 0.450
+    eps_na = 2.200
+    sigma_override = 0.520
+    eps_override = 3.700
+
+    c6_c, c12_c = _c6_c12_from_sigma_eps(sigma_nm=sigma_c, eps_kj_mol=eps_c)
+    c6_na, c12_na = _c6_c12_from_sigma_eps(sigma_nm=sigma_na, eps_kj_mol=eps_na)
+    c6_override, c12_override = _c6_c12_from_sigma_eps(
+        sigma_nm=sigma_override,
+        eps_kj_mol=eps_override,
+    )
+
+    par = work / "ffnonbonded.itp"
+    _write_text(
+        par,
+        f"""
+[ defaults ]
+1 1 yes 1.0 1.0
+
+[ atomtypes ]
+; name  at.num  mass     charge   ptype    C6        C12
+C       6       12.011   0.000    A        {c6_c:.8e}   {c12_c:.8e}
+NA      11      22.990   0.000    A        {c6_na:.8e}  {c12_na:.8e}
+
+[ nonbond_params ]
+; type1  type2  func  C6  C12
+C   NA   1   {c6_override:.8e}  {c12_override:.8e}
+""",
+    )
+
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    accept_log = work / "out" / "acceptance.jsonl"
+
+    inp = work / "run.inp"
+    _write_text(
+        inp,
+        f"""
+random_seed:123
+par:{par}
+top:{top}
+pdb:{pdb}
+fragitp:{frag_itp}
+
+box_size:30.0 30.0 30.0
+cutoff:12.0
+gcmc_region:box 20.0 12.5 12.5 25.0 17.5 17.5
+
+temperature:300.0
+moves_per_step:1
+mcsteps:1
+nprint:1
+
+fragname:NA
+fragconc:0.01
+fragmuex:30.0
+mc_move_prob:1 0 0 0
+""",
+    )
+
+    result = subprocess.run(
+        [gcmc_cpu, "--inp", str(inp), "--prefix", str(out_prefix), "--dump-accept", str(accept_log)],
+        cwd=str(work),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    rec = _first_accept_record(accept_log, move="insertion", species="NA")
+    assert bool(rec.get("accepted")) is True
+
+    final_pdb = Path(f"{out_prefix}_final.pdb")
+    assert final_pdb.exists()
+
+    x0, y0, z0 = _first_atom_xyz_angstrom(final_pdb, resname="MOL")
+    x1, y1, z1 = _first_atom_xyz_angstrom(final_pdb, resname="NA")
+
+    dx = (x1 - x0) / 10.0
+    dy = (y1 - y0) / 10.0
+    dz = (z1 - z0) / 10.0
+    r_nm = math.sqrt(dx * dx + dy * dy + dz * dz)
+
+    expected = _lj_energy_kj_mol(
+        r_nm=r_nm,
+        sigma_nm=sigma_override,
+        eps_kj_mol=eps_override,
+    )
     assert float(rec["deltaU"]) == pytest.approx(expected, rel=5e-4, abs=5e-4)

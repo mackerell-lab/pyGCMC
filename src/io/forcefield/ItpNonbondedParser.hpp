@@ -15,6 +15,7 @@ namespace io {
  * - [ atomtypes ]       -> per-type sigma/epsilon (nm, kJ/mol)
  * - [ pairtypes ]       -> pair overrides (sigma/epsilon)
  * - [ nonbond_params ]  -> pair overrides (sigma/epsilon)
+ * - [ defaults ]        -> comb-rule/nbfunc; comb-rule=1 converts C6/C12 to sigma/epsilon
  *
  * Notes:
  * - This parser intentionally focuses on the columns used by tmp/gcmc_gpu/source/parse.cpp.
@@ -28,9 +29,16 @@ public:
         double epsilon_kj{0.0};
     };
 
+    struct Defaults {
+        int nbfunc{1};
+        int combRule{2};
+        bool present{false};
+    };
+
     struct Result {
         std::map<std::string, LJ> atomTypes;
         std::map<std::pair<std::string, std::string>, LJ> pairOverrides;
+        Defaults defaults;
     };
 
     static Result parse_file(const std::string& filename);
@@ -39,4 +47,3 @@ public:
 
 } // namespace io
 } // namespace pygcmc
-

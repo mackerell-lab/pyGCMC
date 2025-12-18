@@ -371,7 +371,11 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
         const int n = static_cast<int>(result.mcState->atomTypes.atomTypes.size());
         result.mcState->forcefield.numTotalTypes = n;
         result.mcState->forcefield.numMovementTypes = n;
-        result.mcState->forcefield.mixingRule = montecarlo::MCForceField::MixingRule::LorentzBerthelot;
+        auto mixingRule = montecarlo::MCForceField::MixingRule::LorentzBerthelot;
+        if (itpNonbonded.defaults.combRule == 1 || itpNonbonded.defaults.combRule == 3) {
+            mixingRule = montecarlo::MCForceField::MixingRule::Geometric;
+        }
+        result.mcState->forcefield.mixingRule = mixingRule;
         result.mcState->forcefield.ljSigmaType.assign(static_cast<size_t>(n), 0.0f);
         result.mcState->forcefield.ljEpsType.assign(static_cast<size_t>(n), 0.0f);
         result.mcState->forcefield.nbfix.clear();
