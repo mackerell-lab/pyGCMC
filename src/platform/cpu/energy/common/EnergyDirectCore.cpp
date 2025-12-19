@@ -84,24 +84,33 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
         }
     }
 
+    const bool includePairtypes14Intra = movement_only;
+
     if (movement_only) {
         for (const auto& movementInfo : state.movementResidues) {
             for (int i = movementInfo.startIndex;
                  i < movementInfo.startIndex + movementInfo.activeCount;
                  ++i) {
                 if (!residues[i].active) continue;
-                computeResidueNonbondedEnergy(state, i, use_cutoff, use_pbc, vdw_only);
+                computeResidueNonbondedEnergy(state, i, use_cutoff, use_pbc,
+                                              vdw_only, includePairtypes14Intra);
             }
         }
     } else {
         for (int i = 0; i < state.activeResidueCount; ++i) {
             if (!residues[i].active) continue;
-            computeResidueNonbondedEnergy(state, i, use_cutoff, use_pbc, vdw_only);
+            computeResidueNonbondedEnergy(state, i, use_cutoff, use_pbc,
+                                          vdw_only, includePairtypes14Intra);
         }
     }
 }
 
-void computeResidueNonbondedEnergy(model::MCState& state, int residue_idx, bool use_cutoff, bool use_pbc, bool vdw_only) {
+void computeResidueNonbondedEnergy(model::MCState& state,
+                                   int residue_idx,
+                                   bool use_cutoff,
+                                   bool use_pbc,
+                                   bool vdw_only,
+                                   bool include_pairtypes14_intra) {
     auto& residues = state.residues;
     auto& forcefield = state.forcefield;  // Non-const to allow rebuild
     
@@ -116,8 +125,9 @@ void computeResidueNonbondedEnergy(model::MCState& state, int residue_idx, bool 
     }
     const auto& atoms = state.atoms;
     const auto& box = state.info.box;
-    
+
     const double cutoff2 = use_cutoff ? state.info.cutoff * state.info.cutoff : std::numeric_limits<double>::max();
+    const bool usePairtypes14 = forcefield.pairtypes14Enabled;
     
     if (!residues[residue_idx].active) {
         return;
@@ -174,11 +184,58 @@ void computeResidueNonbondedEnergy(model::MCState& state, int residue_idx, bool 
                 double q2 = atoms[atom_j].charge;
                 
                 auto [vdw, elec] = coulomb::calcPairEnergy(r2, sigma, eps, q1, q2, state.info, !vdw_only);
-                
+
                 residues[residue_idx].energy_vdw += static_cast<float>(vdw);
                 if (!vdw_only) {
                     residues[residue_idx].energy_elec += static_cast<float>(elec);
                 }
+            }
+        }
+    }
+
+    if (include_pairtypes14_intra && usePairtypes14) {
+        const int start = residues[residue_idx].atomStart;
+        const int end = start + residues[residue_idx].atomCount;
+        const int nTypes = forcefield.numTotalTypes;
+
+        for (int atom_i = start; atom_i < end; ++atom_i) {
+            if (atoms[atom_i].name == "LP" || atoms[atom_i].name == "LPA") continue;
+            const int type_i = atoms[atom_i].type;
+
+            for (int atom_j = atom_i + 1; atom_j < end; ++atom_j) {
+                if (atoms[atom_j].name == "LP" || atoms[atom_j].name == "LPA") continue;
+                if (!state.isPair14(atom_i, atom_j)) continue;
+
+                const int type_j = atoms[atom_j].type;
+                if (!forcefield.hasPairtype14(type_i, type_j)) continue;
+
+                double dx = atoms[atom_j].x - atoms[atom_i].x;
+                double dy = atoms[atom_j].y - atoms[atom_i].y;
+                double dz = atoms[atom_j].z - atoms[atom_i].z;
+
+                if (use_pbc) {
+                    dx -= box[0] * std::round(dx / box[0]);
+                    dy -= box[1] * std::round(dy / box[1]);
+                    dz -= box[2] * std::round(dz / box[2]);
+                }
+
+                const double r2 = dx * dx + dy * dy + dz * dz;
+                if (r2 > cutoff2 || r2 <= 0.0) continue;
+
+                const int param_index = type_i * nTypes + type_j;
+                const size_t idx = static_cast<size_t>(param_index);
+                if (idx >= forcefield.ljSigma14.size() || idx >= forcefield.ljEps14.size()) {
+                    continue;
+                }
+
+                const double sigma = forcefield.ljSigma14[idx];
+                const double eps = forcefield.ljEps14[idx];
+                const double inv_r2 = 1.0 / r2;
+                const double sr2 = (sigma * sigma) * inv_r2;
+                const double sr6 = sr2 * sr2 * sr2;
+                const double sr12 = sr6 * sr6;
+                const double vdw = 4.0 * eps * (sr12 - sr6);
+                residues[residue_idx].energy_vdw += static_cast<float>(vdw);
             }
         }
     }
@@ -257,7 +314,7 @@ void computeMovementVdwEnergyDirect(model::MCState& state, bool use_cutoff, bool
 
 void computeResidueEnergyCutoffPBC(model::MCState& state, int residue_idx) {
     // Wrapper for multi-insertion optimization: single residue energy with PBC and cutoff
-    computeResidueNonbondedEnergy(state, residue_idx, true, true, false);
+    computeResidueNonbondedEnergy(state, residue_idx, true, true, false, true);
 }
 
 void computeNonbondedEnergyWithNeighborList(
@@ -386,7 +443,7 @@ void computeResidueEnergyWithNeighborList(
 ) {
     if (neighborList.empty()) {
         // Fallback to full calculation
-        computeResidueNonbondedEnergy(state, residue_idx, true, use_pbc, vdw_only);
+        computeResidueNonbondedEnergy(state, residue_idx, true, use_pbc, vdw_only, false);
         return;
     }
 

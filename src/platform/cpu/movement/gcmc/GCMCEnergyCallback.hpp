@@ -75,7 +75,7 @@ public:
         // DIRECT path: compute this residue's interaction energy against the rest.
         // This must not depend on MCState.movementResidues being populated.
         if (energyMethod_ == EnergyMethod::DIRECT) {
-            computeResidueNonbondedEnergy(state, residueIdx, useCutoff_, usePBC_, false);
+            computeResidueNonbondedEnergy(state, residueIdx, useCutoff_, usePBC_, false, true);
             const auto& residue = state.residues[residueIdx];
             return residue.energy_vdw + residue.energy_elec;
         }

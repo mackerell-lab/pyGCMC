@@ -71,6 +71,7 @@ void init_energy_bindings(py::module& m) {
               py::arg("use_cutoff"),
               py::arg("use_pbc"),
               py::arg("vdw_only") = false,
+              py::arg("include_pairtypes14_intra") = false,
               "Compute residue nonbonded energy with flexible options");
 }
 

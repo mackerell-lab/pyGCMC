@@ -76,6 +76,11 @@ from energyNB.nonbonded_pbc_advanced import (
     test_pbc_cross_boundary
 )
 
+# Pairtypes strict (1-4) behavior for DIRECT cutoff
+from energyNB.pairtypes_14_strict_direct import (
+    test_pairtypes_14_override_applies_in_direct_cutoff
+)
+
 # Switching function core tests
 from energyNB.switching_core import (
     test_switching_function,

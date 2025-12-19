@@ -34,7 +34,12 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
  * @param use_pbc Whether to use periodic boundary conditions
  * @param vdw_only Whether to calculate only VDW interactions
  */
-void computeResidueNonbondedEnergy(model::MCState& state, int residue_idx, bool use_cutoff, bool use_pbc, bool vdw_only = false);
+void computeResidueNonbondedEnergy(model::MCState& state,
+                                  int residue_idx,
+                                  bool use_cutoff,
+                                  bool use_pbc,
+                                  bool vdw_only = false,
+                                  bool include_pairtypes14_intra = false);
 
 /**
  * @brief Compute nonbonded energy (vdw+elec) for a single residue vs the rest, with cutoff and PBC
