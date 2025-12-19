@@ -103,6 +103,13 @@ from cpu_cli.movement_energy_translation_rotation import (
     test_rotation_move_deltaU_matches_analytic_lj_for_multi_atom_fragment,
 )
 
+# Physical-contract GCMC checks (3 functions)
+from cpu_cli.physical_contracts import (
+    test_acceptance_formula_insertion_and_deletion_ideal_gas,
+    test_poisson_number_distribution_ideal_gas,
+    test_cutoff_excludes_far_lj_interactions_in_insertion_energy,
+)
+
 # Movement step-size parameter compatibility (1 function)
 from cpu_cli.movement_step_params_compat import (
     test_max_translation_and_rotation_keys_are_parsed_converted_and_applied,

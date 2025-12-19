@@ -107,6 +107,9 @@ from movementGCMC.detailed_balance import TestDetailedBalance
 from movementGCMC.detailed_balance_fix import TestDetailedBalanceFix
 from movementGCMC.insertion_deletion_balance import TestInsertionDeletionBalance
 from movementGCMC.ideal_gas_validation import TestIdealGasValidation
+from movementGCMC.poisson_distribution import (
+    test_ideal_gas_poisson_distribution,
+)
 from movementGCMC.gcmc_engine_config import TestGCMCEngineConfig
 from movementGCMC.cavity_bias_cpu import TestCavityBias as TestCavityBiasCPU
 

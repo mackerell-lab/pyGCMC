@@ -5,8 +5,15 @@ Fixtures for GCMC movement tests
 import pytest
 import sys
 import os
-# Add build directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'build'))
+# Add build bindings to path
+build_dir = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+    'build',
+)
+bindings_dir = os.path.join(build_dir, 'modules', 'bindings')
+for path in (bindings_dir, build_dir):
+    if path not in sys.path:
+        sys.path.insert(0, path)
 import pygcmc
 import numpy as np
 
