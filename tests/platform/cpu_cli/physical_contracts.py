@@ -133,6 +133,121 @@ X   1
     return par, frag
 
 
+def _write_charged_single_atom_system(
+    work: Path,
+    *,
+    mol_charge: float,
+    frag_charge: float,
+    mol_sigma_nm: float,
+    mol_eps_kj_mol: float,
+    frag_sigma_nm: float,
+    frag_eps_kj_mol: float,
+) -> dict[str, Path]:
+    pdb = work / "sys.pdb"
+    _write_text(
+        pdb,
+        """
+CRYST1   30.000   30.000   30.000  90.00  90.00  90.00 P 1           1
+ATOM      1  C   MOL A   1      15.000  15.000  15.000  1.00  0.00           C
+END
+""",
+    )
+
+    par = work / "par.itp"
+    _write_text(
+        par,
+        f"""
+[ defaults ]
+1 2 yes 0.5 0.8333
+
+[ atomtypes ]
+; name  at.num  mass   charge  ptype  sigma   epsilon
+C       0       12.011 0.000   A      {mol_sigma_nm:.6f}   {mol_eps_kj_mol:.6f}
+X       0       1.000  0.000   A      {frag_sigma_nm:.6f}   {frag_eps_kj_mol:.6f}
+""",
+    )
+
+    frag = work / "frag.itp"
+    _write_text(
+        frag,
+        f"""
+[ moleculetype ]
+FRG  1
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge  mass
+1   X     1      FRG      X     1     {frag_charge:.6f}   1.000
+""",
+    )
+
+    top_ins = work / "sys_ins.top"
+    _write_text(
+        top_ins,
+        f"""
+[ defaults ]
+1 2 yes 0.5 0.8333
+
+[ moleculetype ]
+MOL  2
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge  mass
+1   C     1      MOL      C     1     {mol_charge:.6f}   12.011
+
+[ moleculetype ]
+FRG  1
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge  mass
+1   X     1      FRG      X     1     {frag_charge:.6f}   1.000
+
+[ system ]
+Minimal
+
+[ molecules ]
+MOL  1
+""",
+    )
+
+    top_del = work / "sys_del.top"
+    _write_text(
+        top_del,
+        f"""
+[ defaults ]
+1 2 yes 0.5 0.8333
+
+[ moleculetype ]
+MOL  2
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge  mass
+1   C     1      MOL      C     1     {mol_charge:.6f}   12.011
+
+[ moleculetype ]
+FRG  1
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge  mass
+1   X     1      FRG      X     1     {frag_charge:.6f}   1.000
+
+[ system ]
+Minimal
+
+[ molecules ]
+MOL  1
+FRG  1
+""",
+    )
+
+    return {
+        "pdb": pdb,
+        "par": par,
+        "frag": frag,
+        "top_ins": top_ins,
+        "top_del": top_del,
+    }
+
+
 def test_acceptance_formula_insertion_and_deletion_ideal_gas(gcmc_cpu, temp_dir):
     work = Path(temp_dir) / "physical_contracts" / "acceptance"
     work.mkdir(parents=True, exist_ok=True)
@@ -477,6 +592,185 @@ mc_move_prob:1 0 0 0
 
     expected = _coulomb_energy_kj_mol(r_nm=r_nm, q1=0.500, q2=-0.250)
     assert float(rec["deltaU"]) == pytest.approx(expected, rel=1e-3, abs=1e-2)
+
+
+def test_insertion_deltaU_matches_analytic_lj_plus_coulomb_energy(gcmc_cpu, temp_dir):
+    work = Path(temp_dir) / "physical_contracts" / "lj_coulomb_insertion"
+    work.mkdir(parents=True, exist_ok=True)
+
+    files = _write_charged_single_atom_system(
+        work,
+        mol_charge=0.500,
+        frag_charge=-0.250,
+        mol_sigma_nm=0.300,
+        mol_eps_kj_mol=0.200,
+        frag_sigma_nm=0.280,
+        frag_eps_kj_mol=0.100,
+    )
+
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    accept_log = work / "out" / "acceptance.jsonl"
+
+    inp = work / "test.inp"
+    _write_inp(
+        inp,
+        f"""
+random_seed:97531
+par:{files["par"]}
+fragitp:{files["frag"]}
+fragname:FRG
+fragconc:0.0
+fragmuex:30.0
+
+pdb:{files["pdb"]}
+top:{files["top_ins"]}
+box_size:30.0 30.0 30.0
+gcmc_region:box 18.0 15.0 15.0 19.0 16.0 16.0
+cutoff:6.0
+temperature:300.0
+moves_per_step:1
+mcsteps:1
+nprint:1
+mc_move_prob:1 0 0 0
+""",
+    )
+
+    result = _run_gcmc_cpu(
+        gcmc_cpu,
+        workdir=work,
+        inp=inp,
+        out_prefix=out_prefix,
+        extra_args=["--dump-accept", str(accept_log)],
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    rec = _first_accept_record(accept_log, move="insertion", species="FRG")
+    assert bool(rec.get("accepted")) is True
+
+    final_pdb = Path(f"{out_prefix}_final.pdb")
+    assert final_pdb.exists()
+
+    box_ang = _read_cryst1_box_angstrom(final_pdb)
+    mol_pos = _first_atom_xyz_angstrom(final_pdb, resname="MOL")
+    frg_pos = _first_atom_xyz_angstrom(final_pdb, resname="FRG")
+    dx, dy, dz = _min_image_delta_nm(mol_pos, frg_pos, box_ang=box_ang)
+    r_nm = math.sqrt(dx * dx + dy * dy + dz * dz)
+
+    cutoff_nm = 6.0 / 10.0
+    assert r_nm < cutoff_nm
+
+    sigma_mix = 0.5 * (0.300 + 0.280)
+    eps_mix = math.sqrt(0.200 * 0.100)
+    expected = _lj_energy_kj_mol(
+        r_nm=r_nm, sigma_nm=sigma_mix, eps_kj_mol=eps_mix
+    ) + _coulomb_energy_kj_mol(r_nm=r_nm, q1=0.500, q2=-0.250)
+    assert float(rec["deltaU"]) == pytest.approx(expected, rel=1e-3, abs=1e-2)
+
+
+def test_deletion_deltaU_is_negative_of_insertion_for_charged_system(gcmc_cpu, temp_dir):
+    work = Path(temp_dir) / "physical_contracts" / "charged_deltaU_symmetry"
+    work.mkdir(parents=True, exist_ok=True)
+
+    files = _write_charged_single_atom_system(
+        work,
+        mol_charge=0.400,
+        frag_charge=-0.200,
+        mol_sigma_nm=0.320,
+        mol_eps_kj_mol=0.000,
+        frag_sigma_nm=0.280,
+        frag_eps_kj_mol=0.000,
+    )
+
+    ins_prefix = work / "ins" / "gcmc"
+    ins_prefix.parent.mkdir(parents=True, exist_ok=True)
+    ins_accept = work / "ins" / "acceptance.jsonl"
+    ins_inp = work / "ins" / "test.inp"
+    _write_inp(
+        ins_inp,
+        f"""
+random_seed:8642
+par:{files["par"]}
+fragitp:{files["frag"]}
+fragname:FRG
+fragconc:0.0
+fragmuex:30.0
+
+pdb:{files["pdb"]}
+top:{files["top_ins"]}
+box_size:30.0 30.0 30.0
+gcmc_region:box 18.0 15.0 15.0 19.0 16.0 16.0
+cutoff:6.0
+temperature:300.0
+moves_per_step:1
+mcsteps:1
+nprint:1
+mc_move_prob:1 0 0 0
+""",
+    )
+
+    ins_result = _run_gcmc_cpu(
+        gcmc_cpu,
+        workdir=work / "ins",
+        inp=ins_inp,
+        out_prefix=ins_prefix,
+        extra_args=["--dump-accept", str(ins_accept)],
+        timeout=30,
+    )
+    assert ins_result.returncode == 0, ins_result.stdout + ins_result.stderr
+
+    ins_rec = _first_accept_record(ins_accept, move="insertion", species="FRG")
+    assert bool(ins_rec.get("accepted")) is True
+
+    deltaU_ins = float(ins_rec["deltaU"])
+    assert abs(deltaU_ins) > 1e-6
+
+    final_pdb = Path(f"{ins_prefix}_final.pdb")
+    assert final_pdb.exists()
+
+    del_prefix = work / "del" / "gcmc"
+    del_prefix.parent.mkdir(parents=True, exist_ok=True)
+    del_accept = work / "del" / "acceptance.jsonl"
+    del_inp = work / "del" / "test.inp"
+    _write_inp(
+        del_inp,
+        f"""
+random_seed:97531
+par:{files["par"]}
+fragitp:{files["frag"]}
+fragname:FRG
+fragconc:0.0
+fragmuex:30.0
+
+pdb:{final_pdb}
+top:{files["top_del"]}
+box_size:30.0 30.0 30.0
+gcmc_region:box 18.0 15.0 15.0 19.0 16.0 16.0
+cutoff:6.0
+temperature:300.0
+moves_per_step:1
+mcsteps:1
+nprint:1
+mc_move_prob:0 1 0 0
+""",
+    )
+
+    del_result = _run_gcmc_cpu(
+        gcmc_cpu,
+        workdir=work / "del",
+        inp=del_inp,
+        out_prefix=del_prefix,
+        extra_args=["--dump-accept", str(del_accept)],
+        timeout=30,
+    )
+    assert del_result.returncode == 0, del_result.stdout + del_result.stderr
+
+    del_rec = _first_accept_record(del_accept, move="deletion", species="FRG")
+    assert int(del_rec.get("nBefore", 0)) == 1
+
+    deltaU_del = float(del_rec["deltaU"])
+    assert deltaU_del == pytest.approx(-deltaU_ins, rel=1e-4, abs=1e-2)
 
 
 def test_poisson_number_distribution_ideal_gas():

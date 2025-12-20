@@ -109,6 +109,8 @@ from cpu_cli.physical_contracts import (
     test_poisson_number_distribution_ideal_gas,
     test_cutoff_excludes_far_lj_interactions_in_insertion_energy,
     test_insertion_deltaU_matches_analytic_coulomb_energy,
+    test_insertion_deltaU_matches_analytic_lj_plus_coulomb_energy,
+    test_deletion_deltaU_is_negative_of_insertion_for_charged_system,
 )
 
 # Movement step-size parameter compatibility (1 function)

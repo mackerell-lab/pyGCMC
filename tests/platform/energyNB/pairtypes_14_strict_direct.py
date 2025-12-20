@@ -46,7 +46,7 @@ MOL  1
 2 3 1
 3 4 1
 
-[ dihedrals ]
+[ dihedrals
 1 2 3 4 1
 
 [ system ]
