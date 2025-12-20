@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import math
+import statistics
 import sys
 from pathlib import Path
 
@@ -21,6 +22,7 @@ import pytest
 from .inp_units_compat_helpers import _run_gcmc_cpu, _write_inp
 
 COULOMB = 138.935458  # kJ·nm/mol/e^2
+MOLAR_TO_NM3 = 0.6022140857  # mol/L -> particles/nm^3
 
 
 def _write_text(path: Path, content: str) -> None:
@@ -348,6 +350,89 @@ mc_move_prob:1 1 0 0
         int(rec_del["nBefore"]) / (float(rec_del["z"]) * float(rec_del["vBox"])),
     )
     assert float(rec_del["pAcc"]) == pytest.approx(expected_del, rel=1e-12, abs=1e-12)
+
+
+def test_mu_targets_stable_concentration_with_insertion_and_deletion(gcmc_cpu, temp_dir):
+    work = Path(temp_dir) / "physical_contracts" / "mu_stability"
+    work.mkdir(parents=True, exist_ok=True)
+
+    par, frag = _write_ideal_gas_itp(work)
+
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    accept_log = work / "out" / "acceptance.jsonl"
+
+    target_mean = 3.0
+    fragconc_m = 10.0
+    beta = 1.0 / (0.008314462618 * 300.0)
+    target_z = target_mean  # V = 1 nm^3
+    mu_kj = math.log(target_z / (fragconc_m * MOLAR_TO_NM3)) / beta
+    fragmuex_kcal = mu_kj / 4.184
+
+    inp = work / "test.inp"
+    _write_inp(
+        inp,
+        f"""
+random_seed:314159
+par:{par}
+fragitp:{frag}
+fragname:X
+fragconc:{fragconc_m}
+fragmuex:{fragmuex_kcal}
+
+box_size:10.0 10.0 10.0
+gcmc_region:box 0 0 0 10 10 10
+cutoff:4.0
+temperature:300.0
+moves_per_step:1
+mcsteps:2000
+nprint:2000
+mc_move_prob:1 1 0 0
+""",
+    )
+
+    result = _run_gcmc_cpu(
+        gcmc_cpu,
+        workdir=work,
+        inp=inp,
+        out_prefix=out_prefix,
+        extra_args=["--dump-accept", str(accept_log)],
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    records = _load_accept_records(accept_log)
+    assert records, "No acceptance records were produced"
+
+    species_records = [
+        r for r in records
+        if str(r.get("species", "")).strip().upper() == "X"
+    ]
+    assert species_records, "No acceptance records for species X"
+
+    expected_z = fragconc_m * MOLAR_TO_NM3 * math.exp(beta * mu_kj)
+    log_z = float(species_records[0]["z"])
+    assert log_z == pytest.approx(expected_z, rel=2e-3, abs=1e-4)
+
+    burnin = 200
+    sample_records = species_records[burnin:] if len(species_records) > burnin else species_records
+
+    n_values = [int(r["nBefore"]) for r in sample_records if "nBefore" in r]
+    assert n_values, "No nBefore values found in acceptance records"
+
+    mean_n = statistics.mean(n_values)
+    expected_mean = expected_z * float(species_records[0]["vBox"])
+    assert mean_n == pytest.approx(expected_mean, rel=0.25, abs=0.5)
+
+    ins_attempts = [r for r in sample_records if str(r.get("move", "")).strip().lower() == "insertion"]
+    del_attempts = [r for r in sample_records if str(r.get("move", "")).strip().lower() == "deletion"]
+    assert len(ins_attempts) > 0
+    assert len(del_attempts) > 0
+
+    ins_accepts = [r for r in ins_attempts if bool(r.get("accepted"))]
+    del_accepts = [r for r in del_attempts if bool(r.get("accepted"))]
+    assert len(ins_accepts) > 0
+    assert len(del_accepts) > 0
 
 
 def test_cutoff_excludes_far_lj_interactions_in_insertion_energy(gcmc_cpu, temp_dir):

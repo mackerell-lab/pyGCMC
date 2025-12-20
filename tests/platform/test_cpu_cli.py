@@ -106,6 +106,7 @@ from cpu_cli.movement_energy_translation_rotation import (
 # Physical-contract GCMC checks (3 functions)
 from cpu_cli.physical_contracts import (
     test_acceptance_formula_insertion_and_deletion_ideal_gas,
+    test_mu_targets_stable_concentration_with_insertion_and_deletion,
     test_poisson_number_distribution_ideal_gas,
     test_cutoff_excludes_far_lj_interactions_in_insertion_energy,
     test_insertion_deltaU_matches_analytic_coulomb_energy,
