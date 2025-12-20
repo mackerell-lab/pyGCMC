@@ -20,6 +20,8 @@ import pytest
 
 from .inp_units_compat_helpers import _run_gcmc_cpu, _write_inp
 
+COULOMB = 138.935458  # kJ·nm/mol/e^2
+
 
 def _write_text(path: Path, content: str) -> None:
     path.write_text(content.strip() + "\n")
@@ -97,6 +99,10 @@ def _lj_energy_kj_mol(*, r_nm: float, sigma_nm: float, eps_kj_mol: float) -> flo
     sigma_r6 = sigma_r2 * sigma_r2 * sigma_r2
     sigma_r12 = sigma_r6 * sigma_r6
     return 4.0 * eps_kj_mol * (sigma_r12 - sigma_r6)
+
+
+def _coulomb_energy_kj_mol(*, r_nm: float, q1: float, q2: float) -> float:
+    return COULOMB * q1 * q2 / r_nm
 
 
 def _write_ideal_gas_itp(work: Path) -> tuple[Path, Path]:
@@ -351,6 +357,126 @@ mc_move_prob:1 0 0 0
         r_nm=r_nm, sigma_nm=sigma_mix, eps_kj_mol=eps_mix
     )
     assert float(rec["deltaU"]) == pytest.approx(expected, abs=1e-6)
+
+
+def test_insertion_deltaU_matches_analytic_coulomb_energy(gcmc_cpu, temp_dir):
+    work = Path(temp_dir) / "physical_contracts" / "coulomb_insertion"
+    work.mkdir(parents=True, exist_ok=True)
+
+    pdb = work / "sys.pdb"
+    _write_text(
+        pdb,
+        """
+CRYST1   30.000   30.000   30.000  90.00  90.00  90.00 P 1           1
+ATOM      1  C   MOL A   1      15.000  15.000  15.000  1.00  0.00           C
+END
+""",
+    )
+
+    top = work / "sys.top"
+    _write_text(
+        top,
+        """
+[ defaults ]
+1 2 yes 0.5 0.8333
+
+[ moleculetype ]
+MOL  2
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge  mass
+1   C     1      MOL      C     1     0.500   12.011
+
+[ system ]
+Minimal
+
+[ molecules ]
+MOL  1
+""",
+    )
+
+    par = work / "par.itp"
+    _write_text(
+        par,
+        """
+[ defaults ]
+1 2 yes 0.5 0.8333
+
+[ atomtypes ]
+; name  at.num  mass   charge  ptype  sigma   epsilon
+C       0       12.011 0.000   A      0.320   0.000
+X       0       1.000  0.000   A      0.280   0.000
+""",
+    )
+
+    frag = work / "frag.itp"
+    _write_text(
+        frag,
+        """
+[ moleculetype ]
+FRG  1
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge  mass
+1   X     1      FRG      X     1     -0.250  1.000
+""",
+    )
+
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    accept_log = work / "out" / "acceptance.jsonl"
+
+    inp = work / "test.inp"
+    _write_inp(
+        inp,
+        f"""
+random_seed:2468
+par:{par}
+fragitp:{frag}
+fragname:FRG
+fragconc:0.0
+fragmuex:50.0
+
+pdb:{pdb}
+top:{top}
+box_size:30.0 30.0 30.0
+gcmc_region:box 14.0 14.0 14.0 16.0 16.0 16.0
+cutoff:6.0
+temperature:300.0
+moves_per_step:1
+mcsteps:1
+nprint:1
+mc_move_prob:1 0 0 0
+""",
+    )
+
+    result = _run_gcmc_cpu(
+        gcmc_cpu,
+        workdir=work,
+        inp=inp,
+        out_prefix=out_prefix,
+        extra_args=["--dump-accept", str(accept_log)],
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    rec = _first_accept_record(accept_log, move="insertion", species="FRG")
+    assert bool(rec.get("accepted")) is True
+
+    final_pdb = Path(f"{out_prefix}_final.pdb")
+    assert final_pdb.exists()
+
+    box_ang = _read_cryst1_box_angstrom(final_pdb)
+    mol_pos = _first_atom_xyz_angstrom(final_pdb, resname="MOL")
+    frg_pos = _first_atom_xyz_angstrom(final_pdb, resname="FRG")
+    dx, dy, dz = _min_image_delta_nm(mol_pos, frg_pos, box_ang=box_ang)
+    r_nm = math.sqrt(dx * dx + dy * dy + dz * dz)
+
+    cutoff_nm = 6.0 / 10.0
+    assert r_nm < cutoff_nm
+
+    expected = _coulomb_energy_kj_mol(r_nm=r_nm, q1=0.500, q2=-0.250)
+    assert float(rec["deltaU"]) == pytest.approx(expected, rel=1e-3, abs=1e-2)
 
 
 def test_poisson_number_distribution_ideal_gas():

@@ -54,6 +54,13 @@ from energyNB.nonbonded_energy import (
     test_zero_distance_handling
 )
 
+# Analytic energy contracts (LJ/Coulomb)
+from energyNB.analytic_energy_contracts import (
+    test_system_energy_lj_only_analytic,
+    test_system_energy_coulomb_only_analytic,
+    test_system_energy_components_mixed_analytic
+)
+
 # Non-bonded system-wide tests
 from energyNB.nonbonded_system import (
     test_all_residues_nonbonded,
@@ -74,6 +81,12 @@ from energyNB.nonbonded_pbc_basic import (
 
 from energyNB.nonbonded_pbc_advanced import (
     test_pbc_cross_boundary
+)
+
+# Cutoff/PBC contracts
+from energyNB.cutoff_pbc_contracts import (
+    test_cutoff_excludes_far_pair,
+    test_pbc_minimum_image_distance
 )
 
 # Pairtypes strict (1-4) behavior for DIRECT cutoff
