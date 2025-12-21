@@ -107,26 +107,41 @@ def _coulomb_energy_kj_mol(*, r_nm: float, q1: float, q2: float) -> float:
     return COULOMB * q1 * q2 / r_nm
 
 
-def _expected_pacc_with_cavity(rec: dict, move: str) -> float:
+def _expected_pacc_from_record(rec: dict) -> float | None:
+    move = str(rec.get("move", "")).strip().lower()
     beta = float(rec["beta"])
     deltaU = float(rec["deltaU"])
-    n_before = int(rec["nBefore"])
-    z = max(float(rec["z"]), 1e-30)
-    v_box = float(rec["vBox"])
-    cavity = max(float(rec["cavityFraction"]), 1e-30)
-    q_forward = max(float(rec["qForward"]), 1e-30)
-    q_reverse = max(float(rec["qReverse"]), 1e-30)
-    proposal_ratio = float(rec.get("proposalRatio", 1.0))
 
-    if move == "insertion":
-        base = (z * v_box * cavity / (n_before + 1)) * math.exp(-beta * deltaU)
-    else:
-        if n_before <= 0:
+    if move in ("insertion", "deletion"):
+        n_before = int(rec["nBefore"])
+        if move == "deletion" and n_before <= 0:
             return 0.0
-        base = (n_before / (z * v_box * cavity)) * math.exp(-beta * deltaU)
+        z = max(float(rec["z"]), 1e-30)
+        v_eff = max(float(rec.get("vEff", rec["vBox"])), 1e-30)
+        q_forward = max(float(rec["qForward"]), 1e-30)
+        q_reverse = max(float(rec["qReverse"]), 1e-30)
+        proposal_ratio = float(rec.get("proposalRatio", 1.0))
 
-    base *= (q_forward / q_reverse) * proposal_ratio
-    return min(1.0, base)
+        if move == "insertion":
+            ratio = (z * v_eff / (n_before + 1)) * math.exp(-beta * deltaU)
+        else:
+            ratio = (n_before / (z * v_eff)) * math.exp(-beta * deltaU)
+
+        ratio *= (q_forward / q_reverse) * proposal_ratio
+        return min(1.0, ratio)
+
+    if move in ("translation", "rotation"):
+        bias = float(rec.get("bias", 1.0))
+        return min(1.0, math.exp(-beta * deltaU) * bias)
+
+    return None
+
+
+def _expected_pacc_with_cavity(rec: dict, move: str) -> float:
+    expected = _expected_pacc_from_record(rec)
+    if expected is None:
+        raise AssertionError(f"Unsupported move for acceptance closure: {move}")
+    return expected
 
 
 def _write_ideal_gas_itp(work: Path) -> tuple[Path, Path]:
@@ -446,6 +461,76 @@ mc_move_prob:1 1 0 0
     assert float(rec_del["pAcc"]) == pytest.approx(expected_del, rel=1e-12, abs=1e-12)
 
 
+def test_acceptance_log_pacc_matches_formula_all_moves(gcmc_cpu, temp_dir):
+    work = Path(temp_dir) / "physical_contracts" / "acceptance_all_moves"
+    work.mkdir(parents=True, exist_ok=True)
+
+    files = _write_charged_single_atom_system(
+        work,
+        mol_charge=0.0,
+        frag_charge=0.0,
+        mol_sigma_nm=0.34,
+        mol_eps_kj_mol=0.20,
+        frag_sigma_nm=0.28,
+        frag_eps_kj_mol=0.15,
+    )
+
+    out_prefix = work / "run" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    accept_log = work / "run" / "acceptance.jsonl"
+
+    inp = work / "run" / "test.inp"
+    _write_inp(
+        inp,
+        f"""
+random_seed:2468
+par:{files["par"]}
+fragitp:{files["frag"]}
+fragname:FRG
+fragconc:0.5
+fragmuex:0.0
+
+pdb:{files["pdb"]}
+top:{files["top_ins"]}
+box_size:30.0 30.0 30.0
+cutoff:8.0
+temperature:300.0
+moves_per_step:2
+mcsteps:150
+nprint:150
+mc_move_prob:1 1 1 1
+""",
+    )
+
+    result = _run_gcmc_cpu(
+        gcmc_cpu,
+        workdir=work / "run",
+        inp=inp,
+        out_prefix=out_prefix,
+        extra_args=["--dump-accept", str(accept_log)],
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    records = _load_accept_records(accept_log)
+    assert records, "Acceptance log unexpectedly empty"
+
+    seen = {"insertion": 0, "deletion": 0, "translation": 0, "rotation": 0}
+    for rec in records:
+        move = str(rec.get("move", "")).strip().lower()
+        if move not in seen:
+            continue
+        if float(rec.get("pAcc", -1.0)) < 0.0:
+            continue
+        expected = _expected_pacc_from_record(rec)
+        assert expected is not None
+        assert float(rec["pAcc"]) == pytest.approx(expected, rel=1e-6, abs=1e-10)
+        seen[move] += 1
+
+    for move, count in seen.items():
+        assert count >= 1, f"Expected at least one {move} record"
+
+
 def test_cavity_bias_pacc_matches_acceptance_formula(gcmc_cpu, temp_dir):
     work = Path(temp_dir) / "physical_contracts" / "cavity_bias"
     work.mkdir(parents=True, exist_ok=True)
@@ -511,11 +596,93 @@ mc_move_prob:0.5 0.5 0 0
     assert ins_rec is not None, "Expected at least one FRG insertion record"
     assert del_rec is not None, "Expected at least one FRG deletion record with nBefore > 0"
 
-    expected_ins = _expected_pacc_with_cavity(ins_rec, "insertion")
+    expected_ins = _expected_pacc_from_record(ins_rec)
     assert float(ins_rec["pAcc"]) == pytest.approx(expected_ins, rel=1e-6, abs=1e-6)
 
-    expected_del = _expected_pacc_with_cavity(del_rec, "deletion")
+    expected_del = _expected_pacc_from_record(del_rec)
     assert float(del_rec["pAcc"]) == pytest.approx(expected_del, rel=1e-6, abs=1e-6)
+
+
+def test_cbmc_cavity_bias_acceptance_closure(gcmc_cpu, temp_dir):
+    work = Path(temp_dir) / "physical_contracts" / "cbmc_cavity"
+    work.mkdir(parents=True, exist_ok=True)
+
+    files = _write_cavity_bias_system(work)
+
+    out_prefix = work / "run" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    accept_log = work / "run" / "acceptance.jsonl"
+    params_json = work / "run" / "params.json"
+
+    inp = work / "run" / "test.inp"
+    _write_inp(
+        inp,
+        f"""
+random_seed:4242
+par:{files["par"]}
+fragitp:{files["frag"]}
+fragname:FRG
+fragconc:0.5
+fragmuex:0.0
+
+pdb:{files["pdb"]}
+top:{files["top"]}
+box_size:30.0 30.0 30.0
+cutoff:8.0
+grid_dx:2.0
+probe_radius:2.8
+use_cavity_bias:yes
+use_conf_bias:yes
+num_conf_bias_trial:5
+use_vdw_radius_for_grid:yes
+exclude_hydrogens_from_grid:no
+temperature:300.0
+moves_per_step:1
+mcsteps:200
+nprint:200
+mc_move_prob:1 1 0 0
+""",
+    )
+
+    result = _run_gcmc_cpu(
+        gcmc_cpu,
+        workdir=work / "run",
+        inp=inp,
+        out_prefix=out_prefix,
+        extra_args=["--dump-accept", str(accept_log), "--dump-params", str(params_json)],
+        timeout=90,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    params = json.loads(params_json.read_text())
+    assert params["bias"]["use_cavity_bias"] is True
+    assert params["bias"]["use_conf_bias"] is True
+    assert int(params["bias"]["num_conf_bias_trials"]) == 5
+
+    records = _load_accept_records(accept_log)
+    insertions = [
+        r for r in records
+        if r.get("move") == "insertion"
+        and str(r.get("species", "")).strip().upper() == "FRG"
+    ]
+    deletions = [
+        r for r in records
+        if r.get("move") == "deletion"
+        and str(r.get("species", "")).strip().upper() == "FRG"
+        and int(r.get("nBefore", 0)) > 0
+    ]
+    assert insertions, "Expected insertion records for FRG"
+    assert deletions, "Expected deletion records for FRG with nBefore > 0"
+
+    max_trials = max(int(r.get("cbmcTrials", 0)) for r in insertions)
+    assert max_trials >= 5
+    min_cavity = min(float(r.get("cavityFraction", 1.0)) for r in insertions)
+    assert 0.0 < min_cavity < 0.999
+
+    for rec in insertions[:10] + deletions[:10]:
+        expected = _expected_pacc_from_record(rec)
+        assert expected is not None
+        assert float(rec["pAcc"]) == pytest.approx(expected, rel=1e-6, abs=1e-10)
 
 
 def test_mu_targets_stable_concentration_with_insertion_and_deletion(gcmc_cpu, temp_dir):
