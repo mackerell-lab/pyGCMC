@@ -2,6 +2,7 @@
 Test FragmentLibrary with real ITP parsing
 This test actually calls the parser through Python bindings and verifies the loaded data
 """
+import json
 import pytest
 from pathlib import Path
 import subprocess
@@ -41,17 +42,34 @@ class TestFragmentLibraryRealParsing:
 fragitp:{itp_files['sol']}
 box_size:10.0 10.0 10.0
 temperature:298.15
-mcsteps:10
+mcsteps:50
+nprint:10
 fragname:SOL
 fragconc:55.0
-fragmuex:-5.0
-nprint:1
+fragmuex:5.0
+mc_move_prob:1 0 0 0
+attempt_prob_ins:1.0
+attempt_prob_del:0.0
+attempt_prob_trn:0.0
+attempt_prob_rot:0.0
 """)
-            
+
             # Run gcmc_cpu with verbose to see fragment loading
             gcmc_cpu = Path(__file__).parent.parent.parent / "build" / "bin" / "gcmc_cpu"
+            accept_log = tmp_path / "accept.jsonl"
+            out_prefix = tmp_path / "out"
             result = subprocess.run(
-                [str(gcmc_cpu), "--inp", str(inp_file), "--seed", "42", "--verbose"],
+                [
+                    str(gcmc_cpu),
+                    "--inp",
+                    str(inp_file),
+                    "--seed",
+                    "42",
+                    "--prefix",
+                    str(out_prefix),
+                    "--dump-accept",
+                    str(accept_log),
+                ],
                 cwd=tmp_path,
                 capture_output=True,
                 text=True,
@@ -62,15 +80,13 @@ nprint:1
             for f in tmp_path.glob("gcmc_final.*"):
                 f.unlink()
             
-            # Verify the fragment was loaded
-            output = result.stdout + result.stderr
-            
-            # SOL should have been loaded
-            assert result.returncode != -11, "Segfault while loading SOL fragment"
-            
-            # Check for successful loading indicators
-            # The exact messages depend on the logging in FragmentLibrary
-            assert "SOL" in output or "sol" in output.lower(), "SOL fragment not mentioned in output"
+            assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+            assert accept_log.exists(), "Acceptance log missing"
+            records = [json.loads(line) for line in accept_log.read_text().splitlines() if line.strip()]
+            assert any(
+                rec.get("move") == "insertion" and str(rec.get("species", "")).upper() == "SOL"
+                for rec in records
+            ), "No SOL insertion attempts recorded"
     
     def test_load_acox_with_virtual_site(self, itp_files):
         """Test loading ACOX (acetone) with virtual site"""
@@ -83,16 +99,33 @@ nprint:1
 fragitp:{itp_files['acox']}
 box_size:10.0 10.0 10.0
 temperature:298.15
-mcsteps:10
+mcsteps:50
+nprint:10
 fragname:ACOX
 fragconc:1.0
-fragmuex:-0.5
-nprint:1
+fragmuex:5.0
+mc_move_prob:1 0 0 0
+attempt_prob_ins:1.0
+attempt_prob_del:0.0
+attempt_prob_trn:0.0
+attempt_prob_rot:0.0
 """)
             
             gcmc_cpu = Path(__file__).parent.parent.parent / "build" / "bin" / "gcmc_cpu"
+            accept_log = tmp_path / "accept.jsonl"
+            out_prefix = tmp_path / "out"
             result = subprocess.run(
-                [str(gcmc_cpu), "--inp", str(inp_file), "--seed", "42", "--verbose"],
+                [
+                    str(gcmc_cpu),
+                    "--inp",
+                    str(inp_file),
+                    "--seed",
+                    "42",
+                    "--prefix",
+                    str(out_prefix),
+                    "--dump-accept",
+                    str(accept_log),
+                ],
                 cwd=tmp_path,
                 capture_output=True,
                 text=True,
@@ -103,11 +136,13 @@ nprint:1
             for f in tmp_path.glob("gcmc_final.*"):
                 f.unlink()
             
-            # ACOX has 11 entries including 1 virtual site (LP)
-            assert result.returncode != -11, "Segfault while loading ACOX fragment"
-            
-            output = result.stdout + result.stderr
-            assert "ACOX" in output or "acox" in output.lower(), "ACOX fragment not mentioned"
+            assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+            assert accept_log.exists(), "Acceptance log missing"
+            records = [json.loads(line) for line in accept_log.read_text().splitlines() if line.strip()]
+            assert any(
+                rec.get("move") == "insertion" and str(rec.get("species", "")).upper() == "ACOX"
+                for rec in records
+            ), "No ACOX insertion attempts recorded"
     
     def test_load_charged_fragment(self, itp_files):
         """Test loading ACEY (acetate ion) with -1 charge"""
@@ -119,16 +154,33 @@ nprint:1
 fragitp:{itp_files['acey']}
 box_size:10.0 10.0 10.0
 temperature:298.15
-mcsteps:10
+mcsteps:50
+nprint:10
 fragname:ACEY
 fragconc:1.0
-fragmuex:-97.31
-nprint:1
+fragmuex:5.0
+mc_move_prob:1 0 0 0
+attempt_prob_ins:1.0
+attempt_prob_del:0.0
+attempt_prob_trn:0.0
+attempt_prob_rot:0.0
 """)
             
             gcmc_cpu = Path(__file__).parent.parent.parent / "build" / "bin" / "gcmc_cpu"
+            accept_log = tmp_path / "accept.jsonl"
+            out_prefix = tmp_path / "out"
             result = subprocess.run(
-                [str(gcmc_cpu), "--inp", str(inp_file), "--seed", "42"],
+                [
+                    str(gcmc_cpu),
+                    "--inp",
+                    str(inp_file),
+                    "--seed",
+                    "42",
+                    "--prefix",
+                    str(out_prefix),
+                    "--dump-accept",
+                    str(accept_log),
+                ],
                 cwd=tmp_path,
                 capture_output=True,
                 text=True,
@@ -139,7 +191,13 @@ nprint:1
             for f in tmp_path.glob("gcmc_final.*"):
                 f.unlink()
             
-            assert result.returncode != -11, "Segfault while loading charged fragment"
+            assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+            assert accept_log.exists(), "Acceptance log missing"
+            records = [json.loads(line) for line in accept_log.read_text().splitlines() if line.strip()]
+            assert any(
+                rec.get("move") == "insertion" and str(rec.get("species", "")).upper() == "ACEY"
+                for rec in records
+            ), "No ACEY insertion attempts recorded"
     
     def test_load_multiple_fragments(self, itp_files):
         """Test loading multiple fragment types in one simulation"""
@@ -153,16 +211,33 @@ fragitp:{itp_files['benx']}
 fragitp:{itp_files['acet']}
 box_size:20.0 20.0 20.0
 temperature:300.0
-mcsteps:10
+mcsteps:200
+nprint:50
 fragname:SOL BENX ACET
 fragconc:55.0 1.0 1.0
-fragmuex:-5.0 -0.79 -97.31
-nprint:1
+fragmuex:5.0 5.0 5.0
+mc_move_prob:1 0 0 0
+attempt_prob_ins:1.0
+attempt_prob_del:0.0
+attempt_prob_trn:0.0
+attempt_prob_rot:0.0
 """)
             
             gcmc_cpu = Path(__file__).parent.parent.parent / "build" / "bin" / "gcmc_cpu"
+            accept_log = tmp_path / "accept.jsonl"
+            out_prefix = tmp_path / "out"
             result = subprocess.run(
-                [str(gcmc_cpu), "--inp", str(inp_file), "--seed", "42", "--verbose"],
+                [
+                    str(gcmc_cpu),
+                    "--inp",
+                    str(inp_file),
+                    "--seed",
+                    "42",
+                    "--prefix",
+                    str(out_prefix),
+                    "--dump-accept",
+                    str(accept_log),
+                ],
                 cwd=tmp_path,
                 capture_output=True,
                 text=True,
@@ -173,13 +248,12 @@ nprint:1
             for f in tmp_path.glob("gcmc_final.*"):
                 f.unlink()
             
-            assert result.returncode != -11, "Segfault while loading multiple fragments"
-            
-            output = result.stdout + result.stderr
-            
-            # The key test is that it doesn't segfault with multiple fragments
-            # Return code may be non-zero due to other issues, but should not be -11 (segfault)
-            assert result.returncode != -11, f"Segfault with multiple fragments (return code: {result.returncode})"
+            assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+            assert accept_log.exists(), "Acceptance log missing"
+            records = [json.loads(line) for line in accept_log.read_text().splitlines() if line.strip()]
+            seen_species = {str(rec.get("species", "")).upper() for rec in records if rec.get("move") == "insertion"}
+            expected = {"SOL", "BENX", "ACET"}
+            assert expected.issubset(seen_species), f"Missing insertion attempts for: {expected - seen_species}"
     
     def test_invalid_itp_file(self):
         """Test handling of invalid ITP file"""

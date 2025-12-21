@@ -3,10 +3,10 @@ Theoretical validation tests for gcmc_cpu
 基于GCMC统计力学理论的验证测试
 """
 
+import json
 import pytest
 import numpy as np
 import subprocess
-import tempfile
 import re
 from pathlib import Path
 
@@ -91,8 +91,24 @@ WAT     2
             inp_content = "inp_units:nm\n" + inp_content
         inp_file.write_text(inp_content)
 
+        prefix = tmpdir / "run"
+        accept_log = tmpdir / "accept.jsonl"
+        params_json = tmpdir / "params.json"
+
         result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", str(seed)],
+            [
+                str(GCMC_CPU_PATH),
+                "--inp",
+                str(inp_file),
+                "--seed",
+                str(seed),
+                "--prefix",
+                str(prefix),
+                "--dump-accept",
+                str(accept_log),
+                "--dump-params",
+                str(params_json),
+            ],
             cwd=str(tmpdir),
             capture_output=True,
             text=True,
@@ -105,28 +121,42 @@ WAT     2
             "acceptance_rate": 0.0,
             "insert_accept": 0.0,
             "delete_accept": 0.0,
-            "stdout": result.stdout,
-            "returncode": result.returncode
+            "returncode": result.returncode,
+            "params": {},
+            "accept_log": accept_log,
+            "final_pdb": Path(f"{prefix}_final.pdb"),
         }
 
-        # Extract final molecule count
-        count_matches = re.findall(r'WAT:\s+(\d+)', result.stdout)
-        if count_matches:
-            metrics["final_count"] = int(count_matches[-1])
+        if params_json.exists():
+            metrics["params"] = json.loads(params_json.read_text())
 
-        # Extract acceptance rates
-        accept_match = re.search(r'Total acceptance rate:\s+([\d.]+)%', result.stdout)
-        if accept_match:
-            metrics["acceptance_rate"] = float(accept_match.group(1))
+        if metrics["final_pdb"].exists():
+            water_resids = set()
+            for line in metrics["final_pdb"].read_text().splitlines():
+                if not line.startswith(("ATOM", "HETATM")):
+                    continue
+                if line[17:20].strip().upper() != "WAT":
+                    continue
+                try:
+                    resid = int(line[22:26])
+                except ValueError:
+                    continue
+                water_resids.add(resid)
+            metrics["final_count"] = len(water_resids)
 
-        # Extract per-move acceptance
-        insert_match = re.search(r'Insert.*accept:\s+([\d.]+)%', result.stdout)
-        if insert_match:
-            metrics["insert_accept"] = float(insert_match.group(1))
-
-        delete_match = re.search(r'Delete.*accept:\s+([\d.]+)%', result.stdout)
-        if delete_match:
-            metrics["delete_accept"] = float(delete_match.group(1))
+        if accept_log.exists():
+            records = [json.loads(line) for line in accept_log.read_text().splitlines() if line.strip()]
+            ins = [r for r in records if r.get("move") == "insertion" and r.get("species") == "WAT"]
+            dele = [r for r in records if r.get("move") == "deletion" and r.get("species") == "WAT"]
+            metrics["insert_accept"] = (
+                sum(1 for r in ins if bool(r.get("accepted"))) / max(len(ins), 1)
+            )
+            metrics["delete_accept"] = (
+                sum(1 for r in dele if bool(r.get("accepted"))) / max(len(dele), 1)
+            )
+            metrics["acceptance_rate"] = (
+                sum(1 for r in records if bool(r.get("accepted"))) / max(len(records), 1)
+            )
 
         return metrics
 
@@ -289,8 +319,7 @@ fragmuex:2.0
 
             print(f"Verified {len(water_oxygens)} waters all within sphere constraint")
         else:
-            # If no PDB output, at least verify the constraint was recognized
-            assert "sphere" in metrics["stdout"].lower(), "Sphere constraint should be mentioned"
+            raise AssertionError("Expected region output PDB not found")
 
     def test_nbar_modes(self, tmp_path):
         """Test different nbar activity modes"""
@@ -536,10 +565,7 @@ fragconf:3
 """
         metrics = self.run_gcmc(inp_content, tmp_path, steps=1000)
 
-        # Check that CBMC was recognized
-        assert "configuration bias" in metrics["stdout"].lower() or \
-               "conf" in metrics["stdout"].lower(), \
-               "CBMC configuration should be mentioned in output"
+        assert metrics["params"].get("bias", {}).get("use_conf_bias") is True
 
         # Check simulation ran successfully
         assert metrics["returncode"] == 0, "CBMC simulation should run successfully"
@@ -575,26 +601,27 @@ attempt_prob_rot:0.4
         # Verify the simulation ran successfully
         assert metrics["returncode"] == 0, "Simulation with custom move probabilities should run"
 
-        # Parse the actual CDF values from output
-        # Look for pattern like: "WAT cdf: [0.1, 0.3, 0.6, 1]"
-        cdf_pattern = r"WAT\s+cdf:\s*\[([\d.,\s]+)\]"
-        cdf_match = re.search(cdf_pattern, metrics["stdout"])
+        assert metrics["accept_log"].exists(), "Acceptance log missing"
+        records = [json.loads(line) for line in metrics["accept_log"].read_text().splitlines() if line.strip()]
+        counts = {"insertion": 0, "deletion": 0, "translation": 0, "rotation": 0}
+        for rec in records:
+            if rec.get("species") != "WAT":
+                continue
+            move = rec.get("move")
+            if move in counts:
+                counts[move] += 1
+        total = sum(counts.values())
+        assert total > 0, "No move attempts recorded"
 
-        assert cdf_match, "CDF values should be printed in output"
-
-        # Parse the CDF values
-        cdf_str = cdf_match.group(1)
-        cdf_values = [float(x.strip()) for x in cdf_str.split(',')]
-
-        # Expected CDF for 1:2:3:4 ratio
-        expected_cdf = [0.1, 0.3, 0.6, 1.0]
-
-        assert len(cdf_values) == 4, f"Should have 4 CDF values, got {len(cdf_values)}"
-
-        # Verify CDF values match expected (with small tolerance for floating point)
-        for i, (actual, expected) in enumerate(zip(cdf_values, expected_cdf)):
-            assert abs(actual - expected) < 0.001, \
-                f"CDF[{i}]: expected {expected}, got {actual}. Full CDF: {cdf_values}"
+        expected = {
+            "insertion": 0.1,
+            "deletion": 0.2,
+            "translation": 0.3,
+            "rotation": 0.4,
+        }
+        for move, exp in expected.items():
+            frac = counts[move] / total
+            assert abs(frac - exp) < 0.05, f"{move} fraction {frac:.3f} != {exp:.3f}"
 
     def test_cavity_bias(self, tmp_path):
         """Test cavity bias configuration"""

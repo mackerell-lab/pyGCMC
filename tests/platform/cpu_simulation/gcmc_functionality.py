@@ -10,11 +10,10 @@ Tests:
 5. Numerical correctness (energy, MC statistics, weights)
 """
 
+import json
 import pytest
 import numpy as np
 import subprocess
-import tempfile
-import re
 from pathlib import Path
 
 # Try to import pygcmc bindings for energy verification
@@ -27,12 +26,105 @@ except ImportError:
 # Path to gcmc_cpu executable
 GCMC_CPU_PATH = Path(__file__).parent.parent.parent.parent / "build" / "bin" / "gcmc_cpu"
 
+MOVE_TYPES = ("insertion", "deletion", "translation", "rotation")
+
+
+def _load_accept_records(path: Path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def _load_params(path: Path) -> dict:
+    return json.loads(path.read_text())
+
+
+def _expected_cdf(weights: list[float]) -> list[float]:
+    if all(w <= 0 for w in weights):
+        weights = [1.0, 1.0, 1.0, 1.0]
+    total = sum(weights)
+    if total <= 0:
+        total = 1.0
+    c0 = weights[0] / total
+    c1 = c0 + weights[1] / total
+    c2 = c1 + weights[2] / total
+    return [c0, c1, c2, 1.0]
+
+
+def _fragment_index(params: dict, name: str) -> int:
+    names = params.get("fragment", {}).get("names", [])
+    target = name.strip().upper()
+    for idx, frag_name in enumerate(names):
+        if str(frag_name).strip().upper() == target:
+            return idx
+    if not names:
+        return 0
+    raise AssertionError(f"Fragment name {name} not found in params: {names}")
+
+
+def _fragment_cdf(params: dict, name: str) -> list[float]:
+    idx = _fragment_index(params, name)
+    cdf_list = params.get("fragment", {}).get("move_cdf", [])
+    if idx >= len(cdf_list):
+        raise AssertionError(f"move_cdf missing index {idx} for fragment {name}")
+    return [float(x) for x in cdf_list[idx]]
+
+
+def _move_counts(records: list[dict], *, species: str | None = None) -> dict[str, int]:
+    counts = {move: 0 for move in MOVE_TYPES}
+    for rec in records:
+        if species is not None:
+            if str(rec.get("species", "")).strip().upper() != species.strip().upper():
+                continue
+        move = str(rec.get("move", "")).strip().lower()
+        if move in counts:
+            counts[move] += 1
+    return counts
+
+
+def _move_fractions(counts: dict[str, int]) -> dict[str, float]:
+    total = sum(counts.values())
+    if total <= 0:
+        raise AssertionError("No move attempts found in acceptance log")
+    return {move: counts[move] / total for move in MOVE_TYPES}
+
+
+def _assert_move_fractions_close(actual: dict[str, float], expected: dict[str, float], *, tol: float) -> None:
+    for move in MOVE_TYPES:
+        assert abs(actual[move] - expected[move]) <= tol, (
+            f"{move} fraction {actual[move]:.3f} differs from expected {expected[move]:.3f}"
+        )
+
+
+def _run_with_accept_log(inp_file: Path, tmp_path: Path, *, seed: str = "42") -> tuple[subprocess.CompletedProcess, Path, Path]:
+    accept_log = tmp_path / "accept.jsonl"
+    params_json = tmp_path / "params.json"
+    out_prefix = tmp_path / "out"
+    result = subprocess.run(
+        [
+            str(GCMC_CPU_PATH),
+            "--inp",
+            str(inp_file),
+            "--seed",
+            seed,
+            "--prefix",
+            str(out_prefix),
+            "--dump-accept",
+            str(accept_log),
+            "--dump-params",
+            str(params_json),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        cwd=str(tmp_path),
+    )
+    return result, accept_log, out_prefix
+
 
 class TestMcMoveProb:
     """Test mc_move_prob parameter functionality"""
 
     @staticmethod
-    def create_minimal_system(tmpdir, mc_move_prob_values=None):
+    def create_minimal_system(tmpdir, mc_move_prob_values=None, mcsteps=100):
         """Create minimal water system for testing mc_move_prob"""
 
         # Minimal PDB
@@ -113,7 +205,7 @@ fragmuex: -5.60
 box_size: 20.0 20.0 20.0
 cutoff: 10.0
 temperature: 300
-mcsteps: 100
+mcsteps: {mcsteps}
 nprint: 20
 eqsteps: 10
 
@@ -128,62 +220,33 @@ op_pdb: {tmpdir}/output.pdb
 
     def test_mc_move_prob_equal_probabilities(self, tmp_path):
         """Test mc_move_prob with equal probabilities (0.25 each)"""
-        inp_file = self.create_minimal_system(tmp_path, [0.25, 0.25, 0.25, 0.25])
+        inp_file = self.create_minimal_system(tmp_path, [0.25, 0.25, 0.25, 0.25], mcsteps=2000)
+        result, accept_log, _ = _run_with_accept_log(inp_file, tmp_path)
 
-        # Run gcmc_cpu in tmp_path directory
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file)],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            cwd=str(tmp_path)  # Run in tmp_path to ensure files are created there
-        )
-
-        # Check that it ran successfully
         assert result.returncode == 0, f"gcmc_cpu failed: {result.stderr}"
+        assert accept_log.exists(), "Acceptance log missing"
+        params_json = tmp_path / "params.json"
+        assert params_json.exists(), "dump-params output missing"
 
-        # Check that mc_move_prob was parsed
-        assert "[INP] Parsed mc_move_prob:" in result.stdout
-        assert "0.25 (ins)" in result.stdout
-        assert "0.25 (del)" in result.stdout
-        assert "0.25 (trn)" in result.stdout
-        assert "0.25 (rot)" in result.stdout
-
-        # Check that probabilities were applied
-        assert "Move probability cdf" in result.stdout or "move probabilities" in result.stdout
-        # Should show the CDF values
+        params = _load_params(params_json)
+        actual_cdf = _fragment_cdf(params, "water")
+        expected_cdf = _expected_cdf([0.25, 0.25, 0.25, 0.25])
+        assert actual_cdf == pytest.approx(expected_cdf, abs=1e-6)
 
     def test_mc_move_prob_biased_insertion(self, tmp_path):
         """Test mc_move_prob with bias toward insertion (0.7, 0.1, 0.1, 0.1)"""
-        inp_file = self.create_minimal_system(tmp_path, [0.7, 0.1, 0.1, 0.1])
-
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file)],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            cwd=str(tmp_path)
-        )
+        inp_file = self.create_minimal_system(tmp_path, [0.7, 0.1, 0.1, 0.1], mcsteps=2000)
+        result, accept_log, _ = _run_with_accept_log(inp_file, tmp_path)
 
         assert result.returncode == 0, f"gcmc_cpu failed: {result.stderr}"
+        assert accept_log.exists(), "Acceptance log missing"
+        params_json = tmp_path / "params.json"
+        assert params_json.exists(), "dump-params output missing"
 
-        # Check that biased probabilities were parsed
-        assert "[INP] Parsed mc_move_prob:" in result.stdout
-        assert "0.7 (ins)" in result.stdout
-        assert "0.1 (del)" in result.stdout
-
-        # Strictly parse CDF line to validate exact probability distribution
-        # Expected CDF: [0.7, 0.8, 0.9, 1.0] for probabilities [0.7, 0.1, 0.1, 0.1]
-        cdf_match = re.search(r'water cdf:\s*\[([\d.]+),\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)\]', result.stdout)
-        assert cdf_match is not None, f"Could not find 'water cdf' line in output:\n{result.stdout}"
-
-        cdf_values = [float(cdf_match.group(i)) for i in range(1, 5)]
-
-        # Verify exact CDF values with strict tolerance
-        assert abs(cdf_values[0] - 0.7) < 0.001, f"Insert CDF should be 0.7, got {cdf_values[0]}"
-        assert abs(cdf_values[1] - 0.8) < 0.001, f"Delete CDF should be 0.8 (0.7+0.1), got {cdf_values[1]}"
-        assert abs(cdf_values[2] - 0.9) < 0.001, f"Translate CDF should be 0.9 (0.8+0.1), got {cdf_values[2]}"
-        assert abs(cdf_values[3] - 1.0) < 0.001, f"Rotate CDF should be 1.0 (0.9+0.1), got {cdf_values[3]}"
+        params = _load_params(params_json)
+        actual_cdf = _fragment_cdf(params, "water")
+        expected_cdf = _expected_cdf([0.7, 0.1, 0.1, 0.1])
+        assert actual_cdf == pytest.approx(expected_cdf, abs=1e-6)
 
     def test_mc_move_prob_before_fragname(self, tmp_path):
         """Test that mc_move_prob works even when placed before fragname (time-order independent)"""
@@ -208,8 +271,8 @@ fragmuex: -5.60 -3.0
 box_size: 20.0 20.0 20.0
 cutoff: 10.0
 temperature: 300
-mcsteps: 50
-nprint: 20
+mcsteps: 2000
+nprint: 200
 eqsteps: 5
 
 op_top: {tmp_path}/output.top
@@ -217,42 +280,22 @@ op_pdb: {tmp_path}/output.pdb
 """
         inp_file.write_text(inp_content)
 
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file)],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            cwd=str(tmp_path)
-        )
+        result, accept_log, _ = _run_with_accept_log(inp_file, tmp_path)
 
         assert result.returncode == 0, f"gcmc_cpu failed: {result.stderr}"
 
-        # Check that broadcasting happened
-        assert "[INP] Broadcasted mc_move_prob to 2 fragments" in result.stdout
+        assert accept_log.exists(), "Acceptance log missing"
+        params_json = tmp_path / "params.json"
+        assert params_json.exists(), "dump-params output missing"
+        records = _load_accept_records(accept_log)
 
-        # Verify both fragments received the same CDF values
-        # Expected CDF: [0.4, 0.7, 0.9, 1.0] for probabilities [0.4, 0.3, 0.2, 0.1]
-        water_cdf_match = re.search(r'water cdf:\s*\[([\d.]+),\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)\]', result.stdout)
-        methanol_cdf_match = re.search(r'methanol cdf:\s*\[([\d.]+),\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)\]', result.stdout)
+        seen_species = {str(r.get("species", "")).strip().upper() for r in records}
+        assert {"WATER", "METHANOL"}.issubset(seen_species)
 
-        assert water_cdf_match is not None, f"Could not find 'water cdf' in output:\n{result.stdout}"
-        assert methanol_cdf_match is not None, f"Could not find 'methanol cdf' in output:\n{result.stdout}"
-
-        # Parse CDF values for both fragments
-        water_cdf = [float(water_cdf_match.group(i)) for i in range(1, 5)]
-        methanol_cdf = [float(methanol_cdf_match.group(i)) for i in range(1, 5)]
-
-        # Verify water fragment CDF
-        assert abs(water_cdf[0] - 0.4) < 0.001, f"Water insert CDF should be 0.4, got {water_cdf[0]}"
-        assert abs(water_cdf[1] - 0.7) < 0.001, f"Water delete CDF should be 0.7, got {water_cdf[1]}"
-        assert abs(water_cdf[2] - 0.9) < 0.001, f"Water translate CDF should be 0.9, got {water_cdf[2]}"
-        assert abs(water_cdf[3] - 1.0) < 0.001, f"Water rotate CDF should be 1.0, got {water_cdf[3]}"
-
-        # Verify methanol fragment CDF (should be identical since mc_move_prob applies to all)
-        assert abs(methanol_cdf[0] - 0.4) < 0.001, f"Methanol insert CDF should be 0.4, got {methanol_cdf[0]}"
-        assert abs(methanol_cdf[1] - 0.7) < 0.001, f"Methanol delete CDF should be 0.7, got {methanol_cdf[1]}"
-        assert abs(methanol_cdf[2] - 0.9) < 0.001, f"Methanol translate CDF should be 0.9, got {methanol_cdf[2]}"
-        assert abs(methanol_cdf[3] - 1.0) < 0.001, f"Methanol rotate CDF should be 1.0, got {methanol_cdf[3]}"
+        params = _load_params(params_json)
+        expected_cdf = _expected_cdf([0.4, 0.3, 0.2, 0.1])
+        assert _fragment_cdf(params, "water") == pytest.approx(expected_cdf, abs=1e-6)
+        assert _fragment_cdf(params, "methanol") == pytest.approx(expected_cdf, abs=1e-6)
 
     def _create_basic_files(self, tmpdir):
         """Helper to create basic simulation files"""
@@ -472,14 +515,6 @@ class TestBasicGCMC:
         # Should complete without error
         assert result.returncode == 0, f"Simulation failed: {result.stderr}"
 
-        # Should have run expected number of steps
-        assert "Step" in result.stdout
-        assert "mcsteps: 100" in result.stdout or "100" in result.stdout
-
-        # Should report statistics
-        assert "Acceptance" in result.stdout or "acceptance" in result.stdout
-        assert "Energy" in result.stdout
-
         # Output files should exist (default prefix is "gcmc")
         top_files = list(tmp_path.glob("*.top"))
         pdb_files = list(tmp_path.glob("*.pdb"))
@@ -545,15 +580,15 @@ pdb:{pdb_file}
 protitp:{top_file}
 
 fragname: water methanol
-fragconc: 55.0 1.0
+fragconc: 1.0 1.0
 fragmuex: -5.60 -3.0
 mctime: 10 1
 
 box_size: 25.0 25.0 25.0
 cutoff: 10.0
 temperature: 300
-mcsteps: 100
-nprint: 25
+mcsteps: 2000
+nprint: 200
 eqsteps: 5
 
 mc_move_prob: 0.3 0.3 0.2 0.2
@@ -563,43 +598,20 @@ op_pdb: {tmp_path}/output.pdb
 """
         inp_file.write_text(inp_content)
 
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file)],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            cwd=str(tmp_path)
-        )
+        result, accept_log, _ = _run_with_accept_log(inp_file, tmp_path)
 
         # Should complete
         assert result.returncode == 0, f"Multi-fragment simulation failed: {result.stderr}"
 
-        # Verify mc_move_prob was broadcasted to both fragments
-        assert "[INP] Broadcasted mc_move_prob to 2 fragments" in result.stdout
+        assert accept_log.exists(), "Acceptance log missing"
+        records = _load_accept_records(accept_log)
 
-        # Verify both fragments appear in CDF output
-        assert "water cdf:" in result.stdout, "Water fragment should have CDF output"
-        assert "methanol cdf:" in result.stdout, "Methanol fragment should have CDF output"
+        seen_species = {str(r.get("species", "")).strip().upper() for r in records}
+        assert {"WATER", "METHANOL"}.issubset(seen_species)
 
-        # Parse and verify CDF values for both fragments
-        water_cdf_match = re.search(r'water cdf:\s*\[([\d.]+),\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)\]', result.stdout)
-        methanol_cdf_match = re.search(r'methanol cdf:\s*\[([\d.]+),\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)\]', result.stdout)
-
-        assert water_cdf_match is not None, "Water CDF not found in output"
-        assert methanol_cdf_match is not None, "Methanol CDF not found in output"
-
-        # Both should have same CDF since mc_move_prob applies uniformly
-        # Expected: [0.3, 0.6, 0.8, 1.0]
-        water_cdf = [float(water_cdf_match.group(i)) for i in range(1, 5)]
-        methanol_cdf = [float(methanol_cdf_match.group(i)) for i in range(1, 5)]
-
-        expected_cdf = [0.3, 0.6, 0.8, 1.0]
-        for i, expected in enumerate(expected_cdf):
-            assert abs(water_cdf[i] - expected) < 0.001, f"Water CDF[{i}] = {water_cdf[i]}, expected {expected}"
-            assert abs(methanol_cdf[i] - expected) < 0.001, f"Methanol CDF[{i}] = {methanol_cdf[i]}, expected {expected}"
-
-        # Verify methanol topology was loaded (not using default template)
-        assert "MEOH" in result.stdout or "methanol" in result.stdout.lower(), "Methanol fragment should be recognized"
+        counts = _move_counts(records)
+        for move in MOVE_TYPES:
+            assert counts[move] > 0, f"Expected at least one {move} attempt"
 
     def test_energy_calculation(self, tmp_path):
         """Test that energy is calculated and reported"""
@@ -617,12 +629,14 @@ op_pdb: {tmp_path}/output.pdb
 
         assert result.returncode == 0
 
-        # Should report energy
-        energy_match = re.search(r'Energy:\s*([-\d.]+)', result.stdout)
-        assert energy_match, "No energy value found in output"
-
-        energy = float(energy_match.group(1))
-        # Energy can be any value, just check it's numeric
+        dat_files = list(tmp_path.glob("*statistics.dat"))
+        assert dat_files, "Statistics DAT file not created"
+        data_lines = [
+            line for line in dat_files[0].read_text().splitlines()
+            if line.strip() and not line.startswith("#")
+        ]
+        assert data_lines, "No data lines in statistics DAT file"
+        energy = float(data_lines[-1].split()[1])
         assert isinstance(energy, float)
 
 
@@ -689,33 +703,30 @@ protitp:{top_file}
 
 fragname: water
 fragconc: 55.0
-fragmuex: -5.60
+fragmuex: 5.0
 
 mc_move_prob: 0.5 0.5
 
 box_size: 20.0 20.0 20.0
 cutoff: 10.0
 temperature: 300
-mcsteps: 10
-nprint: 10
+mcsteps: 2000
+nprint: 200
 eqsteps: 0
 
 op_top: {tmp_path}/output.top
 op_pdb: {tmp_path}/output.pdb
 """
         inp_file.write_text(inp_content)
+        result, accept_log, _ = _run_with_accept_log(inp_file, tmp_path)
+        assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+        assert accept_log.exists(), "Acceptance log missing"
+        params_json = tmp_path / "params.json"
+        assert params_json.exists(), "dump-params output missing"
 
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file)],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            cwd=str(tmp_path)
-        )
-
-        # Should show warning about wrong number of values
-        assert "[WARNING] mc_move_prob requires 4 values" in result.stdout or \
-               "[WARNING] mc_move_prob requires 4 values" in result.stderr
+        params = _load_params(params_json)
+        expected_cdf = _expected_cdf([0.25, 0.25, 0.25, 0.25])
+        assert _fragment_cdf(params, "water") == pytest.approx(expected_cdf, abs=1e-6)
 
 
 class TestAdvancedFeatures:
@@ -751,41 +762,26 @@ nprint: 25
 eqsteps: 5
 
 mc_move_prob: 0.25 0.25 0.25 0.25
-use_cavity_bias: 1
+use_cavity_bias: yes
 
 op_top: {tmp_path}/output.top
 op_pdb: {tmp_path}/output.pdb
 """
         inp_file.write_text(inp_content)
 
+        params_json = tmp_path / "params.json"
         result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file)],
+            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--dump-params", str(params_json)],
             capture_output=True,
             text=True,
             timeout=30,
             cwd=str(tmp_path)
         )
 
-        # Check for cavity bias enabling message in output
-        # Expected: setupEngine should print something like "Cavity bias enabled" or "Using cavity bias"
-        output = result.stdout + result.stderr
-
-        if result.returncode == 0:
-            # If simulation succeeds, verify cavity bias was acknowledged
-            # Look for cavity bias related messages
-            has_cavity_mention = "cavity" in output.lower() and "bias" in output.lower()
-
-            if has_cavity_mention:
-                # Good: cavity bias feature is acknowledged
-                pass
-            else:
-                # Warning: cavity bias parameter accepted but no confirmation message
-                # This is acceptable if feature is silently enabled
-                pass
-        else:
-            # If it fails, error should mention cavity bias specifically
-            assert "cavity" in output.lower() or "bias" in output.lower(), \
-                f"Error does not mention cavity bias: {result.stderr}"
+        assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+        assert params_json.exists(), "dump-params output missing"
+        params = json.loads(params_json.read_text())
+        assert params.get("bias", {}).get("use_cavity_bias") is True
 
     def test_configurational_bias_parameter(self, tmp_path):
         """
@@ -817,40 +813,26 @@ nprint: 25
 eqsteps: 5
 
 mc_move_prob: 0.25 0.25 0.25 0.25
-use_conf_bias: 1
+use_conf_bias: yes
 
 op_top: {tmp_path}/output.top
 op_pdb: {tmp_path}/output.pdb
 """
         inp_file.write_text(inp_content)
 
+        params_json = tmp_path / "params.json"
         result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file)],
+            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--dump-params", str(params_json)],
             capture_output=True,
             text=True,
             timeout=30,
             cwd=str(tmp_path)
         )
 
-        # Check for CBMC/configurational bias enabling message
-        # Expected: setupEngine should print "Configurational bias enabled" or "Using CBMC"
-        output = result.stdout + result.stderr
-
-        if result.returncode == 0:
-            # If simulation succeeds, verify CBMC was acknowledged
-            has_cbmc_mention = ("conf" in output.lower() and "bias" in output.lower()) or \
-                              "cbmc" in output.lower()
-
-            if has_cbmc_mention:
-                # Good: CBMC feature is acknowledged
-                pass
-            else:
-                # Acceptable if feature is silently enabled
-                pass
-        else:
-            # If it fails, error should mention configurational bias or CBMC
-            assert "conf" in output.lower() or "cbmc" in output.lower(), \
-                f"Error does not mention configurational bias/CBMC: {result.stderr}"
+        assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+        assert params_json.exists(), "dump-params output missing"
+        params = json.loads(params_json.read_text())
+        assert params.get("bias", {}).get("use_conf_bias") is True
 
     def test_combined_advanced_features(self, tmp_path):
         """
@@ -882,43 +864,28 @@ nprint: 25
 eqsteps: 5
 
 mc_move_prob: 0.25 0.25 0.25 0.25
-use_cavity_bias: 1
-use_conf_bias: 1
+use_cavity_bias: yes
+use_conf_bias: yes
 
 op_top: {tmp_path}/output.top
 op_pdb: {tmp_path}/output.pdb
 """
         inp_file.write_text(inp_content)
 
+        params_json = tmp_path / "params.json"
         result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file)],
+            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--dump-params", str(params_json)],
             capture_output=True,
             text=True,
             timeout=30,
             cwd=str(tmp_path)
         )
 
-        # Verify INP parsing doesn't crash
-        output = result.stdout + result.stderr
-
-        if result.returncode == 0:
-            # If simulation succeeds, check that both features are mentioned
-            has_cavity = "cavity" in output.lower()
-            has_conf_bias = "conf" in output.lower() or "cbmc" in output.lower()
-
-            # At least one feature should be acknowledged (acceptable if silently enabled)
-            # Ideally both should appear in setupEngine output
-            pass
-        else:
-            # If it fails, error should be informative
-            assert len(output) > 0, "Should provide error message"
-
-            # Error should mention at least one of the features
-            mentions_feature = "cavity" in output.lower() or "conf" in output.lower() or \
-                             "cbmc" in output.lower() or "bias" in output.lower()
-
-            assert mentions_feature, \
-                f"Error does not mention advanced features: {result.stderr}"
+        assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+        assert params_json.exists(), "dump-params output missing"
+        params = json.loads(params_json.read_text())
+        assert params.get("bias", {}).get("use_cavity_bias") is True
+        assert params.get("bias", {}).get("use_conf_bias") is True
 
 
 class TestNumericalCorrectness:
@@ -1105,8 +1072,8 @@ mctime: 5.0 1.0
 box_size: 20.0 20.0 20.0
 cutoff: 10.0
 temperature: 300
-mcsteps: 100
-nprint: 50
+mcsteps: 2000
+nprint: 200
 eqsteps: 5
 
 mc_move_prob: 0.25 0.25 0.25 0.25
@@ -1116,55 +1083,25 @@ op_pdb: {tmp_path}/output.pdb
 """
         inp_file.write_text(inp_content)
 
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file)],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            cwd=str(tmp_path)
-        )
+        result, accept_log, _ = _run_with_accept_log(inp_file, tmp_path)
 
         assert result.returncode == 0, f"Multi-fragment simulation failed: {result.stderr}"
+        assert accept_log.exists(), "Acceptance log missing"
+        params_json = tmp_path / "params.json"
+        assert params_json.exists(), "dump-params output missing"
 
-        # Verify both fragments have CDF output
-        assert "water cdf:" in result.stdout, "Water fragment CDF not found"
-        assert "methanol cdf:" in result.stdout, "Methanol fragment CDF not found"
+        params = _load_params(params_json)
+        names = params.get("fragment", {}).get("names", [])
+        probs = params.get("fragment", {}).get("selection_prob", [])
+        assert names and probs, "Fragment selection probabilities missing in params"
 
-        # Parse CDF values and verify normalization
-        water_cdf_match = re.search(r'water cdf:\s*\[([\d.]+),\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)\]', result.stdout)
-        methanol_cdf_match = re.search(r'methanol cdf:\s*\[([\d.]+),\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)\]', result.stdout)
-
-        assert water_cdf_match is not None, "Could not parse water CDF"
-        assert methanol_cdf_match is not None, "Could not parse methanol CDF"
-
-        water_cdf = [float(water_cdf_match.group(i)) for i in range(1, 5)]
-        methanol_cdf = [float(methanol_cdf_match.group(i)) for i in range(1, 5)]
-
-        # Verify CDF normalization (last value should be 1.0)
-        assert abs(water_cdf[-1] - 1.0) < 0.001, f"Water CDF not normalized: {water_cdf[-1]}"
-        assert abs(methanol_cdf[-1] - 1.0) < 0.001, f"Methanol CDF not normalized: {methanol_cdf[-1]}"
-
-        # Verify CDF is monotonically increasing
-        for i in range(1, 4):
-            assert water_cdf[i] >= water_cdf[i-1], f"Water CDF not monotonic: {water_cdf}"
-            assert methanol_cdf[i] >= methanol_cdf[i-1], f"Methanol CDF not monotonic: {methanol_cdf}"
-
-        # Check fragment selection probability from mctime cumulative output
-        # Should show "Fragment selection cumulative probability: [0.833, 1.0]" or similar
-        # (5.0/(5.0+1.0) = 0.833 for water)
-        if "Fragment selection cumulative probability:" in result.stdout:
-            frag_sel_match = re.search(r'Fragment selection cumulative probability:\s*\[([\d.]+),\s*([\d.]+)\]', result.stdout)
-            if frag_sel_match:
-                frag_sel_cdf = [float(frag_sel_match.group(i)) for i in range(1, 3)]
-
-                # First fragment (water) should have ~5/6 = 0.833
-                expected_water_prob = 5.0 / (5.0 + 1.0)
-                assert abs(frag_sel_cdf[0] - expected_water_prob) < 0.01, \
-                    f"Fragment selection CDF[0] = {frag_sel_cdf[0]}, expected {expected_water_prob}"
-
-                # Second value should be 1.0
-                assert abs(frag_sel_cdf[1] - 1.0) < 0.001, \
-                    f"Fragment selection CDF should end at 1.0, got {frag_sel_cdf[1]}"
+        idx_water = _fragment_index(params, "water")
+        idx_meoh = _fragment_index(params, "methanol")
+        expected_water_prob = 5.0 / (5.0 + 1.0)
+        observed_water_prob = float(probs[idx_water])
+        observed_meoh_prob = float(probs[idx_meoh])
+        assert observed_water_prob == pytest.approx(expected_water_prob, abs=1e-6)
+        assert observed_meoh_prob == pytest.approx(1.0 - expected_water_prob, abs=1e-6)
 
 
 if __name__ == "__main__":

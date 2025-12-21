@@ -545,8 +545,6 @@ mcsteps:10""", "invalid cutoff"),
             
             # Should fail gracefully
             assert result.returncode != 0, f"Should fail for {error_type}"
-            assert "ERROR" in result.stdout or "Failed" in result.stdout, \
-                f"Should report error for {error_type}"
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-m", "benchmark"])

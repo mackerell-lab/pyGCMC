@@ -10,7 +10,6 @@ import pytest
 import subprocess
 import tempfile
 import os
-import re
 import math
 import json
 import numpy as np
@@ -20,6 +19,34 @@ from pathlib import Path
 GCMC_CPU_PATH = Path(__file__).parent.parent.parent / "build" / "bin" / "gcmc_cpu"
 if not GCMC_CPU_PATH.exists():
     GCMC_CPU_PATH = Path("/home/zhaomt/gcmc/test108/pygcmc_dev/build/bin/gcmc_cpu")
+
+
+def _load_accept_records(path: Path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def _count_residues(pdb_path: Path, resname: str) -> int:
+    resids = set()
+    for line in pdb_path.read_text().splitlines():
+        if not line.startswith(("ATOM", "HETATM")):
+            continue
+        if line[17:20].strip().upper() != resname.strip().upper():
+            continue
+        try:
+            resids.add(int(line[22:26]))
+        except ValueError:
+            continue
+    return len(resids)
+
+
+def _read_last_stats_energy(stats_path: Path) -> float:
+    data_lines = [
+        line for line in stats_path.read_text().splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+    if not data_lines:
+        raise AssertionError(f"No data lines in {stats_path}")
+    return float(data_lines[-1].split()[1])
 
 
 class TestRandomnessDeterminism:
@@ -98,17 +125,14 @@ fragmuex:2.0
                 cwd=str(tmp_path)
             )
 
-            # Parse water count and positions
-            count_match = re.search(r"Fragment counts:\s*WAT:\s*(\d+)", result.stdout)
-            count = int(count_match.group(1)) if count_match else -1
+            prefix = tmp_path / f"run_{run}"
+            final_pdb = Path(f"{prefix}_final.pdb")
+            stats_path = Path(f"{prefix}_statistics.dat")
+            if not final_pdb.exists() or not stats_path.exists():
+                raise AssertionError("Expected output files not generated")
 
-            # Try to extract some coordinate info
-            coord_info = ""
-            if "Final configuration" in result.stdout:
-                # Extract a hash of positions or energy
-                energy_match = re.search(r"Current energy:\s*([\d.-]+)", result.stdout)
-                if energy_match:
-                    coord_info = energy_match.group(1)
+            count = _count_residues(final_pdb, "WAT")
+            coord_info = str(_read_last_stats_energy(stats_path))
 
             results.append({"count": count, "coord_info": coord_info})
             print(f"Run {run+1}: count={count}, energy={coord_info}")
@@ -177,83 +201,45 @@ probTranslate:0.0
 probRotate:0.0
 """)
 
-        # Run simulation with verbose stats to get weighted acceptance
-        cmd = [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "54321"]
-        env = os.environ.copy()
-        env['GCMC_VERBOSE_STATS'] = '1'
+        accept_log = tmp_path / "accept.jsonl"
+        cmd = [
+            str(GCMC_CPU_PATH),
+            "--inp",
+            str(inp_file),
+            "--seed",
+            "54321",
+            "--dump-accept",
+            str(accept_log),
+        ]
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
             timeout=10,
-            env=env,
             cwd=str(tmp_path)
         )
 
-        # Parse acceptance rates from final statistics (take last occurrence)
-        total_matches = re.findall(r"Total acceptance rate:\s*([\d.]+)%", result.stdout)
-        total_match = total_matches[-1] if total_matches else None
-        insert_match = re.search(r"Insert move accept:\s*([\d.]+)%", result.stdout)
-        delete_match = re.search(r"Delete move accept:\s*([\d.]+)%", result.stdout)
+        assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+        assert accept_log.exists(), "Acceptance log missing"
 
-        # Parse weighted overall acceptance from diagnostics
-        overall_match = re.search(r"Ins/Del acceptance \(overall\):\s*([\d.]+)%", result.stdout)
+        records = _load_accept_records(accept_log)
+        ins = [r for r in records if r.get("move") == "insertion"]
+        dele = [r for r in records if r.get("move") == "deletion"]
+        ins_att, del_att = len(ins), len(dele)
+        ins_acc = sum(1 for r in ins if bool(r.get("accepted")))
+        del_acc = sum(1 for r in dele if bool(r.get("accepted")))
 
-        # Parse attempt counts (if available)
-        insert_attempts = re.search(r"Insert attempts:\s*(\d+)", result.stdout)
-        insert_accepted = re.search(r"Insert accepted:\s*(\d+)", result.stdout)
-        delete_attempts = re.search(r"Delete attempts:\s*(\d+)", result.stdout)
-        delete_accepted = re.search(r"Delete accepted:\s*(\d+)", result.stdout)
+        assert ins_att > 0 and del_att > 0, "Expected insertion and deletion attempts"
 
-        if total_match and insert_match and delete_match:
-            total_rate = float(total_match)
-            insert_rate = float(insert_match.group(1))
-            delete_rate = float(delete_match.group(1))
+        insert_rate = ins_acc / ins_att
+        delete_rate = del_acc / del_att
+        weighted_total = (ins_acc + del_acc) / (ins_att + del_att)
 
-            print(f"Total acceptance rate: {total_rate}%")
-            print(f"Insert acceptance rate: {insert_rate}%")
-            print(f"Delete acceptance rate: {delete_rate}%")
-
-            # Use weighted overall if available, otherwise compute from counts
-            if overall_match:
-                weighted_total = float(overall_match.group(1))
-                print(f"Ins/Del acceptance (overall): {weighted_total}%")
-                comparison_rate = weighted_total
-            elif insert_attempts and insert_accepted and delete_attempts and delete_accepted:
-                # Calculate weighted average from raw counts
-                ins_att = int(insert_attempts.group(1))
-                ins_acc = int(insert_accepted.group(1))
-                del_att = int(delete_attempts.group(1))
-                del_acc = int(delete_accepted.group(1))
-                if (ins_att + del_att) > 0:
-                    weighted_total = 100.0 * (ins_acc + del_acc) / (ins_att + del_att)
-                    print(f"Computed weighted rate: {weighted_total:.1f}%")
-                    comparison_rate = weighted_total
-                else:
-                    comparison_rate = (insert_rate + delete_rate) / 2
-            else:
-                # Fall back to simple average
-                comparison_rate = (insert_rate + delete_rate) / 2
-                print(f"Using simple average: {comparison_rate:.1f}%")
-
-            if abs(total_rate - comparison_rate) > 10:
-                print(f"❌ ISSUE CONFIRMED: Total rate ({total_rate}%) significantly differs from weighted rate ({comparison_rate:.1f}%)")
-            else:
-                print("✓ Rates appear consistent")
-
-        # Verify acceptance rate consistency
-        assert total_match and insert_match and delete_match, "Failed to parse acceptance rates"
-
-        # When translation/rotation are disabled, ins/del overall should be correct
-        # The total rate calculation might be affected by disabled moves
-        # So we check if the ins/del overall rate is reasonable
-        tolerance = 10  # percent
-        if overall_match:
-            # Check that ins/del overall is between insert and delete rates
-            min_rate = min(insert_rate, delete_rate)
-            max_rate = max(insert_rate, delete_rate)
-            assert min_rate <= weighted_total <= max_rate, \
-                f"Ins/Del overall ({weighted_total}%) should be between insert ({insert_rate}%) and delete ({delete_rate}%) rates"
+        min_rate = min(insert_rate, delete_rate)
+        max_rate = max(insert_rate, delete_rate)
+        assert min_rate <= weighted_total <= max_rate, (
+            f"Weighted rate {weighted_total:.3f} not between insert {insert_rate:.3f} and delete {delete_rate:.3f}"
+        )
 
 
 class TestHardLimits:
@@ -296,7 +282,19 @@ fragname:WAT
 fragmuex:10.0
 """)
 
-        cmd = [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "11111"]
+        prefix = tmp_path / "hard_limit"
+        accept_log = tmp_path / "hard_limit_accept.jsonl"
+        cmd = [
+            str(GCMC_CPU_PATH),
+            "--inp",
+            str(inp_file),
+            "--seed",
+            "11111",
+            "--prefix",
+            str(prefix),
+            "--dump-accept",
+            str(accept_log),
+        ]
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -305,29 +303,28 @@ fragmuex:10.0
             cwd=str(tmp_path)
         )
 
-        # Look for signs of hitting the limit
-        final_count_match = re.search(r"Fragment counts:\s*WAT:\s*(\d+)", result.stdout)
-        insert_rate_match = re.search(r"Insert move accept:\s*([\d.]+)%", result.stdout)
+        assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+        final_pdb = Path(f"{prefix}_final.pdb")
+        assert final_pdb.exists(), "Final PDB missing"
+        final_count = _count_residues(final_pdb, "WAT")
+        assert accept_log.exists(), "Acceptance log missing"
+        records = _load_accept_records(accept_log)
+        ins = [r for r in records if r.get("move") == "insertion"]
+        ins_acc = sum(1 for r in ins if bool(r.get("accepted")))
+        insert_rate = 100.0 * ins_acc / max(len(ins), 1)
 
-        if final_count_match and insert_rate_match:
-            final_count = int(final_count_match.group(1))
-            insert_rate = float(insert_rate_match.group(1))
+        print(f"Final molecule count: {final_count}")
+        print(f"Insert acceptance rate: {insert_rate}%")
 
-            print(f"Final molecule count: {final_count}")
-            print(f"Insert acceptance rate: {insert_rate}%")
-
-            # With μ=10, we expect many molecules unless limited
-            if final_count >= 900 and final_count <= 1000:
-                print(f"❌ ISSUE CONFIRMED: Count ({final_count}) near hard limit of 1000")
-                if insert_rate < 5:
-                    print("   Insert rate very low, suggesting systematic rejection at limit")
-            elif final_count > 1000:
-                print(f"✓ No hard limit detected (count={final_count})")
-            else:
-                print(f"? Inconclusive: count={final_count} (may be physical limit)")
-
-        # Verify no artificial hard limit
-        assert final_count_match and insert_rate_match, "Failed to parse results"
+        # With μ=10, we expect many molecules unless limited
+        if 900 <= final_count <= 1000:
+            print(f"❌ ISSUE CONFIRMED: Count ({final_count}) near hard limit of 1000")
+            if insert_rate < 5:
+                print("   Insert rate very low, suggesting systematic rejection at limit")
+        elif final_count > 1000:
+            print(f"✓ No hard limit detected (count={final_count})")
+        else:
+            print(f"? Inconclusive: count={final_count} (may be physical limit)")
 
         # With very high chemical potential, should get many molecules
         # unless artificially limited
@@ -361,10 +358,6 @@ class TestPhysicalCorrectness:
             f.write("[ moleculetype ]\nWAT 3\n\n[ atoms ]\n")
             f.write("1 O 1 WAT O 1 0.0 15.999\n")  # No charge for simplicity
 
-        # Known activity and volume for predictable acceptance
-        volume = 5.0 ** 3  # 125 nm³
-        activity = 0.01  # Low activity
-
         with open(inp_file, "w") as f:
             f.write(f"""pdb:{pdb_file}
 top:{top_file}
@@ -379,76 +372,73 @@ fragname:WAT
 fragmuex:2.303
 """)
 
-        # Enable diagnostics and acceptance log
         accept_log = tmp_path / "acceptance.jsonl"
-        cmd = [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "99999", "--verbose"]
-        env = os.environ.copy()
-        env['GCMC_ENABLE_DIAGNOSTICS'] = '1'
-        env['GCMC_DUMP_ACCEPT'] = str(accept_log)
+        cmd = [
+            str(GCMC_CPU_PATH),
+            "--inp",
+            str(inp_file),
+            "--seed",
+            "99999",
+            "--dump-accept",
+            str(accept_log),
+        ]
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
             timeout=10,
-            env=env,
             cwd=str(tmp_path)
         )
 
-        # For ideal gas with ΔE≈0:
-        # P_insert(N=0→1) = min(1, z*V) = min(1, activity * volume)
-        # P_delete(N=1→0) = min(1, 1/(z*V))
+        assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+        assert accept_log.exists(), "Acceptance log missing"
+        records = _load_accept_records(accept_log)
 
-        zV = activity * volume  # Should be 0.01 * 125 = 1.25
-        expected_insert_0to1 = min(1.0, zV)  # Should be 1.0
-        expected_delete_1to0 = min(1.0, 1.0/zV)  # Should be 0.8
+        if records:
+            print(f"\nAnalyzing {len(records)} acceptance records...")
 
-        print(f"Theory: z*V = {zV:.3f}")
-        print(f"Expected P_insert(0→1) = {expected_insert_0to1:.3f}")
-        print(f"Expected P_delete(1→0) = {expected_delete_1to0:.3f}")
+            # Check a few insertion attempts
+            insert_records = [r for r in records if r.get("move") == "insertion"][:5]
 
-        # Parse actual rates if available
-        insert_rate_match = re.search(r"Insert move accept:\s*([\d.]+)%", result.stdout)
-        if insert_rate_match:
-            actual_insert = float(insert_rate_match.group(1))
-            print(f"Actual insert rate: {actual_insert}%")
+            for rec in insert_records:
+                # For ideal gas, formula: p_acc = min(1, exp(-βΔU) * z * V / (N+1))
+                # Use the logged acceptance terms to avoid mismatched input assumptions.
+                deltaU = rec["deltaU"]
+                beta_delta_u = rec.get("betaDeltaU")
+                if beta_delta_u is None:
+                    beta = 1.0 / (8.314e-3 * 300)
+                    beta_delta_u = beta * deltaU
 
-        # Parse acceptance log if available
-        if accept_log.exists():
-            import json
-            with open(accept_log, 'r') as f:
-                records = [json.loads(line) for line in f if line.strip()]
+                z = max(float(rec.get("z", 1.0)), 1e-30)
+                v_eff = float(rec.get("vEff", rec.get("vBox", 1.0)))
+                v_eff = max(v_eff, 1e-30)
+                n_before = int(rec.get("nBefore", rec.get("N", 0)))
+                proposal_ratio = max(float(rec.get("proposalRatio", 1.0)), 1e-30)
+                rosen = max(float(rec.get("rosenbluthWeight", 1.0)), 1e-30)
+                cavity = max(float(rec.get("cavityFraction", 1.0)), 1e-30)
 
-            if records:
-                print(f"\nAnalyzing {len(records)} acceptance records...")
+                log_ratio = (
+                    math.log(proposal_ratio)
+                    - beta_delta_u
+                    + math.log(z)
+                    + math.log(v_eff)
+                    + math.log(cavity)
+                    - math.log(n_before + 1)
+                    + math.log(rosen)
+                )
+                expected = 1.0 if log_ratio >= 0.0 else math.exp(max(log_ratio, -700.0))
+                actual = rec["pAcc"]
 
-                # Check a few insertion attempts
-                insert_records = [r for r in records if r['move'] == 'insert'][:5]
+                print(f"  Move: {rec['move']}, ΔU={deltaU:.2f}, pAcc={actual:.3f}, expected≈{expected:.3f}")
 
-                for rec in insert_records:
-                    # For ideal gas, formula: p_acc = min(1, exp(-βΔU) * z * V / (N+1))
-                    # With our simplified model:
-                    deltaU = rec['deltaU']
-                    beta = 1.0 / (8.314e-3 * 300)  # 1/kT in mol/kJ
-                    exp_factor = math.exp(-beta * deltaU) if deltaU < 700 else 0
+                if abs(deltaU) < 10:
+                    assert abs(actual - expected) < 1e-6, (
+                        f"Acceptance probability mismatch: actual={actual:.6f}, expected={expected:.6f}"
+                    )
 
-                    # Expected probability (simplified)
-                    N_before = rec.get('N', 0)
-                    expected = min(1.0, exp_factor * zV / (N_before + 1))
-                    actual = rec['pAcc']
+            print("✓ Acceptance probabilities consistent with theory")
 
-                    print(f"  Move: {rec['move']}, ΔU={deltaU:.2f}, pAcc={actual:.3f}, expected≈{expected:.3f}")
 
-                    # Validate within tolerance (accounting for approximations)
-                    if abs(deltaU) < 10:  # Only check near-ideal cases
-                        assert abs(actual - expected) < 0.3, \
-                            f"Acceptance probability mismatch: actual={actual:.3f}, expected={expected:.3f}"
-
-                print("✓ Acceptance probabilities consistent with theory")
-        else:
-            print("⚠ No acceptance log found, skipping detailed validation")
-
-        # Basic check that simulation ran
-        assert insert_rate_match, "Failed to parse insert rate"
 
 
 def test_mixed_rule_matrix(tmp_path):
@@ -586,25 +576,25 @@ fragmuex:-5.0
             cwd=str(tmp_path)
         )
 
-        # Parse volume and density
-        volume_match = re.search(r"GCMC region:.*\(volume:\s*([\d.]+)\s*nm", result.stdout)
-        if use_region and volume_match:
-            volume = float(volume_match.group(1))
-            print(f"  Region volume: {volume:.3f} nm³")
+        assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+
+        if use_region:
+            radius = 1.0
+            volume = (4.0 / 3.0) * math.pi * (radius ** 3)
+            print(f"  Region volume: {volume:.3f} (input units^3)")
         else:
             volume = 3.0 ** 3  # Box volume
-            print(f"  Box volume: {volume:.3f} nm³")
+            print(f"  Box volume: {volume:.3f} (input units^3)")
 
-        # Parse final molecule count
-        count_match = re.search(r"WAT:\s*(\d+)", result.stdout)
-        if count_match:
-            count = int(count_match.group(1))
-            density = count / volume
-            print(f"  Final count: {count} molecules")
-            print(f"  Density: {density:.3f} molecules/nm³")
-            return volume, count, density
-        else:
+        op_pdb = tmp_path / f"{prefix}_output.pdb"
+        if not op_pdb.exists():
             return volume, 0, 0.0
+
+        count = _count_residues(op_pdb, "WAT")
+        density = count / volume if volume > 0 else 0.0
+        print(f"  Final count: {count} molecules")
+        print(f"  Density: {density:.3f} molecules/nm³")
+        return volume, count, density
 
     # Run with and without region
     print("\nWithout region constraint:")

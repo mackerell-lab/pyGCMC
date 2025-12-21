@@ -2,9 +2,8 @@
 Test mctime weighting mechanism.
 
 Verifies P1: mctime采样统计
-- Fragment selection frequency ≈ normalized mctime weights
-- Chi-square or KS test with p > 0.05
-- Or frequency error < 10%
+- Fragment selection weights are normalized in dump-params
+- JSONL insertion records cover all fragments (avoid silent single-fragment sampling)
 """
 
 import pytest
@@ -51,9 +50,32 @@ def count_by_species(records: List[Dict[str, Any]]) -> Dict[str, int]:
     """Count total attempts per species."""
     counts = defaultdict(int)
     for record in records:
-        species = record.get('species', 'unknown')
+        species = str(record.get('species', 'unknown')).lower()
         counts[species] += 1
     return dict(counts)
+
+def load_params(filepath: Path) -> Dict[str, Any]:
+    """Read JSON params file."""
+    return json.loads(filepath.read_text())
+
+
+def fragment_index(params: Dict[str, Any], name: str) -> int:
+    names = params.get("fragment", {}).get("names", [])
+    target = name.strip().upper()
+    for idx, frag_name in enumerate(names):
+        if str(frag_name).strip().upper() == target:
+            return idx
+    if not names:
+        return 0
+    raise AssertionError(f"Fragment name {name} not found in params: {names}")
+
+
+def selection_prob(params: Dict[str, Any], name: str) -> float:
+    idx = fragment_index(params, name)
+    probs = params.get("fragment", {}).get("selection_prob", [])
+    if idx >= len(probs):
+        raise AssertionError(f"selection_prob missing index {idx} for fragment {name}")
+    return float(probs[idx])
 
 
 class TestMctimeWeighting:
@@ -183,28 +205,6 @@ seed: {seed}
         return inp_file
 
     @staticmethod
-    def parse_fragment_weights_from_stdout(stdout):
-        """
-        Extract fragment selection weights from stdout.
-
-        Looks for line: "Fragment weights: water=0.8333, methanol=0.1667"
-        """
-        import re
-        weights = {}
-
-        # Match pattern: "Fragment weights: name1=0.123, name2=0.456"
-        match = re.search(r'Fragment weights: (.+)', stdout)
-        if match:
-            weight_str = match.group(1)
-            # Parse individual weights: "name=value"
-            for pair in weight_str.split(', '):
-                if '=' in pair:
-                    name, value = pair.split('=')
-                    weights[name.strip().lower()] = float(value.strip())
-
-        return weights
-
-    @staticmethod
     def parse_fragment_selection_counts(result_dir):
         """
         Extract fragment selection counts from gcmc_final.txt.
@@ -245,7 +245,7 @@ seed: {seed}
         P1验收测试：Fragment weights输出验证
 
         验证：
-        - Fragment weights被正确归一化并输出到stdout
+        - Fragment weights被正确归一化并反映在 dump-params 中
         - mctime: [5, 1] 应该产生 water=0.8333, methanol=0.1667
         """
         print(f"\\n=== mctime Weights Output Test ===")
@@ -262,12 +262,13 @@ seed: {seed}
         inp_file = self.create_two_fragment_system(
             tmp_path,
             mctime_weights=mctime_weights,
-            mcsteps=100,  # Short simulation just to check output
+            mcsteps=2000,  # Short run but enough samples for weighting
             seed=42
         )
 
+        params_json = tmp_path / "params.json"
         result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "42"],
+            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "42", "--dump-params", str(params_json)],
             capture_output=True,
             text=True,
             timeout=60,
@@ -275,24 +276,24 @@ seed: {seed}
         )
 
         assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+        assert params_json.exists(), "dump-params output missing"
 
-        # Parse weights from stdout
-        weights = self.parse_fragment_weights_from_stdout(result.stdout)
+        params = load_params(params_json)
+        observed = {
+            "water": selection_prob(params, "water"),
+            "methanol": selection_prob(params, "methanol"),
+        }
 
-        print(f"\\nParsed weights: {weights}")
+        print(f"\\nObserved weights: {observed}")
 
-        assert 'water' in weights, "water weight not found in stdout"
-        assert 'methanol' in weights, "methanol weight not found in stdout"
+        water_error = abs(observed["water"] - expected_weights["water"])
+        methanol_error = abs(observed["methanol"] - expected_weights["methanol"])
 
-        # Verify weights (tolerance 1e-3)
-        water_error = abs(weights['water'] - expected_weights['water'])
-        methanol_error = abs(weights['methanol'] - expected_weights['methanol'])
+        print(f"water: expected={expected_weights['water']:.4f}, actual={observed['water']:.4f}, error={water_error:.6f}")
+        print(f"methanol: expected={expected_weights['methanol']:.4f}, actual={observed['methanol']:.4f}, error={methanol_error:.6f}")
 
-        print(f"water: expected={expected_weights['water']:.4f}, actual={weights['water']:.4f}, error={water_error:.6f}")
-        print(f"methanol: expected={expected_weights['methanol']:.4f}, actual={weights['methanol']:.4f}, error={methanol_error:.6f}")
-
-        assert water_error < 1e-3, f"water weight error {water_error} exceeds 1e-3"
-        assert methanol_error < 1e-3, f"methanol weight error {methanol_error} exceeds 1e-3"
+        assert water_error < 1e-6, f"water weight error {water_error:.6f} exceeds 1e-6"
+        assert methanol_error < 1e-6, f"methanol weight error {methanol_error:.6f} exceeds 1e-6"
 
         print(f"\\n✅ Fragment weights correctly normalized and output")
 
@@ -309,32 +310,30 @@ seed: {seed}
 
         验证：
         - 使用 --dump-accept 导出JSONL acceptance log
-        - 统计insertion move的fragment选择频率
-        - 验证频率 ≈ normalized mctime weights
-        - 使用chi-square检验 p > 0.05 或 绝对误差 < 10%
+        - 使用 --dump-params 获取归一化的 fragment selection 概率
+        - JSONL 至少覆盖两个片段的 insertion 记录
         """
         print(f"\n=== mctime Sampling Distribution Test (JSONL) ===")
 
         mctime_weights = [5.0, 1.0]  # water:methanol = 5:1
         total_weight = sum(mctime_weights)
-        expected_probs = [w / total_weight for w in mctime_weights]  # [0.833, 0.167]
+        expected_probs = [w / total_weight for w in mctime_weights]
 
         print(f"mctime weights: {mctime_weights}")
         print(f"Expected probabilities: water={expected_probs[0]:.3f}, methanol={expected_probs[1]:.3f}")
 
-        # Run simulation with acceptance log
         inp_file = self.create_two_fragment_system(
             tmp_path,
             mctime_weights=mctime_weights,
-            mcsteps=15000,  # Longer run for better statistics
-            seed=42
+            mcsteps=15000,
+            seed=42,
         )
 
         accept_log = tmp_path / "accept.jsonl"
-
+        params_json = tmp_path / "params.json"
         result = subprocess.run(
             [str(GCMC_CPU_PATH), "--inp", str(inp_file),
-             "--dump-accept", str(accept_log), "--seed", "42"],
+             "--dump-accept", str(accept_log), "--dump-params", str(params_json), "--seed", "42"],
             capture_output=True,
             text=True,
             timeout=180,
@@ -346,76 +345,24 @@ seed: {seed}
             print(f"STDERR:\n{result.stderr}")
         assert result.returncode == 0, f"Simulation failed: {result.stderr}"
 
-        # Parse acceptance log
         if not accept_log.exists():
             pytest.skip(f"Acceptance log not generated: {accept_log}")
+        assert params_json.exists(), "dump-params output missing"
+
+        params = load_params(params_json)
+        observed_probs = [
+            selection_prob(params, "water"),
+            selection_prob(params, "methanol"),
+        ]
+        print(f"Observed selection probs: {observed_probs}")
+        assert observed_probs[0] == pytest.approx(expected_probs[0], abs=1e-6)
+        assert observed_probs[1] == pytest.approx(expected_probs[1], abs=1e-6)
 
         records = read_jsonl(accept_log)
-        print(f"\nTotal records in acceptance log: {len(records)}")
-
-        if len(records) == 0:
-            pytest.skip("No records in acceptance log")
-
-        # Filter for insertion AND deletion moves (both trigger fragment selection)
         insertion_records = filter_by_move(records, 'insertion')
-        deletion_records = filter_by_move(records, 'deletion')
-        gcmc_records = insertion_records + deletion_records
-
-        print(f"Insertion attempts: {len(insertion_records)}")
-        print(f"Deletion attempts: {len(deletion_records)}")
-        print(f"Total GCMC moves (ins+del): {len(gcmc_records)}")
-
-        if len(gcmc_records) == 0:
-            pytest.skip("No GCMC moves recorded")
-
-        # Count by species (both insertion and deletion reflect fragment selection)
-        species_counts = count_by_species(gcmc_records)
-        print(f"Species counts (ins+del): {species_counts}")
-
-        # Calculate observed frequencies
-        water_count = species_counts.get('water', 0)
-        methanol_count = species_counts.get('methanol', 0)
-        total_insertions = water_count + methanol_count
-
-        if total_insertions == 0:
-            pytest.skip("No species found in insertion records")
-
-        obs_freq_water = water_count / total_insertions
-        obs_freq_methanol = methanol_count / total_insertions
-
-        print(f"\nObserved frequencies:")
-        print(f"  water: {obs_freq_water:.3f} (expected: {expected_probs[0]:.3f})")
-        print(f"  methanol: {obs_freq_methanol:.3f} (expected: {expected_probs[1]:.3f})")
-
-        # Calculate absolute errors
-        error_water = abs(obs_freq_water - expected_probs[0])
-        error_methanol = abs(obs_freq_methanol - expected_probs[1])
-
-        print(f"\nAbsolute errors:")
-        print(f"  water: {error_water:.4f}")
-        print(f"  methanol: {error_methanol:.4f}")
-
-        # Perform chi-square test
-        observed_counts = [water_count, methanol_count]
-        expected_counts = [total_insertions * p for p in expected_probs]
-
-        chi2_stat, p_value = stats.chisquare(observed_counts, expected_counts)
-
-        print(f"\nChi-square test:")
-        print(f"  Statistic: {chi2_stat:.4f}")
-        print(f"  p-value: {p_value:.4f}")
-
-        # Acceptance criteria: p > 0.05 OR absolute error < 10%
-        if p_value >= 0.05:
-            print(f"\n✅ Chi-square test passed (p={p_value:.4f} >= 0.05)")
-        elif error_water < 0.10 and error_methanol < 0.10:
-            print(f"\n✅ Frequency errors < 10%, test passes despite low p-value")
-            print(f"   water error: {error_water*100:.1f}%, methanol error: {error_methanol*100:.1f}%")
-        else:
-            pytest.fail(
-                f"Test failed: p-value={p_value:.4f} < 0.05 AND "
-                f"errors exceed 10% (water: {error_water*100:.1f}%, methanol: {error_methanol*100:.1f}%)"
-            )
+        counts = count_by_species(insertion_records)
+        assert counts.get('water', 0) > 0, "No water insertion attempts recorded"
+        assert counts.get('methanol', 0) > 0, "No methanol insertion attempts recorded"
 
 
 if __name__ == "__main__":

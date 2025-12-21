@@ -3255,6 +3255,15 @@ void writeJsonFloatVector(std::ostream& os, const std::vector<float>& v) {
     os << "]";
 }
 
+void writeJsonCdfVector(std::ostream& os, const std::vector<std::array<double, 4>>& v) {
+    os << "[";
+    for (size_t i = 0; i < v.size(); ++i) {
+        if (i) os << ",";
+        os << "[" << v[i][0] << "," << v[i][1] << "," << v[i][2] << "," << v[i][3] << "]";
+    }
+    os << "]";
+}
+
 void writeJsonStringVector(std::ostream& os, const std::vector<std::string>& v) {
     os << "[";
     for (size_t i = 0; i < v.size(); ++i) {
@@ -3360,13 +3369,33 @@ void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
         << ",\"num_conf_bias_trials\":" << bias.num_conf_bias_trials
         << "},";
 
+    std::vector<float> fragmentSelectionProb;
+    fragmentSelectionProb.reserve(fragmentTypes_.size());
+    for (const auto& f : fragmentTypes_) {
+        fragmentSelectionProb.push_back(static_cast<float>(f.probability));
+    }
+
     ofs << "\"fragment\":{"
         << "\"use_number_water_nbar\":" << (frag.use_number_water_nbar ? "true" : "false")
         << ",\"use_const_water_nbar\":" << (frag.use_const_water_nbar ? "true" : "false")
         << ",\"const_water_nbar\":" << frag.const_water_nbar
         << ",\"target_num_waters\":" << frag.target_num_waters
         << ",\"water_density_M\":" << frag.water_density
-        << ",\"conc_list_M\":";
+        << ",\"names\":";
+    writeJsonStringVector(ofs, files.fragment_names);
+    ofs << ",\"selection_prob\":";
+    writeJsonFloatVector(ofs, fragmentSelectionProb);
+    ofs << ",\"move_prob_ins\":";
+    writeJsonFloatVector(ofs, mc.attempt_prob_ins);
+    ofs << ",\"move_prob_del\":";
+    writeJsonFloatVector(ofs, mc.attempt_prob_del);
+    ofs << ",\"move_prob_trn\":";
+    writeJsonFloatVector(ofs, mc.attempt_prob_trn);
+    ofs << ",\"move_prob_rot\":";
+    writeJsonFloatVector(ofs, mc.attempt_prob_rot);
+    ofs << ",\"move_cdf\":";
+    writeJsonCdfVector(ofs, fragmentMoveCDF_);
+    ofs << ",\"conc_list_M\":";
     writeJsonFloatVector(ofs, frag.conc_list);
     ofs << ",\"muex_list_kj_mol\":";
     writeJsonFloatVector(ofs, frag.muex_list);

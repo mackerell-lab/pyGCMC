@@ -3,9 +3,9 @@
 Detailed test for hard molecule limit issue
 """
 
+import json
 import subprocess
 import tempfile
-import re
 from pathlib import Path
 
 GCMC_CPU_PATH = Path("/home/zhaomt/gcmc/test108/pygcmc_dev/build/bin/gcmc_cpu")
@@ -57,7 +57,19 @@ fragname:WAT
 fragmuex:{mu}
 """)
 
-            cmd = [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "42"]
+            prefix = tmppath / f"mu_{mu:.1f}"
+            accept_log = tmppath / f"mu_{mu:.1f}_accept.jsonl"
+            cmd = [
+                str(GCMC_CPU_PATH),
+                "--inp",
+                str(inp_file),
+                "--seed",
+                "42",
+                "--prefix",
+                str(prefix),
+                "--dump-accept",
+                str(accept_log),
+            ]
             result = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -66,35 +78,42 @@ fragmuex:{mu}
                 cwd=tmpdir
             )
 
-            # Parse results
-            count_match = re.search(r"Fragment counts:\s*WAT:\s*(\d+)", result.stdout)
-            insert_rate_match = re.search(r"Insert move accept:\s*([\d.]+)%", result.stdout)
-            insert_attempts_match = re.search(r"Insert attempts:\s*(\d+)", result.stdout)
-            insert_accepted_match = re.search(r"Insert accepted:\s*(\d+)", result.stdout)
+            if result.returncode != 0:
+                raise AssertionError(f"Simulation failed: {result.stderr}")
 
-            if count_match:
-                count = int(count_match.group(1))
-                insert_rate = float(insert_rate_match.group(1)) if insert_rate_match else 0
-                attempts = int(insert_attempts_match.group(1)) if insert_attempts_match else 0
-                accepted = int(insert_accepted_match.group(1)) if insert_accepted_match else 0
+            final_pdb = Path(f"{prefix}_final.pdb")
+            assert final_pdb.exists(), f"Missing final PDB: {final_pdb}"
+            count = sum(
+                1
+                for line in final_pdb.read_text().splitlines()
+                if line.startswith(("ATOM", "HETATM")) and line[17:20].strip().upper() == "WAT"
+            )
 
-                results.append({
-                    "mu": mu,
-                    "count": count,
-                    "insert_rate": insert_rate,
-                    "attempts": attempts,
-                    "accepted": accepted
-                })
+            assert accept_log.exists(), f"Missing acceptance log: {accept_log}"
+            records = [json.loads(line) for line in accept_log.read_text().splitlines() if line.strip()]
+            ins_attempts = [r for r in records if r.get("move") == "insertion"]
+            ins_accepts = [r for r in ins_attempts if bool(r.get("accepted"))]
+            attempts = len(ins_attempts)
+            accepted = len(ins_accepts)
+            insert_rate = 100.0 * accepted / max(attempts, 1)
 
-                print(f"  Count: {count}")
-                print(f"  Insert rate: {insert_rate:.1f}%")
-                print(f"  Insert attempts: {attempts}, accepted: {accepted}")
+            results.append({
+                "mu": mu,
+                "count": count,
+                "insert_rate": insert_rate,
+                "attempts": attempts,
+                "accepted": accepted
+            })
 
-                # Check if we're hitting the limit
-                if 990 <= count <= 1010:
-                    print(f"  ⚠️  Count near 1000 limit!")
-                    if insert_rate < 10:
-                        print(f"  ❌ HARD LIMIT CONFIRMED: Low acceptance despite high μ")
+            print(f"  Count: {count}")
+            print(f"  Insert rate: {insert_rate:.1f}%")
+            print(f"  Insert attempts: {attempts}, accepted: {accepted}")
+
+            # Check if we're hitting the limit
+            if 990 <= count <= 1010:
+                print(f"  ⚠️  Count near 1000 limit!")
+                if insert_rate < 10:
+                    print(f"  ❌ HARD LIMIT CONFIRMED: Low acceptance despite high μ")
 
         # Analyze trend
         print("\n=== ANALYSIS ===")

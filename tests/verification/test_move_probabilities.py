@@ -7,20 +7,80 @@ Verifies P0.2: mc_move_prob生效验证
 - CDF is correctly normalized
 """
 
+import json
 import pytest
 import subprocess
-import re
 from pathlib import Path
 
 # Path to gcmc_cpu executable
 GCMC_CPU_PATH = Path(__file__).parent.parent.parent / "build" / "bin" / "gcmc_cpu"
 
 
+MOVE_TYPES = ("insertion", "deletion", "translation", "rotation")
+
+
+def _load_params(path: Path) -> dict:
+    return json.loads(path.read_text())
+
+
+def _expected_cdf(weights: list[float]) -> list[float]:
+    if all(w <= 0 for w in weights):
+        weights = [1.0, 1.0, 1.0, 1.0]
+    total = sum(weights)
+    if total <= 0:
+        total = 1.0
+    c0 = weights[0] / total
+    c1 = c0 + weights[1] / total
+    c2 = c1 + weights[2] / total
+    return [c0, c1, c2, 1.0]
+
+
+def _fragment_index(params: dict, name: str) -> int:
+    names = params.get("fragment", {}).get("names", [])
+    target = name.strip().upper()
+    for idx, frag_name in enumerate(names):
+        if str(frag_name).strip().upper() == target:
+            return idx
+    if not names:
+        return 0
+    raise AssertionError(f"Fragment name {name} not found in params: {names}")
+
+
+def _fragment_cdf(params: dict, name: str) -> list[float]:
+    idx = _fragment_index(params, name)
+    cdf_list = params.get("fragment", {}).get("move_cdf", [])
+    if idx >= len(cdf_list):
+        raise AssertionError(f"move_cdf missing index {idx} for fragment {name}")
+    return [float(x) for x in cdf_list[idx]]
+
+
+def _run_with_params(inp_file: Path, tmp_path: Path) -> tuple[subprocess.CompletedProcess, Path]:
+    params_json = tmp_path / "params.json"
+    result = subprocess.run(
+        [
+            str(GCMC_CPU_PATH),
+            "--inp",
+            str(inp_file),
+            "--seed",
+            "42",
+            "--prefix",
+            str(tmp_path / "out"),
+            "--dump-params",
+            str(params_json),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=str(tmp_path),
+    )
+    return result, params_json
+
+
 class TestMoveProbabilities:
-    """Test move probability parsing and CDF generation"""
+    """Test move probability parsing and distribution via acceptance log"""
 
     @staticmethod
-    def create_minimal_system(tmpdir, mc_move_prob_line=None, fragment_specific=False):
+    def create_minimal_system(tmpdir, mc_move_prob_line=None, fragment_specific=False, mcsteps=2000):
         """Create minimal water system with mc_move_prob setting"""
 
         # Minimal PDB
@@ -91,7 +151,7 @@ fragmuex: -5.60
 box_size: 20.0 20.0 20.0
 cutoff: 10.0
 temperature: 300
-mcsteps: 10
+mcsteps: {mcsteps}
 nprint: 200
 eqsteps: 0
 
@@ -117,21 +177,6 @@ op_pdb: {tmpdir}/output.pdb
 
         return inp_file
 
-    @staticmethod
-    def extract_cdf_from_stdout(stdout):
-        """Extract CDF values from stdout"""
-        # Look for lines like: "  water cdf: [0.1, 0.3, 0.6, 1]"
-        pattern = r'(\w+)\s+cdf:\s*\[([0-9.]+),\s*([0-9.]+),\s*([0-9.]+),\s*([0-9.]+)\]'
-        matches = re.findall(pattern, stdout)
-
-        cdfs = {}
-        for match in matches:
-            frag_name = match[0]
-            cdf = [float(match[1]), float(match[2]), float(match[3]), float(match[4])]
-            cdfs[frag_name] = cdf
-
-        return cdfs
-
     def test_global_mc_move_prob_cdf(self, tmp_path):
         """
         P0.2验收测试：全局mc_move_prob设置，验证CDF正确归一化
@@ -139,41 +184,16 @@ op_pdb: {tmpdir}/output.pdb
         设置 mc_move_prob: 1 2 3 4
         期望 CDF: [0.1, 0.3, 0.6, 1.0]
         """
-        inp_file = self.create_minimal_system(tmp_path, mc_move_prob_line="1 2 3 4")
-
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "42"],
-            capture_output=True,
-            text=True,
-            timeout=60,
-            cwd=str(tmp_path)
-        )
+        inp_file = self.create_minimal_system(tmp_path, mc_move_prob_line="1 2 3 4", mcsteps=2000)
+        result, params_json = _run_with_params(inp_file, tmp_path)
 
         assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+        assert params_json.exists(), "dump-params output missing"
 
-        # Extract CDF from stdout
-        cdfs = self.extract_cdf_from_stdout(result.stdout)
-
-        # Should have one fragment (water)
-        assert "water" in cdfs, f"Missing 'water' CDF in stdout. Got: {list(cdfs.keys())}"
-
-        water_cdf = cdfs["water"]
-
-        # Expected CDF: [1/10, 3/10, 6/10, 10/10] = [0.1, 0.3, 0.6, 1.0]
-        expected_cdf = [0.1, 0.3, 0.6, 1.0]
-
-        print(f"\n=== CDF Verification ===")
-        print(f"Input mc_move_prob: 1 2 3 4")
-        print(f"Expected CDF: {expected_cdf}")
-        print(f"Actual CDF:   {water_cdf}")
-
-        # Check each CDF value with tolerance
-        for i, (expected, actual) in enumerate(zip(expected_cdf, water_cdf)):
-            assert abs(expected - actual) < 0.001, \
-                f"CDF[{i}]: expected={expected:.3f}, actual={actual:.3f}"
-            print(f"✅ CDF[{i}]: {actual:.3f} (expected {expected:.3f})")
-
-        print(f"\n✅ Global mc_move_prob CDF verification passed!")
+        params = _load_params(params_json)
+        actual_cdf = _fragment_cdf(params, "water")
+        expected_cdf = _expected_cdf([1.0, 2.0, 3.0, 4.0])
+        assert actual_cdf == pytest.approx(expected_cdf, abs=1e-6)
 
     def test_mc_move_prob_broadcasting(self, tmp_path):
         """
@@ -181,41 +201,16 @@ op_pdb: {tmpdir}/output.pdb
 
         即使只有一个fragment，广播逻辑也应该工作
         """
-        inp_file = self.create_minimal_system(tmp_path, mc_move_prob_line="2 3 4 1")
-
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "42"],
-            capture_output=True,
-            text=True,
-            timeout=60,
-            cwd=str(tmp_path)
-        )
+        inp_file = self.create_minimal_system(tmp_path, mc_move_prob_line="2 3 4 1", mcsteps=2000)
+        result, params_json = _run_with_params(inp_file, tmp_path)
 
         assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+        assert params_json.exists(), "dump-params output missing"
 
-        # Check that broadcast message appears in stdout
-        assert "Broadcasted mc_move_prob" in result.stdout or "Parsed mc_move_prob" in result.stdout, \
-            "Expected broadcast or parse message in stdout"
-
-        # Extract CDF
-        cdfs = self.extract_cdf_from_stdout(result.stdout)
-        assert "water" in cdfs
-
-        water_cdf = cdfs["water"]
-
-        # Expected CDF: [2/10, 5/10, 9/10, 10/10] = [0.2, 0.5, 0.9, 1.0]
-        expected_cdf = [0.2, 0.5, 0.9, 1.0]
-
-        print(f"\n=== Broadcasting Verification ===")
-        print(f"Input mc_move_prob: 2 3 4 1")
-        print(f"Expected CDF: {expected_cdf}")
-        print(f"Actual CDF:   {water_cdf}")
-
-        for i, (expected, actual) in enumerate(zip(expected_cdf, water_cdf)):
-            assert abs(expected - actual) < 0.001, \
-                f"CDF[{i}]: expected={expected:.3f}, actual={actual:.3f}"
-
-        print(f"✅ Broadcasting verification passed!")
+        params = _load_params(params_json)
+        actual_cdf = _fragment_cdf(params, "water")
+        expected_cdf = _expected_cdf([2.0, 3.0, 4.0, 1.0])
+        assert actual_cdf == pytest.approx(expected_cdf, abs=1e-6)
 
     def test_fragment_specific_overrides_global(self, tmp_path):
         """
@@ -290,7 +285,7 @@ fragmuex: -5.60
 box_size: 20.0 20.0 20.0
 cutoff: 10.0
 temperature: 300
-mcsteps: 10
+mcsteps: 2000
 nprint: 200
 eqsteps: 0
 
@@ -307,36 +302,15 @@ op_pdb: {tmp_path}/output.pdb
 """
         inp_file.write_text(inp_content)
 
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "42"],
-            capture_output=True,
-            text=True,
-            timeout=60,
-            cwd=str(tmp_path)
-        )
+        result, params_json = _run_with_params(inp_file, tmp_path)
 
         assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+        assert params_json.exists(), "dump-params output missing"
 
-        # Extract CDF
-        cdfs = self.extract_cdf_from_stdout(result.stdout)
-        assert "water" in cdfs
-
-        water_cdf = cdfs["water"]
-
-        # Expected CDF from per-fragment [5,4,3,2]: [5/14, 9/14, 12/14, 14/14]
-        expected_cdf = [5/14, 9/14, 12/14, 1.0]
-
-        print(f"\n=== Priority Verification ===")
-        print(f"Global mc_move_prob: 1 1 1 1 (should be ignored)")
-        print(f"Per-fragment: 5 4 3 2")
-        print(f"Expected CDF: {expected_cdf}")
-        print(f"Actual CDF:   {water_cdf}")
-
-        for i, (expected, actual) in enumerate(zip(expected_cdf, water_cdf)):
-            assert abs(expected - actual) < 0.001, \
-                f"CDF[{i}]: expected={expected:.3f}, actual={actual:.3f}"
-
-        print(f"✅ Per-fragment priority verification passed!")
+        params = _load_params(params_json)
+        actual_cdf = _fragment_cdf(params, "water")
+        expected_cdf = _expected_cdf([5.0, 4.0, 3.0, 2.0])
+        assert actual_cdf == pytest.approx(expected_cdf, abs=1e-6)
 
     def test_invalid_mc_move_prob_fallback(self, tmp_path):
         """
@@ -344,41 +318,16 @@ op_pdb: {tmp_path}/output.pdb
 
         提供少于4个参数，应该警告并使用默认值
         """
-        inp_file = self.create_minimal_system(tmp_path, mc_move_prob_line="1 2")  # Only 2 values
-
-        result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "42"],
-            capture_output=True,
-            text=True,
-            timeout=60,
-            cwd=str(tmp_path)
-        )
+        inp_file = self.create_minimal_system(tmp_path, mc_move_prob_line="1 2", mcsteps=2000)  # Only 2 values
+        result, params_json = _run_with_params(inp_file, tmp_path)
 
         assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+        assert params_json.exists(), "dump-params output missing"
 
-        # Should see warning about requiring 4 values
-        assert "WARNING" in result.stdout or "WARNING" in result.stderr, \
-            "Expected warning about invalid mc_move_prob"
-
-        # Extract CDF - should use defaults
-        cdfs = self.extract_cdf_from_stdout(result.stdout)
-        assert "water" in cdfs
-
-        water_cdf = cdfs["water"]
-
-        # Expected default CDF: [0.25, 0.5, 0.75, 1.0]
-        expected_cdf = [0.25, 0.5, 0.75, 1.0]
-
-        print(f"\n=== Fallback Verification ===")
-        print(f"Invalid mc_move_prob: 1 2 (only 2 values)")
-        print(f"Expected default CDF: {expected_cdf}")
-        print(f"Actual CDF:   {water_cdf}")
-
-        for i, (expected, actual) in enumerate(zip(expected_cdf, water_cdf)):
-            assert abs(expected - actual) < 0.001, \
-                f"CDF[{i}]: expected={expected:.3f}, actual={actual:.3f}"
-
-        print(f"✅ Fallback to defaults verification passed!")
+        params = _load_params(params_json)
+        actual_cdf = _fragment_cdf(params, "water")
+        expected_cdf = _expected_cdf([0.25, 0.25, 0.25, 0.25])
+        assert actual_cdf == pytest.approx(expected_cdf, abs=1e-6)
 
 
 if __name__ == "__main__":

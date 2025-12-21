@@ -3,11 +3,10 @@ Example-based validation tests for gcmc_cpu
 基于实际应用场景的GCMC验证测试
 """
 
+import json
 import pytest
 import numpy as np
 import subprocess
-import tempfile
-import re
 from pathlib import Path
 
 # Path to gcmc_cpu executable
@@ -18,47 +17,43 @@ class TestGCMCExamples:
     """Test suite for GCMC example-based validation"""
 
     @staticmethod
-    def analyze_gcmc_output(output_text):
-        """Parse GCMC output for key metrics"""
+    def analyze_gcmc_output(out_prefix: Path):
+        """Parse final PDB for key metrics without relying on stdout."""
         metrics = {
             "final_count": {},
-            "acceptance_rates": {},
-            "energy": {},
         }
 
-        # Look for final statistics section specifically
-        final_section = output_text
-        if "Final statistics" in output_text:
-            final_section = output_text.split("Final statistics")[-1]
-
-        # Extract final molecule counts from the final section
-        frag_matches = re.findall(r'(\w+):\s+(\d+)\s+\(accept:\s+([\d.]+)%\)', final_section)
-        if frag_matches:
-            # Use only the last occurrence of each fragment
-            for frag_name, count, accept in frag_matches:
-                metrics["final_count"][frag_name] = int(count)
-                metrics["acceptance_rates"][frag_name] = float(accept)
+        final_top = Path(f"{out_prefix}_final.top")
+        if final_top.exists():
+            in_molecules = False
+            for line in final_top.read_text().splitlines():
+                stripped = line.strip()
+                if not stripped or stripped.startswith((';', '#')):
+                    continue
+                if stripped.lower() == "[ molecules ]":
+                    in_molecules = True
+                    continue
+                if in_molecules:
+                    parts = stripped.split()
+                    if len(parts) >= 2 and parts[1].isdigit():
+                        metrics["final_count"][parts[0].upper()] = int(parts[1])
         else:
-            # Fallback to full text if no matches in final section
-            frag_matches = re.findall(r'(\w+):\s+(\d+)\s+\(accept:\s+([\d.]+)%\)', output_text)
-            for frag_name, count, accept in frag_matches:
-                metrics["final_count"][frag_name] = int(count)
-                metrics["acceptance_rates"][frag_name] = float(accept)
+            final_pdb = Path(f"{out_prefix}_final.pdb")
+            assert final_pdb.exists(), f"Missing final PDB: {final_pdb}"
 
-        # Extract energy
-        energy_match = re.search(r'Average energy:\s+([-\d.]+)\s*±\s*([\d.]+)', output_text)
-        if energy_match:
-            metrics["energy"]["average"] = float(energy_match.group(1))
-            metrics["energy"]["std"] = float(energy_match.group(2))
+            resids_by_name = {}
+            for line in final_pdb.read_text().splitlines():
+                if not line.startswith(("ATOM", "HETATM")):
+                    continue
+                resname = line[17:20].strip().upper()
+                try:
+                    resid = int(line[22:26])
+                except ValueError:
+                    continue
+                resids_by_name.setdefault(resname, set()).add(resid)
 
-        current_energy = re.search(r'Current energy:\s+([-\d.]+)', output_text)
-        if current_energy:
-            metrics["energy"]["current"] = float(current_energy.group(1))
-
-        # Extract total acceptance rate
-        total_accept = re.search(r'Total acceptance rate:\s+([\d.]+)%', output_text)
-        if total_accept:
-            metrics["acceptance_rates"]["total"] = float(total_accept.group(1))
+            for resname, resids in resids_by_name.items():
+                metrics["final_count"][resname] = len(resids)
 
         return metrics
 
@@ -137,18 +132,17 @@ moves_per_step:1
         inp_file = tmp_path / "water.inp"
         inp_file.write_text(inp_content)
 
+        out_prefix = tmp_path / "water_box"
         result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "42"],
+            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "42", "--prefix", str(out_prefix)],
             cwd=str(tmp_path),
             capture_output=True,
             text=True,
             timeout=20
         )
 
-        metrics = self.analyze_gcmc_output(result.stdout)
-
-        # Check simulation completed
         assert result.returncode == 0, "Water box simulation should complete successfully"
+        metrics = self.analyze_gcmc_output(out_prefix)
 
         # Check water molecules were inserted
         assert "WAT" in metrics["final_count"], "Water molecules should be present"
@@ -199,38 +193,56 @@ MOL2   1
 """
         top_file.write_text(top_content)
 
+        mol1_itp = tmp_path / "mol1.itp"
+        mol1_itp.write_text("""[ moleculetype ]
+MOL1  1
+
+[ atoms ]
+1  C  1  MOL1  C  1  0.0  12.011
+""")
+
+        mol2_itp = tmp_path / "mol2.itp"
+        mol2_itp.write_text("""[ moleculetype ]
+MOL2  1
+
+[ atoms ]
+1  N  1  MOL2  N  1  -0.5  14.007
+""")
+
         # Test with different chemical potentials
         inp_content = f"""# Multi-component test
 inp_units:nm
 pdb:{str(pdb_file)}
 top:{str(top_file)}
+fragitp:{str(mol1_itp)}
+fragitp:{str(mol2_itp)}
 op_pdb:multi.pdb
 op_top:multi.top
 box_size:15.0 15.0 15.0
 temperature:300.0
 cutoff:7.0
-mcsteps:3000
-nprint:1000
-fragname:MOL1,MOL2
-fragconc:55.0
-fragmuex:-8.0,-10.0
-mc_time:0.5,0.5
+mcsteps:500
+nprint:100
+fragname:MOL1 MOL2
+fragconc:1.0 1.0
+fragmuex:5.0 5.0
+mctime:1.0 1.0
+mc_move_prob:1 0 0 0
 """
         inp_file = tmp_path / "multi.inp"
         inp_file.write_text(inp_content)
 
+        out_prefix = tmp_path / "multi_component"
         result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "777"],
+            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "777", "--prefix", str(out_prefix)],
             cwd=str(tmp_path),
             capture_output=True,
             text=True,
             timeout=30
         )
 
-        metrics = self.analyze_gcmc_output(result.stdout)
-
-        # Check simulation completed
         assert result.returncode == 0, "Multi-component simulation should complete"
+        metrics = self.analyze_gcmc_output(out_prefix)
 
         # Check both molecule types were considered
         # At least one type should be present
@@ -297,18 +309,17 @@ fragconf:3
         inp_file = tmp_path / "cavity.inp"
         inp_file.write_text(inp_content)
 
+        out_prefix = tmp_path / "cavity"
         result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "999"],
+            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "999", "--prefix", str(out_prefix)],
             cwd=str(tmp_path),
             capture_output=True,
             text=True,
             timeout=30
         )
 
-        metrics = self.analyze_gcmc_output(result.stdout)
-
-        # Check simulation completed
         assert result.returncode == 0, "Cavity filling simulation should complete"
+        metrics = self.analyze_gcmc_output(out_prefix)
 
         # Check water molecules were inserted
         water_count = metrics["final_count"].get("WAT", 0)
@@ -370,23 +381,22 @@ fragmuex:-5.0
             inp_file = tmp_path / f"temp_{T}.inp"
             inp_file.write_text(inp_content)
 
+            out_prefix = tmp_path / f"temp_{T}"
             result = subprocess.run(
-                [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", str(T)],
+                [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", str(T), "--prefix", str(out_prefix)],
                 cwd=str(tmp_path),
                 capture_output=True,
                 text=True,
                 timeout=30
             )
 
-            metrics = self.analyze_gcmc_output(result.stdout)
+            assert result.returncode == 0, f"Simulation at {T}K should complete"
+            metrics = self.analyze_gcmc_output(out_prefix)
 
-            count = metrics["final_count"].get("gas", 0)
+            count = metrics["final_count"].get("GAS", 0)
             volume = 15.0 * 15.0 * 15.0
             density = count / volume
             densities.append(density)
-
-            # Check simulation ran
-            assert result.returncode == 0, f"Simulation at {T}K should complete"
 
         # Both temperatures should produce some molecules
         assert all(d >= 0 for d in densities), "Densities should be non-negative"
@@ -442,22 +452,21 @@ fragmuex:-10.0,-10.0
         inp_file = tmp_path / "ions.inp"
         inp_file.write_text(inp_content)
 
+        out_prefix = tmp_path / "ions"
         result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "123"],
+            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "123", "--prefix", str(out_prefix)],
             cwd=str(tmp_path),
             capture_output=True,
             text=True,
             timeout=30
         )
 
-        # Check simulation completed
         assert result.returncode == 0, "Ion insertion simulation should complete"
-
-        metrics = self.analyze_gcmc_output(result.stdout)
+        metrics = self.analyze_gcmc_output(out_prefix)
 
         # Check if any ions were inserted (may be 0 for short runs)
-        na_count = metrics["final_count"].get("Na+", 0)
-        cl_count = metrics["final_count"].get("Cl-", 0)
+        na_count = metrics["final_count"].get("NA+", 0)
+        cl_count = metrics["final_count"].get("CL-", 0)
 
         # At least the simulation should recognize both ion types
         assert result.returncode == 0, "Ion system should be properly configured"
@@ -512,8 +521,9 @@ fragmuex:-5.0
         inp_file = tmp_path / "no_cbmc.inp"
         inp_file.write_text(inp_no_cbmc)
 
+        no_cbmc_prefix = tmp_path / "no_cbmc"
         result_no_cbmc = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "555"],
+            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "555", "--prefix", str(no_cbmc_prefix)],
             cwd=str(tmp_path),
             capture_output=True,
             text=True,
@@ -525,8 +535,20 @@ fragmuex:-5.0
         inp_file_cbmc = tmp_path / "with_cbmc.inp"
         inp_file_cbmc.write_text(inp_cbmc)
 
+        cbmc_prefix = tmp_path / "with_cbmc"
+        params_json = tmp_path / "with_cbmc_params.json"
         result_cbmc = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file_cbmc), "--seed", "555"],
+            [
+                str(GCMC_CPU_PATH),
+                "--inp",
+                str(inp_file_cbmc),
+                "--seed",
+                "555",
+                "--prefix",
+                str(cbmc_prefix),
+                "--dump-params",
+                str(params_json),
+            ],
             cwd=str(tmp_path),
             capture_output=True,
             text=True,
@@ -537,5 +559,6 @@ fragmuex:-5.0
         assert result_no_cbmc.returncode == 0, "Standard insertion should work"
         assert result_cbmc.returncode == 0, "CBMC insertion should work"
 
-        # Check that CBMC was recognized
-        assert "conf" in result_cbmc.stdout.lower(), "CBMC should be mentioned in output"
+        assert params_json.exists(), "dump-params output missing"
+        params = json.loads(params_json.read_text())
+        assert params.get("bias", {}).get("use_conf_bias") is True
