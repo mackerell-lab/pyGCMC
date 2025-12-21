@@ -107,6 +107,28 @@ def _coulomb_energy_kj_mol(*, r_nm: float, q1: float, q2: float) -> float:
     return COULOMB * q1 * q2 / r_nm
 
 
+def _expected_pacc_with_cavity(rec: dict, move: str) -> float:
+    beta = float(rec["beta"])
+    deltaU = float(rec["deltaU"])
+    n_before = int(rec["nBefore"])
+    z = max(float(rec["z"]), 1e-30)
+    v_box = float(rec["vBox"])
+    cavity = max(float(rec["cavityFraction"]), 1e-30)
+    q_forward = max(float(rec["qForward"]), 1e-30)
+    q_reverse = max(float(rec["qReverse"]), 1e-30)
+    proposal_ratio = float(rec.get("proposalRatio", 1.0))
+
+    if move == "insertion":
+        base = (z * v_box * cavity / (n_before + 1)) * math.exp(-beta * deltaU)
+    else:
+        if n_before <= 0:
+            return 0.0
+        base = (n_before / (z * v_box * cavity)) * math.exp(-beta * deltaU)
+
+    base *= (q_forward / q_reverse) * proposal_ratio
+    return min(1.0, base)
+
+
 def _write_ideal_gas_itp(work: Path) -> tuple[Path, Path]:
     par = work / "ideal_par.itp"
     frag = work / "ideal_frag.itp"
@@ -250,6 +272,78 @@ FRG  1
     }
 
 
+def _write_cavity_bias_system(work: Path) -> dict[str, Path]:
+    pdb = work / "cavity.pdb"
+    _write_text(
+        pdb,
+        """
+CRYST1   30.000   30.000   30.000  90.00  90.00  90.00 P 1           1
+ATOM      1  C   MOL A   1      10.000  10.000  10.000  1.00  0.00           C
+ATOM      2  X   FRG A   2      20.000  20.000  20.000  1.00  0.00           C
+END
+""",
+    )
+
+    par = work / "cavity_par.itp"
+    _write_text(
+        par,
+        """
+[ defaults ]
+1 2 yes 0.5 0.8333
+
+[ atomtypes ]
+; name  at.num  mass   charge  ptype  sigma   epsilon
+C       0       12.011 0.000   A      0.300   0.200
+X       0       1.000  0.000   A      0.250   0.100
+""",
+    )
+
+    frag = work / "frag.itp"
+    _write_text(
+        frag,
+        """
+[ moleculetype ]
+FRG  1
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge  mass
+1   X     1      FRG      X     1     0.000   1.000
+""",
+    )
+
+    top = work / "cavity.top"
+    _write_text(
+        top,
+        """
+[ defaults ]
+1 2 yes 0.5 0.8333
+
+[ moleculetype ]
+MOL  2
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge  mass
+1   C     1      MOL      C     1     0.000   12.011
+
+[ moleculetype ]
+FRG  1
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge  mass
+1   X     1      FRG      X     1     0.000   1.000
+
+[ system ]
+CavityBias
+
+[ molecules ]
+MOL  1
+FRG  1
+""",
+    )
+
+    return {"pdb": pdb, "par": par, "frag": frag, "top": top}
+
+
 def test_acceptance_formula_insertion_and_deletion_ideal_gas(gcmc_cpu, temp_dir):
     work = Path(temp_dir) / "physical_contracts" / "acceptance"
     work.mkdir(parents=True, exist_ok=True)
@@ -350,6 +444,78 @@ mc_move_prob:1 1 0 0
         int(rec_del["nBefore"]) / (float(rec_del["z"]) * float(rec_del["vBox"])),
     )
     assert float(rec_del["pAcc"]) == pytest.approx(expected_del, rel=1e-12, abs=1e-12)
+
+
+def test_cavity_bias_pacc_matches_acceptance_formula(gcmc_cpu, temp_dir):
+    work = Path(temp_dir) / "physical_contracts" / "cavity_bias"
+    work.mkdir(parents=True, exist_ok=True)
+
+    files = _write_cavity_bias_system(work)
+
+    out_prefix = work / "run" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    accept_log = work / "run" / "acceptance.jsonl"
+
+    inp = work / "run" / "test.inp"
+    _write_inp(
+        inp,
+        f"""
+random_seed:777
+par:{files["par"]}
+fragitp:{files["frag"]}
+fragname:FRG
+fragconc:1.0
+fragmuex:0.0
+
+pdb:{files["pdb"]}
+top:{files["top"]}
+box_size:30.0 30.0 30.0
+cutoff:8.0
+grid_dx:2.0
+probe_radius:1.4
+use_cavity_bias:yes
+use_vdw_radius_for_grid:yes
+exclude_hydrogens_from_grid:no
+temperature:300.0
+moves_per_step:1
+mcsteps:200
+nprint:200
+mc_move_prob:0.5 0.5 0 0
+""",
+    )
+
+    result = _run_gcmc_cpu(
+        gcmc_cpu,
+        workdir=work / "run",
+        inp=inp,
+        out_prefix=out_prefix,
+        extra_args=["--dump-accept", str(accept_log)],
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    records = _load_accept_records(accept_log)
+    ins_rec = next(
+        (r for r in records
+         if r.get("move") == "insertion"
+         and str(r.get("species", "")).strip().upper() == "FRG"),
+        None,
+    )
+    del_rec = next(
+        (r for r in records
+         if r.get("move") == "deletion"
+         and str(r.get("species", "")).strip().upper() == "FRG"
+         and int(r.get("nBefore", 0)) > 0),
+        None,
+    )
+    assert ins_rec is not None, "Expected at least one FRG insertion record"
+    assert del_rec is not None, "Expected at least one FRG deletion record with nBefore > 0"
+
+    expected_ins = _expected_pacc_with_cavity(ins_rec, "insertion")
+    assert float(ins_rec["pAcc"]) == pytest.approx(expected_ins, rel=1e-6, abs=1e-6)
+
+    expected_del = _expected_pacc_with_cavity(del_rec, "deletion")
+    assert float(del_rec["pAcc"]) == pytest.approx(expected_del, rel=1e-6, abs=1e-6)
 
 
 def test_mu_targets_stable_concentration_with_insertion_and_deletion(gcmc_cpu, temp_dir):

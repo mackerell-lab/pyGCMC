@@ -76,12 +76,15 @@ from cpu_cli.asymmetric_proposal_bias import (
 
 # gcmc_opencl example deck smoke tests (3 functions)
 from cpu_cli.gcmc_opencl_examples import (
+    test_opencl_inp_key_inventory_matches_examples,
     test_opencl_twowater_example_runs_and_preserves_pdb_cryst1,
     test_opencl_waterbox_hollow_example_smoke_runs,
     test_opencl_test_mg_example_smoke_runs_and_converts_cutoff_units,
     test_opencl_waterbox_example_smoke_runs_and_enables_cavity_bias,
     test_opencl_benz_example_smoke_runs_and_parses_multi_fragment_lists,
     test_opencl_protein_example_dump_params_parses_complex_deck,
+    test_opencl_cdk2_example_smoke_runs_and_reports_ignored_gcmc_cutoff,
+    test_opencl_lysozyme_example_smoke_runs_and_reports_ignored_map_keys,
 )
 
 # Initial system builder regressions and bias-term consistency (4 functions)
@@ -106,6 +109,7 @@ from cpu_cli.movement_energy_translation_rotation import (
 # Physical-contract GCMC checks (3 functions)
 from cpu_cli.physical_contracts import (
     test_acceptance_formula_insertion_and_deletion_ideal_gas,
+    test_cavity_bias_pacc_matches_acceptance_formula,
     test_mu_targets_stable_concentration_with_insertion_and_deletion,
     test_poisson_number_distribution_ideal_gas,
     test_cutoff_excludes_far_lj_interactions_in_insertion_energy,

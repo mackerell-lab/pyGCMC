@@ -45,6 +45,81 @@ def _read_inp_box_size_angstrom(inp_path: Path) -> tuple[float, float, float]:
     raise AssertionError(f"box_size not found in {inp_path}")
 
 
+def _extract_inp_keys(inp_path: Path) -> list[str]:
+    keys: list[str] = []
+    for raw in inp_path.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        key = line.split(":", 1)[0].strip()
+        if key and key not in keys:
+            keys.append(key)
+    return sorted(keys)
+
+
+def _load_inp_key_inventory(test_data_dir: Path) -> dict:
+    inventory_path = test_data_dir / "gcmc_opencl_examples" / "inp_key_inventory.json"
+    return json.loads(inventory_path.read_text())
+
+
+def _assert_inp_key_inventory(inp_path: Path, expected_keys: list[str]) -> None:
+    actual = _extract_inp_keys(inp_path)
+    assert actual == sorted(expected_keys)
+
+
+def _assert_inp_key_classification(params: dict, *, example: str, inventory: dict) -> None:
+    expected = inventory["examples"][example]
+    expected_unknown = set(expected.get("unknown", []))
+    expected_keys = set(expected["keys"])
+    ignored_keys = set(inventory["ignored_keys"])
+    expected_ignored = expected_keys & ignored_keys
+    assert set(params["basic"]["unknown_inp_keys"]) == expected_unknown
+    assert set(params["basic"]["ignored_inp_keys"]) == expected_ignored
+
+
+def _sanitize_fragment_name(name: str) -> str:
+    out = []
+    for ch in name:
+        if ch.isalnum() or ch in "_-":
+            out.append(ch)
+        else:
+            out.append("_")
+    return "".join(out)
+
+
+def _extract_frag_names_and_muex(inp_path: Path) -> tuple[list[str], list[float]]:
+    frag_names: list[str] = []
+    frag_muex: list[float] = []
+    for raw in inp_path.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        key = key.strip()
+        parts = value.split()
+        if key == "fragname":
+            frag_names.extend(parts)
+        elif key == "fragmuex":
+            frag_muex.extend(float(x) for x in parts)
+    assert frag_names, f"No fragname entries found in {inp_path}"
+    assert frag_muex, f"No fragmuex entries found in {inp_path}"
+    assert len(frag_names) == len(frag_muex)
+    return frag_names, frag_muex
+
+
+def _read_statistics_n_total(stats_path: Path) -> list[int]:
+    n_total: list[int] = []
+    for line in stats_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+        n_total.append(int(parts[2]))
+    return n_total
+
+
 def _write_smoke_inp_from_opencl_example(
     src_inp: Path,
     dst_inp: Path,
@@ -78,6 +153,24 @@ def _symlink_forcefield_dir(work: Path, test_data_dir: Path) -> None:
     if link.exists() or link.is_symlink():
         link.unlink()
     link.symlink_to(test_data_dir / "charmm36.ff", target_is_directory=True)
+
+
+def _symlink_forcefield_dir_under(work: Path, test_data_dir: Path, rel_dir: str) -> None:
+    base = work / rel_dir
+    base.mkdir(parents=True, exist_ok=True)
+    link = base / "charmm36.ff"
+    if link.exists() or link.is_symlink():
+        link.unlink()
+    link.symlink_to(test_data_dir / "charmm36.ff", target_is_directory=True)
+
+
+def test_opencl_inp_key_inventory_matches_examples(test_data_dir):
+    inventory = _load_inp_key_inventory(Path(test_data_dir))
+    examples = inventory.get("examples", {})
+    for name, meta in examples.items():
+        inp_path = Path(test_data_dir) / "gcmc_opencl_examples" / name / meta["inp"]
+        assert inp_path.exists(), f"Missing INP for {name}: {inp_path}"
+        _assert_inp_key_inventory(inp_path, meta["keys"])
 
 
 def test_opencl_twowater_example_runs_and_preserves_pdb_cryst1(gcmc_cpu, test_data_dir, temp_dir):
@@ -133,6 +226,8 @@ def test_opencl_twowater_example_runs_and_preserves_pdb_cryst1(gcmc_cpu, test_da
 
     params = json.loads(params_json.read_text())
     assert params["basic"]["inp_units"] == "gcmc_gpu"
+    inventory = _load_inp_key_inventory(Path(test_data_dir))
+    _assert_inp_key_classification(params, example="twowater", inventory=inventory)
 
 
 def test_opencl_waterbox_hollow_example_smoke_runs(gcmc_cpu, test_data_dir, temp_dir):
@@ -151,6 +246,7 @@ def test_opencl_waterbox_hollow_example_smoke_runs(gcmc_cpu, test_data_dir, temp
 
     out_prefix = work / "out" / "gcmc"
     out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    params_json = work / "out" / "params.json"
 
     cryst_in = _read_cryst1_box_angstrom(work / "waterbox.pdb")
 
@@ -163,6 +259,8 @@ def test_opencl_waterbox_hollow_example_smoke_runs(gcmc_cpu, test_data_dir, temp
             str(out_prefix),
             "--seed",
             "321",
+            "--dump-params",
+            str(params_json),
         ],
         cwd=str(work),
         capture_output=True,
@@ -174,6 +272,9 @@ def test_opencl_waterbox_hollow_example_smoke_runs(gcmc_cpu, test_data_dir, temp
     final_pdb = Path(f"{out_prefix}_final.pdb")
     assert final_pdb.exists()
     assert _read_cryst1_box_angstrom(final_pdb) == pytest.approx(cryst_in, abs=1e-3)
+    params = json.loads(params_json.read_text())
+    inventory = _load_inp_key_inventory(Path(test_data_dir))
+    _assert_inp_key_classification(params, example="waterbox_hollow", inventory=inventory)
 
 def test_opencl_waterbox_example_smoke_runs_and_enables_cavity_bias(gcmc_cpu, test_data_dir, temp_dir):
     src = test_data_dir / "gcmc_opencl_examples" / "waterbox"
@@ -231,6 +332,8 @@ def test_opencl_waterbox_example_smoke_runs_and_enables_cavity_bias(gcmc_cpu, te
     assert params["bias"]["use_cavity_bias"] is True
     assert params["space"]["use_vdw_radius_for_grid"] is True
     assert params["space"]["exclude_hydrogens_from_grid"] is False
+    inventory = _load_inp_key_inventory(Path(test_data_dir))
+    _assert_inp_key_classification(params, example="waterbox", inventory=inventory)
 
 
 def test_opencl_benz_example_smoke_runs_and_parses_multi_fragment_lists(gcmc_cpu, test_data_dir, temp_dir):
@@ -244,7 +347,12 @@ def test_opencl_benz_example_smoke_runs_and_parses_multi_fragment_lists(gcmc_cpu
 
     shutil.copy(src / "waterbox.top", work / "waterbox.top")
     shutil.copy(src / "waterbox.pdb", work / "waterbox.pdb")
-    _write_smoke_inp_from_opencl_example(src / "gcmc.inp", work / "run.inp", mcsteps=0)
+    _write_smoke_inp_from_opencl_example(
+        src / "gcmc.inp",
+        work / "run.inp",
+        mcsteps=3,
+        overrides={"nprint": "1"},
+    )
     _symlink_forcefield_dir(work, Path(test_data_dir))
 
     out_prefix = work / "out" / "gcmc"
@@ -294,6 +402,38 @@ def test_opencl_benz_example_smoke_runs_and_parses_multi_fragment_lists(gcmc_cpu
     assert [float(x) for x in params["fragment"]["muex_list_kj_mol"]] == pytest.approx(
         expected_muex_kj, abs=1e-4
     )
+    inventory = _load_inp_key_inventory(Path(test_data_dir))
+    _assert_inp_key_classification(params, example="benz", inventory=inventory)
+
+    frag_names, frag_muex = _extract_frag_names_and_muex(src / "gcmc.inp")
+    out_dir = out_prefix.parent
+    active_line_counts: list[int] = []
+    active_last_counts: list[int] = []
+    for frag_name, expected_muex in zip(frag_names, frag_muex):
+        sanitized = _sanitize_fragment_name(frag_name)
+        active_path = out_dir / f"active_{sanitized}.dat"
+        muex_path = out_dir / f"muex_{sanitized}.dat"
+        assert active_path.exists()
+        assert muex_path.exists()
+
+        active_lines = [line.strip() for line in active_path.read_text().splitlines() if line.strip()]
+        muex_lines = [line.strip() for line in muex_path.read_text().splitlines() if line.strip()]
+        assert active_lines, f"{active_path} unexpectedly empty"
+        assert muex_lines, f"{muex_path} unexpectedly empty"
+
+        active_values = [int(val) for val in active_lines]
+        muex_values = [float(val) for val in muex_lines]
+        assert all(val >= 0 for val in active_values)
+        assert all(abs(val - expected_muex) <= 0.02 for val in muex_values)
+        active_line_counts.append(len(active_values))
+        active_last_counts.append(active_values[-1])
+
+    stats_path = Path(f"{out_prefix}_statistics.dat")
+    assert stats_path.exists()
+    n_total = _read_statistics_n_total(stats_path)
+    assert n_total, f"{stats_path} unexpectedly empty"
+    assert all(count == len(n_total) for count in active_line_counts)
+    assert sum(active_last_counts) == n_total[-1]
 
 
 def test_opencl_protein_example_dump_params_parses_complex_deck(gcmc_cpu, test_data_dir, temp_dir):
@@ -358,6 +498,137 @@ def test_opencl_protein_example_dump_params_parses_complex_deck(gcmc_cpu, test_d
     assert params["bias"]["use_conf_bias"] is True
     assert int(params["bias"]["num_conf_bias_trials"]) == 10
     assert params["fragment"]["use_number_water_nbar"] is True
+    inventory = _load_inp_key_inventory(Path(test_data_dir))
+    _assert_inp_key_classification(params, example="protein", inventory=inventory)
+
+
+def test_opencl_cdk2_example_smoke_runs_and_reports_ignored_gcmc_cutoff(gcmc_cpu, test_data_dir, temp_dir):
+    src = test_data_dir / "gcmc_opencl_examples" / "cdk2"
+    assert (src / "test_conf.inp").exists()
+    assert (src / "1h1q_silcs.1.top").exists()
+    assert (src / "1h1q_silcs.1.pdb").exists()
+
+    work = Path(temp_dir) / "opencl_cdk2"
+    work.mkdir(parents=True, exist_ok=True)
+
+    shutil.copy(src / "1h1q_silcs.1.top", work / "1h1q_silcs.1.top")
+    shutil.copy(src / "1h1q_silcs.1.pdb", work / "1h1q_silcs.1.pdb")
+    _write_smoke_inp_from_opencl_example(src / "test_conf.inp", work / "run.inp", mcsteps=0)
+    _symlink_forcefield_dir(work, Path(test_data_dir))
+
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    params_json = work / "out" / "params.json"
+
+    result = subprocess.run(
+        [
+            gcmc_cpu,
+            "--inp",
+            str(work / "run.inp"),
+            "--prefix",
+            str(out_prefix),
+            "--seed",
+            "101",
+            "--dump-params",
+            str(params_json),
+        ],
+        cwd=str(work),
+        capture_output=True,
+        text=True,
+        timeout=240,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    final_pdb = Path(f"{out_prefix}_final.pdb")
+    assert final_pdb.exists()
+
+    op_pdb = work / "test.pdb"
+    op_top = work / "test.top"
+    assert op_pdb.exists()
+    assert op_top.exists()
+    assert op_top.read_text().strip(), "op_top unexpectedly empty"
+
+    params = json.loads(params_json.read_text())
+    assert params["basic"]["inp_units"] == "gcmc_gpu"
+    assert float(params["space"]["grid_spacing_nm"]) == pytest.approx(0.1, abs=1e-6)
+    assert float(params["space"]["cutoff_nm"]) == pytest.approx(1.2, abs=1e-6)
+    assert params["energy"]["use_group_cutoff"] is True
+    assert params["bias"]["use_cavity_bias"] is True
+    assert params["bias"]["use_conf_bias"] is True
+    assert int(params["bias"]["num_conf_bias_trials"]) == 10
+    assert params["fragment"]["use_number_water_nbar"] is True
+    assert params["basic"]["unknown_inp_keys"] == []
+    ignored = set(params["basic"]["ignored_inp_keys"])
+    assert "use_gcmc_cutoff" in ignored
+    inventory = _load_inp_key_inventory(Path(test_data_dir))
+    _assert_inp_key_classification(params, example="cdk2", inventory=inventory)
+
+
+def test_opencl_lysozyme_example_smoke_runs_and_reports_ignored_map_keys(gcmc_cpu, test_data_dir, temp_dir):
+    src = test_data_dir / "gcmc_opencl_examples" / "lysozyme"
+    assert (src / "gcmc.0.inp").exists()
+    assert (src / "181L_apo_silcs.1.top").exists()
+    assert (src / "181L_apo_silcs.1.pdb").exists()
+    assert (src / "181L_apo_silcs.1.equil.rec.pdb").exists()
+
+    work = Path(temp_dir) / "opencl_lysozyme"
+    work.mkdir(parents=True, exist_ok=True)
+
+    examples_dir = work / "examples" / "lysozyme"
+    examples_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy(src / "181L_apo_silcs.1.top", examples_dir / "181L_apo_silcs.1.top")
+    shutil.copy(src / "181L_apo_silcs.1.pdb", examples_dir / "181L_apo_silcs.1.pdb")
+    shutil.copy(
+        src / "181L_apo_silcs.1.equil.rec.pdb",
+        examples_dir / "181L_apo_silcs.1.equil.rec.pdb",
+    )
+    _write_smoke_inp_from_opencl_example(src / "gcmc.0.inp", work / "run.inp", mcsteps=0)
+    _symlink_forcefield_dir_under(work, Path(test_data_dir), "data")
+
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    params_json = work / "out" / "params.json"
+
+    result = subprocess.run(
+        [
+            gcmc_cpu,
+            "--inp",
+            str(work / "run.inp"),
+            "--prefix",
+            str(out_prefix),
+            "--seed",
+            "88",
+            "--dump-params",
+            str(params_json),
+        ],
+        cwd=str(work),
+        capture_output=True,
+        text=True,
+        timeout=240,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    final_pdb = Path(f"{out_prefix}_final.pdb")
+    assert final_pdb.exists()
+
+    op_top = examples_dir / "181L_apo_silcs.1.gc.0.top"
+    op_pdb = examples_dir / "181L_apo_silcs.1.gc.0.pdb"
+    assert op_top.exists()
+    assert op_pdb.exists()
+    assert op_top.read_text().strip(), "op_top unexpectedly empty"
+
+    params = json.loads(params_json.read_text())
+    assert params["basic"]["inp_units"] == "gcmc_gpu"
+    assert float(params["space"]["grid_spacing_nm"]) == pytest.approx(0.1, abs=1e-6)
+    assert float(params["space"]["cutoff_nm"]) == pytest.approx(1.2, abs=1e-6)
+    assert params["basic"]["unknown_inp_keys"] == []
+    ignored = set(params["basic"]["ignored_inp_keys"])
+    assert "initcycle" in ignored
+    assert "conserve_frags" in ignored
+    assert "map_generation" in ignored
+    assert "map_filename_prefix" in ignored
+    inventory = _load_inp_key_inventory(Path(test_data_dir))
+    _assert_inp_key_classification(params, example="lysozyme", inventory=inventory)
 
 
 def test_opencl_test_mg_example_smoke_runs_and_converts_cutoff_units(gcmc_cpu, test_data_dir, temp_dir):
@@ -418,3 +689,5 @@ def test_opencl_test_mg_example_smoke_runs_and_converts_cutoff_units(gcmc_cpu, t
     assert float(params["energy"]["fragment_cutoff_nm"]) == pytest.approx(1.2, abs=1e-6)
     assert params["space"]["use_vdw_radius_for_grid"] is True
     assert params["space"]["exclude_hydrogens_from_grid"] is False
+    inventory = _load_inp_key_inventory(Path(test_data_dir))
+    _assert_inp_key_classification(params, example="test", inventory=inventory)
