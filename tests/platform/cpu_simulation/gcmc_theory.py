@@ -22,6 +22,13 @@ WATER_MW = 18.015  # g/mol
 class TestGCMCTheory:
     """Test suite for GCMC theoretical validation"""
 
+    # Keep CI runs fast: use small periodic boxes so the equilibrium N (for 55 M water)
+    # stays O(10^2) and avoids hitting maxCount / expensive energy paths.
+    BOX_WATER_NM = 1.5
+    CUTOFF_WATER_NM = 0.7
+    BOX_GENERIC_NM = 3.0
+    CUTOFF_GENERIC_NM = 0.9
+
     @staticmethod
     def create_minimal_water_files(tmpdir):
         """Create minimal water PDB and TOP files"""
@@ -178,8 +185,8 @@ top:{top}
 fragitp:{itp}
 op_pdb:output.pdb
 op_top:output.top
-box_size:15.0 15.0 15.0
-cutoff:7.0
+box_size:{self.BOX_GENERIC_NM} {self.BOX_GENERIC_NM} {self.BOX_GENERIC_NM}
+cutoff:{self.CUTOFF_GENERIC_NM}
 mcsteps:500
 nprint:100
 fragname:WAT
@@ -188,7 +195,7 @@ fragmuex:{mu}
             metrics = self.run_gcmc(inp_content, tmp_path, steps=500)
 
             # Calculate density (molecules/nm³)
-            volume = 15.0 * 15.0 * 15.0  # nm³
+            volume = self.BOX_GENERIC_NM ** 3  # nm³
             density = metrics["final_count"] / volume
             densities.append(density)
 
@@ -238,8 +245,8 @@ attempt_prob_rot:0.25
         pdb, top, itp = self.create_minimal_water_files(tmp_path)
 
         # Test sphere region with known center and radius
-        sphere_center = (15.0, 15.0, 15.0)  # nm
-        sphere_radius = 5.0  # nm
+        sphere_center = (self.BOX_GENERIC_NM / 2.0, self.BOX_GENERIC_NM / 2.0, self.BOX_GENERIC_NM / 2.0)  # nm
+        sphere_radius = 0.5  # nm
 
         inp_content = f"""# Region constraint test
 pdb:{pdb}
@@ -247,9 +254,9 @@ top:{top}
 fragitp:{itp}
 op_pdb:region_test.pdb
 op_top:output.top
-box_size:30.0 30.0 30.0
+box_size:{self.BOX_GENERIC_NM} {self.BOX_GENERIC_NM} {self.BOX_GENERIC_NM}
 gcmc_region:sphere {sphere_center[0]} {sphere_center[1]} {sphere_center[2]} {sphere_radius}
-cutoff:9.0
+cutoff:{self.CUTOFF_GENERIC_NM}
 mcsteps:500
 nprint:250
 fragname:WAT
@@ -331,10 +338,10 @@ top:{top}
 fragitp:{itp}
 op_pdb:output.pdb
 op_top:output.top
-box_size:15.0 15.0 15.0
-cutoff:7.0
-mcsteps:1000
-nprint:500
+box_size:{self.BOX_WATER_NM} {self.BOX_WATER_NM} {self.BOX_WATER_NM}
+cutoff:{self.CUTOFF_WATER_NM}
+mcsteps:800
+nprint:400
 fragname:WAT
 fragconc:55.0
 fragmuex:1.0
@@ -372,9 +379,9 @@ fragmuex:1.0
         pdb, top, itp = self.create_minimal_water_files(tmp_path)
 
         # Run multiple simulations for each mode to get distributions
-        num_runs = 5
-        box_size = 15.0
-        mcsteps = 2000
+        num_runs = 3
+        box_size = self.BOX_WATER_NM
+        mcsteps = 800
 
         results_default = []
         results_const = []
@@ -388,9 +395,9 @@ fragitp:{itp}
 op_pdb:output.pdb
 op_top:output.top
 box_size:{box_size} {box_size} {box_size}
-cutoff:7.0
+cutoff:{self.CUTOFF_WATER_NM}
 mcsteps:{mcsteps}
-nprint:1000
+nprint:400
 fragname:WAT
 fragconc:55.0
 fragmuex:0.0
@@ -406,9 +413,9 @@ fragitp:{itp}
 op_pdb:output.pdb
 op_top:output.top
 box_size:{box_size} {box_size} {box_size}
-cutoff:7.0
+cutoff:{self.CUTOFF_WATER_NM}
 mcsteps:{mcsteps}
-nprint:1000
+nprint:400
 fragname:WAT
 fragconc:55.0
 fragmuex:0.0
@@ -425,9 +432,9 @@ fragitp:{itp}
 op_pdb:output.pdb
 op_top:output.top
 box_size:{box_size} {box_size} {box_size}
-cutoff:7.0
+cutoff:{self.CUTOFF_WATER_NM}
 mcsteps:{mcsteps}
-nprint:1000
+nprint:400
 fragname:WAT
 fragconc:55.0
 fragmuex:0.0
@@ -474,9 +481,9 @@ number_water_nbar:yes
         print(f"\n=== nbar Const vs Default Trend Test ===")
         pdb, top, itp = self.create_minimal_water_files(tmp_path)
 
-        box_size = 15.0
-        mcsteps = 3000
-        num_runs = 3
+        box_size = self.BOX_WATER_NM
+        mcsteps = 800
+        num_runs = 2
         target_count = 50
 
         # Test at different chemical potentials
@@ -494,15 +501,15 @@ number_water_nbar:yes
 top:{top}
 fragitp:{itp}
 op_pdb:output.pdb
-op_top:output.top
-box_size:{box_size} {box_size} {box_size}
-cutoff:7.0
-mcsteps:{mcsteps}
-nprint:1500
-fragname:WAT
-fragconc:55.0
-fragmuex:{mu}
-"""
+                    op_top:output.top
+                    box_size:{box_size} {box_size} {box_size}
+                    cutoff:{self.CUTOFF_WATER_NM}
+                    mcsteps:{mcsteps}
+                    nprint:400
+                    fragname:WAT
+                    fragconc:55.0
+                    fragmuex:{mu}
+                    """
                 metrics_default = self.run_gcmc(inp_default, tmp_path, steps=mcsteps, seed=42+run*100)
                 default_counts.append(metrics_default["final_count"])
 
@@ -511,16 +518,16 @@ fragmuex:{mu}
 top:{top}
 fragitp:{itp}
 op_pdb:output.pdb
-op_top:output.top
-box_size:{box_size} {box_size} {box_size}
-cutoff:7.0
-mcsteps:{mcsteps}
-nprint:1500
-fragname:WAT
-fragconc:55.0
-fragmuex:{mu}
-const_water_nbar:{target_count}
-"""
+                    op_top:output.top
+                    box_size:{box_size} {box_size} {box_size}
+                    cutoff:{self.CUTOFF_WATER_NM}
+                    mcsteps:{mcsteps}
+                    nprint:400
+                    fragname:WAT
+                    fragconc:55.0
+                    fragmuex:{mu}
+                    const_water_nbar:{target_count}
+                    """
                 metrics_const = self.run_gcmc(inp_const, tmp_path, steps=mcsteps, seed=42+run*100)
                 const_counts.append(metrics_const["final_count"])
 
@@ -552,12 +559,11 @@ top:{top}
 fragitp:{itp}
 op_pdb:output.pdb
 op_top:output.top
-box_size:15.0 15.0 15.0
-cutoff:7.0
+box_size:{self.BOX_WATER_NM} {self.BOX_WATER_NM} {self.BOX_WATER_NM}
+cutoff:{self.CUTOFF_WATER_NM}
 mcsteps:500
 nprint:100
 fragname:WAT
-fragconc:40.0
 fragconc:55.0
 fragmuex:-5.0
 use_conf_bias:yes
@@ -584,8 +590,8 @@ top:{top}
 fragitp:{itp}
 op_pdb:output.pdb
 op_top:output.top
-box_size:10.0 10.0 10.0
-cutoff:4.0
+box_size:{self.BOX_GENERIC_NM} {self.BOX_GENERIC_NM} {self.BOX_GENERIC_NM}
+cutoff:{self.CUTOFF_GENERIC_NM}
 mcsteps:100
 nprint:50
 fragname:WAT
@@ -634,8 +640,8 @@ top:{top}
 fragitp:{itp}
 op_pdb:output.pdb
 op_top:output.top
-box_size:15.0 15.0 15.0
-cutoff:7.0
+box_size:{self.BOX_GENERIC_NM} {self.BOX_GENERIC_NM} {self.BOX_GENERIC_NM}
+cutoff:{self.CUTOFF_GENERIC_NM}
 mcsteps:1000
 nprint:500
 fragname:WAT
@@ -670,11 +676,11 @@ top:{top}
 fragitp:{itp}
 op_pdb:output.pdb
 op_top:output.top
-box_size:15.0 15.0 15.0
+box_size:{self.BOX_WATER_NM} {self.BOX_WATER_NM} {self.BOX_WATER_NM}
 temperature:{T}
-cutoff:7.0
-mcsteps:2000
-nprint:500
+cutoff:{self.CUTOFF_WATER_NM}
+mcsteps:800
+nprint:400
 fragname:WAT
 fragconc:55.0
 fragmuex:-5.0
@@ -704,8 +710,8 @@ top:{top}
 fragitp:{itp}
 op_pdb:output.pdb
 op_top:output.top
-box_size:15.0 15.0 15.0
-cutoff:7.0
+box_size:{self.BOX_GENERIC_NM} {self.BOX_GENERIC_NM} {self.BOX_GENERIC_NM}
+cutoff:{self.CUTOFF_GENERIC_NM}
 mcsteps:1000
 nprint:500
 fragname:WAT

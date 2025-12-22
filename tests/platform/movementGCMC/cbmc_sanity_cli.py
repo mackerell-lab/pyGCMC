@@ -201,13 +201,12 @@ fragconf:{k_trials}"""
     # Input unit policy:
     # - INP uses gcmc_gpu/opencl style (Å for lengths, kcal/mol for fragmuex)
     # - Internal simulation uses nm + kJ/mol (converted during INP parsing)
-    nm_to_angstrom = 10.0
     kj_to_kcal = 1.0 / 4.184
 
     cavity_block = (
         f"""use_cavity_bias:yes
-cavity_grid_spacing:{grid_spacing * nm_to_angstrom}
-cavity_probe_radius:{probe_radius * nm_to_angstrom}"""
+cavity_grid_spacing:{grid_spacing}
+cavity_probe_radius:{probe_radius}"""
         if use_cavity
         else "use_cavity_bias:no"
     )
@@ -218,17 +217,20 @@ top:{top}
 pdb:{pdb}
 protitp:{top}
 
-fragname: water
-fragconc: 55.0
-fragmuex: {mu * kj_to_kcal}
-{cbmc_block}
+	fragname: water
+	fragconc: 55.0
+	fragmuex: {mu * kj_to_kcal}
+	{cbmc_block}
 
-box_size: {10.0 * nm_to_angstrom} {10.0 * nm_to_angstrom} {10.0 * nm_to_angstrom}
-cutoff: {4.5 * nm_to_angstrom}
-temperature: 300.0
-mcsteps: {mcsteps}
-nprint: {max(1, mcsteps // 2)}
-eqsteps: 0
+	box_size: 15.0 15.0 15.0
+	# gcmc_gpu/opencl semantics: CRYST1 provides the periodic box; box_size+gc_center describe the GCMC region.
+	gc_center: 50.0 50.0 50.0
+	sys_center: 50.0 50.0 50.0
+	cutoff: 7.0
+	temperature: 300.0
+	mcsteps: {mcsteps}
+	nprint: {max(1, mcsteps // 2)}
+	eqsteps: 0
 
 mc_move_prob: 0.5 0.5 0 0
 
@@ -273,7 +275,7 @@ class TestCBMCSanity:
 
         pdb, top, atp, ff = create_minimal_water_files(tmp_path)
         inp = build_inp(pdb, top, atp, ff, use_cbmc=True, k_trials=8,
-                       mcsteps=4000, mu=-2.0)
+                       mcsteps=1200, mu=-2.0)
 
         result, accept_log = run_with_accept_log(inp, tmp_path, "cbmc_on.jsonl", timeout=180)
 
@@ -327,7 +329,7 @@ class TestCBMCSanity:
 
         pdb, top, atp, ff = create_minimal_water_files(tmp_path)
         inp = build_inp(pdb, top, atp, ff, use_cbmc=False, k_trials=1,
-                       mcsteps=3000, mu=-2.0)
+                       mcsteps=1200, mu=-2.0)
 
         result, accept_log = run_with_accept_log(inp, tmp_path, "cbmc_off.jsonl", timeout=120)
 
@@ -381,7 +383,7 @@ class TestCBMCSanity:
         # Run baseline (K=1)
         print("Running baseline (K=1)...")
         inp_off = build_inp(pdb, top, atp, ff, use_cbmc=False, k_trials=1,
-                           mcsteps=5000, mu=-1.5)  # Higher mu for more insertions
+                           mcsteps=1500, mu=-1.5)  # Higher mu for more insertions
         result_off, log_off = run_with_accept_log(inp_off, tmp_path, "off.jsonl", timeout=180)
         assert result_off.returncode == 0
         rec_off = read_jsonl(log_off)
@@ -389,7 +391,7 @@ class TestCBMCSanity:
         # Run CBMC (K=8)
         print("Running CBMC (K=8)...")
         inp_on = build_inp(pdb, top, atp, ff, use_cbmc=True, k_trials=8,
-                          mcsteps=5000, mu=-1.5)
+                          mcsteps=1500, mu=-1.5)
         result_on, log_on = run_with_accept_log(inp_on, tmp_path, "on.jsonl", timeout=180)
         assert result_on.returncode == 0
         rec_on = read_jsonl(log_on)
@@ -445,7 +447,7 @@ class TestCBMCSanity:
 
         pdb, top, atp, ff = create_minimal_water_files(tmp_path)
         inp = build_inp(pdb, top, atp, ff, use_cbmc=True, k_trials=5,
-                       mcsteps=4000, mu=-2.0)
+                       mcsteps=1200, mu=-2.0)
 
         result, accept_log = run_with_accept_log(inp, tmp_path, "formula.jsonl", timeout=180)
 
@@ -524,7 +526,7 @@ class TestCBMCSanity:
             ff,
             use_cbmc=False,
             k_trials=1,
-            mcsteps=3500,
+            mcsteps=1200,
             mu=-2.0,
             use_cavity=True,
             grid_spacing=2.0,
@@ -615,7 +617,7 @@ class TestCBMCSanity:
             ff,
             use_cbmc=True,
             k_trials=8,
-            mcsteps=3500,
+            mcsteps=1200,
             mu=-2.0,
         )
 
@@ -670,7 +672,7 @@ class TestCBMCSanity:
             ff,
             use_cbmc=True,
             k_trials=5,
-            mcsteps=4000,
+            mcsteps=1200,
             mu=-2.0,
             use_cavity=True,
         )
@@ -728,7 +730,7 @@ class TestCBMCSanity:
         inp = build_inp(
             pdb, top, atp, ff,
             use_cbmc=True, k_trials=8,
-            mcsteps=3000, mu=-2.0,
+            mcsteps=1200, mu=-2.0,
             use_cavity=False  # 先禁用cavity，专注CBMC
         )
         

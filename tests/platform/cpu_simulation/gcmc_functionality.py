@@ -1049,16 +1049,17 @@ op_pdb: {tmp_path}/output.pdb
         state.forcefield.numTotalTypes = num_types
         state.forcefield.numMovementTypes = num_types
         state.forcefield.mixingRule = pygcmc.MCForceField.MixingRule.LorentzBerthelot
-        state.forcefield.ljSigmaType = [0.0] * num_types
-        state.forcefield.ljEpsType = [0.0] * num_types
-
+        sigma_types = [0.0] * num_types
+        eps_types = [0.0] * num_types
         for name in sorted(atomtypes):
             sigma, eps = atomtypes[name]
             idx = state.atomTypes.get_or_add_type(name)
             if 0 <= idx < num_types:
-                state.forcefield.ljSigmaType[idx] = float(sigma)
-                state.forcefield.ljEpsType[idx] = float(eps)
+                sigma_types[idx] = float(sigma)
+                eps_types[idx] = float(eps)
 
+        state.forcefield.ljSigmaType = sigma_types
+        state.forcefield.ljEpsType = eps_types
         state.forcefield.rebuildLJMatrix()
 
         cpu_platform.computeSystemEnergyPBCCutoff(state)

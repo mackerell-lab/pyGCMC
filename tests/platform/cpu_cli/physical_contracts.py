@@ -15,6 +15,7 @@ import json
 import math
 import statistics
 import sys
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -106,16 +107,17 @@ def _build_state_from_pdb_top(
     state.forcefield.numTotalTypes = num_types
     state.forcefield.numMovementTypes = num_types
     state.forcefield.mixingRule = pygcmc.MCForceField.MixingRule.LorentzBerthelot
-    state.forcefield.ljSigmaType = [0.0] * num_types
-    state.forcefield.ljEpsType = [0.0] * num_types
-
+    sigma_types = [0.0] * num_types
+    eps_types = [0.0] * num_types
     for name in sorted(atomtypes):
         sigma, eps = atomtypes[name]
         idx = state.atomTypes.get_or_add_type(name)
         if 0 <= idx < num_types:
-            state.forcefield.ljSigmaType[idx] = float(sigma)
-            state.forcefield.ljEpsType[idx] = float(eps)
+            sigma_types[idx] = float(sigma)
+            eps_types[idx] = float(eps)
 
+    state.forcefield.ljSigmaType = sigma_types
+    state.forcefield.ljEpsType = eps_types
     state.forcefield.rebuildLJMatrix()
     return mc_system, state
 
@@ -1395,3 +1397,25 @@ mc_move_prob:1 1 0 0
 
     assert sample_mean == pytest.approx(expected_mean, rel=0.25, abs=0.5)
     assert abs(sample_var - expected_mean) / max(expected_mean, 1e-6) < 0.35
+
+    # Stronger μVT contract: histogram ratio for Poisson law
+    #   P(N+1)/P(N) = (z * V) / (N+1)
+    # We only evaluate bins around the mean with enough statistics to avoid flakiness.
+    counts = Counter(n_values)
+    center = int(round(expected_mean))
+    n_min = max(0, center - 3)
+    n_max = center + 3
+    min_bin_count = 30
+
+    checked = 0
+    for n in range(n_min, n_max + 1):
+        c0 = counts.get(n, 0)
+        c1 = counts.get(n + 1, 0)
+        if c0 < min_bin_count or c1 < min_bin_count:
+            continue
+        empirical = c1 / c0
+        expected = expected_mean / float(n + 1)
+        assert empirical == pytest.approx(expected, rel=0.30, abs=0.15)
+        checked += 1
+
+    assert checked >= 3, f"Insufficient populated bins for Poisson ratio check: checked={checked}, counts={counts}"

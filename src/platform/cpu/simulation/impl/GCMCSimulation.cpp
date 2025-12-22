@@ -857,30 +857,28 @@ bool GCMCSimulation::setupFragments() {
     const auto& fragInfo = params_->get_fragment_info();
     const auto& fileInfo = params_->get_file_info();
     const auto& mcInfo = params_->get_mc_info();
-    const auto& space = params_->get_space_info();
     const auto& biasInfo = params_->get_bias_info();
 
     log("====== Setting up fragments ======");
 
-    // Parse region constraint early to get the correct volume for maxCount calculation
-    double effectiveVolume = params_->get_space_info().volume;  // Default to box volume
-    std::unique_ptr<movement::RegionConstraint> regionForVolume;
-
-    if (!space.gcmc_region.empty()) {
-        try {
-            movement::Vector3 movBoxSize(
-                state_->info.box[0],
-                state_->info.box[1],
-                state_->info.box[2]
-            );
-            regionForVolume = movement::RegionConstraint::parseRegion(space.gcmc_region, movBoxSize);
-            effectiveVolume = regionForVolume->getVolume();
-            log("Using region volume for maxCount calculation: ", effectiveVolume, " nm³");
-        } catch (const std::exception& e) {
-            log("WARNING: Failed to parse gcmc_region for volume calculation: ", e.what());
-            // Keep using box volume
+    // Determine a conservative per-type maxCount consistent with the original gcmc_gpu memory model:
+    // at most one fragment insertion per MC step (CBMC still inserts a single fragment instance).
+    //
+    // We treat this as a hard capacity limit for memory safety; if the system hits maxCount, further
+    // insertions are disabled and we do not attempt to preserve the unconstrained μVT distribution.
+    std::unordered_map<std::string, int> initialCounts;
+    if (state_) {
+        initialCounts.reserve(static_cast<size_t>(state_->activeResidueCount));
+        for (int residueIdx = 0; residueIdx < state_->activeResidueCount; ++residueIdx) {
+            const auto& residue = state_->residues[residueIdx];
+            if (!residue.active || residue.atomCount <= 0) {
+                continue;
+            }
+            initialCounts[normalizeName(residue.resname)] += 1;
         }
     }
+    const int maxInsertions = std::max(0, mcInfo.mc_steps);
+    constexpr int kMaxCountBuffer = 200;
 
     // Create multi-type fragment reservoir
     reservoir_ = std::make_unique<movement::MultiTypeReservoir>();
@@ -919,72 +917,10 @@ bool GCMCSimulation::setupFragments() {
         } else {
             frag.probability = 1.0 / fileInfo.fragment_names.size();
         }
-        
-        // Calculate maximum count from concentration and effective volume (region or box)
-        // Use effectiveVolume which accounts for region constraints
 
-        // When BOTH concentration and chemical potential are specified (nbar mode):
-        // - Use the concentration for maxCount (target number)
-        // - But if chemical potential is negative, reduce maxCount for efficiency
-        if (frag.concentration > 0 && frag.chemicalPotential < 0) {
-            // Both specified - nbar mode with negative chemical potential
-            // Negative mu means low activity, so reduce maxCount to avoid timeout
-            // Convert: 1 M = 0.6022 molecules/nm³ (NA/L in nm³)
-            const double M_TO_MOLECULES_PER_NM3 = 0.6022;  // 6.022e23 / 1e24
-            int calculated = static_cast<int>(frag.concentration * effectiveVolume * M_TO_MOLECULES_PER_NM3);
-            // For negative chemical potential in nbar mode, cap more aggressively
-            double muAbs = std::abs(frag.chemicalPotential);
-            if (muAbs >= 5.0) {
-                frag.maxCount = std::min(calculated, 30);  // Very negative mu - strict cap
-            } else if (muAbs >= 3.0) {
-                frag.maxCount = std::min(calculated, 50);
-            } else if (muAbs >= 1.0) {
-                frag.maxCount = std::min(calculated, 100);
-            } else {
-                frag.maxCount = std::min(calculated, 150);
-            }
-            log("Nbar mode with negative mu: C=", frag.concentration, " M, mu=", frag.chemicalPotential,
-                " maxCount=", frag.maxCount);
-        } else if (frag.concentration > 0) {
-            // Convert concentration (M) to number: N = C * V * 0.6022
-            // 1 M = 0.6022 molecules/nm³ (NA/L in nm³)
-            const double M_TO_MOLECULES_PER_NM3 = 0.6022;  // 6.022e23 / 1e24
-            int calculated = static_cast<int>(frag.concentration * effectiveVolume * M_TO_MOLECULES_PER_NM3);
-            // Only apply cap for large volumes to prevent runaway in tests
-            // For small regions, use the calculated value
-            if (effectiveVolume > 1000.0) {  // If volume > 1000 nm³
-                frag.maxCount = std::min(calculated, 200);  // Cap at 200 for large volumes
-            } else {
-                frag.maxCount = calculated;  // Use calculated value for small regions
-            }
-            log("Concentration mode: C=", frag.concentration, " M, volume=", effectiveVolume,
-                " nm³, calculated=", calculated, " maxCount capped at ", frag.maxCount);
-        } else if (frag.chemicalPotential != 0.0) {
-            // For chemical potential mode without concentration, use a STRICT cap
-            // to prevent runaway growth that causes timeouts in tests
-            // Much lower limits for test stability and performance
-            double muAbs = std::abs(frag.chemicalPotential);
-            if (muAbs >= 3.0) {
-                // Very high chemical potential - very strict cap
-                frag.maxCount = 50;  // Hard cap at 50 molecules for very high mu
-            } else if (muAbs >= 2.0) {
-                // High chemical potential - strict cap for test stability
-                frag.maxCount = 75;  // Hard cap at 75 molecules for high mu
-            } else if (muAbs >= 1.0) {
-                frag.maxCount = 100;  // Moderate cap for medium mu
-            } else {
-                // Low chemical potential - still reasonable cap
-                frag.maxCount = 150;  // Cap at 150 for low mu
-            }
-            log("Chemical potential mode: mu=", frag.chemicalPotential,
-                " maxCount set to ", frag.maxCount);
-        } else {
-            // No concentration or chemical potential - use a reasonable maximum
-            // Use 100 M as upper limit but cap at 300 molecules
-            const double M_TO_MOLECULES_PER_NM3 = 0.6022;  // 6.022e23 / 1e24
-            int calculated = static_cast<int>(100.0 * effectiveVolume * M_TO_MOLECULES_PER_NM3);
-            frag.maxCount = std::min(calculated, 300);
-        }
+        const auto itCount = initialCounts.find(normalizeName(frag.name));
+        const int initialCount = (itCount == initialCounts.end()) ? 0 : itCount->second;
+        frag.maxCount = initialCount + maxInsertions + kMaxCountBuffer;
         
         // Check if we have a template from the builder
         movement::FragmentTemplate tmpl;

@@ -104,6 +104,8 @@ from cpu_cli.fragment_template_geometry import (
 from cpu_cli.movement_energy_translation_rotation import (
     test_translation_move_deltaU_matches_analytic_lj_and_is_logged_in_dump_accept,
     test_rotation_move_deltaU_matches_analytic_lj_for_multi_atom_fragment,
+    test_translation_move_deltaU_matches_energy_backend_components_with_coulomb,
+    test_rotation_move_deltaU_matches_energy_backend_components_with_coulomb,
 )
 
 # Physical-contract GCMC checks (3 functions)
@@ -118,6 +120,11 @@ from cpu_cli.physical_contracts import (
     test_insertion_deltaU_matches_analytic_coulomb_energy,
     test_insertion_deltaU_matches_analytic_lj_plus_coulomb_energy,
     test_deletion_deltaU_is_negative_of_insertion_for_charged_system,
+)
+
+# MaxCount hard-cap policy regression (1 function)
+from cpu_cli.maxcount_policy import (
+    test_maxcount_is_initial_plus_mcsteps_plus_buffer,
 )
 
 # Movement step-size parameter compatibility (1 function)

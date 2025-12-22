@@ -552,6 +552,13 @@ void InpParserGCMC::enhance_param(model::param::Param& param) {
 
         // Bias radii
         bias_info.sigma *= LEN;
+        // NOTE: Most legacy INP decks (gcmc_gpu/opencl) are written in Å (length) + kcal/mol (energy).
+        // For inp_units:nm decks, we expect nm + kJ/mol, but keep a small heuristic here so that
+        // legacy defaults (e.g., BiasInfo.sigma=2.4 which historically meant 2.4 Å) do not become
+        // an unphysical 2.4 nm when the user enables cavity bias without an explicit probe radius.
+        if (mode == UnitMode::NmKj && bias_info.sigma > 1.0f) {
+            bias_info.sigma *= 0.1f;
+        }
 
         // Fragment radii & cavity params
         scaleList(fragment_info.radius_list);
