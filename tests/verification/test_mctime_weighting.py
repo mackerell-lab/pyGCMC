@@ -8,10 +8,8 @@ Verifies P1: mctime采样统计
 
 import pytest
 import subprocess
-import numpy as np
 import json
 from pathlib import Path
-from scipy import stats
 from typing import List, Dict, Any
 from collections import defaultdict
 
@@ -82,7 +80,20 @@ class TestMctimeWeighting:
     """Test mctime-based fragment selection weighting"""
 
     @staticmethod
-    def create_two_fragment_system(tmpdir, mctime_weights, mcsteps=5000, seed=42):
+    def create_two_fragment_system(
+        tmpdir,
+        mctime_weights,
+        mcsteps=5000,
+        seed=42,
+        *,
+        eqsteps: int = 1000,
+        nprint: int = 2000,
+        box_size: tuple[float, float, float] = (30.0, 30.0, 30.0),
+        cutoff: float = 14.0,
+        mc_move_prob: tuple[float, float, float, float] = (0.5, 0.5, 0.0, 0.0),
+        fragmuex: tuple[float, float] = (-5.60, -6.50),
+        fragconc: tuple[float, float] = (55.0, 24.0),
+    ):
         """Create system with two fragments (water and methanol) with specified mctime weights"""
 
         # Initial PDB with one water molecule
@@ -171,6 +182,7 @@ OM  8   15.9994  -0.683  A  3.07000e-01  7.11280e-01
 
         # INP file with two fragments and mctime weights
         mctime_str = " ".join(map(str, mctime_weights))
+        mc_move_prob_str = " ".join(map(str, mc_move_prob))
 
         inp_file = tmpdir / "test.inp"
         inp_content = f"""par:{ff_file}
@@ -180,23 +192,24 @@ pdb:{pdb_file}
 protitp:{top_file}
 
 fragname: water
-fragconc: 55.0
-fragmuex: -5.60
+fragconc: {fragconc[0]}
+fragmuex: {fragmuex[0]}
 
 fragname: methanol
-fragconc: 24.0
-fragmuex: -6.50
+fragconc: {fragconc[1]}
+fragmuex: {fragmuex[1]}
 
 mctime: {mctime_str}
 
-box_size: 30.0 30.0 30.0
-cutoff: 14.0
+box_size: {box_size[0]} {box_size[1]} {box_size[2]}
+cutoff: {cutoff}
 temperature: 300
 mcsteps: {mcsteps}
-nprint: 2000
-eqsteps: 1000
+nprint: {nprint}
+eqsteps: {eqsteps}
 
-mc_move_prob: 0.5 0.5 0 0
+moves_per_step: 1
+mc_move_prob: {mc_move_prob_str}
 
 seed: {seed}
 """
@@ -325,8 +338,16 @@ seed: {seed}
         inp_file = self.create_two_fragment_system(
             tmp_path,
             mctime_weights=mctime_weights,
-            mcsteps=15000,
+            # This test verifies fragment *selection* weighting (mctime), not equilibrium.
+            # Keep the run short to avoid expensive growth to bulk-like densities.
+            mcsteps=2000,
             seed=42,
+            eqsteps=0,
+            nprint=2000,
+            box_size=(20.0, 20.0, 20.0),
+            cutoff=8.0,
+            mc_move_prob=(1.0, 0.0, 0.0, 0.0),
+            fragmuex=(-50.0, -50.0),
         )
 
         accept_log = tmp_path / "accept.jsonl"
@@ -336,7 +357,7 @@ seed: {seed}
              "--dump-accept", str(accept_log), "--dump-params", str(params_json), "--seed", "42"],
             capture_output=True,
             text=True,
-            timeout=180,
+            timeout=60,
             cwd=str(tmp_path)
         )
 
@@ -361,8 +382,15 @@ seed: {seed}
         records = read_jsonl(accept_log)
         insertion_records = filter_by_move(records, 'insertion')
         counts = count_by_species(insertion_records)
+        total_ins = sum(counts.values())
+        assert total_ins >= 200, f"Too few insertion attempts recorded: {total_ins}"
         assert counts.get('water', 0) > 0, "No water insertion attempts recorded"
         assert counts.get('methanol', 0) > 0, "No methanol insertion attempts recorded"
+
+        # Distribution check (avoid overfitting exact RNG stream):
+        # observed insertion attempts should be consistent with the normalized mctime weights.
+        frac_methanol = counts["methanol"] / total_ins
+        assert frac_methanol == pytest.approx(expected_probs[1], abs=0.05)
 
 
 if __name__ == "__main__":
