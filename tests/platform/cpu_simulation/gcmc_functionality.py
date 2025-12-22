@@ -18,6 +18,7 @@ from pathlib import Path
 
 # Try to import pygcmc bindings for energy verification
 try:
+    import pygcmc
     import pygcmc.platform.cpu as cpu_platform
     HAS_PYGCMC = True
 except ImportError:
@@ -35,6 +36,25 @@ def _load_accept_records(path: Path) -> list[dict]:
 
 def _load_params(path: Path) -> dict:
     return json.loads(path.read_text())
+
+
+def _parse_itp_atomtypes(path: Path) -> dict[str, tuple[float, float]]:
+    section = ""
+    atomtypes: dict[str, tuple[float, float]] = {}
+    for raw in path.read_text().splitlines():
+        line = raw.split(";", 1)[0].strip()
+        if not line:
+            continue
+        if line.startswith("[") and "]" in line:
+            section = line[1:line.index("]")].strip().lower()
+            continue
+        if section == "atomtypes":
+            tokens = line.split()
+            if len(tokens) >= 7:
+                atomtypes[tokens[0]] = (float(tokens[-2]), float(tokens[-1]))
+    if not atomtypes:
+        raise AssertionError(f"No atomtypes parsed from {path}")
+    return atomtypes
 
 
 def _expected_cdf(weights: list[float]) -> list[float]:
@@ -901,11 +921,81 @@ class TestNumericalCorrectness:
         Reference: SimulationBasicBindings.cpp:70
         """
         test_helper = TestMcMoveProb()
-        inp_file = test_helper.create_minimal_system(tmp_path, [0.25, 0.25, 0.25, 0.25])
+        pdb_file, top_file, atp_file, ff_file = test_helper._create_basic_files(tmp_path)
 
-        # Run simulation with minimal steps to get initial energy
+        pdb_file.write_text(
+            """CRYST1   20.000   20.000   20.000  90.00  90.00  90.00 P 1           1
+ATOM      1  O   WAT     1      10.000  10.000  10.000  1.00  0.00
+ATOM      2  H1  WAT     1      10.757  10.586  10.000  1.00  0.00
+ATOM      3  H2  WAT     1       9.243  10.586  10.000  1.00  0.00
+ATOM      4  O   WAT     2      15.000  10.000  10.000  1.00  0.00
+ATOM      5  H1  WAT     2      15.757  10.586  10.000  1.00  0.00
+ATOM      6  H2  WAT     2      14.243  10.586  10.000  1.00  0.00
+END
+"""
+        )
+        top_file.write_text(
+            """[ defaults ]
+1 2 yes 0.5 0.8333
+[ atomtypes ]
+O   8   15.9994  -0.834  A  3.15061e-01  6.36386e-01
+H   1   1.008     0.417  A  0.00000e+00  0.00000e+00
+[ moleculetype ]
+WAT   3
+[ atoms ]
+1  O   1  WAT  O   1  -0.834  15.9994
+2  H   1  WAT  H1  2   0.417   1.008
+3  H   1  WAT  H2  3   0.417   1.008
+[ system ]
+Test
+[ molecules ]
+WAT  2
+"""
+        )
+
+        inp_file = tmp_path / "energy.inp"
+        inp_file.write_text(
+            f"""par:{ff_file}
+atomtypes:{atp_file}
+top:{top_file}
+pdb:{pdb_file}
+protitp:{top_file}
+
+fragname: WAT
+fragconc: 55.0
+fragmuex: -5.60
+
+box_size: 20.0 20.0 20.0
+cutoff: 10.0
+temperature: 300
+mcsteps: 1
+nprint: 100
+eqsteps: 0
+
+mc_move_prob: 0.0 0.0 1.0 0.0
+
+op_top: {tmp_path}/output.top
+op_pdb: {tmp_path}/output.pdb
+"""
+        )
+
+        params_json = tmp_path / "params.json"
+        out_prefix = tmp_path / "energy"
+
         result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file)],
+            [
+                str(GCMC_CPU_PATH),
+                "--inp",
+                str(inp_file),
+                "--seed",
+                "123",
+                "--stats-interval",
+                "1",
+                "--dump-params",
+                str(params_json),
+                "--prefix",
+                str(out_prefix),
+            ],
             capture_output=True,
             text=True,
             timeout=30,
@@ -913,6 +1003,7 @@ class TestNumericalCorrectness:
         )
 
         assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+        assert params_json.exists(), "dump-params output missing"
 
         # Read statistics.dat to get energy from simulation
         dat_files = list(tmp_path.glob("*statistics.dat"))
@@ -921,27 +1012,64 @@ class TestNumericalCorrectness:
         dat_content = dat_files[0].read_text()
         lines = dat_content.strip().split('\n')
         data_lines = [l for l in lines if not l.startswith('#') and l.strip()]
+        assert data_lines, "Statistics DAT file contains no data rows"
 
-        # Get energy from first data line (initial or early step)
-        first_line = data_lines[0].split()
-        sim_energy = float(first_line[1])  # Energy column
+        # Get energy from the last data line (final snapshot)
+        last_line = data_lines[-1].split()
+        sim_energy = float(last_line[1])  # Energy column
 
-        # TODO: Use computeSystemEnergy to verify
-        # This requires:
-        # 1. Loading the initial structure from PDB
-        # 2. Loading topology and force field parameters
-        # 3. Calling cpu_platform.computeSystemEnergy(...)
-        # 4. Comparing with sim_energy within tolerance
+        params = _load_params(params_json)
+        space = params.get("space", {})
 
-        # For now, verify energy is a reasonable value
-        # Energy should not be NaN, Inf, or extremely large
+        final_pdb = Path(str(out_prefix) + "_final.pdb")
+        assert final_pdb.exists(), "Final PDB output missing"
+
+        structure = pygcmc.PDBParser.parse_file(str(final_pdb))
+        topology = pygcmc.TOPParser.parse_file(str(top_file))
+        molecular = pygcmc.MolecularSystem().combine(structure, topology)
+
+        mc_system = pygcmc.MonteCarloSystem()
+        info = pygcmc.MCInfo()
+        info.max_residues = 100
+        info.max_atoms = 1000
+        mc_system.initialize(info)
+        mc_system.initialize_from_molecular(molecular)
+
+        state = mc_system.get_state_mutable()
+        if "cutoff_nm" in space:
+            state.info.cutoff = float(space["cutoff_nm"])
+        if "box_size_nm" in space:
+            state.info.box = [float(x) for x in space["box_size_nm"]]
+
+        atomtypes = _parse_itp_atomtypes(ff_file)
+        for name in sorted(atomtypes):
+            state.atomTypes.get_or_add_type(name)
+
+        num_types = len(state.atomTypes.atomTypes)
+        state.forcefield.numTotalTypes = num_types
+        state.forcefield.numMovementTypes = num_types
+        state.forcefield.mixingRule = pygcmc.MCForceField.MixingRule.LorentzBerthelot
+        state.forcefield.ljSigmaType = [0.0] * num_types
+        state.forcefield.ljEpsType = [0.0] * num_types
+
+        for name in sorted(atomtypes):
+            sigma, eps = atomtypes[name]
+            idx = state.atomTypes.get_or_add_type(name)
+            if 0 <= idx < num_types:
+                state.forcefield.ljSigmaType[idx] = float(sigma)
+                state.forcefield.ljEpsType[idx] = float(eps)
+
+        state.forcefield.rebuildLJMatrix()
+
+        cpu_platform.computeSystemEnergyPBCCutoff(state)
+        computed_energy = pygcmc.getTotalEnergyUniquePairs(state, pygcmc.EnergyMethod.DIRECT)
+
         assert not np.isnan(sim_energy), "Simulation energy is NaN"
         assert not np.isinf(sim_energy), "Simulation energy is Inf"
-        assert abs(sim_energy) < 1e10, f"Simulation energy {sim_energy} is unreasonably large"
+        assert not np.isnan(computed_energy), "Computed energy is NaN"
+        assert not np.isinf(computed_energy), "Computed energy is Inf"
 
-        # Energy for a single water molecule should be relatively small
-        # (mostly bonded interactions, no non-bonded for single molecule)
-        assert abs(sim_energy) < 1000, f"Energy {sim_energy} kJ/mol seems too high for single water"
+        assert computed_energy == pytest.approx(sim_energy, rel=5e-2, abs=2e-1)
 
     def test_mc_move_probability_distribution(self, tmp_path):
         """

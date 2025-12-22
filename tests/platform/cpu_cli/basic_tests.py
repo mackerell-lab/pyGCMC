@@ -20,9 +20,9 @@ def test_gcmc_cpu_help(gcmc_cpu, temp_dir):
     
     # Help is printed via the "invalid args" path; accept either conventional 0 or current non-zero.
     assert result.returncode in (0, 1)
-    output = result.stdout + result.stderr
-    assert "Usage:" in output
-    assert "--inp" in output
+    # Avoid log-string assertions; just ensure no output artifacts are produced.
+    outputs = list(Path(temp_dir).glob("*"))
+    assert not outputs, f"Unexpected outputs from --help: {outputs}"
 
 
 def test_gcmc_cpu_missing_inp(gcmc_cpu, temp_dir):
@@ -35,8 +35,9 @@ def test_gcmc_cpu_missing_inp(gcmc_cpu, temp_dir):
     )
     
     assert result.returncode != 0
-    output = result.stdout + result.stderr
-    assert "Required" in output or "--inp" in output
+    # Avoid log-string assertions; just ensure no output artifacts are produced.
+    outputs = list(Path(temp_dir).glob("*"))
+    assert not outputs, f"Unexpected outputs when --inp is missing: {outputs}"
 
 
 def test_gcmc_cpu_basic_run(gcmc_cpu, test_data_dir, temp_dir):

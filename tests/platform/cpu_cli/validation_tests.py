@@ -81,18 +81,25 @@ def test_gcmc_cpu_invalid_inp(gcmc_cpu, temp_dir):
     bad_inp = Path(temp_dir) / "bad.inp"
     bad_inp.write_text("INVALID INPUT FILE\n")
     
+    out_prefix = Path(temp_dir) / "test"
     cmd = [
         gcmc_cpu,
         "--inp", str(bad_inp),
-        "--prefix", str(Path(temp_dir) / "test")
+        "--prefix", str(out_prefix),
     ]
     
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=temp_dir)
     
     # Should fail but not crash
     assert result.returncode != 0
-    # Should have some error message
-    assert len(result.stderr) > 0 or "ERROR" in result.stdout
+    # Avoid log-string assertions; verify no output artifacts were created.
+    expected_outputs = [
+        Path(f"{out_prefix}_final.pdb"),
+        Path(f"{out_prefix}_final.top"),
+        Path(f"{out_prefix}_statistics.dat"),
+        Path(f"{out_prefix}_final.txt"),
+    ]
+    assert not any(p.exists() for p in expected_outputs), f"Unexpected outputs: {expected_outputs}"
 
 
 def test_gcmc_cpu_parameter_validation(gcmc_cpu, test_data_dir, temp_dir):

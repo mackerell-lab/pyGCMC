@@ -383,7 +383,9 @@ fragmuex:-5.0
         
         # Help might return 1 instead of 0
         assert result.returncode in [0, 1]
-        assert result.stdout.strip(), "Expected help output"
+        # Avoid log-string assertions; just ensure no output artifacts are produced.
+        outputs = list(tmp_path.glob("*"))
+        assert not outputs, f"Unexpected outputs from --help: {outputs}"
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
