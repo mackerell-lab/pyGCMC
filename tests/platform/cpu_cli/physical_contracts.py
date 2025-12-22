@@ -38,6 +38,88 @@ def _ensure_pygcmc_on_path() -> None:
             sys.path.insert(0, bindings_str)
 
 
+def _parse_itp_atomtypes(path: Path) -> dict[str, tuple[float, float]]:
+    atomtypes: dict[str, tuple[float, float]] = {}
+    in_section = False
+    for raw in path.read_text().splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith(("[", ";", "#")):
+            if line.startswith("["):
+                in_section = line.lower().startswith("[ atomtypes")
+            continue
+        if not in_section:
+            continue
+        if ";" in line:
+            line = line.split(";", 1)[0].strip()
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) < 7:
+            continue
+        name = parts[0]
+        sigma = float(parts[-2])
+        eps = float(parts[-1])
+        atomtypes[name] = (sigma, eps)
+    if not atomtypes:
+        raise AssertionError(f"No atomtypes parsed from {path}")
+    return atomtypes
+
+
+def _build_state_from_pdb_top(
+    par_path: Path,
+    pdb_path: Path,
+    top_path: Path,
+    *,
+    cutoff_nm: float,
+    box_nm: tuple[float, float, float],
+):
+    _ensure_pygcmc_on_path()
+    try:
+        import pygcmc
+    except ModuleNotFoundError as exc:
+        raise AssertionError(
+            "pygcmc bindings not found; build with `cmake --build build --target pygcmc`"
+        ) from exc
+
+    structure = pygcmc.PDBParser.parse_file(str(pdb_path))
+    topology = pygcmc.TOPParser.parse_file(str(top_path))
+    molecular = pygcmc.MolecularSystem().combine(structure, topology)
+
+    mc_system = pygcmc.MonteCarloSystem()
+    info = pygcmc.MCInfo()
+    info.max_residues = 50
+    info.max_atoms = 200
+    mc_system.initialize(info)
+    mc_system.initialize_from_molecular(molecular)
+
+    state = mc_system.get_state_mutable()
+    state.info.cutoff = float(cutoff_nm)
+    state.info.box = [float(x) for x in box_nm]
+
+    atomtypes = _parse_itp_atomtypes(par_path)
+    for name in sorted(atomtypes):
+        state.atomTypes.get_or_add_type(name)
+
+    num_types = len(state.atomTypes.atomTypes)
+    state.forcefield.numTotalTypes = num_types
+    state.forcefield.numMovementTypes = num_types
+    state.forcefield.mixingRule = pygcmc.MCForceField.MixingRule.LorentzBerthelot
+    state.forcefield.ljSigmaType = [0.0] * num_types
+    state.forcefield.ljEpsType = [0.0] * num_types
+
+    for name in sorted(atomtypes):
+        sigma, eps = atomtypes[name]
+        idx = state.atomTypes.get_or_add_type(name)
+        if 0 <= idx < num_types:
+            state.forcefield.ljSigmaType[idx] = float(sigma)
+            state.forcefield.ljEpsType[idx] = float(eps)
+
+    state.forcefield.rebuildLJMatrix()
+    return mc_system, state
+
+
 def _load_accept_records(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
@@ -93,6 +175,19 @@ def _min_image_delta_nm(
     dy -= box_nm[1] * round(dy / box_nm[1])
     dz -= box_nm[2] * round(dz / box_nm[2])
     return dx, dy, dz
+
+
+def _read_statistics_n_total(stats_path: Path) -> list[int]:
+    n_total: list[int] = []
+    for line in stats_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+        n_total.append(int(parts[2]))
+    return n_total
 
 
 def _lj_energy_kj_mol(*, r_nm: float, sigma_nm: float, eps_kj_mol: float) -> float:
@@ -1086,6 +1181,39 @@ mc_move_prob:1 0 0 0
     ) + _coulomb_energy_kj_mol(r_nm=r_nm, q1=0.500, q2=-0.250)
     assert float(rec["deltaU"]) == pytest.approx(expected, rel=1e-3, abs=1e-2)
 
+    _ensure_pygcmc_on_path()
+    try:
+        import pygcmc
+    except ModuleNotFoundError as exc:
+        raise AssertionError(
+            "pygcmc bindings not found; build with `cmake --build build --target pygcmc`"
+        ) from exc
+
+    cutoff_nm = 6.0 / 10.0
+    box_nm = (3.0, 3.0, 3.0)
+    mc_before, state_before = _build_state_from_pdb_top(
+        files["par"],
+        files["pdb"],
+        files["top_ins"],
+        cutoff_nm=cutoff_nm,
+        box_nm=box_nm,
+    )
+    pygcmc.computeSystemEnergyPBCCutoff(state_before)
+    elec_before, vdw_before = pygcmc.getTotalEnergyComponents(state_before)
+
+    mc_after, state_after = _build_state_from_pdb_top(
+        files["par"],
+        final_pdb,
+        files["top_del"],
+        cutoff_nm=cutoff_nm,
+        box_nm=box_nm,
+    )
+    pygcmc.computeSystemEnergyPBCCutoff(state_after)
+    elec_after, vdw_after = pygcmc.getTotalEnergyComponents(state_after)
+
+    delta_components = (elec_after - elec_before) + (vdw_after - vdw_before)
+    assert float(rec["deltaU"]) == pytest.approx(delta_components, rel=5e-3, abs=0.15)
+
 
 def test_deletion_deltaU_is_negative_of_insertion_for_charged_system(gcmc_cpu, temp_dir):
     work = Path(temp_dir) / "physical_contracts" / "charged_deltaU_symmetry"
@@ -1191,21 +1319,79 @@ mc_move_prob:0 1 0 0
     assert deltaU_del == pytest.approx(-deltaU_ins, rel=1e-4, abs=1e-2)
 
 
-def test_poisson_number_distribution_ideal_gas():
+def test_poisson_number_distribution_ideal_gas(gcmc_cpu, temp_dir):
     """
-    Delegate to the engine-level Poisson distribution test.
+    CLI Poisson distribution check using --dump-accept records.
 
-    This keeps the physical-contract coverage while avoiding CLI move-selection
-    side effects that can bias the stationary distribution.
+    Validates <N> = z * V and Var(N) ≈ <N> in the ideal-gas limit.
     """
-    _ensure_pygcmc_on_path()
-    try:
-        import pygcmc  # noqa: F401
-    except ModuleNotFoundError as exc:
-        raise AssertionError(
-            "pygcmc bindings not found; build with `cmake --build build --target pygcmc`"
-        ) from exc
+    work = Path(temp_dir) / "physical_contracts" / "poisson_cli"
+    work.mkdir(parents=True, exist_ok=True)
 
-    from movementGCMC.poisson_distribution import test_ideal_gas_poisson_distribution
+    par, frag = _write_ideal_gas_itp(work)
 
-    test_ideal_gas_poisson_distribution()
+    target_mean = 5.0
+    beta = 1.0 / (0.008314462618 * 300.0)
+    target_z = target_mean  # V = 1 nm^3 for 10 Å box
+    mu_kj = math.log(target_z) / beta
+    fragmuex_kcal = mu_kj / 4.184
+
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    accept_log = work / "out" / "acceptance.jsonl"
+
+    inp = work / "run.inp"
+    _write_inp(
+        inp,
+        f"""
+random_seed:424242
+par:{par}
+fragitp:{frag}
+fragname:X
+fragconc:0.0
+fragmuex:{fragmuex_kcal}
+
+box_size:10.0 10.0 10.0
+gcmc_region:box 0 0 0 10 10 10
+cutoff:4.0
+temperature:300.0
+moves_per_step:1
+mcsteps:4000
+nprint:1
+mc_move_prob:1 1 0 0
+""",
+    )
+
+    result = _run_gcmc_cpu(
+        gcmc_cpu,
+        workdir=work,
+        inp=inp,
+        out_prefix=out_prefix,
+        extra_args=["--dump-accept", str(accept_log)],
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    records = _load_accept_records(accept_log)
+    species_records = [
+        r for r in records
+        if str(r.get("species", "")).strip().upper() == "X"
+    ]
+    assert species_records, "No acceptance records for species X"
+
+    expected_mean = float(species_records[0]["z"]) * float(species_records[0]["vBox"])
+
+    stats_path = Path(f"{out_prefix}_statistics.dat")
+    assert stats_path.exists(), "statistics.dat missing for Poisson check"
+    n_values = _read_statistics_n_total(stats_path)
+    assert len(n_values) >= 1000, "Insufficient statistics.dat samples for Poisson check"
+
+    burnin = 200
+    n_values = n_values[burnin:] if len(n_values) > burnin else n_values
+    assert len(n_values) >= 500, "Insufficient post-burnin samples for Poisson statistics"
+
+    sample_mean = statistics.mean(n_values)
+    sample_var = statistics.pvariance(n_values)
+
+    assert sample_mean == pytest.approx(expected_mean, rel=0.25, abs=0.5)
+    assert abs(sample_var - expected_mean) / max(expected_mean, 1e-6) < 0.35
