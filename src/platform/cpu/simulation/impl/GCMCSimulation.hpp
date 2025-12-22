@@ -126,6 +126,7 @@ public:
         enum MoveType { INSERT, DELETE, TRANSLATE, ROTATE };
 
         MoveType moveType;
+        MoveType requestedMoveType;
         int species;
         int nBefore;       // Number of molecules of this species before the move
         int cbmcTrials;    // Number of CBMC trial configurations (K)

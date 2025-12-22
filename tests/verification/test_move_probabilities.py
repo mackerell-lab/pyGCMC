@@ -23,6 +23,10 @@ def _load_params(path: Path) -> dict:
     return json.loads(path.read_text())
 
 
+def _load_accept_records(path: Path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
 def _expected_cdf(weights: list[float]) -> list[float]:
     if all(w <= 0 for w in weights):
         weights = [1.0, 1.0, 1.0, 1.0]
@@ -54,6 +58,22 @@ def _fragment_cdf(params: dict, name: str) -> list[float]:
     return [float(x) for x in cdf_list[idx]]
 
 
+def _requested_move_counts(records: list[dict]) -> dict[str, int]:
+    counts = {move: 0 for move in MOVE_TYPES}
+    for rec in records:
+        move = str(rec.get("requestedMove", "")).strip().lower()
+        if move in counts:
+            counts[move] += 1
+    return counts
+
+
+def _requested_move_fractions(counts: dict[str, int]) -> dict[str, float]:
+    total = sum(counts.values())
+    if total <= 0:
+        raise AssertionError("No requestedMove records found in acceptance log")
+    return {move: counts[move] / total for move in MOVE_TYPES}
+
+
 def _run_with_params(inp_file: Path, tmp_path: Path) -> tuple[subprocess.CompletedProcess, Path]:
     params_json = tmp_path / "params.json"
     result = subprocess.run(
@@ -80,7 +100,13 @@ class TestMoveProbabilities:
     """Test move probability parsing and distribution via acceptance log"""
 
     @staticmethod
-    def create_minimal_system(tmpdir, mc_move_prob_line=None, fragment_specific=False, mcsteps=2000):
+    def create_minimal_system(
+        tmpdir,
+        mc_move_prob_line=None,
+        fragment_specific=False,
+        mcsteps=2000,
+        fragmuex_value=-5.60,
+    ):
         """Create minimal water system with mc_move_prob setting"""
 
         # Minimal PDB
@@ -146,7 +172,7 @@ protitp:{top_file}
 
 fragname: water
 fragconc: 55.0
-fragmuex: -5.60
+fragmuex: {fragmuex_value}
 
 box_size: 20.0 20.0 20.0
 cutoff: 10.0
@@ -328,6 +354,70 @@ op_pdb: {tmp_path}/output.pdb
         actual_cdf = _fragment_cdf(params, "water")
         expected_cdf = _expected_cdf([0.25, 0.25, 0.25, 0.25])
         assert actual_cdf == pytest.approx(expected_cdf, abs=1e-6)
+
+    def test_requested_move_distribution_matches_cdf(self, tmp_path):
+        """
+        Verify requestedMove sampling distribution matches configured move CDF.
+
+        This checks the actual move selection BEFORE fallback adjustments.
+        """
+        inp_file = self.create_minimal_system(
+            tmp_path,
+            mc_move_prob_line="4 3 2 1",
+            mcsteps=6000,
+            fragmuex_value=5.0,
+        )
+        inp_file.write_text(
+            inp_file.read_text().replace(
+                "box_size: 20.0 20.0 20.0",
+                "box_size: 50.0 50.0 50.0",
+            )
+        )
+        accept_log = tmp_path / "accept.jsonl"
+        params_json = tmp_path / "params.json"
+
+        result = subprocess.run(
+            [
+                str(GCMC_CPU_PATH),
+                "--inp",
+                str(inp_file),
+                "--seed",
+                "4242",
+                "--prefix",
+                str(tmp_path / "out"),
+                "--dump-accept",
+                str(accept_log),
+                "--dump-params",
+                str(params_json),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd=str(tmp_path),
+        )
+
+        assert result.returncode == 0, f"Simulation failed: {result.stderr}"
+        assert accept_log.exists(), "Acceptance log not generated"
+        assert params_json.exists(), "dump-params output missing"
+
+        params = _load_params(params_json)
+        cdf = _fragment_cdf(params, "water")
+        expected = {
+            "insertion": cdf[0],
+            "deletion": cdf[1] - cdf[0],
+            "translation": cdf[2] - cdf[1],
+            "rotation": 1.0 - cdf[2],
+        }
+
+        records = _load_accept_records(accept_log)
+        counts = _requested_move_counts(records)
+        fractions = _requested_move_fractions(counts)
+
+        for move in MOVE_TYPES:
+            assert counts[move] > 0, f"No requestedMove records for {move}"
+            assert abs(fractions[move] - expected[move]) < 0.05, (
+                f"{move} fraction {fractions[move]:.3f} differs from expected {expected[move]:.3f}"
+            )
 
 
 if __name__ == "__main__":

@@ -1686,6 +1686,7 @@ bool GCMCSimulation::performSingleMove() {
 
     // Select move based on per-fragment CDF (with optional target bias)
     MoveType moveType = selectMoveForFragment(fragType);
+    MoveType requestedMove = moveType;
 
     // Final hard guard on capacity limits - CRITICAL for preventing runaway growth
     if (fragType >= 0 && static_cast<size_t>(fragType) < fragmentTypes_.size()) {
@@ -1846,6 +1847,12 @@ bool GCMCSimulation::performSingleMove() {
             case DELETE:    rec.moveType = AcceptanceRecord::DELETE; break;
             case TRANSLATE: rec.moveType = AcceptanceRecord::TRANSLATE; break;
             case ROTATE:    rec.moveType = AcceptanceRecord::ROTATE; break;
+        }
+        switch (requestedMove) {
+            case INSERT:    rec.requestedMoveType = AcceptanceRecord::INSERT; break;
+            case DELETE:    rec.requestedMoveType = AcceptanceRecord::DELETE; break;
+            case TRANSLATE: rec.requestedMoveType = AcceptanceRecord::TRANSLATE; break;
+            case ROTATE:    rec.requestedMoveType = AcceptanceRecord::ROTATE; break;
         }
 
         // Species index for this move:
@@ -3171,6 +3178,13 @@ void GCMCSimulation::dumpAcceptanceLog(const std::string& filename) const {
             case AcceptanceRecord::TRANSLATE:  moveTypeStr = "translation"; break;
             case AcceptanceRecord::ROTATE:     moveTypeStr = "rotation"; break;
         }
+        const char* requestedMoveStr = "";
+        switch (rec.requestedMoveType) {
+            case AcceptanceRecord::INSERT:     requestedMoveStr = "insertion"; break;
+            case AcceptanceRecord::DELETE:     requestedMoveStr = "deletion"; break;
+            case AcceptanceRecord::TRANSLATE:  requestedMoveStr = "translation"; break;
+            case AcceptanceRecord::ROTATE:     requestedMoveStr = "rotation"; break;
+        }
 
         // Map species index to fragment name
         std::string speciesName = "unknown";
@@ -3180,6 +3194,7 @@ void GCMCSimulation::dumpAcceptanceLog(const std::string& filename) const {
 
         ofs << "{"
             << "\"move\":\"" << moveTypeStr << "\","
+            << "\"requestedMove\":\"" << requestedMoveStr << "\","
             << "\"species\":\"" << speciesName << "\","
             << "\"nBefore\":" << rec.nBefore << ","
             << "\"cbmcTrials\":" << rec.cbmcTrials << ","
