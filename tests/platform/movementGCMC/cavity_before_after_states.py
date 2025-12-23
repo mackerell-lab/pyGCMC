@@ -84,8 +84,16 @@ def test_deletion_uses_after_state_cavity():
 
     assert reservoir.getActiveCount(0) > 5, "System too sparse for deletion test"
 
+    # Favor deletions to ensure at least one accepted move for after-state validation.
+    low_activity = pygcmc.GCMCAcceptance()
+    low_activity.setTemperature(300.0)
+    volume = float(state.info.box[0] * state.info.box[1] * state.info.box[2])
+    low_activity.setVolume(volume)
+    low_activity.setActivity(0, 1e-3)
+    engine.setAcceptanceCalculator(low_activity)
+
     # Attempt deletions until one is accepted (to observe after-state directly)
-    for _ in range(40):
+    for _ in range(120):
         result = engine.attemptDeletion(0)
         if not result.accepted:
             continue
@@ -97,4 +105,4 @@ def test_deletion_uses_after_state_cavity():
         assert pytest.approx(after_fraction, rel=1e-6) == result.cavityBiasComponent
         break
     else:
-        pytest.skip("No deletion was accepted; cannot verify after-state cavity.")
+        pytest.fail("No deletion was accepted; cannot verify after-state cavity.")

@@ -98,7 +98,7 @@ def test_initialize_force_field(molecular_system, charmm_ff):
     
     if missing_types:
         print("\nMissing LJ parameters for atom types:", missing_types)
-        pytest.skip(f"Missing LJ parameters for atom types: {missing_types}")
+        pytest.fail(f"Missing LJ parameters for atom types: {missing_types}")
     
     print("\nAll atom types have LJ parameters, proceeding with force field initialization")
     
@@ -202,4 +202,3 @@ def test_initialize_force_field(molecular_system, charmm_ff):
                 f"Combined sigma mismatch for {type1}-{type2}: expected {expected_sigma}, got {actual_sigma} nm"
     
     print("\n=== test_initialize_force_field completed successfully ===")
-

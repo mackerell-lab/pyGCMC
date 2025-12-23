@@ -366,8 +366,7 @@ seed: {seed}
             print(f"STDERR:\n{result.stderr}")
         assert result.returncode == 0, f"Simulation failed: {result.stderr}"
 
-        if not accept_log.exists():
-            pytest.skip(f"Acceptance log not generated: {accept_log}")
+        assert accept_log.exists(), f"Acceptance log not generated: {accept_log}"
         assert params_json.exists(), "dump-params output missing"
 
         params = load_params(params_json)

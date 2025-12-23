@@ -190,6 +190,7 @@ def build_inp(
     use_cavity: bool = False,
     grid_spacing: float = 2.0,
     probe_radius: float = 1.4,
+    move_prob=(0.5, 0.5, 0.0, 0.0),
 ):
     """Build INP file content with optional CBMC and cavity configuration."""
     if use_cbmc:
@@ -210,6 +211,8 @@ cavity_probe_radius:{probe_radius}"""
         if use_cavity
         else "use_cavity_bias:no"
     )
+
+    move_prob_str = " ".join(str(x) for x in move_prob)
 
     return f"""par:{ff}
 atomtypes:{atp}
@@ -232,7 +235,7 @@ protitp:{top}
 	nprint: {max(1, mcsteps // 2)}
 	eqsteps: 0
 
-mc_move_prob: 0.5 0.5 0 0
+mc_move_prob: {move_prob_str}
 
 {cavity_block}
 
@@ -383,7 +386,7 @@ class TestCBMCSanity:
         # Run baseline (K=1)
         print("Running baseline (K=1)...")
         inp_off = build_inp(pdb, top, atp, ff, use_cbmc=False, k_trials=1,
-                           mcsteps=1500, mu=-1.5)  # Higher mu for more insertions
+                           mcsteps=2200, mu=-1.0, move_prob=(0.7, 0.3, 0.0, 0.0))
         result_off, log_off = run_with_accept_log(inp_off, tmp_path, "off.jsonl", timeout=180)
         assert result_off.returncode == 0
         rec_off = read_jsonl(log_off)
@@ -391,7 +394,7 @@ class TestCBMCSanity:
         # Run CBMC (K=8)
         print("Running CBMC (K=8)...")
         inp_on = build_inp(pdb, top, atp, ff, use_cbmc=True, k_trials=8,
-                          mcsteps=1500, mu=-1.5)
+                          mcsteps=2200, mu=-1.0, move_prob=(0.7, 0.3, 0.0, 0.0))
         result_on, log_on = run_with_accept_log(inp_on, tmp_path, "on.jsonl", timeout=180)
         assert result_on.returncode == 0
         rec_on = read_jsonl(log_on)
@@ -403,8 +406,8 @@ class TestCBMCSanity:
         print(f"Baseline insertions: {len(ins_off)}")
         print(f"CBMC insertions: {len(ins_on)}")
 
-        if len(ins_off) < 20 or len(ins_on) < 20:
-            pytest.skip("Not enough insertion attempts for robust comparison")
+        assert len(ins_off) >= 20 and len(ins_on) >= 20, \
+            f"Not enough insertion attempts: off={len(ins_off)}, on={len(ins_on)}"
 
         # Compare acceptance rates
         stats_off = acceptance_statistics(rec_off)
@@ -617,8 +620,9 @@ class TestCBMCSanity:
             ff,
             use_cbmc=True,
             k_trials=8,
-            mcsteps=1200,
-            mu=-2.0,
+            mcsteps=2000,
+            mu=-1.0,
+            move_prob=(0.6, 0.4, 0.0, 0.0),
         )
 
         result, accept_log = run_with_accept_log(
@@ -637,23 +641,22 @@ class TestCBMCSanity:
             r for r in records if r.get("move") == "deletion" and r.get("cbmcTrials", 1) > 1
         ]
 
-        if insertions:
-            q_forward = [r.get("qForward", 1.0) for r in insertions if r.get("qForward") is not None]
-            if not q_forward:
-                pytest.skip("No qForward values recorded for CBMC insertions")
-            min_qf = min(q_forward)
-            max_qf = max(q_forward)
-            print(f"qForward range: min={min_qf:.4f}, max={max_qf:.4f}, trials={max_trials}")
-            assert all((q > 0.0) and math.isfinite(q) for q in q_forward), "CBMC qForward must be finite and > 0"
+        assert insertions, "No CBMC insertion records found"
+        assert deletions, "No CBMC deletion records found"
 
-        if deletions:
-            q_reverse = [r.get("qReverse", 1.0) for r in deletions if r.get("qReverse") is not None]
-            if not q_reverse:
-                pytest.skip("No qReverse values recorded for CBMC deletions")
-            min_qr = min(q_reverse)
-            max_qr = max(q_reverse)
-            print(f"qReverse range: min={min_qr:.4f}, max={max_qr:.4f}, trials={max_trials}")
-            assert all((q > 0.0) and math.isfinite(q) for q in q_reverse), "CBMC qReverse must be finite and > 0"
+        q_forward = [r.get("qForward", 1.0) for r in insertions if r.get("qForward") is not None]
+        assert q_forward, "No qForward values recorded for CBMC insertions"
+        min_qf = min(q_forward)
+        max_qf = max(q_forward)
+        print(f"qForward range: min={min_qf:.4f}, max={max_qf:.4f}, trials={max_trials}")
+        assert all((q > 0.0) and math.isfinite(q) for q in q_forward), "CBMC qForward must be finite and > 0"
+
+        q_reverse = [r.get("qReverse", 1.0) for r in deletions if r.get("qReverse") is not None]
+        assert q_reverse, "No qReverse values recorded for CBMC deletions"
+        min_qr = min(q_reverse)
+        max_qr = max(q_reverse)
+        print(f"qReverse range: min={min_qr:.4f}, max={max_qr:.4f}, trials={max_trials}")
+        assert all((q > 0.0) and math.isfinite(q) for q in q_reverse), "CBMC qReverse must be finite and > 0"
 
         _assert_cbmc_rosenbluth_closure(records)
         print("✅ CBMC Rosenbluth weights within expected bounds")
