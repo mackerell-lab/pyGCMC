@@ -127,15 +127,11 @@ def test_cavity_detection():
     for i, ((x, y, z), e) in enumerate(zip(test_points, energies)):
         print(f"  {i}: ({x}, {y}, {z}) -> {e:.4f} kJ/mol")
     
-    # Check if all energies are zero
-    if all(e == 0.0 for e in energies):
-        print("WARNING: All energies are zero - this might indicate:")
-        print("  1. Atoms are too far apart (beyond cutoff)")
-        print("  2. Force field parameters might be zero")
-        print("  3. System box/cutoff not set properly")
-        # For now, just verify we can insert atoms at different positions
-        assert len(energies) == len(test_points), "Should calculate energy for all test points"
-        return
+    # Require non-zero energy signal (no silent pass).
+    assert any(abs(e) > 1e-6 for e in energies), (
+        "All insertion energies are zero; expected non-zero values. "
+        f"Energies={energies}"
+    )
     
     # If we do get non-zero energies, check the pattern
     # Cavity center should have most favorable (most negative) energy
@@ -145,5 +141,4 @@ def test_cavity_detection():
     # At least verify that positions give different energies
     unique_energies = set(energies)
     assert len(unique_energies) > 1, "All positions gave same energy - no discrimination"
-
 

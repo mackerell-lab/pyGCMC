@@ -169,10 +169,9 @@ seed: {seed}
 
         final_coords = self.parse_pdb_coords(final_pdb)
 
-        # If no molecules in final state, test passes trivially
-        if final_coords is None or len(final_coords) == 0:
-            print("\n⚠️  No molecules in final state, skipping geometry check")
-            return
+        assert final_coords is not None and len(final_coords) > 0, (
+            "No molecules in final state; expected at least the initial water molecule."
+        )
 
         # Should have at least 3 atoms (one water molecule)
         assert len(final_coords) >= 3, f"Expected at least 3 atoms, got {len(final_coords)}"
@@ -242,10 +241,9 @@ seed: {seed}
 
         final_coords = self.parse_pdb_coords(final_pdb)
 
-        # If no molecules in final state, test passes trivially
-        if final_coords is None or len(final_coords) == 0:
-            print("\n⚠️  No molecules in final state, skipping geometry check")
-            return
+        assert final_coords is not None and len(final_coords) > 0, (
+            "No molecules in final state; expected at least the initial water molecule."
+        )
 
         # Should have at least 3 atoms
         assert len(final_coords) >= 3, f"Expected at least 3 atoms, got {len(final_coords)}"
@@ -311,9 +309,9 @@ seed: {seed}
 
         final_coords = self.parse_pdb_coords(final_pdb)
 
-        if final_coords is None or len(final_coords) == 0:
-            print("\n⚠️  No molecules in final state, skipping PBC check")
-            return
+        assert final_coords is not None and len(final_coords) > 0, (
+            "No molecules in final state; expected at least the initial water molecule."
+        )
 
         # Box size in Angstrom (from INP: 20.0 nm * 10 = 200 Å)
         box_size = 200.0

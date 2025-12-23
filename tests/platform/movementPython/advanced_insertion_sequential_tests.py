@@ -71,10 +71,11 @@ def test_sequential_cavity_filling():
     # Debug output
     print(f"Insertion energies: {insertion_energies}")
     
-    # Check if we have meaningful energy values
-    if all(abs(e) < 1e-6 for e in insertion_energies):
-        print("WARNING: All insertion energies are zero - skipping test")
-        return
+    # Require non-zero energy signal (no silent pass).
+    assert any(abs(e) > 1e-6 for e in insertion_energies), (
+        "All insertion energies are ~0; expected non-zero values. "
+        f"Energies={insertion_energies}"
+    )
     
     # First insertions should be more favorable (or at least not worse)
     if len(insertion_energies) > 1:
@@ -123,16 +124,17 @@ def test_water_cluster_formation():
     # Debug output
     print(f"Water cluster formation energies: {[f'{e:.4f}' for e in total_energies]}")
     
-    # Check if we have meaningful energies
-    if all(abs(e) < 1e-6 for e in total_energies):
-        print("WARNING: All water cluster energies are zero - skipping test")
-        return
+    # Require non-zero energy signal (no silent pass).
+    assert any(abs(e) > 1e-6 for e in total_energies), (
+        "All water cluster energies are ~0; expected non-zero values. "
+        f"Energies={total_energies}"
+    )
     
-    # Energy should generally become more negative as cluster forms
-    # But allow for some variation due to geometry
-    if len(total_energies) > 1:
-        # At least check that adding waters doesn't make it much worse
-        assert total_energies[-1] < total_energies[0] + 10.0, \
-            f"Water cluster energy ({total_energies[-1]:.4f}) should not be much worse than single water ({total_energies[0]:.4f})"
-
-
+    # Adding waters should change the total energy magnitude (direction can vary by FF).
+    abs_values = [abs(e) for e in total_energies]
+    assert max(abs_values) > 1.0, (
+        "Cluster formation should produce a noticeable energy change. "
+        f"Energies={total_energies}"
+    )
+    rounded = {round(e, 6) for e in total_energies}
+    assert len(rounded) > 1, "Total energy should vary across insertions"

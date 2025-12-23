@@ -60,8 +60,7 @@ def insert_single_atom(system, atom):
     new_system.atomTypes = system.atomTypes
     new_system.forcefield = system.forcefield
     
-    # Copy existing atoms
-    new_system.atoms = []
+    atoms = []
     for old_atom in system.atoms:
         new_atom = pygcmc.MCAtom()
         new_atom.x = old_atom.x
@@ -69,20 +68,18 @@ def insert_single_atom(system, atom):
         new_atom.z = old_atom.z
         new_atom.charge = old_atom.charge
         new_atom.type = old_atom.type
-        new_system.atoms.append(new_atom)
-    
-    # Add new atom
-    new_system.atoms.append(atom)
-    
-    # Copy existing residues
-    new_system.residues = []
+        atoms.append(new_atom)
+
+    atoms.append(atom)
+
+    residues = []
     for res in system.residues:
         new_res = pygcmc.MCResidue()
         new_res.active = res.active
         new_res.atomStart = res.atomStart
         new_res.atomCount = res.atomCount
         new_res.type = res.type
-        new_system.residues.append(new_res)
+        residues.append(new_res)
     
     # Add new residue
     res = pygcmc.MCResidue()
@@ -90,10 +87,12 @@ def insert_single_atom(system, atom):
     res.atomStart = len(system.atoms)
     res.atomCount = 1
     res.type = 0  # Guest type
-    new_system.residues.append(res)
-    
-    new_system.activeAtomCount = len(new_system.atoms)
-    new_system.activeResidueCount = len(new_system.residues)
+    residues.append(res)
+
+    new_system.atoms = atoms
+    new_system.residues = residues
+    new_system.activeAtomCount = len(atoms)
+    new_system.activeResidueCount = len(residues)
     
     return new_system
 
@@ -106,8 +105,7 @@ def insert_molecule(system, atoms):
     new_system.atomTypes = system.atomTypes
     new_system.forcefield = system.forcefield
     
-    # Copy existing atoms
-    new_system.atoms = []
+    new_atoms = []
     for old_atom in system.atoms:
         new_atom = pygcmc.MCAtom()
         new_atom.x = old_atom.x
@@ -115,23 +113,21 @@ def insert_molecule(system, atoms):
         new_atom.z = old_atom.z
         new_atom.charge = old_atom.charge
         new_atom.type = old_atom.type
-        new_system.atoms.append(new_atom)
-    
-    atom_start = len(new_system.atoms)
-    
-    # Add new atoms
+        new_atoms.append(new_atom)
+
+    atom_start = len(new_atoms)
+
     for atom in atoms:
-        new_system.atoms.append(atom)
-    
-    # Copy existing residues
-    new_system.residues = []
+        new_atoms.append(atom)
+
+    new_residues = []
     for res in system.residues:
         new_res = pygcmc.MCResidue()
         new_res.active = res.active
         new_res.atomStart = res.atomStart
         new_res.atomCount = res.atomCount
         new_res.type = res.type
-        new_system.residues.append(new_res)
+        new_residues.append(new_res)
     
     # Add new residue
     res = pygcmc.MCResidue()
@@ -139,10 +135,12 @@ def insert_molecule(system, atoms):
     res.atomStart = atom_start
     res.atomCount = len(atoms)
     res.type = 0  # Guest type
-    new_system.residues.append(res)
-    
-    new_system.activeAtomCount = len(new_system.atoms)
-    new_system.activeResidueCount = len(new_system.residues)
+    new_residues.append(res)
+
+    new_system.atoms = new_atoms
+    new_system.residues = new_residues
+    new_system.activeAtomCount = len(new_atoms)
+    new_system.activeResidueCount = len(new_residues)
     
     return new_system
 

@@ -88,6 +88,8 @@ def create_cavity_system():
         (4.0, 4.0, 1.0), (4.0, 4.0, 4.0),
     ]
     
+    atoms = []
+    residues = []
     for x, y, z in framework_positions:
         atom = pygcmc.MCAtom()
         atom.x = x
@@ -98,15 +100,17 @@ def create_cavity_system():
         
         res = pygcmc.MCResidue()
         res.active = True
-        res.atomStart = len(system.atoms)
+        res.atomStart = len(atoms)
         res.atomCount = 1
         res.type = 1  # Framework type
         
-        system.atoms.append(atom)
-        system.residues.append(res)
+        atoms.append(atom)
+        residues.append(res)
     
-    system.activeAtomCount = len(system.atoms)
-    system.activeResidueCount = len(system.residues)
+    system.atoms = atoms
+    system.residues = residues
+    system.activeAtomCount = len(atoms)
+    system.activeResidueCount = len(residues)
     
     return system
 
@@ -137,6 +141,8 @@ def create_multi_cavity_system():
     
     all_positions = small_cavity_atoms + large_cavity_atoms + edge_cavity_atoms
     
+    atoms = []
+    residues = []
     for x, y, z in all_positions:
         atom = pygcmc.MCAtom()
         atom.x = x
@@ -147,15 +153,17 @@ def create_multi_cavity_system():
         
         res = pygcmc.MCResidue()
         res.active = True
-        res.atomStart = len(system.atoms)
+        res.atomStart = len(atoms)
         res.atomCount = 1
         res.type = 1  # Framework type
         
-        system.atoms.append(atom)
-        system.residues.append(res)
+        atoms.append(atom)
+        residues.append(res)
     
-    system.activeAtomCount = len(system.atoms)
-    system.activeResidueCount = len(system.residues)
+    system.atoms = atoms
+    system.residues = residues
+    system.activeAtomCount = len(atoms)
+    system.activeResidueCount = len(residues)
     
     return system
 
@@ -170,6 +178,8 @@ def create_mixed_system():
         (3.5, 3.5, 2.5, 0.5),
     ]
     
+    atoms = list(system.atoms)
+    residues = list(system.residues)
     for x, y, z, charge in existing_guests:
         atom = pygcmc.MCAtom()
         atom.x = x
@@ -180,15 +190,17 @@ def create_mixed_system():
         
         res = pygcmc.MCResidue()
         res.active = True
-        res.atomStart = len(system.atoms)
+        res.atomStart = len(atoms)
         res.atomCount = 1
         res.type = 0  # Guest type
         
-        system.atoms.append(atom)
-        system.residues.append(res)
+        atoms.append(atom)
+        residues.append(res)
     
-    system.activeAtomCount = len(system.atoms)
-    system.activeResidueCount = len(system.residues)
+    system.atoms = atoms
+    system.residues = residues
+    system.activeAtomCount = len(atoms)
+    system.activeResidueCount = len(residues)
     
     return system
 
@@ -216,6 +228,8 @@ def create_ranked_cavity_system():
          (2.0, 4.0, 3.0, -0.1), (3.0, 4.0, 3.0, 0.1)],
     ]
     
+    atoms = []
+    residues = []
     for cavity_atoms in framework_configs:
         for x, y, z, charge in cavity_atoms:
             atom = pygcmc.MCAtom()
@@ -227,15 +241,17 @@ def create_ranked_cavity_system():
             
             res = pygcmc.MCResidue()
             res.active = True
-            res.atomStart = len(system.atoms)
+            res.atomStart = len(atoms)
             res.atomCount = 1
             res.type = 1  # Framework type
             
-            system.atoms.append(atom)
-            system.residues.append(res)
+            atoms.append(atom)
+            residues.append(res)
     
-    system.activeAtomCount = len(system.atoms)
-    system.activeResidueCount = len(system.residues)
+    system.atoms = atoms
+    system.residues = residues
+    system.activeAtomCount = len(atoms)
+    system.activeResidueCount = len(residues)
     
     return system
 
@@ -264,4 +280,3 @@ def create_mixed_forcefield():
     ]
     
     return ff
-

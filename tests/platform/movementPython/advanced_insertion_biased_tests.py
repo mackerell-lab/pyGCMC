@@ -46,11 +46,12 @@ def test_biased_cavity_insertion():
     # Debug: print cavity energies
     print(f"Cavity energies: Small={cavity_energies[0]:.4f}, Large={cavity_energies[1]:.4f}, Edge={cavity_energies[2]:.4f}")
     
-    # Check if all energies are the same (no discrimination)
-    if all(abs(e - cavity_energies[0]) < 1e-6 for e in cavity_energies):
-        print("WARNING: All cavities have same energy - system may not be set up correctly")
-        # For now, skip this test
-        return
+    # Require energy discrimination across cavities (no silent pass).
+    spread = max(cavity_energies) - min(cavity_energies)
+    assert spread > 1e-6, (
+        "All cavities have the same energy; expected discrimination. "
+        f"Energies={cavity_energies}"
+    )
     
     # Large cavity should be most favorable
     assert cavity_energies[1] < cavity_energies[0], \
@@ -98,10 +99,11 @@ def test_energy_guided_insertion():
     
     print(f"Energy range: best={best_energy:.4f}, worst={worst_energy:.4f}")
     
-    # Check if all energies are zero
-    if all(abs(att['energy']) < 1e-6 for att in insertion_attempts):
-        print("WARNING: All insertion energies are zero - skipping test")
-        return
+    # Require non-zero energy signal to avoid silent pass.
+    assert any(abs(att["energy"]) > 1e-6 for att in insertion_attempts), (
+        "All insertion energies are ~0; expected non-zero values. "
+        f"Energies={[att['energy'] for att in insertion_attempts]}"
+    )
     
     # If we have non-zero energies, check the pattern
     assert best_energy <= 0, f"Best insertion should be favorable or neutral, got {best_energy:.2f}"
@@ -118,5 +120,4 @@ def test_energy_guided_insertion():
     # Worst position should have low acceptance
     p_worst = min(1.0, math.exp(-beta * worst_energy))
     assert p_worst < 0.1, f"Worst position should have low acceptance, got {p_worst:.3f}"
-
 

@@ -129,11 +129,11 @@ def test_insert_ion_pair():
     print(f"Ion pair energies at distances {distances}: {energies}")
     min_energy_idx = energies.index(min(energies))
     
-    # Check if all energies are zero (might indicate calculation issue)
-    if all(e == 0.0 for e in energies):
-        print("WARNING: All energies are zero - might be a forcefield issue")
-        # For now, skip this assertion if energies are not calculated
-        return
+    # Require non-zero energy signal (no silent pass).
+    assert any(abs(e) > 1e-6 for e in energies), (
+        "All ion-pair energies are zero; expected non-zero values. "
+        f"Energies={energies}"
+    )
     
     # If energies are being calculated, verify the expected behavior
     # With weak LJ parameters (eps=0.6 kJ/mol), the minimum will be at shortest distance
@@ -194,4 +194,3 @@ def test_insert_random_positions():
 
 
 # Helper functions
-
