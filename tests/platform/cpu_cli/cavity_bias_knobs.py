@@ -287,3 +287,119 @@ random_seed:101
     frac_exclude = run_case("exclude_h", exclude_h="yes")
 
     assert frac_exclude > frac_keep + 0.004
+
+
+def test_cavity_bias_use_vdw_radius_changes_cavity_fraction(gcmc_cpu, temp_dir):
+    work = Path(temp_dir) / "cavity_bias_use_vdw_radius"
+    work.mkdir(parents=True, exist_ok=True)
+
+    pdb = work / "sys.pdb"
+    _write_text(
+        pdb,
+        """
+CRYST1   20.000   20.000   20.000  90.00  90.00  90.00 P 1           1
+ATOM      1  C1  MOL A   1      10.000  10.000  10.000  1.00  0.00           C
+END
+""",
+    )
+
+    top = work / "sys.top"
+    _write_text(
+        top,
+        """
+[ defaults ]
+1 2 yes 1.0 1.0
+
+[ atomtypes ]
+; name  at.num  mass   charge  ptype  sigma   epsilon
+C       6       12.011 0.000   A      0.800   0.000
+
+[ moleculetype ]
+MOL  1
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge  mass
+1   C     1      MOL      C1    1     0.000   12.011
+
+[ system ]
+CavityVDWRadius
+
+[ molecules ]
+MOL 1
+""",
+    )
+
+    par = work / "par.itp"
+    _write_text(
+        par,
+        """
+[ defaults ]
+1 2 yes 1.0 1.0
+
+[ atomtypes ]
+; name  at.num  mass   charge  ptype  sigma   epsilon
+C       6       12.011 0.000   A      0.800   0.000
+""",
+    )
+
+    frag = work / "frag.itp"
+    _write_text(
+        frag,
+        """
+[ moleculetype ]
+MOL  1
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge  mass
+1   C     1      MOL      C1    1     0.000   12.011
+""",
+    )
+
+    def run_case(tag: str, use_vdw: str) -> float:
+        case = work / tag
+        case.mkdir(parents=True, exist_ok=True)
+        inp = case / "run.inp"
+        _write_inp(
+            inp,
+            f"""
+version:gcmc_2.0
+par:{par}
+fragitp:{frag}
+fragname:MOL
+fragconc:55.0
+fragmuex:0.0
+
+pdb:{pdb}
+top:{top}
+box_size:20.0 20.0 20.0
+cutoff:12.0
+grid_dx:1.0
+probe_radius:1.4
+use_cavity_bias:yes
+use_vdw_radius_for_grid:{use_vdw}
+exclude_hydrogens_from_grid:no
+
+temperature:300.0
+mcsteps:20
+nprint:20
+moves_per_step:1
+mc_move_prob:1.0 0.0 0.0 0.0
+random_seed:202
+""",
+        )
+        out_prefix = case / "out" / "gcmc"
+        out_prefix.parent.mkdir(parents=True, exist_ok=True)
+        accept_log = case / "out" / "acceptance.jsonl"
+        return _run_cavity_case(
+            gcmc_cpu=gcmc_cpu,
+            work=case,
+            inp=inp,
+            out_prefix=out_prefix,
+            accept_log=accept_log,
+            timeout=90,
+        )
+
+    frac_sigma = run_case("sigma", use_vdw="no")
+    frac_vdw = run_case("vdw", use_vdw="yes")
+
+    assert frac_vdw > frac_sigma + 0.02

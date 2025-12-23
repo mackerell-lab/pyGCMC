@@ -133,6 +133,7 @@ from cpu_cli.cbmc_region_contract import (
 from cpu_cli.cavity_bias_knobs import (
     test_cavity_bias_probe_radius_changes_cavity_fraction,
     test_cavity_bias_exclude_hydrogens_changes_cavity_fraction,
+    test_cavity_bias_use_vdw_radius_changes_cavity_fraction,
 )
 
 # MaxCount hard-cap policy regression (1 function)
