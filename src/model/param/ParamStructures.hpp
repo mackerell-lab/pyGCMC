@@ -36,6 +36,11 @@ struct BasicInfo {
     std::string itp_pairtypes_mode = "compat";  // compat (gcmc_gpu) or strict (1-4 only)
     int gromacs_nbfunc = 1;
     int gromacs_comb_rule = 2;
+    std::string gromacs_gen_pairs = "yes";
+    double gromacs_fudge_lj = 1.0;
+    double gromacs_fudge_qq = 1.0;
+    bool gromacs_gen_pairs_present = false;
+    bool gromacs_fudge_present = false;
     bool gromacs_defaults_present = false;
     // Diagnostics: capture INP keys seen/handled/unknown during parsing.
     // These are used to avoid silently ignoring legacy keys during gcmc_gpu/opencl compatibility work.

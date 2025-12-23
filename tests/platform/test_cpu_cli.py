@@ -63,6 +63,7 @@ from cpu_cli.inp_units_compat import (
 
 # gcmc_gpu/opencl example deck smoke tests (4 functions)
 from cpu_cli.gcmc_gpu_inp_examples import (
+    test_gcmc_gpu_inp_key_inventory_matches_templates,
     test_gcmc_gpu_water_tip3p_runs_and_honors_op_outputs,
     test_gcmc_gpu_version_gcmc_2_0_implies_angstrom_units_and_op_outputs,
     test_gcmc_gpu_multi_salt_runs_and_converts_muex_list,
@@ -83,6 +84,7 @@ from cpu_cli.gcmc_opencl_examples import (
     test_opencl_waterbox_example_smoke_runs_and_enables_cavity_bias,
     test_opencl_benz_example_smoke_runs_and_parses_multi_fragment_lists,
     test_opencl_protein_example_dump_params_parses_complex_deck,
+    test_opencl_protein_example_active_muex_outputs,
     test_opencl_cdk2_example_smoke_runs_and_reports_ignored_gcmc_cutoff,
     test_opencl_lysozyme_example_smoke_runs_and_reports_ignored_map_keys,
 )
@@ -122,6 +124,17 @@ from cpu_cli.physical_contracts import (
     test_deletion_deltaU_is_negative_of_insertion_for_charged_system,
 )
 
+# CBMC + region contract regression (1 function)
+from cpu_cli.cbmc_region_contract import (
+    test_cbmc_insertion_respects_gcmc_region,
+)
+
+# Cavity-bias knob regressions (2 functions)
+from cpu_cli.cavity_bias_knobs import (
+    test_cavity_bias_probe_radius_changes_cavity_fraction,
+    test_cavity_bias_exclude_hydrogens_changes_cavity_fraction,
+)
+
 # MaxCount hard-cap policy regression (1 function)
 from cpu_cli.maxcount_policy import (
     test_maxcount_is_initial_plus_mcsteps_plus_buffer,
@@ -140,6 +153,7 @@ from cpu_cli.itp_nonbonded_forcefield import (
     test_itp_pairtypes_strict_mode_does_not_override_inter_residue,
     test_itp_nonbond_params_take_precedence_over_pairtypes_for_same_pair,
     test_dump_params_reports_itp_defaults_comb_rule,
+    test_itp_defaults_gen_pairs_and_fudge_are_visible_and_strict_fails,
     test_itp_defaults_comb_rule_geometric_sigma_mixing,
     test_itp_defaults_comb_rule_one_converts_c6_c12_and_overrides,
 )

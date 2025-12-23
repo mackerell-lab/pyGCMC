@@ -276,9 +276,15 @@ bool GCMCSimulation::initialize() {
         // Only treat missing files as fatal
         if (errorMsg.find("not found") != std::string::npos ||
             errorMsg.find("does not exist") != std::string::npos ||
-            errorMsg.find("Failed to open") != std::string::npos) {
-            // File was explicitly specified but doesn't exist - this is fatal
-            log("ERROR: Cannot continue with missing input files");
+            errorMsg.find("Failed to open") != std::string::npos ||
+            // Fragment templates are an input contract: silently continuing would yield
+            // "runs but wrong" behavior (e.g., zero-atom templates / placeholder fragments).
+            errorMsg.find("Failed to parse fragment template") != std::string::npos ||
+            errorMsg.find("Failed to retrieve fragment data") != std::string::npos ||
+            errorMsg.find("Failed to load any fragment templates") != std::string::npos ||
+            errorMsg.find("Parameters not available for fragment template loading") != std::string::npos) {
+            // Inputs were explicitly specified but are invalid or unavailable - this is fatal.
+            log("ERROR: Cannot continue with invalid or missing input files");
             return false;
         }
 
@@ -3260,6 +3266,11 @@ void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
 	        << "\"gromacs_defaults_present\":" << (basic.gromacs_defaults_present ? "true" : "false") << ","
 	        << "\"gromacs_nbfunc\":" << basic.gromacs_nbfunc << ","
 	        << "\"gromacs_comb_rule\":" << basic.gromacs_comb_rule << ","
+	        << "\"gromacs_gen_pairs_present\":" << (basic.gromacs_gen_pairs_present ? "true" : "false") << ","
+	        << "\"gromacs_gen_pairs\":\"" << escapeJsonString(basic.gromacs_gen_pairs) << "\","
+	        << "\"gromacs_fudge_present\":" << (basic.gromacs_fudge_present ? "true" : "false") << ","
+	        << "\"gromacs_fudge_lj\":" << basic.gromacs_fudge_lj << ","
+	        << "\"gromacs_fudge_qq\":" << basic.gromacs_fudge_qq << ","
 	        << "\"unknown_inp_keys\":";
 	    writeJsonStringVector(ofs, basic.inp_keys_unknown);
 	    ofs << ",\"ignored_inp_keys\":";

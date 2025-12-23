@@ -158,6 +158,15 @@ ItpNonbondedParser::Result parseFileRaw(const std::string& filename) {
                 try {
                     result.defaults.nbfunc = std::stoi(tokens[0]);
                     result.defaults.combRule = std::stoi(tokens[1]);
+                    if (tokens.size() >= 3) {
+                        result.defaults.genPairs = tokens[2];
+                        result.defaults.genPairsPresent = true;
+                    }
+                    if (tokens.size() >= 5) {
+                        result.defaults.fudgeLJ = std::stod(tokens[3]);
+                        result.defaults.fudgeQQ = std::stod(tokens[4]);
+                        result.defaults.fudgePresent = true;
+                    }
                     result.defaults.present = true;
                 } catch (const std::exception&) {
                     continue;
@@ -234,6 +243,35 @@ ItpNonbondedParser::Result ItpNonbondedParser::parse_files(const std::vector<std
             } else if (merged.defaults.nbfunc != r.defaults.nbfunc ||
                        merged.defaults.combRule != r.defaults.combRule) {
                 throw std::runtime_error("Conflicting GROMACS [defaults] across ITP files");
+            } else {
+                if (r.defaults.genPairsPresent) {
+                    if (merged.defaults.genPairsPresent) {
+                        auto lower = [](std::string v) {
+                            std::transform(v.begin(), v.end(), v.begin(),
+                                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                            return v;
+                        };
+                        if (lower(merged.defaults.genPairs) != lower(r.defaults.genPairs)) {
+                            throw std::runtime_error("Conflicting GROMACS gen-pairs across ITP files");
+                        }
+                    } else {
+                        merged.defaults.genPairs = r.defaults.genPairs;
+                        merged.defaults.genPairsPresent = true;
+                    }
+                }
+                if (r.defaults.fudgePresent) {
+                    const double tol = 1e-8;
+                    if (merged.defaults.fudgePresent) {
+                        if (std::abs(merged.defaults.fudgeLJ - r.defaults.fudgeLJ) > tol ||
+                            std::abs(merged.defaults.fudgeQQ - r.defaults.fudgeQQ) > tol) {
+                            throw std::runtime_error("Conflicting GROMACS fudgeLJ/fudgeQQ across ITP files");
+                        }
+                    } else {
+                        merged.defaults.fudgeLJ = r.defaults.fudgeLJ;
+                        merged.defaults.fudgeQQ = r.defaults.fudgeQQ;
+                        merged.defaults.fudgePresent = true;
+                    }
+                }
             }
         }
     }

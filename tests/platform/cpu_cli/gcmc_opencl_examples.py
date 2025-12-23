@@ -120,6 +120,18 @@ def _read_statistics_n_total(stats_path: Path) -> list[int]:
     return n_total
 
 
+def _count_residues_by_resname(pdb_path: Path, resname: str) -> int:
+    want = resname.strip().upper()
+    resids: set[int] = set()
+    for line in pdb_path.read_text().splitlines():
+        if not line.startswith(("ATOM", "HETATM")):
+            continue
+        if line[17:20].strip().upper() != want:
+            continue
+        resids.add(int(line[22:26]))
+    return len(resids)
+
+
 def _write_smoke_inp_from_opencl_example(
     src_inp: Path,
     dst_inp: Path,
@@ -500,6 +512,102 @@ def test_opencl_protein_example_dump_params_parses_complex_deck(gcmc_cpu, test_d
     assert params["fragment"]["use_number_water_nbar"] is True
     inventory = _load_inp_key_inventory(Path(test_data_dir))
     _assert_inp_key_classification(params, example="protein", inventory=inventory)
+
+
+def test_opencl_protein_example_active_muex_outputs(gcmc_cpu, test_data_dir, temp_dir):
+    """
+    Complex deck regression: active_*/muex_* outputs must exist and stay consistent.
+    """
+    src = test_data_dir / "gcmc_opencl_examples" / "protein"
+    assert (src / "gcmc.inp").exists()
+    assert (src / "181L_apo_silcs.1.top").exists()
+    assert (src / "181L_apo_silcs.1.pdb").exists()
+    assert (src / "posre.itp").exists()
+    assert (src / "posre_protein_ca.itp").exists()
+
+    work = Path(temp_dir) / "opencl_protein_active_muex"
+    work.mkdir(parents=True, exist_ok=True)
+
+    shutil.copy(src / "181L_apo_silcs.1.top", work / "181L_apo_silcs.1.top")
+    shutil.copy(src / "181L_apo_silcs.1.pdb", work / "181L_apo_silcs.1.pdb")
+    shutil.copy(src / "posre.itp", work / "posre.itp")
+    shutil.copy(src / "posre_protein_ca.itp", work / "posre_protein_ca.itp")
+
+    _write_smoke_inp_from_opencl_example(
+        src / "gcmc.inp",
+        work / "run.inp",
+        mcsteps=3,
+        overrides={"op_top": "out.top", "op_pdb": "out.pdb"},
+    )
+    _symlink_forcefield_dir(work, Path(test_data_dir))
+
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+
+    result = subprocess.run(
+        [
+            gcmc_cpu,
+            "--inp",
+            str(work / "run.inp"),
+            "--prefix",
+            str(out_prefix),
+            "--seed",
+            "17",
+        ],
+        cwd=str(work),
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    final_pdb = Path(f"{out_prefix}_final.pdb")
+    assert final_pdb.exists()
+    initial_pdb = work / "181L_apo_silcs.1.pdb"
+
+    frag_names, frag_muex = _extract_frag_names_and_muex(work / "run.inp")
+    out_dir = out_prefix.parent
+    active_line_counts: list[int] = []
+    active_last_counts: list[int] = []
+    resname_dupes: set[str] = set()
+    resname_map: dict[str, str] = {}
+    for name in frag_names:
+        key = name.strip()[:3].upper()
+        if key in resname_map:
+            resname_dupes.add(key)
+        resname_map[key] = name
+    for frag_name, expected_muex in zip(frag_names, frag_muex):
+        sanitized = _sanitize_fragment_name(frag_name)
+        active_path = out_dir / f"active_{sanitized}.dat"
+        muex_path = out_dir / f"muex_{sanitized}.dat"
+        assert active_path.exists()
+        assert muex_path.exists()
+
+        active_lines = [line.strip() for line in active_path.read_text().splitlines() if line.strip()]
+        muex_lines = [line.strip() for line in muex_path.read_text().splitlines() if line.strip()]
+        assert active_lines, f"{active_path} unexpectedly empty"
+        assert muex_lines, f"{muex_path} unexpectedly empty"
+
+        active_values = [int(val) for val in active_lines]
+        muex_values = [float(val) for val in muex_lines]
+        assert all(val >= 0 for val in active_values)
+        assert all(abs(val - expected_muex) <= 0.02 for val in muex_values)
+        active_line_counts.append(len(active_values))
+        active_last_counts.append(active_values[-1])
+
+        resname_key = frag_name.strip()[:3].upper()
+        if resname_key and resname_key not in resname_dupes:
+            baseline = _count_residues_by_resname(initial_pdb, resname_key)
+            if baseline == 0:
+                pdb_count = _count_residues_by_resname(final_pdb, resname_key)
+                assert active_values[-1] == pdb_count, f"{frag_name} count mismatch"
+
+    stats_path = Path(f"{out_prefix}_statistics.dat")
+    assert stats_path.exists()
+    n_total = _read_statistics_n_total(stats_path)
+    assert n_total, f"{stats_path} unexpectedly empty"
+    assert all(count == len(n_total) for count in active_line_counts)
+    assert sum(active_last_counts) == n_total[-1]
 
 
 def test_opencl_cdk2_example_smoke_runs_and_reports_ignored_gcmc_cutoff(gcmc_cpu, test_data_dir, temp_dir):

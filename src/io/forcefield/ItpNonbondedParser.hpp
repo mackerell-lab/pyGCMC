@@ -32,6 +32,11 @@ public:
     struct Defaults {
         int nbfunc{1};
         int combRule{2};
+        std::string genPairs{"yes"};
+        double fudgeLJ{1.0};
+        double fudgeQQ{1.0};
+        bool genPairsPresent{false};
+        bool fudgePresent{false};
         bool present{false};
     };
 

@@ -288,9 +288,9 @@ fragmuex:-1.0
             for f in tmp_path.glob("gcmc_final.*"):
                 f.unlink()
             
-            # Should either fail gracefully or show error
-            # The exact behavior depends on error handling in FragmentLibrary
-            assert result.returncode != -11 or "error" in result.stderr.lower()
+            # Should fail cleanly (no segfault) for an invalid ITP file.
+            assert result.returncode != -11
+            assert result.returncode != 0
     
     def test_nonexistent_itp_file(self):
         """Test handling of non-existent ITP file"""
@@ -321,9 +321,9 @@ fragmuex:-1.0
             for f in tmp_path.glob("gcmc_final.*"):
                 f.unlink()
             
-            # Should show error about missing file
-            output = result.stdout + result.stderr
-            assert "not found" in output.lower() or "error" in output.lower() or result.returncode != 0
+            # Should fail cleanly (no segfault) for a missing ITP file.
+            assert result.returncode != -11
+            assert result.returncode != 0
 
 
 class TestFragmentLibraryContent:

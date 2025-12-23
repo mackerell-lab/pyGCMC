@@ -10,6 +10,7 @@
 #include "../../../../system/log/LogMain.hpp"
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <fstream>
 #include <stdexcept>
 #include <filesystem>
@@ -30,6 +31,12 @@ SimulationInputBuilder::SimulationInputBuilder(const Config& config)
 
 SimulationInputBuilder::Result SimulationInputBuilder::build() {
     Result result;
+
+    auto pushUnique = [](std::vector<std::string>& v, const std::string& s) {
+        if (std::find(v.begin(), v.end(), s) == v.end()) {
+            v.push_back(s);
+        }
+    };
     
     // Step 1: Parse INP file
     log("Parsing INP file: " + config_.inpFile);
@@ -142,6 +149,28 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
                     basic.gromacs_defaults_present = itpNonbonded.defaults.present;
                     basic.gromacs_nbfunc = itpNonbonded.defaults.nbfunc;
                     basic.gromacs_comb_rule = itpNonbonded.defaults.combRule;
+                    basic.gromacs_gen_pairs = itpNonbonded.defaults.genPairs;
+                    basic.gromacs_fudge_lj = itpNonbonded.defaults.fudgeLJ;
+                    basic.gromacs_fudge_qq = itpNonbonded.defaults.fudgeQQ;
+                    basic.gromacs_gen_pairs_present = itpNonbonded.defaults.genPairsPresent;
+                    basic.gromacs_fudge_present = itpNonbonded.defaults.fudgePresent;
+
+                    if (itpNonbonded.defaults.genPairsPresent) {
+                        std::string gen = itpNonbonded.defaults.genPairs;
+                        std::transform(gen.begin(), gen.end(), gen.begin(),
+                                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                        if (gen != "yes" && gen != "y" && gen != "1") {
+                            pushUnique(basic.inp_keys_ignored, "gromacs_gen_pairs");
+                        }
+                    }
+                    if (itpNonbonded.defaults.fudgePresent) {
+                        if (std::abs(itpNonbonded.defaults.fudgeLJ - 1.0) > 1e-6) {
+                            pushUnique(basic.inp_keys_ignored, "gromacs_fudge_lj");
+                        }
+                        if (std::abs(itpNonbonded.defaults.fudgeQQ - 1.0) > 1e-6) {
+                            pushUnique(basic.inp_keys_ignored, "gromacs_fudge_qq");
+                        }
+                    }
                 }
             }
         } catch (const std::exception& e) {

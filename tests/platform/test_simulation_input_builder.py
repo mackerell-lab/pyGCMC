@@ -80,53 +80,68 @@ class TestSimulationInputBuilder:
     
     def test_load_complete_input_files(self, test_paths, tmp_path):
         """Test loading complete set of input files (INP + PDB + TOP + PAR)"""
-        # Use a temporary directory to avoid polluting the source tree
+        # Use a temporary directory to avoid polluting the source tree.
+        # Assert behavior via --dump-params (no stdout/stderr log-string matching).
         with tempfile.TemporaryDirectory() as temp_dir:
-            temp_dir = Path(temp_dir)
-            
-            # Copy necessary test data to temp directory
-            # Copy all test data files to temp_dir so relative paths work
-            for file in ['gcmc_quick.inp', 'test.pdb', 'test.top']:
+            work = Path(temp_dir)
+
+            # Copy all test data files to work so relative paths resolve.
+            for file in ["gcmc_quick.inp", "test.pdb", "test.top"]:
                 src = TEST_DATA_DIR / file
-                if src.exists():
-                    shutil.copy(src, temp_dir / file)
-            
-            # Copy charmm36.ff directory
-            if (TEST_DATA_DIR / "charmm36.ff").exists():
-                shutil.copytree(TEST_DATA_DIR / "charmm36.ff", temp_dir / "charmm36.ff")
-            
-            # Create mol symlink if needed
-            mol_link = temp_dir / "mol"
+                assert src.exists(), f"Missing test data file: {src}"
+                shutil.copy(src, work / file)
+
+            assert (TEST_DATA_DIR / "charmm36.ff").exists(), "Missing charmm36.ff test data"
+            shutil.copytree(TEST_DATA_DIR / "charmm36.ff", work / "charmm36.ff")
+
+            mol_link = work / "mol"
             if not mol_link.exists():
                 mol_link.symlink_to("charmm36.ff/mol")
-                
-            temp_inp = temp_dir / "gcmc_quick.inp"
-            
-            # Run gcmc_cpu with the complete input set
+
+            temp_inp = work / "gcmc_quick.inp"
+            # Keep it fast: this test is about input loading, not production sampling.
+            content = temp_inp.read_text()
+            content = content.replace("eqsteps:10", "eqsteps:0")
+            content = content.replace("mcsteps:100", "mcsteps:0")
+            temp_inp.write_text(content)
+
+            out_prefix = work / "out" / "gcmc"
+            out_prefix.parent.mkdir(parents=True, exist_ok=True)
+            params_json = work / "out" / "params.json"
+
             result = subprocess.run(
-                [str(GCMC_CPU_PATH), "--inp", str(temp_inp), "--seed", "42", "--verbose"],
-                cwd=temp_dir,  # Run in temp_dir where all files are
+                [
+                    str(GCMC_CPU_PATH),
+                    "--inp",
+                    str(temp_inp),
+                    "--seed",
+                    "42",
+                    "--prefix",
+                    str(out_prefix),
+                    "--dump-params",
+                    str(params_json),
+                ],
+                cwd=work,
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=20,
             )
-            
-            # Clean up any generated files immediately
-            cleanup_generated_files(temp_dir)
-        
-        # Should not crash
-        assert result.returncode != -11, "Segfault with complete input files"
-        
-        # Check for actual log messages from the code
-        output = result.stdout + result.stderr
-        # The actual logs show "Loaded parameters from" or "MC state initialized"
-        assert ("Loaded parameters from" in output or 
-                "MC state initialized" in output or
-                "Initializing GCMC simulation" in output)
-        
-        # Should show loaded parameters (actual format from logs)
-        assert "Temperature:" in output or "temperature" in output.lower()
-        assert "Box size:" in output or "box_size" in output.lower()
+
+            assert result.returncode != -11, "Segfault with complete input files"
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert params_json.exists(), "params.json not generated"
+
+            params = json.loads(params_json.read_text())
+            assert params["basic"]["inp_units"] == "gcmc_gpu"
+            names = [str(x).strip() for x in params["fragment"]["names"]]
+            assert names and all(names)
+            assert len(names) >= 3
+            lower_names = {n.lower() for n in names}
+            assert {"sol", "benx"}.issubset(lower_names)
+            assert [float(x) for x in params["space"]["box_size_nm"]] == pytest.approx(
+                [3.6736, 4.0850, 4.9379], abs=1e-4
+            )
+            assert float(params["mc"]["temperature_K"]) == pytest.approx(300.0, abs=1e-6)
         
     def test_load_pdb_only_no_crash(self, test_paths, tmp_path):
         """Test that PDB-only input doesn't crash"""
@@ -166,15 +181,16 @@ fragitp:{test_paths['itp_benx']}
 fragitp:{test_paths['itp_acox']}
 box_size:10.0 10.0 10.0
 temperature:298.15
-mcsteps:10
+mcsteps:0
 fragname:SOL BENX ACOX
 fragconc:55.0 1.0 1.0
 fragmuex:-5.0 -0.79 -0.5
 moves_per_step:1
 """)
+        params_json = tmp_path / "params.json"
 
         result = subprocess.run(
-            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "42"],
+            [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "42", "--dump-params", str(params_json)],
             cwd=tmp_path,  # Run in temp directory
             capture_output=True,
             text=True,
@@ -187,11 +203,14 @@ moves_per_step:1
         # Should not crash
         assert result.returncode != -11, "Failed to load fragment ITPs"
         
-        # Should show fragment loading (if verbose logging implemented)
-        output = result.stdout + result.stderr
-        # Check for fragment names or loading messages
-        if "fragment" in output.lower() or "template" in output.lower():
-            assert True  # Fragment loading messages found
+        assert params_json.exists()
+        params = json.loads(params_json.read_text())
+        names = [str(n).strip().upper() for n in params["fragment"]["names"]]
+        assert names == ["SOL", "BENX", "ACOX"]
+        assert [float(x) for x in params["fragment"]["conc_list_M"]] == pytest.approx([55.0, 1.0, 1.0], abs=1e-6)
+        assert [float(x) for x in params["fragment"]["muex_list_kj_mol"]] == pytest.approx(
+            [-5.0 * 4.184, -0.79 * 4.184, -0.5 * 4.184], abs=2e-3
+        )
     
     def test_load_parameter_files(self, test_paths, tmp_path):
         """Test loading force field parameter files"""
@@ -249,16 +268,22 @@ fragmuex:-5.0
             text=True,
             timeout=5
         )
-        
-        # Clean up any generated files
-        cleanup_generated_files(tmp_path)
-        
+
         # Should not crash
         assert result.returncode != -11, "Segfault with empty files"
-        
-        # Should handle gracefully
-        output = result.stdout + result.stderr
-        assert "empty" in output.lower() or "no atoms" in output.lower() or result.returncode == 0
+
+        # Either fail cleanly (non-zero) or succeed while producing an empty final PDB.
+        if result.returncode == 0:
+            out_pdb = tmp_path / "gcmc_final.pdb"
+            assert out_pdb.exists(), "Expected gcmc_final.pdb for successful run"
+            atom_lines = [
+                line for line in out_pdb.read_text().splitlines()
+                if line.startswith(("ATOM", "HETATM"))
+            ]
+            assert not atom_lines, f"Expected empty output PDB, found {len(atom_lines)} atoms"
+
+        # Clean up any generated files
+        cleanup_generated_files(tmp_path)
     
     def test_parameter_preservation(self, tmp_path, test_paths):
         """Test that INP parameters are correctly preserved"""
@@ -371,20 +396,17 @@ fragmuex:-5.0
             text=True,
             timeout=5
         )
-        
+
+        # Should not crash; should fail cleanly when referenced files are missing.
+        assert result.returncode != -11, "Segfault on missing file references"
+        assert result.returncode != 0, "Expected failure for missing file references"
+
         # Clean up any generated files
         cleanup_generated_files(tmp_path)
-        
-        # Should show error about missing files (may still crash currently)
-        # Adjust expectation based on current behavior
-        output = result.stdout + result.stderr
-        assert ("not found" in output.lower() or 
-                "Failed to load" in output or
-                result.returncode != 0)
 
 
 class TestParameterLogging:
-    """Test that simulation parameters are correctly logged"""
+    """Test that simulation parameters are exported in a stable, machine-readable form."""
     
     @pytest.fixture(autouse=True) 
     def cleanup(self, tmp_path):
@@ -394,7 +416,7 @@ class TestParameterLogging:
         # The tests should run in tmp_path anyway
     
     def test_log_output_format(self, tmp_path):
-        """Test the format of parameter logging matches expected format"""
+        """Test that --dump-params contains key simulation parameters (no stdout parsing)."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_dir = Path(temp_dir)
             
@@ -424,31 +446,29 @@ class TestParameterLogging:
             # Create a simpler version with fewer steps
             inp_content = test_inp.read_text()
             # Replace mcsteps line
-            inp_content = inp_content.replace("mcsteps:100", "mcsteps:10")
+            inp_content = inp_content.replace("mcsteps:100", "mcsteps:0")
+            inp_content = inp_content.replace("eqsteps:10", "eqsteps:0")
             
             inp_file = temp_dir / "log_test.inp"
             inp_file.write_text(inp_content)
-            
+            params_json = temp_dir / "params.json"
+
             result = subprocess.run(
-                [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "42", "--verbose"],
+                [str(GCMC_CPU_PATH), "--inp", str(inp_file), "--seed", "42", "--dump-params", str(params_json)],
                 cwd=temp_dir,  # Run in temp_dir where all files are
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=10
             )
-            
+
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert params_json.exists()
+            params = json.loads(params_json.read_text())
+            assert float(params["mc"]["temperature_K"]) == pytest.approx(300.0, abs=1e-6)
+            assert len(params["space"]["box_size_nm"]) == 3
+
             # Clean up any generated files immediately
             cleanup_generated_files(temp_dir)
-        
-        output = result.stdout + result.stderr
-        
-        # Check for actual log format from the code
-        assert "Temperature:" in output or "temperature" in output.lower()
-        assert "Box size:" in output or "box_size" in output.lower()
-        assert "steps" in output.lower()  # MC steps or similar
-        
-        # Check for parameter loading
-        assert "Loaded parameters" in output or "Initializing" in output
 
 
 if __name__ == "__main__":

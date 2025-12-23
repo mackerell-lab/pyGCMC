@@ -736,6 +736,113 @@ mc_move_prob:1 0 0 0
     assert params["basic"]["gromacs_comb_rule"] == 3
 
 
+def test_itp_defaults_gen_pairs_and_fudge_are_visible_and_strict_fails(gcmc_cpu, temp_dir):
+    """
+    [defaults] gen-pairs/fudge values must be visible and trigger strict failure when unsupported.
+    """
+    work = Path(temp_dir) / "itp_nonbonded_energy" / "defaults_gen_pairs_fudge"
+    work.mkdir(parents=True, exist_ok=True)
+
+    frag_itp = work / "frag.itp"
+    _write_text(
+        frag_itp,
+        """
+[ moleculetype ]
+FRG  1
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge  mass
+1   X     1      FRG      X     1     0.000   1.000
+""",
+    )
+
+    defaults_itp = work / "forcefield.itp"
+    _write_text(
+        defaults_itp,
+        """
+[ defaults ]
+1 2 no 0.5 0.5
+""",
+    )
+
+    par = work / "ffnonbonded.itp"
+    _write_text(
+        par,
+        """
+[ atomtypes ]
+; name  at.num  mass     charge   ptype    sigma      epsilon
+X       0       1.000    0.000    A        0.300000   0.000000
+""",
+    )
+
+    inp = work / "run.inp"
+    _write_text(
+        inp,
+        f"""
+random_seed:123
+par:{par}
+itp_defaults:{defaults_itp}
+fragitp:{frag_itp}
+
+fragname:FRG
+fragconc:1.0
+fragmuex:0.0
+
+box_size:10.0 10.0 10.0
+cutoff:8.0
+temperature:300.0
+mcsteps:0
+nprint:1
+mc_move_prob:1 0 0 0
+""",
+    )
+
+    dump_params = work / "params.json"
+    out_prefix = work / "out" / "gcmc"
+    out_prefix.parent.mkdir(parents=True, exist_ok=True)
+
+    result = subprocess.run(
+        [gcmc_cpu, "--inp", str(inp), "--prefix", str(out_prefix), "--dump-params", str(dump_params)],
+        cwd=str(work),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    params = json.loads(dump_params.read_text())
+    assert params["basic"]["gromacs_defaults_present"] is True
+    assert params["basic"]["gromacs_gen_pairs_present"] is True
+    assert params["basic"]["gromacs_gen_pairs"].lower() == "no"
+    assert params["basic"]["gromacs_fudge_present"] is True
+    assert float(params["basic"]["gromacs_fudge_lj"]) == pytest.approx(0.5, abs=1e-6)
+    assert float(params["basic"]["gromacs_fudge_qq"]) == pytest.approx(0.5, abs=1e-6)
+
+    ignored = set(params["basic"]["ignored_inp_keys"])
+    assert "gromacs_gen_pairs" in ignored
+    assert "gromacs_fudge_lj" in ignored
+    assert "gromacs_fudge_qq" in ignored
+
+    dump_params_strict = work / "params_strict.json"
+    result_strict = subprocess.run(
+        [
+            gcmc_cpu,
+            "--inp",
+            str(inp),
+            "--prefix",
+            str(out_prefix),
+            "--dump-params",
+            str(dump_params_strict),
+            "--strict-inp-keys",
+        ],
+        cwd=str(work),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result_strict.returncode != 0
+
+
 def test_itp_nonbond_params_take_precedence_over_pairtypes_for_same_pair(gcmc_cpu, temp_dir):
     """
     Regression for override precedence.

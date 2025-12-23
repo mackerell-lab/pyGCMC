@@ -70,12 +70,12 @@ class TestCavityBias:
 
     def test_cavity_stats_output(self, tmp_path):
         """
-        Verify cavity grid statistics are output correctly.
+        Verify cavity grid statistics are computed and exported correctly.
 
         Validates:
-        - Stdout contains "Cavity stats: total=<int>, cavities=<int>, fraction=<float>"
-        - Total grid points > 0
-        - Cavity fraction in reasonable range [0, 1]
+        - --dump-accept contains cavity-related structured fields (no stdout parsing)
+        - cavityFraction and wCavity are in [0, 1]
+        - vEff ≈ vBox * cavityFraction (effective insertion volume)
         """
         # Build simple water box INP with cavity bias enabled
         pdb, top, atp, ff = self.setup_water_system(tmp_path)
@@ -94,12 +94,13 @@ class TestCavityBias:
 
         inp_file = tmp_path / "test.inp"
         inp_file.write_text(inp)
+        accept_log = tmp_path / "accept.jsonl"
 
         # Run simulation (use tmp_path as cwd to avoid parallel test interference)
         build_dir = Path(__file__).parent.parent.parent.parent / "build"
         gcmc_exe = build_dir / "bin" / "gcmc_cpu"
         result = subprocess.run(
-            [str(gcmc_exe), "--inp", str(inp_file)],
+            [str(gcmc_exe), "--inp", str(inp_file), "--dump-accept", str(accept_log)],
             cwd=tmp_path,
             capture_output=True,
             text=True,
@@ -107,33 +108,40 @@ class TestCavityBias:
         )
 
         assert result.returncode == 0, f"Simulation failed:\n{result.stderr}"
+        assert accept_log.exists(), "Acceptance log not created"
 
-        # Parse cavity stats from stdout
-        pattern = r"Cavity stats: total=(\d+), cavities=(\d+), fraction=([\d.]+)"
-        matches = re.findall(pattern, result.stdout)
+        records = read_jsonl(accept_log)
+        assert records, "No acceptance records found"
+        insertions = filter_by_move(records, "insertion")
+        assert insertions, "No insertion records found"
 
-        assert len(matches) > 0, f"No cavity stats found in output:\n{result.stdout}"
+        checked = 0
+        for rec in insertions[:25]:
+            if rec.get("cavityFraction") is None or rec.get("wCavity") is None:
+                continue
+            if rec.get("vBox") is None or rec.get("vEff") is None:
+                continue
 
-        # Check first cavity stats (initial grid calculation)
-        total, cavities, fraction = matches[0]
-        total = int(total)
-        cavities = int(cavities)
-        fraction = float(fraction)
+            cavity_fraction = float(rec["cavityFraction"])
+            w_cavity = float(rec["wCavity"])
+            v_box = float(rec["vBox"])
+            v_eff = float(rec["vEff"])
 
-        # Validate statistics
-        assert total > 0, f"Total grid points should be > 0, got {total}"
-        assert cavities >= 0, f"Cavity points should be >= 0, got {cavities}"
-        assert 0.0 <= fraction <= 1.0, f"Cavity fraction should be in [0,1], got {fraction}"
-        assert abs(fraction - cavities / total) < 1e-6, \
-            f"Fraction mismatch: {fraction} != {cavities}/{total}"
+            assert 0.0 <= cavity_fraction <= 1.0
+            assert 0.0 <= w_cavity <= 1.0
+            assert v_eff == pytest.approx(v_box * cavity_fraction, rel=2e-4, abs=2e-6)
+            checked += 1
+
+        assert checked >= 5, "Too few insertion records with cavity fields"
 
     def test_cavity_fraction_matches_bias(self, tmp_path):
         """
-        Verify cavity fraction ≈ bias factor in acceptance records.
+        Verify cavity fraction ≈ bias factor in acceptance records (file-driven).
 
         Validates:
         - Cavity bias (wCavity) in JSONL logs
-        - Average wCavity ≈ cavity fraction from grid stats (±10% tolerance)
+        - Average wCavity ≈ average cavityFraction (±10% tolerance)
+        - vEff ≈ vBox * cavityFraction
         - Both insertion and deletion moves record cavity bias correctly
         """
         # Build water box with moderate density for cavity formation
@@ -169,15 +177,6 @@ class TestCavityBias:
         assert result.returncode == 0, f"Simulation failed:\n{result.stderr}"
         assert accept_log.exists(), "Acceptance log not created"
 
-        # Parse cavity fraction from stdout
-        pattern = r"Cavity stats: total=(\d+), cavities=(\d+), fraction=([\d.]+)"
-        matches = re.findall(pattern, result.stdout)
-        assert len(matches) > 0, "No cavity stats in output"
-
-        # Get cavity fraction from grid (use first calculation)
-        _, _, grid_fraction = matches[0]
-        grid_fraction = float(grid_fraction)
-
         # Parse JSONL records
         records = read_jsonl(accept_log)
         assert len(records) > 0, "No acceptance records found"
@@ -195,18 +194,36 @@ class TestCavityBias:
         assert len(w_cavity_values) > 50, \
             f"Need >50 cavity bias values, got {len(w_cavity_values)}"
 
-        # Calculate average cavity bias
-        avg_w_cavity = sum(w_cavity_values) / len(w_cavity_values)
+        cavity_fractions = [
+            float(r["cavityFraction"])
+            for r in insertions
+            if r.get("cavityFraction") is not None
+        ]
+        assert len(cavity_fractions) > 50, f"Need >50 cavityFraction values, got {len(cavity_fractions)}"
 
-        # Verify wCavity ≈ grid_fraction (±10% tolerance)
-        # Note: wCavity may vary slightly as molecules are inserted/deleted
+        checked = 0
+        for rec in insertions[:25]:
+            if rec.get("vBox") is None or rec.get("vEff") is None or rec.get("cavityFraction") is None:
+                continue
+            v_box = float(rec["vBox"])
+            v_eff = float(rec["vEff"])
+            cavity_fraction = float(rec["cavityFraction"])
+            assert v_eff == pytest.approx(v_box * cavity_fraction, rel=2e-4, abs=2e-6)
+            checked += 1
+        assert checked >= 5
+
+        avg_w_cavity = sum(w_cavity_values) / len(w_cavity_values)
+        avg_fraction = sum(cavity_fractions) / len(cavity_fractions)
+
+        # Verify wCavity ≈ cavityFraction (±10% tolerance)
+        # Note: these may vary slightly as molecules are inserted/deleted.
         tolerance = 0.10  # 10% tolerance
-        lower_bound = grid_fraction * (1 - tolerance)
-        upper_bound = grid_fraction * (1 + tolerance)
+        lower_bound = avg_fraction * (1 - tolerance)
+        upper_bound = avg_fraction * (1 + tolerance)
 
         assert lower_bound <= avg_w_cavity <= upper_bound, \
             f"Cavity bias mismatch: avg wCavity={avg_w_cavity:.4f}, " \
-            f"grid fraction={grid_fraction:.4f}, tolerance=±{tolerance*100}%"
+            f"avg cavityFraction={avg_fraction:.4f}, tolerance=±{tolerance*100}%"
 
     def test_cavity_acceptance_formula_consistency(self, tmp_path):
         """

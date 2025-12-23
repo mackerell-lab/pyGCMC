@@ -273,6 +273,8 @@ private:
         double energy;
         double weight;
         double logWOverK;
+        bool valid;
+        int trialsUsed;
     };
     TrialConfiguration performCBMCInsertion(int typeId, int numTrials);
     double calculateCBMCBias(const std::vector<TrialConfiguration>& trials, int selectedIdx);

@@ -155,15 +155,36 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     Quaternion orientation;
     double cbmcRosen = 1.0;
     double cavityVolumeFraction = 1.0;
+    int trialsUsed = 1;
 
     if (useConfBias_ && numTrials > 1) {
         // Use CBMC to select configuration
         TrialConfiguration selected = performCBMCInsertion(typeId, numTrials);
+        if (!selected.valid) {
+            MoveResult early;
+            early.type = MoveResult::INSERT;
+            early.fragmentType = typeId;
+            early.accepted = false;
+            early.deltaE = 0.0;
+            early.energyBefore = 0.0;
+            early.energyAfter = 0.0;
+            early.bias = 0.0;
+            early.cbmcTrialsUsed = numTrials;
+            early.rosenbluthWeight = 0.0;
+            early.acceptanceProbability = shouldStoreProbability() ? 0.0 : -1.0;
+            totalMoves_++;
+            return early;
+        }
         position = selected.position;
         orientation = selected.orientation;
         cbmcRosen = selected.weight;
         result.cbmcSelectedEnergy = selected.energy;
         result.cbmcLogWOverK = selected.logWOverK;
+        if (selected.trialsUsed > 0) {
+            trialsUsed = selected.trialsUsed;
+        } else {
+            trialsUsed = numTrials;
+        }
     } else {
         // Original single configuration generation
         // Try multiple times to find a placement fully inside region (if configured)
@@ -227,9 +248,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         result.energyAfter = calculateSystemEnergy();
         result.deltaE = result.energyAfter - result.energyBefore;
     }
-    
-    const int trialsUsed = std::max(numTrials, 1);
-    result.cbmcTrialsUsed = trialsUsed;
+    result.cbmcTrialsUsed = std::max(trialsUsed, 1);
 
     // Calculate scheduler/config bias components (exclude cavity handled separately)
     double schedulerBias = calculateInsertionBias(*tmpl, position, orientation);
@@ -256,7 +275,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         terms.cavityFraction = cavityFraction;
         terms.lambdaNm = acceptanceCalculator_->getThermalLambda(typeId);
         terms.rosenbluthWeight = std::max(cbmcRosen, 1e-30);
-        terms.cbmcTrials = trialsUsed;
+        terms.cbmcTrials = result.cbmcTrialsUsed;
         terms.proposalLogRatio = proposalLogRatio;
         prob = acceptanceCalculator_->calculateInsertionProbabilityDetailed(terms);
         
@@ -1666,7 +1685,7 @@ GCMCEngine::TrialConfiguration GCMCEngine::performCBMCInsertion(int typeId, int 
     FragmentTemplate* tmpl = reservoir_->getTemplate(typeId);
     if (!tmpl) {
         // Return default configuration if template not found
-        return TrialConfiguration{Vector3(0,0,0), Quaternion(1,0,0,0), 0.0, 1.0, 0.0};
+        return TrialConfiguration{Vector3(0,0,0), Quaternion(1,0,0,0), 0.0, 1.0, 0.0, false, 0};
     }
 
     // Generate K trial configurations
@@ -1675,12 +1694,18 @@ GCMCEngine::TrialConfiguration GCMCEngine::performCBMCInsertion(int typeId, int 
         TrialConfiguration trial;
         trial.weight = 0.0;
         trial.logWOverK = 0.0;
+        trial.valid = false;
+        trial.trialsUsed = 0;
 
         // Generate position and orientation
         trial.position = (useCavityBias_ && cavityManager_) ?
                         generateCavityPosition() : generateRandomPosition();
         applyPeriodicBoundary(trial.position);
         trial.orientation = generateRandomOrientation();
+
+        if (regionConstraint_ && !isMoleculeWithinRegion(typeId, trial.position, trial.orientation)) {
+            continue;
+        }
 
         // Create temporary instance for energy calculation
         int tempId = reservoir_->createInstance(typeId, trial.position, trial.orientation);
@@ -1703,19 +1728,21 @@ GCMCEngine::TrialConfiguration GCMCEngine::performCBMCInsertion(int typeId, int 
 
         // Track minimum energy for numerical stability
         minEnergy = std::min(minEnergy, trial.energy);
+        trial.valid = true;
         trials.push_back(trial);
     }
 
     // Check if we got any valid trials
     if (trials.empty()) {
-        // No valid CBMC trials - fall back to unbiased insertion
-        // This can happen with minimal test inputs or invalid fragment templates
+        // No valid CBMC trials - return invalid to let caller reject
         return TrialConfiguration{
             generateRandomPosition(),
             generateRandomOrientation(),
             0.0,  // energy
-            1.0,  // rosenbluthWeight (unbiased)
+            0.0,  // rosenbluthWeight (invalid)
             0.0,  // log(W/K)
+            false,
+            0,
         };
     }
 
@@ -1742,7 +1769,8 @@ GCMCEngine::TrialConfiguration GCMCEngine::performCBMCInsertion(int typeId, int 
     // Convert selection weight into a Rosenbluth factor compatible with exp(-βΔU)
     // to avoid double-counting the selected configuration's Boltzmann term:
     //   rosen = (W/K) / exp(-β u_selected)
-    const double avgScaled = totalWeight / static_cast<double>(numTrials);
+    const int effectiveTrials = static_cast<int>(trials.size());
+    const double avgScaled = totalWeight / static_cast<double>(effectiveTrials);
     const double safeAvgScaled = std::max(avgScaled, 1e-30);
     const double logWOverK = std::log(safeAvgScaled) - beta * minEnergy;
 
@@ -1753,6 +1781,8 @@ GCMCEngine::TrialConfiguration GCMCEngine::performCBMCInsertion(int typeId, int 
     const double logRosenClamped = std::min(std::max(logRosen, logLower), logUpper);
     selected.weight = std::exp(logRosenClamped);
     selected.logWOverK = logWOverK;
+    selected.valid = true;
+    selected.trialsUsed = effectiveTrials;
 
     return selected;
 }

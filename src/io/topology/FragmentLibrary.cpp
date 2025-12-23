@@ -105,10 +105,16 @@ bool FragmentLibrary::loadFromITP(const std::string& path, const std::string& na
             int idx;
             std::string atomType, resname, atomname;
             int resnr, cgnr;
-            double charge, mass;
+            double charge;
+            double mass = 0.0;
             
             // Format: nr type resnr residue atom cgnr charge mass
-            if (iss >> idx >> atomType >> resnr >> resname >> atomname >> cgnr >> charge >> mass) {
+            // Some GROMACS ITPs omit the mass column (mass can be derived from atomtypes);
+            // accept both 7- and 8-column forms.
+            if (iss >> idx >> atomType >> resnr >> resname >> atomname >> cgnr >> charge) {
+                if (!(iss >> mass)) {
+                    mass = 0.0;
+                }
                 model::montecarlo::MCAtom atom;
                 atom.charge = static_cast<float>(charge);
                 atom.mass = static_cast<float>(mass);

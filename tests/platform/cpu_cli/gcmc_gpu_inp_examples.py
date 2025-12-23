@@ -51,6 +51,47 @@ def _first_accept_record(path: Path, *, move: str, species: str) -> dict:
     raise AssertionError(f"No {move}/{species} record found in {path}; first records: {records[:3]}")
 
 
+def _extract_inp_keys(inp_path: Path) -> list[str]:
+    keys: list[str] = []
+    for raw in inp_path.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        key = line.split(":", 1)[0].strip()
+        if key and key not in keys:
+            keys.append(key)
+    return sorted(keys)
+
+
+def _load_inp_key_inventory(test_data_dir: Path) -> dict:
+    inventory_path = test_data_dir / "gcmc_gpu_examples" / "inp_key_inventory.json"
+    return json.loads(inventory_path.read_text())
+
+
+def _assert_inp_key_inventory(inp_path: Path, expected_keys: list[str]) -> None:
+    actual = _extract_inp_keys(inp_path)
+    assert actual == sorted(expected_keys)
+
+
+def _assert_inp_key_classification(params: dict, *, example: str, inventory: dict) -> None:
+    expected = inventory["examples"][example]
+    expected_unknown = set(expected.get("unknown", []))
+    expected_keys = set(expected["keys"])
+    ignored_keys = set(inventory["ignored_keys"])
+    expected_ignored = expected_keys & ignored_keys
+    assert set(params["basic"]["unknown_inp_keys"]) == expected_unknown
+    assert set(params["basic"]["ignored_inp_keys"]) == expected_ignored
+
+
+def test_gcmc_gpu_inp_key_inventory_matches_templates(test_data_dir):
+    inventory = _load_inp_key_inventory(Path(test_data_dir))
+    examples = inventory.get("examples", {})
+    for name, meta in examples.items():
+        inp_path = Path(test_data_dir) / "gcmc_gpu_examples" / meta["inp"]
+        assert inp_path.exists(), f"Missing INP for {name}: {inp_path}"
+        _assert_inp_key_inventory(inp_path, meta["keys"])
+
+
 def test_gcmc_gpu_water_tip3p_runs_and_honors_op_outputs(gcmc_cpu, test_data_dir, temp_dir):
     templates = test_data_dir / "gcmc_gpu_examples"
     template = templates / "water_tip3p_gcmc_gpu_template.inp"
@@ -63,6 +104,7 @@ def test_gcmc_gpu_water_tip3p_runs_and_honors_op_outputs(gcmc_cpu, test_data_dir
     out_prefix = work / "out" / "gcmc"
     out_prefix.parent.mkdir(parents=True, exist_ok=True)
     accept_log = work / "out" / "acceptance.jsonl"
+    params_json = work / "out" / "params.json"
 
     result = subprocess.run(
         [
@@ -71,6 +113,8 @@ def test_gcmc_gpu_water_tip3p_runs_and_honors_op_outputs(gcmc_cpu, test_data_dir
             str(inp),
             "--prefix",
             str(out_prefix),
+            "--dump-params",
+            str(params_json),
             "--dump-accept",
             str(accept_log),
             "--store-probabilities",
@@ -103,6 +147,10 @@ def test_gcmc_gpu_water_tip3p_runs_and_honors_op_outputs(gcmc_cpu, test_data_dir
     assert accept_log.exists()
     _first_accept_record(accept_log, move="insertion", species="SOL")
 
+    params = json.loads(params_json.read_text())
+    inventory = _load_inp_key_inventory(Path(test_data_dir))
+    _assert_inp_key_classification(params, example="water_tip3p", inventory=inventory)
+
 
 def test_gcmc_gpu_version_gcmc_2_0_implies_angstrom_units_and_op_outputs(
     gcmc_cpu, test_data_dir, temp_dir
@@ -118,6 +166,7 @@ def test_gcmc_gpu_version_gcmc_2_0_implies_angstrom_units_and_op_outputs(
     out_prefix = work / "out" / "gcmc"
     out_prefix.parent.mkdir(parents=True, exist_ok=True)
     accept_log = work / "out" / "acceptance.jsonl"
+    params_json = work / "out" / "params.json"
 
     result = subprocess.run(
         [
@@ -126,6 +175,8 @@ def test_gcmc_gpu_version_gcmc_2_0_implies_angstrom_units_and_op_outputs(
             str(inp),
             "--prefix",
             str(out_prefix),
+            "--dump-params",
+            str(params_json),
             "--dump-accept",
             str(accept_log),
             "--store-probabilities",
@@ -154,6 +205,10 @@ def test_gcmc_gpu_version_gcmc_2_0_implies_angstrom_units_and_op_outputs(
     # CBMC trial count must come from "fragconf" (gcmc_gpu key).
     rec = _first_accept_record(accept_log, move="insertion", species="BENZ")
     assert int(rec["cbmcTrials"]) == 5
+
+    params = json.loads(params_json.read_text())
+    inventory = _load_inp_key_inventory(Path(test_data_dir))
+    _assert_inp_key_classification(params, example="benzene_cbmc_cavity", inventory=inventory)
 
 
 def test_gcmc_gpu_multi_salt_runs_and_converts_muex_list(gcmc_cpu, test_data_dir, temp_dir):
@@ -212,6 +267,8 @@ def test_gcmc_gpu_multi_salt_runs_and_converts_muex_list(gcmc_cpu, test_data_dir
     assert [float(x) for x in params["fragment"]["muex_list_kj_mol"]] == pytest.approx(
         expected_muex_kj, abs=1e-5
     )
+    inventory = _load_inp_key_inventory(Path(test_data_dir))
+    _assert_inp_key_classification(params, example="multi_salt", inventory=inventory)
 
 
 def test_gcmc_opencl_style_alias_keys_are_honored(gcmc_cpu, test_data_dir, temp_dir):
@@ -258,6 +315,10 @@ def test_gcmc_opencl_style_alias_keys_are_honored(gcmc_cpu, test_data_dir, temp_
     assert op_top.exists()
     assert op_top.read_text().strip(), "op_top unexpectedly empty"
     assert _count_atom_records(op_pdb) == _count_atom_records(final_pdb)
+
+    params = json.loads(params_json.read_text())
+    inventory = _load_inp_key_inventory(Path(test_data_dir))
+    _assert_inp_key_classification(params, example="opencl_waterbox_style", inventory=inventory)
 
     assert params_json.exists()
     params = json.loads(params_json.read_text())
