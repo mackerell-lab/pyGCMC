@@ -143,41 +143,39 @@ seed: {seed}
         header_text = ' '.join(header_lines)
         print(f"\nHeader preview: {header_lines[0] if header_lines else 'No header'}")
 
-        # Check data lines
-        if len(data_lines) > 0:
-            # Parse first data line to determine column count
-            first_data = data_lines[0].split()
-            num_columns = len(first_data)
+        assert data_lines, "No data lines (simulation may have been too short)"
 
-            print(f"Number of columns: {num_columns}")
-            print(f"First data line: {data_lines[0].strip()}")
+        # Parse first data line to determine column count
+        first_data = data_lines[0].split()
+        num_columns = len(first_data)
 
-            # Check all data lines have same column count
-            for i, line in enumerate(data_lines):
-                columns = line.split()
-                assert len(columns) == num_columns, \
-                    f"Line {i} has {len(columns)} columns, expected {num_columns}"
+        print(f"Number of columns: {num_columns}")
+        print(f"First data line: {data_lines[0].strip()}")
 
-            # Validate value ranges for each data line
-            for i, line in enumerate(data_lines):
-                columns = line.split()
+        # Check all data lines have same column count
+        for i, line in enumerate(data_lines):
+            columns = line.split()
+            assert len(columns) == num_columns, \
+                f"Line {i} has {len(columns)} columns, expected {num_columns}"
 
-                # Typically: Step, Energy, N_total, Accept_rate, Ins_att, Ins_acc, Del_att, Del_acc, Trn_att, Trn_acc, Rot_att, Rot_acc
-                step = int(columns[0])
-                energy = float(columns[1])
-                n_total = int(columns[2])
-                accept_rate = float(columns[3])
+        # Validate value ranges for each data line
+        for i, line in enumerate(data_lines):
+            columns = line.split()
 
-                # Validate ranges
-                assert step >= 0, f"Step {step} < 0"
-                assert n_total >= 0, f"N_total {n_total} < 0"
-                assert 0 <= accept_rate <= 100, f"Accept rate {accept_rate} not in [0, 100]"
-                assert -1e10 < energy < 1e10, f"Energy {energy} out of reasonable range"
+            # Typically: Step, Energy, N_total, Accept_rate, Ins_att, Ins_acc, Del_att, Del_acc, Trn_att, Trn_acc, Rot_att, Rot_acc
+            step = int(columns[0])
+            energy = float(columns[1])
+            n_total = int(columns[2])
+            accept_rate = float(columns[3])
 
-            print(f"\n✅ All {len(data_lines)} data lines have consistent schema")
-            print(f"✅ Value ranges validated (accept rate 0-100%, N≥0, finite energy)")
-        else:
-            print("\n⚠️  No data lines (simulation may have been too short)")
+            # Validate ranges
+            assert step >= 0, f"Step {step} < 0"
+            assert n_total >= 0, f"N_total {n_total} < 0"
+            assert 0 <= accept_rate <= 100, f"Accept rate {accept_rate} not in [0, 100]"
+            assert -1e10 < energy < 1e10, f"Energy {energy} out of reasonable range"
+
+        print(f"\n✅ All {len(data_lines)} data lines have consistent schema")
+        print(f"✅ Value ranges validated (accept rate 0-100%, N≥0, finite energy)")
 
         print(f"\n✅ statistics.dat schema verification passed!")
 
@@ -259,13 +257,10 @@ seed: {seed}
         has_atoms = 'ATOM' in content or 'HETATM' in content
         has_end = 'END' in content
 
-        if has_atoms:
-            print(f"✅ Contains ATOM/HETATM records")
-        else:
-            print(f"⚠️  No ATOM records (system may be empty)")
-
-        if has_end:
-            print(f"✅ Contains END marker")
+        assert has_atoms, "No ATOM/HETATM records found in PDB"
+        assert has_end, "Missing END marker in PDB"
+        print(f"✅ Contains ATOM/HETATM records")
+        print(f"✅ Contains END marker")
 
         # Extract box dimensions from CRYST1
         cryst_match = re.search(r'CRYST1\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)', content)
@@ -388,10 +383,7 @@ seed: 42
         # Find density DAT file
         density_files = list(tmp_path.glob("*density.dat"))
 
-        if len(density_files) == 0:
-            print(f"\n⚠️  No density.dat file found (wdens may not be supported)")
-            print(f"Available files: {list(tmp_path.glob('*.dat'))}")
-            pytest.skip("density.dat not generated - feature may not be implemented")
+        assert density_files, f"No density.dat file found; dat files: {list(tmp_path.glob('*.dat'))}"
 
         density_dat = density_files[0]
         print(f"\n=== Density DAT Schema Verification ===")
@@ -412,41 +404,39 @@ seed: 42
         if len(header_lines) > 0:
             print(f"Header: {header_lines[0].strip()}")
 
-        # Check data lines
-        if len(data_lines) > 0:
-            first_data = data_lines[0].split()
-            num_columns = len(first_data)
+        assert data_lines, "No data lines in density.dat"
 
-            print(f"Number of columns: {num_columns}")
-            print(f"First data line: {data_lines[0].strip()}")
+        first_data = data_lines[0].split()
+        num_columns = len(first_data)
 
-            # Expected format: Step N_water density(molecules/nm³) density(M)
-            assert num_columns >= 2, f"Expected at least 2 columns (Step, Count), got {num_columns}"
+        print(f"Number of columns: {num_columns}")
+        print(f"First data line: {data_lines[0].strip()}")
 
-            # Check all lines have same column count
-            for i, line in enumerate(data_lines):
-                columns = line.split()
-                assert len(columns) == num_columns, \
-                    f"Line {i} has {len(columns)} columns, expected {num_columns}"
+        # Expected format: Step N_water density(molecules/nm³) density(M)
+        assert num_columns >= 2, f"Expected at least 2 columns (Step, Count), got {num_columns}"
 
-            # Validate value ranges
-            for i, line in enumerate(data_lines):
-                columns = line.split()
-                step = int(columns[0])
-                count = int(columns[1])
+        # Check all lines have same column count
+        for i, line in enumerate(data_lines):
+            columns = line.split()
+            assert len(columns) == num_columns, \
+                f"Line {i} has {len(columns)} columns, expected {num_columns}"
 
-                assert step >= 0, f"Step {step} < 0"
-                assert count >= 0, f"Count {count} < 0"
+        # Validate value ranges
+        for i, line in enumerate(data_lines):
+            columns = line.split()
+            step = int(columns[0])
+            count = int(columns[1])
 
-                # If density values present
-                if num_columns >= 3:
-                    density = float(columns[2])
-                    assert density >= 0, f"Density {density} < 0"
+            assert step >= 0, f"Step {step} < 0"
+            assert count >= 0, f"Count {count} < 0"
 
-            print(f"\n✅ All {len(data_lines)} data lines have consistent schema")
-            print(f"✅ Value ranges validated (Step≥0, Count≥0, Density≥0)")
-        else:
-            print("\n⚠️  No data lines in density.dat")
+            # If density values present
+            if num_columns >= 3:
+                density = float(columns[2])
+                assert density >= 0, f"Density {density} < 0"
+
+        print(f"\n✅ All {len(data_lines)} data lines have consistent schema")
+        print(f"✅ Value ranges validated (Step≥0, Count≥0, Density≥0)")
 
         print(f"\n✅ density.dat schema verification passed!")
 

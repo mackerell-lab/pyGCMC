@@ -17,6 +17,23 @@ import os
 # Path to gcmc_cpu executable
 GCMC_CPU_PATH = Path(__file__).parent.parent.parent / "build" / "bin" / "gcmc_cpu"
 
+def _pdb_atom_records(pdb_path):
+    records = []
+    for line in pdb_path.read_text().splitlines():
+        if not line.startswith(("ATOM", "HETATM")):
+            continue
+        records.append(
+            (
+                line[12:16].strip(),
+                line[17:20].strip(),
+                line[22:26].strip(),
+                round(float(line[30:38]), 3),
+                round(float(line[38:46]), 3),
+                round(float(line[46:54]), 3),
+            )
+        )
+    return sorted(records)
+
 
 class TestCheckpointRestart:
     """Test checkpoint save/load/restart functionality"""
@@ -131,18 +148,12 @@ seed: {seed}
 
         # Check for checkpoint files
         checkpoint_files = list(tmp_path.glob("*checkpoint*"))
-
-        if len(checkpoint_files) > 0:
-            print(f"✅ Found {len(checkpoint_files)} checkpoint file(s):")
-            for ckpt in checkpoint_files:
-                size = ckpt.stat().st_size
-                print(f"  - {ckpt.name} ({size} bytes)")
-                assert size > 0, f"Checkpoint file {ckpt.name} is empty"
-        else:
-            # Checkpoint功能可能未启用或参数名称不同
-            print(f"⚠️  No checkpoint files found")
-            print(f"Available files: {list(tmp_path.glob('*'))}")
-            pytest.skip("Checkpoint功能可能未实现或参数名称不同")
+        assert checkpoint_files, f"No checkpoint files found; files: {list(tmp_path.glob('*'))}"
+        print(f"✅ Found {len(checkpoint_files)} checkpoint file(s):")
+        for ckpt in checkpoint_files:
+            size = ckpt.stat().st_size
+            print(f"  - {ckpt.name} ({size} bytes)")
+            assert size > 0, f"Checkpoint file {ckpt.name} is empty"
 
     def test_checkpoint_roundtrip(self, tmp_path):
         """
@@ -181,15 +192,13 @@ seed: {seed}
 
         # Parse statistics from phase 1
         stats_file1 = tmp_path / "gcmc_statistics.dat"
-        if not stats_file1.exists():
-            pytest.skip("Statistics file not found")
+        assert stats_file1.exists(), "Statistics file not found"
 
         # Read final statistics from phase 1
         with open(stats_file1, 'r') as f:
             lines = f.readlines()
         data_lines = [l for l in lines if not l.startswith('#') and l.strip()]
-        if not data_lines:
-            pytest.skip("No data in statistics file")
+        assert data_lines, "No data in statistics file"
 
         last_line1 = data_lines[-1].split()
         step1 = int(last_line1[0]) if len(last_line1) > 0 else 0
@@ -216,16 +225,9 @@ seed: {seed}
             cwd=str(tmp_path)
         )
 
-        if result2.returncode != 0:
-            # Check if it's because --resume is not implemented
-            if "unrecognized" in result2.stderr.lower() or "unknown" in result2.stderr.lower():
-                print(f"⚠️  --resume parameter not yet implemented")
-                print(f"stderr: {result2.stderr[:200]}")
-                pytest.skip("--resume CLI parameter not yet implemented")
-            else:
-                print(f"Phase 2 stderr: {result2.stderr}")
-                print(f"Phase 2 stdout: {result2.stdout}")
-                pytest.fail(f"Phase 2 failed: {result2.stderr}")
+        assert result2.returncode == 0, (
+            f"Phase 2 failed.\nSTDERR:\n{result2.stderr}\nSTDOUT:\n{result2.stdout}"
+        )
 
         print(f"✅ Checkpoint loaded and simulation continued")
 
@@ -238,6 +240,7 @@ seed: {seed}
         step2 = int(last_line2[0]) if len(last_line2) > 0 else 0
 
         print(f"Phase 2 completed at step {step2}")
+        assert step2 > step1, f"Resume did not advance steps: {step1} -> {step2}"
         print(f"✅ Roundtrip successful: {step1} → {step2} steps")
 
     def test_missing_checkpoint_error(self, tmp_path):
@@ -262,20 +265,26 @@ seed: {seed}
             cwd=str(tmp_path)
         )
 
-        if "unrecognized" in result.stderr.lower() or "unknown" in result.stderr.lower():
-            pytest.skip("--resume CLI parameter not yet implemented")
-
         # Should fail with clear error message
         assert result.returncode != 0, "Should fail when checkpoint file doesn't exist"
+        stats_file = tmp_path / "gcmc_statistics.dat"
+        if stats_file.exists():
+            lines = stats_file.read_text().splitlines()
+            data_lines = [l for l in lines if l.strip() and not l.startswith("#")]
+            if data_lines:
+                steps = [int(line.split()[0]) for line in data_lines]
+                assert max(steps) == 0, "Simulation advanced despite resume error"
 
-        # Check for meaningful error message
-        error_text = result.stderr.lower()
-        has_error_msg = any(word in error_text for word in ["not found", "does not exist", "cannot open", "failed"])
-
-        if has_error_msg:
-            print(f"✅ Clear error message provided")
-        else:
-            print(f"⚠️  Error message could be clearer: {result.stderr[:200]}")
+        pdb_file = tmp_path / "gcmc_final.pdb"
+        if pdb_file.exists():
+            pdb_line = next(
+                (line for line in inp_file.read_text().splitlines() if line.startswith("pdb:")),
+                None,
+            )
+            assert pdb_line is not None, "Missing pdb: entry in input file"
+            input_pdb = Path(pdb_line.split(":", 1)[1].strip())
+            assert _pdb_atom_records(pdb_file) == _pdb_atom_records(input_pdb), \
+                "Final PDB differs from input despite resume error"
 
     def test_simulation_reproducibility(self, tmp_path):
         """
@@ -321,23 +330,14 @@ seed: {seed}
         pdb1 = run1_dir / "gcmc_final.pdb"
         pdb2 = run2_dir / "gcmc_final.pdb"
 
-        if pdb1.exists() and pdb2.exists():
-            content1 = pdb1.read_text()
-            content2 = pdb2.read_text()
-
-            # Files should be identical for same seed
-            if content1 == content2:
-                print(f"✅ Identical output for same seed")
-            else:
-                # May differ slightly in formatting but should be very similar
-                print(f"⚠️  Output files differ (may be due to formatting)")
-                # Check at least that they have same number of atoms
-                atoms1 = content1.count("ATOM")
-                atoms2 = content2.count("ATOM")
-                assert atoms1 == atoms2, f"Different atom counts: {atoms1} vs {atoms2}"
-                print(f"✅ Same atom count ({atoms1})")
-        else:
-            pytest.skip("Output PDB files not found")
+        assert pdb1.exists(), "Run 1 output PDB not found"
+        assert pdb2.exists(), "Run 2 output PDB not found"
+        records1 = _pdb_atom_records(pdb1)
+        records2 = _pdb_atom_records(pdb2)
+        assert records1, "No ATOM/HETATM records found in run 1"
+        assert records2, "No ATOM/HETATM records found in run 2"
+        assert records1 == records2, "Same seed should produce identical atom records"
+        print(f"✅ Identical output for same seed")
 
 
 if __name__ == "__main__":

@@ -151,14 +151,14 @@ def create_framework_system():
     return state
 
 
-def create_guest_molecule(x, y, z):
+def create_guest_molecule(x, y, z, charge=0.5, atom_type=0):
     """Create a guest molecule at specified position"""
     atom = pygcmc.MCAtom()
     atom.x = x
     atom.y = y
     atom.z = z
-    atom.charge = 0.5
-    atom.type = 0  # Guest type
+    atom.charge = charge
+    atom.type = atom_type
     return atom
 
 
@@ -173,22 +173,24 @@ def add_molecule_to_state(state, molecule, movement_type=False):
     new_state.forcefield = state.forcefield
     
     # Copy existing atoms and residues
-    new_state.atoms = list(state.atoms)
-    new_state.residues = list(state.residues)
+    atoms = list(state.atoms)
+    residues = list(state.residues)
     
     # Add new molecule
-    atom_idx = len(new_state.atoms)
-    new_state.atoms.append(molecule)
+    atom_idx = len(atoms)
+    atoms.append(molecule)
     
     res = pygcmc.MCResidue()
     res.active = True
     res.atomStart = atom_idx
     res.atomCount = 1
     res.type = 0 if movement_type else 1
-    new_state.residues.append(res)
+    residues.append(res)
     
-    new_state.activeAtomCount = len(new_state.atoms)
-    new_state.activeResidueCount = len(new_state.residues)
+    new_state.atoms = atoms
+    new_state.residues = residues
+    new_state.activeAtomCount = len(atoms)
+    new_state.activeResidueCount = len(residues)
     
     return new_state
 

@@ -72,71 +72,52 @@ def test_rng_seed_setting():
 @pytest.mark.skipif(not PYGCMC_AVAILABLE, reason="PyGCMC not available")
 def test_seed_reset_behavior():
     """Test that resetting seed affects subsequent results"""
+    def run_sequence(seed, num_attempts=20):
+        state = pygcmc.MCState()
+        state.info.box = (30.0, 30.0, 30.0)
+        state.info.setTemperature(300.0)
+        
+        ff = pygcmc.MCForceField()
+        ff.numTotalTypes = 1
+        ff.numMovementTypes = 1
+        ff.ljSigma = [3.15]
+        ff.ljEps = [0.1]
+        state.forcefield = ff
+        
+        template = pygcmc.movement.FragmentTemplate()
+        template.typeId = 0
+        template.atoms = [pygcmc.MCAtom()]
+        template.atoms[0].type = 0
+        template.atoms[0].charge = 0.0
+        
+        reservoir = pygcmc.movement.FragmentReservoir()
+        reservoir.addTemplate(template)
+        
+        engine = pygcmc.GCMCEngine()
+        engine.initialize(state, reservoir)
+        engine.setTemperature(300.0)
+        engine.setSeed(seed)
+        
+        acceptance = pygcmc.GCMCAcceptance()
+        acceptance.setTemperature(300.0)
+        acceptance.setVolume(27000.0)  # 30^3
+        # Keep acceptance near 0.5 at N=0 to avoid all-true or all-false sequences.
+        target_activity = 0.5 / 27000.0
+        acceptance.setActivity(0, target_activity)
+        engine.setAcceptanceCalculator(acceptance)
+        
+        results = []
+        for _ in range(num_attempts):
+            r = engine.attemptInsertion(0)
+            results.append(r.accepted)
+        return results
     
-    # Create one engine instance
-    state = pygcmc.MCState()
-    state.info.box = (30.0, 30.0, 30.0)
-    state.info.setTemperature(300.0)
+    results1 = run_sequence(12345)
+    results2 = run_sequence(12345)
+    results3 = run_sequence(54321)
     
-    ff = pygcmc.MCForceField()
-    ff.numTotalTypes = 1
-    ff.numMovementTypes = 1
-    ff.ljSigma = [3.15]
-    ff.ljEps = [0.1]
-    state.forcefield = ff
-    
-    template = pygcmc.movement.FragmentTemplate()
-    template.typeId = 0
-    template.atoms = [pygcmc.MCAtom()]
-    template.atoms[0].type = 0
-    template.atoms[0].charge = 0.0
-    
-    reservoir = pygcmc.movement.FragmentReservoir()
-    reservoir.addTemplate(template)
-    
-    engine = pygcmc.GCMCEngine()
-    engine.initialize(state, reservoir)
-    engine.setTemperature(300.0)
-    
-    acceptance = pygcmc.GCMCAcceptance()
-    acceptance.setTemperature(300.0)
-    acceptance.setVolume(27000.0)  # 30^3
-    acceptance.setActivity(0, 0.001)  # Much lower activity
-    engine.setAcceptanceCalculator(acceptance)
-    
-    # Test 1: Set seed and collect results
-    engine.setSeed(12345)
-    results1 = []
-    for _ in range(20):
-        r = engine.attemptInsertion(0)
-        results1.append(r.accepted)
-    
-    # Test 2: Reset same seed and collect results
-    engine.setSeed(12345)
-    results2 = []
-    for _ in range(20):
-        r = engine.attemptInsertion(0)
-        results2.append(r.accepted)
-    
-    # Test 3: Set different seed
-    engine.setSeed(54321)
-    results3 = []
-    for _ in range(20):
-        r = engine.attemptInsertion(0)
-        results3.append(r.accepted)
-    
-    # Check if seed reset affects results
-    if results1 == results2:
-        print("✓ Seed reset produces identical results (good determinism)")
-    else:
-        print("⚠ Seed reset doesn't produce identical results (possible state contamination)")
-    
-    # Different seed should produce different results (with high probability)
-    if results1 != results3 or results2 != results3:
-        print("✓ Different seed produces different results")
-    else:
-        print("⚠ Different seeds produce same results (RNG may not be working)")
-    
+    assert results1 == results2, "Same seed should reproduce the same sequence"
+    assert results1 != results3, "Different seeds should produce different sequences"
     print("✓ Seed behavior test completed")
 
 @pytest.mark.skipif(not PYGCMC_AVAILABLE, reason="PyGCMC not available")
@@ -172,7 +153,9 @@ def test_different_seeds_different_results():
         acceptance = pygcmc.GCMCAcceptance()
         acceptance.setTemperature(300.0)
         acceptance.setVolume(27000.0)  # 30^3
-        acceptance.setActivity(0, 0.001)  # Much lower activity
+        # Keep acceptance near 0.5 at N=0 to avoid all-true or all-false sequences.
+        target_activity = 0.5 / 27000.0
+        acceptance.setActivity(0, target_activity)
         engine.setAcceptanceCalculator(acceptance)
         
         # Collect results - more attempts to see randomness

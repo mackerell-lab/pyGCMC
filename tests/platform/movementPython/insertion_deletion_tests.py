@@ -141,29 +141,24 @@ def test_biased_insertion():
     state = create_framework_system()
     
     # Insert guest at favorable location (inside cavity)
-    guest_favorable = create_guest_molecule(2.5, 2.5, 2.5)  # Center of cavity
+    guest_type = state.atomTypes.get_or_add_type("GUEST")
+    guest_favorable = create_guest_molecule(2.3, 2.3, 2.3, charge=0.0, atom_type=guest_type)
     state_fav = add_molecule_to_state(state, guest_favorable)
-    pygcmc.computeSystemEnergyCutoff(state_fav)
-    energy_fav = get_system_energy(state_fav)
+    energy_fav = pygcmc.computeSystemEnergyCutoff(state_fav)
     
-    # Insert guest at unfavorable location (overlapping with framework)
-    guest_unfavorable = create_guest_molecule(1.0, 1.0, 1.0)  # Near framework atom
+    # Insert guest at unfavorable location (close to framework atom)
+    guest_unfavorable = create_guest_molecule(1.2, 1.0, 1.0, charge=0.0, atom_type=guest_type)
     state_unfav = add_molecule_to_state(state, guest_unfavorable)
-    pygcmc.computeSystemEnergyCutoff(state_unfav)
-    energy_unfav = get_system_energy(state_unfav)
+    energy_unfav = pygcmc.computeSystemEnergyCutoff(state_unfav)
     
     # Debug output
     print(f"Favorable energy: {energy_fav:.4f}, Unfavorable energy: {energy_unfav:.4f}")
     
-    # Check if energies are different
-    if abs(energy_fav - energy_unfav) < 1e-6:
-        print("WARNING: Both energies are the same - system may not discriminate positions")
-        # For now, just check that we can calculate energies
-        assert energy_fav is not None and energy_unfav is not None
-    else:
-        # Favorable insertion should have lower energy
-        assert energy_fav < energy_unfav, \
-            f"Favorable insertion ({energy_fav:.2f}) should have lower energy than unfavorable ({energy_unfav:.2f})"
+    assert abs(energy_fav - energy_unfav) > 1e-6, \
+        "Biased insertion should distinguish favorable vs unfavorable positions"
+    # Favorable insertion should have lower energy
+    assert energy_fav < energy_unfav, \
+        f"Favorable insertion ({energy_fav:.2f}) should have lower energy than unfavorable ({energy_unfav:.2f})"
     
     # Calculate bias factors at 300K
     T = 300.0
@@ -175,13 +170,9 @@ def test_biased_insertion():
     # Debug
     print(f"Bias factors: favorable={bias_fav:.4f}, unfavorable={bias_unfav:.4f}")
     
-    # If energies are the same, biases will be the same
-    if abs(energy_fav - energy_unfav) < 1e-6:
-        print("Both positions have same energy, so same bias - test passes")
-    else:
-        # Favorable location should have higher acceptance probability
-        assert bias_fav >= bias_unfav, \
-            "Favorable location should have higher or equal acceptance probability"
+    # Favorable location should have higher acceptance probability
+    assert bias_fav >= bias_unfav, \
+        "Favorable location should have higher or equal acceptance probability"
 
 
 def test_movement_only_insertion():
@@ -226,4 +217,3 @@ def test_movement_only_insertion():
 
 
 # Helper functions
-

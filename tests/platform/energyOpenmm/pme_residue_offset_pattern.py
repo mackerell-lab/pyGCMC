@@ -9,6 +9,7 @@ import os
 import subprocess
 import textwrap
 import tempfile
+import json
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -29,6 +30,7 @@ def compute_pme_with_state_isolation(n_residues, residue_config):
     # Build Python script string that directly returns results
     script = textwrap.dedent(f"""
         import pygcmc
+        import json
         from pygcmc import MCState, MCAtom, MCResidue, MCForceField
 
         box_size = 5.0
@@ -82,12 +84,12 @@ def compute_pme_with_state_isolation(n_residues, residue_config):
 
         pygcmc.computeSystemEnergyPME(state)
 
-        print({{
+        print(json.dumps({{
             'total': state.ewald_energy.get('total', 0.0),
             'real_space': state.ewald_energy.get('real_space', 0.0),
             'reciprocal': state.ewald_energy.get('reciprocal', 0.0),
             'self': state.ewald_energy.get('self', 0.0)
-        }})
+        }}))
     """)
 
     # Run in subprocess
@@ -109,7 +111,9 @@ def compute_pme_with_state_isolation(n_residues, residue_config):
         print("SUBPROCESS STDOUT:", result.stdout)
         print("SUBPROCESS STDERR:", result.stderr)
         result.check_returncode()
-        return eval(result.stdout)
+        stdout_lines = [line for line in result.stdout.splitlines() if line.strip()]
+        assert stdout_lines, "No JSON output from subprocess"
+        return json.loads(stdout_lines[-1])
     except subprocess.CalledProcessError as e:
         print(f"Error running subprocess: {e.stderr}")
         raise
