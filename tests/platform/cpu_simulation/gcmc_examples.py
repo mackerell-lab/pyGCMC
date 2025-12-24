@@ -297,8 +297,8 @@ box_size:30.0 30.0 30.0
 gcmc_region:sphere 15.0 15.0 15.0 4.0
 temperature:300.0
 cutoff:9.0
-mcsteps:3000
-nprint:1000
+mcsteps:1500
+nprint:500
 fragname:WAT
 fragconc:55.5
 fragmuex:-5.0

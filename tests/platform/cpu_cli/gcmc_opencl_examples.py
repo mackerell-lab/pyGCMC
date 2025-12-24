@@ -543,6 +543,7 @@ def test_opencl_protein_example_active_muex_outputs(gcmc_cpu, test_data_dir, tem
 
     out_prefix = work / "out" / "gcmc"
     out_prefix.parent.mkdir(parents=True, exist_ok=True)
+    params_json = work / "out" / "params.json"
 
     result = subprocess.run(
         [
@@ -553,6 +554,8 @@ def test_opencl_protein_example_active_muex_outputs(gcmc_cpu, test_data_dir, tem
             str(out_prefix),
             "--seed",
             "17",
+            "--dump-params",
+            str(params_json),
         ],
         cwd=str(work),
         capture_output=True,
@@ -566,6 +569,12 @@ def test_opencl_protein_example_active_muex_outputs(gcmc_cpu, test_data_dir, tem
     initial_pdb = work / "181L_apo_silcs.1.pdb"
 
     frag_names, frag_muex = _extract_frag_names_and_muex(work / "run.inp")
+    assert len(frag_names) >= 2, "Expected multi-fragment deck for active/muex contract"
+    assert params_json.exists()
+    params = json.loads(params_json.read_text())
+    assert params["bias"]["use_cavity_bias"] is True
+    assert params["bias"]["use_conf_bias"] is True
+    assert int(params["bias"]["num_conf_bias_trials"]) >= 2
     out_dir = out_prefix.parent
     active_line_counts: list[int] = []
     active_last_counts: list[int] = []

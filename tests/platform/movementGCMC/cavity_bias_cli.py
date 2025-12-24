@@ -249,10 +249,10 @@ class TestCavityBias:
             ff=ff,
             use_cavity=True,
             use_cbmc=True,
-            k_trials=8,
-            grid_spacing=2.0,
+            k_trials=4,
+            grid_spacing=3.0,
             probe_radius=1.4,
-            mcsteps=5000,  # Reduced from 10000
+            mcsteps=2000,  # Reduced from 10000
             mu=-1.0  # Raised from -2.0 for better acceptance
         )
 

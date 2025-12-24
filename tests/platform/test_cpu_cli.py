@@ -124,6 +124,12 @@ from cpu_cli.physical_contracts import (
     test_deletion_deltaU_is_negative_of_insertion_for_charged_system,
 )
 
+# Multi-fragment physical contracts (2 functions)
+from cpu_cli.physical_contracts_multifragment import (
+    test_multifragment_cross_species_deltaU_matches_energy_components,
+    test_multifragment_poisson_distribution_ideal_gas,
+)
+
 # CBMC + region contract regression (1 function)
 from cpu_cli.cbmc_region_contract import (
     test_cbmc_insertion_respects_gcmc_region,
