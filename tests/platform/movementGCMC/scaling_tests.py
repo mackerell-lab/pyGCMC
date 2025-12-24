@@ -20,6 +20,9 @@ def test_volume_scaling(small_state):
     
     # Create states with different volumes
     state_small = small_state  # 2x2x2 = 8 nm³
+    state_small.info.max_residues = 2000
+    state_small.info.max_atoms = 6000
+    state_small.forcefield.ljEps[0] = 0.0
     
     state_large = pygcmc.MCState()
     state_large.info = pygcmc.MCInfo()
@@ -27,6 +30,8 @@ def test_volume_scaling(small_state):
     state_large.info.setTemperature(300.0)
     state_large.info.cutoff = 1.2
     state_large.info.volume = 64.0
+    state_large.info.max_residues = 2000
+    state_large.info.max_atoms = 6000
     
     # Setup force field for large box
     ff = pygcmc.MCForceField()
@@ -35,7 +40,7 @@ def test_volume_scaling(small_state):
     ff.ljSigma = [0.0] * 100
     ff.ljEps = [0.0] * 100
     ff.ljSigma[0] = 0.3151
-    ff.ljEps[0] = 0.6364
+    ff.ljEps[0] = 0.0
     state_large.forcefield = ff
     state_large.residues = []
     state_large.atoms = []
@@ -43,7 +48,7 @@ def test_volume_scaling(small_state):
     # Same parameters for both - use chemical potential that works for both box sizes
     params = pygcmc.movement.MovementParams()
     params.temperature = 300.0
-    params.chemicalPotential = -2.0  # Higher μ to ensure molecules in both boxes
+    params.chemicalPotential = 0.0
     params.maxTranslation = 0.1
     params.maxRotation = 0.2
     params.useConfigBiasForInsertion = False  # Disable CBMC to avoid asymmetry issues
@@ -58,7 +63,7 @@ def test_volume_scaling(small_state):
     
     # Run GCMC with insertion and deletion to reach equilibrium
     # Equilibration phase
-    for _ in range(1000):
+    for _ in range(600):
         # Small box
         if rng.random() < 0.5:
             mover_small.attemptInsertion(state_small)
@@ -76,7 +81,7 @@ def test_volume_scaling(small_state):
     # Production phase - collect averages
     small_counts = []
     large_counts = []
-    for i in range(1000):
+    for i in range(600):
         # Small box
         if rng.random() < 0.5:
             mover_small.attemptInsertion(state_small)
@@ -91,8 +96,8 @@ def test_volume_scaling(small_state):
             if state_large.activeResidueCount > 0:
                 mover_large.attemptDeletion(state_large)
         
-        # Sample every 10 steps
-        if i % 10 == 0:
+        # Sample every 5 steps
+        if i % 5 == 0:
             small_counts.append(state_small.activeResidueCount)
             large_counts.append(state_large.activeResidueCount)
     
@@ -107,17 +112,14 @@ def test_volume_scaling(small_state):
     # Check if molecules were inserted
     # NOTE: Current implementation may have issues with insertion acceptance
     
-    if avg_small > 0.1 and avg_large > 0.1:
-        molecule_ratio = avg_large / avg_small
-        
-        # Tightened tolerance: 0.5-2x of volume ratio
-        # Still allows for statistical fluctuations but requires better agreement
-        assert 0.5 * volume_ratio <= molecule_ratio <= 2.0 * volume_ratio, \
-            f"Average molecule ratio {molecule_ratio:.2f} not proportional to volume ratio {volume_ratio:.1f}"
-    else:
-        # PROPER SKIP instead of warn-and-pass
-        pytest.skip(f"Insufficient particles for scaling test: small={avg_small:.1f}, large={avg_large:.1f}. "
-                   f"This may indicate insertion issues or parameter tuning needed.")
+    assert avg_small > 0.1 and avg_large > 0.1, \
+        f"Insufficient particles for scaling test: small={avg_small:.1f}, large={avg_large:.1f}"
+    molecule_ratio = avg_large / avg_small
+    
+    # Tightened tolerance: 0.5-2x of volume ratio
+    # Still allows for statistical fluctuations but requires better agreement
+    assert 0.5 * volume_ratio <= molecule_ratio <= 2.0 * volume_ratio, \
+        f"Average molecule ratio {molecule_ratio:.2f} not proportional to volume ratio {volume_ratio:.1f}"
 
 
 def test_chemical_potential_scaling():
@@ -142,7 +144,7 @@ def test_chemical_potential_scaling():
         ff.ljSigma = [0.0] * 100
         ff.ljEps = [0.0] * 100
         ff.ljSigma[0] = 0.3151
-        ff.ljEps[0] = 0.6364
+        ff.ljEps[0] = 0.0
         state.forcefield = ff
         state.residues = []
         state.atoms = []
@@ -150,14 +152,14 @@ def test_chemical_potential_scaling():
     # Different chemical potentials - use higher values for better acceptance
     params_low = pygcmc.movement.MovementParams()
     params_low.temperature = 300.0
-    params_low.chemicalPotential = -2.0  # Low but not too low
+    params_low.chemicalPotential = 0.0
     # Guard against missing attribute
     if hasattr(params_low, 'useConfigBiasForInsertion'):
         params_low.useConfigBiasForInsertion = False  # Disable CBMC
     
     params_high = pygcmc.movement.MovementParams()
     params_high.temperature = 300.0
-    params_high.chemicalPotential = 2.0   # High for good acceptance
+    params_high.chemicalPotential = 3.0
     # Guard against missing attribute
     if hasattr(params_high, 'useConfigBiasForInsertion'):
         params_high.useConfigBiasForInsertion = False  # Disable CBMC
@@ -170,8 +172,8 @@ def test_chemical_potential_scaling():
     
     # Run GCMC with insertion and deletion to reach equilibrium
     # Use longer equilibration and collect statistics
-    n_equilibration = 1000
-    n_production = 1000
+    n_equilibration = 1500
+    n_production = 1500
     
     # Equilibration phase
     for _ in range(n_equilibration):
@@ -236,16 +238,13 @@ def test_chemical_potential_scaling():
     delta_mu = params_high.chemicalPotential - params_low.chemicalPotential
     expected_ratio = np.exp(beta * delta_mu)
     
-    if avg_count1 > 0 and avg_count2 > 0:
-        actual_ratio = avg_count2 / avg_count1
-        
-        # Further tightened: 0.5-2x of expected ratio for better validation
-        assert 0.5 * expected_ratio <= actual_ratio <= 2.0 * expected_ratio, \
-            f"Actual ratio {actual_ratio:.2f} not close to expected {expected_ratio:.2f}"
-    elif avg_count1 == 0 or avg_count2 == 0:
-        # PROPER SKIP instead of warn-and-pass
-        pytest.skip(f"Insufficient particles: low μ={avg_count1:.1f}, high μ={avg_count2:.1f}. "
-                   f"May indicate parameter tuning needed or binding issues.")
+    assert avg_count1 > 0 and avg_count2 > 0, \
+        f"Insufficient particles: low μ={avg_count1:.1f}, high μ={avg_count2:.1f}"
+    actual_ratio = avg_count2 / avg_count1
+    
+    # Further tightened: 0.5-2x of expected ratio for better validation
+    assert 0.5 * expected_ratio <= actual_ratio <= 2.0 * expected_ratio, \
+        f"Actual ratio {actual_ratio:.2f} not close to expected {expected_ratio:.2f}"
 
 
 def test_detailed_balance():
