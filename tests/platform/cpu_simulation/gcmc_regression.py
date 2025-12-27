@@ -7,8 +7,33 @@ Ensures that changes don't break existing functionality
 import pytest
 import subprocess
 from pathlib import Path
+import json
 
 GCMC_CPU_PATH = Path(__file__).parent.parent.parent.parent / "build" / "bin" / "gcmc_cpu"
+
+
+def _pdb_atom_signature(pdb_path: Path) -> tuple[tuple[str, str, int, float, float, float], ...]:
+    """Extract a stable, formatting-insensitive signature from a PDB (ATOM/HETATM only)."""
+    atoms: list[tuple[str, str, int, float, float, float]] = []
+    for line in pdb_path.read_text().splitlines():
+        if not line.startswith(("ATOM", "HETATM")):
+            continue
+        resname = line[17:20].strip().upper()
+        atom_name = line[12:16].strip().upper()
+        try:
+            resid = int(line[22:26])
+            x = float(line[30:38])
+            y = float(line[38:46])
+            z = float(line[46:54])
+        except ValueError as exc:
+            raise AssertionError(f"Failed to parse PDB ATOM line: {line}") from exc
+        atoms.append((resname, atom_name, resid, round(x, 3), round(y, 3), round(z, 3)))
+    return tuple(sorted(atoms))
+
+
+def _load_acceptance_jsonl(path: Path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
 
 class TestRegression:
     """Regression test suite"""
@@ -35,7 +60,6 @@ END
         
         inp_path = tmp_path / "reference.inp"
         inp_content = """# Reference simulation for regression testing
-inp_units:nm
 top:reference.top
 pdb:reference.pdb
 op_top:output.top
@@ -54,8 +78,8 @@ fragmuex:-5.0
         return {"inp": inp_path, "pdb": pdb_path, "top": top_path, "dir": tmp_path}
     
     def test_deterministic_with_seed(self, reference_setup):
-        """Test that same seed produces identical results"""
-        results = []
+        """Same seed should produce identical final structures (no stdout/stderr parsing)."""
+        signatures = []
         
         for run in range(3):
             result = subprocess.run(
@@ -72,46 +96,23 @@ fragmuex:-5.0
                 timeout=10
             )
             
-            assert result.returncode == 0
-            
-            # Read and hash the output file
-            output_file = reference_setup["dir"] / f"det_{run}_final.txt"
-            content = output_file.read_text()
-            
-            # Extract key metrics for comparison
-            metrics = self.extract_metrics(content)
-            results.append(metrics)
+            assert result.returncode == 0, result.stdout + result.stderr
+
+            out_pdb = reference_setup["dir"] / f"det_{run}_final.pdb"
+            assert out_pdb.exists(), f"Missing output PDB: {out_pdb}"
+            signatures.append(_pdb_atom_signature(out_pdb))
         
-        # All runs should produce identical metrics
-        for i in range(1, len(results)):
-            assert results[0] == results[i], \
-                f"Run {i} differs from run 0 with same seed"
-    
-    def extract_metrics(self, content):
-        """Extract key metrics from output for comparison"""
-        metrics = {}
-        
-        for line in content.split('\n'):
-            if "Overall acceptance:" in line:
-                metrics["acceptance"] = line.split(':')[1].strip()
-            elif "Final count:" in line:
-                metrics["final_count"] = line.split(':')[1].strip()
-            elif "Insert accepted:" in line:
-                metrics["insert_accepted"] = line.split(':')[1].strip()
-            elif "Delete accepted:" in line:
-                metrics["delete_accepted"] = line.split(':')[1].strip()
-        
-        return metrics
+        for i in range(1, len(signatures)):
+            assert signatures[0] == signatures[i], f"Run {i} differs from run 0 with same seed"
     
     def test_backward_compatibility(self, reference_setup):
         """Test that old-style INP files still work"""
         # Create an INP file with minimal required fields
         old_inp_path = reference_setup["dir"] / "old_style.inp"
         old_content = """# Minimal old-style INP
-inp_units:nm
 top:reference.top
 pdb:reference.pdb
-box_size:20.0 20.0 20.0
+box_size:25.0 25.0 25.0
 mcsteps:50
 fragname:water
 fragconc:55.0
@@ -138,63 +139,74 @@ fragmuex:-5.0
         assert Path(f"{out_prefix}_final.pdb").exists(), "Expected final PDB not created"
     
     def test_known_scenarios(self, reference_setup):
-        """Test specific scenarios with known expected behavior"""
-        
-        test_cases = [
-            # Empty box should attempt insertions (acceptance depends on implementation)
-            {
-                "name": "empty_box",
-                "extra_inp": "mcsteps:50\nfragmuex:-10.0",  # Very favorable
-                # Check that at least insertions were attempted
-                "check": lambda m: int(m.get("insert_attempts", "0")) > 0 if "insert_attempts" in m 
-                                   else float(m.get("acceptance", "0").rstrip('%')) >= 0
-            },
-            # High concentration should reach equilibrium
-            {
-                "name": "high_conc",
-                "extra_inp": "mcsteps:200\nfragconc:100.0",
-                "check": lambda m: float(m.get("acceptance", "0").rstrip('%')) > 0
-            },
-            # Very unfavorable chemical potential
-            {
-                "name": "unfavorable",
-                "extra_inp": "mcsteps:50\nfragmuex:10.0",  # Positive = unfavorable
-                # Should have lower acceptance than favorable case, but may still accept some
-                "check": lambda m: True  # Skip this check for now - implementation dependent
-            }
-        ]
-        
-        for test_case in test_cases:
-            # Modify INP
-            inp_path = reference_setup["dir"] / f"{test_case['name']}.inp"
+        """
+        Sanity-check a few common deck variations without relying on stdout or final.txt text parsing.
+
+        We assert that key inputs (fragconc/fragmuex) are actually consumed by checking the structured
+        `--dump-accept` fields (mu/z) on a single insertion attempt.
+        """
+
+        def run_once(extra_inp: str, tag: str) -> dict:
+            work = reference_setup["dir"]
+            inp_path = work / f"{tag}.inp"
+            accept_path = work / f"{tag}_acceptance.jsonl"
+
             base_content = reference_setup["inp"].read_text()
-            inp_path.write_text(base_content + "\n" + test_case["extra_inp"])
-            
+            # Force a single insertion attempt for deterministic record inspection.
+            inp_path.write_text(
+                base_content
+                + "\n"
+                + extra_inp
+                + "\n"
+                + "moves_per_step:1\nmcsteps:1\nnprint:1\nmc_move_prob:1 0 0 0\n"
+            )
+
             result = subprocess.run(
                 [
                     str(GCMC_CPU_PATH),
-                    "--inp", str(inp_path),
-                    "--prefix", test_case["name"],
-                    "--seed", "777",
-                    "--no-stats"
+                    "--inp",
+                    str(inp_path),
+                    "--prefix",
+                    tag,
+                    "--seed",
+                    "777",
+                    "--no-stats",
+                    "--dump-accept",
+                    str(accept_path),
                 ],
-                cwd=reference_setup["dir"],
+                cwd=work,
                 capture_output=True,
                 text=True,
-                timeout=20
+                timeout=20,
             )
-            
-            assert result.returncode == 0, f"{test_case['name']} failed"
-            
-            # Check expected behavior
-            output_file = reference_setup["dir"] / f"{test_case['name']}_final.txt"
-            metrics = self.extract_metrics(output_file.read_text())
-            
-            assert test_case["check"](metrics), \
-                f"{test_case['name']} didn't behave as expected: {metrics}"
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert accept_path.exists()
+
+            records = _load_acceptance_jsonl(accept_path)
+            assert records, f"No acceptance records produced for {tag}"
+            rec = records[0]
+            assert str(rec.get("move", "")).strip().lower() == "insertion"
+            return rec
+
+        baseline = run_once("", "baseline")
+        assert float(baseline["z"]) > 0.0
+
+        # 1) More negative mu_ex should reduce activity (z).
+        mu_more_negative = run_once("fragmuex:-10.0", "mu_more_negative")
+        assert float(mu_more_negative["mu"]) == pytest.approx(-10.0 * 4.184, rel=1e-6, abs=1e-6)
+        assert float(mu_more_negative["z"]) < float(baseline["z"])
+
+        # 2) Higher concentration should increase activity (z) linearly.
+        high_conc = run_once("fragconc:100.0", "high_conc")
+        assert float(high_conc["z"]) > float(baseline["z"])
+
+        # 3) Less negative / positive mu_ex should increase activity (z).
+        mu_less_negative = run_once("fragmuex:10.0", "mu_less_negative")
+        assert float(mu_less_negative["mu"]) == pytest.approx(10.0 * 4.184, rel=1e-6, abs=1e-6)
+        assert float(mu_less_negative["z"]) > float(baseline["z"])
     
     def test_parameter_validation(self, reference_setup):
-        """Test that invalid parameters are caught"""
+        """Invalid parameters must fail fast (no silent fallback)."""
         
         invalid_cases = [
             ("negative_steps", "mcsteps:-100"),
@@ -222,10 +234,13 @@ fragmuex:-5.0
                     lines.append(invalid_param)
                 inp_path.write_text('\n'.join(lines))
             
+            out_prefix = reference_setup["dir"] / f"invalid_{name}"
             result = subprocess.run(
                 [
                     str(GCMC_CPU_PATH),
-                    "--inp", str(inp_path)
+                    "--inp", str(inp_path),
+                    "--prefix", str(out_prefix),
+                    "--seed", "12345",
                 ],
                 cwd=reference_setup["dir"],
                 capture_output=True,
@@ -233,11 +248,15 @@ fragmuex:-5.0
                 timeout=5
             )
             
-            # Should either fail or handle gracefully
-            # (depending on validation implementation)
-            if result.returncode == 0:
-                # If it didn't fail, check for warnings or default handling
-                print(f"Warning: {name} didn't fail - may be using defaults")
+            assert result.returncode != 0, f"{name} should fail for invalid param: {invalid_param}"
+            # No output artifacts should be produced on failure.
+            expected_outputs = [
+                Path(f"{out_prefix}_final.pdb"),
+                Path(f"{out_prefix}_final.top"),
+                Path(f"{out_prefix}_statistics.dat"),
+                Path(f"{out_prefix}_final.txt"),
+            ]
+            assert not any(p.exists() for p in expected_outputs), f"Unexpected outputs: {expected_outputs}"
     
     def test_output_format_stability(self, reference_setup):
         """Test that output format remains consistent"""
@@ -349,7 +368,8 @@ class TestContinuousIntegration:
         inp_path = tmp_path / "ci.inp"
         inp_path.write_text("""top:ci.top
 pdb:ci.pdb
-box_size:10.0 10.0 10.0
+box_size:30.0 30.0 30.0
+cutoff:8.0
 mcsteps:10
 fragname:water
 fragconc:55.0

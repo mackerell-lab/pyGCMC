@@ -180,6 +180,7 @@ fragitp:{test_paths['itp_sol']}
 fragitp:{test_paths['itp_benx']}
 fragitp:{test_paths['itp_acox']}
 box_size:10.0 10.0 10.0
+cutoff:4.0
 temperature:298.15
 mcsteps:0
 fragname:SOL BENX ACOX
@@ -289,10 +290,11 @@ fragmuex:-5.0
         """Test that INP parameters are correctly preserved"""
         inp_file = tmp_path / "params_test.inp"
         # Create a more complete INP file with fragment ITPs
-        inp_file.write_text(f"""
+        inp_file.write_text(
+            f"""
 fragitp:{test_paths['itp_sol']}
 inp_units:nm
-box_size:12.34 23.45 34.56
+box_size:3.21 4.32 5.43
 temperature:310.0
 mcsteps:1000
 eqsteps:500
@@ -300,8 +302,10 @@ fragname:SOL
 fragconc:10.0
 fragmuex:-2.5
 nprint:50
-cutoff:14.0
-""")
+cutoff:1.2
+""".strip()
+            + "\n"
+        )
 
         params_json = tmp_path / "params.json"
         result = subprocess.run(
@@ -329,9 +333,9 @@ cutoff:14.0
         params = json.loads(params_json.read_text())
         assert params["basic"]["inp_units"] == "nm"
         assert [float(x) for x in params["space"]["box_size_nm"]] == pytest.approx(
-            [12.34, 23.45, 34.56], abs=1e-5
+            [3.21, 4.32, 5.43], abs=1e-5
         )
-        assert float(params["space"]["cutoff_nm"]) == pytest.approx(14.0, abs=1e-6)
+        assert float(params["space"]["cutoff_nm"]) == pytest.approx(1.2, abs=1e-6)
         assert [float(x) for x in params["fragment"]["conc_list_M"]] == pytest.approx(
             [10.0], abs=1e-6
         )

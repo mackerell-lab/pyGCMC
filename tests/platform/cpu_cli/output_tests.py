@@ -33,7 +33,7 @@ fragname:NA
 fragconc:55.0
 fragmuex:0.0
 
-box_size:10.0 10.0 10.0
+box_size:30.0 30.0 30.0
 cutoff:12.0
 temperature:300.0
 moves_per_step:1
@@ -83,7 +83,7 @@ fragname:NA
 fragconc:55.0
 fragmuex:0.0
 
-box_size:10.0 10.0 10.0
+box_size:30.0 30.0 30.0
 cutoff:12.0
 temperature:300.0
 moves_per_step:1
@@ -130,7 +130,7 @@ fragname:NA
 fragconc:55.0
 fragmuex:0.0
 
-box_size:10.0 10.0 10.0
+box_size:30.0 30.0 30.0
 cutoff:12.0
 temperature:300.0
 moves_per_step:1

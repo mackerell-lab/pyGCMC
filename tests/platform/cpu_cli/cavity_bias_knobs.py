@@ -127,14 +127,14 @@ fragname:FRG
 fragconc:55.0
 fragmuex:0.0
 
-pdb:{pdb}
-top:{top}
-box_size:20.0 20.0 20.0
-cutoff:12.0
-grid_dx:1.0
-probe_radius:{probe_radius}
-use_cavity_bias:yes
-use_vdw_radius_for_grid:no
+	pdb:{pdb}
+	top:{top}
+	box_size:20.0 20.0 20.0
+	cutoff:10.0
+	grid_dx:1.0
+	probe_radius:{probe_radius}
+	use_cavity_bias:yes
+	use_vdw_radius_for_grid:no
 exclude_hydrogens_from_grid:no
 
 temperature:300.0
@@ -253,14 +253,14 @@ fragname:WAT
 fragconc:55.0
 fragmuex:0.0
 
-pdb:{pdb}
-top:{top}
-box_size:20.0 20.0 20.0
-cutoff:12.0
-grid_dx:1.0
-probe_radius:1.4
-use_cavity_bias:yes
-use_vdw_radius_for_grid:yes
+	pdb:{pdb}
+	top:{top}
+	box_size:20.0 20.0 20.0
+	cutoff:10.0
+	grid_dx:1.0
+	probe_radius:1.4
+	use_cavity_bias:yes
+	use_vdw_radius_for_grid:yes
 exclude_hydrogens_from_grid:{exclude_h}
 
 temperature:300.0
@@ -369,14 +369,14 @@ fragname:MOL
 fragconc:55.0
 fragmuex:0.0
 
-pdb:{pdb}
-top:{top}
-box_size:20.0 20.0 20.0
-cutoff:12.0
-grid_dx:1.0
-probe_radius:1.4
-use_cavity_bias:yes
-use_vdw_radius_for_grid:{use_vdw}
+	pdb:{pdb}
+	top:{top}
+	box_size:20.0 20.0 20.0
+	cutoff:10.0
+	grid_dx:1.0
+	probe_radius:1.4
+	use_cavity_bias:yes
+	use_vdw_radius_for_grid:{use_vdw}
 exclude_hydrogens_from_grid:no
 
 temperature:300.0

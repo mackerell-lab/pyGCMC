@@ -185,6 +185,7 @@ class TestCavityBias:
             f"""
 version:gcmc_2.0
 box_size:20.0 20.0 20.0
+cutoff:10.0
 temperature:300.0
 fragitp:{sol_itp}
 fragname:SOL
@@ -401,6 +402,7 @@ class TestOutputValidation:
             f"""
 version:gcmc_2.0
 box_size:20.0 20.0 20.0
+cutoff:10.0
 temperature:300.0
 fragitp:{sol_itp}
 fragname:SOL
@@ -437,6 +439,7 @@ attempt_prob_rot:0.0
             f"""
 version:gcmc_2.0
 box_size:20.0 20.0 20.0
+cutoff:10.0
 temperature:300.0
 fragitp:{sol_itp}
 fragname:SOL

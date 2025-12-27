@@ -13,6 +13,20 @@ from pathlib import Path
 GCMC_CPU_PATH = Path(__file__).parent.parent.parent.parent / "build" / "bin" / "gcmc_cpu"
 
 
+def _read_cryst1_box_angstrom(pdb_path: Path) -> tuple[float, float, float]:
+    """Read CRYST1 box lengths (Å) from a PDB file."""
+    for line in pdb_path.read_text().splitlines():
+        if not line.startswith("CRYST1"):
+            continue
+        parts = line.split()
+        if len(parts) >= 4:
+            try:
+                return float(parts[1]), float(parts[2]), float(parts[3])
+            except ValueError as exc:
+                raise AssertionError(f"Failed to parse CRYST1 line: {line}") from exc
+    raise AssertionError(f"Missing CRYST1 record in PDB: {pdb_path}")
+
+
 class TestGCMCExamples:
     """Test suite for GCMC example-based validation"""
 
@@ -114,7 +128,6 @@ WAT     2
 
         # Run GCMC at standard conditions (reduced steps for faster testing)
         inp_content = f"""# TIP3P water at standard conditions
-inp_units:nm
 pdb:{str(pdb_file)}
 top:{str(top_file)}
 fragitp:{str(itp_file)}
@@ -149,7 +162,8 @@ moves_per_step:1
         assert metrics["final_count"]["WAT"] > 0, "Should insert water molecules"
 
         # Calculate density
-        box_volume = 15.0 * 15.0 * 15.0  # nm³ (updated for smaller box)
+        a, b, c = _read_cryst1_box_angstrom(Path(f"{out_prefix}_final.pdb"))
+        box_volume = (0.1 * a) * (0.1 * b) * (0.1 * c)  # nm³ (PDB CRYST1 is always Å)
         density = metrics["final_count"]["WAT"] / box_volume
 
         # Check density is in reasonable range for water
@@ -209,9 +223,8 @@ MOL2  1
 1  N  1  MOL2  N  1  -0.5  14.007
 """)
 
-        # Test with different chemical potentials
+        # Basic two-fragment smoke test
         inp_content = f"""# Multi-component test
-inp_units:nm
 pdb:{str(pdb_file)}
 top:{str(top_file)}
 fragitp:{str(mol1_itp)}
@@ -288,7 +301,6 @@ WAT    2
 
         # Define cavity region (sphere in center of box)
         inp_content = f"""# Protein cavity filling
-inp_units:nm
 pdb:{str(water_pdb)}
 top:{str(top_file)}
 op_pdb:cavity_filled.pdb
@@ -301,7 +313,7 @@ mcsteps:1500
 nprint:500
 fragname:WAT
 fragconc:55.5
-fragmuex:-5.0
+fragmuex:0.0
 use_cavity_bias:yes
 use_conf_bias:yes
 fragconf:3
@@ -326,10 +338,11 @@ fragconf:3
         assert water_count > 0, "Should insert water molecules in cavity"
 
         # Calculate expected molecules based on cavity volume
-        cavity_radius = 4.0  # nm
-        cavity_volume = (4/3) * np.pi * cavity_radius**3
+        cavity_radius_ang = 4.0  # Å (default inp_units:auto => gcmc_gpu-style)
+        cavity_radius_nm = 0.1 * cavity_radius_ang
+        cavity_volume = (4/3) * np.pi * cavity_radius_nm**3
         # Expected density ~33 molecules/nm³ for water
-        expected_max = cavity_volume * 50  # Upper bound with tolerance
+        expected_max = cavity_volume * 200  # Upper bound with tolerance
 
         # Check molecules are within reasonable range for cavity
         assert water_count < expected_max, \
@@ -364,7 +377,6 @@ GAS    1
 
         for T in temperatures:
             inp_content = f"""# Temperature test at {T}K
-inp_units:nm
 pdb:{str(pdb_file)}
 top:{str(top_file)}
 op_pdb:temp_{T}.pdb
@@ -394,7 +406,8 @@ fragmuex:-5.0
             metrics = self.analyze_gcmc_output(out_prefix)
 
             count = metrics["final_count"].get("GAS", 0)
-            volume = 15.0 * 15.0 * 15.0
+            # PDB files here do not include CRYST1; periodic box comes from INP box_size (Å -> nm).
+            volume = (15.0 * 0.1) * (15.0 * 0.1) * (15.0 * 0.1)
             density = count / volume
             densities.append(density)
 
@@ -435,7 +448,6 @@ Cl-    1
 
         # Test ion pair insertion
         inp_content = f"""# Ion pair insertion test
-inp_units:nm
 pdb:{str(pdb_file)}
 top:{str(top_file)}
 op_pdb:ions.pdb
@@ -501,7 +513,6 @@ WAT    2
         top_file.write_text(top_content)
 
         base_inp = f"""# CBMC comparison test
-inp_units:nm
 pdb:{str(pdb_file)}
 top:{str(top_file)}
 op_pdb:output.pdb

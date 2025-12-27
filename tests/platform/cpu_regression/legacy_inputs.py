@@ -354,6 +354,7 @@ fragitp: {}/charmm36.ff/mol/sol.itp
         inp_content = """
 version: gcmc_2.0
 box: 20.0 20.0 20.0
+cutoff: 10.0
 temperature: 300.0
 fragname: WAT
 fragmuex: -10.0

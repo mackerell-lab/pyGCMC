@@ -147,6 +147,7 @@ public:
         double rosenbluthWeight = 1.0; // Recorded Rosenbluth ratio (W/K or K/W)
         double cbmcSelectedEnergy = 0.0; // u_selected (ins) or u_current (del), kJ/mol
         double cbmcLogWOverK = 0.0;      // log(W/K) from CBMC trial energies
+        std::vector<double> cbmcTrialEnergies; // Trial energies used to compute log(W/K), kJ/mol
         double pAcc;       // Calculated acceptance probability
         double bias = 1.0; // Total bias factor applied in acceptance
         double u;          // Random number used

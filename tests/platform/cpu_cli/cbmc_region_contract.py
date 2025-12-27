@@ -100,7 +100,7 @@ use_conf_bias:yes
 
 box_size:20.0 20.0 20.0
 gcmc_region:sphere {center[0]} {center[1]} {center[2]} {radius}
-cutoff:12.0
+cutoff:10.0
 grid_dx:1.0
 temperature:300.0
 mcsteps:200

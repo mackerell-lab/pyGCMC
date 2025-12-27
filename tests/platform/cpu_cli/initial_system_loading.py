@@ -48,7 +48,7 @@ def test_builder_initial_system_loaded_with_itp_par(gcmc_cpu, temp_dir):
                 "",
                 "[ atoms ]",
                 "; nr  type  resnr  residue  atom  cgnr  charge    mass",
-                "1   C     1      MOL      C     1     0.000   12.011",
+                "1   C     1      MOL      C     1    -1.000   12.011",
                 "",
                 "[ system ]",
                 "Minimal",
@@ -83,7 +83,7 @@ par:{par}
 top:{top}
 pdb:{pdb}
 
-box_size:10.0 10.0 10.0
+box_size:30.0 30.0 30.0
 gc_center:15.0 15.0 15.0
 cutoff:12.0
 temperature:300
@@ -153,7 +153,9 @@ def test_insertion_does_not_overwrite_initial_residues(gcmc_cpu, test_data_dir, 
                 "",
                 "[ atoms ]",
                 "; nr  type  resnr  residue  atom  cgnr  charge    mass",
-                "1   C     1      MOL      C     1     0.000   12.011",
+                # Give the framework a non-zero charge so CBMC trial energies differ
+                # (avoids a degenerate rosenbluthWeight==1 sequence for certain RNG seeds).
+                "1   C     1      MOL      C     1    -1.000   12.011",
                 "",
                 "[ system ]",
                 "Minimal",
@@ -321,7 +323,7 @@ pdb:{pdb}
 fragitp:{frag_itp}
 
 box_size:10.0 10.0 10.0
-cutoff:12.0
+cutoff:4.0
 temperature:300
 moves_per_step:1
 mcsteps:1
@@ -426,7 +428,7 @@ pdb:{pdb}
 fragitp:{frag_itp}
 
 box_size:10.0 10.0 10.0
-cutoff:12.0
+cutoff:5.0
 temperature:300
 moves_per_step:1
 mcsteps:1
@@ -465,8 +467,16 @@ mc_move_prob:1 0 0 0
     assert cavity_fraction == pytest.approx(0.875, abs=1e-12)
 
     rosen = float(rec["rosenbluthWeight"])
-    assert 0.0 < rosen <= 1.0
-    assert rosen < 0.999999
+    assert rosen > 0.0
+    assert math.isfinite(rosen)
+    assert not math.isclose(rosen, 1.0, rel_tol=0.0, abs_tol=1e-6)
+
+    beta_logged = float(rec["beta"])
+    cbmc_selected_energy = float(rec["cbmcSelectedEnergy"])
+    cbmc_log_w_over_k = float(rec["cbmcLogWOverK"])
+    expected_log_rosen = cbmc_log_w_over_k + beta_logged * cbmc_selected_energy
+    expected_log_rosen = min(max(expected_log_rosen, math.log(1e-30)), 700.0)
+    assert math.log(rosen) == pytest.approx(expected_log_rosen, abs=1e-10)
 
     beta = 1.0 / (8.314e-3 * 300.0)
     delta_u = float(rec["deltaU"])

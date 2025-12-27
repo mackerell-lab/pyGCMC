@@ -148,6 +148,11 @@ from cpu_cli.cbmc_region_contract import (
     test_cbmc_insertion_respects_gcmc_region,
 )
 
+# CBMC trial-energy observability and Rosenbluth closure (1 function)
+from cpu_cli.cbmc_trial_energies import (
+    test_dump_accept_exposes_cbmc_trial_energies_and_closes_rosenbluth_terms,
+)
+
 # Cavity-bias knob regressions (2 functions)
 from cpu_cli.cavity_bias_knobs import (
     test_cavity_bias_probe_radius_changes_cavity_fraction,

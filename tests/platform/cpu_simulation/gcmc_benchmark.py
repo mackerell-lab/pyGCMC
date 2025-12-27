@@ -144,9 +144,11 @@ class TestPerformanceBenchmark:
         """Test performance scaling with box size"""
         box_sizes = [10, 20, 30, 40, 50]
         results = {}
-        
+
         for box_size in box_sizes:
-            # Create INP file
+            # Enforce minimum-image sanity: cutoff must be <= 0.5*box.
+            cutoff = min(8.0, box_size / 2.0)
+
             inp_path = benchmark_dir / f"box_{box_size}.inp"
             inp_content = f"""# Box size {box_size} benchmark
 top:bench.top
@@ -155,7 +157,7 @@ op_top:output.top
 op_pdb:output.pdb
 box_size:{box_size}.0 {box_size}.0 {box_size}.0
 gc_center:{box_size/2}.0 {box_size/2}.0 {box_size/2}.0
-cutoff:8.0
+cutoff:{cutoff:.1f}
 mcsteps:1000
 nprint:100
 fragname:water
@@ -163,25 +165,24 @@ fragconc:55.0
 fragmuex:-5.0
 """
             inp_path.write_text(inp_content)
-            
-            # Run benchmark
+
             bench_result = BenchmarkResult(f"box_{box_size}")
             runs = self.run_benchmark(inp_path, benchmark_dir, num_runs=3)
-            
+
             for run in runs:
                 bench_result.add_run(
-                    run["elapsed"], 
+                    run["elapsed"],
                     1000,  # mcsteps
                     run["acceptance"],
-                    run["final_count"]
+                    run["final_count"],
                 )
-            
+
             results[box_size] = bench_result.get_stats()
             print(f"Box {box_size}: {results[box_size]['avg_steps_per_sec']:.1f} steps/s")
-        
+
         # Verify performance doesn't degrade catastrophically
         for size in box_sizes[1:]:
-            assert results[size]['avg_steps_per_sec'] > 0, f"Box {size} failed"
+            assert results[size]["avg_steps_per_sec"] > 0, f"Box {size} failed"
     
     def test_step_count_scaling(self, benchmark_dir):
         """Test performance with different numbers of MC steps"""
@@ -396,19 +397,19 @@ fragmuex:-5.0
         # Run a minimal benchmark
         inp_path = benchmark_dir / "report_test.inp"
         inp_content = """# Report test
-top:bench.top
-pdb:bench.pdb
-op_top:output.top
-op_pdb:output.pdb
-box_size:10.0 10.0 10.0
-gc_center:5.0 5.0 5.0
-cutoff:8.0
-mcsteps:10
-nprint:1
-fragname:water
-fragconc:55.0
-fragmuex:-5.0
-"""
+	top:bench.top
+	pdb:bench.pdb
+	op_top:output.top
+	op_pdb:output.pdb
+	box_size:30.0 30.0 30.0
+	gc_center:15.0 15.0 15.0
+	cutoff:8.0
+	mcsteps:10
+	nprint:1
+	fragname:water
+	fragconc:55.0
+	fragmuex:-5.0
+	"""
         inp_path.write_text(inp_content)
         
         result = subprocess.run(

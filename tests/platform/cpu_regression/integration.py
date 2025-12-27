@@ -201,6 +201,7 @@ nprint:1
             f"""
 version:gcmc_2.0
 box_size:{box_angstrom[0]} {box_angstrom[1]} {box_angstrom[2]}
+cutoff:10.0
 temperature:298.15
 fragitp:{sol_itp}
 fragname:SOL

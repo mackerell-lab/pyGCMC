@@ -41,6 +41,7 @@ class TestFragmentLibraryRealParsing:
             inp_file.write_text(f"""
 fragitp:{itp_files['sol']}
 box_size:10.0 10.0 10.0
+cutoff:4.0
 temperature:298.15
 mcsteps:50
 nprint:10
@@ -98,6 +99,7 @@ attempt_prob_rot:0.0
             inp_file.write_text(f"""
 fragitp:{itp_files['acox']}
 box_size:10.0 10.0 10.0
+cutoff:4.0
 temperature:298.15
 mcsteps:50
 nprint:10
@@ -153,6 +155,7 @@ attempt_prob_rot:0.0
             inp_file.write_text(f"""
 fragitp:{itp_files['acey']}
 box_size:10.0 10.0 10.0
+cutoff:4.0
 temperature:298.15
 mcsteps:50
 nprint:10
@@ -210,6 +213,7 @@ fragitp:{itp_files['sol']}
 fragitp:{itp_files['benx']}
 fragitp:{itp_files['acet']}
 box_size:20.0 20.0 20.0
+cutoff:10.0
 temperature:300.0
 mcsteps:200
 nprint:50

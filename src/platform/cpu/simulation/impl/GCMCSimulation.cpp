@@ -277,6 +277,11 @@ bool GCMCSimulation::initialize() {
         if (errorMsg.find("not found") != std::string::npos ||
             errorMsg.find("does not exist") != std::string::npos ||
             errorMsg.find("Failed to open") != std::string::npos ||
+            // Input validation errors must be fatal; continuing would produce undefined or silent-wrong behavior.
+            errorMsg.find("Invalid ") != std::string::npos ||
+            errorMsg.find("Inconsistent ") != std::string::npos ||
+            errorMsg.find("Must specify") != std::string::npos ||
+            errorMsg.find("Error parsing line") != std::string::npos ||
             // Fragment templates are an input contract: silently continuing would yield
             // "runs but wrong" behavior (e.g., zero-atom templates / placeholder fragments).
             errorMsg.find("Failed to parse fragment template") != std::string::npos ||
@@ -1898,6 +1903,9 @@ bool GCMCSimulation::performSingleMove() {
         rec.rosenbluthWeight = result.rosenbluthWeight;
         rec.cbmcSelectedEnergy = result.cbmcSelectedEnergy;
         rec.cbmcLogWOverK = result.cbmcLogWOverK;
+        if (engine_) {
+            rec.cbmcTrialEnergies = engine_->getLastCBMCTrialEnergies();
+        }
         rec.bias = result.bias;
 
         // Acceptance probability and random number
@@ -3164,6 +3172,12 @@ void GCMCSimulation::dumpAcceptanceLog(const std::string& filename) const {
             << "\"rosenbluthWeight\":" << rec.rosenbluthWeight << ","
             << "\"cbmcSelectedEnergy\":" << rec.cbmcSelectedEnergy << ","
             << "\"cbmcLogWOverK\":" << rec.cbmcLogWOverK << ","
+            << "\"cbmcTrialEnergies\":[";
+        for (size_t i = 0; i < rec.cbmcTrialEnergies.size(); ++i) {
+            if (i) ofs << ",";
+            ofs << rec.cbmcTrialEnergies[i];
+        }
+        ofs << "],"
             << "\"bias\":" << rec.bias << ","
             << "\"pAcc\":" << rec.pAcc << ","
             << "\"u\":" << rec.u << ","

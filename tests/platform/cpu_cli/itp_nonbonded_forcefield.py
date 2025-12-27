@@ -789,7 +789,7 @@ fragconc:1.0
 fragmuex:0.0
 
 box_size:10.0 10.0 10.0
-cutoff:8.0
+cutoff:4.0
 temperature:300.0
 mcsteps:0
 nprint:1

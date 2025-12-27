@@ -317,6 +317,7 @@ void InpParserMain::parse_line(const std::string& key, const std::string& value,
 void InpParserMain::validate_parameters(model::Param& param) {
     auto& file_info = param.get_file_info();
     auto& fragment_info = param.get_fragment_info();
+    auto& mc_info = param.get_mc_info();
     auto& space_info = param.get_space_info();
 
     // For GCMC simulations with fragment top files (fragitp), we don't require PDB or TOP files
@@ -348,6 +349,24 @@ void InpParserMain::validate_parameters(model::Param& param) {
     // At least one of fragconc or fragmuex must be specified
     if (fragment_info.conc_list.empty() && fragment_info.muex_list.empty()) {
         throw std::runtime_error("Must specify either fragconc or fragmuex (or both) for GCMC");
+    }
+
+    // Basic MC parameter checks
+    if (mc_info.mc_steps < 0) {
+        throw std::runtime_error("Invalid mcsteps: must be non-negative");
+    }
+    if (mc_info.moves_per_step <= 0) {
+        throw std::runtime_error("Invalid moves_per_step: must be positive");
+    }
+    if (mc_info.print_freq <= 0) {
+        throw std::runtime_error("Invalid nprint: must be positive");
+    }
+
+    // Fragment value checks
+    for (float conc : fragment_info.conc_list) {
+        if (conc < 0.0f) {
+            throw std::runtime_error("Invalid fragconc: must be non-negative");
+        }
     }
     
     // Grid and space checks

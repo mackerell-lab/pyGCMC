@@ -14,6 +14,7 @@
 #include <memory>
 #include <unordered_map>
 #include <string>
+#include <vector>
 
 namespace pygcmc {
 namespace platform {
@@ -208,6 +209,10 @@ public:
     void setStatisticsInterval(int interval);
     GCMCStatistics& getStatistics() { return statistics_; }
     const GCMCStatistics& getStatistics() const { return statistics_; }
+
+    // Diagnostics: CBMC trial energies for the last move (kJ/mol, internal units).
+    // When CBMC is disabled or the last move was not CBMC-based, this vector is empty.
+    const std::vector<double>& getLastCBMCTrialEnergies() const { return lastCbmcTrialEnergies_; }
     
 private:
     // State and components
@@ -253,6 +258,9 @@ private:
     // Performance optimization: cache probability storage flag
     mutable bool storeProbabilityCached_ = false;
     mutable bool storeProbabilityValue_ = false;
+
+    // Diagnostics: energies used to compute CBMC log(W/K) for the last move.
+    std::vector<double> lastCbmcTrialEnergies_;
     
     // Helper methods
     void updateFragmentPosition(int residueIdx, const Vector3& newPos);

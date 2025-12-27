@@ -38,6 +38,14 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
             v.push_back(s);
         }
     };
+
+    // If the initial PDB contains additional fragment residues not present in the TOP,
+    // we split the structure into:
+    // - framework residues (must match TOP exactly) for MCInitializer
+    // - extra residues (must match loaded fragment templates) which are added to MCState later
+    // This supports gcmc_gpu/opencl style inputs where the TOP describes the protein/framework,
+    // while fragment ITPs define the GCMC species (which may already appear in the initial PDB).
+    std::vector<std::shared_ptr<Residue>> extraStructureResidues;
     
     // Step 1: Parse INP file
     log("Parsing INP file: " + config_.inpFile);
@@ -257,7 +265,76 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
         // Only combine if we have actual atoms
         if (structure && structure->get_atoms().size() > 0 && 
             topology && topology->get_num_atoms() > 0) {
-            result.molecular = combineMolecular(structure, topology, result.forceField);
+            try {
+                result.molecular = combineMolecular(structure, topology, result.forceField);
+            } catch (const std::exception& e) {
+                // Compatibility: allow extra residues in the PDB (e.g., initial guests/solvent)
+                // when they can be mapped to fragment templates (fragitp).
+                if (result.fragmentTemplates.empty()) {
+                    throw;
+                }
+
+                auto lower = [](std::string s) {
+                    std::transform(s.begin(), s.end(), s.begin(),
+                                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                    return s;
+                };
+                auto residueKey = [&](const std::string& name, int number) {
+                    return lower(name) + ":" + std::to_string(number);
+                };
+
+                std::unordered_set<std::string> topoResidues;
+                topoResidues.reserve(static_cast<size_t>(topology->get_num_residues()));
+                for (int i = 0; i < topology->get_num_residues(); ++i) {
+                    const auto& tr = topology->get_residue(i);
+                    topoResidues.insert(residueKey(tr.name, tr.number));
+                }
+
+                std::unordered_set<std::string> templateNames;
+                templateNames.reserve(result.fragmentTemplates.size());
+                for (const auto& [name, tmpl] : result.fragmentTemplates) {
+                    (void)tmpl;
+                    templateNames.insert(lower(name));
+                }
+
+                auto filtered = std::make_shared<Structure>();
+                filtered->set_box_dimensions(structure->get_box_dimensions());
+                extraStructureResidues.clear();
+
+                for (const auto& res : structure->get_residues()) {
+                    if (!res) continue;
+                    const std::string key = residueKey(res->get_resname(), res->get_ires());
+                    if (topoResidues.find(key) != topoResidues.end()) {
+                        filtered->add_residue(res);
+                        for (const auto& atom : res->get_atoms()) {
+                            if (atom) filtered->add_atom(atom);
+                        }
+                    } else {
+                        extraStructureResidues.push_back(res);
+                    }
+                }
+
+                // Only apply this fallback when the structure contains ALL topology residues
+                // plus additional residues that can be mapped to fragment templates.
+                if (filtered->get_residues().size() != static_cast<size_t>(topology->get_num_residues()) ||
+                    extraStructureResidues.empty()) {
+                    throw;
+                }
+                for (const auto& res : extraStructureResidues) {
+                    const std::string nm = lower(res->get_resname());
+                    if (templateNames.find(nm) == templateNames.end()) {
+                        std::ostringstream oss;
+                        oss << "Inconsistent structure/topology: PDB contains residue '" << res->get_resname()
+                            << "' (ires=" << res->get_ires()
+                            << ") which is not present in the topology and has no matching fragment template.";
+                        throw std::runtime_error(oss.str());
+                    }
+                }
+
+                log("Info: PDB contains residues beyond the TOP; loading framework from TOP and seeding "
+                    "initial fragment residues from PDB.");
+                result.molecular = combineMolecular(filtered, topology, result.forceField);
+            }
         } else {
             log("Warning: Structure or topology is empty, skipping molecular combination");
             result.structureLoaded = false;  // Mark as not loaded if empty
@@ -461,6 +538,22 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
         log("MC state initialized with INP parameters only");
     }
 
+    // Enforce minimum-image convention: cutoff must be strictly less than half the smallest box dimension.
+    // This prevents "runs but silently wrong" truncated interactions under PBC.
+    if (result.mcState) {
+        const float cutoff = result.mcState->info.cutoff;
+        const float bx = result.mcState->info.box[0];
+        const float by = result.mcState->info.box[1];
+        const float bz = result.mcState->info.box[2];
+        const float minBox = std::min(bx, std::min(by, bz));
+        if (cutoff > 0.0f && minBox > 0.0f && cutoff > 0.5f * minBox) {
+            std::ostringstream oss;
+            oss << "Invalid cutoff: cutoff=" << cutoff << " nm must be <= 0.5 * min(box) where box="
+                << bx << " " << by << " " << bz << " nm.";
+            throw std::runtime_error(oss.str());
+        }
+    }
+
     // Step 6b: Apply GROMACS ITP nonbonded parameters to MC state if available.
     // Only apply when the MCState force field is still empty to avoid overriding a fully
     // initialized CHARMM (PRM/STR) force field path.
@@ -556,6 +649,146 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
 
         result.mcState->forcefield.rebuildLJMatrix();
         log("Applied GROMACS ITP nonbonded parameters to MCState (types=" + std::to_string(n) + ")");
+    }
+
+    // Step 6c: If the initial PDB contained extra residues (not present in TOP),
+    // seed them into the MCState as fragment instances using the loaded fragment templates.
+    if (!extraStructureResidues.empty() && result.mcState && !result.fragmentTemplates.empty()) {
+        auto lower = [](std::string s) {
+            std::transform(s.begin(), s.end(), s.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            return s;
+        };
+
+        std::unordered_map<std::string, const platform::cpu::movement::FragmentTemplate*> tmplByLower;
+        tmplByLower.reserve(result.fragmentTemplates.size());
+        for (const auto& [name, tmpl] : result.fragmentTemplates) {
+            tmplByLower.emplace(lower(name), &tmpl);
+        }
+
+        size_t seededFragments = 0;
+        for (const auto& pdbRes : extraStructureResidues) {
+            if (!pdbRes) continue;
+
+            const auto itT = tmplByLower.find(lower(pdbRes->get_resname()));
+            if (itT == tmplByLower.end() || !itT->second) {
+                continue;
+            }
+            const auto& tmpl = *itT->second;
+            if (tmpl.atoms.empty()) {
+                throw std::runtime_error("Fragment template has no atoms for: " + pdbRes->get_resname());
+            }
+
+            const auto& pdbAtoms = pdbRes->get_atoms();
+            if (pdbAtoms.empty()) {
+                continue;
+            }
+
+            std::vector<size_t> pdbIndexForTemplate;
+            pdbIndexForTemplate.resize(tmpl.atoms.size(), 0);
+            bool mapped = false;
+
+            if (pdbAtoms.size() == tmpl.atoms.size()) {
+                for (size_t i = 0; i < tmpl.atoms.size(); ++i) {
+                    pdbIndexForTemplate[i] = i;
+                }
+                mapped = true;
+            } else {
+                // Name-based sequential matching fallback.
+                size_t p = 0;
+                mapped = true;
+                for (size_t i = 0; i < tmpl.atoms.size(); ++i) {
+                    const std::string want = tmpl.atoms[i].name;
+                    while (p < pdbAtoms.size() && pdbAtoms[p] && pdbAtoms[p]->get_type() != want) {
+                        ++p;
+                    }
+                    if (p >= pdbAtoms.size()) {
+                        mapped = false;
+                        break;
+                    }
+                    pdbIndexForTemplate[i] = p;
+                    ++p;
+                }
+            }
+
+            if (!mapped) {
+                std::ostringstream oss;
+                oss << "Failed to map PDB residue '" << pdbRes->get_resname() << "' (ires=" << pdbRes->get_ires()
+                    << ") atoms onto fragment template '" << tmpl.name << "' (template_atoms=" << tmpl.atoms.size()
+                    << ", pdb_atoms=" << pdbAtoms.size() << ").";
+                throw std::runtime_error(oss.str());
+            }
+
+            model::montecarlo::MCResidue mcRes;
+            mcRes.active = true;
+            mcRes.fixed = false;
+            mcRes.resname = pdbRes->get_resname();
+            mcRes.resid = pdbRes->get_ires();
+            mcRes.type = result.mcState->residueTypes.getOrAddType(mcRes.resname);
+            mcRes.radius = static_cast<float>(tmpl.radius);
+
+            mcRes.atomStart = result.mcState->activeAtomCount;
+            mcRes.atomCount = static_cast<int>(tmpl.atoms.size());
+            mcRes.atoms.clear();
+            mcRes.atoms.reserve(tmpl.atoms.size());
+
+            double cx = 0.0, cy = 0.0, cz = 0.0;
+            for (size_t i = 0; i < tmpl.atoms.size(); ++i) {
+                const size_t pdbIdx = pdbIndexForTemplate[i];
+                if (pdbIdx >= pdbAtoms.size() || !pdbAtoms[pdbIdx]) {
+                    throw std::runtime_error("Invalid PDB atom mapping for residue: " + pdbRes->get_resname());
+                }
+                const auto& coorA = pdbAtoms[pdbIdx]->get_coor();
+
+                model::montecarlo::MCAtom atom;
+                atom.name = tmpl.atoms[i].name;
+                atom.charge = tmpl.atoms[i].charge;
+                atom.mass = tmpl.atoms[i].mass;
+
+                // Map ITP type name -> MCState type index.
+                if (!tmpl.atomTypeNames.empty() && tmpl.atomTypeNames.size() == tmpl.atoms.size()) {
+                    const std::string& typeName = tmpl.atomTypeNames[i];
+                    const auto it = result.mcState->atomTypes.atomTypeIndices.find(typeName);
+                    if (it == result.mcState->atomTypes.atomTypeIndices.end()) {
+                        std::ostringstream oss;
+                        oss << "Missing atom type '" << typeName << "' in MCState while seeding initial residue '"
+                            << pdbRes->get_resname() << "' (ires=" << pdbRes->get_ires() << ").";
+                        throw std::runtime_error(oss.str());
+                    }
+                    atom.type = it->second;
+                } else {
+                    atom.type = tmpl.atoms[i].type;
+                }
+
+                atom.x = static_cast<float>(coorA[0] * 0.1);
+                atom.y = static_cast<float>(coorA[1] * 0.1);
+                atom.z = static_cast<float>(coorA[2] * 0.1);
+                atom.updatePosition();
+
+                mcRes.atoms.push_back(atom);
+                if (result.mcState->activeAtomCount < static_cast<int>(result.mcState->atoms.size())) {
+                    result.mcState->atoms[result.mcState->activeAtomCount] = atom;
+                } else {
+                    result.mcState->atoms.push_back(atom);
+                }
+                result.mcState->activeAtomCount++;
+
+                cx += atom.x;
+                cy += atom.y;
+                cz += atom.z;
+            }
+
+            const double inv = 1.0 / static_cast<double>(tmpl.atoms.size());
+            mcRes.center[0] = static_cast<float>(cx * inv);
+            mcRes.center[1] = static_cast<float>(cy * inv);
+            mcRes.center[2] = static_cast<float>(cz * inv);
+
+            result.mcState->residues.push_back(std::move(mcRes));
+            result.mcState->activeResidueCount = static_cast<int>(result.mcState->residues.size());
+            seededFragments++;
+        }
+
+        log("Seeded " + std::to_string(seededFragments) + " initial fragment residues from PDB into MCState");
     }
     
     return result;

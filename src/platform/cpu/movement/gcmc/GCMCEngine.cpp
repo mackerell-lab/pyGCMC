@@ -88,6 +88,9 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     MoveResult result;
     result.type = MoveResult::INSERT;
     result.fragmentType = typeId;
+
+    // Diagnostics: CBMC trial energies for this move (only populated when CBMC is used).
+    lastCbmcTrialEnergies_.clear();
     
     if (!state_ || !reservoir_) {
         result.accepted = false;
@@ -322,6 +325,9 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     MoveResult result;
     result.type = MoveResult::DELETE;
     result.fragmentType = typeId;
+
+    // Diagnostics: CBMC trial energies for this move (only populated when CBMC is used).
+    lastCbmcTrialEnergies_.clear();
     
     if (!state_ || !reservoir_) {
         result.accepted = false;
@@ -456,6 +462,12 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
         }
 
         if (trials.size() == static_cast<size_t>(numTrials)) {
+            lastCbmcTrialEnergies_.clear();
+            lastCbmcTrialEnergies_.reserve(trials.size());
+            for (const auto& trial : trials) {
+                lastCbmcTrialEnergies_.push_back(trial.energy);
+            }
+
             const double beta = 1.0 / (8.314e-3 * temperature_);
             double minEnergy = std::numeric_limits<double>::max();
             for (const auto& trial : trials) {
@@ -601,6 +613,9 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
     MoveResult result;
     result.type = MoveResult::TRANSLATE;
     result.residueIndex = residueIdx;
+
+    // Diagnostics: non-CBMC move; prevent leaking previous trial energies.
+    lastCbmcTrialEnergies_.clear();
     
     if (!state_ || !reservoir_) {
         result.accepted = false;
@@ -712,6 +727,9 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
     MoveResult result;
     result.type = MoveResult::ROTATE;
     result.residueIndex = residueIdx;
+
+    // Diagnostics: non-CBMC move; prevent leaking previous trial energies.
+    lastCbmcTrialEnergies_.clear();
     
     if (!state_ || !reservoir_) {
         result.accepted = false;
@@ -1679,6 +1697,9 @@ bool GCMCEngine::shouldStoreProbability() const {
 
 // CBMC insertion - generate K trials and select based on Boltzmann weights
 GCMCEngine::TrialConfiguration GCMCEngine::performCBMCInsertion(int typeId, int numTrials) {
+    // Diagnostics: capture the trial energies used to compute log(W/K).
+    lastCbmcTrialEnergies_.clear();
+
     std::vector<TrialConfiguration> trials;
     trials.reserve(numTrials);
 
@@ -1744,6 +1765,11 @@ GCMCEngine::TrialConfiguration GCMCEngine::performCBMCInsertion(int typeId, int 
             false,
             0,
         };
+    }
+
+    lastCbmcTrialEnergies_.reserve(trials.size());
+    for (const auto& trial : trials) {
+        lastCbmcTrialEnergies_.push_back(trial.energy);
     }
 
     // Calculate Boltzmann weights (subtract minEnergy for numerical stability)

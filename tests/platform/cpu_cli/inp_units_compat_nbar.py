@@ -38,7 +38,7 @@ fragconc:1.0
 fragmuex:0.0
 
 box_size:10.0 10.0 10.0
-cutoff:12.0
+cutoff:4.0
 temperature:300.0
 moves_per_step:1
 mcsteps:1
@@ -89,7 +89,7 @@ fragconc:1.0
 fragmuex:0.0
 
 box_size:10.0 10.0 10.0
-cutoff:12.0
+cutoff:4.0
 temperature:300.0
 moves_per_step:1
 mcsteps:1
@@ -214,7 +214,7 @@ fragconc:55.0
 fragmuex:0.0
 
 box_size:10.0 10.0 10.0
-cutoff:12.0
+cutoff:4.0
 temperature:300.0
 moves_per_step:1
 mcsteps:2

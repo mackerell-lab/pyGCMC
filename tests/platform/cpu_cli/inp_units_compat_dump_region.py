@@ -37,7 +37,7 @@ fragname:NA
 fragconc:1.0
 fragmuex:0.0
 
-box_size:10.0 10.0 10.0
+box_size:30.0 30.0 30.0
 cutoff:12.0
 grid_dx:1.0
 
@@ -60,7 +60,7 @@ mc_move_prob:1 0 0 0
 
     params = json.loads(params_json.read_text())
     assert params["basic"]["inp_units"] == "gcmc_gpu"
-    assert [float(x) for x in params["space"]["box_size_nm"]] == pytest.approx([1.0, 1.0, 1.0], abs=1e-6)
+    assert [float(x) for x in params["space"]["box_size_nm"]] == pytest.approx([3.0, 3.0, 3.0], abs=1e-6)
     assert float(params["space"]["grid_spacing_nm"]) == pytest.approx(0.1, abs=1e-6)
     assert float(params["space"]["cutoff_nm"]) == pytest.approx(1.2, abs=1e-6)
 
@@ -93,7 +93,7 @@ fragname:NA
 fragconc:1.0
 fragmuex:0.0
 
-box_size:10.0 10.0 10.0
+box_size:30.0 30.0 30.0
 cutoff:12.0
 grid_dx:1.0
 energy_cutoff_frag:12.0
@@ -152,7 +152,7 @@ fragname:NA
 fragconc:1.0
 fragmuex:-4.184
 
-box_size:1.0 1.0 1.0
+box_size:3.0 3.0 3.0
 cutoff:1.2
 grid_dx:0.1
 
@@ -176,7 +176,7 @@ mc_move_prob:1 0 0 0
     params = json.loads(params_json.read_text())
     assert params["basic"]["inp_units"] == "nm"
     assert params["basic"]["inp_units_explicit"] is True
-    assert [float(x) for x in params["space"]["box_size_nm"]] == pytest.approx([1.0, 1.0, 1.0], abs=1e-6)
+    assert [float(x) for x in params["space"]["box_size_nm"]] == pytest.approx([3.0, 3.0, 3.0], abs=1e-6)
     assert float(params["space"]["cutoff_nm"]) == pytest.approx(1.2, abs=1e-6)
     assert float(params["space"]["grid_spacing_nm"]) == pytest.approx(0.1, abs=1e-6)
     assert [float(x) for x in params["fragment"]["muex_list_kj_mol"]] == pytest.approx([-4.184], abs=1e-6)
@@ -208,7 +208,7 @@ fragname:NA
 fragconc:1.0
 fragmuex:-1.0
 
-box_size:10.0 10.0 10.0
+box_size:30.0 30.0 30.0
 cutoff:12.0
 grid_dx:1.0
 
@@ -233,7 +233,7 @@ mc_move_prob:1 0 0 0
     assert params["basic"]["inp_units"] == "charmm"
     assert params["basic"]["inp_units_explicit"] is True
 
-    assert [float(x) for x in params["space"]["box_size_nm"]] == pytest.approx([1.0, 1.0, 1.0], abs=1e-6)
+    assert [float(x) for x in params["space"]["box_size_nm"]] == pytest.approx([3.0, 3.0, 3.0], abs=1e-6)
     assert float(params["space"]["cutoff_nm"]) == pytest.approx(1.2, abs=1e-6)
     assert float(params["space"]["grid_spacing_nm"]) == pytest.approx(0.1, abs=1e-6)
     assert [float(x) for x in params["fragment"]["muex_list_kj_mol"]] == pytest.approx([-4.184], abs=1e-6)

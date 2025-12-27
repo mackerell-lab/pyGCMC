@@ -48,7 +48,7 @@ fragconc:1.0
 fragmuex:0.0
 
 box_size:20.0 20.0 20.0
-cutoff:12.0
+cutoff:10.0
 temperature:300.0
 moves_per_step:1
 mcsteps:2500
