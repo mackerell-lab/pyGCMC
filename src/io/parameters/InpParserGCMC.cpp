@@ -565,6 +565,13 @@ void InpParserGCMC::enhance_param(model::param::Param& param) {
         // legacy defaults (e.g., BiasInfo.sigma=2.4 which historically meant 2.4 Å) do not become
         // an unphysical 2.4 nm when the user enables cavity bias without an explicit probe radius.
         if (mode == UnitMode::NmKj && bias_info.sigma > 1.0f) {
+            const float original = bias_info.sigma;
+            const float converted = bias_info.sigma * 0.1f;
+            std::ostringstream oss;
+            oss << "probe_radius/sigma=" << original
+                << " interpreted as nm (inp_units=" << basic_info.inp_units
+                << "); this is unusually large, assuming legacy Å value and converting to " << converted << " nm.";
+            pushWarning("UNIT_HEURISTIC_PROBE_RADIUS_ASSUMED_ANGSTROM", oss.str());
             bias_info.sigma *= 0.1f;
         }
 
@@ -660,6 +667,104 @@ void InpParserGCMC::enhance_param(model::param::Param& param) {
                     << " interpreted as nm (inp_units=" << basic_info.inp_units
                     << "); this is unusually large and may indicate Å values were provided (e.g., 30Å -> 3nm).";
                 pushWarning("UNIT_SUSPECT_BOX_TOO_LARGE_FOR_NM", oss.str());
+            }
+
+            // Cavity grid spacing: typical ~0.05-0.5 nm. Values >= 1.0 often mean legacy 1.0 Å.
+            if (space_info.grid_spacing > 0.8f) {
+                std::ostringstream oss;
+                oss << "grid_dx/grid_spacing=" << space_info.grid_spacing
+                    << " interpreted as nm (inp_units=" << basic_info.inp_units
+                    << "); this is unusually coarse and may indicate Å values were provided (e.g., 1Å -> 0.1nm).";
+                pushWarning("UNIT_SUSPECT_GRID_SPACING_TOO_LARGE_FOR_NM", oss.str());
+            }
+
+            // Region constraints: prevent accidental 10x scale errors in nm decks.
+            if (!space_info.gcmc_region.empty()) {
+                std::istringstream iss(space_info.gcmc_region);
+                std::vector<std::string> toks;
+                std::string t;
+                while (iss >> t) toks.push_back(t);
+
+                auto parseFloat = [](const std::string& s, float& out) -> bool {
+                    try {
+                        out = std::stof(s);
+                        return true;
+                    } catch (const std::exception&) {
+                        return false;
+                    }
+                };
+
+                bool suspect = false;
+                if (!toks.empty()) {
+                    std::string type = toks[0];
+                    std::transform(type.begin(), type.end(), type.begin(),
+                                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+                    if (type == "sphere" && toks.size() == 5) {
+                        float r = 0.0f;
+                        if (parseFloat(toks[4], r) && r > 10.0f) {
+                            suspect = true;
+                        }
+                    } else if (type == "box" && toks.size() == 7) {
+                        float x1 = 0.0f, y1 = 0.0f, z1 = 0.0f, x2 = 0.0f, y2 = 0.0f, z2 = 0.0f;
+                        if (parseFloat(toks[1], x1) && parseFloat(toks[2], y1) && parseFloat(toks[3], z1) &&
+                            parseFloat(toks[4], x2) && parseFloat(toks[5], y2) && parseFloat(toks[6], z2)) {
+                            const float dx = std::abs(x2 - x1);
+                            const float dy = std::abs(y2 - y1);
+                            const float dz = std::abs(z2 - z1);
+                            if (dx > 20.0f || dy > 20.0f || dz > 20.0f) {
+                                suspect = true;
+                            }
+                        }
+                    } else if (type == "cylinder" && toks.size() == 7) {
+                        float r = 0.0f, h = 0.0f;
+                        // cylinder x y z r h axis
+                        if (parseFloat(toks[4], r) && parseFloat(toks[5], h)) {
+                            if (r > 10.0f || h > 20.0f) {
+                                suspect = true;
+                            }
+                        }
+                    }
+                }
+
+                if (suspect) {
+                    std::ostringstream oss;
+                    oss << "gcmc_region=\"" << space_info.gcmc_region
+                        << "\" interpreted as nm (inp_units=" << basic_info.inp_units
+                        << "); this looks unusually large and may indicate Å values were provided (10x scale error).";
+                    pushWarning("UNIT_SUSPECT_GCMC_REGION_TOO_LARGE_FOR_NM", oss.str());
+                }
+            }
+        }
+
+        // --- Cross-field consistency heuristics (unit-agnostic, still non-fatal by default) ---
+        // target_volume is rarely intended to differ from the INP box_size by orders of magnitude.
+        const float boxVol = space_info.box_size[0] * space_info.box_size[1] * space_info.box_size[2];
+        if (space_info.target_volume > 0.0f && boxVol > 0.0f) {
+            const float ratio = space_info.target_volume / boxVol;
+            if (ratio > 10.0f || ratio < 0.1f) {
+                std::ostringstream oss;
+                oss << "target_volume=" << space_info.target_volume << " nm^3 vs box_size volume=" << boxVol
+                    << " nm^3 (ratio=" << ratio
+                    << "); this looks inconsistent and may indicate a unit mismatch (e.g., Å^3 provided in nm mode, or nm^3 provided in Å mode).";
+                pushWarning("UNIT_SUSPECT_TARGET_VOLUME_BOX_MISMATCH", oss.str());
+            }
+        }
+
+        // pairlist_cutoff should typically be >= cutoff (often cutoff + skin). Flag suspicious relations.
+        if (energy_info.pairlist_cutoff > 0.0f && space_info.cutoff > 0.0f) {
+            const float diff = energy_info.pairlist_cutoff - space_info.cutoff;
+            if (diff < 0.0f) {
+                std::ostringstream oss;
+                oss << "pairlist_cutoff=" << energy_info.pairlist_cutoff << " nm is smaller than cutoff=" << space_info.cutoff
+                    << " nm; this is likely unintended and could cause missing interactions if pairlists are used.";
+                pushWarning("PAIRLIST_CUTOFF_SMALLER_THAN_CUTOFF", oss.str());
+            } else if (diff > 2.0f) {
+                std::ostringstream oss;
+                oss << "pairlist_cutoff=" << energy_info.pairlist_cutoff << " nm is much larger than cutoff=" << space_info.cutoff
+                    << " nm (diff=" << diff
+                    << "); this may waste compute and could indicate a unit mismatch.";
+                pushWarning("PAIRLIST_CUTOFF_EXCESSIVELY_LARGE", oss.str());
             }
         }
 
