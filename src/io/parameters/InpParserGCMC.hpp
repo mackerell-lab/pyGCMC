@@ -21,6 +21,16 @@ public:
 
 private:
     static void parse_line_ext(const std::string& key, const std::string& value, model::param::Param& param);
+
+    // Split large parsing/normalization logic into smaller translation units.
+    static bool parse_line_ext_core(const std::string& key, const std::string& value, model::param::Param& param);
+    static bool parse_line_ext_legacy(const std::string& key, const std::string& value, model::param::Param& param);
+
+    // `enhance_param` implementation helpers.
+    // Returns true when the unit mode is treated as native nm/kJ (used for heuristic warnings).
+    static bool enhance_param_units(model::param::Param& param);
+    static void enhance_param_warnings(model::param::Param& param, bool nm_mode);
+    static void enhance_param_finalize(model::param::Param& param);
 };
 
 } // namespace parameters

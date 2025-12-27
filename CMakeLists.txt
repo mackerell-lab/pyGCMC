@@ -29,14 +29,14 @@ endif()
 # Function to create a standard library with common settings
 function(add_pygcmc_library target_name source_dir library_type)
     # Auto-discover source files
-    file(GLOB_RECURSE LIB_SOURCES
+    file(GLOB_RECURSE LIB_SOURCES CONFIGURE_DEPENDS
         "${source_dir}/*.cpp"
         "${source_dir}/*.cc"
         "${source_dir}/*.cxx"
     )
     
     # Auto-discover header files
-    file(GLOB_RECURSE LIB_HEADERS
+    file(GLOB_RECURSE LIB_HEADERS CONFIGURE_DEPENDS
         "${source_dir}/*.hpp"
         "${source_dir}/*.h"
         "${source_dir}/*.hxx"
