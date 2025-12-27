@@ -41,6 +41,7 @@ WAT 3
     inp_file.write_text(
         f"""par:{ff_file}
 fragitp:{frag_itp}
+itp_pairtypes_mode:compat
 
 fragname:WAT
 fragconc:55.0
@@ -129,6 +130,7 @@ WAT 3
     inp_file.write_text(
         f"""par:{ff_file}
 fragitp:{frag_itp}
+itp_pairtypes_mode:compat
 
 fragname:WAT
 fragconc:55.0

@@ -50,6 +50,7 @@ public:
         bool verbose = false;               // Verbose output
         int randomSeed = -1;                // Random seed (-1 for auto)
         bool strictInpKeys = false;         // Fail if INP contains unknown/ignored keys
+        bool strictInpWarnings = false;     // Fail if INP produces heuristic warnings (e.g., unit mistakes)
         
         // Performance options
         bool enableStatistics = true;       // Enable statistics collection

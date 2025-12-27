@@ -314,6 +314,14 @@ bool GCMCSimulation::initialize() {
             }
         }
 
+        if (config_.strictInpWarnings) {
+            const auto& basic = params_->get_basic_info();
+            if (!basic.inp_warnings.empty()) {
+                log("ERROR: Strict INP warning mode enabled; heuristic warnings detected.");
+                return false;
+            }
+        }
+
 	    // If CLI did not provide a seed, allow legacy INP keys (random_seed/seed) to drive RNG determinism.
 	    if (config_.randomSeed < 0 && params_) {
 	        const unsigned int inpSeed = params_->get_basic_info().random_seed;
@@ -3230,6 +3238,18 @@ void writeJsonStringVector(std::ostream& os, const std::vector<std::string>& v) 
     os << "]";
 }
 
+void writeJsonInpWarnings(std::ostream& os, const std::vector<pygcmc::model::param::BasicInfo::InpWarning>& v) {
+    os << "[";
+    for (size_t i = 0; i < v.size(); ++i) {
+        if (i) os << ",";
+        os << "{"
+           << "\"code\":\"" << escapeJsonString(v[i].code) << "\","
+           << "\"message\":\"" << escapeJsonString(v[i].message) << "\""
+           << "}";
+    }
+    os << "]";
+}
+
 } // namespace
 
 void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
@@ -3257,10 +3277,10 @@ void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
 
     ofs << "{";
 
-	    ofs << "\"basic\":{"
-	        << "\"version\":\"" << escapeJsonString(basic.version) << "\","
-	        << "\"inp_units\":\"" << escapeJsonString(basic.inp_units) << "\","
-	        << "\"inp_units_explicit\":" << (basic.inp_units_explicit ? "true" : "false") << ","
+		    ofs << "\"basic\":{"
+		        << "\"version\":\"" << escapeJsonString(basic.version) << "\","
+		        << "\"inp_units\":\"" << escapeJsonString(basic.inp_units) << "\","
+		        << "\"inp_units_explicit\":" << (basic.inp_units_explicit ? "true" : "false") << ","
 	        << "\"inp_units_converted\":" << (basic.inp_units_converted ? "true" : "false") << ","
 	        << "\"itp_pairtypes_mode\":\"" << escapeJsonString(basic.itp_pairtypes_mode) << "\","
 	        << "\"gromacs_defaults_present\":" << (basic.gromacs_defaults_present ? "true" : "false") << ","
@@ -3271,13 +3291,15 @@ void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
 	        << "\"gromacs_fudge_present\":" << (basic.gromacs_fudge_present ? "true" : "false") << ","
 	        << "\"gromacs_fudge_lj\":" << basic.gromacs_fudge_lj << ","
 	        << "\"gromacs_fudge_qq\":" << basic.gromacs_fudge_qq << ","
-	        << "\"unknown_inp_keys\":";
-	    writeJsonStringVector(ofs, basic.inp_keys_unknown);
-	    ofs << ",\"ignored_inp_keys\":";
-	    writeJsonStringVector(ofs, basic.inp_keys_ignored);
-	    ofs << ","
-	        << "\"random_seed\":" << basic.random_seed
-	        << "},";
+		        << "\"unknown_inp_keys\":";
+		    writeJsonStringVector(ofs, basic.inp_keys_unknown);
+		    ofs << ",\"ignored_inp_keys\":";
+		    writeJsonStringVector(ofs, basic.inp_keys_ignored);
+		    ofs << ",\"warnings\":";
+		    writeJsonInpWarnings(ofs, basic.inp_warnings);
+		    ofs << ","
+		        << "\"random_seed\":" << basic.random_seed
+		        << "},";
 
     ofs << "\"space\":{"
         << "\"box_size_nm\":";

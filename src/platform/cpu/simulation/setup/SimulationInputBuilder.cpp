@@ -12,6 +12,7 @@
 #include <cctype>
 #include <cmath>
 #include <fstream>
+#include <sstream>
 #include <stdexcept>
 #include <filesystem>
 #include <unordered_set>
@@ -65,6 +66,63 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
             if (structure) {
                 result.structureLoaded = true;
                 log("Loaded " + std::to_string(structure->get_atoms().size()) + " atoms from PDB");
+            }
+
+            // Heuristic warning: detect likely 10x unit mismatch between PDB CRYST1 (Å)
+            // and INP box_size (interpreted by inp_units conversion).
+            if (result.parameters) {
+                auto& basic = result.parameters->get_basic_info();
+                auto& warnings = basic.inp_warnings;
+                auto pushWarning = [&](const std::string& code, const std::string& message) {
+                    const auto it = std::find_if(warnings.begin(), warnings.end(), [&](const auto& w) { return w.code == code; });
+                    if (it == warnings.end()) {
+                        warnings.push_back({code, message});
+                    }
+                };
+
+                std::array<float, 3> crystA = {0.0f, 0.0f, 0.0f};
+                bool hasCryst1 = false;
+                {
+                    std::ifstream ifs(pdbPath);
+                    std::string line;
+                    // Scan a small prefix only; CRYST1 appears at the top in well-formed PDBs.
+                    for (int i = 0; i < 200 && std::getline(ifs, line); ++i) {
+                        if (line.rfind("CRYST1", 0) != 0) continue;
+                        std::istringstream iss(line);
+                        std::string tag;
+                        double a = 0.0, b = 0.0, c = 0.0;
+                        if (iss >> tag >> a >> b >> c) {
+                            crystA = {static_cast<float>(a), static_cast<float>(b), static_cast<float>(c)};
+                            hasCryst1 = true;
+                        }
+                        break;
+                    }
+                }
+
+                if (hasCryst1) {
+                    const auto& box = result.parameters->get_space_info().box_size;  // already internal nm
+                    const bool hasBox = (box[0] > 0.0f || box[1] > 0.0f || box[2] > 0.0f);
+                    if (hasBox) {
+                        const std::array<float, 3> crystNm = {0.1f * crystA[0], 0.1f * crystA[1], 0.1f * crystA[2]};
+                        auto ratioIn = [&](float inpNm, float pdbNm) -> float {
+                            return (pdbNm > 0.0f) ? (inpNm / pdbNm) : 1.0f;
+                        };
+                        const float rx = ratioIn(box[0], crystNm[0]);
+                        const float ry = ratioIn(box[1], crystNm[1]);
+                        const float rz = ratioIn(box[2], crystNm[2]);
+
+                        const auto isFactor10 = [&](float r) {
+                            return ((r > 8.0f && r < 12.0f) || (r > 0.08f && r < 0.12f));
+                        };
+                        if (isFactor10(rx) || isFactor10(ry) || isFactor10(rz)) {
+                            std::ostringstream oss;
+                            oss << "PDB CRYST1=" << crystA[0] << " " << crystA[1] << " " << crystA[2] << " Å, "
+                                << "INP box_size=" << box[0] << " " << box[1] << " " << box[2] << " nm "
+                                << "(ratio≈" << rx << "," << ry << "," << rz << "); likely a 10x unit mismatch.";
+                            pushWarning("UNIT_MISMATCH_PDB_CRYST1_VS_INP_BOX_SIZE", oss.str());
+                        }
+                    }
+                }
             }
         } catch (const std::exception& e) {
             log("ERROR: Failed to load PDB: " + std::string(e.what()));

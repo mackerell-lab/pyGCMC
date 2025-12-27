@@ -516,6 +516,14 @@ void InpParserGCMC::enhance_param(model::param::Param& param) {
         const float VOL = (mode == UnitMode::AngstromKcal) ? 0.001f : 1.0f;    // Å^3 -> nm^3
         const float ENE = (mode == UnitMode::AngstromKcal) ? 4.184f : 1.0f;    // kcal -> kJ
 
+        auto pushWarning = [&](const std::string& code, const std::string& message) {
+            auto& ws = basic_info.inp_warnings;
+            const auto it = std::find_if(ws.begin(), ws.end(), [&](const auto& w) { return w.code == code; });
+            if (it == ws.end()) {
+                ws.push_back({code, message});
+            }
+        };
+
         auto scale3 = [&](std::array<float, 3>& a) {
             a[0] *= LEN;
             a[1] *= LEN;
@@ -632,6 +640,28 @@ void InpParserGCMC::enhance_param(model::param::Param& param) {
         model::param::ParamOperations::updateEnergySquaredValues(energy_info);
         model::param::ParamOperations::updateFragmentSquaredValues(fragment_info);
         model::param::ParamOperations::updateBiasSquaredValues(bias_info);
+
+        // --- Unit/geometry heuristics (diagnostic warnings, not fatal by default) ---
+        // Goal: prevent "runs but silently wrong" unit mistakes when users opt into nm/openmm decks.
+        if (mode == UnitMode::NmKj && basic_info.inp_units_explicit) {
+            // In nm mode, common accidental legacy values are cutoff≈12 (Å) and box_size≈30 (Å).
+            // These become 12 nm / 30 nm which are almost always unintended.
+            if (space_info.cutoff > 4.0f) {
+                std::ostringstream oss;
+                oss << "cutoff=" << space_info.cutoff
+                    << " interpreted as nm (inp_units=" << basic_info.inp_units
+                    << "); this is unusually large and may indicate Å values were provided (e.g., 12Å -> 1.2nm).";
+                pushWarning("UNIT_SUSPECT_CUTOFF_TOO_LARGE_FOR_NM", oss.str());
+            }
+            const float maxBox = std::max(space_info.box_size[0], std::max(space_info.box_size[1], space_info.box_size[2]));
+            if (maxBox > 20.0f && (space_info.box_size[0] > 0.0f || space_info.box_size[1] > 0.0f || space_info.box_size[2] > 0.0f)) {
+                std::ostringstream oss;
+                oss << "box_size=" << space_info.box_size[0] << " " << space_info.box_size[1] << " " << space_info.box_size[2]
+                    << " interpreted as nm (inp_units=" << basic_info.inp_units
+                    << "); this is unusually large and may indicate Å values were provided (e.g., 30Å -> 3nm).";
+                pushWarning("UNIT_SUSPECT_BOX_TOO_LARGE_FOR_NM", oss.str());
+            }
+        }
 
         basic_info.inp_units_converted = true;
     }

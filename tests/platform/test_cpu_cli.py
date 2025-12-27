@@ -44,6 +44,13 @@ from cpu_cli.validation_tests import (
     test_strict_inp_keys_passes_when_no_unknown_or_ignored_keys,
 )
 
+# Unit/geometry heuristic warnings and strict mode (3 functions)
+from cpu_cli.inp_units_heuristic_warnings import (
+    test_nm_mode_suspicious_lengths_emit_unit_warnings,
+    test_strict_inp_fails_on_unit_warnings,
+    test_pdb_cryst1_vs_inp_box_size_factor10_mismatch_is_reported,
+)
+
 # gcmc_gpu-style INP compatibility and unit semantics tests (11 functions + param cases)
 from cpu_cli.inp_units_compat import (
     test_inp_units_gcmc_gpu_box_roundtrip_cryst1,

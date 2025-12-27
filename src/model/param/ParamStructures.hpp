@@ -15,6 +15,11 @@ namespace param {
  * @brief Basic information structure for GCMC simulation
  */
 struct BasicInfo {
+    struct InpWarning {
+        std::string code;
+        std::string message;
+    };
+
     std::string version = "gcmc_v2.0";
     int verbosity = 0;
     int debug = 0;
@@ -50,6 +55,8 @@ struct BasicInfo {
     // Keys that are recognized during parsing but currently not implemented/used by the engine.
     // This separates "unknown" from "parsed-but-ignored" to avoid silent semantic drift.
     std::vector<std::string> inp_keys_ignored;
+    // Structured warnings for suspicious-but-parseable inputs (e.g., likely unit mistakes).
+    std::vector<InpWarning> inp_warnings;
     unsigned int random_seed = 0;
     int num_threads = 1;
     bool is_box = false;

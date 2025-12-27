@@ -33,6 +33,7 @@ struct Options {
     bool store_prob = false;
     int max_molecules_per_type = 10000;  // Default value, -1 to disable
     bool strict_inp_keys = false;
+    bool strict_inp = false;
 };
 
 void print_usage(const char* prog) {
@@ -56,6 +57,7 @@ void print_usage(const char* prog) {
     std::cout << "  --adaptive                 Enable adaptive sampling of move probs\n";
     std::cout << "  --store-probabilities      Store acceptance probabilities\n";
     std::cout << "  --strict-inp-keys          Fail if INP contains unknown/ignored keys\n";
+    std::cout << "  --strict-inp               Fail if INP has unknown/ignored keys OR heuristic warnings\n";
 }
 
 bool parse_int(const char* arg, int& out) {
@@ -122,6 +124,8 @@ bool parse_args(int argc, char** argv, Options& opt) {
             opt.store_prob = true;
         } else if (a == "--strict-inp-keys") {
             opt.strict_inp_keys = true;
+        } else if (a == "--strict-inp") {
+            opt.strict_inp = true;
         } else if (a == "--max-molecules-per-type") {
             const char* v = need("--max-molecules-per-type");
             if (!v || !parse_int(v, opt.max_molecules_per_type)) return false;
@@ -158,7 +162,8 @@ int main(int argc, char** argv) {
     cfg.storeProbabilities = opt.store_prob;
     cfg.enableAdaptiveSampling = opt.adaptive;
     cfg.maxMoleculesPerType = opt.max_molecules_per_type;
-    cfg.strictInpKeys = opt.strict_inp_keys;
+    cfg.strictInpKeys = opt.strict_inp_keys || opt.strict_inp;
+    cfg.strictInpWarnings = opt.strict_inp;
 
     // Create and run
     GCMCSimulation sim(cfg);
