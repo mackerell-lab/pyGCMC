@@ -156,3 +156,100 @@ fragconf:5
     expected_rosen = math.exp(log_rosen)
     assert float(rec["rosenbluthWeight"]) == pytest.approx(expected_rosen, rel=1e-12, abs=1e-12)
 
+    # Also lock down the deletion-side Rosenbluth closure (critical for detailed balance).
+    del_dir = work / "del"
+    del_dir.mkdir(parents=True, exist_ok=True)
+    del_prefix = del_dir / "out" / "gcmc"
+    del_prefix.parent.mkdir(parents=True, exist_ok=True)
+    del_accept = del_dir / "out" / "acceptance.jsonl"
+
+    inserted_pdb = Path(f"{out_prefix}_final.pdb")
+    assert inserted_pdb.exists()
+    del_top = del_dir / "sys_del.top"
+    _write_text(
+        del_top,
+        """
+[ defaults ]
+1 2 yes 0.5 0.8333
+
+[ moleculetype ]
+MOL  2
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge  mass
+1   C     1      MOL      C     1     0.500   12.011
+
+[ moleculetype ]
+FRG  1
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge  mass
+1   X     1      FRG      X     1     -0.250  1.000
+
+[ system ]
+Minimal
+
+[ molecules ]
+MOL  1
+FRG  1
+""",
+    )
+
+    del_inp = del_dir / "test.inp"
+    _write_inp(
+        del_inp,
+        f"""
+random_seed:54321
+par:{par}
+fragitp:{frag}
+fragname:FRG
+fragconc:0.0
+fragmuex:-200.0
+
+pdb:{inserted_pdb}
+top:{del_top}
+box_size:30.0 30.0 30.0
+gcmc_region:box 14.0 14.0 14.0 16.0 16.0 16.0
+cutoff:6.0
+temperature:300.0
+moves_per_step:1
+mcsteps:1
+nprint:1
+
+use_cavity_bias:no
+use_conf_bias:yes
+fragconf:5
+
+attempt_prob_ins:0.0
+attempt_prob_del:1.0
+attempt_prob_trn:0.0
+attempt_prob_rot:0.0
+""",
+    )
+
+    del_result = _run_gcmc_cpu(
+        gcmc_cpu,
+        workdir=del_dir,
+        inp=del_inp,
+        out_prefix=del_prefix,
+        extra_args=["--dump-accept", str(del_accept)],
+        timeout=30,
+    )
+    assert del_result.returncode == 0, del_result.stdout + del_result.stderr
+
+    del_rec = _first_accept_record(del_accept, move="deletion", species="FRG")
+    assert int(del_rec.get("nBefore", 0)) > 0
+    assert int(del_rec.get("cbmcTrials", 0)) >= 5
+
+    del_energies = [float(x) for x in del_rec.get("cbmcTrialEnergies", [])]
+    assert len(del_energies) == int(del_rec["cbmcTrials"])
+    assert all(math.isfinite(e) for e in del_energies)
+
+    del_beta = float(del_rec["beta"])
+    del_expected_log_w_over_k = _expected_cbmc_log_w_over_k(energies_kj_mol=del_energies, beta=del_beta)
+    assert float(del_rec["cbmcLogWOverK"]) == pytest.approx(del_expected_log_w_over_k, abs=1e-12)
+
+    del_log_rosen = del_expected_log_w_over_k + del_beta * float(del_rec["cbmcSelectedEnergy"])
+    del_log_rosen = _clamp(del_log_rosen, math.log(1e-30), 700.0)
+    del_expected_rosen = math.exp(del_log_rosen)
+    assert float(del_rec["rosenbluthWeight"]) == pytest.approx(del_expected_rosen, rel=1e-12, abs=1e-12)

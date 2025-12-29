@@ -1360,7 +1360,12 @@ temperature:300.0
 moves_per_step:1
 mcsteps:4000
 nprint:1
-mc_move_prob:1 1 0 0
+
+# Proposal distribution should not affect the equilibrium Poisson law (MH correction via proposalRatio).
+attempt_prob_ins:0.85
+attempt_prob_del:0.15
+attempt_prob_trn:0.0
+attempt_prob_rot:0.0
 """,
     )
 

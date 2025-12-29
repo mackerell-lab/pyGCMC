@@ -314,7 +314,8 @@ fragitp:{frag_y}
 fragname:X Y
 fragconc:0.0 0.0
 fragmuex:{mu_x_kcal} {mu_y_kcal}
-mctime:1 1
+# Non-uniform fragment selection weights must not change μVT equilibrium (proposal cancels).
+mctime:2 1
 
 box_size:10.0 10.0 10.0
 gcmc_region:box 0 0 0 10 10 10
@@ -369,3 +370,35 @@ mc_move_prob:1 1 0 0
             checked += 1
 
         assert checked >= 3, f"Insufficient bins for {species}: checked={checked}, counts={counts}"
+
+    # Joint distribution should factorize for independent ideal-gas species (covariance ~ 0).
+    counts = {"X": 0, "Y": 0}
+    series_x: list[int] = []
+    series_y: list[int] = []
+    for rec in records:
+        move = str(rec.get("move", "")).strip().lower()
+        species = str(rec.get("species", "")).strip().upper()
+        if move in ("insertion", "deletion") and species in counts:
+            assert int(rec.get("nBefore", -1)) == counts[species]
+        if move == "insertion" and species in counts and bool(rec.get("accepted")):
+            counts[species] += 1
+        elif move == "deletion" and species in counts and bool(rec.get("accepted")):
+            counts[species] -= 1
+        series_x.append(counts["X"])
+        series_y.append(counts["Y"])
+
+    burnin = 300
+    series_x = series_x[burnin:] if len(series_x) > burnin else series_x
+    series_y = series_y[burnin:] if len(series_y) > burnin else series_y
+    assert len(series_x) == len(series_y)
+    assert len(series_x) >= 500
+
+    mean_x = statistics.mean(series_x)
+    mean_y = statistics.mean(series_y)
+    var_x = statistics.pvariance(series_x)
+    var_y = statistics.pvariance(series_y)
+    cov_xy = statistics.mean(
+        (x - mean_x) * (y - mean_y) for x, y in zip(series_x, series_y)
+    )
+    corr = cov_xy / math.sqrt(max(var_x, 1e-12) * max(var_y, 1e-12))
+    assert abs(corr) < 0.15, f"Unexpected X/Y correlation in ideal gas: corr={corr:.3f}"
