@@ -834,6 +834,7 @@ eqsteps: 5
 
 mc_move_prob: 0.25 0.25 0.25 0.25
 use_conf_bias: yes
+fragconf: 5
 
 op_top: {tmp_path}/output.top
 op_pdb: {tmp_path}/output.pdb
@@ -886,6 +887,7 @@ eqsteps: 5
 mc_move_prob: 0.25 0.25 0.25 0.25
 use_cavity_bias: yes
 use_conf_bias: yes
+fragconf: 5
 
 op_top: {tmp_path}/output.top
 op_pdb: {tmp_path}/output.pdb

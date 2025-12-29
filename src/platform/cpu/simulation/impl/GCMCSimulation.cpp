@@ -921,11 +921,13 @@ bool GCMCSimulation::setupFragments() {
         frag.activity = std::exp(beta * frag.chemicalPotential);
 
         // Set conf bias trials
-        // Priority: fragconf per-fragment list > global num_conf_bias_trial > default 1
-        if (i < fragInfo.fragconf_list.size()) {
-            frag.confBiasTrials = fragInfo.fragconf_list[i];
+        // Priority (when enabled): fragconf per-fragment list > global num_conf_bias_trial > default 1
+        if (!biasInfo.use_conf_bias) {
+            frag.confBiasTrials = 1;
+        } else if (i < fragInfo.fragconf_list.size()) {
+            frag.confBiasTrials = std::max(1, fragInfo.fragconf_list[i]);
         } else if (biasInfo.num_conf_bias_trials > 0) {
-            frag.confBiasTrials = biasInfo.num_conf_bias_trials;
+            frag.confBiasTrials = static_cast<int>(biasInfo.num_conf_bias_trials);
         } else {
             frag.confBiasTrials = 1;
         }
@@ -3234,6 +3236,15 @@ void writeJsonFloatVector(std::ostream& os, const std::vector<float>& v) {
     os << "]";
 }
 
+void writeJsonIntVector(std::ostream& os, const std::vector<int>& v) {
+    os << "[";
+    for (size_t i = 0; i < v.size(); ++i) {
+        if (i) os << ",";
+        os << v[i];
+    }
+    os << "]";
+}
+
 void writeJsonCdfVector(std::ostream& os, const std::vector<std::array<double, 4>>& v) {
     os << "[";
     for (size_t i = 0; i < v.size(); ++i) {
@@ -3373,6 +3384,26 @@ void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
         fragmentSelectionProb.push_back(static_cast<float>(f.probability));
     }
 
+    std::vector<int> fragmentConfBiasTrials;
+    fragmentConfBiasTrials.reserve(files.fragment_names.size());
+    if (!bias.use_conf_bias) {
+        fragmentConfBiasTrials.assign(files.fragment_names.size(), 1);
+    } else if (!fragmentTypes_.empty()) {
+        for (const auto& f : fragmentTypes_) {
+            fragmentConfBiasTrials.push_back(std::max(1, f.confBiasTrials));
+        }
+    } else {
+        const int fallbackTrials =
+            (bias.num_conf_bias_trials > 0) ? static_cast<int>(bias.num_conf_bias_trials) : 1;
+        for (size_t i = 0; i < files.fragment_names.size(); ++i) {
+            if (i < frag.fragconf_list.size()) {
+                fragmentConfBiasTrials.push_back(std::max(1, frag.fragconf_list[i]));
+            } else {
+                fragmentConfBiasTrials.push_back(fallbackTrials);
+            }
+        }
+    }
+
     ofs << "\"fragment\":{"
         << "\"use_number_water_nbar\":" << (frag.use_number_water_nbar ? "true" : "false")
         << ",\"use_const_water_nbar\":" << (frag.use_const_water_nbar ? "true" : "false")
@@ -3381,6 +3412,8 @@ void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
         << ",\"water_density_M\":" << frag.water_density
         << ",\"names\":";
     writeJsonStringVector(ofs, files.fragment_names);
+    ofs << ",\"conf_bias_trials\":";
+    writeJsonIntVector(ofs, fragmentConfBiasTrials);
     ofs << ",\"selection_prob\":";
     writeJsonFloatVector(ofs, fragmentSelectionProb);
     ofs << ",\"move_prob_ins\":";

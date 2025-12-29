@@ -153,6 +153,18 @@ from cpu_cli.cbmc_trial_energies import (
     test_dump_accept_exposes_cbmc_trial_energies_and_closes_rosenbluth_terms,
 )
 
+# CBMC trial-count key compatibility (1 function)
+from cpu_cli.cbmc_trial_count_alias import (
+    test_num_conf_bias_trial_sets_cbmc_trials_when_fragconf_missing,
+)
+
+# CBMC trial-count visibility + strictness (3 functions)
+from cpu_cli.cbmc_trials_visibility import (
+    test_dump_params_exposes_conf_bias_trials_per_fragment,
+    test_dump_params_uses_num_conf_bias_trial_when_fragconf_missing,
+    test_strict_inp_fails_when_use_conf_bias_has_no_trial_count_source,
+)
+
 # Cavity-bias knob regressions (2 functions)
 from cpu_cli.cavity_bias_knobs import (
     test_cavity_bias_probe_radius_changes_cavity_fraction,

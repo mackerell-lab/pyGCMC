@@ -13,6 +13,9 @@ namespace parameters {
 void InpParserGCMC::enhance_param_warnings(model::param::Param& param, bool nm_mode) {
     auto& energy_info = param.get_energy_info();
     auto& space_info = param.get_space_info();
+    auto& frag_info = param.get_fragment_info();
+    auto& bias_info = param.get_bias_info();
+    auto& file_info = param.get_file_info();
     auto& basic_info = param.get_basic_info();
 
     auto pushWarning = [&](const std::string& code, const std::string& message) {
@@ -112,6 +115,42 @@ void InpParserGCMC::enhance_param_warnings(model::param::Param& param, bool nm_m
         }
     }
 
+    // --- CBMC configuration (unit-agnostic) ---
+    // Prevent "use_conf_bias enabled but trial-count source missing" from silently defaulting.
+    // gcmc_gpu typically provides per-fragment `fragconf`, while gcmc_opencl uses a global
+    // `num_conf_bias_trial`. We accept both, but warn when neither is present.
+    if (bias_info.use_conf_bias) {
+        const auto& handled = basic_info.inp_keys_handled;
+        auto hasHandledKey = [&](const std::string& k) {
+            return std::find(handled.begin(), handled.end(), k) != handled.end();
+        };
+
+        const bool hasFragconfKey = hasHandledKey("fragconf") || hasHandledKey("fragconfs");
+        const bool hasGlobalTrialsKey = hasHandledKey("num_conf_bias_trial") || hasHandledKey("confbias_trials");
+        const bool hasAnyTrialsKey = hasFragconfKey || hasGlobalTrialsKey;
+
+        if (!hasAnyTrialsKey) {
+            std::ostringstream oss;
+            oss << "use_conf_bias=yes but no CBMC trial-count key provided "
+                << "(fragconf/num_conf_bias_trial/confbias_trials); defaulting to "
+                << "num_conf_bias_trials=" << bias_info.num_conf_bias_trials << " for all fragments.";
+            pushWarning("CBMC_TRIAL_COUNT_DEFAULTED", oss.str());
+        }
+
+        // If per-fragment fragconf is provided, its length should match fragname count.
+        // We still accept shorter lists by falling back to the global value, but warn.
+        if (hasFragconfKey && !file_info.fragment_names.empty() &&
+            !frag_info.fragconf_list.empty() &&
+            frag_info.fragconf_list.size() != file_info.fragment_names.size()) {
+            std::ostringstream oss;
+            oss << "fragconf list length (" << frag_info.fragconf_list.size()
+                << ") does not match fragname count (" << file_info.fragment_names.size()
+                << "); missing entries will fall back to num_conf_bias_trials="
+                << bias_info.num_conf_bias_trials << ".";
+            pushWarning("CBMC_TRIAL_COUNT_LIST_LENGTH_MISMATCH", oss.str());
+        }
+    }
+
     // --- Cross-field consistency heuristics (unit-agnostic, still non-fatal by default) ---
     // target_volume is rarely intended to differ from the INP box_size by orders of magnitude.
     const float boxVol = space_info.box_size[0] * space_info.box_size[1] * space_info.box_size[2];
@@ -147,4 +186,3 @@ void InpParserGCMC::enhance_param_warnings(model::param::Param& param, bool nm_m
 } // namespace parameters
 } // namespace io
 } // namespace pygcmc
-
