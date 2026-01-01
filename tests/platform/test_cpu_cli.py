@@ -143,6 +143,11 @@ from cpu_cli.physical_contracts_multifragment import (
     test_multifragment_poisson_distribution_ideal_gas,
 )
 
+# Widom μ↔ρ cross-check in interacting systems (1 function)
+from cpu_cli.widom_insertion import (
+    test_widom_insertion_mu_rho_consistency_interacting_lj,
+)
+
 # CBMC + region contract regression (1 function)
 from cpu_cli.cbmc_region_contract import (
     test_cbmc_insertion_respects_gcmc_region,
@@ -151,6 +156,12 @@ from cpu_cli.cbmc_region_contract import (
 # CBMC trial-energy observability and Rosenbluth closure (1 function)
 from cpu_cli.cbmc_trial_energies import (
     test_dump_accept_exposes_cbmc_trial_energies_and_closes_rosenbluth_terms,
+)
+
+# CBMC multi-atom boundary regressions (2 functions)
+from cpu_cli.cbmc_multiatom import (
+    test_cbmc_trials_one_has_unity_rosenbluth_and_preserves_geometry,
+    test_cbmc_trials_multiatom_closes_rosenbluth_terms,
 )
 
 # CBMC trial-count key compatibility (1 function)
@@ -180,6 +191,27 @@ from cpu_cli.maxcount_policy import (
 # Movement step-size parameter compatibility (1 function)
 from cpu_cli.movement_step_params_compat import (
     test_max_translation_and_rotation_keys_are_parsed_converted_and_applied,
+)
+
+# PGP energy backend selection + long-range Coulomb smoke/contract tests (4 functions)
+from cpu_cli.pgp_backends import (
+    test_dump_params_includes_energy_method,
+    test_pgp_host_fails_without_fixed_residue,
+    test_pgp_host_adds_long_range_coulomb_beyond_cutoff,
+    test_pgp_full_adds_long_range_coulomb_beyond_cutoff_for_nonfixed_background,
+)
+
+# PGP mode semantics + CBMC backend wiring (3 functions)
+from cpu_cli.pgp_contracts import (
+    test_pgp_host_does_not_include_nonfixed_long_range_beyond_cutoff,
+    test_pgp_full_translation_self_exclusion_keeps_deltaU_zero_in_one_particle_system,
+    test_pgp_host_cbmc_trial_energies_include_long_range_host_coulomb,
+)
+
+# PGP closure regressions (2 functions)
+from cpu_cli.pgp_closure import (
+    test_pgp_full_cbmc_trial_energies_shift_with_nonfixed_background_charge,
+    test_pgp_full_deletion_deltaU_is_negative_of_insertion_for_charged_system,
 )
 
 # ITP nonbonded -> forcefield/LJ energy wiring (2 functions)

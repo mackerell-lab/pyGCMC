@@ -1303,6 +1303,43 @@ bool GCMCSimulation::setupEngine() {
     engine_->setEnergyCallback(std::move(energyCallback));
     log("Energy callback configured: DIRECT method with cutoff and PBC");
 
+    // Select energy backend from INP (default: direct cutoff).
+    // PGP backends are implemented inside GCMCEngine to keep global EnergyMethod stable.
+    const std::string energyMethod = normalizeName(params_->get_basic_info().energy_method);
+    if (energyMethod == "direct") {
+        engine_->setEnergyBackend(GCMCEnergyBackend::DirectCutoff);
+    } else if (energyMethod == "ewald") {
+        engine_->setEnergyBackend(GCMCEnergyBackend::Ewald);
+    } else if (energyMethod == "pme") {
+        engine_->setEnergyBackend(GCMCEnergyBackend::Pme);
+    } else if (energyMethod == "pgp_host") {
+        // Fail early instead of letting PGP silently fall back to "all atoms".
+        bool hasFixed = false;
+        for (int i = 0; state_ && i < state_->activeResidueCount; ++i) {
+            const auto& res = state_->residues[i];
+            if (res.active && res.fixed) {
+                hasFixed = true;
+                break;
+            }
+        }
+        if (!hasFixed) {
+            const std::string msg =
+                "energy_method=pgp_host requires at least one fixed residue (host/framework)";
+            log("ERROR: ", msg);
+            std::cout << "ERROR: " << msg << std::endl;
+            return false;
+        }
+        engine_->setEnergyBackend(GCMCEnergyBackend::PgpHost);
+    } else if (energyMethod == "pgp_full") {
+        engine_->setEnergyBackend(GCMCEnergyBackend::PgpFull);
+    } else {
+        const std::string msg = "Invalid energy_method: " + energyMethod;
+        log("ERROR: ", msg);
+        std::cout << "ERROR: " << msg << std::endl;
+        return false;
+    }
+    log("Energy backend configured: ", energyMethod);
+
     // Configure engine parameters for optimal performance
     // NOTE: INP decks (inp_units:auto/gcmc_gpu) provide max_translation in Å and max_rotation in degrees;
     // enhance_param normalizes lengths to nm, so we only need to convert degrees -> radians here.
@@ -3307,6 +3344,7 @@ void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
 		        << "\"inp_units\":\"" << escapeJsonString(basic.inp_units) << "\","
 		        << "\"inp_units_explicit\":" << (basic.inp_units_explicit ? "true" : "false") << ","
 	        << "\"inp_units_converted\":" << (basic.inp_units_converted ? "true" : "false") << ","
+	        << "\"energy_method\":\"" << escapeJsonString(basic.energy_method) << "\","
 	        << "\"itp_pairtypes_mode\":\"" << escapeJsonString(basic.itp_pairtypes_mode) << "\","
 	        << "\"gromacs_defaults_present\":" << (basic.gromacs_defaults_present ? "true" : "false") << ","
 	        << "\"gromacs_nbfunc\":" << basic.gromacs_nbfunc << ","

@@ -25,6 +25,17 @@ namespace gcmc {
 using namespace model::montecarlo;
 using namespace energy;
 
+// Energy backend selector for gcmc moves.
+// This is intentionally separate from platform::cpu::EnergyMethod to avoid
+// forcing PGP-specific semantics into the global energy dispatch.
+enum class GCMCEnergyBackend {
+    DirectCutoff,
+    Ewald,
+    Pme,
+    PgpHost,
+    PgpFull,
+};
+
 /**
  * @brief Core GCMC engine that handles all move operations
  * 
@@ -153,6 +164,8 @@ public:
     
     // Configuration
     void setTemperature(double T) { temperature_ = T; }
+    void setEnergyBackend(GCMCEnergyBackend backend);
+    GCMCEnergyBackend getEnergyBackend() const { return energyBackend_; }
     void setEnergyMethod(EnergyMethod method) { 
         energyMethod_ = method; 
         if (energyCallback_) {
@@ -228,6 +241,15 @@ private:
     double temperature_;
     double cutoff_;
     EnergyMethod energyMethod_;
+    GCMCEnergyBackend energyBackend_ = GCMCEnergyBackend::DirectCutoff;
+
+    // PGP configuration (used when energyBackend_ is PgpHost/PgpFull)
+    double pgpTolerance_ = 1e-5;
+    int pgpSplineOrder_ = 4;
+    bool pgpInitialized_ = false;
+    bool pgpHostGridReady_ = false;
+    bool pgpFullGridReady_ = false;
+    int pgpFullGridExcludedResidue_ = -999;  // -1 = none, >=0 = excluded residue index
     
     // Random number generation
     std::mt19937 rng_;
@@ -261,8 +283,18 @@ private:
 
     // Diagnostics: energies used to compute CBMC log(W/K) for the last move.
     std::vector<double> lastCbmcTrialEnergies_;
-    
+
     // Helper methods
+    void ensurePgpInitialized();
+    void ensurePgpHostGridReady();
+    void ensurePgpFullGridReadyExcluding(int excludedResidueIdx);
+    double calculateFragmentEnergyPgpHost(int residueIdx);
+    double calculateFragmentEnergyPgpFullUsingCurrentGrid(int residueIdx);
+    double calculatePgpRealSpaceElectrostaticsFixedOnly(int residueIdx);
+    double calculatePgpRealSpaceElectrostaticsAllPartners(int residueIdx);
+    double calculatePgpReciprocalEnergyFromGrid(int residueIdx);
+    double calculatePgpSelfEnergyMovementResidue(int residueIdx);
+
     void updateFragmentPosition(int residueIdx, const Vector3& newPos);
     void updateFragmentOrientation(int residueIdx, const Quaternion& newOrient);
     void applyPeriodicBoundary(Vector3& position);

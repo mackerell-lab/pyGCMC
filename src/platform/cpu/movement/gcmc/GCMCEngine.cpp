@@ -4,10 +4,19 @@
 #include "../reservoir/MultiTypeReservoir.hpp"
 #include "../../energy/EnergyModule.hpp"
 #include "../../energy/common/EnergyDirectCore.hpp"
+#include "../../energy/pme/PMEGlobal.hpp"
+#include "../../energy/pme/PMESetup.hpp"
+#include "../../energy/pgp/PGPComposite.hpp"
+#include "../../energy/pgp/PGPGlobal.hpp"
+#include "../../energy/pgp/PGPInterpolation.hpp"
+#include "../../energy/pgp/PGPSelf.hpp"
+#include "../../energy/pgp/PGPPrecompute.hpp"
+#include "../../energy/common/EnergyConstants.hpp"
 #include <cmath>
 #include <algorithm>
 #include <iostream>
 #include <stdexcept>
+#include <limits>
 
 namespace pygcmc {
 namespace platform {
@@ -19,6 +28,70 @@ namespace gcmc {
 using MCState = model::montecarlo::MCState;
 using MCResidue = model::montecarlo::MCResidue;
 using MCAtom = model::montecarlo::MCAtom;
+
+namespace {
+
+struct MovementResiduesGuard {
+    MCState& state;
+    std::vector<model::MCMovementResidueInfo> saved;
+
+    explicit MovementResiduesGuard(MCState& stateIn)
+        : state(stateIn), saved(stateIn.movementResidues) {
+    }
+
+    void setSingleResidue(int residueIdx) {
+        state.movementResidues.clear();
+        model::MCMovementResidueInfo info;
+        info.startIndex = residueIdx;
+        info.activeCount = 1;
+        state.movementResidues.push_back(info);
+    }
+
+    ~MovementResiduesGuard() {
+        state.movementResidues = saved;
+    }
+};
+
+struct ResidueActiveGuard {
+    MCState& state;
+    int residueIdx = -1;
+    bool savedActive = false;
+
+    ResidueActiveGuard(MCState& stateIn, int residueIdxIn)
+        : state(stateIn), residueIdx(residueIdxIn) {
+        if (residueIdx >= 0 && residueIdx < static_cast<int>(state.residues.size())) {
+            savedActive = state.residues[residueIdx].active;
+        }
+    }
+
+    void setInactive() {
+        if (residueIdx >= 0 && residueIdx < static_cast<int>(state.residues.size())) {
+            state.residues[residueIdx].active = false;
+        }
+    }
+
+    void restore() {
+        if (residueIdx >= 0 && residueIdx < static_cast<int>(state.residues.size())) {
+            state.residues[residueIdx].active = savedActive;
+        }
+    }
+
+    ~ResidueActiveGuard() {
+        restore();
+    }
+};
+
+bool hasAnyActiveFixedResidue(const MCState& state) {
+    for (int i = 0; i < state.activeResidueCount; ++i) {
+        const auto& res = state.residues[i];
+        if (res.active && res.fixed) {
+            return true;
+        }
+    }
+    return false;
+}
+
+} // namespace
 
 // Constructor
 GCMCEngine::GCMCEngine()
@@ -59,6 +132,34 @@ void GCMCEngine::initialize(MCState* state, FragmentReservoir* reservoir) {
     }
 }
 
+void GCMCEngine::setEnergyBackend(GCMCEnergyBackend backend) {
+    energyBackend_ = backend;
+
+    // Invalidate cached grids when switching backends.
+    pgpInitialized_ = false;
+    pgpHostGridReady_ = false;
+    pgpFullGridReady_ = false;
+    pgpFullGridExcludedResidue_ = -999;
+
+    // Keep the legacy EnergyMethod in a sensible state for fallback paths.
+    switch (backend) {
+        case GCMCEnergyBackend::DirectCutoff:
+            setEnergyMethod(EnergyMethod::DIRECT);
+            break;
+        case GCMCEnergyBackend::Ewald:
+            setEnergyMethod(EnergyMethod::EWALD);
+            break;
+        case GCMCEnergyBackend::Pme:
+            setEnergyMethod(EnergyMethod::PME);
+            break;
+        case GCMCEnergyBackend::PgpHost:
+        case GCMCEnergyBackend::PgpFull:
+            // PGP is handled inside GCMCEngine; keep fallback set to DIRECT.
+            setEnergyMethod(EnergyMethod::DIRECT);
+            break;
+    }
+}
+
 // Set seed - unified for all RNG components
 void GCMCEngine::setSeed(unsigned int seed) {
     // Set engine's RNG seed
@@ -81,6 +182,321 @@ void GCMCEngine::setSeed(unsigned int seed) {
         // Note: Add setSeed to CavityManager if it needs random operations
         // cavityManager_->setSeed(seed + 3);
     }
+}
+
+void GCMCEngine::ensurePgpInitialized() {
+    if (pgpInitialized_) {
+        return;
+    }
+    if (!state_) {
+        throw std::runtime_error("PGP backend requires MCState to be initialized");
+    }
+
+    const double cutoff = static_cast<double>(state_->info.cutoff);
+    if (!(cutoff > 0.0)) {
+        throw std::runtime_error("PGP backend requires a positive cutoff (nm)");
+    }
+
+    const double box[3] = {
+        static_cast<double>(state_->info.box[0]),
+        static_cast<double>(state_->info.box[1]),
+        static_cast<double>(state_->info.box[2]),
+    };
+    if (!(box[0] > 0.0 && box[1] > 0.0 && box[2] > 0.0)) {
+        throw std::runtime_error("PGP backend requires a valid periodic box (nm)");
+    }
+
+    // Auto-tune PME parameters and reuse them for PGP setup.
+    // This keeps PGP consistent with the existing PME error tolerance model.
+    autoAdjustPMEParameters(pgpTolerance_, cutoff, box);
+    const auto& pme = getPMEParams();
+    const int meshSize[3] = {pme.meshSize[0], pme.meshSize[1], pme.meshSize[2]};
+
+    // Use the same mesh for potential grid size in the first implementation.
+    PGPComposite::initialize(
+        cutoff,
+        box,
+        pme.alpha,
+        meshSize,
+        cutoff,
+        meshSize,
+        pgpSplineOrder_,
+        pgpTolerance_
+    );
+
+    pgpInitialized_ = true;
+}
+
+void GCMCEngine::ensurePgpHostGridReady() {
+    ensurePgpInitialized();
+    if (pgpHostGridReady_) {
+        return;
+    }
+    if (!state_) {
+        throw std::runtime_error("PGP backend requires MCState");
+    }
+    if (!hasAnyActiveFixedResidue(*state_)) {
+        throw std::runtime_error(
+            "energy_method=pgp_host requires at least one active fixed residue (host/framework)");
+    }
+    precomputeGridPotential(*state_, true);
+    pgpHostGridReady_ = true;
+}
+
+void GCMCEngine::ensurePgpFullGridReadyExcluding(int excludedResidueIdx) {
+    ensurePgpInitialized();
+    if (!state_) {
+        throw std::runtime_error("PGP backend requires MCState");
+    }
+
+    int exclude = excludedResidueIdx;
+    if (exclude < 0 || exclude >= state_->activeResidueCount) {
+        exclude = -1;
+    }
+
+    if (pgpFullGridReady_ && pgpFullGridExcludedResidue_ == exclude) {
+        return;
+    }
+
+    if (exclude >= 0) {
+        ResidueActiveGuard guard(*state_, exclude);
+        guard.setInactive();
+        precomputeGridPotential(*state_, false);
+    } else {
+        precomputeGridPotential(*state_, false);
+    }
+
+    pgpFullGridReady_ = true;
+    pgpFullGridExcludedResidue_ = exclude;
+}
+
+double GCMCEngine::calculatePgpReciprocalEnergyFromGrid(int residueIdx) {
+    if (!state_) {
+        return 0.0;
+    }
+    MovementResiduesGuard movementGuard(*state_);
+    movementGuard.setSingleResidue(residueIdx);
+    double gridEnergy = 0.0;
+    interpolateMoleculeEnergy(*state_, gridEnergy);
+    return gridEnergy;
+}
+
+double GCMCEngine::calculatePgpSelfEnergyMovementResidue(int residueIdx) {
+    if (!state_) {
+        return 0.0;
+    }
+    MovementResiduesGuard movementGuard(*state_);
+    movementGuard.setSingleResidue(residueIdx);
+    return computeSelfEnergyPGPImpl(*state_, true);
+}
+
+double GCMCEngine::calculatePgpRealSpaceElectrostaticsFixedOnly(int residueIdx) {
+    if (!state_) {
+        return 0.0;
+    }
+    if (residueIdx < 0 || residueIdx >= static_cast<int>(state_->residues.size())) {
+        return 0.0;
+    }
+    const auto& residues = state_->residues;
+    const auto& atoms = state_->atoms;
+    const auto& resI = residues[residueIdx];
+    if (!resI.active) {
+        return 0.0;
+    }
+
+    const double cutoff2 = static_cast<double>(state_->info.cutoff) * static_cast<double>(state_->info.cutoff);
+    const double alpha = getPGPParams().alpha;
+    const float* box = state_->info.box;
+
+    double energy = 0.0;
+    for (int atom_i = resI.atomStart; atom_i < resI.atomStart + resI.atomCount; ++atom_i) {
+        if (atom_i < 0 || atom_i >= static_cast<int>(atoms.size())) continue;
+        const auto& ai = atoms[atom_i];
+        if (ai.name == "LP" || ai.name == "LPA") continue;
+        const double qi = static_cast<double>(ai.charge);
+        if (std::abs(qi) < 1e-12) continue;
+
+        const double xi = static_cast<double>(ai.x);
+        const double yi = static_cast<double>(ai.y);
+        const double zi = static_cast<double>(ai.z);
+
+        for (int r = 0; r < state_->activeResidueCount; ++r) {
+            const auto& resJ = residues[r];
+            if (!resJ.active || !resJ.fixed) continue;
+
+            for (int atom_j = resJ.atomStart; atom_j < resJ.atomStart + resJ.atomCount; ++atom_j) {
+                if (atom_j < 0 || atom_j >= static_cast<int>(atoms.size())) continue;
+                const auto& aj = atoms[atom_j];
+                if (aj.name == "LP" || aj.name == "LPA") continue;
+                const double qj = static_cast<double>(aj.charge);
+                if (std::abs(qj) < 1e-12) continue;
+
+                double dx = static_cast<double>(aj.x) - xi;
+                double dy = static_cast<double>(aj.y) - yi;
+                double dz = static_cast<double>(aj.z) - zi;
+
+                dx -= static_cast<double>(box[0]) * std::round(dx / static_cast<double>(box[0]));
+                dy -= static_cast<double>(box[1]) * std::round(dy / static_cast<double>(box[1]));
+                dz -= static_cast<double>(box[2]) * std::round(dz / static_cast<double>(box[2]));
+
+                const double r2 = dx * dx + dy * dy + dz * dz;
+                if (r2 > cutoff2 || r2 < 1e-12) continue;
+
+                const double rDist = std::sqrt(r2);
+                energy += COULOMB * qi * qj * std::erfc(alpha * rDist) / rDist;
+            }
+        }
+    }
+    return energy;
+}
+
+double GCMCEngine::calculatePgpRealSpaceElectrostaticsAllPartners(int residueIdx) {
+    if (!state_) {
+        return 0.0;
+    }
+    if (residueIdx < 0 || residueIdx >= static_cast<int>(state_->residues.size())) {
+        return 0.0;
+    }
+    const auto& residues = state_->residues;
+    const auto& atoms = state_->atoms;
+    const auto& resI = residues[residueIdx];
+    if (!resI.active) {
+        return 0.0;
+    }
+
+    const double cutoff2 = static_cast<double>(state_->info.cutoff) * static_cast<double>(state_->info.cutoff);
+    const double alpha = getPGPParams().alpha;
+    const float* box = state_->info.box;
+
+    double energy = 0.0;
+    for (int atom_i = resI.atomStart; atom_i < resI.atomStart + resI.atomCount; ++atom_i) {
+        if (atom_i < 0 || atom_i >= static_cast<int>(atoms.size())) continue;
+        const auto& ai = atoms[atom_i];
+        if (ai.name == "LP" || ai.name == "LPA") continue;
+        const double qi = static_cast<double>(ai.charge);
+        if (std::abs(qi) < 1e-12) continue;
+
+        const double xi = static_cast<double>(ai.x);
+        const double yi = static_cast<double>(ai.y);
+        const double zi = static_cast<double>(ai.z);
+
+        for (int r = 0; r < state_->activeResidueCount; ++r) {
+            if (r == residueIdx) continue;
+            const auto& resJ = residues[r];
+            if (!resJ.active) continue;
+
+            for (int atom_j = resJ.atomStart; atom_j < resJ.atomStart + resJ.atomCount; ++atom_j) {
+                if (atom_j < 0 || atom_j >= static_cast<int>(atoms.size())) continue;
+                const auto& aj = atoms[atom_j];
+                if (aj.name == "LP" || aj.name == "LPA") continue;
+                const double qj = static_cast<double>(aj.charge);
+                if (std::abs(qj) < 1e-12) continue;
+
+                double dx = static_cast<double>(aj.x) - xi;
+                double dy = static_cast<double>(aj.y) - yi;
+                double dz = static_cast<double>(aj.z) - zi;
+
+                dx -= static_cast<double>(box[0]) * std::round(dx / static_cast<double>(box[0]));
+                dy -= static_cast<double>(box[1]) * std::round(dy / static_cast<double>(box[1]));
+                dz -= static_cast<double>(box[2]) * std::round(dz / static_cast<double>(box[2]));
+
+                const double r2 = dx * dx + dy * dy + dz * dz;
+                if (r2 > cutoff2 || r2 < 1e-12) continue;
+
+                const double rDist = std::sqrt(r2);
+                energy += COULOMB * qi * qj * std::erfc(alpha * rDist) / rDist;
+            }
+        }
+    }
+    return energy;
+}
+
+double GCMCEngine::calculateFragmentEnergyPgpHost(int residueIdx) {
+    if (!state_) {
+        return 0.0;
+    }
+    ensurePgpHostGridReady();
+
+    if (residueIdx < 0 || residueIdx >= static_cast<int>(state_->residues.size())) {
+        return 0.0;
+    }
+    auto& residue = state_->residues[residueIdx];
+    if (!residue.active) {
+        return 0.0;
+    }
+
+    // 1) Direct (cutoff) interactions against non-fixed residues (guest↔guest), incl. intramolecular 1-4 LJ once.
+    computeResidueNonbondedEnergy(
+        *state_,
+        residueIdx,
+        true,
+        true,
+        false,
+        true,
+        ResiduePartnerFilter::NonFixedOnly
+    );
+    const double vdwNonFixed = residue.energy_vdw;
+    const double elecNonFixed = residue.energy_elec;
+
+    // 2) LJ interactions against fixed residues (host↔guest) using the same LJ backend; skip intra 1-4 here.
+    computeResidueNonbondedEnergy(
+        *state_,
+        residueIdx,
+        true,
+        true,
+        true,
+        false,
+        ResiduePartnerFilter::FixedOnly
+    );
+    const double vdwFixed = residue.energy_vdw;
+
+    // 3) Real-space erfc term against fixed residues only.
+    const double elecFixedReal = calculatePgpRealSpaceElectrostaticsFixedOnly(residueIdx);
+
+    // 4) Reciprocal term from the fixed-only potential grid.
+    const double elecFixedRecip = calculatePgpReciprocalEnergyFromGrid(residueIdx);
+
+    const double vdwTotal = vdwNonFixed + vdwFixed;
+    const double elecTotal = elecNonFixed + elecFixedReal + elecFixedRecip;
+
+    residue.energy_vdw = static_cast<float>(vdwTotal);
+    residue.energy_elec = static_cast<float>(elecTotal);
+
+    return vdwTotal + elecTotal;
+}
+
+double GCMCEngine::calculateFragmentEnergyPgpFullUsingCurrentGrid(int residueIdx) {
+    if (!state_) {
+        return 0.0;
+    }
+    if (residueIdx < 0 || residueIdx >= static_cast<int>(state_->residues.size())) {
+        return 0.0;
+    }
+    auto& residue = state_->residues[residueIdx];
+    if (!residue.active) {
+        return 0.0;
+    }
+
+    // LJ: always DIRECT+cutoff against all partners (host+guests), incl. intramolecular 1-4 LJ.
+    computeResidueNonbondedEnergy(
+        *state_,
+        residueIdx,
+        true,
+        true,
+        true,
+        true,
+        ResiduePartnerFilter::All
+    );
+    const double vdwTotal = residue.energy_vdw;
+
+    const double elecReal = calculatePgpRealSpaceElectrostaticsAllPartners(residueIdx);
+    const double elecRecip = calculatePgpReciprocalEnergyFromGrid(residueIdx);
+    const double elecSelf = calculatePgpSelfEnergyMovementResidue(residueIdx);
+
+    const double elecTotal = elecReal + elecRecip + elecSelf;
+    residue.energy_elec = static_cast<float>(elecTotal);
+
+    return vdwTotal + elecTotal;
 }
 
 // Attempt insertion
@@ -225,8 +641,20 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
 
     result.position = position;
     
-    // Calculate energy before insertion
-    result.energyBefore = calculateSystemEnergy();
+    // Precompute any PGP background grid before adding the new residue, so the grid does not
+    // accidentally include the trial/inserted charges.
+    if (energyBackend_ == GCMCEnergyBackend::PgpHost) {
+        ensurePgpHostGridReady();
+    } else if (energyBackend_ == GCMCEnergyBackend::PgpFull) {
+        ensurePgpFullGridReadyExcluding(-1);
+    }
+
+    // Calculate energy before insertion (only needed for long-range full-system methods).
+    if (energyBackend_ == GCMCEnergyBackend::Ewald || energyBackend_ == GCMCEnergyBackend::Pme) {
+        result.energyBefore = calculateSystemEnergy();
+    } else {
+        result.energyBefore = 0.0;
+    }
     
     // Create instance
     int instanceId = reservoir_->createInstance(typeId, position, orientation);
@@ -238,16 +666,22 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     // Synchronize MCState with the new instance
     synchronizeStateWithReservoir(instanceId, true);
     
-    // Calculate energy change - optimize for DIRECT mode
-    if (energyMethod_ == EnergyMethod::DIRECT) {
-        // Fast local ΔE calculation - only compute interaction of new residue with system
+    // Calculate energy change using the selected backend.
+    if (energyBackend_ == GCMCEnergyBackend::DirectCutoff) {
+        // Fast local ΔE calculation - only compute interaction of new residue with system.
         cpu::computeResidueEnergyCutoffPBC(*state_, instanceId);
         const auto& residue = state_->residues[instanceId];
         result.deltaE = residue.energy_vdw + residue.energy_elec;
-        result.energyBefore = 0.0;  // Not needed for local calculation
         result.energyAfter = result.deltaE;  // For consistency
+    } else if (energyBackend_ == GCMCEnergyBackend::PgpHost) {
+        result.deltaE = calculateFragmentEnergyPgpHost(instanceId);
+        result.energyAfter = result.deltaE;
+    } else if (energyBackend_ == GCMCEnergyBackend::PgpFull) {
+        // Use the precomputed background grid (exclude=-1) prepared above / in CBMC.
+        result.deltaE = calculateFragmentEnergyPgpFullUsingCurrentGrid(instanceId);
+        result.energyAfter = result.deltaE;
     } else {
-        // Full system energy for Ewald/PME modes
+        // Full system energy for Ewald/PME modes.
         result.energyAfter = calculateSystemEnergy();
         result.deltaE = result.energyAfter - result.energyBefore;
     }
@@ -297,6 +731,11 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         result.residueIndex = instanceId;
         acceptedMoves_++;
         energyCache_.invalidate();
+        if (energyBackend_ == GCMCEnergyBackend::PgpFull) {
+            // Background changed; force a rebuild on the next evaluation.
+            pgpFullGridReady_ = false;
+            pgpFullGridExcludedResidue_ = -999;
+        }
     } else {
         // Remove the instance and revert state
         reservoir_->deleteInstance(instanceId);
@@ -386,6 +825,25 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     }
     result.effectiveVolume = baseVolume;
 
+    auto residueEnergyForBackend = [&](int residueIdx) -> double {
+        if (!state_) {
+            return 0.0;
+        }
+        if (energyBackend_ == GCMCEnergyBackend::DirectCutoff) {
+            cpu::computeResidueEnergyCutoffPBC(*state_, residueIdx);
+            const auto& residue = state_->residues[residueIdx];
+            return residue.energy_vdw + residue.energy_elec;
+        }
+        if (energyBackend_ == GCMCEnergyBackend::PgpHost) {
+            return calculateFragmentEnergyPgpHost(residueIdx);
+        }
+        if (energyBackend_ == GCMCEnergyBackend::PgpFull) {
+            ensurePgpFullGridReadyExcluding(residueIdx);
+            return calculateFragmentEnergyPgpFullUsingCurrentGrid(residueIdx);
+        }
+        return calculateFragmentEnergy(residueIdx);
+    };
+
     // Calculate CBMC bias for deletion if enabled
     double cbmcRosen = 1.0;
     double cbmcSelectedEnergy = 0.0;
@@ -407,7 +865,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
         current.logWOverK = 0.0;
         current.position = savedPosition;
         current.orientation = savedOrientation;
-        current.energy = calculateFragmentEnergy(instanceId);
+        current.energy = residueEnergyForBackend(instanceId);
         trials.push_back(current);
         cbmcSelectedEnergy = current.energy;
 
@@ -439,10 +897,15 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
                 if (tempId >= 0) {
                     synchronizeStateWithReservoir(tempId, true);
 
-                    if (energyMethod_ == EnergyMethod::DIRECT) {
+                    if (energyBackend_ == GCMCEnergyBackend::DirectCutoff) {
                         cpu::computeResidueEnergyCutoffPBC(*state_, tempId);
                         const auto& residue = state_->residues[tempId];
                         trial.energy = residue.energy_vdw + residue.energy_elec;
+                    } else if (energyBackend_ == GCMCEnergyBackend::PgpHost) {
+                        trial.energy = calculateFragmentEnergyPgpHost(tempId);
+                    } else if (energyBackend_ == GCMCEnergyBackend::PgpFull) {
+                        // Reuse the background grid built excluding the molecule being deleted.
+                        trial.energy = calculateFragmentEnergyPgpFullUsingCurrentGrid(tempId);
                     } else {
                         trial.energy = calculateFragmentEnergy(tempId);
                     }
@@ -492,14 +955,13 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
         }
     }
 
-    // Calculate energy change - optimize for DIRECT mode
-    if (energyMethod_ == EnergyMethod::DIRECT) {
-        // Fast local ΔE calculation - compute energy of residue to be deleted
-        cpu::computeResidueEnergyCutoffPBC(*state_, instanceId);
-        const auto& residue = state_->residues[instanceId];
-        double residueEnergy = residue.energy_vdw + residue.energy_elec;
+    const bool cbmcEnabled = (useConfBias_ && numTrials > 1);
+    if (energyBackend_ == GCMCEnergyBackend::DirectCutoff ||
+        energyBackend_ == GCMCEnergyBackend::PgpHost ||
+        energyBackend_ == GCMCEnergyBackend::PgpFull) {
+        const double residueEnergy = cbmcEnabled ? cbmcSelectedEnergy : residueEnergyForBackend(instanceId);
         result.deltaE = -residueEnergy;  // Removing this energy from system
-        result.energyBefore = residueEnergy;  // For consistency
+        result.energyBefore = residueEnergy;
         result.energyAfter = 0.0;
     } else {
         // Full system energy for Ewald/PME modes
@@ -510,8 +972,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     reservoir_->deleteInstance(instanceId);
     synchronizeStateWithReservoir(instanceId, false);
     
-    // Calculate energy after deletion for non-DIRECT modes
-    if (energyMethod_ != EnergyMethod::DIRECT) {
+    // Calculate energy after deletion for long-range full-system modes
+    if (energyBackend_ == GCMCEnergyBackend::Ewald || energyBackend_ == GCMCEnergyBackend::Pme) {
         result.energyAfter = calculateSystemEnergy();
         result.deltaE = result.energyAfter - result.energyBefore;
     }
@@ -571,6 +1033,11 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
         result.accepted = true;
         acceptedMoves_++;
         energyCache_.invalidate();
+        if (energyBackend_ == GCMCEnergyBackend::PgpFull) {
+            // Background changed; force a rebuild on the next insertion/background evaluation.
+            pgpFullGridReady_ = false;
+            pgpFullGridExcludedResidue_ = -999;
+        }
     } else {
         // Restore the deleted instance at the same position (keeps same ID)
         bool restored = reservoir_->restoreInstance(instanceId, savedPosition, savedOrientation);
@@ -1155,6 +1622,19 @@ double GCMCEngine::calculateFragmentEnergy(int residueIdx) {
     // Get residue from state
     auto& residue = state_->residues[residueIdx];
     if (!residue.active) return 0.0;
+
+    // PGP backends bypass the generic EnergyMethod dispatch and compute per-residue energies
+    // directly against the current background/grid configuration.
+    if (energyBackend_ == GCMCEnergyBackend::PgpHost) {
+        return calculateFragmentEnergyPgpHost(residueIdx);
+    }
+    if (energyBackend_ == GCMCEnergyBackend::PgpFull) {
+        // For translation/rotation/deletion, the background grid must exclude the moved residue.
+        // (CBMC insertion/deletion retracing handle grid reuse explicitly and call the
+        // calculateFragmentEnergyPgpFullUsingCurrentGrid helper directly.)
+        ensurePgpFullGridReadyExcluding(residueIdx);
+        return calculateFragmentEnergyPgpFullUsingCurrentGrid(residueIdx);
+    }
     
     // Check cache
     if (reservoir_) {
@@ -1709,6 +2189,14 @@ GCMCEngine::TrialConfiguration GCMCEngine::performCBMCInsertion(int typeId, int 
         return TrialConfiguration{Vector3(0,0,0), Quaternion(1,0,0,0), 0.0, 1.0, 0.0, false, 0};
     }
 
+    // Prepare any background grid once per CBMC move (never per trial).
+    if (energyBackend_ == GCMCEnergyBackend::PgpHost) {
+        ensurePgpHostGridReady();
+    } else if (energyBackend_ == GCMCEnergyBackend::PgpFull) {
+        // Background is the current system (trial residues are temporary and must not enter the grid).
+        ensurePgpFullGridReadyExcluding(-1);
+    }
+
     // Generate K trial configurations
     double minEnergy = std::numeric_limits<double>::max();
     for (int k = 0; k < numTrials; ++k) {
@@ -1735,10 +2223,14 @@ GCMCEngine::TrialConfiguration GCMCEngine::performCBMCInsertion(int typeId, int 
         synchronizeStateWithReservoir(tempId, true);
 
         // Calculate energy for this configuration
-        if (energyMethod_ == EnergyMethod::DIRECT) {
+        if (energyBackend_ == GCMCEnergyBackend::DirectCutoff) {
             cpu::computeResidueEnergyCutoffPBC(*state_, tempId);
             const auto& residue = state_->residues[tempId];
             trial.energy = residue.energy_vdw + residue.energy_elec;
+        } else if (energyBackend_ == GCMCEnergyBackend::PgpHost) {
+            trial.energy = calculateFragmentEnergyPgpHost(tempId);
+        } else if (energyBackend_ == GCMCEnergyBackend::PgpFull) {
+            trial.energy = calculateFragmentEnergyPgpFullUsingCurrentGrid(tempId);
         } else {
             trial.energy = calculateFragmentEnergy(tempId);
         }

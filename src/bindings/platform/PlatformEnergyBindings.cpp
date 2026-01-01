@@ -63,6 +63,12 @@ void init_energy_bindings(py::module& m) {
               &pygcmc::platform::cpu::computeMovementEnergyCutoff,
               py::arg("state"),
               "Compute movement residues energy with cutoff");
+
+    py::enum_<pygcmc::platform::cpu::ResiduePartnerFilter>(m_cpu, "ResiduePartnerFilter")
+        .value("All", pygcmc::platform::cpu::ResiduePartnerFilter::All)
+        .value("FixedOnly", pygcmc::platform::cpu::ResiduePartnerFilter::FixedOnly)
+        .value("NonFixedOnly", pygcmc::platform::cpu::ResiduePartnerFilter::NonFixedOnly)
+        .export_values();
     
     m_cpu.def("computeResidueNonbondedEnergy",
               &pygcmc::platform::cpu::computeResidueNonbondedEnergy,
@@ -72,6 +78,7 @@ void init_energy_bindings(py::module& m) {
               py::arg("use_pbc"),
               py::arg("vdw_only") = false,
               py::arg("include_pairtypes14_intra") = false,
+              py::arg("partner_filter") = pygcmc::platform::cpu::ResiduePartnerFilter::All,
               "Compute residue nonbonded energy with flexible options");
 }
 

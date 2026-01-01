@@ -33,6 +33,23 @@ bool InpParserGCMC::parse_line_ext_core(const std::string& key, const std::strin
         for (float t : times) {
             mc_info.mc_time_list.push_back(t);
         }
+    } else if (key == "energy_method") {
+        handled = true;
+        std::string v = value;
+        std::transform(v.begin(), v.end(), v.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        v = InpParserStructures::trim(v);
+
+        if (v == "cutoff" || v == "direct_cutoff") {
+            v = "direct";
+        }
+
+        if (v == "direct" || v == "pgp_host" || v == "pgp_full" || v == "ewald" || v == "pme") {
+            basic_info.energy_method = v;
+        } else {
+            throw std::runtime_error("Invalid energy_method: " + value +
+                                     " (expected direct|pgp_host|pgp_full|ewald|pme)");
+        }
     } else if (key == "energy_cutoff") {
         handled = true;
         // Legacy gcmc_opencl key: treat as a shared cutoff for fragment/protein.
@@ -206,4 +223,3 @@ bool InpParserGCMC::parse_line_ext_core(const std::string& key, const std::strin
 } // namespace parameters
 } // namespace io
 } // namespace pygcmc
-

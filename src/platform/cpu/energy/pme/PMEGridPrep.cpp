@@ -37,10 +37,20 @@ void selectAtomsToProcess(const model::MCState& state, bool fixed_only,
         platform::log(LogLevel::INFO, "Processing ", atomsToProcess.size(), 
                      " atoms from fixed residues, total charge: ", totalCharge);
     } else {
-        // Process all atoms
-        for (int i = 0; i < state.activeAtomCount; ++i) {
-            atomsToProcess.push_back(i);
-            totalCharge += atoms[i].charge;
+        // Process atoms from all active residues.
+        // NOTE: gcmc_cpu keeps deleted atoms in the global arrays and does not always decrement
+        // activeAtomCount; iterating by residues avoids accidentally including "ghost" atoms.
+        for (int i = 0; i < state.activeResidueCount; ++i) {
+            const auto& residue = residues[i];
+            if (!residue.active) continue;
+            for (int j = 0; j < residue.atomCount; ++j) {
+                const int atomIndex = residue.atomStart + j;
+                if (atomIndex < 0 || atomIndex >= static_cast<int>(atoms.size())) {
+                    continue;
+                }
+                atomsToProcess.push_back(atomIndex);
+                totalCharge += atoms[atomIndex].charge;
+            }
         }
         
         platform::log(LogLevel::INFO, "Total system charge: ", totalCharge);

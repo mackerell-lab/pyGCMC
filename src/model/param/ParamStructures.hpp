@@ -26,6 +26,14 @@ struct BasicInfo {
     bool print_logfile = false;
     std::string param_file;
     std::string log_file;
+    // GCMC electrostatics/energy backend selection for gcmc_cpu.
+    // Supported values (case-insensitive):
+    // - "direct" (default): DIRECT + cutoff + PBC (gcmc_gpu-compatible baseline)
+    // - "pgp_host": PGP(host-only) for host↔guest electrostatics (Mode B)
+    // - "pgp_full": PGP(full-background) for electrostatics (Mode C)
+    // - "ewald": Ewald summation backend (slow; primarily for validation)
+    // - "pme": Particle Mesh Ewald backend (slow; primarily for validation)
+    std::string energy_method = "direct";
     // INP unit system for compatibility with legacy gcmc_gpu style inputs.
     // Supported values (case-insensitive):
     // - "auto" (default) => assume gcmc_gpu/opencl style (Å + kcal/mol)

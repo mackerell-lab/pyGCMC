@@ -110,7 +110,8 @@ void computeResidueNonbondedEnergy(model::MCState& state,
                                    bool use_cutoff,
                                    bool use_pbc,
                                    bool vdw_only,
-                                   bool include_pairtypes14_intra) {
+                                   bool include_pairtypes14_intra,
+                                   ResiduePartnerFilter partner_filter) {
     auto& residues = state.residues;
     auto& forcefield = state.forcefield;  // Non-const to allow rebuild
     
@@ -146,6 +147,8 @@ void computeResidueNonbondedEnergy(model::MCState& state,
 
         for (int j = 0; j < state.activeResidueCount; ++j) {
             if (!residues[j].active || j == residue_idx) continue;
+            if (partner_filter == ResiduePartnerFilter::FixedOnly && !residues[j].fixed) continue;
+            if (partner_filter == ResiduePartnerFilter::NonFixedOnly && residues[j].fixed) continue;
 
             for (int atom_j = residues[j].atomStart;
                  atom_j < residues[j].atomStart + residues[j].atomCount;
