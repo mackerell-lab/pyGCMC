@@ -50,10 +50,11 @@ public:
     double calculateSystemEnergy(MCState& state) {
         // Use the energy module to calculate system energy
         if (energyMethod_ == EnergyMethod::PME) {
-            computeSystemEnergy(state, EnergyMethod::PME);
+            // Long-range methods require PBC; validateBox should also see the cutoff.
+            computeSystemEnergy(state, EnergyMethod::PME, true, true);
             return energy::getTotalEnergyUniquePairs(state, EnergyMethod::PME);
         } else if (energyMethod_ == EnergyMethod::EWALD) {
-            computeSystemEnergy(state, EnergyMethod::EWALD);
+            computeSystemEnergy(state, EnergyMethod::EWALD, true, true);
             return energy::getTotalEnergyUniquePairs(state, EnergyMethod::EWALD);
         } else {
             computeSystemEnergy(state, EnergyMethod::DIRECT, useCutoff_, usePBC_);
@@ -83,9 +84,9 @@ public:
         // Long-range methods: fall back to the existing movement energy entrypoint.
         // (Per-residue energy interfaces for PME/EWALD are not yet exposed here.)
         if (energyMethod_ == EnergyMethod::PME) {
-            computeMovementEnergy(state, EnergyMethod::PME);
+            computeMovementEnergy(state, EnergyMethod::PME, true, true);
         } else if (energyMethod_ == EnergyMethod::EWALD) {
-            computeMovementEnergy(state, EnergyMethod::EWALD);
+            computeMovementEnergy(state, EnergyMethod::EWALD, true, true);
         } else {
             computeMovementEnergy(state, EnergyMethod::DIRECT, useCutoff_, usePBC_);
         }

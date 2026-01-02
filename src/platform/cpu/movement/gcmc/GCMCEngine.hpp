@@ -288,6 +288,7 @@ private:
     void ensurePgpInitialized();
     void ensurePgpHostGridReady();
     void ensurePgpFullGridReadyExcluding(int excludedResidueIdx);
+    void computePgpFullGridExcludingNoCache(int excludedResidueIdx);
     double calculateFragmentEnergyPgpHost(int residueIdx);
     double calculateFragmentEnergyPgpFullUsingCurrentGrid(int residueIdx);
     double calculatePgpRealSpaceElectrostaticsFixedOnly(int residueIdx);

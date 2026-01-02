@@ -14,6 +14,22 @@ namespace molecular {
 using LogMain = pygcmc::system::log::LogMain;
 using LogLevel = pygcmc::system::common::LogLevel;
 
+namespace {
+
+char firstAlphaUpper(const std::string& value) {
+    for (unsigned char c : value) {
+        if (std::isalpha(c)) {
+            return static_cast<char>(std::toupper(c));
+        }
+    }
+    if (!value.empty()) {
+        return static_cast<char>(std::toupper(static_cast<unsigned char>(value[0])));
+    }
+    return '\0';
+}
+
+}  // namespace
+
 void MolecularValidator::verifyAtomTypes(
     const std::shared_ptr<model::Residue>& pdb_res,
     const model::TopologyResidue& top_res,
@@ -42,9 +58,10 @@ void MolecularValidator::verifyAtomTypes(
         // Extract element from topology atom type
         std::string top_element = top_atom.type;
         
-        // Compare first letter (converted to uppercase)
-        char pdb_first = std::toupper(pdb_element[0]);
-        char top_first = std::toupper(top_element[0]);
+        // Compare first alphabetic letter (converted to uppercase).
+        // PDB atom names may start with digits (e.g., "1HD2"), so taking [0] would be wrong.
+        char pdb_first = firstAlphaUpper(pdb_element);
+        char top_first = firstAlphaUpper(top_element);
         
         if (pdb_first != top_first) {
             std::stringstream ss;
@@ -95,9 +112,10 @@ void MolecularValidator::validateCombination(
         // Extract element from topology atom type
         std::string top_element = top_atom.type;
         
-        // Compare first letter (converted to uppercase)
-        char pdb_first = std::toupper(pdb_element[0]);
-        char top_first = std::toupper(top_element[0]);
+        // Compare first alphabetic letter (converted to uppercase).
+        // PDB atom names may start with digits (e.g., "1HD2"), so taking [0] would be wrong.
+        char pdb_first = firstAlphaUpper(pdb_element);
+        char top_first = firstAlphaUpper(top_element);
         
         if (pdb_first != top_first) {
             std::stringstream ss;

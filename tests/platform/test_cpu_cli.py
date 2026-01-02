@@ -214,6 +214,16 @@ from cpu_cli.pgp_closure import (
     test_pgp_full_deletion_deltaU_is_negative_of_insertion_for_charged_system,
 )
 
+# PME backend (Mode D) contract test (1 function)
+from cpu_cli.pme_backends import (
+    test_pme_adds_long_range_coulomb_beyond_cutoff_for_deletion,
+)
+
+# PGP vs PME backend equivalence (Mode C vs D) (1 function)
+from cpu_cli.pgp_pme_equivalence import (
+    test_pgp_full_and_pme_translation_deltaU_match,
+)
+
 # ITP nonbonded -> forcefield/LJ energy wiring (2 functions)
 from cpu_cli.itp_nonbonded_forcefield import (
     test_itp_atomtypes_builds_lj_matrix_and_deltaU_matches_analytic_lj,

@@ -150,5 +150,6 @@ attempt_prob_rot:0.0
     mean_n = statistics.mean(n_values)
     rho_measured = mean_n / v_box_expected
 
-    # In the μVT ensemble this identity is exact; we allow finite-sample noise with a moderate tolerance.
-    assert rho_measured == pytest.approx(rho_widom, rel=0.25, abs=0.05)
+    # In the μVT ensemble this identity is exact; keep the tolerance tight to catch
+    # systematic backend/units mistakes while still allowing finite-sample noise.
+    assert rho_measured == pytest.approx(rho_widom, rel=0.05, abs=0.02)

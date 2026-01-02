@@ -1,6 +1,8 @@
 #include "GCMCSimulation.hpp"
 #include "../../movement/reservoir/MultiTypeReservoir.hpp"
 #include "../../movement/gcmc/GCMCEnergyCallback.hpp"
+#include "../../energy/pme/PMEGlobal.hpp"
+#include "../../energy/pme/PMESetup.hpp"
 #include "../setup/SimulationInputBuilder.hpp"
 #include "../io/SimulationIO.hpp"
 #include <iostream>
@@ -31,6 +33,43 @@ constexpr double kB = 8.314e-3;  // Boltzmann constant in kJ/(mol*K)
 constexpr double NA = 6.02214076e23;   // Avogadro's number
 
 namespace {
+
+int nextPow2(int n) {
+    int p = 1;
+    while (p < n) {
+        p <<= 1;
+    }
+    return p;
+}
+
+void enforceMinPmeGridDx(double minGridDxNm, double cutoffNm, const double boxNm[3]) {
+    if (!(minGridDxNm > 0.0) || !(cutoffNm > 0.0)) {
+        return;
+    }
+
+    auto& pme = platform::cpu::getPMEParams();
+    int meshSize[3] = {pme.meshSize[0], pme.meshSize[1], pme.meshSize[2]};
+
+    bool changed = false;
+    for (int d = 0; d < 3; ++d) {
+        if (!(boxNm[d] > 0.0)) {
+            continue;
+        }
+        const int minSize = nextPow2(static_cast<int>(std::ceil(boxNm[d] / minGridDxNm)));
+        if (meshSize[d] < minSize) {
+            meshSize[d] = minSize;
+            changed = true;
+        }
+    }
+
+    if (!changed) {
+        return;
+    }
+
+    platform::cpu::setPMEBox(boxNm);
+    platform::cpu::setPMEParameters(pme.alpha, meshSize, pme.splineOrder, pme.tolerance);
+    platform::cpu::initializePMETables(cutoffNm);
+}
 
 std::string normalizeName(std::string value) {
     auto isSpace = [](unsigned char c) { return std::isspace(c) != 0; };
@@ -1339,6 +1378,32 @@ bool GCMCSimulation::setupEngine() {
         return false;
     }
     log("Energy backend configured: ", energyMethod);
+
+    // Initialize long-range electrostatics backends (PME/Ewald) before any energy evaluation.
+    // These modules require global parameter setup and will throw if uninitialized.
+    if (state_ && state_->periodicBox.size() == 3) {
+        const double box[3] = {
+            static_cast<double>(state_->info.box[0]),
+            static_cast<double>(state_->info.box[1]),
+            static_cast<double>(state_->info.box[2]),
+        };
+        const double cutoff = static_cast<double>(state_->info.cutoff);
+        try {
+            if (engine_->getEnergyBackend() == GCMCEnergyBackend::Pme) {
+                initializePMEParameters(cutoff, box);
+                // Guard against pathological auto-tuning (e.g., selecting a 4×4×4 mesh for a multi-nm box),
+                // which can severely under-resolve reciprocal electrostatics and break PGP↔PME consistency.
+                enforceMinPmeGridDx(0.25, cutoff, box);
+            } else if (engine_->getEnergyBackend() == GCMCEnergyBackend::Ewald) {
+                initializeEwaldParameters(cutoff, box);
+            }
+        } catch (const std::exception& e) {
+            const std::string msg = std::string("Failed to initialize energy backend: ") + e.what();
+            log("ERROR: ", msg);
+            std::cout << "ERROR: " << msg << std::endl;
+            return false;
+        }
+    }
 
     // Configure engine parameters for optimal performance
     // NOTE: INP decks (inp_units:auto/gcmc_gpu) provide max_translation in Å and max_rotation in degrees;

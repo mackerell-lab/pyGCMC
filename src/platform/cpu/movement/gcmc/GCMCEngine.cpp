@@ -289,6 +289,26 @@ void GCMCEngine::ensurePgpFullGridReadyExcluding(int excludedResidueIdx) {
     pgpFullGridExcludedResidue_ = exclude;
 }
 
+void GCMCEngine::computePgpFullGridExcludingNoCache(int excludedResidueIdx) {
+    ensurePgpInitialized();
+    if (!state_) {
+        throw std::runtime_error("PGP backend requires MCState");
+    }
+
+    int exclude = excludedResidueIdx;
+    if (exclude < 0 || exclude >= state_->activeResidueCount) {
+        exclude = -1;
+    }
+
+    if (exclude >= 0) {
+        ResidueActiveGuard guard(*state_, exclude);
+        guard.setInactive();
+        precomputeGridPotential(*state_, false);
+    } else {
+        precomputeGridPotential(*state_, false);
+    }
+}
+
 double GCMCEngine::calculatePgpReciprocalEnergyFromGrid(int residueIdx) {
     if (!state_) {
         return 0.0;
@@ -669,7 +689,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     }
 
     // Calculate energy before insertion (only needed for long-range full-system methods).
-    if (energyBackend_ == GCMCEnergyBackend::Ewald || energyBackend_ == GCMCEnergyBackend::Pme) {
+    if (energyBackend_ == GCMCEnergyBackend::Ewald) {
         result.energyBefore = calculateSystemEnergy();
     } else {
         result.energyBefore = 0.0;
@@ -699,8 +719,11 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         // Use the precomputed background grid (exclude=-1) prepared above / in CBMC.
         result.deltaE = calculateFragmentEnergyPgpFullUsingCurrentGrid(instanceId);
         result.energyAfter = result.deltaE;
+    } else if (energyBackend_ == GCMCEnergyBackend::Pme) {
+        result.deltaE = calculateFragmentEnergy(instanceId);
+        result.energyAfter = result.deltaE;
     } else {
-        // Full system energy for Ewald/PME modes.
+        // Full system energy for Ewald mode.
         result.energyAfter = calculateSystemEnergy();
         result.deltaE = result.energyAfter - result.energyBefore;
     }
@@ -977,13 +1000,14 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     const bool cbmcEnabled = (useConfBias_ && numTrials > 1);
     if (energyBackend_ == GCMCEnergyBackend::DirectCutoff ||
         energyBackend_ == GCMCEnergyBackend::PgpHost ||
-        energyBackend_ == GCMCEnergyBackend::PgpFull) {
+        energyBackend_ == GCMCEnergyBackend::PgpFull ||
+        energyBackend_ == GCMCEnergyBackend::Pme) {
         const double residueEnergy = cbmcEnabled ? cbmcSelectedEnergy : residueEnergyForBackend(instanceId);
         result.deltaE = -residueEnergy;  // Removing this energy from system
         result.energyBefore = residueEnergy;
         result.energyAfter = 0.0;
     } else {
-        // Full system energy for Ewald/PME modes
+        // Full system energy for Ewald mode
         result.energyBefore = calculateSystemEnergy();
     }
     
@@ -992,7 +1016,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     synchronizeStateWithReservoir(instanceId, false);
     
     // Calculate energy after deletion for long-range full-system modes
-    if (energyBackend_ == GCMCEnergyBackend::Ewald || energyBackend_ == GCMCEnergyBackend::Pme) {
+    if (energyBackend_ == GCMCEnergyBackend::Ewald) {
         result.energyAfter = calculateSystemEnergy();
         result.deltaE = result.energyAfter - result.energyBefore;
     }
@@ -1121,7 +1145,11 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
     result.position = oldPos;
     
     // Calculate energy before move
-    result.energyBefore = calculateFragmentEnergy(residueIdx);
+    if (energyBackend_ == GCMCEnergyBackend::Ewald) {
+        result.energyBefore = calculateSystemEnergy();
+    } else {
+        result.energyBefore = calculateFragmentEnergy(residueIdx);
+    }
     
     // Generate translation using configured step size
     Vector3 displacement = generateTranslationVector(maxTranslationStep_);
@@ -1159,7 +1187,11 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
     updateFragmentPosition(residueIdx, newPos);
     
     // Calculate energy after move
-    result.energyAfter = calculateFragmentEnergy(residueIdx);
+    if (energyBackend_ == GCMCEnergyBackend::Ewald) {
+        result.energyAfter = calculateSystemEnergy();
+    } else {
+        result.energyAfter = calculateFragmentEnergy(residueIdx);
+    }
     result.deltaE = result.energyAfter - result.energyBefore;
     
     // Accept or reject using unified acceptance calculator
@@ -1235,7 +1267,11 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
     Quaternion oldOrient = instance->orientation;
     
     // Calculate energy before rotation
-    result.energyBefore = calculateFragmentEnergy(residueIdx);
+    if (energyBackend_ == GCMCEnergyBackend::Ewald) {
+        result.energyBefore = calculateSystemEnergy();
+    } else {
+        result.energyBefore = calculateFragmentEnergy(residueIdx);
+    }
     
     // Generate rotation using configured angle
     Quaternion rotation = generateRotationQuaternion(maxRotationAngleRad_);
@@ -1269,7 +1305,11 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
     updateFragmentOrientation(residueIdx, newOrient);
     
     // Calculate energy after rotation
-    result.energyAfter = calculateFragmentEnergy(residueIdx);
+    if (energyBackend_ == GCMCEnergyBackend::Ewald) {
+        result.energyAfter = calculateSystemEnergy();
+    } else {
+        result.energyAfter = calculateFragmentEnergy(residueIdx);
+    }
     result.deltaE = result.energyAfter - result.energyBefore;
     
     // Use unified acceptance calculation for rotation
@@ -1602,7 +1642,12 @@ Quaternion GCMCEngine::generateRotationQuaternion(double maxAngle) {
 double GCMCEngine::calculateSystemEnergy() {
     if (!state_) return 0.0;
 
-    if (energyCache_.valid) {
+    // Full-system long-range backends (EWALD/PME) may evaluate multiple trial states
+    // within a single MC move; caching is unsafe there unless we implement fine-grained
+    // invalidation. Keep caching enabled for local backends only (DIRECT/PGP).
+    if (energyCache_.valid &&
+        energyBackend_ != GCMCEnergyBackend::Ewald &&
+        energyBackend_ != GCMCEnergyBackend::Pme) {
         return energyCache_.totalEnergy;
     }
 
@@ -1614,9 +1659,9 @@ double GCMCEngine::calculateSystemEnergy() {
     } else {
         // Fallback to direct energy module usage
         if (energyMethod_ == EnergyMethod::PME) {
-            computeSystemEnergy(*state_, EnergyMethod::PME);
+            computeSystemEnergy(*state_, EnergyMethod::PME, true, true);
         } else if (energyMethod_ == EnergyMethod::EWALD) {
-            computeSystemEnergy(*state_, EnergyMethod::EWALD);
+            computeSystemEnergy(*state_, EnergyMethod::EWALD, true, true);
         } else {
             // DIRECT with cutoff and PBC
             computeSystemEnergy(*state_, EnergyMethod::DIRECT, true, true);
@@ -1641,6 +1686,13 @@ double GCMCEngine::calculateFragmentEnergy(int residueIdx) {
     // Get residue from state
     auto& residue = state_->residues[residueIdx];
     if (!residue.active) return 0.0;
+
+    // Mode D (energy_method=pme): use the same PGP full energy decomposition for moves,
+    // but recompute the reciprocal grid on every evaluation (no caching).
+    if (energyBackend_ == GCMCEnergyBackend::Pme) {
+        computePgpFullGridExcludingNoCache(residueIdx);
+        return calculateFragmentEnergyPgpFullUsingCurrentGrid(residueIdx);
+    }
 
     // PGP backends bypass the generic EnergyMethod dispatch and compute per-residue energies
     // directly against the current background/grid configuration.
@@ -1675,9 +1727,9 @@ double GCMCEngine::calculateFragmentEnergy(int residueIdx) {
         
         // Calculate movement energy for this residue
         if (energyMethod_ == EnergyMethod::PME) {
-            computeMovementEnergy(*state_, EnergyMethod::PME);
+            computeMovementEnergy(*state_, EnergyMethod::PME, true, true);
         } else if (energyMethod_ == EnergyMethod::EWALD) {
-            computeMovementEnergy(*state_, EnergyMethod::EWALD);
+            computeMovementEnergy(*state_, EnergyMethod::EWALD, true, true);
         } else {
             computeMovementEnergy(*state_, EnergyMethod::DIRECT, true, true);
         }
