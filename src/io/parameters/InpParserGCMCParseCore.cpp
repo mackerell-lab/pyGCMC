@@ -44,11 +44,16 @@ bool InpParserGCMC::parse_line_ext_core(const std::string& key, const std::strin
             v = "direct";
         }
 
-        if (v == "direct" || v == "pgp_host" || v == "pgp_full" || v == "ewald" || v == "pme") {
+        if (v == "pgp_pme") {
+            v = "pgp_full_pme";
+        }
+
+        if (v == "direct" || v == "pgp_host" || v == "pgp_full" || v == "pgp_full_pme" || v == "ewald" ||
+            v == "pme") {
             basic_info.energy_method = v;
         } else {
             throw std::runtime_error("Invalid energy_method: " + value +
-                                     " (expected direct|pgp_host|pgp_full|ewald|pme)");
+                                     " (expected direct|pgp_host|pgp_full|pgp_full_pme|ewald|pme)");
         }
     } else if (key == "energy_cutoff") {
         handled = true;

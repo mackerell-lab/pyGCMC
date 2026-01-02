@@ -3,6 +3,7 @@
 #include "../../movement/gcmc/GCMCEnergyCallback.hpp"
 #include "../../energy/pme/PMEGlobal.hpp"
 #include "../../energy/pme/PMESetup.hpp"
+#include "../../energy/pgp/PGPGlobal.hpp"
 #include "../setup/SimulationInputBuilder.hpp"
 #include "../io/SimulationIO.hpp"
 #include <iostream>
@@ -1371,6 +1372,8 @@ bool GCMCSimulation::setupEngine() {
         engine_->setEnergyBackend(GCMCEnergyBackend::PgpHost);
     } else if (energyMethod == "pgp_full") {
         engine_->setEnergyBackend(GCMCEnergyBackend::PgpFull);
+    } else if (energyMethod == "pgp_full_pme" || energyMethod == "pgp_pme") {
+        engine_->setEnergyBackend(GCMCEnergyBackend::PgpFullPme);
     } else {
         const std::string msg = "Invalid energy_method: " + energyMethod;
         log("ERROR: ", msg);
@@ -1392,7 +1395,8 @@ bool GCMCSimulation::setupEngine() {
             const auto backend = engine_->getEnergyBackend();
             if (backend == GCMCEnergyBackend::Pme ||
                 backend == GCMCEnergyBackend::PgpHost ||
-                backend == GCMCEnergyBackend::PgpFull) {
+                backend == GCMCEnergyBackend::PgpFull ||
+                backend == GCMCEnergyBackend::PgpFullPme) {
                 // PGP backends reuse PME parameters (alpha/mesh/B-splines) for the reciprocal grid,
                 // so they must be initialized consistently to keep PGP↔PME energy differences closed.
                 initializePMEParameters(cutoff, box);
@@ -3482,6 +3486,27 @@ void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
         << ",\"use_switching\":" << (energy.use_switching ? "true" : "false")
         << ",\"switch_dist_fragment_nm\":" << energy.switch_dist_fragment
         << ",\"switch_dist_protein_nm\":" << energy.switch_dist_protein
+        << "},";
+
+    // Electrostatics backend parameters (for debugging/validation).
+    // These are informational and should not be treated as a stable public API.
+    const auto& pmeParams = platform::cpu::getPMEParams();
+    const auto& pgpParams = platform::cpu::getPGPParams();
+    ofs << "\"electrostatics\":{"
+        << "\"pme_initialized\":" << (pmeParams.initialized ? "true" : "false")
+        << ",\"pme_alpha\":" << pmeParams.alpha
+        << ",\"pme_tolerance\":" << pmeParams.tolerance
+        << ",\"pme_spline_order\":" << pmeParams.splineOrder
+        << ",\"pme_mesh\":[" << pmeParams.meshSize[0] << "," << pmeParams.meshSize[1] << "," << pmeParams.meshSize[2] << "]"
+        << ",\"pme_box_nm\":[" << pmeParams.box[0] << "," << pmeParams.box[1] << "," << pmeParams.box[2] << "]"
+        << ",\"pme_cutoff_nm\":" << pmeParams.cutoff
+        << ",\"pgp_initialized\":" << (pgpParams.initialized ? "true" : "false")
+        << ",\"pgp_alpha\":" << pgpParams.alpha
+        << ",\"pgp_tolerance\":" << pgpParams.tolerance
+        << ",\"pgp_spline_order\":" << pgpParams.splineOrder
+        << ",\"pgp_potential_grid\":[" << pgpParams.potential_grid_size[0] << "," << pgpParams.potential_grid_size[1] << "," << pgpParams.potential_grid_size[2] << "]"
+        << ",\"pgp_box_nm\":[" << pgpParams.box[0] << "," << pgpParams.box[1] << "," << pgpParams.box[2] << "]"
+        << ",\"pgp_cutoff_nm\":" << pgpParams.cutoff
         << "},";
 
     ofs << "\"bias\":{"

@@ -1,8 +1,8 @@
 """
-Mode C (pgp_full) and Mode D (pme) must be energy-consistent.
+Mode E (pgp_full_pme) and Mode D (pme) must be energy-consistent.
 
 For gcmc_cpu we require that `energy_method:pme` reproduces the same per-move ΔU
-as `energy_method:pgp_full` when running the same random seed and move proposals.
+as `energy_method:pgp_full_pme` when running the same random seed and move proposals.
 This prevents backend-dependent sampling bias in μVT simulations.
 """
 
@@ -50,7 +50,7 @@ def _load_move_delta_us(path: Path, *, move: str, species: str) -> tuple[list[fl
     return deltas, accepted
 
 
-def test_pgp_full_and_pme_translation_deltaU_match(gcmc_cpu, temp_dir):
+def test_pgp_full_pme_and_pme_translation_deltaU_match(gcmc_cpu, temp_dir):
     work = Path(temp_dir) / "pgp_pme_equivalence" / "translation_deltaU_match"
     work.mkdir(parents=True, exist_ok=True)
 
@@ -182,13 +182,13 @@ use_conf_bias:no
         assert len(deltas) == 20
         return deltas
 
-    deltas_pgp = _run("pgp_full")
+    deltas_pgp = _run("pgp_full_pme")
     deltas_pme = _run("pme")
 
-    assert deltas_pme == pytest.approx(deltas_pgp, rel=1e-10, abs=0.1)
+    assert deltas_pme == pytest.approx(deltas_pgp, rel=1e-10, abs=1e-6)
 
 
-def test_pgp_full_and_pme_insertion_deltaU_match_neutral_lj(gcmc_cpu, temp_dir):
+def test_pgp_full_pme_and_pme_insertion_deltaU_match_neutral_lj(gcmc_cpu, temp_dir):
     work = Path(temp_dir) / "pgp_pme_equivalence" / "insertion_deltaU_match_rejected"
     work.mkdir(parents=True, exist_ok=True)
 
@@ -321,13 +321,13 @@ use_conf_bias:no
         assert accepted == [True] * 20
         return deltas
 
-    deltas_pgp = _run("pgp_full")
+    deltas_pgp = _run("pgp_full_pme")
     deltas_pme = _run("pme")
 
-    assert deltas_pme == pytest.approx(deltas_pgp, rel=1e-10, abs=0.1)
+    assert deltas_pme == pytest.approx(deltas_pgp, rel=1e-10, abs=1e-6)
 
 
-def test_pgp_full_and_pme_deletion_deltaU_match_neutral_lj(gcmc_cpu, temp_dir):
+def test_pgp_full_pme_and_pme_deletion_deltaU_match_neutral_lj(gcmc_cpu, temp_dir):
     work = Path(temp_dir) / "pgp_pme_equivalence" / "deletion_deltaU_match_rejected"
     work.mkdir(parents=True, exist_ok=True)
 
@@ -460,7 +460,7 @@ use_conf_bias:no
         assert accepted == [True]
         return deltas
 
-    deltas_pgp = _run("pgp_full")
+    deltas_pgp = _run("pgp_full_pme")
     deltas_pme = _run("pme")
 
-    assert deltas_pme == pytest.approx(deltas_pgp, rel=1e-10, abs=0.1)
+    assert deltas_pme == pytest.approx(deltas_pgp, rel=1e-10, abs=1e-6)

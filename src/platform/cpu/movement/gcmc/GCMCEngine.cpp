@@ -6,6 +6,8 @@
 #include "../../energy/common/EnergyDirectCore.hpp"
 #include "../../energy/pme/PMEGlobal.hpp"
 #include "../../energy/pme/PMESetup.hpp"
+#include "../../energy/pme/PMESpline.hpp"
+#include "../../energy/pme/PMESystemCore.hpp"
 #include "../../energy/pgp/PGPComposite.hpp"
 #include "../../energy/pgp/PGPGlobal.hpp"
 #include "../../energy/pgp/PGPInterpolation.hpp"
@@ -154,6 +156,7 @@ void GCMCEngine::setEnergyBackend(GCMCEnergyBackend backend) {
             break;
         case GCMCEnergyBackend::PgpHost:
         case GCMCEnergyBackend::PgpFull:
+        case GCMCEnergyBackend::PgpFullPme:
             // PGP is handled inside GCMCEngine; keep fallback set to DIRECT.
             setEnergyMethod(EnergyMethod::DIRECT);
             break;
@@ -251,7 +254,64 @@ void GCMCEngine::ensurePgpInitialized() {
         pgpTolerance_
     );
 
+    buildPgpReciprocalKernel();
+
     pgpInitialized_ = true;
+}
+
+void GCMCEngine::buildPgpReciprocalKernel() {
+    const auto& pme = getPMEParams();
+    const int nx = pme.meshSize[0];
+    const int ny = pme.meshSize[1];
+    const int nz = pme.meshSize[2];
+    if (!(nx > 0 && ny > 0 && nz > 0)) {
+        pgpRecipKernel_.clear();
+        pgpRecipKernelMesh_[0] = pgpRecipKernelMesh_[1] = pgpRecipKernelMesh_[2] = 0;
+        pgpRecipKernelSplineOrder_ = 0;
+        return;
+    }
+
+    const int totalGridSize = nx * ny * nz;
+    if (!(totalGridSize > 0)) {
+        pgpRecipKernel_.clear();
+        pgpRecipKernelMesh_[0] = pgpRecipKernelMesh_[1] = pgpRecipKernelMesh_[2] = 0;
+        pgpRecipKernelSplineOrder_ = 0;
+        return;
+    }
+
+    auto& pmeMutable = getPMEParams();
+    std::vector<std::complex<double>> pmeGridBackup = std::move(pmeMutable.pmeGrid);
+
+    pmeMutable.pmeGrid.assign(static_cast<size_t>(totalGridSize), std::complex<double>(0.0, 0.0));
+    pmeMutable.pmeGrid[0] = std::complex<double>(1.0, 0.0);
+
+    performFFTForward();
+
+    const double boxNm[3] = {pmeMutable.box[0], pmeMutable.box[1], pmeMutable.box[2]};
+    double unusedRecipEnergy = 0.0;
+    computeEnergyFromGrid(unusedRecipEnergy, boxNm);
+    if (!pmeMutable.pmeGrid.empty()) {
+        pmeMutable.pmeGrid[0] = std::complex<double>(0.0, 0.0);
+    }
+
+    performFFTBackward();
+
+    const double fftScale = static_cast<double>(totalGridSize);
+    for (int i = 0; i < totalGridSize; ++i) {
+        pmeMutable.pmeGrid[static_cast<size_t>(i)] *= fftScale;
+    }
+
+    pgpRecipKernel_.assign(static_cast<size_t>(totalGridSize), 0.0);
+    for (int i = 0; i < totalGridSize; ++i) {
+        pgpRecipKernel_[static_cast<size_t>(i)] = pmeMutable.pmeGrid[static_cast<size_t>(i)].real();
+    }
+
+    pgpRecipKernelMesh_[0] = nx;
+    pgpRecipKernelMesh_[1] = ny;
+    pgpRecipKernelMesh_[2] = nz;
+    pgpRecipKernelSplineOrder_ = pmeMutable.splineOrder;
+
+    pmeMutable.pmeGrid = std::move(pmeGridBackup);
 }
 
 void GCMCEngine::ensurePgpHostGridReady() {
@@ -326,6 +386,166 @@ double GCMCEngine::calculatePgpReciprocalEnergyFromGrid(int residueIdx) {
     double gridEnergy = 0.0;
     interpolateMoleculeEnergy(*state_, gridEnergy);
     return gridEnergy;
+}
+
+double GCMCEngine::calculatePgpReciprocalMeshSelfEnergy(int residueIdx) {
+    if (!state_) {
+        return 0.0;
+    }
+    if (pgpRecipKernel_.empty()) {
+        return 0.0;
+    }
+    const int nx = pgpRecipKernelMesh_[0];
+    const int ny = pgpRecipKernelMesh_[1];
+    const int nz = pgpRecipKernelMesh_[2];
+    if (!(nx > 0 && ny > 0 && nz > 0)) {
+        return 0.0;
+    }
+    if (static_cast<int>(pgpRecipKernel_.size()) != nx * ny * nz) {
+        return 0.0;
+    }
+    if (residueIdx < 0 || residueIdx >= static_cast<int>(state_->residues.size())) {
+        return 0.0;
+    }
+    const auto& residue = state_->residues[residueIdx];
+    if (!residue.active) {
+        return 0.0;
+    }
+
+    const int order = (pgpRecipKernelSplineOrder_ > 0) ? pgpRecipKernelSplineOrder_ : pgpSplineOrder_;
+    if (order < 2) {
+        return 0.0;
+    }
+
+    const float* box = state_->info.box;
+    if (!(box[0] > 0.0f && box[1] > 0.0f && box[2] > 0.0f)) {
+        return 0.0;
+    }
+
+    struct GridCharge {
+        int x;
+        int y;
+        int z;
+        double q;
+    };
+
+    std::vector<std::pair<int, double>> rawCharges;
+    rawCharges.reserve(static_cast<size_t>(residue.atomCount) * static_cast<size_t>(order) * static_cast<size_t>(order) * static_cast<size_t>(order));
+
+    std::vector<double> coeffsX(order);
+    std::vector<double> coeffsY(order);
+    std::vector<double> coeffsZ(order);
+
+    for (int j = 0; j < residue.atomCount; ++j) {
+        const int atomIdx = residue.atomStart + j;
+        if (atomIdx < 0 || atomIdx >= static_cast<int>(state_->atoms.size())) {
+            continue;
+        }
+        const auto& atom = state_->atoms[atomIdx];
+        const double charge = static_cast<double>(atom.charge);
+        if (std::abs(charge) < 1e-12) {
+            continue;
+        }
+
+        const double posX = static_cast<double>(atom.x);
+        const double posY = static_cast<double>(atom.y);
+        const double posZ = static_cast<double>(atom.z);
+
+        auto fracToGrid = [](double pos, double boxLen, int mesh) {
+            double u = pos / boxLen;
+            u -= std::floor(u);
+            u *= static_cast<double>(mesh);
+            return u;
+        };
+
+        const double gridX = fracToGrid(posX, static_cast<double>(box[0]), nx);
+        const double gridY = fracToGrid(posY, static_cast<double>(box[1]), ny);
+        const double gridZ = fracToGrid(posZ, static_cast<double>(box[2]), nz);
+
+        const int x0 = static_cast<int>(std::floor(gridX));
+        const int y0 = static_cast<int>(std::floor(gridY));
+        const int z0 = static_cast<int>(std::floor(gridZ));
+
+        const double dx = gridX - std::floor(gridX);
+        const double dy = gridY - std::floor(gridY);
+        const double dz = gridZ - std::floor(gridZ);
+
+        computeBSplineCoefficients(dx, order, coeffsX);
+        computeBSplineCoefficients(dy, order, coeffsY);
+        computeBSplineCoefficients(dz, order, coeffsZ);
+
+        for (int ix = 0; ix < order; ++ix) {
+            const int x = (x0 + ix) % nx;
+            const double wx = coeffsX[ix];
+            for (int iy = 0; iy < order; ++iy) {
+                const int y = (y0 + iy) % ny;
+                const double wxy = wx * coeffsY[iy];
+                for (int iz = 0; iz < order; ++iz) {
+                    const int z = (z0 + iz) % nz;
+                    const double weight = wxy * coeffsZ[iz];
+                    if (std::abs(weight) < 1e-18) {
+                        continue;
+                    }
+                    const int idx = x * ny * nz + y * nz + z;
+                    rawCharges.emplace_back(idx, charge * weight);
+                }
+            }
+        }
+    }
+
+    if (rawCharges.empty()) {
+        return 0.0;
+    }
+
+    std::sort(rawCharges.begin(), rawCharges.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+
+    std::vector<GridCharge> charges;
+    charges.reserve(rawCharges.size());
+    int currentIdx = rawCharges.front().first;
+    double accum = 0.0;
+    for (const auto& kv : rawCharges) {
+        if (kv.first != currentIdx) {
+            if (std::abs(accum) > 0.0) {
+                const int x = currentIdx / (ny * nz);
+                const int rem = currentIdx - x * ny * nz;
+                const int y = rem / nz;
+                const int z = rem - y * nz;
+                charges.push_back(GridCharge{x, y, z, accum});
+            }
+            currentIdx = kv.first;
+            accum = kv.second;
+        } else {
+            accum += kv.second;
+        }
+    }
+    if (std::abs(accum) > 0.0) {
+        const int x = currentIdx / (ny * nz);
+        const int rem = currentIdx - x * ny * nz;
+        const int y = rem / nz;
+        const int z = rem - y * nz;
+        charges.push_back(GridCharge{x, y, z, accum});
+    }
+
+    if (charges.empty()) {
+        return 0.0;
+    }
+
+    double sum = 0.0;
+    for (const auto& a : charges) {
+        for (const auto& b : charges) {
+            int dx = a.x - b.x;
+            if (dx < 0) dx += nx;
+            int dy = a.y - b.y;
+            if (dy < 0) dy += ny;
+            int dz = a.z - b.z;
+            if (dz < 0) dz += nz;
+            const int diffIdx = dx * ny * nz + dy * nz + dz;
+            sum += a.q * b.q * pgpRecipKernel_[static_cast<size_t>(diffIdx)];
+        }
+    }
+
+    return 0.5 * sum;
 }
 
 double GCMCEngine::calculatePgpSelfEnergyMovementResidue(int residueIdx) {
@@ -538,9 +758,11 @@ double GCMCEngine::calculateFragmentEnergyPgpFullUsingCurrentGrid(int residueIdx
 
     const double elecReal = calculatePgpRealSpaceElectrostaticsAllPartners(residueIdx);
     const double elecRecip = calculatePgpReciprocalEnergyFromGrid(residueIdx);
+    const bool includeMeshSelf = (energyBackend_ == GCMCEnergyBackend::PgpFullPme);
+    const double elecRecipSelf = includeMeshSelf ? calculatePgpReciprocalMeshSelfEnergy(residueIdx) : 0.0;
     const double elecSelf = calculatePgpSelfEnergyMovementResidue(residueIdx);
 
-    const double elecTotal = elecReal + elecRecip + elecSelf;
+    const double elecTotal = elecReal + elecRecip + elecRecipSelf + elecSelf;
     residue.energy_elec = static_cast<float>(elecTotal);
 
     return vdwTotal + elecTotal;
@@ -692,7 +914,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     // accidentally include the trial/inserted charges.
     if (energyBackend_ == GCMCEnergyBackend::PgpHost) {
         ensurePgpHostGridReady();
-    } else if (energyBackend_ == GCMCEnergyBackend::PgpFull) {
+    } else if (energyBackend_ == GCMCEnergyBackend::PgpFull ||
+               energyBackend_ == GCMCEnergyBackend::PgpFullPme) {
         ensurePgpFullGridReadyExcluding(-1);
     }
 
@@ -724,7 +947,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     } else if (energyBackend_ == GCMCEnergyBackend::PgpHost) {
         result.deltaE = calculateFragmentEnergyPgpHost(instanceId);
         result.energyAfter = result.deltaE;
-    } else if (energyBackend_ == GCMCEnergyBackend::PgpFull) {
+    } else if (energyBackend_ == GCMCEnergyBackend::PgpFull ||
+               energyBackend_ == GCMCEnergyBackend::PgpFullPme) {
         // Use the precomputed background grid (exclude=-1) prepared above / in CBMC.
         result.deltaE = calculateFragmentEnergyPgpFullUsingCurrentGrid(instanceId);
         result.energyAfter = result.deltaE;
@@ -779,7 +1003,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         result.residueIndex = instanceId;
         acceptedMoves_++;
         energyCache_.invalidate();
-        if (energyBackend_ == GCMCEnergyBackend::PgpFull) {
+        if (energyBackend_ == GCMCEnergyBackend::PgpFull ||
+            energyBackend_ == GCMCEnergyBackend::PgpFullPme) {
             // Background changed; force a rebuild on the next evaluation.
             pgpFullGridReady_ = false;
             pgpFullGridExcludedResidue_ = -999;
@@ -885,7 +1110,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
         if (energyBackend_ == GCMCEnergyBackend::PgpHost) {
             return calculateFragmentEnergyPgpHost(residueIdx);
         }
-        if (energyBackend_ == GCMCEnergyBackend::PgpFull) {
+        if (energyBackend_ == GCMCEnergyBackend::PgpFull ||
+            energyBackend_ == GCMCEnergyBackend::PgpFullPme) {
             ensurePgpFullGridReadyExcluding(residueIdx);
             return calculateFragmentEnergyPgpFullUsingCurrentGrid(residueIdx);
         }
@@ -1043,7 +1269,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
                         trial.energy = residue.energy_vdw + residue.energy_elec;
                     } else if (energyBackend_ == GCMCEnergyBackend::PgpHost) {
                         trial.energy = calculateFragmentEnergyPgpHost(tempId);
-                    } else if (energyBackend_ == GCMCEnergyBackend::PgpFull) {
+                    } else if (energyBackend_ == GCMCEnergyBackend::PgpFull ||
+                               energyBackend_ == GCMCEnergyBackend::PgpFullPme) {
                         // Reuse the background grid built excluding the molecule being deleted.
                         trial.energy = calculateFragmentEnergyPgpFullUsingCurrentGrid(tempId);
                     } else {
@@ -1099,7 +1326,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     const bool cbmcEnabled = (useConfBias_ && numTrials > 1);
     if (energyBackend_ == GCMCEnergyBackend::DirectCutoff ||
         energyBackend_ == GCMCEnergyBackend::PgpHost ||
-        energyBackend_ == GCMCEnergyBackend::PgpFull) {
+        energyBackend_ == GCMCEnergyBackend::PgpFull ||
+        energyBackend_ == GCMCEnergyBackend::PgpFullPme) {
         const double residueEnergy = cbmcEnabled ? cbmcSelectedEnergy : residueEnergyForBackend(instanceId);
         result.deltaE = -residueEnergy;  // Removing this energy from system
         result.energyBefore = residueEnergy;
@@ -1175,7 +1403,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
         result.accepted = true;
         acceptedMoves_++;
         energyCache_.invalidate();
-        if (energyBackend_ == GCMCEnergyBackend::PgpFull) {
+        if (energyBackend_ == GCMCEnergyBackend::PgpFull ||
+            energyBackend_ == GCMCEnergyBackend::PgpFullPme) {
             // Background changed; force a rebuild on the next insertion/background evaluation.
             pgpFullGridReady_ = false;
             pgpFullGridExcludedResidue_ = -999;
@@ -1795,7 +2024,8 @@ double GCMCEngine::calculateFragmentEnergy(int residueIdx) {
     if (energyBackend_ == GCMCEnergyBackend::PgpHost) {
         return calculateFragmentEnergyPgpHost(residueIdx);
     }
-    if (energyBackend_ == GCMCEnergyBackend::PgpFull) {
+    if (energyBackend_ == GCMCEnergyBackend::PgpFull ||
+        energyBackend_ == GCMCEnergyBackend::PgpFullPme) {
         // For translation/rotation/deletion, the background grid must exclude the moved residue.
         // (CBMC insertion/deletion retracing handle grid reuse explicitly and call the
         // calculateFragmentEnergyPgpFullUsingCurrentGrid helper directly.)
@@ -2359,7 +2589,8 @@ GCMCEngine::TrialConfiguration GCMCEngine::performCBMCInsertion(int typeId, int 
     // Prepare any background grid once per CBMC move (never per trial).
     if (energyBackend_ == GCMCEnergyBackend::PgpHost) {
         ensurePgpHostGridReady();
-    } else if (energyBackend_ == GCMCEnergyBackend::PgpFull) {
+    } else if (energyBackend_ == GCMCEnergyBackend::PgpFull ||
+               energyBackend_ == GCMCEnergyBackend::PgpFullPme) {
         // Background is the current system (trial residues are temporary and must not enter the grid).
         ensurePgpFullGridReadyExcluding(-1);
     }
@@ -2402,7 +2633,8 @@ GCMCEngine::TrialConfiguration GCMCEngine::performCBMCInsertion(int typeId, int 
             trial.energy = residue.energy_vdw + residue.energy_elec;
         } else if (energyBackend_ == GCMCEnergyBackend::PgpHost) {
             trial.energy = calculateFragmentEnergyPgpHost(tempId);
-        } else if (energyBackend_ == GCMCEnergyBackend::PgpFull) {
+        } else if (energyBackend_ == GCMCEnergyBackend::PgpFull ||
+                   energyBackend_ == GCMCEnergyBackend::PgpFullPme) {
             trial.energy = calculateFragmentEnergyPgpFullUsingCurrentGrid(tempId);
         } else {
             trial.energy = calculateFragmentEnergy(tempId);

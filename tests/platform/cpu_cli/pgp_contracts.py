@@ -7,6 +7,7 @@ They assert behavior via --dump-accept (JSONL) and --dump-params (JSON).
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -150,8 +151,10 @@ def test_pgp_full_translation_self_exclusion_keeps_deltaU_zero_in_one_particle_s
     Mode C (pgp_full) must exclude the moved residue from the background grid.
 
     With only one charged particle in the entire system:
-    - Interaction energy should be purely self-energy (position-independent).
-    - A translation move must therefore have deltaU ~ 0.
+    - Energy should be purely self-energy (no pair interactions).
+    - Under continuous Ewald, translating the particle must not change energy (ΔU = 0).
+    - In standard PME (Mode D), a finite mesh introduces a small mesh-self fluctuation; we
+      therefore require Mode E (pgp_full_pme) to match PME, while Mode C stays "more physical".
     """
     work = Path(temp_dir) / "pgp_full_translation_self_exclusion"
     work.mkdir(parents=True, exist_ok=True)
@@ -214,16 +217,20 @@ FRG  1
 """,
     )
 
-    out_prefix = work / "out" / "gcmc"
-    out_prefix.parent.mkdir(parents=True, exist_ok=True)
-    accept_log = work / "out" / "accept.jsonl"
+    def _run(method: str) -> list[float]:
+        run_dir = work / method
+        run_dir.mkdir(parents=True, exist_ok=True)
 
-    inp = work / "test.inp"
-    _write_inp(
-        inp,
-        f"""
+        out_prefix = run_dir / "out" / "gcmc"
+        out_prefix.parent.mkdir(parents=True, exist_ok=True)
+        accept_log = run_dir / "out" / "accept.jsonl"
+
+        inp = run_dir / "test.inp"
+        _write_inp(
+            inp,
+            f"""
 random_seed:42
-energy_method:pgp_full
+energy_method:{method}
 par:{par}
 fragitp:{frag}
 fragname:FRG
@@ -234,29 +241,49 @@ pdb:{pdb}
 top:{top}
 box_size:50.0 50.0 50.0
 cutoff:6.0
+max_translation:5.0
 temperature:300.0
 moves_per_step:1
-mcsteps:1
+mcsteps:10
 nprint:1
 mc_move_prob:0 0 1 0
 
 use_cavity_bias:no
 use_conf_bias:no
 """,
-    )
+        )
 
-    result = _run_gcmc_cpu(
-        gcmc_cpu,
-        workdir=work,
-        inp=inp,
-        out_prefix=out_prefix,
-        extra_args=["--dump-accept", str(accept_log)],
-        timeout=60,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
+        result = _run_gcmc_cpu(
+            gcmc_cpu,
+            workdir=run_dir,
+            inp=inp,
+            out_prefix=out_prefix,
+            extra_args=["--dump-accept", str(accept_log)],
+            timeout=60,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
 
-    rec = _first_accept_record(accept_log, move="translation", species="FRG")
-    assert float(rec["deltaU"]) == pytest.approx(0.0, abs=1e-6)
+        records = [
+            json.loads(line)
+            for line in accept_log.read_text().splitlines()
+            if line.strip()
+        ]
+        deltas = [
+            float(r["deltaU"])
+            for r in records
+            if str(r.get("move", "")).strip().lower() == "translation"
+            and str(r.get("species", "")).strip().upper() == "FRG"
+        ]
+        assert deltas, f"No translation/FRG records found in {accept_log}"
+        return deltas
+
+    deltas_pgp = _run("pgp_full")
+    deltas_pme = _run("pme")
+    deltas_pgp_pme = _run("pgp_full_pme")
+
+    assert deltas_pgp == pytest.approx([0.0] * len(deltas_pgp), abs=1e-6)
+    assert deltas_pgp_pme == pytest.approx(deltas_pme, rel=1e-10, abs=1e-6)
+    assert max(abs(x) for x in deltas_pme) > 1e-4
 
 
 def test_pgp_host_cbmc_trial_energies_include_long_range_host_coulomb(gcmc_cpu, temp_dir):

@@ -34,6 +34,7 @@ enum class GCMCEnergyBackend {
     Pme,
     PgpHost,
     PgpFull,
+    PgpFullPme,
 };
 
 /**
@@ -243,14 +244,20 @@ private:
     EnergyMethod energyMethod_;
     GCMCEnergyBackend energyBackend_ = GCMCEnergyBackend::DirectCutoff;
 
-    // PGP configuration (used when energyBackend_ is PgpHost/PgpFull)
+    // PGP configuration (used when energyBackend_ is PgpHost/PgpFull/PgpFullPme)
     double pgpTolerance_ = 1e-5;
     int pgpSplineOrder_ = 4;
     bool pgpInitialized_ = false;
     bool pgpHostGridReady_ = false;
     bool pgpFullGridReady_ = false;
     int pgpFullGridExcludedResidue_ = -999;  // -1 = none, >=0 = excluded residue index
-    
+    // Reciprocal-space Green's function on the PME mesh (real part, kJ/mol/e),
+    // used by Mode E (energy_method=pgp_full_pme) to add the mesh-self term that
+    // is present in PME(system energy) but missing from the background-grid cross-term alone.
+    std::vector<double> pgpRecipKernel_;
+    int pgpRecipKernelMesh_[3] = {0, 0, 0};
+    int pgpRecipKernelSplineOrder_ = 0;
+
     // Random number generation
     std::mt19937 rng_;
     std::uniform_real_distribution<double> uniform_;
@@ -289,11 +296,13 @@ private:
     void ensurePgpHostGridReady();
     void ensurePgpFullGridReadyExcluding(int excludedResidueIdx);
     void computePgpFullGridExcludingNoCache(int excludedResidueIdx);
+    void buildPgpReciprocalKernel();
     double calculateFragmentEnergyPgpHost(int residueIdx);
     double calculateFragmentEnergyPgpFullUsingCurrentGrid(int residueIdx);
     double calculatePgpRealSpaceElectrostaticsFixedOnly(int residueIdx);
     double calculatePgpRealSpaceElectrostaticsAllPartners(int residueIdx);
     double calculatePgpReciprocalEnergyFromGrid(int residueIdx);
+    double calculatePgpReciprocalMeshSelfEnergy(int residueIdx);
     double calculatePgpSelfEnergyMovementResidue(int residueIdx);
 
     void updateFragmentPosition(int residueIdx, const Vector3& newPos);
