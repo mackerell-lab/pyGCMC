@@ -224,13 +224,6 @@ mc_move_prob:1 0 0 0
     assert float(rec["deltaU"]) == pytest.approx(delta_components, rel=5e-3, abs=0.15)
 
 
-def _expected_mean_from_records(records: list[dict], species: str) -> float:
-    for rec in records:
-        if str(rec.get("species", "")).strip().upper() == species.strip().upper():
-            return float(rec["z"]) * float(rec["vBox"])
-    raise AssertionError(f"No records found for {species}")
-
-
 def _n_before_samples(records: list[dict], species: str) -> list[int]:
     samples: list[int] = []
     want = species.strip().upper()
@@ -291,11 +284,15 @@ Y  1
 """,
     )
 
+    box_ang = 10.0
+    v_box_expected = (box_ang / 10.0) ** 3
     beta = 1.0 / (0.008314462618 * 300.0)
     target_mean_x = 4.0
     target_mean_y = 2.0
-    mu_x_kj = math.log(target_mean_x) / beta
-    mu_y_kj = math.log(target_mean_y) / beta
+    target_z_x = target_mean_x / v_box_expected
+    target_z_y = target_mean_y / v_box_expected
+    mu_x_kj = math.log(target_z_x) / beta
+    mu_y_kj = math.log(target_z_y) / beta
     mu_x_kcal = mu_x_kj / 4.184
     mu_y_kcal = mu_y_kj / 4.184
 
@@ -341,16 +338,25 @@ mc_move_prob:1 1 0 0
     records = _load_accept_records(accept_log)
     assert records, "acceptance log unexpectedly empty"
 
-    for species, target_mean in (("X", target_mean_x), ("Y", target_mean_y)):
-        expected_mean = _expected_mean_from_records(records, species)
+    for species, target_mean, target_z in (
+        ("X", target_mean_x, target_z_x),
+        ("Y", target_mean_y, target_z_y),
+    ):
+        first = next(
+            r for r in records
+            if str(r.get("species", "")).strip().upper() == species
+        )
+        assert float(first["vBox"]) == pytest.approx(v_box_expected, rel=1e-12, abs=1e-12)
+        assert float(first["z"]) == pytest.approx(target_z, rel=2e-3, abs=1e-3)
+        expected_mean = target_z * v_box_expected
         samples = _n_before_samples(records, species)
         assert len(samples) >= 800, f"Insufficient samples for {species}: {len(samples)}"
 
         sample_mean = statistics.mean(samples)
         sample_var = statistics.pvariance(samples)
 
-        assert sample_mean == pytest.approx(expected_mean, rel=0.35, abs=0.7)
-        assert abs(sample_var - expected_mean) / max(expected_mean, 1e-6) < 0.45
+        assert sample_mean == pytest.approx(expected_mean, rel=0.15, abs=0.3)
+        assert abs(sample_var - expected_mean) / max(expected_mean, 1e-6) < 0.25
 
         counts = Counter(samples)
         center = int(round(expected_mean))
@@ -366,7 +372,7 @@ mc_move_prob:1 1 0 0
                 continue
             empirical = c1 / c0
             expected = expected_mean / float(n + 1)
-            assert empirical == pytest.approx(expected, rel=0.35, abs=0.2)
+            assert empirical == pytest.approx(expected, rel=0.25, abs=0.15)
             checked += 1
 
         assert checked >= 3, f"Insufficient bins for {species}: checked={checked}, counts={counts}"

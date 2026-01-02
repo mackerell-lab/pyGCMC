@@ -1272,7 +1272,7 @@ mc_move_prob:1 0 0 0
     assert bool(ins_rec.get("accepted")) is True
 
     deltaU_ins = float(ins_rec["deltaU"])
-    assert abs(deltaU_ins) > 1e-6
+    assert abs(deltaU_ins) > 5.0
 
     final_pdb = Path(f"{ins_prefix}_final.pdb")
     assert final_pdb.exists()
@@ -1333,8 +1333,10 @@ def test_poisson_number_distribution_ideal_gas(gcmc_cpu, temp_dir):
     par, frag = _write_ideal_gas_itp(work)
 
     target_mean = 5.0
+    box_ang = 10.0
+    v_box_expected = (box_ang / 10.0) ** 3
     beta = 1.0 / (0.008314462618 * 300.0)
-    target_z = target_mean  # V = 1 nm^3 for 10 Å box
+    target_z = target_mean / v_box_expected
     mu_kj = math.log(target_z) / beta
     fragmuex_kcal = mu_kj / 4.184
 
@@ -1386,7 +1388,10 @@ attempt_prob_rot:0.0
     ]
     assert species_records, "No acceptance records for species X"
 
-    expected_mean = float(species_records[0]["z"]) * float(species_records[0]["vBox"])
+    first = species_records[0]
+    assert float(first["vBox"]) == pytest.approx(v_box_expected, rel=1e-12, abs=1e-12)
+    assert float(first["z"]) == pytest.approx(target_z, rel=2e-3, abs=1e-3)
+    expected_mean = target_z * v_box_expected
 
     stats_path = Path(f"{out_prefix}_statistics.dat")
     assert stats_path.exists(), "statistics.dat missing for Poisson check"
@@ -1400,8 +1405,8 @@ attempt_prob_rot:0.0
     sample_mean = statistics.mean(n_values)
     sample_var = statistics.pvariance(n_values)
 
-    assert sample_mean == pytest.approx(expected_mean, rel=0.25, abs=0.5)
-    assert abs(sample_var - expected_mean) / max(expected_mean, 1e-6) < 0.35
+    assert sample_mean == pytest.approx(expected_mean, rel=0.10, abs=0.2)
+    assert abs(sample_var - expected_mean) / max(expected_mean, 1e-6) < 0.20
 
     # Stronger μVT contract: histogram ratio for Poisson law
     #   P(N+1)/P(N) = (z * V) / (N+1)
@@ -1420,7 +1425,7 @@ attempt_prob_rot:0.0
             continue
         empirical = c1 / c0
         expected = expected_mean / float(n + 1)
-        assert empirical == pytest.approx(expected, rel=0.30, abs=0.15)
+        assert empirical == pytest.approx(expected, rel=0.20, abs=0.10)
         checked += 1
 
     assert checked >= 3, f"Insufficient populated bins for Poisson ratio check: checked={checked}, counts={counts}"

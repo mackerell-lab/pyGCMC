@@ -347,7 +347,10 @@ use_conf_bias:no
     assert abs(delta_direct) < 1e-6
 
     delta_pgp = _run("pgp_host")
-    assert delta_pgp < -1.0
+    # Order-of-magnitude contract: long-range electrostatics must be clearly non-zero and correctly signed.
+    # We avoid hard-coding a vacuum 1/r estimate because periodic Ewald/PGP adds image/background effects.
+    assert delta_pgp < -10.0
+    assert delta_pgp > -100.0
 
 
 def test_pgp_full_adds_long_range_coulomb_beyond_cutoff_for_nonfixed_background(gcmc_cpu, temp_dir):
@@ -413,43 +416,43 @@ FRG  1
 """,
     )
 
-    def _run(method: str) -> float:
-        out_prefix = work / method / "out" / "gcmc"
+    def _run_direct() -> float:
+        out_prefix = work / "direct" / "out" / "gcmc"
         out_prefix.parent.mkdir(parents=True, exist_ok=True)
-        accept_log = work / method / "out" / "accept.jsonl"
+        accept_log = work / "direct" / "out" / "accept.jsonl"
 
-        inp = work / method / "test.inp"
+        inp = work / "direct" / "test.inp"
         inp.parent.mkdir(parents=True, exist_ok=True)
         _write_inp(
             inp,
             f"""
-random_seed:12345
-energy_method:{method}
-par:{par}
-fragitp:{frag}
-fragname:FRG
-fragconc:1.0
-fragmuex:0.0
+	random_seed:12345
+	energy_method:direct
+	par:{par}
+	fragitp:{frag}
+	fragname:FRG
+	fragconc:1.0
+	fragmuex:0.0
 
-pdb:{pdb}
-top:{top}
-box_size:50.0 50.0 50.0
-gcmc_region:box 39.5 9.5 9.5 40.5 10.5 10.5
-cutoff:6.0
-temperature:300.0
-moves_per_step:1
-mcsteps:1
-nprint:1
-mc_move_prob:1 0 0 0
+	pdb:{pdb}
+	top:{top}
+	box_size:50.0 50.0 50.0
+	gcmc_region:box 39.5 9.5 9.5 40.5 10.5 10.5
+	cutoff:6.0
+	temperature:300.0
+	moves_per_step:1
+	mcsteps:1
+	nprint:1
+	mc_move_prob:1 0 0 0
 
-use_cavity_bias:no
-use_conf_bias:no
-""",
+	use_cavity_bias:no
+	use_conf_bias:no
+	""",
         )
 
         result = _run_gcmc_cpu(
             gcmc_cpu,
-            workdir=work / method,
+            workdir=work / "direct",
             inp=inp,
             out_prefix=out_prefix,
             extra_args=["--dump-accept", str(accept_log)],
@@ -459,9 +462,80 @@ use_conf_bias:no
         rec = _first_accept_record(accept_log, move="insertion", species="FRG")
         return float(rec["deltaU"])
 
-    delta_direct = _run("direct")
+    def _run_pgp_full(background_charge: float) -> float:
+        out_prefix = work / f"pgp_full_q{background_charge:.1f}" / "out" / "gcmc"
+        out_prefix.parent.mkdir(parents=True, exist_ok=True)
+        accept_log = out_prefix.parent / "accept.jsonl"
+
+        top_variant = work / f"sys_q{background_charge:.1f}.top"
+        _write_text(
+            top_variant,
+            f"""
+[ defaults ]
+1 2 yes 1.0 1.0
+
+[ moleculetype ]
+FRG  1
+
+[ atoms ]
+; nr  type  resnr  residue  atom  cgnr  charge  mass
+1   QP    1      FRG      Q     1     {background_charge:.6f}   12.011
+
+[ system ]
+FRG
+
+[ molecules ]
+FRG  1
+""",
+        )
+
+        inp = out_prefix.parent / "test.inp"
+        _write_inp(
+            inp,
+            f"""
+	random_seed:12345
+	energy_method:pgp_full
+	par:{par}
+	fragitp:{frag}
+	fragname:FRG
+	fragconc:1.0
+	fragmuex:0.0
+
+	pdb:{pdb}
+	top:{top_variant}
+	box_size:50.0 50.0 50.0
+	gcmc_region:box 39.5 9.5 9.5 40.5 10.5 10.5
+	cutoff:6.0
+	temperature:300.0
+	moves_per_step:1
+	mcsteps:1
+	nprint:1
+	mc_move_prob:1 0 0 0
+
+	use_cavity_bias:no
+	use_conf_bias:no
+	""",
+        )
+
+        result = _run_gcmc_cpu(
+            gcmc_cpu,
+            workdir=out_prefix.parent.parent,
+            inp=inp,
+            out_prefix=out_prefix,
+            extra_args=["--dump-accept", str(accept_log)],
+            timeout=60,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        rec = _first_accept_record(accept_log, move="insertion", species="FRG")
+        return float(rec["deltaU"])
+
+    delta_direct = _run_direct()
     assert abs(delta_direct) < 1e-6
 
-    delta_pgp = _run("pgp_full")
-    assert delta_pgp > 1.0
-
+    # For pgp_full, deltaU also contains the (position-independent) Ewald self-energy of the inserted particle.
+    # Isolate long-range background coupling by differencing two runs that only change the *background* charge.
+    delta_neutral = _run_pgp_full(0.0)
+    delta_charged = _run_pgp_full(1.0)
+    shift = delta_charged - delta_neutral
+    assert shift > 5.0
+    assert shift < 100.0

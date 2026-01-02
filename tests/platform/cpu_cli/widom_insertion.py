@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 
 from .inp_units_compat_helpers import _run_gcmc_cpu, _write_inp
+from .physical_contracts import MOLAR_TO_NM3
 
 
 def _write_text(path: Path, content: str) -> None:
@@ -39,6 +40,14 @@ def _load_accept_records(path: Path) -> list[dict]:
 def test_widom_insertion_mu_rho_consistency_interacting_lj(gcmc_cpu, temp_dir):
     work = Path(temp_dir) / "widom_insertion"
     work.mkdir(parents=True, exist_ok=True)
+
+    temperature_k = 300.0
+    fragconc_m = 2.0
+    fragmuex_kcal = 0.0
+    box_ang = 20.0
+    v_box_expected = (box_ang / 10.0) ** 3
+    beta_expected = 1.0 / (0.008314462618 * temperature_k)
+    z_expected = fragconc_m * MOLAR_TO_NM3 * math.exp(beta_expected * (fragmuex_kcal * 4.184))
 
     par = work / "par.itp"
     frag = work / "frag.itp"
@@ -79,13 +88,13 @@ random_seed:20251229
 par:{par}
 fragitp:{frag}
 fragname:X
-fragconc:2.0
-fragmuex:0.0
+fragconc:{fragconc_m}
+fragmuex:{fragmuex_kcal}
 
-box_size:20.0 20.0 20.0
-gcmc_region:box 0 0 0 20 20 20
+box_size:{box_ang} {box_ang} {box_ang}
+gcmc_region:box 0 0 0 {box_ang} {box_ang} {box_ang}
 cutoff:10.0
-temperature:300.0
+temperature:{temperature_k}
 moves_per_step:1
 mcsteps:4000
 nprint:1
@@ -128,21 +137,18 @@ attempt_prob_rot:0.0
     insertions = insertions[burnin:]
     assert len(insertions) >= 500
 
-    beta = float(insertions[0]["beta"])
-    z = float(insertions[0]["z"])
-    v_box = float(insertions[0]["vBox"])
-    assert beta > 0.0
-    assert z > 0.0
-    assert v_box > 0.0
+    first = insertions[0]
+    assert float(first["beta"]) == pytest.approx(beta_expected, rel=2e-3, abs=1e-4)
+    assert float(first["vBox"]) == pytest.approx(v_box_expected, rel=1e-12, abs=1e-12)
+    assert float(first["z"]) == pytest.approx(z_expected, rel=2e-3, abs=1e-4)
 
-    widom_weights = [math.exp(-beta * float(r["deltaU"])) for r in insertions]
+    widom_weights = [math.exp(-beta_expected * float(r["deltaU"])) for r in insertions]
     widom_factor = statistics.mean(widom_weights)
-    rho_widom = z * widom_factor
+    rho_widom = z_expected * widom_factor
 
     n_values = [int(r["nBefore"]) for r in insertions]
     mean_n = statistics.mean(n_values)
-    rho_measured = mean_n / v_box
+    rho_measured = mean_n / v_box_expected
 
     # In the μVT ensemble this identity is exact; we allow finite-sample noise with a moderate tolerance.
     assert rho_measured == pytest.approx(rho_widom, rel=0.25, abs=0.05)
-

@@ -209,8 +209,27 @@ void GCMCEngine::ensurePgpInitialized() {
     // Auto-tune PME parameters and reuse them for PGP setup.
     // This keeps PGP consistent with the existing PME error tolerance model.
     autoAdjustPMEParameters(pgpTolerance_, cutoff, box);
+    // PGP's setup path relies on PME-global box state for charge spreading and for copying
+    // PME parameters into the PGP parameter block. Without this, PGP can silently run with
+    // the default unit box and produce wildly mis-scaled electrostatics.
+    setPMEBox(box);
     const auto& pme = getPMEParams();
-    const int meshSize[3] = {pme.meshSize[0], pme.meshSize[1], pme.meshSize[2]};
+    int meshSize[3] = {pme.meshSize[0], pme.meshSize[1], pme.meshSize[2]};
+    // Guard against pathological auto-tuning (e.g., selecting a 4×4×4 mesh for a multi-nm box),
+    // which can severely under-resolve the reciprocal potential and silently mis-scale PGP energies.
+    // Use a conservative minimum grid spacing for PGP potential interpolation.
+    auto nextPow2 = [](int n) {
+        int p = 1;
+        while (p < n) p <<= 1;
+        return p;
+    };
+    constexpr double kMinGridDxNm = 0.25;
+    for (int d = 0; d < 3; ++d) {
+        const int minSize = nextPow2(static_cast<int>(std::ceil(box[d] / kMinGridDxNm)));
+        if (meshSize[d] < minSize) {
+            meshSize[d] = minSize;
+        }
+    }
 
     // Use the same mesh for potential grid size in the first implementation.
     PGPComposite::initialize(

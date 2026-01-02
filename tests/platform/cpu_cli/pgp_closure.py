@@ -170,8 +170,16 @@ def test_pgp_full_cbmc_trial_energies_shift_with_nonfixed_background_charge(gcmc
     mean_neutral = statistics.mean(rec_neutral["cbmcTrialEnergies"])
     mean_charged = statistics.mean(rec_charged["cbmcTrialEnergies"])
 
-    assert (mean_charged - mean_neutral) > 5.0
-    assert (rec_charged["deltaU"] - rec_neutral["deltaU"]) > 5.0
+    shift_trials = mean_charged - mean_neutral
+    shift_selected = rec_charged["deltaU"] - rec_neutral["deltaU"]
+
+    # Order-of-magnitude contract: switching a background charge 0 -> +1 must produce a clear
+    # repulsive shift, but we do not hard-code a vacuum 1/r estimate because periodic Ewald/PGP
+    # includes image/background effects and CBMC selects among trial positions.
+    assert shift_trials > 10.0
+    assert shift_trials < 100.0
+    assert shift_selected > 10.0
+    assert shift_selected < 100.0
 
 
 def test_pgp_full_deletion_deltaU_is_negative_of_insertion_for_charged_system(gcmc_cpu, temp_dir):
@@ -238,7 +246,7 @@ mc_move_prob:1 0 0 0
     assert bool(ins_rec.get("accepted")) is True
 
     deltaU_ins = float(ins_rec["deltaU"])
-    assert abs(deltaU_ins) > 1e-6
+    assert abs(deltaU_ins) > 5.0
 
     final_pdb = Path(f"{ins_prefix}_final.pdb")
     assert final_pdb.exists()
