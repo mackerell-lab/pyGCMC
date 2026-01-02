@@ -208,6 +208,12 @@ from cpu_cli.pgp_contracts import (
     test_pgp_host_cbmc_trial_energies_include_long_range_host_coulomb,
 )
 
+# PGP C/D/E quantification contracts (2 functions)
+from cpu_cli.pgp_cde_quantification import (
+    test_cde_mesh_self_gap_is_background_independent_for_neutral_dipole_translation,
+    test_mesh_self_gap_scales_quadratically_with_charge_for_neutral_dipole,
+)
+
 # PGP closure regressions (2 functions)
 from cpu_cli.pgp_closure import (
     test_pgp_full_cbmc_trial_energies_shift_with_nonfixed_background_charge,
