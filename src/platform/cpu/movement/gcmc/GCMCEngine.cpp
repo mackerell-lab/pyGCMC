@@ -223,9 +223,17 @@ void GCMCEngine::ensurePgpInitialized() {
         while (p < n) p <<= 1;
         return p;
     };
-    constexpr double kMinGridDxNm = 0.25;
+    // Heuristic: require a finer reciprocal mesh when alpha is large to keep
+    // PGP(interpolated potential) consistent with PME(system energy).
+    // For typical alpha~5 1/nm, 0.5/alpha -> 0.1 nm grid spacing (64^3 for a 4 nm box).
+    constexpr double kMinGridDxLowerNm = 0.10;
+    constexpr double kMinGridDxUpperNm = 0.25;
+    double minGridDxNm = kMinGridDxUpperNm;
+    if (pme.alpha > 0.0) {
+        minGridDxNm = std::min(kMinGridDxUpperNm, std::max(kMinGridDxLowerNm, 0.5 / pme.alpha));
+    }
     for (int d = 0; d < 3; ++d) {
-        const int minSize = nextPow2(static_cast<int>(std::ceil(box[d] / kMinGridDxNm)));
+        const int minSize = nextPow2(static_cast<int>(std::ceil(box[d] / minGridDxNm)));
         if (meshSize[d] < minSize) {
             meshSize[d] = minSize;
         }
@@ -689,7 +697,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     }
 
     // Calculate energy before insertion (only needed for long-range full-system methods).
-    if (energyBackend_ == GCMCEnergyBackend::Ewald) {
+    if (energyBackend_ == GCMCEnergyBackend::Ewald ||
+        energyBackend_ == GCMCEnergyBackend::Pme) {
         result.energyBefore = calculateSystemEnergy();
     } else {
         result.energyBefore = 0.0;
@@ -719,11 +728,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         // Use the precomputed background grid (exclude=-1) prepared above / in CBMC.
         result.deltaE = calculateFragmentEnergyPgpFullUsingCurrentGrid(instanceId);
         result.energyAfter = result.deltaE;
-    } else if (energyBackend_ == GCMCEnergyBackend::Pme) {
-        result.deltaE = calculateFragmentEnergy(instanceId);
-        result.energyAfter = result.deltaE;
     } else {
-        // Full system energy for Ewald mode.
+        // Full system energy for EWALD/PME backends.
         result.energyAfter = calculateSystemEnergy();
         result.deltaE = result.energyAfter - result.energyBefore;
     }
@@ -897,6 +903,98 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     }
 
     if (useConfBias_ && numTrials > 1) {
+        if (energyBackend_ == GCMCEnergyBackend::Pme) {
+            // Mode D (PME): compute CBMC retracing weights using full-system PME energy differences.
+            // This is intentionally slow and serves as a validation/reference backend.
+            std::vector<TrialConfiguration> trials;
+            trials.reserve(numTrials);
+
+            const double energyWithCurrent = calculateSystemEnergy();
+
+            // Temporarily deactivate this residue in MCState so trial energies do not
+            // include interactions with the molecule being deleted.
+            bool restoredActive = false;
+            int restoredAtomCount = 0;
+            if (state_ && instanceId >= 0 && instanceId < static_cast<int>(state_->residues.size())) {
+                auto& residue = state_->residues[instanceId];
+                restoredActive = residue.active;
+                restoredAtomCount = residue.atomCount;
+                residue.active = false;
+                residue.atomCount = 0;
+            }
+
+            const double baselineEnergy = calculateSystemEnergy();
+
+            TrialConfiguration current;
+            current.weight = 0.0;
+            current.logWOverK = 0.0;
+            current.position = savedPosition;
+            current.orientation = savedOrientation;
+            current.energy = energyWithCurrent - baselineEnergy;
+            trials.push_back(current);
+            cbmcSelectedEnergy = current.energy;
+
+            FragmentTemplate* tmpl = reservoir_->getTemplate(typeId);
+            if (tmpl) {
+                for (int k = 1; k < numTrials; ++k) {
+                    TrialConfiguration trial;
+                    trial.weight = 0.0;
+                    trial.logWOverK = 0.0;
+                    trial.position = (useCavityBias_ && cavityManager_) ?
+                                    generateCavityPosition() : generateRandomPosition();
+                    applyPeriodicBoundary(trial.position);
+                    trial.orientation = generateRandomOrientation();
+
+                    int tempId = reservoir_->createInstance(typeId, trial.position, trial.orientation);
+                    if (tempId >= 0) {
+                        synchronizeStateWithReservoir(tempId, true);
+                        const double energyWithTrial = calculateSystemEnergy();
+                        trial.energy = energyWithTrial - baselineEnergy;
+
+                        reservoir_->deleteInstance(tempId);
+                        synchronizeStateWithReservoir(tempId, false);
+                        trials.push_back(trial);
+                    }
+                }
+            }
+
+            // Restore residue activity for the actual deletion attempt.
+            if (state_ && instanceId >= 0 && instanceId < static_cast<int>(state_->residues.size())) {
+                auto& residue = state_->residues[instanceId];
+                residue.active = restoredActive;
+                residue.atomCount = restoredAtomCount;
+            }
+
+            if (trials.size() == static_cast<size_t>(numTrials)) {
+                lastCbmcTrialEnergies_.clear();
+                lastCbmcTrialEnergies_.reserve(trials.size());
+                for (const auto& trial : trials) {
+                    lastCbmcTrialEnergies_.push_back(trial.energy);
+                }
+
+                const double beta = 1.0 / (8.314e-3 * temperature_);
+                double minEnergy = std::numeric_limits<double>::max();
+                for (const auto& trial : trials) {
+                    minEnergy = std::min(minEnergy, trial.energy);
+                }
+
+                double sumScaled = 0.0;
+                for (const auto& trial : trials) {
+                    sumScaled += std::exp(-beta * (trial.energy - minEnergy));
+                }
+
+                const double avgScaled = sumScaled / static_cast<double>(numTrials);
+                const double safeAvgScaled = std::max(avgScaled, 1e-30);
+                cbmcLogWOverK = std::log(safeAvgScaled) - beta * minEnergy;
+
+                // rosen = (W/K)/exp(-β u_current) = exp(log(W/K) + β u_current)
+                const double logLower = std::log(1e-30);
+                const double logUpper = 700.0;
+                const double logRosen = cbmcLogWOverK + beta * current.energy;
+                const double logRosenClamped = std::min(std::max(logRosen, logLower), logUpper);
+                cbmcRosen = std::exp(logRosenClamped);
+            }
+        } else {
         // For deletion, compute CBMC retracing weights in the post-deletion environment
         // (i.e., excluding the current molecule) to match the reverse insertion proposal.
         std::vector<TrialConfiguration> trials;
@@ -995,19 +1093,19 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
             const double logRosenClamped = std::min(std::max(logRosen, logLower), logUpper);
             cbmcRosen = std::exp(logRosenClamped);
         }
+        }
     }
 
     const bool cbmcEnabled = (useConfBias_ && numTrials > 1);
     if (energyBackend_ == GCMCEnergyBackend::DirectCutoff ||
         energyBackend_ == GCMCEnergyBackend::PgpHost ||
-        energyBackend_ == GCMCEnergyBackend::PgpFull ||
-        energyBackend_ == GCMCEnergyBackend::Pme) {
+        energyBackend_ == GCMCEnergyBackend::PgpFull) {
         const double residueEnergy = cbmcEnabled ? cbmcSelectedEnergy : residueEnergyForBackend(instanceId);
         result.deltaE = -residueEnergy;  // Removing this energy from system
         result.energyBefore = residueEnergy;
         result.energyAfter = 0.0;
     } else {
-        // Full system energy for Ewald mode
+        // Full system energy for EWALD/PME modes
         result.energyBefore = calculateSystemEnergy();
     }
     
@@ -1016,7 +1114,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     synchronizeStateWithReservoir(instanceId, false);
     
     // Calculate energy after deletion for long-range full-system modes
-    if (energyBackend_ == GCMCEnergyBackend::Ewald) {
+    if (energyBackend_ == GCMCEnergyBackend::Ewald ||
+        energyBackend_ == GCMCEnergyBackend::Pme) {
         result.energyAfter = calculateSystemEnergy();
         result.deltaE = result.energyAfter - result.energyBefore;
     }
@@ -1145,7 +1244,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
     result.position = oldPos;
     
     // Calculate energy before move
-    if (energyBackend_ == GCMCEnergyBackend::Ewald) {
+    if (energyBackend_ == GCMCEnergyBackend::Ewald ||
+        energyBackend_ == GCMCEnergyBackend::Pme) {
         result.energyBefore = calculateSystemEnergy();
     } else {
         result.energyBefore = calculateFragmentEnergy(residueIdx);
@@ -1187,7 +1287,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
     updateFragmentPosition(residueIdx, newPos);
     
     // Calculate energy after move
-    if (energyBackend_ == GCMCEnergyBackend::Ewald) {
+    if (energyBackend_ == GCMCEnergyBackend::Ewald ||
+        energyBackend_ == GCMCEnergyBackend::Pme) {
         result.energyAfter = calculateSystemEnergy();
     } else {
         result.energyAfter = calculateFragmentEnergy(residueIdx);
@@ -1267,7 +1368,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
     Quaternion oldOrient = instance->orientation;
     
     // Calculate energy before rotation
-    if (energyBackend_ == GCMCEnergyBackend::Ewald) {
+    if (energyBackend_ == GCMCEnergyBackend::Ewald ||
+        energyBackend_ == GCMCEnergyBackend::Pme) {
         result.energyBefore = calculateSystemEnergy();
     } else {
         result.energyBefore = calculateFragmentEnergy(residueIdx);
@@ -1305,7 +1407,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
     updateFragmentOrientation(residueIdx, newOrient);
     
     // Calculate energy after rotation
-    if (energyBackend_ == GCMCEnergyBackend::Ewald) {
+    if (energyBackend_ == GCMCEnergyBackend::Ewald ||
+        energyBackend_ == GCMCEnergyBackend::Pme) {
         result.energyAfter = calculateSystemEnergy();
     } else {
         result.energyAfter = calculateFragmentEnergy(residueIdx);
@@ -1686,13 +1789,6 @@ double GCMCEngine::calculateFragmentEnergy(int residueIdx) {
     // Get residue from state
     auto& residue = state_->residues[residueIdx];
     if (!residue.active) return 0.0;
-
-    // Mode D (energy_method=pme): use the same PGP full energy decomposition for moves,
-    // but recompute the reciprocal grid on every evaluation (no caching).
-    if (energyBackend_ == GCMCEnergyBackend::Pme) {
-        computePgpFullGridExcludingNoCache(residueIdx);
-        return calculateFragmentEnergyPgpFullUsingCurrentGrid(residueIdx);
-    }
 
     // PGP backends bypass the generic EnergyMethod dispatch and compute per-residue energies
     // directly against the current background/grid configuration.
@@ -2268,6 +2364,9 @@ GCMCEngine::TrialConfiguration GCMCEngine::performCBMCInsertion(int typeId, int 
         ensurePgpFullGridReadyExcluding(-1);
     }
 
+    const bool useSystemEnergyDelta = (energyBackend_ == GCMCEnergyBackend::Pme);
+    const double baselineSystemEnergy = useSystemEnergyDelta ? calculateSystemEnergy() : 0.0;
+
     // Generate K trial configurations
     double minEnergy = std::numeric_limits<double>::max();
     for (int k = 0; k < numTrials; ++k) {
@@ -2294,7 +2393,10 @@ GCMCEngine::TrialConfiguration GCMCEngine::performCBMCInsertion(int typeId, int 
         synchronizeStateWithReservoir(tempId, true);
 
         // Calculate energy for this configuration
-        if (energyBackend_ == GCMCEnergyBackend::DirectCutoff) {
+        if (useSystemEnergyDelta) {
+            const double energyWithTrial = calculateSystemEnergy();
+            trial.energy = energyWithTrial - baselineSystemEnergy;
+        } else if (energyBackend_ == GCMCEnergyBackend::DirectCutoff) {
             cpu::computeResidueEnergyCutoffPBC(*state_, tempId);
             const auto& residue = state_->residues[tempId];
             trial.energy = residue.energy_vdw + residue.energy_elec;

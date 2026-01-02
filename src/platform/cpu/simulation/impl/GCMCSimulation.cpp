@@ -1389,12 +1389,22 @@ bool GCMCSimulation::setupEngine() {
         };
         const double cutoff = static_cast<double>(state_->info.cutoff);
         try {
-            if (engine_->getEnergyBackend() == GCMCEnergyBackend::Pme) {
+            const auto backend = engine_->getEnergyBackend();
+            if (backend == GCMCEnergyBackend::Pme ||
+                backend == GCMCEnergyBackend::PgpHost ||
+                backend == GCMCEnergyBackend::PgpFull) {
+                // PGP backends reuse PME parameters (alpha/mesh/B-splines) for the reciprocal grid,
+                // so they must be initialized consistently to keep PGP↔PME energy differences closed.
                 initializePMEParameters(cutoff, box);
                 // Guard against pathological auto-tuning (e.g., selecting a 4×4×4 mesh for a multi-nm box),
                 // which can severely under-resolve reciprocal electrostatics and break PGP↔PME consistency.
-                enforceMinPmeGridDx(0.25, cutoff, box);
-            } else if (engine_->getEnergyBackend() == GCMCEnergyBackend::Ewald) {
+                double minGridDxNm = 0.25;
+                const auto& pmeParams = platform::cpu::getPMEParams();
+                if (pmeParams.alpha > 0.0) {
+                    minGridDxNm = std::min(0.25, std::max(0.10, 0.5 / pmeParams.alpha));
+                }
+                enforceMinPmeGridDx(minGridDxNm, cutoff, box);
+            } else if (backend == GCMCEnergyBackend::Ewald) {
                 initializeEwaldParameters(cutoff, box);
             }
         } catch (const std::exception& e) {
