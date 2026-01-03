@@ -50,12 +50,15 @@ void fft_1d_batch(cmplx* data, int dimension, int nx, int ny, int nz, bool inver
         // Calculate corresponding 2D index based on dimension
         switch (dimension) {
             case 0: // X direction
+                // Grid linearization used throughout PME/PGP:
+                //   idx = x * ny * nz + y * nz + z  (z is the fastest index)
+                // So for fixed (y,z), the x-line has stride ny*nz.
                 y = t % ny;
                 z = t / ny;
                 
                 // Read data into buffer
                 for (int x = 0; x < nx; x++) {
-                    buffer[x] = data[x + y*nx + z*nx*ny];
+                    buffer[x] = data[x * ny * nz + y * nz + z];
                 }
                 
                 // Perform FFT/IFFT
@@ -63,17 +66,18 @@ void fft_1d_batch(cmplx* data, int dimension, int nx, int ny, int nz, bool inver
                 
                 // Write result back
                 for (int x = 0; x < nx; x++) {
-                    data[x + y*nx + z*nx*ny] = buffer[x];
+                    data[x * ny * nz + y * nz + z] = buffer[x];
                 }
                 break;
                 
             case 1: // Y direction
-                x = t % nx;
-                z = t / nx;
+                // For fixed (x,z), the y-line has stride nz.
+                x = t / nz;
+                z = t % nz;
                 
                 // Read data into buffer
                 for (int y = 0; y < ny; y++) {
-                    buffer[y] = data[x + y*nx + z*nx*ny];
+                    buffer[y] = data[x * ny * nz + y * nz + z];
                 }
                 
                 // Perform FFT/IFFT
@@ -81,17 +85,18 @@ void fft_1d_batch(cmplx* data, int dimension, int nx, int ny, int nz, bool inver
                 
                 // Write result back
                 for (int y = 0; y < ny; y++) {
-                    data[x + y*nx + z*nx*ny] = buffer[y];
+                    data[x * ny * nz + y * nz + z] = buffer[y];
                 }
                 break;
                 
             case 2: // Z direction
-                x = t % nx;
-                y = t / nx;
+                // For fixed (x,y), the z-line is contiguous.
+                x = t / ny;
+                y = t % ny;
                 
                 // Read data into buffer
                 for (int z = 0; z < nz; z++) {
-                    buffer[z] = data[x + y*nx + z*nx*ny];
+                    buffer[z] = data[x * ny * nz + y * nz + z];
                 }
                 
                 // Perform FFT/IFFT
@@ -99,7 +104,7 @@ void fft_1d_batch(cmplx* data, int dimension, int nx, int ny, int nz, bool inver
                 
                 // Write result back
                 for (int z = 0; z < nz; z++) {
-                    data[x + y*nx + z*nx*ny] = buffer[z];
+                    data[x * ny * nz + y * nz + z] = buffer[z];
                 }
                 break;
         }

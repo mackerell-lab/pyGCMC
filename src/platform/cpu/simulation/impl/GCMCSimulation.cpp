@@ -3302,7 +3302,24 @@ void GCMCSimulation::dumpAcceptanceLog(const std::string& filename) const {
             << "\"accepted\":" << (rec.accepted ? "true" : "false") << ","
             << "\"wForward\":" << rec.wForward << ","
             << "\"wReverse\":" << rec.wReverse << ","
-            << "\"wCavity\":" << rec.wCavity
+            << "\"wCavity\":" << rec.wCavity;
+
+        // Electrostatics backend parameters (diagnostic only; not a stable public API).
+        // Keeping them in the JSONL record lets tests and benchmarking scripts validate that
+        // runs compared across backends are using identical PME parameters.
+        const auto& pmeParams = platform::cpu::getPMEParams();
+        ofs << ",\"pme_alpha\":" << pmeParams.alpha
+            << ",\"pme_spline_order\":" << pmeParams.splineOrder
+            << ",\"pme_mesh\":[" << pmeParams.meshSize[0] << "," << pmeParams.meshSize[1] << "," << pmeParams.meshSize[2] << "]";
+        double bsplineSum[3] = {0.0, 0.0, 0.0};
+        for (int d = 0; d < 3; ++d) {
+            for (double v : pmeParams.bsplineModuli[d]) {
+                bsplineSum[d] += v;
+            }
+        }
+        ofs << ",\"pme_bspline_moduli_sum\":[" << bsplineSum[0] << "," << bsplineSum[1] << "," << bsplineSum[2] << "]";
+
+        ofs
             << "}\n";
     }
 

@@ -5,6 +5,7 @@
 #include "../../energy/EnergyModule.hpp"
 #include "../../energy/common/EnergyDirectCore.hpp"
 #include "../../energy/pme/PMEGlobal.hpp"
+#include "../../energy/pme/PMEGridCharge.hpp"
 #include "../../energy/pme/PMESetup.hpp"
 #include "../../energy/pme/PMESpline.hpp"
 #include "../../energy/pme/PMESystemCore.hpp"
@@ -254,8 +255,6 @@ void GCMCEngine::ensurePgpInitialized() {
         pgpTolerance_
     );
 
-    buildPgpReciprocalKernel();
-
     pgpInitialized_ = true;
 }
 
@@ -296,6 +295,8 @@ void GCMCEngine::buildPgpReciprocalKernel() {
 
     performFFTBackward();
 
+    // Undo inverse FFT normalization (1/(nx*ny*nz)) to match the physical scaling used by PGP
+    // potential grids and by the quadratic-form mesh-self evaluation.
     const double fftScale = static_cast<double>(totalGridSize);
     for (int i = 0; i < totalGridSize; ++i) {
         pmeMutable.pmeGrid[static_cast<size_t>(i)] *= fftScale;
@@ -342,6 +343,26 @@ void GCMCEngine::ensurePgpFullGridReadyExcluding(int excludedResidueIdx) {
     }
 
     if (pgpFullGridReady_ && pgpFullGridExcludedResidue_ == exclude) {
+        return;
+    }
+
+    // Fast path: if the background (all residues except the excluded one) is empty,
+    // the reciprocal potential grid is identically zero. Skipping the full
+    // precomputeGridPotential() avoids unnecessary FFT work and prevents any chance
+    // of transient PME-state mutations affecting later diagnostics.
+    bool hasAnyBackgroundCharge = false;
+    for (int r = 0; r < state_->activeResidueCount; ++r) {
+        if (r == exclude) continue;
+        if (state_->residues[r].active) {
+            hasAnyBackgroundCharge = true;
+            break;
+        }
+    }
+    if (!hasAnyBackgroundCharge) {
+        auto& pgp = getPGPParams();
+        std::fill(pgp.potentialGrid.begin(), pgp.potentialGrid.end(), std::complex<double>(0.0, 0.0));
+        pgpFullGridReady_ = true;
+        pgpFullGridExcludedResidue_ = exclude;
         return;
     }
 
@@ -392,16 +413,15 @@ double GCMCEngine::calculatePgpReciprocalMeshSelfEnergy(int residueIdx) {
     if (!state_) {
         return 0.0;
     }
-    if (pgpRecipKernel_.empty()) {
-        return 0.0;
-    }
-    const int nx = pgpRecipKernelMesh_[0];
-    const int ny = pgpRecipKernelMesh_[1];
-    const int nz = pgpRecipKernelMesh_[2];
+    const auto& pmeParams = getPMEParams();
+    const int nx = pmeParams.meshSize[0];
+    const int ny = pmeParams.meshSize[1];
+    const int nz = pmeParams.meshSize[2];
     if (!(nx > 0 && ny > 0 && nz > 0)) {
         return 0.0;
     }
-    if (static_cast<int>(pgpRecipKernel_.size()) != nx * ny * nz) {
+    const int totalGridSize = nx * ny * nz;
+    if (!(totalGridSize > 0)) {
         return 0.0;
     }
     if (residueIdx < 0 || residueIdx >= static_cast<int>(state_->residues.size())) {
@@ -412,140 +432,51 @@ double GCMCEngine::calculatePgpReciprocalMeshSelfEnergy(int residueIdx) {
         return 0.0;
     }
 
-    const int order = (pgpRecipKernelSplineOrder_ > 0) ? pgpRecipKernelSplineOrder_ : pgpSplineOrder_;
-    if (order < 2) {
-        return 0.0;
-    }
-
     const float* box = state_->info.box;
     if (!(box[0] > 0.0f && box[1] > 0.0f && box[2] > 0.0f)) {
         return 0.0;
     }
 
-    struct GridCharge {
-        int x;
-        int y;
-        int z;
-        double q;
+    // Mode E (energy_method=pgp_full_pme) needs the exact PME mesh-self term so that per-move ΔU
+    // matches `energy_method=pme`. We compute it by running the same PME reciprocal pipeline as
+    // `computeReciprocalPME`, but restricting charge spreading to this residue only.
+    //
+    // This is intentionally slower than the sparse-kernel form; it is only used in strict
+    // PME-compat mode and avoids subtle charge-spreading/normalization mismatches.
+
+    std::vector<char> residueActiveBackup;
+    residueActiveBackup.reserve(static_cast<size_t>(state_->activeResidueCount));
+    for (int r = 0; r < state_->activeResidueCount; ++r) {
+        residueActiveBackup.push_back(static_cast<char>(state_->residues[r].active ? 1 : 0));
+    }
+    for (int r = 0; r < state_->activeResidueCount; ++r) {
+        if (r == residueIdx) continue;
+        state_->residues[r].active = false;
+    }
+
+    auto& pmeMutable = getPMEParams();
+    std::vector<std::complex<double>> gridBackup = std::move(pmeMutable.pmeGrid);
+    pmeMutable.pmeGrid.assign(static_cast<size_t>(totalGridSize), std::complex<double>(0.0, 0.0));
+    spreadChargesOntoGrid(*state_, false);
+
+    performFFTForward();
+
+    const double boxNm[3] = {
+        static_cast<double>(box[0]),
+        static_cast<double>(box[1]),
+        static_cast<double>(box[2]),
     };
+    pmeMutable.setBox(boxNm);
 
-    std::vector<std::pair<int, double>> rawCharges;
-    rawCharges.reserve(static_cast<size_t>(residue.atomCount) * static_cast<size_t>(order) * static_cast<size_t>(order) * static_cast<size_t>(order));
+    double recipEnergy = 0.0;
+    computeEnergyFromGrid(recipEnergy, boxNm);
 
-    std::vector<double> coeffsX(order);
-    std::vector<double> coeffsY(order);
-    std::vector<double> coeffsZ(order);
+    pmeMutable.pmeGrid = std::move(gridBackup);
 
-    for (int j = 0; j < residue.atomCount; ++j) {
-        const int atomIdx = residue.atomStart + j;
-        if (atomIdx < 0 || atomIdx >= static_cast<int>(state_->atoms.size())) {
-            continue;
-        }
-        const auto& atom = state_->atoms[atomIdx];
-        const double charge = static_cast<double>(atom.charge);
-        if (std::abs(charge) < 1e-12) {
-            continue;
-        }
-
-        const double posX = static_cast<double>(atom.x);
-        const double posY = static_cast<double>(atom.y);
-        const double posZ = static_cast<double>(atom.z);
-
-        auto fracToGrid = [](double pos, double boxLen, int mesh) {
-            double u = pos / boxLen;
-            u -= std::floor(u);
-            u *= static_cast<double>(mesh);
-            return u;
-        };
-
-        const double gridX = fracToGrid(posX, static_cast<double>(box[0]), nx);
-        const double gridY = fracToGrid(posY, static_cast<double>(box[1]), ny);
-        const double gridZ = fracToGrid(posZ, static_cast<double>(box[2]), nz);
-
-        const int x0 = static_cast<int>(std::floor(gridX));
-        const int y0 = static_cast<int>(std::floor(gridY));
-        const int z0 = static_cast<int>(std::floor(gridZ));
-
-        const double dx = gridX - std::floor(gridX);
-        const double dy = gridY - std::floor(gridY);
-        const double dz = gridZ - std::floor(gridZ);
-
-        computeBSplineCoefficients(dx, order, coeffsX);
-        computeBSplineCoefficients(dy, order, coeffsY);
-        computeBSplineCoefficients(dz, order, coeffsZ);
-
-        for (int ix = 0; ix < order; ++ix) {
-            const int x = (x0 + ix) % nx;
-            const double wx = coeffsX[ix];
-            for (int iy = 0; iy < order; ++iy) {
-                const int y = (y0 + iy) % ny;
-                const double wxy = wx * coeffsY[iy];
-                for (int iz = 0; iz < order; ++iz) {
-                    const int z = (z0 + iz) % nz;
-                    const double weight = wxy * coeffsZ[iz];
-                    if (std::abs(weight) < 1e-18) {
-                        continue;
-                    }
-                    const int idx = x * ny * nz + y * nz + z;
-                    rawCharges.emplace_back(idx, charge * weight);
-                }
-            }
-        }
+    for (int r = 0; r < state_->activeResidueCount && r < static_cast<int>(residueActiveBackup.size()); ++r) {
+        state_->residues[r].active = (residueActiveBackup[static_cast<size_t>(r)] != 0);
     }
-
-    if (rawCharges.empty()) {
-        return 0.0;
-    }
-
-    std::sort(rawCharges.begin(), rawCharges.end(),
-              [](const auto& a, const auto& b) { return a.first < b.first; });
-
-    std::vector<GridCharge> charges;
-    charges.reserve(rawCharges.size());
-    int currentIdx = rawCharges.front().first;
-    double accum = 0.0;
-    for (const auto& kv : rawCharges) {
-        if (kv.first != currentIdx) {
-            if (std::abs(accum) > 0.0) {
-                const int x = currentIdx / (ny * nz);
-                const int rem = currentIdx - x * ny * nz;
-                const int y = rem / nz;
-                const int z = rem - y * nz;
-                charges.push_back(GridCharge{x, y, z, accum});
-            }
-            currentIdx = kv.first;
-            accum = kv.second;
-        } else {
-            accum += kv.second;
-        }
-    }
-    if (std::abs(accum) > 0.0) {
-        const int x = currentIdx / (ny * nz);
-        const int rem = currentIdx - x * ny * nz;
-        const int y = rem / nz;
-        const int z = rem - y * nz;
-        charges.push_back(GridCharge{x, y, z, accum});
-    }
-
-    if (charges.empty()) {
-        return 0.0;
-    }
-
-    double sum = 0.0;
-    for (const auto& a : charges) {
-        for (const auto& b : charges) {
-            int dx = a.x - b.x;
-            if (dx < 0) dx += nx;
-            int dy = a.y - b.y;
-            if (dy < 0) dy += ny;
-            int dz = a.z - b.z;
-            if (dz < 0) dz += nz;
-            const int diffIdx = dx * ny * nz + dy * nz + dz;
-            sum += a.q * b.q * pgpRecipKernel_[static_cast<size_t>(diffIdx)];
-        }
-    }
-
-    return 0.5 * sum;
+    return recipEnergy;
 }
 
 double GCMCEngine::calculatePgpSelfEnergyMovementResidue(int residueIdx) {
