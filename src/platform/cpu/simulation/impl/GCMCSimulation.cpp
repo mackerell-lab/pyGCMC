@@ -4,6 +4,7 @@
 #include "../../energy/pme/PMEGlobal.hpp"
 #include "../../energy/pme/PMESetup.hpp"
 #include "../../energy/pgp/PGPGlobal.hpp"
+#include "../../energy/drude/DrudeMain.hpp"
 #include "../setup/SimulationInputBuilder.hpp"
 #include "../io/SimulationIO.hpp"
 #include <iostream>
@@ -14,6 +15,7 @@
 #include <cctype>
 #include <random>
 #include <unordered_map>
+#include <unordered_set>
 #include <map>
 #include <set>
 #include <thread>
@@ -271,6 +273,10 @@ bool GCMCSimulation::initialize() {
         // Store force field from builder
         if (result.forceField && result.parametersLoaded) {
             forceFieldFromBuilder_ = result.forceField;
+        }
+
+        if (result.molecular) {
+            molecularFromBuilder_ = result.molecular;
         }
         
         // Use the loaded data
@@ -1416,6 +1422,230 @@ bool GCMCSimulation::setupEngine() {
             log("ERROR: ", msg);
             std::cout << "ERROR: " << msg << std::endl;
             return false;
+        }
+    }
+
+    // Configure Drude SCF (polarizable force field) if the loaded topology indicates Drude particles.
+    // This is an opt-in-by-data path: if no Drude oscillators are present, the simulation proceeds
+    // exactly as before.
+    if (state_ && molecularFromBuilder_ && forceFieldFromBuilder_) {
+        const auto& topAtoms = molecularFromBuilder_->topology_atoms;
+        const auto& topResidues = molecularFromBuilder_->topology_residues;
+        const auto& bonds = molecularFromBuilder_->bonds;
+
+        auto isDrudeAtom = [](const model::topology::TopologyAtom& atom) {
+            return std::abs(atom.mass - ::pygcmc::platform::cpu::DrudeConstants::DRUDE_MASS) < 1e-3 ||
+                   atom.type == "DRUD" ||
+                   atom.type == "DRUDE";
+        };
+
+        if (!topAtoms.empty()) {
+            std::vector<int> topologyToMc(topAtoms.size(), -1);
+            const int mapResidues =
+                std::min(static_cast<int>(topResidues.size()), static_cast<int>(state_->residues.size()));
+            for (int i = 0; i < mapResidues; ++i) {
+                const auto& topRes = topResidues[static_cast<size_t>(i)];
+                const auto& mcRes = state_->residues[static_cast<size_t>(i)];
+                const int nAtoms =
+                    std::min(static_cast<int>(topRes.atoms.size()), std::max(0, mcRes.atomCount));
+                for (int j = 0; j < nAtoms; ++j) {
+                    const int topAtomIdx = topRes.atoms[static_cast<size_t>(j)];
+                    const int mcAtomIdx = mcRes.atomStart + j;
+                    if (topAtomIdx < 0 || static_cast<size_t>(topAtomIdx) >= topAtoms.size()) {
+                        continue;
+                    }
+                    if (mcAtomIdx < 0 || mcAtomIdx >= state_->activeAtomCount) {
+                        continue;
+                    }
+                    topologyToMc[static_cast<size_t>(topAtomIdx)] = mcAtomIdx;
+                }
+            }
+
+            std::vector<std::vector<int>> adjacency(topAtoms.size());
+            adjacency.reserve(topAtoms.size());
+            for (const auto& bond : bonds) {
+                if (bond.atom1 < 0 || bond.atom2 < 0) {
+                    continue;
+                }
+                if (static_cast<size_t>(bond.atom1) >= topAtoms.size() ||
+                    static_cast<size_t>(bond.atom2) >= topAtoms.size()) {
+                    continue;
+                }
+                adjacency[static_cast<size_t>(bond.atom1)].push_back(bond.atom2);
+                adjacency[static_cast<size_t>(bond.atom2)].push_back(bond.atom1);
+            }
+
+            std::vector<int> parentTopToDipole(topAtoms.size(), -1);
+            std::vector<double> parentThole(topAtoms.size(), 0.0);
+
+            ::pygcmc::platform::cpu::DrudeComplete::clear();
+
+            for (size_t drudeTopIdx = 0; drudeTopIdx < topAtoms.size(); ++drudeTopIdx) {
+                const auto& drudeAtom = topAtoms[drudeTopIdx];
+                if (!isDrudeAtom(drudeAtom)) {
+                    continue;
+                }
+
+                int parentTopIdx = -1;
+                for (int neighbor : adjacency[drudeTopIdx]) {
+                    if (neighbor < 0 || static_cast<size_t>(neighbor) >= topAtoms.size()) {
+                        continue;
+                    }
+                    if (!isDrudeAtom(topAtoms[static_cast<size_t>(neighbor)])) {
+                        parentTopIdx = neighbor;
+                        break;
+                    }
+                }
+                if (parentTopIdx < 0) {
+                    continue;
+                }
+
+                const auto& parentAtom = topAtoms[static_cast<size_t>(parentTopIdx)];
+                double alphaA3 = parentAtom.alpha;
+                double thole = parentAtom.thole;
+
+                if (!(alphaA3 > 0.0) && forceFieldFromBuilder_->has_alpha_params(parentAtom.type)) {
+                    const auto& alphaParams = forceFieldFromBuilder_->get_alpha_params(parentAtom.type);
+                    alphaA3 = alphaParams.alpha;
+                    if (thole == 0.0) {
+                        thole = alphaParams.thole;
+                    }
+                }
+
+                const double alphaNm3 = alphaA3 * 1e-3;
+                if (!(alphaNm3 > 0.0)) {
+                    continue;
+                }
+
+                const int parentMc = topologyToMc[static_cast<size_t>(parentTopIdx)];
+                const int drudeMc = topologyToMc[drudeTopIdx];
+                if (parentMc < 0 || drudeMc < 0) {
+                    continue;
+                }
+
+                ::pygcmc::platform::cpu::DrudeParticle particle;
+                particle.parentIndex = parentMc;
+                particle.drudeIndex = drudeMc;
+                particle.charge = static_cast<double>(state_->atoms[static_cast<size_t>(drudeMc)].charge);
+                particle.polarizability = alphaNm3;
+                particle.computeSpringConstants();
+
+                const int dipoleIdx =
+                    ::pygcmc::platform::cpu::DrudeComplete::getDrudeCore().addParticle(particle);
+                parentTopToDipole[static_cast<size_t>(parentTopIdx)] = dipoleIdx;
+                parentThole[static_cast<size_t>(parentTopIdx)] = thole;
+            }
+
+            const bool hasDrude = (::pygcmc::platform::cpu::DrudeComplete::getNumParticles() > 0);
+            if (hasDrude) {
+                auto makeKey = [](int a, int b) -> uint64_t {
+                    uint32_t x = static_cast<uint32_t>(std::min(a, b));
+                    uint32_t y = static_cast<uint32_t>(std::max(a, b));
+                    return (static_cast<uint64_t>(x) << 32) | static_cast<uint64_t>(y);
+                };
+
+                std::unordered_set<uint64_t> screenedParentPairs;
+                screenedParentPairs.reserve(topAtoms.size());
+
+                // 1-2 (bonded) polarizable parents.
+                for (const auto& bond : bonds) {
+                    if (bond.atom1 < 0 || bond.atom2 < 0) {
+                        continue;
+                    }
+                    if (static_cast<size_t>(bond.atom1) >= parentTopToDipole.size() ||
+                        static_cast<size_t>(bond.atom2) >= parentTopToDipole.size()) {
+                        continue;
+                    }
+                    if (parentTopToDipole[static_cast<size_t>(bond.atom1)] >= 0 &&
+                        parentTopToDipole[static_cast<size_t>(bond.atom2)] >= 0) {
+                        screenedParentPairs.insert(makeKey(bond.atom1, bond.atom2));
+                    }
+                }
+
+                // 1-3 (topological distance 2) polarizable parents.
+                for (size_t mid = 0; mid < adjacency.size(); ++mid) {
+                    const auto& neighbors = adjacency[mid];
+                    for (size_t ia = 0; ia < neighbors.size(); ++ia) {
+                        for (size_t ib = ia + 1; ib < neighbors.size(); ++ib) {
+                            const int a = neighbors[ia];
+                            const int b = neighbors[ib];
+                            if (a < 0 || b < 0) {
+                                continue;
+                            }
+                            if (static_cast<size_t>(a) >= parentTopToDipole.size() ||
+                                static_cast<size_t>(b) >= parentTopToDipole.size()) {
+                                continue;
+                            }
+                            if (parentTopToDipole[static_cast<size_t>(a)] >= 0 &&
+                                parentTopToDipole[static_cast<size_t>(b)] >= 0) {
+                                screenedParentPairs.insert(makeKey(a, b));
+                            }
+                        }
+                    }
+                }
+
+                for (const uint64_t key : screenedParentPairs) {
+                    const int parentA = static_cast<int>(key >> 32);
+                    const int parentB = static_cast<int>(key & 0xffffffffu);
+                    if (parentA < 0 || parentB < 0) {
+                        continue;
+                    }
+                    if (static_cast<size_t>(parentA) >= parentTopToDipole.size() ||
+                        static_cast<size_t>(parentB) >= parentTopToDipole.size()) {
+                        continue;
+                    }
+                    const int dipoleA = parentTopToDipole[static_cast<size_t>(parentA)];
+                    const int dipoleB = parentTopToDipole[static_cast<size_t>(parentB)];
+                    if (dipoleA < 0 || dipoleB < 0 || dipoleA == dipoleB) {
+                        continue;
+                    }
+
+                    double thole = std::abs(parentThole[static_cast<size_t>(parentA)]) +
+                                   std::abs(parentThole[static_cast<size_t>(parentB)]);
+                    if (forceFieldFromBuilder_) {
+                        const auto& typeA = topAtoms[static_cast<size_t>(parentA)].type;
+                        const auto& typeB = topAtoms[static_cast<size_t>(parentB)].type;
+                        const auto [nbthole, hasNbthole] = forceFieldFromBuilder_->get_nbthole(typeA, typeB);
+                        if (hasNbthole) {
+                            thole = std::abs(nbthole);
+                        }
+                    }
+
+                    ::pygcmc::platform::cpu::ScreenedPair pair;
+                    pair.dipole1 = dipoleA;
+                    pair.dipole2 = dipoleB;
+                    pair.thole = thole;
+                    ::pygcmc::platform::cpu::DrudeComplete::addScreenedPair(pair);
+                }
+
+                ::pygcmc::platform::cpu::DrudeSCFParams scf;
+                scf.tolerance = 1e-5;
+                scf.maxIterations = 300;
+                scf.dampingFactor = 0.9;
+                scf.maxDrudeDistance = 0.02;
+                scf.enableHardWall = false;
+                scf.excludePartnerParentInExternalField = false;
+                scf.includeCoulombEnergy = false;
+                scf.tholeMode = ::pygcmc::platform::cpu::TholeMode::StandardS1;
+
+                ::pygcmc::platform::cpu::DrudeComplete::setParameters(scf);
+                ::pygcmc::platform::cpu::DrudeComplete::getDrudeCore().setAlgorithm(
+                    ::pygcmc::platform::cpu::DrudeAlgorithm::SCF);
+
+                if (engine_->getEnergyBackend() == GCMCEnergyBackend::PgpHost ||
+                    engine_->getEnergyBackend() == GCMCEnergyBackend::PgpFull ||
+                    engine_->getEnergyBackend() == GCMCEnergyBackend::PgpFullPme) {
+                    const std::string msg =
+                        "Drude SCF is not yet supported with PGP backends; use energy_method=direct/ewald/pme";
+                    log("ERROR: ", msg);
+                    std::cout << "ERROR: " << msg << std::endl;
+                    return false;
+                }
+
+                engine_->setUseDrude(true);
+                log("Drude SCF enabled: particles=", ::pygcmc::platform::cpu::DrudeComplete::getNumParticles(),
+                    " screenedPairs=", screenedParentPairs.size());
+            }
         }
     }
 

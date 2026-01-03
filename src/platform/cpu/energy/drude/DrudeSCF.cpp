@@ -11,6 +11,52 @@ namespace pygcmc {
 namespace platform {
 namespace cpu {
 
+void DrudeSCF::buildActiveAtomMask(const model::MCState& state, std::vector<char>& mask) {
+    const int nAtoms = std::max(0, state.activeAtomCount);
+    mask.assign(static_cast<size_t>(nAtoms), 1);
+    if (state.residues.empty()) {
+        return;
+    }
+
+    // Default: all atoms [0..activeAtomCount) are active.
+    // Mask out atoms belonging to inactive residues (GCMC deletion keeps atom arrays un-compacted),
+    // while leaving atoms not covered by any residue range active (tests may model external charges this way).
+    for (const auto& res : state.residues) {
+        if (res.active) {
+            continue;
+        }
+        if (res.atomCount <= 0) {
+            continue;
+        }
+        const int start = std::max(0, res.atomStart);
+        const int end = std::min(nAtoms, res.atomStart + res.atomCount);
+        for (int j = start; j < end; ++j) {
+            mask[static_cast<size_t>(j)] = 0;
+        }
+    }
+}
+
+void DrudeSCF::buildActiveAtomIndices(const std::vector<char>& mask, std::vector<int>& indices) {
+    indices.clear();
+    indices.reserve(mask.size());
+    for (size_t i = 0; i < mask.size(); ++i) {
+        if (mask[i]) {
+            indices.push_back(static_cast<int>(i));
+        }
+    }
+}
+
+bool DrudeSCF::isActiveAtom(int atomIndex, const std::vector<char>& mask) {
+    if (atomIndex < 0) {
+        return false;
+    }
+    const size_t idx = static_cast<size_t>(atomIndex);
+    if (idx >= mask.size()) {
+        return false;
+    }
+    return mask[idx] != 0;
+}
+
 bool DrudeSCF::optimize(
     model::MCState& state,
     const std::vector<DrudeParticle>& particles,
@@ -18,15 +64,19 @@ bool DrudeSCF::optimize(
     const DrudeSCFParams& params
 ) {
     if (particles.empty()) return true;
+
+    std::vector<char> activeAtomMask;
+    std::vector<int> activeAtoms;
+    buildActiveAtomMask(state, activeAtomMask);
+    buildActiveAtomIndices(activeAtomMask, activeAtoms);
     
     std::vector<Vec3> electricField(particles.size(), {0.0, 0.0, 0.0});
     std::vector<Vec3> drudeForces(particles.size(), {0.0, 0.0, 0.0});
     
     // Initialize Drude positions near parents if needed
     for (const auto& particle : particles) {
-        // Bounds check
-        if (particle.parentIndex < 0 || particle.parentIndex >= state.activeAtomCount ||
-            particle.drudeIndex < 0 || particle.drudeIndex >= state.activeAtomCount) {
+        if (!isActiveAtom(particle.parentIndex, activeAtomMask) ||
+            !isActiveAtom(particle.drudeIndex, activeAtomMask)) {
             continue;
         }
         
@@ -56,10 +106,10 @@ bool DrudeSCF::optimize(
         m_lastIterationCount = iter + 1;
         // Calculate electric field at each Drude particle
         std::fill(electricField.begin(), electricField.end(), Vec3{0.0, 0.0, 0.0});
-        calculateElectricField(state, particles, screenedPairs, electricField);
+        calculateElectricField(state, particles, screenedPairs, electricField, activeAtoms, activeAtomMask);
         
         // Calculate forces on Drude particles
-        calculateDrudeForces(state, particles, electricField, drudeForces);
+        calculateDrudeForces(state, particles, electricField, drudeForces, activeAtomMask);
         
         // Check convergence with hard wall consideration
         double maxForce = 0.0;
@@ -67,6 +117,10 @@ bool DrudeSCF::optimize(
         
         for (size_t i = 0; i < particles.size(); ++i) {
             const auto& particle = particles[i];
+            if (!isActiveAtom(particle.parentIndex, activeAtomMask) ||
+                !isActiveAtom(particle.drudeIndex, activeAtomMask)) {
+                continue;
+            }
             const auto& drude = state.atoms[particle.drudeIndex];
             const auto& parent = state.atoms[particle.parentIndex];
             
@@ -105,7 +159,8 @@ bool DrudeSCF::optimize(
         // Update Drude positions
         updateDrudePositions(
             state, particles, electricField, dampingFactor, 
-            params.enableHardWall ? params.maxDrudeDistance : 1e10  // Large value when hard wall disabled
+            params.enableHardWall ? params.maxDrudeDistance : 1e10,  // Large value when hard wall disabled
+            activeAtomMask
         );
         
         // Adaptive damping - disabled for now to debug
@@ -121,19 +176,22 @@ void DrudeSCF::calculateElectricField(
     const model::MCState& state,
     const std::vector<DrudeParticle>& particles,
     const std::vector<ScreenedPair>& screenedPairs,
-    std::vector<Vec3>& electricField
+    std::vector<Vec3>& electricField,
+    const std::vector<int>& activeAtoms,
+    const std::vector<char>& activeAtomMask
 ) const {
     // Field from external charges
-    calculateExternalField(state, particles, electricField);
+    calculateExternalField(state, particles, electricField, activeAtoms);
     
     // Field from induced dipoles (other Drude particles)
-    calculateInducedField(state, particles, screenedPairs, electricField);
+    calculateInducedField(state, particles, screenedPairs, electricField, activeAtomMask);
 }
 
 void DrudeSCF::calculateExternalField(
     const model::MCState& state,
     const std::vector<DrudeParticle>& particles,
-    std::vector<Vec3>& electricField
+    std::vector<Vec3>& electricField,
+    const std::vector<int>& activeAtoms
 ) const {
     // Loop over all Drude particles
     for (size_t i = 0; i < particles.size(); ++i) {
@@ -149,8 +207,8 @@ void DrudeSCF::calculateExternalField(
         
         Vec3 field = {0.0, 0.0, 0.0};
         
-        // Loop over all atoms
-        for (int j = 0; j < state.activeAtomCount; ++j) {
+        // Loop over active atoms (skip inactive/ghost atoms).
+        for (int j : activeAtoms) {
             // Skip the Drude particle itself
             if (j == particle.drudeIndex) continue;
             
@@ -195,7 +253,8 @@ void DrudeSCF::calculateInducedField(
     const model::MCState& state,
     const std::vector<DrudeParticle>& particles,
     const std::vector<ScreenedPair>& screenedPairs,
-    std::vector<Vec3>& electricField
+    std::vector<Vec3>& electricField,
+    const std::vector<char>& activeAtomMask
 ) const {
     // External field already includes *unscreened* Coulomb contributions from all atoms
     // (including other Drude and parent atoms). Here we apply a *correction* for
@@ -216,10 +275,10 @@ void DrudeSCF::calculateInducedField(
         const auto& dipole1 = particles[pair.dipole1];
         const auto& dipole2 = particles[pair.dipole2];
 
-        if (dipole1.drudeIndex < 0 || dipole1.drudeIndex >= state.activeAtomCount ||
-            dipole1.parentIndex < 0 || dipole1.parentIndex >= state.activeAtomCount ||
-            dipole2.drudeIndex < 0 || dipole2.drudeIndex >= state.activeAtomCount ||
-            dipole2.parentIndex < 0 || dipole2.parentIndex >= state.activeAtomCount) {
+        if (!isActiveAtom(dipole1.drudeIndex, activeAtomMask) ||
+            !isActiveAtom(dipole1.parentIndex, activeAtomMask) ||
+            !isActiveAtom(dipole2.drudeIndex, activeAtomMask) ||
+            !isActiveAtom(dipole2.parentIndex, activeAtomMask)) {
             continue;
         }
 
@@ -231,6 +290,10 @@ void DrudeSCF::calculateInducedField(
         auto applyCorrectionFromSource = [&](int fieldDipoleIndex, int fieldAtomIndex, int sourceAtomIndex) {
             // Match calculateExternalField() skip semantics: if the base unscreened term
             // was skipped, do not attempt to "correct" it.
+            if (!isActiveAtom(fieldAtomIndex, activeAtomMask) ||
+                !isActiveAtom(sourceAtomIndex, activeAtomMask)) {
+                return;
+            }
             if (inSameMolecule(fieldAtomIndex, sourceAtomIndex, state)) {
                 return;
             }
@@ -289,16 +352,16 @@ double DrudeSCF::updateDrudePositions(
     const std::vector<DrudeParticle>& particles,
     const std::vector<Vec3>& electricField,
     double dampingFactor,
-    double maxDrudeDistance
+    double maxDrudeDistance,
+    const std::vector<char>& activeAtomMask
 ) const {
     double maxDisplacement = 0.0;
     
     for (size_t i = 0; i < particles.size(); ++i) {
         const auto& particle = particles[i];
-        
-        // Bounds check
-        if (particle.drudeIndex < 0 || particle.drudeIndex >= state.activeAtomCount ||
-            particle.parentIndex < 0 || particle.parentIndex >= state.activeAtomCount) {
+
+        if (!isActiveAtom(particle.parentIndex, activeAtomMask) ||
+            !isActiveAtom(particle.drudeIndex, activeAtomMask)) {
             continue;
         }
         
@@ -355,10 +418,16 @@ void DrudeSCF::calculateDrudeForces(
     const model::MCState& state,
     const std::vector<DrudeParticle>& particles,
     const std::vector<Vec3>& electricField,
-    std::vector<Vec3>& forces
+    std::vector<Vec3>& forces,
+    const std::vector<char>& activeAtomMask
 ) const {
     for (size_t i = 0; i < particles.size(); ++i) {
         const auto& particle = particles[i];
+        if (!isActiveAtom(particle.parentIndex, activeAtomMask) ||
+            !isActiveAtom(particle.drudeIndex, activeAtomMask)) {
+            forces[i] = {0.0, 0.0, 0.0};
+            continue;
+        }
         const auto& drude = state.atoms[particle.drudeIndex];
         const auto& parent = state.atoms[particle.parentIndex];
         
@@ -405,6 +474,9 @@ bool DrudeSCF::inSameMolecule(int atom1, int atom2, const model::MCState& state)
         }
         
         const auto& res = state.residues[i];
+        if (!res.active) {
+            continue;
+        }
         int start = res.atomStart;
         int end = start + res.atomCount;
         

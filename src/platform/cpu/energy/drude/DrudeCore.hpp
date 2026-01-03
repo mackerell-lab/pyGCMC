@@ -62,10 +62,14 @@ public:
     DrudeMultiStage* getMultiStageOptimizer() { return m_multiStageOptimizer.get(); }
     
 private:
+    static void buildActiveAtomMask(const model::MCState& state, std::vector<char>& mask);
+    static bool isActiveAtom(int atomIndex, const std::vector<char>& mask);
+
     // Energy calculation components
-    double calculateHarmonicEnergy(const model::MCState& state) const;
+    double calculateHarmonicEnergy(const model::MCState& state, const std::vector<char>& activeAtomMask) const;
     double calculateScreenedCoulombEnergy(const model::MCState& state) const;
-    double calculateCoulombEnergy(const model::MCState& state) const;
+    double calculateCoulombEnergy(const model::MCState& state, const std::vector<char>& activeAtomMask) const;
+    double calculateTholeCorrectionEnergy(const model::MCState& state, const std::vector<char>& activeAtomMask) const;
     
     // Force calculation components
     void calculateHarmonicForces(const model::MCState& state, 

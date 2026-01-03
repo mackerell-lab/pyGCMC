@@ -188,6 +188,12 @@ public:
         energyCallback_ = std::move(callback);
     }
 
+    // Drude (polarizable) support:
+    // When enabled, energy evaluation will relax Drude particles via SCF and
+    // GCMC moves will use full-system ΔU (no local residue-only shortcuts).
+    void setUseDrude(bool enable) { useDrude_ = enable; }
+    bool isUseDrudeEnabled() const { return useDrude_; }
+
     // Get energy callback (for configuration)
     GCMCEnergyCallback* getEnergyCallback() {
         return energyCallback_.get();
@@ -304,6 +310,10 @@ private:
     double calculatePgpReciprocalEnergyFromGrid(int residueIdx);
     double calculatePgpReciprocalMeshSelfEnergy(int residueIdx);
     double calculatePgpSelfEnergyMovementResidue(int residueIdx);
+
+    // Drude helpers
+    void relaxDrudeIfEnabled();
+    bool useDrude_ = false;
 
     void updateFragmentPosition(int residueIdx, const Vector3& newPos);
     void updateFragmentOrientation(int residueIdx, const Quaternion& newOrient);

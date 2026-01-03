@@ -247,6 +247,7 @@ private:
     
     // Force field from builder (if loaded)
     std::shared_ptr<model::ForceField> forceFieldFromBuilder_;
+    std::shared_ptr<model::Molecular> molecularFromBuilder_;
     
     // Statistics
     Statistics stats_;

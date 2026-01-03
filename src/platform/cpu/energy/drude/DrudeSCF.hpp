@@ -40,6 +40,11 @@ public:
     
 private:
     mutable int m_lastIterationCount = 0;
+
+    static void buildActiveAtomMask(const model::MCState& state, std::vector<char>& mask);
+    static void buildActiveAtomIndices(const std::vector<char>& mask, std::vector<int>& indices);
+    static bool isActiveAtom(int atomIndex, const std::vector<char>& mask);
+
     /**
      * @brief Calculate electric field at Drude particles
      * 
@@ -51,7 +56,9 @@ private:
         const model::MCState& state,
         const std::vector<DrudeParticle>& particles,
         const std::vector<ScreenedPair>& screenedPairs,
-        std::vector<Vec3>& electricField
+        std::vector<Vec3>& electricField,
+        const std::vector<int>& activeAtoms,
+        const std::vector<char>& activeAtomMask
     ) const;
     
     /**
@@ -60,7 +67,8 @@ private:
     void calculateExternalField(
         const model::MCState& state,
         const std::vector<DrudeParticle>& particles,
-        std::vector<Vec3>& electricField
+        std::vector<Vec3>& electricField,
+        const std::vector<int>& activeAtoms
     ) const;
     
     /**
@@ -70,7 +78,8 @@ private:
         const model::MCState& state,
         const std::vector<DrudeParticle>& particles,
         const std::vector<ScreenedPair>& screenedPairs,
-        std::vector<Vec3>& electricField
+        std::vector<Vec3>& electricField,
+        const std::vector<char>& activeAtomMask
     ) const;
     
     /**
@@ -82,7 +91,8 @@ private:
         const std::vector<DrudeParticle>& particles,
         const std::vector<Vec3>& electricField,
         double dampingFactor,
-        double maxDrudeDistance
+        double maxDrudeDistance,
+        const std::vector<char>& activeAtomMask
     ) const;
     
     /**
@@ -92,7 +102,8 @@ private:
         const model::MCState& state,
         const std::vector<DrudeParticle>& particles,
         const std::vector<Vec3>& electricField,
-        std::vector<Vec3>& forces
+        std::vector<Vec3>& forces,
+        const std::vector<char>& activeAtomMask
     ) const;
     
     /**

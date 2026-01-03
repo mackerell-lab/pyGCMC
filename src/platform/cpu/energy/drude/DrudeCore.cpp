@@ -6,6 +6,7 @@
 #include "DrudeCore.hpp"
 #include "DrudeStructures.hpp"
 #include "DrudeDirectPolarization.hpp"
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 
@@ -15,6 +16,43 @@ namespace cpu {
 
 // Global instance for static interface
 static DrudeCore g_drudeCore;
+
+void DrudeCore::buildActiveAtomMask(const model::MCState& state, std::vector<char>& mask) {
+    const int nAtoms = std::max(0, state.activeAtomCount);
+    mask.assign(static_cast<size_t>(nAtoms), 1);
+    if (state.residues.empty()) {
+        return;
+    }
+
+    // Default: all atoms [0..activeAtomCount) are active.
+    // To support GCMC deletion without compacting atom arrays, explicitly mask out atoms
+    // that belong to inactive residues. Atoms not covered by any residue range remain active
+    // (some unit tests model external charges this way).
+    for (const auto& res : state.residues) {
+        if (res.active) {
+            continue;
+        }
+        if (res.atomCount <= 0) {
+            continue;
+        }
+        const int start = std::max(0, res.atomStart);
+        const int end = std::min(nAtoms, res.atomStart + res.atomCount);
+        for (int j = start; j < end; ++j) {
+            mask[static_cast<size_t>(j)] = 0;
+        }
+    }
+}
+
+bool DrudeCore::isActiveAtom(int atomIndex, const std::vector<char>& mask) {
+    if (atomIndex < 0) {
+        return false;
+    }
+    const size_t idx = static_cast<size_t>(atomIndex);
+    if (idx >= mask.size()) {
+        return false;
+    }
+    return mask[idx] != 0;
+}
 
 DrudeCore::DrudeCore() 
 : m_algorithm(DrudeAlgorithm::SCF),
@@ -26,6 +64,9 @@ double DrudeCore::calculateEnergy(model::MCState& state) {
 if (!m_currentOptimizer) {
     throw std::runtime_error("No Drude optimizer available");
 }
+
+std::vector<char> activeAtomMask;
+buildActiveAtomMask(state, activeAtomMask);
 
 // ASPC: Apply history positions if available
 if (m_useASPC && m_hasHistory) {
@@ -50,17 +91,18 @@ if (m_useASPC) {
 double energy = 0.0;
 
 // Harmonic spring energy
-energy += calculateHarmonicEnergy(state);
+energy += calculateHarmonicEnergy(state, activeAtomMask);
 
 // Coulomb energy: optional (avoid double counting with main nonbonded)
 // Default: false (spring-only) for production use
 // Set true only for standalone testing without main nonbonded module
 if (m_params.includeCoulombEnergy) {
-    energy += calculateCoulombEnergy(state);
+    energy += calculateCoulombEnergy(state, activeAtomMask);
+} else {
+    // When Coulomb is computed by the main nonbonded module, we still need the
+    // screened-unscreened correction for configured Thole pairs.
+    energy += calculateTholeCorrectionEnergy(state, activeAtomMask);
 }
-
-// Note: Thole screening is applied during SCF optimization to prevent
-// polarization catastrophe, but does not contribute a separate energy term
 
 return energy;
 }
@@ -201,10 +243,14 @@ size_t DrudeCore::getNumParticles() const {
 return m_particles.size();
 }
 
-double DrudeCore::calculateHarmonicEnergy(const model::MCState& state) const {
+double DrudeCore::calculateHarmonicEnergy(const model::MCState& state, const std::vector<char>& activeAtomMask) const {
 double energy = 0.0;
 
 for (const auto& particle : m_particles) {
+    if (!isActiveAtom(particle.parentIndex, activeAtomMask) ||
+        !isActiveAtom(particle.drudeIndex, activeAtomMask)) {
+        continue;
+    }
     // Get positions
     const auto& drudeAtom = state.atoms[particle.drudeIndex];
     const auto& parentAtom = state.atoms[particle.parentIndex];
@@ -224,46 +270,52 @@ for (const auto& particle : m_particles) {
     
     // Anisotropic contributions (if present)
     if (particle.aniso1Index >= 0 && particle.aniso2Index >= 0) {
-        // Calculate projection along anisotropy axis
-        const auto& aniso1 = state.atoms[particle.aniso1Index];
-        const auto& aniso2 = state.atoms[particle.aniso2Index];
+        if (isActiveAtom(particle.aniso1Index, activeAtomMask) &&
+            isActiveAtom(particle.aniso2Index, activeAtomMask)) {
+            // Calculate projection along anisotropy axis
+            const auto& aniso1 = state.atoms[particle.aniso1Index];
+            const auto& aniso2 = state.atoms[particle.aniso2Index];
         
-        double ax = aniso2.x - aniso1.x;
-        double ay = aniso2.y - aniso1.y;
-        double az = aniso2.z - aniso1.z;
-        std::array<double, 3> box2 = {state.info.box[0], state.info.box[1], state.info.box[2]};
-        applyPBC(ax, ay, az, box2);
+            double ax = aniso2.x - aniso1.x;
+            double ay = aniso2.y - aniso1.y;
+            double az = aniso2.z - aniso1.z;
+            std::array<double, 3> box2 = {state.info.box[0], state.info.box[1], state.info.box[2]};
+            applyPBC(ax, ay, az, box2);
         
-        double anorm = std::sqrt(ax*ax + ay*ay + az*az);
-        if (anorm > 1e-6) {
-            ax /= anorm;
-            ay /= anorm;
-            az /= anorm;
+            double anorm = std::sqrt(ax*ax + ay*ay + az*az);
+            if (anorm > 1e-6) {
+                ax /= anorm;
+                ay /= anorm;
+                az /= anorm;
             
-            double proj = dx*ax + dy*ay + dz*az;
-            energy += 0.5 * particle.kAniso1 * proj * proj;
+                double proj = dx*ax + dy*ay + dz*az;
+                energy += 0.5 * particle.kAniso1 * proj * proj;
+            }
         }
     }
     
     if (particle.aniso3Index >= 0 && particle.aniso4Index >= 0) {
-        // Second anisotropy axis
-        const auto& aniso3 = state.atoms[particle.aniso3Index];
-        const auto& aniso4 = state.atoms[particle.aniso4Index];
+        if (isActiveAtom(particle.aniso3Index, activeAtomMask) &&
+            isActiveAtom(particle.aniso4Index, activeAtomMask)) {
+            // Second anisotropy axis
+            const auto& aniso3 = state.atoms[particle.aniso3Index];
+            const auto& aniso4 = state.atoms[particle.aniso4Index];
         
-        double ax = aniso4.x - aniso3.x;
-        double ay = aniso4.y - aniso3.y;
-        double az = aniso4.z - aniso3.z;
-        std::array<double, 3> box2 = {state.info.box[0], state.info.box[1], state.info.box[2]};
-        applyPBC(ax, ay, az, box2);
+            double ax = aniso4.x - aniso3.x;
+            double ay = aniso4.y - aniso3.y;
+            double az = aniso4.z - aniso3.z;
+            std::array<double, 3> box2 = {state.info.box[0], state.info.box[1], state.info.box[2]};
+            applyPBC(ax, ay, az, box2);
         
-        double anorm = std::sqrt(ax*ax + ay*ay + az*az);
-        if (anorm > 1e-6) {
-            ax /= anorm;
-            ay /= anorm;
-            az /= anorm;
+            double anorm = std::sqrt(ax*ax + ay*ay + az*az);
+            if (anorm > 1e-6) {
+                ax /= anorm;
+                ay /= anorm;
+                az /= anorm;
             
-            double proj = dx*ax + dy*ay + dz*az;
-            energy += 0.5 * particle.kAniso2 * proj * proj;
+                double proj = dx*ax + dy*ay + dz*az;
+                energy += 0.5 * particle.kAniso2 * proj * proj;
+            }
         }
     }
 }
@@ -378,15 +430,21 @@ if (box[1] > 0) dy -= box[1] * std::round(dy / box[1]);
 if (box[2] > 0) dz -= box[2] * std::round(dz / box[2]);
 }
 
-double DrudeCore::calculateCoulombEnergy(const model::MCState& state) const {
+double DrudeCore::calculateCoulombEnergy(const model::MCState& state, const std::vector<char>& activeAtomMask) const {
 double energy = 0.0;
 
 // First, calculate normal Coulomb interactions for all atom pairs
 // excluding intramolecular interactions and Drude-parent pairs
 for (int i = 0; i < state.activeAtomCount - 1; ++i) {
+    if (!isActiveAtom(i, activeAtomMask)) {
+        continue;
+    }
     const auto& atom1 = state.atoms[i];
     
     for (int j = i + 1; j < state.activeAtomCount; ++j) {
+        if (!isActiveAtom(j, activeAtomMask)) {
+            continue;
+        }
         const auto& atom2 = state.atoms[j];
         
         // Skip if both have zero charge
@@ -434,10 +492,10 @@ for (const auto& pair : m_screenedPairs) {
     const auto& particle2 = m_particles[pair.dipole2];
     
     // Bounds check for particle indices
-    if (particle1.parentIndex < 0 || particle1.parentIndex >= state.activeAtomCount ||
-        particle1.drudeIndex < 0 || particle1.drudeIndex >= state.activeAtomCount ||
-        particle2.parentIndex < 0 || particle2.parentIndex >= state.activeAtomCount ||
-        particle2.drudeIndex < 0 || particle2.drudeIndex >= state.activeAtomCount) {
+    if (!isActiveAtom(particle1.parentIndex, activeAtomMask) ||
+        !isActiveAtom(particle1.drudeIndex, activeAtomMask) ||
+        !isActiveAtom(particle2.parentIndex, activeAtomMask) ||
+        !isActiveAtom(particle2.drudeIndex, activeAtomMask)) {
         continue;
     }
     
@@ -465,8 +523,8 @@ for (const auto& pair : m_screenedPairs) {
             }
             
             // Bounds check
-            if (atoms1[j] < 0 || atoms1[j] >= state.activeAtomCount ||
-                atoms2[k] < 0 || atoms2[k] >= state.activeAtomCount) {
+            if (!isActiveAtom(atoms1[j], activeAtomMask) ||
+                !isActiveAtom(atoms2[k], activeAtomMask)) {
                 continue;
             }
             
@@ -503,6 +561,74 @@ for (const auto& pair : m_screenedPairs) {
 return energy;
 }
 
+double DrudeCore::calculateTholeCorrectionEnergy(const model::MCState& state, const std::vector<char>& activeAtomMask) const {
+    double energy = 0.0;
+    for (const auto& pair : m_screenedPairs) {
+        if (pair.dipole1 < 0 || pair.dipole2 < 0 ||
+            static_cast<size_t>(pair.dipole1) >= m_particles.size() ||
+            static_cast<size_t>(pair.dipole2) >= m_particles.size()) {
+            continue;
+        }
+
+        const auto& particle1 = m_particles[static_cast<size_t>(pair.dipole1)];
+        const auto& particle2 = m_particles[static_cast<size_t>(pair.dipole2)];
+
+        if (!isActiveAtom(particle1.parentIndex, activeAtomMask) ||
+            !isActiveAtom(particle1.drudeIndex, activeAtomMask) ||
+            !isActiveAtom(particle2.parentIndex, activeAtomMask) ||
+            !isActiveAtom(particle2.drudeIndex, activeAtomMask)) {
+            continue;
+        }
+
+        const int atoms1[2] = {particle1.parentIndex, particle1.drudeIndex};
+        const int atoms2[2] = {particle2.parentIndex, particle2.drudeIndex};
+        const std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
+
+        const bool screenParents = (m_params.tholeMode == TholeMode::StandardS1);
+        for (int j = 0; j < 2; ++j) {
+            for (int k = 0; k < 2; ++k) {
+                const bool involvesDrude = (j == 1 || k == 1);
+                if (!screenParents && !involvesDrude) {
+                    continue;
+                }
+
+                if (!isActiveAtom(atoms1[j], activeAtomMask) ||
+                    !isActiveAtom(atoms2[k], activeAtomMask)) {
+                    continue;
+                }
+
+                if (inSameMolecule(atoms1[j], atoms2[k], state)) {
+                    continue;
+                }
+
+                const auto& atom1 = state.atoms[atoms1[j]];
+                const auto& atom2 = state.atoms[atoms2[k]];
+
+                double dx = atom2.x - atom1.x;
+                double dy = atom2.y - atom1.y;
+                double dz = atom2.z - atom1.z;
+                applyPBC(dx, dy, dz, box);
+
+                const double r = std::sqrt(dx * dx + dy * dy + dz * dz);
+                if (r < 1e-6) {
+                    continue;
+                }
+
+                const double coulomb = DrudeConstants::ONE_4PI_EPS0 * atom1.charge * atom2.charge / r;
+                const double screening = computeTholeScreening(
+                    r,
+                    particle1.polarizability,
+                    particle2.polarizability,
+                    pair.thole
+                );
+
+                energy += coulomb * (screening - 1.0);
+            }
+        }
+    }
+    return energy;
+}
+
 bool DrudeCore::inSameMolecule(int atom1, int atom2, const model::MCState& state) const {
 // Check if we have residues defined
 if (state.activeResidueCount <= 0 || state.residues.empty()) {
@@ -517,6 +643,9 @@ for (int i = 0; i < state.activeResidueCount; ++i) {
     }
     
     const auto& res = state.residues[i];
+    if (!res.active) {
+        continue;
+    }
     int start = res.atomStart;
     int end = start + res.atomCount;
     

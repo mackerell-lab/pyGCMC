@@ -15,6 +15,7 @@
 #include "../../energy/pgp/PGPSelf.hpp"
 #include "../../energy/pgp/PGPPrecompute.hpp"
 #include "../../energy/common/EnergyConstants.hpp"
+#include "../../energy/drude/DrudeMain.hpp"
 #include <cmath>
 #include <algorithm>
 #include <iostream>
@@ -850,9 +851,13 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         ensurePgpFullGridReadyExcluding(-1);
     }
 
-    // Calculate energy before insertion (only needed for long-range full-system methods).
-    if (energyBackend_ == GCMCEnergyBackend::Ewald ||
-        energyBackend_ == GCMCEnergyBackend::Pme) {
+    const bool useSystemEnergyDelta =
+        useDrude_ ||
+        energyBackend_ == GCMCEnergyBackend::Ewald ||
+        energyBackend_ == GCMCEnergyBackend::Pme;
+
+    // Calculate energy before insertion (only needed for full-system ΔU paths).
+    if (useSystemEnergyDelta) {
         result.energyBefore = calculateSystemEnergy();
     } else {
         result.energyBefore = 0.0;
@@ -869,7 +874,10 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     synchronizeStateWithReservoir(instanceId, true);
     
     // Calculate energy change using the selected backend.
-    if (energyBackend_ == GCMCEnergyBackend::DirectCutoff) {
+    if (useSystemEnergyDelta) {
+        result.energyAfter = calculateSystemEnergy();
+        result.deltaE = result.energyAfter - result.energyBefore;
+    } else if (energyBackend_ == GCMCEnergyBackend::DirectCutoff) {
         // Fast local ΔE calculation - only compute interaction of new residue with system.
         cpu::computeResidueEnergyCutoffPBC(*state_, instanceId);
         const auto& residue = state_->residues[instanceId];
@@ -884,7 +892,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         result.deltaE = calculateFragmentEnergyPgpFullUsingCurrentGrid(instanceId);
         result.energyAfter = result.deltaE;
     } else {
-        // Full system energy for EWALD/PME backends.
+        // Should be unreachable: non-local backends are covered by useSystemEnergyDelta.
         result.energyAfter = calculateSystemEnergy();
         result.deltaE = result.energyAfter - result.energyBefore;
     }
@@ -944,6 +952,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         // Remove the instance and revert state
         reservoir_->deleteInstance(instanceId);
         synchronizeStateWithReservoir(instanceId, false);
+        relaxDrudeIfEnabled();
         result.accepted = false;
     }
     
@@ -1255,16 +1264,22 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     }
 
     const bool cbmcEnabled = (useConfBias_ && numTrials > 1);
-    if (energyBackend_ == GCMCEnergyBackend::DirectCutoff ||
-        energyBackend_ == GCMCEnergyBackend::PgpHost ||
-        energyBackend_ == GCMCEnergyBackend::PgpFull ||
-        energyBackend_ == GCMCEnergyBackend::PgpFullPme) {
+    const bool useSystemEnergyDelta =
+        useDrude_ ||
+        energyBackend_ == GCMCEnergyBackend::Ewald ||
+        energyBackend_ == GCMCEnergyBackend::Pme;
+
+    if (!useSystemEnergyDelta &&
+        (energyBackend_ == GCMCEnergyBackend::DirectCutoff ||
+         energyBackend_ == GCMCEnergyBackend::PgpHost ||
+         energyBackend_ == GCMCEnergyBackend::PgpFull ||
+         energyBackend_ == GCMCEnergyBackend::PgpFullPme)) {
         const double residueEnergy = cbmcEnabled ? cbmcSelectedEnergy : residueEnergyForBackend(instanceId);
         result.deltaE = -residueEnergy;  // Removing this energy from system
         result.energyBefore = residueEnergy;
         result.energyAfter = 0.0;
     } else {
-        // Full system energy for EWALD/PME modes
+        // Full system energy for Drude/EWALD/PME modes.
         result.energyBefore = calculateSystemEnergy();
     }
     
@@ -1272,9 +1287,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
     reservoir_->deleteInstance(instanceId);
     synchronizeStateWithReservoir(instanceId, false);
     
-    // Calculate energy after deletion for long-range full-system modes
-    if (energyBackend_ == GCMCEnergyBackend::Ewald ||
-        energyBackend_ == GCMCEnergyBackend::Pme) {
+    // Calculate energy after deletion for full-system modes.
+    if (useSystemEnergyDelta) {
         result.energyAfter = calculateSystemEnergy();
         result.deltaE = result.energyAfter - result.energyBefore;
     }
@@ -1347,6 +1361,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
             // Successfully restored with same instance ID
             synchronizeStateWithReservoir(instanceId, true);
             result.residueIndex = instanceId;  // Keep original index
+            relaxDrudeIfEnabled();
         } else {
             // Fallback: create a new instance if restoration failed
             // This can happen if the instance was already purged
@@ -1354,6 +1369,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
             if (restoredId >= 0) {
                 synchronizeStateWithReservoir(restoredId, true);
                 result.residueIndex = restoredId;
+                relaxDrudeIfEnabled();
             } else {
                 std::cerr << "WARNING: Failed to restore deleted instance in GCMC deletion rejection" << std::endl;
             }
@@ -1404,7 +1420,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
     result.position = oldPos;
     
     // Calculate energy before move
-    if (energyBackend_ == GCMCEnergyBackend::Ewald ||
+    if (useDrude_ ||
+        energyBackend_ == GCMCEnergyBackend::Ewald ||
         energyBackend_ == GCMCEnergyBackend::Pme) {
         result.energyBefore = calculateSystemEnergy();
     } else {
@@ -1447,7 +1464,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
     updateFragmentPosition(residueIdx, newPos);
     
     // Calculate energy after move
-    if (energyBackend_ == GCMCEnergyBackend::Ewald ||
+    if (useDrude_ ||
+        energyBackend_ == GCMCEnergyBackend::Ewald ||
         energyBackend_ == GCMCEnergyBackend::Pme) {
         result.energyAfter = calculateSystemEnergy();
     } else {
@@ -1482,6 +1500,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
     } else {
         // Restore old position
         updateFragmentPosition(residueIdx, oldPos);
+        relaxDrudeIfEnabled();
         result.accepted = false;
     }
     
@@ -1528,7 +1547,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
     Quaternion oldOrient = instance->orientation;
     
     // Calculate energy before rotation
-    if (energyBackend_ == GCMCEnergyBackend::Ewald ||
+    if (useDrude_ ||
+        energyBackend_ == GCMCEnergyBackend::Ewald ||
         energyBackend_ == GCMCEnergyBackend::Pme) {
         result.energyBefore = calculateSystemEnergy();
     } else {
@@ -1567,7 +1587,8 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
     updateFragmentOrientation(residueIdx, newOrient);
     
     // Calculate energy after rotation
-    if (energyBackend_ == GCMCEnergyBackend::Ewald ||
+    if (useDrude_ ||
+        energyBackend_ == GCMCEnergyBackend::Ewald ||
         energyBackend_ == GCMCEnergyBackend::Pme) {
         result.energyAfter = calculateSystemEnergy();
     } else {
@@ -1603,6 +1624,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
     } else {
         // Restore old orientation
         updateFragmentOrientation(residueIdx, oldOrient);
+        relaxDrudeIfEnabled();
         result.accepted = false;
     }
     
@@ -1901,6 +1923,13 @@ Quaternion GCMCEngine::generateRotationQuaternion(double maxAngle) {
     return q;
 }
 
+void GCMCEngine::relaxDrudeIfEnabled() {
+    if (!useDrude_ || !state_) {
+        return;
+    }
+    ::pygcmc::platform::cpu::DrudeComplete::calculateEnergy(*state_);
+}
+
 // Calculate system energy
 double GCMCEngine::calculateSystemEnergy() {
     if (!state_) return 0.0;
@@ -1912,6 +1941,13 @@ double GCMCEngine::calculateSystemEnergy() {
         energyBackend_ != GCMCEnergyBackend::Ewald &&
         energyBackend_ != GCMCEnergyBackend::Pme) {
         return energyCache_.totalEnergy;
+    }
+
+    // Relax Drude oscillators (Born–Oppenheimer surface) before evaluating nonbonded energy.
+    // This mutates Drude particle coordinates in-place.
+    double drudeEnergy = 0.0;
+    if (useDrude_) {
+        drudeEnergy = ::pygcmc::platform::cpu::DrudeComplete::calculateEnergy(*state_);
     }
 
     double totalEnergy = 0.0;
@@ -1933,6 +1969,8 @@ double GCMCEngine::calculateSystemEnergy() {
         // Get total energy from state
         totalEnergy = energy::getTotalEnergyUniquePairs(*state_, energyMethod_);
     }
+
+    totalEnergy += drudeEnergy;
     
     energyCache_.totalEnergy = totalEnergy;
     energyCache_.valid = true;
@@ -2229,7 +2267,6 @@ void GCMCEngine::synchronizeStateWithReservoir(int instanceId, bool isInsertion)
             
             // CRITICAL: Don't actually remove atoms from global array to avoid shifting indices
             // Just mark the residue as inactive so energy calculations skip it
-            residue.atomCount = 0;  // Mark as having no atoms
             residue.atoms.clear();
             
             // CRITICAL: Update activeResidueCount
@@ -2245,6 +2282,9 @@ void GCMCEngine::synchronizeStateWithReservoir(int instanceId, bool isInsertion)
             // This is a simplification for now - a production system would compact arrays
         }
     }
+
+    // State atom/residue arrays were mutated (insert/delete); cached energies are invalid.
+    energyCache_.invalidate();
 }
 
 // Update fragment position

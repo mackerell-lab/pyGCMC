@@ -2,6 +2,7 @@
 #include "../../../../io/parameters/InpParserGCMC.hpp"
 #include "../../../../io/structure/PdbParserMain.hpp"
 #include "../../../../io/topology/topParserMain.hpp"
+#include "../../../../io/topology/psfParserMain.hpp"
 #include "../../../../io/forcefield/ItpNonbondedParser.hpp"
 #include "../../../../io/forcefield/PrmParserMain.hpp"
 #include "../../../../io/topology/FragmentLibrary.hpp"
@@ -938,8 +939,22 @@ std::shared_ptr<model::Topology> SimulationInputBuilder::loadTopology(const std:
     file.close();
     
     auto topology = std::make_shared<model::Topology>();
-    io::TOPParser parser;
-    parser.parse_to_topology(filename, *topology);
+
+    std::string ext = std::filesystem::path(filename).extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    if (ext == ".psf") {
+        io::PSFParser parser;
+        if (!parser.parse_to_topology(filename, *topology)) {
+            throw std::runtime_error("Failed to parse PSF topology file: " + filename);
+        }
+    } else {
+        io::TOPParser parser;
+        if (!parser.parse_to_topology(filename, *topology)) {
+            throw std::runtime_error("Failed to parse topology file: " + filename);
+        }
+    }
     return topology;
 }
 

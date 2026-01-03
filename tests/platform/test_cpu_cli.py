@@ -183,6 +183,11 @@ from cpu_cli.cavity_bias_knobs import (
     test_cavity_bias_use_vdw_radius_changes_cavity_fraction,
 )
 
+# Drude (polarizable) strict SCF integration (1 function)
+from cpu_cli.drude_strict_scf import (
+    test_gcmc_cpu_drude_strict_scf_relaxes_and_limits_displacement,
+)
+
 # MaxCount hard-cap policy regression (1 function)
 from cpu_cli.maxcount_policy import (
     test_maxcount_is_initial_plus_mcsteps_plus_buffer,
