@@ -137,6 +137,12 @@ from cpu_cli.physical_contracts import (
     test_deletion_deltaU_is_negative_of_insertion_for_charged_system,
 )
 
+# Drude fragment insert/delete (2 functions)
+from cpu_cli.drude_fragment_contracts import (
+    test_drude_fragment_insertion_deltaU_closes_to_coulomb_plus_spring,
+    test_drude_fragment_delete_deltaU_is_negative_of_insert,
+)
+
 # Multi-fragment physical contracts (2 functions)
 from cpu_cli.physical_contracts_multifragment import (
     test_multifragment_cross_species_deltaU_matches_energy_components,
@@ -186,6 +192,11 @@ from cpu_cli.cavity_bias_knobs import (
 # Drude (polarizable) strict SCF integration (1 function)
 from cpu_cli.drude_strict_scf import (
     test_gcmc_cpu_drude_strict_scf_relaxes_and_limits_displacement,
+)
+
+# Drude (polarizable) energy closure + OpenMM cross-check (1 function)
+from cpu_cli.drude_openmm_energy import (
+    test_gcmc_cpu_drude_energy_matches_openmm_and_analytic_closure,
 )
 
 # MaxCount hard-cap policy regression (1 function)

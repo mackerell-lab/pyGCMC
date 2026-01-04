@@ -88,7 +88,11 @@ void PrmParserSections::parseNonbondedSection(std::istream& input, pygcmc::model
     if (debug_output) std::cerr << "Current lj_params map size: " << ff.get_num_lj_params() << std::endl;
     
     // Parse atom type parameters
-    while (std::getline(input, line)) {
+    while (true) {
+        const std::streampos linePos = input.tellg();
+        if (!std::getline(input, line)) {
+            break;
+        }
         if (PrmParserStructures::isCommentLine(line)) continue;
         
         line = PrmParserStructures::removeComments(line);
@@ -121,6 +125,16 @@ void PrmParserSections::parseNonbondedSection(std::istream& input, pygcmc::model
             PrmParserStructures::isAnglesSection(line) || PrmParserStructures::isDihedralsSection(line) || 
             PrmParserStructures::isImproperSection(line)) {
             if (debug_output) std::cerr << "Found section end marker: " << tokens[0] << std::endl;
+            break;
+        }
+
+        // Drude-related sections can follow NONBONDED in CHARMM parameter files (e.g. "ALPHA").
+        // Stop parsing NONBONDED and let the outer parser handle the new section header.
+        if (PrmParserStructures::isAlphaTHoleSection(line) ||
+            PrmParserStructures::isLonePairSection(line) ||
+            PrmParserStructures::isAnisotropySection(line)) {
+            input.clear();
+            input.seekg(linePos);
             break;
         }
         

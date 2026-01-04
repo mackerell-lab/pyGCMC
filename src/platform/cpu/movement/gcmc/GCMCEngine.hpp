@@ -6,6 +6,8 @@
 #include "../bias/CavityBias.hpp"
 #include "../bias/ConfigBias.hpp"
 #include "../../energy/EnergyModule.hpp"
+#include "../../energy/drude/DrudeStructures.hpp"
+#include "../../../../model/forcefield/ForceFieldMain.hpp"
 #include "GCMCEnergyCallback.hpp"
 #include "GCMCAcceptance.hpp"
 #include "GCMCStatistics.hpp"
@@ -194,6 +196,13 @@ public:
     void setUseDrude(bool enable) { useDrude_ = enable; }
     bool isUseDrudeEnabled() const { return useDrude_; }
 
+    // Drude topology sources:
+    // - Host topology is typically derived from the initial PSF/Topology + ForceField.
+    // - Fragment topology is derived from FragmentTemplate connectivity at runtime.
+    void setDrudeHostTopology(std::vector<::pygcmc::platform::cpu::DrudeParticle> particles,
+                              std::vector<::pygcmc::platform::cpu::ScreenedPair> screenedPairs);
+    void setDrudeForceFieldModel(const ::pygcmc::model::forcefield::ForceField* forceField);
+
     // Get energy callback (for configuration)
     GCMCEnergyCallback* getEnergyCallback() {
         return energyCallback_.get();
@@ -313,7 +322,14 @@ private:
 
     // Drude helpers
     void relaxDrudeIfEnabled();
+    void rebuildDrudeTopologyIfNeeded();
+    void appendDrudeForActiveFragments();
+    void appendDrudeForFragmentInstance(int instanceId);
     bool useDrude_ = false;
+    bool drudeTopologyDirty_ = false;
+    std::vector<::pygcmc::platform::cpu::DrudeParticle> drudeHostParticles_;
+    std::vector<::pygcmc::platform::cpu::ScreenedPair> drudeHostScreenedPairs_;
+    const ::pygcmc::model::forcefield::ForceField* drudeForceFieldModel_ = nullptr;
 
     void updateFragmentPosition(int residueIdx, const Vector3& newPos);
     void updateFragmentOrientation(int residueIdx, const Quaternion& newOrient);

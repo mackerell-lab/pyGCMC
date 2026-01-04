@@ -155,7 +155,13 @@ bool PrmParserStructures::isNBFixSection(const std::string& line) {
 }
 
 bool PrmParserStructures::isAlphaTHoleSection(const std::string& line) {
-    return line.find("ALPHA") != std::string::npos && line.find("THOLE") != std::string::npos;
+    const std::string trimmed = trim(line);
+    if (trimmed.rfind("ALPHA", 0) == 0) {
+        // CHARMM parameter files often start the section with a bare "ALPHA" header
+        // (THOLE is then given per line), while some variants use "ALPHA THOLE".
+        return true;
+    }
+    return trimmed.find("ALPHA") != std::string::npos && trimmed.find("THOLE") != std::string::npos;
 }
 
 bool PrmParserStructures::isLonePairSection(const std::string& line) {

@@ -242,6 +242,10 @@ public:
                              int instanceId,
                              const Vector3& position,
                              const Quaternion& orientation = Quaternion());
+
+    // Clear all instances (active/ghost) while keeping templates/types.
+    // Useful for checkpoint restore where MCState is restored externally.
+    void clearInstances();
     
     // Create with configurational bias
     int createInstanceCBMC(int templateId,

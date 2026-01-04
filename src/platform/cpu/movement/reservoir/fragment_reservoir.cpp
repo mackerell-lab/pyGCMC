@@ -129,6 +129,18 @@ int FragmentReservoir::createInstanceWithId(int templateId,
     return instanceId;
 }
 
+void FragmentReservoir::clearInstances() {
+    instances_.clear();
+    activeInstances_.clear();
+    ghostInstances_.clear();
+    templateInstances_.clear();
+    ghostQueues_.clear();
+    ghostPools_.clear();
+    perTypeActiveCount_.clear();
+    nextInstanceId_ = 0;
+    stats_.reset();
+}
+
 // Template management
 int FragmentReservoir::addTemplate(const FragmentTemplate& tmpl) {
     int id = nextTemplateId_++;

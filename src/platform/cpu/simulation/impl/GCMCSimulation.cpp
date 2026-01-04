@@ -1425,13 +1425,33 @@ bool GCMCSimulation::setupEngine() {
         }
     }
 
-    // Configure Drude SCF (polarizable force field) if the loaded topology indicates Drude particles.
-    // This is an opt-in-by-data path: if no Drude oscillators are present, the simulation proceeds
-    // exactly as before.
+    // Configure Drude SCF (polarizable force field).
+    // Opt-in-by-data: enable when either the initial topology or any fragment template contains Drude particles.
+    bool wantsDrude = false;
+    std::vector<::pygcmc::platform::cpu::DrudeParticle> hostDrudeParticles;
+    std::vector<::pygcmc::platform::cpu::ScreenedPair> hostDrudePairs;
+
     if (state_ && molecularFromBuilder_ && forceFieldFromBuilder_) {
         const auto& topAtoms = molecularFromBuilder_->topology_atoms;
         const auto& topResidues = molecularFromBuilder_->topology_residues;
         const auto& bonds = molecularFromBuilder_->bonds;
+
+        // If the initial structure already contains fragments that are also declared as insertable
+        // templates (fragitp/fragname), the reservoir will manage them and the engine will rebuild
+        // their Drude topology from the templates. Avoid duplicating those dipoles in the host list.
+        std::unordered_set<std::string> fragmentResnamesLower;
+        if (reservoir_) {
+            fragmentResnamesLower.reserve(static_cast<size_t>(reservoir_->getTemplateCount()));
+            for (int templateId = 0; templateId < reservoir_->getTemplateCount(); ++templateId) {
+                const auto* tmpl = reservoir_->getTemplate(templateId);
+                if (!tmpl) {
+                    continue;
+                }
+                std::string name = tmpl->name;
+                for (auto& c : name) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                fragmentResnamesLower.insert(name);
+            }
+        }
 
         auto isDrudeAtom = [](const model::topology::TopologyAtom& atom) {
             return std::abs(atom.mass - ::pygcmc::platform::cpu::DrudeConstants::DRUDE_MASS) < 1e-3 ||
@@ -1478,8 +1498,6 @@ bool GCMCSimulation::setupEngine() {
             std::vector<int> parentTopToDipole(topAtoms.size(), -1);
             std::vector<double> parentThole(topAtoms.size(), 0.0);
 
-            ::pygcmc::platform::cpu::DrudeComplete::clear();
-
             for (size_t drudeTopIdx = 0; drudeTopIdx < topAtoms.size(); ++drudeTopIdx) {
                 const auto& drudeAtom = topAtoms[drudeTopIdx];
                 if (!isDrudeAtom(drudeAtom)) {
@@ -1501,6 +1519,16 @@ bool GCMCSimulation::setupEngine() {
                 }
 
                 const auto& parentAtom = topAtoms[static_cast<size_t>(parentTopIdx)];
+                if (!fragmentResnamesLower.empty()) {
+                    const int rid = parentAtom.residue_id;
+                    if (rid >= 0 && static_cast<size_t>(rid) < topResidues.size()) {
+                        std::string resname = topResidues[static_cast<size_t>(rid)].name;
+                        for (auto& c : resname) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                        if (fragmentResnamesLower.count(resname) != 0) {
+                            continue;
+                        }
+                    }
+                }
                 double alphaA3 = parentAtom.alpha;
                 double thole = parentAtom.thole;
 
@@ -1530,14 +1558,13 @@ bool GCMCSimulation::setupEngine() {
                 particle.polarizability = alphaNm3;
                 particle.computeSpringConstants();
 
-                const int dipoleIdx =
-                    ::pygcmc::platform::cpu::DrudeComplete::getDrudeCore().addParticle(particle);
+                const int dipoleIdx = static_cast<int>(hostDrudeParticles.size());
+                hostDrudeParticles.push_back(particle);
                 parentTopToDipole[static_cast<size_t>(parentTopIdx)] = dipoleIdx;
                 parentThole[static_cast<size_t>(parentTopIdx)] = thole;
             }
 
-            const bool hasDrude = (::pygcmc::platform::cpu::DrudeComplete::getNumParticles() > 0);
-            if (hasDrude) {
+            if (!hostDrudeParticles.empty()) {
                 auto makeKey = [](int a, int b) -> uint64_t {
                     uint32_t x = static_cast<uint32_t>(std::min(a, b));
                     uint32_t y = static_cast<uint32_t>(std::max(a, b));
@@ -1584,6 +1611,7 @@ bool GCMCSimulation::setupEngine() {
                     }
                 }
 
+                hostDrudePairs.reserve(screenedParentPairs.size());
                 for (const uint64_t key : screenedParentPairs) {
                     const int parentA = static_cast<int>(key >> 32);
                     const int parentB = static_cast<int>(key & 0xffffffffu);
@@ -1615,38 +1643,68 @@ bool GCMCSimulation::setupEngine() {
                     pair.dipole1 = dipoleA;
                     pair.dipole2 = dipoleB;
                     pair.thole = thole;
-                    ::pygcmc::platform::cpu::DrudeComplete::addScreenedPair(pair);
+                    hostDrudePairs.push_back(pair);
                 }
-
-                ::pygcmc::platform::cpu::DrudeSCFParams scf;
-                scf.tolerance = 1e-5;
-                scf.maxIterations = 300;
-                scf.dampingFactor = 0.9;
-                scf.maxDrudeDistance = 0.02;
-                scf.enableHardWall = false;
-                scf.excludePartnerParentInExternalField = false;
-                scf.includeCoulombEnergy = false;
-                scf.tholeMode = ::pygcmc::platform::cpu::TholeMode::StandardS1;
-
-                ::pygcmc::platform::cpu::DrudeComplete::setParameters(scf);
-                ::pygcmc::platform::cpu::DrudeComplete::getDrudeCore().setAlgorithm(
-                    ::pygcmc::platform::cpu::DrudeAlgorithm::SCF);
-
-                if (engine_->getEnergyBackend() == GCMCEnergyBackend::PgpHost ||
-                    engine_->getEnergyBackend() == GCMCEnergyBackend::PgpFull ||
-                    engine_->getEnergyBackend() == GCMCEnergyBackend::PgpFullPme) {
-                    const std::string msg =
-                        "Drude SCF is not yet supported with PGP backends; use energy_method=direct/ewald/pme";
-                    log("ERROR: ", msg);
-                    std::cout << "ERROR: " << msg << std::endl;
-                    return false;
-                }
-
-                engine_->setUseDrude(true);
-                log("Drude SCF enabled: particles=", ::pygcmc::platform::cpu::DrudeComplete::getNumParticles(),
-                    " screenedPairs=", screenedParentPairs.size());
             }
         }
+    }
+
+    bool fragmentsHaveDrude = false;
+    if (reservoir_) {
+        for (int templateId = 0; templateId < reservoir_->getTemplateCount(); ++templateId) {
+            const auto* tmpl = reservoir_->getTemplate(templateId);
+            if (!tmpl) {
+                continue;
+            }
+            for (const auto& atom : tmpl->atoms) {
+                if (std::abs(static_cast<double>(atom.mass) - ::pygcmc::platform::cpu::DrudeConstants::DRUDE_MASS) <
+                    1e-3) {
+                    fragmentsHaveDrude = true;
+                    break;
+                }
+            }
+            if (fragmentsHaveDrude) {
+                break;
+            }
+        }
+    }
+
+    wantsDrude = (!hostDrudeParticles.empty()) || fragmentsHaveDrude;
+    if (wantsDrude && engine_) {
+        ::pygcmc::platform::cpu::DrudeSCFParams scf;
+        scf.tolerance = 1e-5;
+        scf.maxIterations = 300;
+        scf.dampingFactor = 0.9;
+        scf.maxDrudeDistance = 0.02;
+        scf.enableHardWall = false;
+        scf.excludePartnerParentInExternalField = false;
+        scf.includeCoulombEnergy = false;
+        scf.tholeMode = ::pygcmc::platform::cpu::TholeMode::StandardS1;
+
+        ::pygcmc::platform::cpu::DrudeComplete::setParameters(scf);
+        ::pygcmc::platform::cpu::DrudeComplete::getDrudeCore().setAlgorithm(
+            ::pygcmc::platform::cpu::DrudeAlgorithm::SCF);
+
+        if (engine_->getEnergyBackend() == GCMCEnergyBackend::PgpHost ||
+            engine_->getEnergyBackend() == GCMCEnergyBackend::PgpFull ||
+            engine_->getEnergyBackend() == GCMCEnergyBackend::PgpFullPme) {
+            const std::string msg =
+                "Drude SCF is not yet supported with PGP backends; use energy_method=direct/ewald/pme";
+            log("ERROR: ", msg);
+            std::cout << "ERROR: " << msg << std::endl;
+            return false;
+        }
+
+        const size_t hostDipoleCount = hostDrudeParticles.size();
+        const size_t hostScreenedCount = hostDrudePairs.size();
+
+        engine_->setUseDrude(true);
+        engine_->setDrudeForceFieldModel(forceFieldFromBuilder_.get());
+        engine_->setDrudeHostTopology(std::move(hostDrudeParticles), std::move(hostDrudePairs));
+
+        log("Drude SCF enabled: hostDrudeDipoles=", hostDipoleCount,
+            " hostScreenedPairs=", hostScreenedCount,
+            " fragmentTemplatesHaveDrude=", fragmentsHaveDrude ? "yes" : "no");
     }
 
     // Configure engine parameters for optimal performance
@@ -3015,7 +3073,7 @@ void GCMCSimulation::saveCheckpoint(const std::string& filename) const {
     }
     
     // Write checkpoint header
-    const std::string header = "GCMC_CHECKPOINT_V1";
+    const std::string header = "GCMC_CHECKPOINT_V2";
     out.write(header.c_str(), header.size());
     
     // Write simulation state
@@ -3039,27 +3097,37 @@ void GCMCSimulation::saveCheckpoint(const std::string& filename) const {
     }
     
     // Write atom positions
-    size_t numAtoms = state_->atoms.size();
+    const size_t numAtoms = state_->activeAtomCount > 0 ? static_cast<size_t>(state_->activeAtomCount) : 0;
     out.write(reinterpret_cast<const char*>(&numAtoms), sizeof(numAtoms));
-    for (const auto& atom : state_->atoms) {
+    for (size_t i = 0; i < numAtoms && i < state_->atoms.size(); ++i) {
+        const auto& atom = state_->atoms[i];
         out.write(reinterpret_cast<const char*>(&atom.x), sizeof(atom.x));
         out.write(reinterpret_cast<const char*>(&atom.y), sizeof(atom.y));
         out.write(reinterpret_cast<const char*>(&atom.z), sizeof(atom.z));
+        out.write(reinterpret_cast<const char*>(&atom.charge), sizeof(atom.charge));
+        out.write(reinterpret_cast<const char*>(&atom.mass), sizeof(atom.mass));
         out.write(reinterpret_cast<const char*>(&atom.type), sizeof(atom.type));
-        // MCAtom doesn't have isActive, write a placeholder
-        bool active = true;
+        const bool active = atom.type >= 0;
         out.write(reinterpret_cast<const char*>(&active), sizeof(active));
+        const size_t nameLen = atom.name.size();
+        out.write(reinterpret_cast<const char*>(&nameLen), sizeof(nameLen));
+        out.write(atom.name.c_str(), nameLen);
     }
     
     // Write residue information
-    size_t numResidues = state_->residues.size();
+    const size_t numResidues = state_->activeResidueCount > 0 ? static_cast<size_t>(state_->activeResidueCount) : 0;
     out.write(reinterpret_cast<const char*>(&numResidues), sizeof(numResidues));
-    for (const auto& res : state_->residues) {
+    for (size_t i = 0; i < numResidues && i < state_->residues.size(); ++i) {
+        const auto& res = state_->residues[i];
         size_t nameLen = res.resname.size();
         out.write(reinterpret_cast<const char*>(&nameLen), sizeof(nameLen));
         out.write(res.resname.c_str(), nameLen);
         // Write active status
         out.write(reinterpret_cast<const char*>(&res.active), sizeof(res.active));
+        out.write(reinterpret_cast<const char*>(&res.fixed), sizeof(res.fixed));
+        out.write(reinterpret_cast<const char*>(&res.atomStart), sizeof(res.atomStart));
+        out.write(reinterpret_cast<const char*>(&res.atomCount), sizeof(res.atomCount));
+        out.write(reinterpret_cast<const char*>(&res.resid), sizeof(res.resid));
     }
     
     out.close();
@@ -3077,16 +3145,18 @@ bool GCMCSimulation::loadCheckpoint(const std::string& filename) {
         log("ERROR: Failed to open checkpoint file ", filename);
         return false;
     }
-
+    
     // Read and verify header
-    const std::string expected_header = "GCMC_CHECKPOINT_V1";
-    std::string header(expected_header.size(), '\0');
+    const std::string headerV1 = "GCMC_CHECKPOINT_V1";
+    const std::string headerV2 = "GCMC_CHECKPOINT_V2";
+    std::string header(headerV1.size(), '\0');
     in.read(&header[0], header.size());
-    if (header != expected_header) {
+    const bool isV2 = header == headerV2;
+    if (!isV2 && header != headerV1) {
         log("ERROR: Invalid checkpoint file format");
         return false;
     }
-
+    
     // Read simulation state
     in.read(reinterpret_cast<char*>(&stats_.totalSteps), sizeof(stats_.totalSteps));
     in.read(reinterpret_cast<char*>(&stats_.acceptedMoves), sizeof(stats_.acceptedMoves));
@@ -3127,33 +3197,40 @@ bool GCMCSimulation::loadCheckpoint(const std::string& filename) {
     size_t numAtoms;
     in.read(reinterpret_cast<char*>(&numAtoms), sizeof(numAtoms));
 
-    if (numAtoms != state_->atoms.size()) {
-        log("WARNING: Atom count mismatch in checkpoint (", numAtoms, " vs ", state_->atoms.size(), ")");
-        // Continue anyway - may be due to insertions/deletions
-    }
-
-    // Resize atoms vector if needed
     if (numAtoms > state_->atoms.size()) {
         state_->atoms.resize(numAtoms);
     }
 
     for (size_t i = 0; i < numAtoms && i < state_->atoms.size(); ++i) {
-        in.read(reinterpret_cast<char*>(&state_->atoms[i].x), sizeof(state_->atoms[i].x));
-        in.read(reinterpret_cast<char*>(&state_->atoms[i].y), sizeof(state_->atoms[i].y));
-        in.read(reinterpret_cast<char*>(&state_->atoms[i].z), sizeof(state_->atoms[i].z));
-        in.read(reinterpret_cast<char*>(&state_->atoms[i].type), sizeof(state_->atoms[i].type));
+        auto& atom = state_->atoms[i];
+        in.read(reinterpret_cast<char*>(&atom.x), sizeof(atom.x));
+        in.read(reinterpret_cast<char*>(&atom.y), sizeof(atom.y));
+        in.read(reinterpret_cast<char*>(&atom.z), sizeof(atom.z));
+        if (isV2) {
+            in.read(reinterpret_cast<char*>(&atom.charge), sizeof(atom.charge));
+            in.read(reinterpret_cast<char*>(&atom.mass), sizeof(atom.mass));
+        }
+        in.read(reinterpret_cast<char*>(&atom.type), sizeof(atom.type));
         bool active;
         in.read(reinterpret_cast<char*>(&active), sizeof(active));
-        // Note: MCAtom doesn't have isActive field, so we just read and discard
+        if (!active) {
+            atom.type = -1;
+        }
+        if (isV2) {
+            size_t nameLen = 0;
+            in.read(reinterpret_cast<char*>(&nameLen), sizeof(nameLen));
+            std::string name(nameLen, '\0');
+            if (nameLen > 0) {
+                in.read(&name[0], nameLen);
+            }
+            atom.name = std::move(name);
+        }
+        atom.updatePosition();
     }
 
     // Read residue information
     size_t numResidues;
     in.read(reinterpret_cast<char*>(&numResidues), sizeof(numResidues));
-
-    if (numResidues != state_->residues.size()) {
-        log("WARNING: Residue count mismatch in checkpoint (", numResidues, " vs ", state_->residues.size(), ")");
-    }
 
     // Resize residues vector if needed
     if (numResidues > state_->residues.size()) {
@@ -3167,23 +3244,71 @@ bool GCMCSimulation::loadCheckpoint(const std::string& filename) {
         in.read(&resname[0], nameLen);
         state_->residues[i].resname = resname;
         in.read(reinterpret_cast<char*>(&state_->residues[i].active), sizeof(state_->residues[i].active));
+        if (isV2) {
+            in.read(reinterpret_cast<char*>(&state_->residues[i].fixed), sizeof(state_->residues[i].fixed));
+            in.read(reinterpret_cast<char*>(&state_->residues[i].atomStart), sizeof(state_->residues[i].atomStart));
+            in.read(reinterpret_cast<char*>(&state_->residues[i].atomCount), sizeof(state_->residues[i].atomCount));
+            in.read(reinterpret_cast<char*>(&state_->residues[i].resid), sizeof(state_->residues[i].resid));
+        }
     }
-
+    
     // Update active atom/residue counts
-    state_->activeAtomCount = 0;
-    for (const auto& atom : state_->atoms) {
-        if (atom.type >= 0) {  // Simple active check
-            state_->activeAtomCount++;
+    if (isV2) {
+        state_->activeAtomCount = static_cast<int>(numAtoms);
+        state_->activeResidueCount = static_cast<int>(numResidues);
+    } else {
+        state_->activeAtomCount = 0;
+        for (size_t i = 0; i < numAtoms && i < state_->atoms.size(); ++i) {
+            if (state_->atoms[i].type >= 0) {
+                state_->activeAtomCount++;
+            }
+        }
+
+        state_->activeResidueCount = 0;
+        for (size_t i = 0; i < numResidues && i < state_->residues.size(); ++i) {
+            if (state_->residues[i].active) {
+                state_->activeResidueCount = static_cast<int>(i + 1);
+            }
         }
     }
 
-    state_->activeResidueCount = 0;
-    for (const auto& res : state_->residues) {
-        if (res.active) {
-            state_->activeResidueCount++;
+    for (size_t i = 0; i < numResidues && i < state_->residues.size(); ++i) {
+        auto& residue = state_->residues[i];
+        residue.atoms.clear();
+        if (residue.atomStart < 0 || residue.atomCount <= 0) {
+            continue;
+        }
+        const size_t start = static_cast<size_t>(residue.atomStart);
+        const size_t count = static_cast<size_t>(residue.atomCount);
+        if (start + count > numAtoms || start + count > state_->atoms.size()) {
+            continue;
+        }
+        residue.atoms.reserve(count);
+        for (size_t j = 0; j < count; ++j) {
+            residue.atoms.push_back(state_->atoms[start + j]);
         }
     }
 
+    // Rebuild reservoir instances for active fragments, so resumed runs can delete/move them.
+    if (reservoir_) {
+        reservoir_->clearInstances();
+        for (auto& frag : fragmentTypes_) {
+            frag.currentCount = 0;
+        }
+        seedReservoirFromInitialState();
+        for (auto& frag : fragmentTypes_) {
+            frag.currentCount = reservoir_->activeCount(frag.typeId);
+        }
+    }
+
+    // Invalidate caches and ensure Drude topology includes restored fragments.
+    if (engine_) {
+        engine_->initialize(state_.get(), reservoir_.get());
+        if (forceFieldFromBuilder_) {
+            engine_->setDrudeForceFieldModel(forceFieldFromBuilder_.get());
+        }
+    }
+    
     in.close();
     log("Loaded checkpoint from ", filename, " (step ", stats_.totalSteps, ")");
     return true;

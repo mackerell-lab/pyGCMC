@@ -134,12 +134,42 @@ bool FragmentLibrary::loadFromITP(const std::string& path, const std::string& na
                 totalCharge += charge;
             }
         }
-        // Note: bonds section parsing could be added here if needed for connectivity
         else if (section == "bonds") {
-            // Could parse bond information if needed
-            // Format: ai aj funct [parameters]
-            // For now, we skip bond parsing as MCAtom doesn't store bond info
+            std::istringstream iss(line);
+            int ai = 0;
+            int aj = 0;
+            int funct = 0;
+            if (!(iss >> ai >> aj)) {
+                continue;
+            }
+            if (!(iss >> funct)) {
+                funct = 0;
+            }
+            // ITP uses 1-based atom indices.
+            ai -= 1;
+            aj -= 1;
+            if (ai < 0 || aj < 0) {
+                continue;
+            }
+            tmpl.bonds.push_back(FragmentLibrary::TemplateData::Bond{ai, aj});
         }
+    }
+
+    // Validate any parsed bonds against the atom count (ignore out-of-range entries).
+    if (!tmpl.bonds.empty() && !tmpl.atoms.empty()) {
+        const int nAtoms = static_cast<int>(tmpl.atoms.size());
+        std::vector<FragmentLibrary::TemplateData::Bond> filtered;
+        filtered.reserve(tmpl.bonds.size());
+        for (const auto& b : tmpl.bonds) {
+            if (b.atom1 < 0 || b.atom2 < 0) {
+                continue;
+            }
+            if (b.atom1 >= nAtoms || b.atom2 >= nAtoms) {
+                continue;
+            }
+            filtered.push_back(b);
+        }
+        tmpl.bonds.swap(filtered);
     }
     
     // Calculate molecular weight and radius

@@ -885,6 +885,15 @@ std::map<std::string, platform::cpu::movement::FragmentTemplate> SimulationInput
         tmpl.atomTypeNames = fragmentData->atomTypeNames;
         tmpl.molecularWeight = fragmentData->molecularWeight;
         tmpl.radius = fragmentData->radius;
+        tmpl.bonds.clear();
+        tmpl.bonds.reserve(fragmentData->bonds.size());
+        for (const auto& b : fragmentData->bonds) {
+            platform::cpu::movement::FragmentTemplate::Bond bond;
+            bond.atom1 = b.atom1;
+            bond.atom2 = b.atom2;
+            bond.length = 0.0;
+            tmpl.bonds.push_back(bond);
+        }
         
         // Assign concentration and chemical potential by index (fragitp order).
         if (i < fragConcs.size()) {

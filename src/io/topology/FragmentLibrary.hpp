@@ -20,6 +20,12 @@ public:
         // Per-atom force field type names from the ITP "type" column (same order as atoms).
         // Used later to map atoms onto MCState atom type indices.
         std::vector<std::string> atomTypeNames;
+        struct Bond {
+            int atom1 = -1;  // 0-based
+            int atom2 = -1;  // 0-based
+        };
+        // Connectivity for features that require topology awareness (e.g., Drude parent pairing).
+        std::vector<Bond> bonds;
         double radius = 0.0;
         double molecularWeight = 0.0;
     };

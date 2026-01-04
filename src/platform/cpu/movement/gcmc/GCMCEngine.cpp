@@ -18,9 +18,11 @@
 #include "../../energy/drude/DrudeMain.hpp"
 #include <cmath>
 #include <algorithm>
+#include <cctype>
 #include <iostream>
 #include <stdexcept>
 #include <limits>
+#include <unordered_set>
 
 namespace pygcmc {
 namespace platform {
@@ -96,6 +98,20 @@ bool hasAnyActiveFixedResidue(const MCState& state) {
 }
 
 } // namespace
+
+void GCMCEngine::setDrudeHostTopology(
+    std::vector<::pygcmc::platform::cpu::DrudeParticle> particles,
+    std::vector<::pygcmc::platform::cpu::ScreenedPair> screenedPairs) {
+    drudeHostParticles_ = std::move(particles);
+    drudeHostScreenedPairs_ = std::move(screenedPairs);
+    drudeTopologyDirty_ = true;
+    ::pygcmc::platform::cpu::DrudeComplete::clearHistory();
+}
+
+void GCMCEngine::setDrudeForceFieldModel(const ::pygcmc::model::forcefield::ForceField* forceField) {
+    drudeForceFieldModel_ = forceField;
+    drudeTopologyDirty_ = true;
+}
 
 // Constructor
 GCMCEngine::GCMCEngine()
@@ -1927,7 +1943,240 @@ void GCMCEngine::relaxDrudeIfEnabled() {
     if (!useDrude_ || !state_) {
         return;
     }
+    rebuildDrudeTopologyIfNeeded();
     ::pygcmc::platform::cpu::DrudeComplete::calculateEnergy(*state_);
+}
+
+void GCMCEngine::rebuildDrudeTopologyIfNeeded() {
+    if (!useDrude_ || !state_) {
+        return;
+    }
+    if (!drudeTopologyDirty_) {
+        return;
+    }
+
+    ::pygcmc::platform::cpu::DrudeComplete::clear();
+    ::pygcmc::platform::cpu::DrudeComplete::clearHistory();
+
+    auto& core = ::pygcmc::platform::cpu::DrudeComplete::getDrudeCore();
+    for (const auto& particle : drudeHostParticles_) {
+        core.addParticle(particle);
+    }
+    for (const auto& pair : drudeHostScreenedPairs_) {
+        ::pygcmc::platform::cpu::DrudeComplete::addScreenedPair(pair);
+    }
+
+    appendDrudeForActiveFragments();
+
+    drudeTopologyDirty_ = false;
+}
+
+void GCMCEngine::appendDrudeForActiveFragments() {
+    if (!reservoir_ || !state_) {
+        return;
+    }
+    for (int instanceId : reservoir_->getActiveInstances()) {
+        appendDrudeForFragmentInstance(instanceId);
+    }
+}
+
+void GCMCEngine::appendDrudeForFragmentInstance(int instanceId) {
+    if (!reservoir_ || !state_) {
+        return;
+    }
+    if (instanceId < 0 || instanceId >= static_cast<int>(state_->residues.size())) {
+        return;
+    }
+
+    const auto& residue = state_->residues[instanceId];
+    if (!residue.active || residue.atomCount <= 0) {
+        return;
+    }
+
+    const FragmentInstance* instance = reservoir_->getInstance(instanceId);
+    if (!instance) {
+        return;
+    }
+    const FragmentTemplate* tmpl = reservoir_->getTemplate(instance->templateId);
+    if (!tmpl) {
+        return;
+    }
+    const int nAtoms = static_cast<int>(tmpl->atoms.size());
+    if (nAtoms <= 0 || residue.atomCount != nAtoms) {
+        return;
+    }
+    if (tmpl->bonds.empty()) {
+        return;
+    }
+
+    auto isDrudeAtom = [&](int localIdx) -> bool {
+        if (localIdx < 0 || localIdx >= nAtoms) {
+            return false;
+        }
+        const auto& a = tmpl->atoms[static_cast<size_t>(localIdx)];
+        if (std::abs(static_cast<double>(a.mass) - ::pygcmc::platform::cpu::DrudeConstants::DRUDE_MASS) < 1e-3) {
+            return true;
+        }
+        if (static_cast<size_t>(localIdx) < tmpl->atomTypeNames.size()) {
+            std::string t = tmpl->atomTypeNames[static_cast<size_t>(localIdx)];
+            for (auto& c : t) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+            if (t == "DRUD" || t == "DRUDE") {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    std::vector<std::vector<int>> adjacency(static_cast<size_t>(nAtoms));
+    adjacency.reserve(static_cast<size_t>(nAtoms));
+    for (const auto& b : tmpl->bonds) {
+        if (b.atom1 < 0 || b.atom2 < 0) {
+            continue;
+        }
+        if (b.atom1 >= nAtoms || b.atom2 >= nAtoms) {
+            continue;
+        }
+        adjacency[static_cast<size_t>(b.atom1)].push_back(b.atom2);
+        adjacency[static_cast<size_t>(b.atom2)].push_back(b.atom1);
+    }
+
+    std::vector<int> parentLocalToDipole(static_cast<size_t>(nAtoms), -1);
+    std::vector<double> parentThole(static_cast<size_t>(nAtoms), 0.0);
+
+    for (int drudeLocal = 0; drudeLocal < nAtoms; ++drudeLocal) {
+        if (!isDrudeAtom(drudeLocal)) {
+            continue;
+        }
+
+        int parentLocal = -1;
+        for (int neighbor : adjacency[static_cast<size_t>(drudeLocal)]) {
+            if (neighbor < 0 || neighbor >= nAtoms) {
+                continue;
+            }
+            if (!isDrudeAtom(neighbor)) {
+                parentLocal = neighbor;
+                break;
+            }
+        }
+        if (parentLocal < 0) {
+            continue;
+        }
+
+        if (!drudeForceFieldModel_) {
+            continue;
+        }
+        if (static_cast<size_t>(parentLocal) >= tmpl->atomTypeNames.size()) {
+            continue;
+        }
+
+        const std::string& parentTypeName = tmpl->atomTypeNames[static_cast<size_t>(parentLocal)];
+        if (!drudeForceFieldModel_->has_alpha_params(parentTypeName)) {
+            continue;
+        }
+        const auto& alphaParams = drudeForceFieldModel_->get_alpha_params(parentTypeName);
+        const double alphaNm3 = alphaParams.alpha * 1e-3;
+        if (!(alphaNm3 > 0.0)) {
+            continue;
+        }
+
+        const int parentIdx = residue.atomStart + parentLocal;
+        const int drudeIdx = residue.atomStart + drudeLocal;
+        if (parentIdx < 0 || drudeIdx < 0) {
+            continue;
+        }
+        if (parentIdx >= state_->activeAtomCount || drudeIdx >= state_->activeAtomCount) {
+            continue;
+        }
+
+        ::pygcmc::platform::cpu::DrudeParticle particle;
+        particle.parentIndex = parentIdx;
+        particle.drudeIndex = drudeIdx;
+        particle.charge = static_cast<double>(state_->atoms[static_cast<size_t>(drudeIdx)].charge);
+        particle.polarizability = alphaNm3;
+        particle.computeSpringConstants();
+
+        const int dipoleIdx = ::pygcmc::platform::cpu::DrudeComplete::getDrudeCore().addParticle(particle);
+        parentLocalToDipole[static_cast<size_t>(parentLocal)] = dipoleIdx;
+        parentThole[static_cast<size_t>(parentLocal)] = alphaParams.thole;
+    }
+
+    auto makeKey = [](int a, int b) -> uint64_t {
+        const uint32_t x = static_cast<uint32_t>(std::min(a, b));
+        const uint32_t y = static_cast<uint32_t>(std::max(a, b));
+        return (static_cast<uint64_t>(x) << 32) | static_cast<uint64_t>(y);
+    };
+
+    std::unordered_set<uint64_t> screenedParentPairs;
+    screenedParentPairs.reserve(static_cast<size_t>(nAtoms));
+
+    // 1-2 (bonded) polarizable parents.
+    for (const auto& b : tmpl->bonds) {
+        if (b.atom1 < 0 || b.atom2 < 0) {
+            continue;
+        }
+        if (b.atom1 >= nAtoms || b.atom2 >= nAtoms) {
+            continue;
+        }
+        if (parentLocalToDipole[static_cast<size_t>(b.atom1)] >= 0 &&
+            parentLocalToDipole[static_cast<size_t>(b.atom2)] >= 0) {
+            screenedParentPairs.insert(makeKey(b.atom1, b.atom2));
+        }
+    }
+
+    // 1-3 (topological distance 2) polarizable parents.
+    for (size_t mid = 0; mid < adjacency.size(); ++mid) {
+        const auto& neighbors = adjacency[mid];
+        for (size_t ia = 0; ia < neighbors.size(); ++ia) {
+            for (size_t ib = ia + 1; ib < neighbors.size(); ++ib) {
+                const int a = neighbors[ia];
+                const int b = neighbors[ib];
+                if (a < 0 || b < 0) {
+                    continue;
+                }
+                if (a >= nAtoms || b >= nAtoms) {
+                    continue;
+                }
+                if (parentLocalToDipole[static_cast<size_t>(a)] >= 0 &&
+                    parentLocalToDipole[static_cast<size_t>(b)] >= 0) {
+                    screenedParentPairs.insert(makeKey(a, b));
+                }
+            }
+        }
+    }
+
+    // Register screened pairs with per-pair NBTHOLE override when available.
+    for (const uint64_t key : screenedParentPairs) {
+        const int parentA = static_cast<int>(key >> 32);
+        const int parentB = static_cast<int>(key & 0xffffffffu);
+        if (parentA < 0 || parentB < 0 || parentA >= nAtoms || parentB >= nAtoms) {
+            continue;
+        }
+        const int dipoleA = parentLocalToDipole[static_cast<size_t>(parentA)];
+        const int dipoleB = parentLocalToDipole[static_cast<size_t>(parentB)];
+        if (dipoleA < 0 || dipoleB < 0 || dipoleA == dipoleB) {
+            continue;
+        }
+
+        double thole = std::abs(parentThole[static_cast<size_t>(parentA)]) +
+                       std::abs(parentThole[static_cast<size_t>(parentB)]);
+
+        if (drudeForceFieldModel_ &&
+            static_cast<size_t>(parentA) < tmpl->atomTypeNames.size() &&
+            static_cast<size_t>(parentB) < tmpl->atomTypeNames.size()) {
+            const auto [nbthole, hasNbthole] = drudeForceFieldModel_->get_nbthole(
+                tmpl->atomTypeNames[static_cast<size_t>(parentA)],
+                tmpl->atomTypeNames[static_cast<size_t>(parentB)]);
+            if (hasNbthole) {
+                thole = std::abs(nbthole);
+            }
+        }
+
+        ::pygcmc::platform::cpu::ScreenedPair pair;
+        pair.dipole1 = dipoleA;
+        pair.dipole2 = dipoleB;
+        pair.thole = thole;
+        ::pygcmc::platform::cpu::DrudeComplete::addScreenedPair(pair);
+    }
 }
 
 // Calculate system energy
@@ -1947,6 +2196,7 @@ double GCMCEngine::calculateSystemEnergy() {
     // This mutates Drude particle coordinates in-place.
     double drudeEnergy = 0.0;
     if (useDrude_) {
+        rebuildDrudeTopologyIfNeeded();
         drudeEnergy = ::pygcmc::platform::cpu::DrudeComplete::calculateEnergy(*state_);
     }
 
@@ -2285,6 +2535,9 @@ void GCMCEngine::synchronizeStateWithReservoir(int instanceId, bool isInsertion)
 
     // State atom/residue arrays were mutated (insert/delete); cached energies are invalid.
     energyCache_.invalidate();
+    if (useDrude_) {
+        drudeTopologyDirty_ = true;
+    }
 }
 
 // Update fragment position
