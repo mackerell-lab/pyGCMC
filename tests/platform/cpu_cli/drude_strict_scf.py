@@ -103,9 +103,9 @@ REMARKS minimal Drude SCF integration test
         pdb,
         f"""
 CRYST1   50.000   50.000   50.000  90.00  90.00  90.00 P 1           1
-ATOM      1  P1  RES A   1      {cx:8.3f}{cy:8.3f}{cz:8.3f}  1.00  0.00           C
-ATOM      2 DP1  RES A   1      {cx + drude_dx_a:8.3f}{cy:8.3f}{cz:8.3f}  1.00  0.00           D
-ATOM      3  Q1  FIX A   2      {cx + ext_dx_a:8.3f}{cy:8.3f}{cz:8.3f}  1.00  0.00           Q
+ATOM      1  P1  RES A   1    {cx:8.3f}{cy:8.3f}{cz:8.3f}  1.00  0.00           C
+ATOM      2 DP1  RES A   1    {cx + drude_dx_a:8.3f}{cy:8.3f}{cz:8.3f}  1.00  0.00           D
+ATOM      3  Q1  FIX A   2    {cx + ext_dx_a:8.3f}{cy:8.3f}{cz:8.3f}  1.00  0.00           Q
 END
 """,
     )

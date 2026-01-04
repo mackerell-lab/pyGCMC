@@ -143,6 +143,12 @@ from cpu_cli.drude_fragment_contracts import (
     test_drude_fragment_delete_deltaU_is_negative_of_insert,
 )
 
+# Drude fragment insertion/deletion when the host already contains Drude particles (2 functions)
+from cpu_cli.drude_host_gcmc import (
+    test_drude_fragment_insertion_deltaU_closes_with_drude_host_present,
+    test_drude_fragment_delete_deltaU_is_negative_of_insert_with_drude_host_present,
+)
+
 # Multi-fragment physical contracts (2 functions)
 from cpu_cli.physical_contracts_multifragment import (
     test_multifragment_cross_species_deltaU_matches_energy_components,

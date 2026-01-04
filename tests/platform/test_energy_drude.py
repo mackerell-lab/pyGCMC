@@ -105,6 +105,11 @@ from energyDrude.thole_charmm_four_charge_energy import (
     test_thole_screening_energy_openmmcompat_screens_only_drude_involving_pairs,
 )
 
+from energyDrude.thole_screened_pair_induced_charges import (
+    test_thole_induced_charge_semantics_inter_residue_is_core_charge_independent,
+    test_thole_induced_charge_semantics_intra_residue_adds_full_screened_energy,
+)
+
 # CI tests - Fast
 from energyDrude.ci_fast_tests import (
     test_ci_fast_single_drude_external_field,

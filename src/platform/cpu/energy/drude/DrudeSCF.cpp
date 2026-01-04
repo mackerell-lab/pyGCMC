@@ -266,11 +266,11 @@ void DrudeSCF::calculateInducedField(
     // This fixes the historical missing (u^2/2) term and avoids double counting.
     const std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
 
-    for (const auto& pair : screenedPairs) {
-        if (pair.dipole1 < 0 || static_cast<size_t>(pair.dipole1) >= particles.size() ||
-            pair.dipole2 < 0 || static_cast<size_t>(pair.dipole2) >= particles.size()) {
-            continue;
-        }
+	    for (const auto& pair : screenedPairs) {
+	        if (pair.dipole1 < 0 || static_cast<size_t>(pair.dipole1) >= particles.size() ||
+	            pair.dipole2 < 0 || static_cast<size_t>(pair.dipole2) >= particles.size()) {
+	            continue;
+	        }
 
         const auto& dipole1 = particles[pair.dipole1];
         const auto& dipole2 = particles[pair.dipole2];
@@ -287,23 +287,25 @@ void DrudeSCF::calculateInducedField(
             continue;
         }
 
-        auto applyCorrectionFromSource = [&](int fieldDipoleIndex, int fieldAtomIndex, int sourceAtomIndex) {
-            // Match calculateExternalField() skip semantics: if the base unscreened term
-            // was skipped, do not attempt to "correct" it.
-            if (!isActiveAtom(fieldAtomIndex, activeAtomMask) ||
-                !isActiveAtom(sourceAtomIndex, activeAtomMask)) {
-                return;
-            }
-            if (inSameMolecule(fieldAtomIndex, sourceAtomIndex, state)) {
-                return;
-            }
+	        auto applyCorrectionFromSource = [&](int fieldDipoleIndex,
+	                                             int fieldAtomIndex,
+	                                             int sourceAtomIndex,
+	                                             double sourceCharge) {
+	            if (!isActiveAtom(fieldAtomIndex, activeAtomMask) ||
+	                !isActiveAtom(sourceAtomIndex, activeAtomMask)) {
+	                return;
+	            }
 
-            const auto& fieldAtom = state.atoms[fieldAtomIndex];
-            const auto& sourceAtom = state.atoms[sourceAtomIndex];
+	            // For screened dipole pairs, OpenMM/CHARMM semantics apply Thole screening to the
+	            // induced Drude charge pair (±q_drude), not to the full core atomic charge.
+	            if (std::abs(sourceCharge) < 1e-14) {
+	                return;
+	            }
 
-            if (std::abs(sourceAtom.charge) < 1e-14) {
-                return;
-            }
+	            const bool sameMolecule = inSameMolecule(fieldAtomIndex, sourceAtomIndex, state);
+
+	            const auto& fieldAtom = state.atoms[fieldAtomIndex];
+	            const auto& sourceAtom = state.atoms[sourceAtomIndex];
 
             double dx = fieldAtom.x - sourceAtom.x;
             double dy = fieldAtom.y - sourceAtom.y;
@@ -318,8 +320,8 @@ void DrudeSCF::calculateInducedField(
             const double r = std::sqrt(r2);
             const double invR3 = 1.0 / (r2 * r);
 
-            // Unscreened field contribution from the source charge.
-            const double unscreenedFactor = DrudeConstants::ONE_4PI_EPS0 * sourceAtom.charge * invR3;
+	            // Unscreened field contribution from the source charge (induced-only for screened pairs).
+	            const double unscreenedFactor = DrudeConstants::ONE_4PI_EPS0 * sourceCharge * invR3;
 
             // Compute D(u) for screened Coulomb field (screened - unscreened correction).
             double damping = 1.0;
@@ -331,21 +333,23 @@ void DrudeSCF::calculateInducedField(
                 }
             }
 
-            const double deltaFactor = (damping - 1.0) * unscreenedFactor;
-            electricField[fieldDipoleIndex][0] += deltaFactor * dx;
-            electricField[fieldDipoleIndex][1] += deltaFactor * dy;
-            electricField[fieldDipoleIndex][2] += deltaFactor * dz;
-        };
+	            // Inter-residue: base unscreened term is present -> add (screened - unscreened).
+	            // Intra-residue: gcmc_cpu DIRECT energy excludes intra-residue Coulomb -> add full screened term.
+	            const double deltaFactor = (sameMolecule ? damping : (damping - 1.0)) * unscreenedFactor;
+	            electricField[fieldDipoleIndex][0] += deltaFactor * dx;
+	            electricField[fieldDipoleIndex][1] += deltaFactor * dy;
+	            electricField[fieldDipoleIndex][2] += deltaFactor * dz;
+	        };
 
-        // Field at Drude of dipole1: correct interactions with parent2 and drude2.
-        applyCorrectionFromSource(pair.dipole1, dipole1.drudeIndex, dipole2.parentIndex);
-        applyCorrectionFromSource(pair.dipole1, dipole1.drudeIndex, dipole2.drudeIndex);
+	        // Field at Drude of dipole1: correct interactions with parent2 and drude2.
+	        applyCorrectionFromSource(pair.dipole1, dipole1.drudeIndex, dipole2.parentIndex, -dipole2.charge);
+	        applyCorrectionFromSource(pair.dipole1, dipole1.drudeIndex, dipole2.drudeIndex, dipole2.charge);
 
-        // Field at Drude of dipole2: correct interactions with parent1 and drude1.
-        applyCorrectionFromSource(pair.dipole2, dipole2.drudeIndex, dipole1.parentIndex);
-        applyCorrectionFromSource(pair.dipole2, dipole2.drudeIndex, dipole1.drudeIndex);
-    }
-}
+	        // Field at Drude of dipole2: correct interactions with parent1 and drude1.
+	        applyCorrectionFromSource(pair.dipole2, dipole2.drudeIndex, dipole1.parentIndex, -dipole1.charge);
+	        applyCorrectionFromSource(pair.dipole2, dipole2.drudeIndex, dipole1.drudeIndex, dipole1.charge);
+	    }
+	}
 
 double DrudeSCF::updateDrudePositions(
     model::MCState& state,

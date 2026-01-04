@@ -507,26 +507,26 @@ for (const auto& pair : m_screenedPairs) {
 
     const bool screenParents = (m_params.tholeMode == TholeMode::StandardS1);
 
-    // Apply Thole screening as a correction to the already-included unscreened Coulomb terms.
-    // StandardS1: screen all 4 charge-charge interactions between dipoles.
-    // OpenMMCompat: screen only interactions involving at least one Drude particle.
-    for (int j = 0; j < 2; ++j) {
-        for (int k = 0; k < 2; ++k) {
-            const bool involvesDrude = (j == 1 || k == 1);
-            if (!screenParents && !involvesDrude) {
-                continue;  // OpenMMCompat: leave parent-parent unscreened
-            }
-
-            // Skip intramolecular interactions if they're in the same molecule
-            if (inSameMolecule(atoms1[j], atoms2[k], state)) {
-                continue;
-            }
-            
-            // Bounds check
-            if (!isActiveAtom(atoms1[j], activeAtomMask) ||
-                !isActiveAtom(atoms2[k], activeAtomMask)) {
-                continue;
-            }
+	    // Apply Thole screening as a correction to the already-included unscreened Coulomb terms.
+	    // StandardS1: screen all 4 charge-charge interactions between dipoles.
+	    // OpenMMCompat: screen only interactions involving at least one Drude particle.
+	    for (int j = 0; j < 2; ++j) {
+	        for (int k = 0; k < 2; ++k) {
+	            const bool involvesDrude = (j == 1 || k == 1);
+	            if (!screenParents && !involvesDrude) {
+	                continue;  // OpenMMCompat: leave parent-parent unscreened
+	            }
+	            // gcmc_cpu's DIRECT energy backend does not include intra-residue Coulomb.
+	            // For screened dipole pairs within the same residue, the *full* screened induced-charge
+	            // interaction must be added here. For inter-residue pairs, add only the correction
+	            // (screened - unscreened) to avoid modifying permanent charge interactions.
+	            const bool sameMolecule = inSameMolecule(atoms1[j], atoms2[k], state);
+	            
+	            // Bounds check
+	            if (!isActiveAtom(atoms1[j], activeAtomMask) ||
+	                !isActiveAtom(atoms2[k], activeAtomMask)) {
+	                continue;
+	            }
             
             // Get atoms
             const auto& atom1 = state.atoms[atoms1[j]];
@@ -537,26 +537,32 @@ for (const auto& pair : m_screenedPairs) {
             double dy = atom2.y - atom1.y;
             double dz = atom2.z - atom1.z;
             applyPBC(dx, dy, dz, box);
-            
-            double r = std::sqrt(dx*dx + dy*dy + dz*dz);
-            if (r < 1e-6) continue;
-            
-            // Calculate unscreened Coulomb energy
-            double coulomb = DrudeConstants::ONE_4PI_EPS0 * atom1.charge * atom2.charge / r;
+	            
+	            double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+	            if (r < 1e-6) continue;
 
-            // Per-interaction screening factor S1(u) (see THOLE_CHARMM_IMPLEMENTATION.md).
-            double screening = computeTholeScreening(
-                r,
-                particle1.polarizability,
-                particle2.polarizability,
-                pair.thole
-            );
+	            // Screened-pair interactions operate on the induced Drude charge pair (±q_drude),
+	            // not on the full atomic charges (which include permanent charge on the core atom).
+	            // This matches OpenMM/CHARMM DrudeForce screened pair semantics.
+	            const double q1 = (j == 0) ? -particle1.charge : particle1.charge;
+	            const double q2 = (k == 0) ? -particle2.charge : particle2.charge;
+	            const double coulomb = DrudeConstants::ONE_4PI_EPS0 * q1 * q2 / r;
 
-            // Replace unscreened Coulomb with screened Coulomb by adding the delta.
-            energy += coulomb * (screening - 1.0);
-        }
-    }
-}
+	            // Per-interaction screening factor S1(u) (see THOLE_CHARMM_IMPLEMENTATION.md).
+	            double screening = computeTholeScreening(
+	                r,
+	                particle1.polarizability,
+	                particle2.polarizability,
+	                pair.thole
+	            );
+
+	            // Intra-residue: baseline term is absent -> add full screened.
+	            // Inter-residue: baseline unscreened induced-charge term is present -> add correction.
+	            const double factor = sameMolecule ? screening : (screening - 1.0);
+	            energy += coulomb * factor;
+	        }
+	    }
+	}
 
 return energy;
 }
@@ -585,24 +591,21 @@ double DrudeCore::calculateTholeCorrectionEnergy(const model::MCState& state, co
         const std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
 
         const bool screenParents = (m_params.tholeMode == TholeMode::StandardS1);
-        for (int j = 0; j < 2; ++j) {
-            for (int k = 0; k < 2; ++k) {
-                const bool involvesDrude = (j == 1 || k == 1);
-                if (!screenParents && !involvesDrude) {
-                    continue;
-                }
+	        for (int j = 0; j < 2; ++j) {
+	            for (int k = 0; k < 2; ++k) {
+	                const bool involvesDrude = (j == 1 || k == 1);
+	                if (!screenParents && !involvesDrude) {
+	                    continue;
+	                }
 
-                if (!isActiveAtom(atoms1[j], activeAtomMask) ||
-                    !isActiveAtom(atoms2[k], activeAtomMask)) {
-                    continue;
-                }
+	                if (!isActiveAtom(atoms1[j], activeAtomMask) ||
+	                    !isActiveAtom(atoms2[k], activeAtomMask)) {
+	                    continue;
+	                }
+	                const bool sameMolecule = inSameMolecule(atoms1[j], atoms2[k], state);
 
-                if (inSameMolecule(atoms1[j], atoms2[k], state)) {
-                    continue;
-                }
-
-                const auto& atom1 = state.atoms[atoms1[j]];
-                const auto& atom2 = state.atoms[atoms2[k]];
+	                const auto& atom1 = state.atoms[atoms1[j]];
+	                const auto& atom2 = state.atoms[atoms2[k]];
 
                 double dx = atom2.x - atom1.x;
                 double dy = atom2.y - atom1.y;
@@ -610,24 +613,27 @@ double DrudeCore::calculateTholeCorrectionEnergy(const model::MCState& state, co
                 applyPBC(dx, dy, dz, box);
 
                 const double r = std::sqrt(dx * dx + dy * dy + dz * dz);
-                if (r < 1e-6) {
-                    continue;
-                }
+	                if (r < 1e-6) {
+	                    continue;
+	                }
 
-                const double coulomb = DrudeConstants::ONE_4PI_EPS0 * atom1.charge * atom2.charge / r;
-                const double screening = computeTholeScreening(
-                    r,
-                    particle1.polarizability,
-                    particle2.polarizability,
-                    pair.thole
-                );
+	                const double q1 = (j == 0) ? -particle1.charge : particle1.charge;
+	                const double q2 = (k == 0) ? -particle2.charge : particle2.charge;
+	                const double coulomb = DrudeConstants::ONE_4PI_EPS0 * q1 * q2 / r;
+	                const double screening = computeTholeScreening(
+	                    r,
+	                    particle1.polarizability,
+	                    particle2.polarizability,
+	                    pair.thole
+	                );
 
-                energy += coulomb * (screening - 1.0);
-            }
-        }
-    }
-    return energy;
-}
+	                const double factor = sameMolecule ? screening : (screening - 1.0);
+	                energy += coulomb * factor;
+	            }
+	        }
+	    }
+	    return energy;
+	}
 
 bool DrudeCore::inSameMolecule(int atom1, int atom2, const model::MCState& state) const {
 // Check if we have residues defined

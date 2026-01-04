@@ -268,8 +268,11 @@ def test_thole_parameter_range():
     
     # At least some Thole values should significantly change displacement
     significant_changes = 0
+    # The exact displacement change depends on the chosen parameters and SCF tolerance,
+    # but Thole screening must produce a detectable effect above numerical noise.
+    min_disp_change = max(2e-5, 0.01 * no_thole_disp)
     for i in range(1, len(results)):
-        if abs(results[i][2] - no_thole_disp) > 0.0001:
+        if abs(results[i][2] - no_thole_disp) > min_disp_change:
             significant_changes += 1
     
     assert significant_changes >= 2, "Thole should affect displacement for multiple values"
