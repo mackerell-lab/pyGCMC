@@ -851,8 +851,10 @@ mc_move_prob:1 1 0 0
     assert n_values, "No nBefore values found in acceptance records"
 
     mean_n = statistics.mean(n_values)
+    var_n = statistics.pvariance(n_values)
     expected_mean = expected_z * float(species_records[0]["vBox"])
-    assert mean_n == pytest.approx(expected_mean, rel=0.25, abs=0.5)
+    assert mean_n == pytest.approx(expected_mean, rel=0.10, abs=0.2)
+    assert abs(var_n - expected_mean) / max(expected_mean, 1e-6) < 0.15
 
     ins_attempts = [r for r in sample_records if str(r.get("move", "")).strip().lower() == "insertion"]
     del_attempts = [r for r in sample_records if str(r.get("move", "")).strip().lower() == "deletion"]
@@ -1405,8 +1407,8 @@ attempt_prob_rot:0.0
     sample_mean = statistics.mean(n_values)
     sample_var = statistics.pvariance(n_values)
 
-    assert sample_mean == pytest.approx(expected_mean, rel=0.10, abs=0.2)
-    assert abs(sample_var - expected_mean) / max(expected_mean, 1e-6) < 0.20
+    assert sample_mean == pytest.approx(expected_mean, rel=0.08, abs=0.15)
+    assert abs(sample_var - expected_mean) / max(expected_mean, 1e-6) < 0.12
 
     # Stronger μVT contract: histogram ratio for Poisson law
     #   P(N+1)/P(N) = (z * V) / (N+1)
@@ -1425,7 +1427,7 @@ attempt_prob_rot:0.0
             continue
         empirical = c1 / c0
         expected = expected_mean / float(n + 1)
-        assert empirical == pytest.approx(expected, rel=0.20, abs=0.10)
+        assert empirical == pytest.approx(expected, rel=0.18, abs=0.08)
         checked += 1
 
     assert checked >= 3, f"Insufficient populated bins for Poisson ratio check: checked={checked}, counts={counts}"

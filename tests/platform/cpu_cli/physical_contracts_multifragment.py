@@ -301,6 +301,7 @@ Y  1
     accept_log = work / "out" / "acceptance.jsonl"
 
     inp = work / "run.inp"
+    mcsteps = 12000
     _write_inp(
         inp,
         f"""
@@ -319,7 +320,7 @@ gcmc_region:box 0 0 0 10 10 10
 cutoff:4.0
 temperature:300.0
 moves_per_step:1
-mcsteps:4000
+mcsteps:{mcsteps}
 nprint:1
 mc_move_prob:1 1 0 0
 """,
@@ -338,6 +339,7 @@ mc_move_prob:1 1 0 0
     records = _load_accept_records(accept_log)
     assert records, "acceptance log unexpectedly empty"
 
+    expected_by_species: dict[str, float] = {}
     for species, target_mean, target_z in (
         ("X", target_mean_x, target_z_x),
         ("Y", target_mean_y, target_z_y),
@@ -348,34 +350,7 @@ mc_move_prob:1 1 0 0
         )
         assert float(first["vBox"]) == pytest.approx(v_box_expected, rel=1e-12, abs=1e-12)
         assert float(first["z"]) == pytest.approx(target_z, rel=2e-3, abs=1e-3)
-        expected_mean = target_z * v_box_expected
-        samples = _n_before_samples(records, species)
-        assert len(samples) >= 800, f"Insufficient samples for {species}: {len(samples)}"
-
-        sample_mean = statistics.mean(samples)
-        sample_var = statistics.pvariance(samples)
-
-        assert sample_mean == pytest.approx(expected_mean, rel=0.15, abs=0.3)
-        assert abs(sample_var - expected_mean) / max(expected_mean, 1e-6) < 0.25
-
-        counts = Counter(samples)
-        center = int(round(expected_mean))
-        n_min = max(1, center - 3)
-        n_max = center + 3
-        min_bin_count = 20
-
-        checked = 0
-        for n in range(n_min, n_max + 1):
-            c0 = counts.get(n, 0)
-            c1 = counts.get(n + 1, 0)
-            if c0 < min_bin_count or c1 < min_bin_count:
-                continue
-            empirical = c1 / c0
-            expected = expected_mean / float(n + 1)
-            assert empirical == pytest.approx(expected, rel=0.25, abs=0.15)
-            checked += 1
-
-        assert checked >= 3, f"Insufficient bins for {species}: checked={checked}, counts={counts}"
+        expected_by_species[species] = target_z * v_box_expected
 
     # Joint distribution should factorize for independent ideal-gas species (covariance ~ 0).
     counts = {"X": 0, "Y": 0}
@@ -393,7 +368,7 @@ mc_move_prob:1 1 0 0
         series_x.append(counts["X"])
         series_y.append(counts["Y"])
 
-    burnin = 300
+    burnin = max(300, mcsteps // 10)
     series_x = series_x[burnin:] if len(series_x) > burnin else series_x
     series_y = series_y[burnin:] if len(series_y) > burnin else series_y
     assert len(series_x) == len(series_y)
@@ -403,6 +378,34 @@ mc_move_prob:1 1 0 0
     mean_y = statistics.mean(series_y)
     var_x = statistics.pvariance(series_x)
     var_y = statistics.pvariance(series_y)
+
+    for species, series, sample_mean, sample_var in (
+        ("X", series_x, mean_x, var_x),
+        ("Y", series_y, mean_y, var_y),
+    ):
+        expected_mean = float(expected_by_species[species])
+        assert sample_mean == pytest.approx(expected_mean, rel=0.12, abs=0.25)
+        assert abs(sample_var - expected_mean) / max(expected_mean, 1e-6) < 0.18
+
+        hist = Counter(series)
+        center = int(round(expected_mean))
+        n_min = max(0, center - 2)
+        n_max = center + 2
+        min_bin_count = 30
+
+        checked = 0
+        for n in range(n_min, n_max + 1):
+            c0 = hist.get(n, 0)
+            c1 = hist.get(n + 1, 0)
+            if c0 < min_bin_count or c1 < min_bin_count:
+                continue
+            empirical = c1 / c0
+            expected = expected_mean / float(n + 1)
+            assert empirical == pytest.approx(expected, rel=0.20, abs=0.10)
+            checked += 1
+
+        assert checked >= 3, f"Insufficient populated bins for {species}: checked={checked}, hist={hist}"
+
     cov_xy = statistics.mean(
         (x - mean_x) * (y - mean_y) for x, y in zip(series_x, series_y)
     )

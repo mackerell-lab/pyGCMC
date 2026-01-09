@@ -2045,36 +2045,16 @@ bool GCMCSimulation::performSingleMove() {
         return false;
     }
 
+    // Keep the selected fragment's count in sync with the reservoir; move proposal probabilities
+    // must not depend on stale counts (and must not renormalize away "invalid" deletions), otherwise
+    // μVT number statistics become biased (e.g., P(N=0) suppressed).
+    if (reservoir_ && fragType >= 0 && static_cast<size_t>(fragType) < fragmentTypes_.size()) {
+        fragmentTypes_[fragType].currentCount = reservoir_->activeCount(fragType);
+    }
+
     // Select move based on per-fragment CDF (with optional target bias)
     MoveType moveType = selectMoveForFragment(fragType);
     MoveType requestedMove = moveType;
-
-    // Final hard guard on capacity limits - CRITICAL for preventing runaway growth
-    if (fragType >= 0 && static_cast<size_t>(fragType) < fragmentTypes_.size()) {
-        auto& frag = fragmentTypes_[fragType];
-
-        // Update current count from reservoir (more reliable than tracking locally)
-        frag.currentCount = reservoir_->activeCount(fragType);
-
-        if (moveType == INSERT && frag.maxCount > 0 && frag.currentCount >= frag.maxCount) {
-            // At capacity, absolutely prevent insertion
-            // Force a different move or skip if no molecules to operate on
-            if (frag.currentCount > 0) {
-                moveType = (uniform_(rng_) < 0.5) ? TRANSLATE : ROTATE;
-            } else {
-                return false;  // Skip this move entirely
-            }
-        } else if (moveType == DELETE && frag.currentCount <= 0) {
-            // No molecules of this fragment; try another move instead of failing the step
-            if (reservoir_->getActiveCount() > 0) {
-                // There are some molecules (maybe other types): try a cheap move
-                moveType = (uniform_(rng_) < 0.5) ? TRANSLATE : ROTATE;
-            } else {
-                // No molecules at all: switch to insertion
-                moveType = INSERT;
-            }
-        }
-    }
 
     currentProposalRatio_ = 1.0;
     bool accepted = false;
@@ -2122,7 +2102,7 @@ bool GCMCSimulation::performSingleMove() {
         }
 
         case DELETE: {
-            if (reservoir_->getActiveCount() > 0 && fragType >= 0) {
+            if (fragType >= 0) {
                 double proposalBias = 1.0;
                 if (lastProposalPInsert_ > 0 && lastProposalPDelete_ > 0) {
                     proposalBias = lastProposalPInsert_ / lastProposalPDelete_;
@@ -3363,34 +3343,6 @@ GCMCSimulation::MoveType GCMCSimulation::selectMoveForFragment(int fragType) {
     auto cdf = fragmentMoveCDF_.empty()
         ? std::array<double,4>{0.25,0.50,0.75,1.0}
         : fragmentMoveCDF_[std::min<size_t>(fragType, fragmentMoveCDF_.size()-1)];
-
-    // Capacity-aware adjustment: disable insertion when at cap, disable deletion when empty
-    if (fragType >= 0 && static_cast<size_t>(fragType) < fragmentTypes_.size()) {
-        const auto& f = fragmentTypes_[fragType];
-        // Reconstruct PDF from CDF
-        double wIns = cdf[0];
-        double wDel = cdf[1] - cdf[0];
-        double wTrn = cdf[2] - cdf[1];
-        double wRot = cdf[3] - cdf[2];
-
-        bool changed = false;
-        if (f.maxCount > 0 && f.currentCount >= f.maxCount) {
-            wIns = 0.0;  // prevent further growth
-            changed = true;
-        }
-        if (f.currentCount <= 0) {
-            wDel = 0.0;  // nothing to delete
-            changed = true;
-        }
-
-        if (changed) {
-            const double sum = std::max(1e-12, wIns + wDel + wTrn + wRot);
-            cdf[0] = wIns / sum;
-            cdf[1] = cdf[0] + wDel / sum;
-            cdf[2] = cdf[1] + wTrn / sum;
-            cdf[3] = 1.0;
-        }
-    }
 
     // Optional: apply soft bias for target_num_waters (adjust Ins/Del weights)
     const auto& fragInfo = params_->get_fragment_info();
