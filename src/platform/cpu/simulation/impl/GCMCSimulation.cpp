@@ -2143,11 +2143,12 @@ bool GCMCSimulation::performSingleMove() {
                     // Note: We'll skip type lookup for now as getInstanceType doesn't exist
                     // Just record with generic "fragment" name
                     simulationStats_.recordMove("translate", "fragment", accepted);
+
+                    // Only count translation attempts when a molecule exists and a move was actually attempted.
+                    stats_.moveAttempts["translation"]++;
+                    if (accepted) stats_.moveAccepted["translation"]++;
                 }
             }
-            
-            stats_.moveAttempts["translation"]++;
-            if (accepted) stats_.moveAccepted["translation"]++;
             break;
         }
         
@@ -2164,11 +2165,12 @@ bool GCMCSimulation::performSingleMove() {
                     // Note: We'll skip type lookup for now as getInstanceType doesn't exist
                     // Just record with generic "fragment" name
                     simulationStats_.recordMove("rotate", "fragment", accepted);
+
+                    // Only count rotation attempts when a molecule exists and a move was actually attempted.
+                    stats_.moveAttempts["rotation"]++;
+                    if (accepted) stats_.moveAccepted["rotation"]++;
                 }
             }
-            
-            stats_.moveAttempts["rotation"]++;
-            if (accepted) stats_.moveAccepted["rotation"]++;
             break;
         }
     }

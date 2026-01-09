@@ -401,7 +401,7 @@ mc_move_prob:1 1 0 0
                 continue
             empirical = c1 / c0
             expected = expected_mean / float(n + 1)
-            assert empirical == pytest.approx(expected, rel=0.20, abs=0.10)
+            assert empirical == pytest.approx(expected, rel=0.18, abs=0.08)
             checked += 1
 
         assert checked >= 3, f"Insufficient populated bins for {species}: checked={checked}, hist={hist}"

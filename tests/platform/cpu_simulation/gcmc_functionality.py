@@ -1106,6 +1106,7 @@ fragmuex: -5.60
 box_size: 20.0 20.0 20.0
 cutoff: 10.0
 temperature: 300
+moves_per_step: 1
 mcsteps: 1000
 nprint: 200
 eqsteps: 0
@@ -1138,6 +1139,8 @@ op_pdb: {tmp_path}/output.pdb
 
         # Parse last line for cumulative statistics
         last_line = data_lines[-1].split()
+        last_step = int(last_line[0])
+        assert last_step == 1000, f"Unexpected final step in statistics: {last_step}"
         ins_att = int(last_line[4])
         del_att = int(last_line[6])
         trn_att = int(last_line[8])
@@ -1163,8 +1166,10 @@ op_pdb: {tmp_path}/output.pdb
         # Note: Delete/Translate/Rotate may be 0 if system never had molecules
 
         # 2. Total attempts should match mcsteps
-        # Each MC step may involve multiple fragment moves, so total >= mcsteps
-        assert total_att >= 1000, f"Total attempts {total_att} < mcsteps (1000)"
+        # We count only executed moves (e.g., delete/translate/rotate can be skipped when N=0),
+        # so total_att can be slightly smaller than mcsteps but should remain close in this setup.
+        assert total_att <= 1000, f"Total attempts {total_att} > mcsteps (1000)"
+        assert total_att >= 950, f"Too many skipped moves: total_att={total_att} (<95% of mcsteps)"
 
         # 3. Ratios should be reasonable (not all 100% one type)
         # With mc_move_prob = [0.25, 0.25, 0.25, 0.25], no single move should dominate completely
