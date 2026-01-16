@@ -176,6 +176,11 @@ from cpu_cli.cbmc_multiatom import (
     test_cbmc_trials_multiatom_closes_rosenbluth_terms,
 )
 
+# CRYST1-less PDB periodic box inference (1 function)
+from cpu_cli.cryst1_inference import (
+    test_missing_cryst1_uses_sys_center_to_infer_periodic_box_in_gcmc_gpu_units,
+)
+
 # CBMC trial-count key compatibility (1 function)
 from cpu_cli.cbmc_trial_count_alias import (
     test_num_conf_bias_trial_sets_cbmc_trials_when_fragconf_missing,

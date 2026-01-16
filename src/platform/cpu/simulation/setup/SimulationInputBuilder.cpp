@@ -453,13 +453,38 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
                                                      result.mcState->info.box[1],
                                                      result.mcState->info.box[2]);
                 } else if (inpBoxProvided) {
-                    result.mcState->setBoxDimensions(spaceInfo.box_size[0],
-                                                     spaceInfo.box_size[1],
-                                                     spaceInfo.box_size[2]);
-                    log("Set periodic box from INP box_size (no CRYST1): " +
-                        std::to_string(spaceInfo.box_size[0]) + " x " +
-                        std::to_string(spaceInfo.box_size[1]) + " x " +
-                        std::to_string(spaceInfo.box_size[2]) + " nm");
+                    // In legacy gcmc_gpu/opencl decks, `box_size` often denotes the *GCMC region* (grid)
+                    // rather than the periodic unit cell. When CRYST1 is missing, some decks provide
+                    // `sys_center` as an approximate half-box; use it to infer the periodic box.
+                    const bool sysCenterProvided =
+                        (spaceInfo.sys_center[0] > 0.0f || spaceInfo.sys_center[1] > 0.0f || spaceInfo.sys_center[2] > 0.0f);
+
+                    const float inferredBoxX = 2.0f * spaceInfo.sys_center[0];
+                    const float inferredBoxY = 2.0f * spaceInfo.sys_center[1];
+                    const float inferredBoxZ = 2.0f * spaceInfo.sys_center[2];
+
+                    const bool inferredLooksLikeFullBox =
+                        sysCenterProvided &&
+                        inferredBoxX > 0.0f && inferredBoxY > 0.0f && inferredBoxZ > 0.0f &&
+                        (inferredBoxX > spaceInfo.box_size[0] * 1.05f ||
+                         inferredBoxY > spaceInfo.box_size[1] * 1.05f ||
+                         inferredBoxZ > spaceInfo.box_size[2] * 1.05f);
+
+                    if (inferredLooksLikeFullBox) {
+                        result.mcState->setBoxDimensions(inferredBoxX, inferredBoxY, inferredBoxZ);
+                        log("Set periodic box from inferred 2*sys_center (no CRYST1): " +
+                            std::to_string(inferredBoxX) + " x " +
+                            std::to_string(inferredBoxY) + " x " +
+                            std::to_string(inferredBoxZ) + " nm");
+                    } else {
+                        result.mcState->setBoxDimensions(spaceInfo.box_size[0],
+                                                         spaceInfo.box_size[1],
+                                                         spaceInfo.box_size[2]);
+                        log("Set periodic box from INP box_size (no CRYST1): " +
+                            std::to_string(spaceInfo.box_size[0]) + " x " +
+                            std::to_string(spaceInfo.box_size[1]) + " x " +
+                            std::to_string(spaceInfo.box_size[2]) + " nm");
+                    }
                 } else {
                     // Ensure periodicBox is initialized (some movement/energy code indexes it directly).
                     result.mcState->setBoxDimensions(result.mcState->info.box[0],
