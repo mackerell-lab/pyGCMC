@@ -5,20 +5,24 @@ import pytest
 import os
 import pygcmc
 import math
+from functools import lru_cache
 
 # Get the directory containing test data files
 TEST_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
+PDB_4WP7_PATH = os.path.join(TEST_DATA_DIR, "4wp7", "4wp7_fixed_with_5l13_silcs.1.prod.74.rec.pdb")
+
+
+@lru_cache(maxsize=1)
+def _parsed_4wp7_system():
+    """Parse the large 4wp7 PDB once per module to reduce memory churn."""
+    if not os.path.exists(PDB_4WP7_PATH):
+        pytest.skip(f"Test file {PDB_4WP7_PATH} not found")
+    return pygcmc.PDBParser.parse_file(PDB_4WP7_PATH)
 
 
 def test_parse_4wp7_gcmc_system():
     """Test parsing 4wp7 GCMC system PDB file with protein and small molecules."""
-    pdb_path = os.path.join(TEST_DATA_DIR, "4wp7", "4wp7_fixed_with_5l13_silcs.1.prod.74.rec.pdb")
-    
-    # Skip test if file doesn't exist  
-    if not os.path.exists(pdb_path):
-        pytest.skip(f"Test file {pdb_path} not found")
-    
-    result = pygcmc.PDBParser.parse_file(pdb_path)
+    result = _parsed_4wp7_system()
     
     # Verify basic parsing success
     assert result is not None, "Failed to parse 4wp7 PDB file"
@@ -66,13 +70,7 @@ def test_parse_4wp7_gcmc_system():
 
 def test_4wp7_system_residue_distribution():
     """Test the distribution of residues in 4wp7 system matches expected GCMC composition."""
-    pdb_path = os.path.join(TEST_DATA_DIR, "4wp7", "4wp7_fixed_with_5l13_silcs.1.prod.74.rec.pdb")
-    
-    # Skip test if file doesn't exist
-    if not os.path.exists(pdb_path):
-        pytest.skip(f"Test file {pdb_path} not found")
-    
-    result = pygcmc.PDBParser.parse_file(pdb_path)
+    result = _parsed_4wp7_system()
     
     # Count residue occurrences (counting atoms per residue type)
     residue_counts = {}  # This counts ATOMS per residue type, not molecules
@@ -125,13 +123,7 @@ def test_4wp7_system_residue_distribution():
 
 def test_4wp7_coordinate_validation():
     """Test coordinate parsing and validation for 4wp7 system."""
-    pdb_path = os.path.join(TEST_DATA_DIR, "4wp7", "4wp7_fixed_with_5l13_silcs.1.prod.74.rec.pdb")
-    
-    # Skip test if file doesn't exist
-    if not os.path.exists(pdb_path):
-        pytest.skip(f"Test file {pdb_path} not found")
-    
-    result = pygcmc.PDBParser.parse_file(pdb_path)
+    result = _parsed_4wp7_system()
     
     # Sample atoms for coordinate testing (test first 1000 atoms for performance)
     # Note: Using first 1000 atoms for deterministic testing, but has order dependency

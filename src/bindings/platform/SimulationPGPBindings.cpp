@@ -252,8 +252,8 @@ void init_pgp_bindings(py::module& m) {
         
     m.def("computeMovementEnergyPGPCompleteCorrect", 
         [](::pygcmc::model::MCState& state) {
-            // Call existing function (the "Correct" version doesn't exist yet)
-            ::pygcmc::platform::cpu::energy::computeMovementEnergyPGPComplete(state);
+            // Call the dedicated corrected implementation
+            ::pygcmc::platform::cpu::energy::computeMovementEnergyPGPCompleteCorrect(state);
             
             // Convert from C++ struct to Python dictionary
             py::dict pgp_dict;

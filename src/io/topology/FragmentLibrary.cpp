@@ -1,4 +1,5 @@
 #include "FragmentLibrary.hpp"
+#include <array>
 #include <fstream>
 #include <sstream>
 #include <algorithm>

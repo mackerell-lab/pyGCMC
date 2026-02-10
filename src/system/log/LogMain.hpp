@@ -3,6 +3,7 @@
 #define PYGCMC_SYSTEM_LOG_LOGMAIN_HPP
 
 #include "../common/SystemInterface.hpp"
+#include "../common/LoggingState.hpp"
 #include <sstream>
 #include <iostream>
 
@@ -30,7 +31,7 @@ public:
     // Template logging function (must be in header for template instantiation)
     template<typename... Args>
     static void log(common::LogLevel level, Args... args) {
-        if (!verbose_ || level < log_level_) return;
+        if (!common::LoggingState::should_log_system(level)) return;
         
         std::stringstream ss;
         (ss << ... << args);
@@ -72,15 +73,6 @@ public:
     static void error(Args... args) {
         log(common::LogLevel::ERROR, args...);
     }
-
-private:
-    // Static members for global logging state
-    static bool verbose_;
-    static common::LogLevel log_level_;
-    
-    // Instance members for object-based logging
-    bool instance_verbose_;
-    common::LogLevel instance_log_level_;
 };
 
 /**

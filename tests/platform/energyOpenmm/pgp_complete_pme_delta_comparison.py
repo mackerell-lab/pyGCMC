@@ -1,8 +1,16 @@
 """
 Compare PyGCMC PGP Complete delta energies with PME reciprocal space
 
-This test verifies that PGP Complete (not interpolation) correctly
-reproduces PME reciprocal space energy changes with high accuracy.
+This test verifies that PGP Complete reciprocal delta energies converge
+to PME reciprocal delta energies as the mesh becomes finer.
+
+NOTE on mesh-self energy:
+PME 'reciprocal' = full system reciprocal (fixed-fixed + cross + mobile-mobile).
+PGP 'reciprocal' = cross-term only (grid interpolation of fixed potential).
+On a discrete mesh, the mobile-mobile reciprocal energy has a position-dependent
+artifact called "mesh-self energy" that PGP eliminates by design.
+A sufficiently fine grid (>=64^3 for this system) makes the mesh-self negligible
+so that the delta comparison passes at <1% relative error.
 """
 
 import pytest
@@ -124,7 +132,12 @@ def test_pgp_complete_pme_reciprocal_delta():
     
     # Setup PME/PGP parameters
     alpha = 2.84  # 1/nm (typical for 2nm cutoff)
-    mesh_size = [32, 32, 32]
+    # Use 128^3 mesh to minimize mesh-self energy artifact in PME.
+    # PME 'reciprocal' includes mobile-mobile mesh-self energy that
+    # depends on atom position within grid cells. PGP eliminates this
+    # artifact by design. At 32^3 the mesh-self dominates (~9% error);
+    # at 64^3 it drops to ~1.5% for some directions; 128^3 gives <0.1%.
+    mesh_size = [128, 128, 128]
     spline_order = 4
     tolerance = 1e-5
     

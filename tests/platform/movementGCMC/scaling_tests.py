@@ -137,6 +137,8 @@ def test_chemical_potential_scaling():
         state.info.setTemperature(300.0)
         state.info.cutoff = 1.2
         state.info.volume = 27.0
+        state.info.max_residues = 2000
+        state.info.max_atoms = 6000
         
         ff = pygcmc.MCForceField()
         ff.numTotalTypes = 10
@@ -153,6 +155,7 @@ def test_chemical_potential_scaling():
     params_low = pygcmc.movement.MovementParams()
     params_low.temperature = 300.0
     params_low.chemicalPotential = 0.0
+    params_low.seed = 24680
     # Guard against missing attribute
     if hasattr(params_low, 'useConfigBiasForInsertion'):
         params_low.useConfigBiasForInsertion = False  # Disable CBMC
@@ -160,6 +163,7 @@ def test_chemical_potential_scaling():
     params_high = pygcmc.movement.MovementParams()
     params_high.temperature = 300.0
     params_high.chemicalPotential = 3.0
+    params_high.seed = 24681
     # Guard against missing attribute
     if hasattr(params_high, 'useConfigBiasForInsertion'):
         params_high.useConfigBiasForInsertion = False  # Disable CBMC

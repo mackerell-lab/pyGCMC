@@ -11,6 +11,7 @@ Tests:
 """
 
 import json
+import os
 import pytest
 import numpy as np
 import subprocess
@@ -28,6 +29,21 @@ except ImportError:
 GCMC_CPU_PATH = Path(__file__).parent.parent.parent.parent / "build" / "bin" / "gcmc_cpu"
 
 MOVE_TYPES = ("insertion", "deletion", "translation", "rotation")
+
+
+def _scaled_timeout_seconds(timeout: int) -> int:
+    """Scale subprocess timeout under high xdist parallelism to reduce false timeouts."""
+    raw_workers = os.getenv("PYTEST_XDIST_WORKER_COUNT", "1")
+    try:
+        worker_count = max(1, int(raw_workers))
+    except ValueError:
+        worker_count = 1
+
+    if worker_count >= 8:
+        return max(timeout, timeout * 2)
+    if worker_count >= 6:
+        return max(timeout, int(timeout * 3 / 2))
+    return timeout
 
 
 def _load_accept_records(path: Path) -> list[dict]:
@@ -134,7 +150,7 @@ def _run_with_accept_log(inp_file: Path, tmp_path: Path, *, seed: str = "42") ->
         ],
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=_scaled_timeout_seconds(30),
         cwd=str(tmp_path),
     )
     return result, accept_log, out_prefix

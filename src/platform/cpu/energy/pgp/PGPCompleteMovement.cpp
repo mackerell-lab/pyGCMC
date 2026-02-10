@@ -192,8 +192,9 @@ static double calculateMovementSelfEnergy(const model::MCState& state) {
     return self_energy;
 }
 
-// Corrected implementation of computeMovementEnergyPGPComplete
-void computeMovementEnergyPGPCompleteCorrect(model::MCState& state) {
+// Legacy implementation kept for reference only.
+// The active corrected implementation is in PGPCompleteCorrected.cpp.
+void computeMovementEnergyPGPCompleteCorrectLegacy(model::MCState& state) {
     if (!getPGPParams().initialized) {
         throw std::runtime_error("PGP parameters not initialized. Call setPGPParameters() first.");
     }

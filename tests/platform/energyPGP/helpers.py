@@ -5,22 +5,15 @@ import math
 import random
 import pygcmc
 from pygcmc import MCState, MCInfo, MCAtom, MCResidue, MCForceField, MCMovementResidueInfo
-import sys
 
-# Set log level to INFO or lower to ensure detailed log output
-# System log settings
-pygcmc.System.set_log_level(pygcmc.LogLevel.INFO)
-pygcmc.System.set_verbose(True)
 
-# Platform log settings (for log output in energyPGP.cpp)
-pygcmc.set_platform_verbose(True)  # Enable platform log output
-pygcmc.set_platform_log_level(pygcmc.PlatformLogLevel.INFO)
-pygcmc.set_platform_debug_mode(True)  # Enable debug mode for testing
-
-# Ensure output buffer is flushed immediately
-sys.stdout.flush()
-print("Log level settings completed")
-sys.stdout.flush()
+def configure_energypgp_debug_logging(enabled: bool = False) -> None:
+    """Configure logging for local debugging without polluting global test state."""
+    pygcmc.System.set_log_level(pygcmc.LogLevel.INFO)
+    pygcmc.System.set_verbose(enabled)
+    pygcmc.set_platform_verbose(enabled)
+    pygcmc.set_platform_log_level(pygcmc.PlatformLogLevel.INFO)
+    pygcmc.set_platform_debug_mode(enabled)
 
 
 def create_nacl_crystal(box_size, n_cells):

@@ -54,17 +54,20 @@ static void calculateRealSpacePGPComplete(model::MCState& state, bool movement_o
     // Loop over residue pairs
     for (int r1 = 0; r1 < state.activeResidueCount; r1++) {
         if (!residues[r1].active) continue;
-        
-        // For movement_only mode, skip if r1 is not movement
-        if (movement_only && !isMovementResidue(r1, state)) continue;
-        
-        // Start from r1 to include intra-residue interactions
-        for (int r2 = r1; r2 < state.activeResidueCount; r2++) {
+
+        const bool r1_is_movement = movement_only ? isMovementResidue(r1, state) : true;
+        if (movement_only && !r1_is_movement) continue;
+
+        // In movement_only mode, movement-fixed interactions must include all r2.
+        // Use r2_start=0 and keep unique counting for movement-movement pairs.
+        const int r2_start = movement_only ? 0 : r1;
+        for (int r2 = r2_start; r2 < state.activeResidueCount; r2++) {
             if (!residues[r2].active) continue;
-            
-            // For movement_only mode, at least one residue must be movement
-            if (movement_only && !isMovementResidue(r1, state) && !isMovementResidue(r2, state)) {
-                continue;
+
+            const bool r2_is_movement = movement_only ? isMovementResidue(r2, state) : true;
+            if (movement_only) {
+                if (!r1_is_movement && !r2_is_movement) continue;
+                if (r2_is_movement && r2 < r1) continue;
             }
             
             // CRITICAL: If both residues are fixed, skip
@@ -170,13 +173,14 @@ static void calculateLJPGPComplete(model::MCState& state, bool movement_only) {
         
         platform::log(LogLevel::DEBUG, "Processing residue r1=", r1);
         
-        // Start from r1 to include intra-residue interactions
-        for (int r2 = r1; r2 < state.activeResidueCount; r2++) {
+        const int r2_start = movement_only ? 0 : r1;
+        for (int r2 = r2_start; r2 < state.activeResidueCount; r2++) {
             if (!residues[r2].active) continue;
-            
-            // For movement_only mode, at least one residue must be movement
-            if (movement_only && !isMovementResidue(r1, state) && !isMovementResidue(r2, state)) {
-                continue;
+
+            const bool r2_is_movement = isMovementResidue(r2, state);
+            if (movement_only) {
+                if (!r1_is_movement && !r2_is_movement) continue;
+                if (r2_is_movement && r2 < r1) continue;
             }
             
             platform::log(LogLevel::DEBUG, "Processing residue pair r1=", r1, " r2=", r2);

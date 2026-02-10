@@ -183,12 +183,8 @@ def test_pgp_direct_and_lj_energies():
     print(f"Delta PGP Method Total:    {delta_pgp_method_total:.6f} kJ/mol")
 
     # --- Comparisons ---
-    # If we had to use explicitly calculated real space energies, we'll have a different delta
-    if abs(initial_pme_direct) < 1e-6 and abs(moved_pme_direct) < 1e-6:
-        # Calculate delta using real space from PGP
-        delta_real_space = moved_real_space - initial_real_space
-        print(f"Using explicitly calculated delta real space: {delta_real_space:.6f} kJ/mol")
-        delta_pgp_method_total = delta_pgp_interpolated + delta_real_space + delta_pme_lj
+    # Keep the total-energy comparison on the same decomposition path used by PME.
+    # Mixing in absolute PGP real-space terms here would compare different quantities.
 
     print("\n--- Comparison 1: Delta Reciprocal ---")
     if abs(delta_pme_reciprocal) > 1e-6:

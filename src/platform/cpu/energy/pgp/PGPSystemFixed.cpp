@@ -14,6 +14,22 @@ namespace pygcmc {
 namespace platform {
 namespace cpu {
 
+static bool isMovementResidue(int residue_index, const model::MCState& state) {
+    if (state.movementResidues.empty()) {
+        return residue_index >= 0 &&
+               residue_index < state.activeResidueCount &&
+               !state.residues[residue_index].fixed;
+    }
+
+    for (const auto& movementInfo : state.movementResidues) {
+        if (residue_index >= movementInfo.startIndex &&
+            residue_index < movementInfo.startIndex + movementInfo.activeCount) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /**
  * @brief Calculate real-space PGP energy with correct erfc implementation
  * This fixes the bug where getPGPParams().erfcApprox uses pme_params tables
@@ -29,16 +45,24 @@ static void computeRealSpacePGPFixed(model::MCState& state, bool movement_only, 
     int debug_count = 0;
     const int max_debug_pairs = 5;
     
-    // For movement_only mode
-    if (movement_only) {
-        // Similar to original but not implemented here for brevity
-        return;
-    }
-    
-    // Calculate all residue pairs
+    // Calculate residue pairs.
+    // For movement_only mode, evaluate pairs where at least one residue is movement.
     for(int r1 = 0; r1 < state.activeResidueCount; r1++) {
-        // FIXED: Include intra-residue interactions (r2 starts from r1, not r1+1)
-        for(int r2 = r1; r2 < state.activeResidueCount; r2++) {
+        if (!residues[r1].active) continue;
+
+        const bool r1_is_movement = movement_only ? isMovementResidue(r1, state) : true;
+        if (movement_only && !r1_is_movement) continue;
+
+        const int r2_start = movement_only ? 0 : r1;
+        for(int r2 = r2_start; r2 < state.activeResidueCount; r2++) {
+            if (!residues[r2].active) continue;
+
+            const bool r2_is_movement = movement_only ? isMovementResidue(r2, state) : true;
+            if (movement_only) {
+                if (!r1_is_movement && !r2_is_movement) continue;
+                // Moving-moving pairs are evaluated once.
+                if (r2_is_movement && r2 < r1) continue;
+            }
             
             // If both residues are fixed, skip (already in precomputed grid)
             if(residues[r1].fixed && residues[r2].fixed) continue;
@@ -192,8 +216,28 @@ void computeMovementEnergyPGPFixed(model::MCState& state) {
     // 3. Calculate self energy correction (only for moving residues)
     state.ewald_energy.self = computeSelfEnergyPGPImpl(state, true);
     
-    // 4. Calculate LJ interactions using direct cutoff method
-    computeSystemVdwEnergyCutoff(state);
+    // 4. Calculate LJ interactions for movement residues only.
+    // If movementResidues is empty, use all non-fixed active residues as implicit movement set.
+    const bool injected_implicit_movement = state.movementResidues.empty();
+    if (injected_implicit_movement) {
+        state.movementResidues.clear();
+        for (int i = 0; i < state.activeResidueCount; ++i) {
+            if (!state.residues[i].active || state.residues[i].fixed) continue;
+            model::MCMovementResidueInfo movement_info;
+            movement_info.startIndex = i;
+            movement_info.activeCount = 1;
+            movement_info.totalCount = 1;
+            movement_info.resName = "";
+            state.movementResidues.push_back(movement_info);
+        }
+    }
+
+    const int original_num_movement_types = state.forcefield.numMovementTypes;
+    if (state.forcefield.numMovementTypes <= 0) {
+        state.forcefield.numMovementTypes = state.forcefield.numTotalTypes;
+    }
+    computeMovementVdwEnergyDirect(state, true, false);
+    state.forcefield.numMovementTypes = original_num_movement_types;
     
     // Multiply real space energy by COULOMB constant
     state.ewald_energy.real_space *= COULOMB;
@@ -213,6 +257,10 @@ void computeMovementEnergyPGPFixed(model::MCState& state) {
     state.ewald_energy.reciprocal = grid_energy;
     state.ewald_energy.total = grid_energy + state.ewald_energy.real_space + 
                              state.ewald_energy.self + vdw_total;
+
+    if (injected_implicit_movement) {
+        state.movementResidues.clear();
+    }
     
     if (platform::is_debug_mode()) {
         platform::log(LogLevel::DEBUG, "PGP-Fixed movement energy components: ");

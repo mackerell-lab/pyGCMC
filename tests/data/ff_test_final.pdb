@@ -1,0 +1,5 @@
+REMARK GCMC Trajectory
+REMARK Step: 30
+REMARK Energy: 0 kJ/mol
+CRYST1   30.000   30.000   30.000  90.00  90.00  90.00 P 1           1
+END

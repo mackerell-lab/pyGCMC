@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../model/ModelModule.hpp"
+#include "../system/common/LoggingState.hpp"
 #include <string>
 #include <sstream>
 #include <iostream>
@@ -17,22 +18,19 @@ enum class LogLevel {
     ERROR
 };
 
-// Static logging control
-static bool verbose_ = false;
-static LogLevel log_level_ = LogLevel::INFO;
-static bool debug_mode_ = false;  // Default to false to disable test output code
-
 // Logging functions
-inline void set_verbose(bool verbose) { verbose_ = verbose; }
-inline void set_log_level(LogLevel level) { log_level_ = level; }
-inline void set_debug_mode(bool debug_mode) { debug_mode_ = debug_mode; }
+inline void set_verbose(bool verbose) { ::pygcmc::system::common::LoggingState::platform_enabled = verbose; }
+inline void set_log_level(LogLevel level) {
+    ::pygcmc::system::common::LoggingState::platform_level_int = static_cast<int>(level);
+}
+inline void set_debug_mode(bool debug_mode) { ::pygcmc::system::common::LoggingState::platform_debug_mode = debug_mode; }
 
 // Helper to check if debug mode is enabled (for test output)
-inline bool is_debug_mode() { return debug_mode_; }
+inline bool is_debug_mode() { return ::pygcmc::system::common::LoggingState::platform_debug_mode; }
 
 template<typename... Args>
 inline void log(LogLevel level, Args... args) {
-    if (!verbose_ || level < log_level_) return;
+    if (!::pygcmc::system::common::LoggingState::should_log_platform_int(static_cast<int>(level))) return;
     
     std::stringstream ss;
     (ss << ... << args);

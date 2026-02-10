@@ -1,5 +1,7 @@
 #pragma once
 
+#include "LoggingState.hpp"
+
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -9,41 +11,28 @@ namespace system {
 namespace common {
 
 /**
- * @brief Log level enumeration
- */
-enum class LogLevel {
-    DEBUG,
-    INFO,
-    WARNING,
-    ERROR
-};
-
-/**
  * @brief System-wide logger for PyGCMC
  * 
  * This logger provides basic logging functionality with different log levels.
  * It was extracted from simulation.hpp to be reusable across modules.
  */
 class SystemLogger {
-private:
-    static bool verbose_;
-    static LogLevel log_level_;
-    static bool debug_mode_;
-
 public:
     // Configuration methods
-    static void setVerbose(bool verbose) { verbose_ = verbose; }
-    static void setLogLevel(LogLevel level) { log_level_ = level; }
-    static void setDebugMode(bool debug) { debug_mode_ = debug; }
+    static void setVerbose(bool verbose) { LoggingState::system_enabled = verbose; }
+    static void setLogLevel(LogLevel level) { LoggingState::system_level = level; }
+    static void setDebugMode(bool debug) { LoggingState::system_debug_mode = debug; }
     
-    static bool isVerbose() { return verbose_; }
-    static bool isDebugEnabled() { return verbose_ && log_level_ <= LogLevel::DEBUG; }
-    static bool isDebugMode() { return debug_mode_; }
+    static bool isVerbose() { return LoggingState::system_enabled; }
+    static bool isDebugEnabled() {
+        return LoggingState::system_enabled && LoggingState::system_level <= LogLevel::DEBUG;
+    }
+    static bool isDebugMode() { return LoggingState::system_debug_mode; }
     
     // Logging method with variadic templates
     template<typename... Args>
     static void log(LogLevel level, Args... args) {
-        if (!verbose_ || level < log_level_) return;
+        if (!LoggingState::should_log_system(level)) return;
         
         std::stringstream ss;
         (ss << ... << args);
@@ -78,11 +67,6 @@ public:
     template<typename... Args>
     static void error(Args... args) { log(LogLevel::ERROR, args...); }
 };
-
-// Static member definitions
-inline bool SystemLogger::verbose_ = false;
-inline LogLevel SystemLogger::log_level_ = LogLevel::WARNING;
-inline bool SystemLogger::debug_mode_ = false;
 
 } // namespace common
 } // namespace system

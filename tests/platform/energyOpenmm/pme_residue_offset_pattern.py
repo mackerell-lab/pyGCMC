@@ -15,11 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
 import pygcmc
-pygcmc.set_platform_verbose(True)
-pygcmc.set_platform_log_level(pygcmc.PlatformLogLevel.DEBUG)
 from pygcmc import MCState, MCAtom, MCResidue, MCForceField
-pygcmc.set_platform_verbose(True)
-pygcmc.set_platform_log_level(pygcmc.PlatformLogLevel.DEBUG)
 
 
 def compute_pme_with_state_isolation(n_residues, residue_config):

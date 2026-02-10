@@ -13,6 +13,7 @@ from __future__ import annotations
 import math
 import subprocess
 import warnings
+import importlib.util
 from pathlib import Path
 
 import pytest
@@ -36,16 +37,23 @@ warnings.filterwarnings(
     message=r"builtin type swigvarlink has no __module__ attribute",
 )
 
-try:
-    import openmm
-    import openmm.unit as unit
-
-    HAS_OPENMM = True
-except Exception:
-    HAS_OPENMM = False
+HAS_OPENMM = importlib.util.find_spec("openmm") is not None
+openmm = None
+unit = None
 
 
 COULOMB_KJ_NM_PER_MOL_E2 = 138.935456  # must match DrudeConstants.ONE_4PI_EPS0
+
+
+def _require_openmm():
+    global openmm, unit
+    if openmm is None or unit is None:
+        import openmm as _openmm
+        import openmm.unit as _unit
+
+        openmm = _openmm
+        unit = _unit
+    return openmm, unit
 
 
 def _write_text(path: Path, content: str) -> None:
@@ -188,37 +196,38 @@ RES     3
 
 def _openmm_energy_components_kj(positions_a: list[tuple[float, float, float]]) -> tuple[float, float, float]:
     assert HAS_OPENMM
+    openmm_mod, unit_mod = _require_openmm()
     positions_nm = [(x * 0.1, y * 0.1, z * 0.1) for (x, y, z) in positions_a]
 
-    system = openmm.System()
-    system.addParticle(12.011 * unit.dalton)  # parent
-    system.addParticle(0.400 * unit.dalton)  # drude
-    system.addParticle(12.011 * unit.dalton)  # external
+    system = openmm_mod.System()
+    system.addParticle(12.011 * unit_mod.dalton)  # parent
+    system.addParticle(0.400 * unit_mod.dalton)  # drude
+    system.addParticle(12.011 * unit_mod.dalton)  # external
 
-    drude_force = openmm.DrudeForce()
+    drude_force = openmm_mod.DrudeForce()
     drude_force.setForceGroup(1)
     drude_force.addParticle(1, 0, -1, -1, -1, -1.0, 0.001, 1.0, 1.0)  # q=-1, alpha=0.001 nm^3
     system.addForce(drude_force)
 
-    nb = openmm.NonbondedForce()
+    nb = openmm_mod.NonbondedForce()
     nb.setForceGroup(2)
-    nb.setNonbondedMethod(openmm.NonbondedForce.NoCutoff)
-    sigma = 0.1 * unit.nanometer
-    epsilon = 0.0 * unit.kilojoule_per_mole
-    nb.addParticle(1.0 * unit.elementary_charge, sigma, epsilon)   # parent
-    nb.addParticle(-1.0 * unit.elementary_charge, sigma, epsilon)  # drude
-    nb.addParticle(1.0 * unit.elementary_charge, sigma, epsilon)   # external
+    nb.setNonbondedMethod(openmm_mod.NonbondedForce.NoCutoff)
+    sigma = 0.1 * unit_mod.nanometer
+    epsilon = 0.0 * unit_mod.kilojoule_per_mole
+    nb.addParticle(1.0 * unit_mod.elementary_charge, sigma, epsilon)   # parent
+    nb.addParticle(-1.0 * unit_mod.elementary_charge, sigma, epsilon)  # drude
+    nb.addParticle(1.0 * unit_mod.elementary_charge, sigma, epsilon)   # external
     nb.addException(0, 1, 0.0, 1.0, 0.0)  # exclude parent-drude nonbonded (bonded in PSF)
     system.addForce(nb)
 
-    platform = openmm.Platform.getPlatformByName("Reference")
-    integrator = openmm.VerletIntegrator(0.001 * unit.picoseconds)
-    context = openmm.Context(system, integrator, platform)
-    context.setPositions(positions_nm * unit.nanometer)
+    platform = openmm_mod.Platform.getPlatformByName("Reference")
+    integrator = openmm_mod.VerletIntegrator(0.001 * unit_mod.picoseconds)
+    context = openmm_mod.Context(system, integrator, platform)
+    context.setPositions(positions_nm * unit_mod.nanometer)
 
-    total = context.getState(getEnergy=True).getPotentialEnergy().value_in_unit(unit.kilojoule_per_mole)
-    drude_e = context.getState(getEnergy=True, groups=1 << 1).getPotentialEnergy().value_in_unit(unit.kilojoule_per_mole)
-    nb_e = context.getState(getEnergy=True, groups=1 << 2).getPotentialEnergy().value_in_unit(unit.kilojoule_per_mole)
+    total = context.getState(getEnergy=True).getPotentialEnergy().value_in_unit(unit_mod.kilojoule_per_mole)
+    drude_e = context.getState(getEnergy=True, groups=1 << 1).getPotentialEnergy().value_in_unit(unit_mod.kilojoule_per_mole)
+    nb_e = context.getState(getEnergy=True, groups=1 << 2).getPotentialEnergy().value_in_unit(unit_mod.kilojoule_per_mole)
     return total, nb_e, drude_e
 
 

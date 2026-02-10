@@ -758,15 +758,12 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     // CRITICAL FIX: Get N BEFORE insertion for correct acceptance calculation
     int N_before = reservoir_->getActiveCount(typeId);
 
-    // Configurable capacity check to prevent runaway growth
-    // Can be disabled by setting maxMoleculesPerType to -1
-    double maxMolecules = getConfigValue("maxMoleculesPerType");
-    if (maxMolecules <= 0) {
-        // Default: large but reasonable limit for safety
-        maxMolecules = 10000;
-    }
+    // Configurable capacity check to prevent runaway growth.
+    // maxMoleculesPerType <= 0 means "disabled" (no hard cap).
+    const double maxMolecules = getConfigValue("maxMoleculesPerType");
+    const bool hasHardCap = std::isfinite(maxMolecules) && (maxMolecules > 0.0);
 
-    if (N_before >= static_cast<int>(maxMolecules)) {
+    if (hasHardCap && N_before >= static_cast<int>(maxMolecules)) {
         // At limit, reject insertion immediately
         MoveResult early;
         early.type = MoveResult::INSERT;

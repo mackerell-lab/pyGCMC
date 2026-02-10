@@ -457,6 +457,16 @@ inline void computeMovementEnergyPGPComplete(MCState& state) {
 }
 
 /**
+ * @brief Compute movement energy using PGP Complete Correct
+ */
+inline void computeMovementEnergyPGPCompleteCorrect(MCState& state) {
+    if (SystemLogger::isDebugEnabled()) {
+        SystemLogger::debug("Computing movement energy using PGP Complete Correct");
+    }
+    ::pygcmc::platform::cpu::computeMovementEnergyPGPCompleteCorrect(state);
+}
+
+/**
  * @brief Set energy debug output
  */
 inline void setEnergyDebugOutput(bool enable) {
