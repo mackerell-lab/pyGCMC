@@ -13,6 +13,7 @@
 #include "../../platform/cpu/movement/gcmc/GCMCAcceptance.hpp"
 #include "../../platform/cpu/movement/reservoir/fragment_reservoir.hpp"
 #include "../../platform/cpu/movement/bias/CavityBias.hpp"
+#include "../../platform/cpu/simulation/impl/GCMCSimulation.hpp"
 #include "../../model/montecarlo/MCStructures.hpp"
 
 namespace py = pybind11;
@@ -28,6 +29,191 @@ using GCMCStatistics = ::pygcmc::platform::cpu::movement::gcmc::GCMCStatistics;
 using CavityManager = ::pygcmc::platform::cpu::movement::CavityManager;
 using Vector3 = ::pygcmc::platform::cpu::movement::Vector3;
 using Quaternion = ::pygcmc::platform::cpu::movement::Quaternion;
+using GCMCCPUSimulation = ::pygcmc::platform::cpu::simulation::GCMCSimulation;
+
+namespace {
+
+py::dict cpu_stats_to_dict(const GCMCCPUSimulation::Statistics& stats) {
+    py::dict result;
+    result["totalSteps"] = stats.totalSteps;
+    result["acceptedMoves"] = stats.acceptedMoves;
+    result["acceptanceRate"] = stats.acceptanceRate;
+    result["moveAttempts"] = stats.moveAttempts;
+    result["moveAccepted"] = stats.moveAccepted;
+    result["moveAcceptanceRates"] = stats.moveAcceptanceRates;
+    result["fragmentCounts"] = stats.fragmentCounts;
+    result["fragmentDensities"] = stats.fragmentDensities;
+    result["fragmentAcceptanceRates"] = stats.fragmentAcceptanceRates;
+    result["currentEnergy"] = stats.currentEnergy;
+    result["averageEnergy"] = stats.averageEnergy;
+    result["energyStdDev"] = stats.energyStdDev;
+    result["energyHistory"] = stats.energyHistory;
+    result["totalTime"] = stats.totalTime;
+    result["timePerStep"] = stats.timePerStep;
+    result["stepsPerSecond"] = stats.stepsPerSecond;
+    return result;
+}
+
+py::dict cpu_counters_to_dict(const GCMCCPUSimulation::Counters& counters) {
+    py::dict result;
+    result["attemptsInsert"] = counters.attemptsInsert;
+    result["acceptsInsert"] = counters.acceptsInsert;
+    result["attemptsDelete"] = counters.attemptsDelete;
+    result["acceptsDelete"] = counters.acceptsDelete;
+    result["attemptsTranslate"] = counters.attemptsTranslate;
+    result["acceptsTranslate"] = counters.acceptsTranslate;
+    result["attemptsRotate"] = counters.attemptsRotate;
+    result["acceptsRotate"] = counters.acceptsRotate;
+    result["attemptsSinceLastPrint"] = counters.attemptsSinceLastPrint;
+    result["acceptsSinceLastPrint"] = counters.acceptsSinceLastPrint;
+    result["insDelOverallRate"] = counters.getInsDelOverallRate();
+    return result;
+}
+
+py::dict cpu_fragment_to_dict(const GCMCCPUSimulation::FragmentInfo& fragment) {
+    py::dict result;
+    result["name"] = fragment.name;
+    result["typeId"] = fragment.typeId;
+    result["concentration"] = fragment.concentration;
+    result["chemicalPotential"] = fragment.chemicalPotential;
+    result["activity"] = fragment.activity;
+    result["probability"] = fragment.probability;
+    result["maxCount"] = fragment.maxCount;
+    result["currentCount"] = fragment.currentCount;
+    result["confBiasTrials"] = fragment.confBiasTrials;
+    result["insertAttempts"] = fragment.insertAttempts;
+    result["insertAccepted"] = fragment.insertAccepted;
+    result["deleteAttempts"] = fragment.deleteAttempts;
+    result["deleteAccepted"] = fragment.deleteAccepted;
+    return result;
+}
+
+py::list cpu_fragments_to_list(const std::vector<GCMCCPUSimulation::FragmentInfo>& fragments) {
+    py::list result;
+    for (const auto& fragment : fragments) {
+        result.append(cpu_fragment_to_dict(fragment));
+    }
+    return result;
+}
+
+std::string cpu_move_type_to_string(GCMCCPUSimulation::AcceptanceRecord::MoveType moveType) {
+    switch (moveType) {
+        case GCMCCPUSimulation::AcceptanceRecord::INSERT:
+            return "insertion";
+        case GCMCCPUSimulation::AcceptanceRecord::DELETE:
+            return "deletion";
+        case GCMCCPUSimulation::AcceptanceRecord::TRANSLATE:
+            return "translation";
+        case GCMCCPUSimulation::AcceptanceRecord::ROTATE:
+            return "rotation";
+    }
+    return "unknown";
+}
+
+py::dict cpu_acceptance_record_to_dict(const GCMCCPUSimulation::AcceptanceRecord& record) {
+    py::dict result;
+    result["move"] = cpu_move_type_to_string(record.moveType);
+    result["requestedMove"] = cpu_move_type_to_string(record.requestedMoveType);
+    result["species"] = record.species;
+    result["nBefore"] = record.nBefore;
+    result["cbmcTrials"] = record.cbmcTrials;
+    result["step"] = record.step;
+    result["beta"] = record.beta;
+    result["deltaU"] = record.deltaU;
+    result["betaDeltaU"] = record.betaDeltaU;
+    result["mu"] = record.mu;
+    result["betaMu"] = record.betaMu;
+    result["z"] = record.z;
+    result["qForward"] = record.qForward;
+    result["qReverse"] = record.qReverse;
+    result["proposalRatio"] = record.proposalRatio;
+    result["vEff"] = record.vEff;
+    result["vBox"] = record.vBox;
+    result["cavityFraction"] = record.cavityFraction;
+    result["rosenbluthWeight"] = record.rosenbluthWeight;
+    result["cbmcSelectedEnergy"] = record.cbmcSelectedEnergy;
+    result["cbmcLogWOverK"] = record.cbmcLogWOverK;
+    result["cbmcTrialEnergies"] = record.cbmcTrialEnergies;
+    result["pAcc"] = record.pAcc;
+    result["bias"] = record.bias;
+    result["u"] = record.u;
+    result["accepted"] = record.accepted;
+    result["wForward"] = record.wForward;
+    result["wReverse"] = record.wReverse;
+    result["wCavity"] = record.wCavity;
+    return result;
+}
+
+py::list cpu_acceptance_records_to_list(const std::vector<GCMCCPUSimulation::AcceptanceRecord>& records) {
+    py::list result;
+    for (const auto& record : records) {
+        result.append(cpu_acceptance_record_to_dict(record));
+    }
+    return result;
+}
+
+py::dict run_gcmc_cpu_config(
+    const GCMCCPUSimulation::Config& config,
+    const std::string& resumeCheckpoint,
+    const std::string& dumpAccept,
+    const std::string& dumpParams,
+    size_t diagnosticsBuffer) {
+    GCMCCPUSimulation sim(config);
+
+    bool initialized = false;
+    {
+        py::gil_scoped_release release;
+        initialized = sim.initialize();
+        if (!initialized && !dumpParams.empty()) {
+            sim.dumpParamsJson(dumpParams);
+        }
+    }
+
+    py::dict result;
+    result["initialized"] = initialized;
+    if (!initialized) {
+        result["returncode"] = 2;
+        result["ran"] = false;
+        result["finalized"] = false;
+        return result;
+    }
+
+    if (!dumpAccept.empty()) {
+        sim.enableDiagnostics(diagnosticsBuffer);
+    }
+
+    bool checkpointLoaded = true;
+    bool ran = false;
+    {
+        py::gil_scoped_release release;
+        if (!dumpParams.empty()) {
+            sim.dumpParamsJson(dumpParams);
+        }
+        if (!resumeCheckpoint.empty()) {
+            checkpointLoaded = sim.loadCheckpoint(resumeCheckpoint);
+        }
+        if (checkpointLoaded) {
+            ran = sim.run();
+            if (ran) {
+                sim.finalize();
+                if (!dumpAccept.empty()) {
+                    sim.dumpAcceptanceLog(dumpAccept);
+                }
+            }
+        }
+    }
+
+    result["checkpointLoaded"] = checkpointLoaded;
+    result["ran"] = ran;
+    result["finalized"] = ran;
+    result["returncode"] = checkpointLoaded ? (ran ? 0 : 3) : 4;
+    result["statistics"] = cpu_stats_to_dict(sim.getStatistics());
+    result["counters"] = cpu_counters_to_dict(sim.getCounters());
+    result["fragments"] = cpu_fragments_to_list(sim.getFragmentInfo());
+    return result;
+}
+
+} // namespace
 
 namespace pygcmc {
 namespace bindings {
@@ -297,6 +483,91 @@ void init_gcmc_bindings(py::module& m) {
              py::arg("radius"), "Set probe radius")
         .def("getCavityCount", &CavityManager::getCavityCount,
              "Get number of cavities found");
+
+    py::class_<GCMCCPUSimulation::Config>(m, "GCMCCPUConfig")
+        .def(py::init<>())
+        .def_readwrite("inputFile", &GCMCCPUSimulation::Config::inputFile)
+        .def_readwrite("outputPrefix", &GCMCCPUSimulation::Config::outputPrefix)
+        .def_readwrite("printFrequency", &GCMCCPUSimulation::Config::printFrequency)
+        .def_readwrite("trajectoryFrequency", &GCMCCPUSimulation::Config::trajectoryFrequency)
+        .def_readwrite("checkpointFrequency", &GCMCCPUSimulation::Config::checkpointFrequency)
+        .def_readwrite("verbose", &GCMCCPUSimulation::Config::verbose)
+        .def_readwrite("randomSeed", &GCMCCPUSimulation::Config::randomSeed)
+        .def_readwrite("strictInpKeys", &GCMCCPUSimulation::Config::strictInpKeys)
+        .def_readwrite("strictInpWarnings", &GCMCCPUSimulation::Config::strictInpWarnings)
+        .def_readwrite("enableStatistics", &GCMCCPUSimulation::Config::enableStatistics)
+        .def_readwrite("movesPerStep", &GCMCCPUSimulation::Config::movesPerStep)
+        .def_readwrite("statisticsInterval", &GCMCCPUSimulation::Config::statisticsInterval)
+        .def_readwrite("storeProbabilities", &GCMCCPUSimulation::Config::storeProbabilities)
+        .def_readwrite("enableAdaptiveSampling", &GCMCCPUSimulation::Config::enableAdaptiveSampling)
+        .def_readwrite("enableEnergyMinimization", &GCMCCPUSimulation::Config::enableEnergyMinimization)
+        .def_readwrite("convergenceTolerance", &GCMCCPUSimulation::Config::convergenceTolerance)
+        .def_readwrite("maxMoleculesPerType", &GCMCCPUSimulation::Config::maxMoleculesPerType);
+
+    py::class_<GCMCCPUSimulation>(m, "GCMCCPUSimulation")
+        .def(py::init<const GCMCCPUSimulation::Config&>(), py::arg("config"))
+        .def("initialize", &GCMCCPUSimulation::initialize,
+             py::call_guard<py::gil_scoped_release>())
+        .def("run", &GCMCCPUSimulation::run,
+             py::call_guard<py::gil_scoped_release>())
+        .def("finalize", &GCMCCPUSimulation::finalize,
+             py::call_guard<py::gil_scoped_release>())
+        .def("stop", &GCMCCPUSimulation::stop)
+        .def("is_running", &GCMCCPUSimulation::isRunning)
+        .def("save_trajectory", &GCMCCPUSimulation::saveTrajectory,
+             py::arg("filename"),
+             py::call_guard<py::gil_scoped_release>())
+        .def("save_topology", &GCMCCPUSimulation::saveTopology,
+             py::arg("filename"),
+             py::call_guard<py::gil_scoped_release>())
+        .def("save_checkpoint", &GCMCCPUSimulation::saveCheckpoint,
+             py::arg("filename"),
+             py::call_guard<py::gil_scoped_release>())
+        .def("load_checkpoint", &GCMCCPUSimulation::loadCheckpoint,
+             py::arg("filename"),
+             py::call_guard<py::gil_scoped_release>())
+        .def("enable_diagnostics", &GCMCCPUSimulation::enableDiagnostics,
+             py::arg("bufferSize") = 4096)
+        .def("is_diagnostics_enabled", &GCMCCPUSimulation::isDiagnosticsEnabled)
+        .def("dump_acceptance_log", &GCMCCPUSimulation::dumpAcceptanceLog,
+             py::arg("filename"),
+             py::call_guard<py::gil_scoped_release>())
+        .def("dump_params_json", &GCMCCPUSimulation::dumpParamsJson,
+             py::arg("filename"),
+             py::call_guard<py::gil_scoped_release>())
+        .def("get_config", &GCMCCPUSimulation::getConfig)
+        .def("update_config", &GCMCCPUSimulation::updateConfig,
+             py::arg("config"))
+        .def("get_statistics", [](const GCMCCPUSimulation& self) {
+            return cpu_stats_to_dict(self.getStatistics());
+        })
+        .def("get_counters", [](const GCMCCPUSimulation& self) {
+            return cpu_counters_to_dict(self.getCounters());
+        })
+        .def("get_fragment_info", [](const GCMCCPUSimulation& self) {
+            return cpu_fragments_to_list(self.getFragmentInfo());
+        })
+        .def("get_last_move", [](const GCMCCPUSimulation& self) {
+            return cpu_acceptance_record_to_dict(self.getLastMove());
+        })
+        .def("get_moves", [](const GCMCCPUSimulation& self, size_t n) {
+            return cpu_acceptance_records_to_list(self.getMoves(n));
+        }, py::arg("n"))
+        .def("dump_lj_matrix", &GCMCCPUSimulation::dumpLJMatrix,
+             py::call_guard<py::gil_scoped_release>())
+        .def("print_statistics", &GCMCCPUSimulation::printStatistics)
+        .def("get_acceptance_records", [](const GCMCCPUSimulation& self, size_t n) {
+            return cpu_acceptance_records_to_list(self.getMoves(n));
+        }, py::arg("n"));
+
+    m.def("run_gcmc_cpu",
+          &run_gcmc_cpu_config,
+          py::arg("config"),
+          py::arg("resumeCheckpoint") = "",
+          py::arg("dumpAccept") = "",
+          py::arg("dumpParams") = "",
+          py::arg("diagnosticsBuffer") = 65536,
+          "Run the CPU GCMC simulation through the pybind interface.");
 }
 
 } // namespace platform

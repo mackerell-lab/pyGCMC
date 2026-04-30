@@ -262,6 +262,12 @@ from cpu_cli.pgp_pme_equivalence import (
     test_pgp_full_pme_and_pme_rotation_deltaU_match_neutral_lj,
 )
 
+# Python pybind interface for the same CPU GCMC implementation (2 functions)
+from cpu_cli.pybind_gcmc_cpu_interface import (
+    test_pybind_run_gcmc_cpu_executes_pgp_full_pme,
+    test_installed_paper_modes_cover_two_pgp_methods_and_pme,
+)
+
 # ITP nonbonded -> forcefield/LJ energy wiring (2 functions)
 from cpu_cli.itp_nonbonded_forcefield import (
     test_itp_atomtypes_builds_lj_matrix_and_deltaU_matches_analytic_lj,
