@@ -111,6 +111,11 @@ void safePrecomputeGridPotentialImpl(model::MCState& state, bool fixed_only) {
                 }
             }
         }
+
+        // Remove k=0 mode explicitly before inverse FFT.
+        if (!getPMEParams().pmeGrid.empty()) {
+            getPMEParams().pmeGrid[0] = std::complex<double>(0.0, 0.0);
+        }
         
         // Perform inverse FFT
         performFFTBackward();

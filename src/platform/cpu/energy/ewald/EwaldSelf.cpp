@@ -27,10 +27,16 @@ double computeSelfEnergy(model::MCState& state, bool movement_only) {
             }
         }
     } else {
-        // Calculate self-energy for all active atoms
-        for(int i = 0; i < state.activeAtomCount; i++) {
-            double charge = state.atoms[i].charge;
-            self_energy += charge * charge;
+        // Calculate self-energy for all active residues/atoms.
+        // Do not rely on activeAtomCount because deleted residues can leave ghost atoms.
+        for (int r = 0; r < state.activeResidueCount; ++r) {
+            const auto& residue = state.residues[r];
+            if (!residue.active) continue;
+            for (int j = residue.atomStart; j < residue.atomStart + residue.atomCount; ++j) {
+                if (j < 0 || j >= static_cast<int>(state.atoms.size())) continue;
+                double charge = state.atoms[j].charge;
+                self_energy += charge * charge;
+            }
         }
     }
     

@@ -252,11 +252,14 @@ from cpu_cli.pme_backends import (
     test_pme_adds_long_range_coulomb_beyond_cutoff_for_deletion,
 )
 
-# PGP vs PME backend equivalence (Mode E vs D) (3 functions)
+# PGP vs PME backend parity + tracked charged-gap cases (Mode E vs D) (6 functions)
 from cpu_cli.pgp_pme_equivalence import (
     test_pgp_full_pme_and_pme_translation_deltaU_match,
     test_pgp_full_pme_and_pme_insertion_deltaU_match_neutral_lj,
     test_pgp_full_pme_and_pme_deletion_deltaU_match_neutral_lj,
+    test_pgp_full_pme_and_pme_insertion_deltaU_match_charged_coulomb,
+    test_pgp_full_pme_and_pme_deletion_deltaU_match_charged_coulomb,
+    test_pgp_full_pme_and_pme_rotation_deltaU_match_neutral_lj,
 )
 
 # ITP nonbonded -> forcefield/LJ energy wiring (2 functions)

@@ -188,6 +188,11 @@ void precomputeGridPotentialSafe(model::MCState& state, bool fixed_only) {
             }
         }
     }
+
+    // Remove k=0 mode explicitly before inverse FFT.
+    if (!workspace.tempGrid.empty()) {
+        workspace.tempGrid[0] = std::complex<double>(0.0, 0.0);
+    }
     
     // Perform inverse FFT
     CustomFFT::padded_fft(workspace.tempGrid.data(), totalSize, true);

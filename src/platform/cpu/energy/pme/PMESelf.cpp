@@ -52,16 +52,21 @@ double computeSelfEnergyPME(model::MCState& state, bool movement_only) {
         }
     }
     else {
-        for(int i = 0; i < state.activeAtomCount; i++) {
-            // No longer check active member
-            double charge = state.atoms[i].charge;
-            double q2 = charge * charge;
-            sum_q2 += q2;
-            
-            if (i < 5) {
-                platform::log(LogLevel::INFO, "Atom ", i, 
-                            " charge = ", charge, 
-                            ", q² = ", q2);
+        int printed = 0;
+        for (int r = 0; r < state.activeResidueCount; ++r) {
+            const auto& residue = state.residues[r];
+            if (!residue.active) continue;
+            for (int j = residue.atomStart; j < residue.atomStart + residue.atomCount; ++j) {
+                if (j < 0 || j >= static_cast<int>(state.atoms.size())) continue;
+                double charge = state.atoms[j].charge;
+                double q2 = charge * charge;
+                sum_q2 += q2;
+                if (printed < 5) {
+                    platform::log(LogLevel::INFO, "Atom ", j,
+                                " charge = ", charge,
+                                ", q² = ", q2);
+                    printed++;
+                }
             }
         }
     }

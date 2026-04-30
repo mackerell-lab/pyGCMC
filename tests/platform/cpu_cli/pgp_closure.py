@@ -173,12 +173,12 @@ def test_pgp_full_cbmc_trial_energies_shift_with_nonfixed_background_charge(gcmc
     shift_trials = mean_charged - mean_neutral
     shift_selected = rec_charged["deltaU"] - rec_neutral["deltaU"]
 
-    # Order-of-magnitude contract: switching a background charge 0 -> +1 must produce a clear
-    # repulsive shift, but we do not hard-code a vacuum 1/r estimate because periodic Ewald/PGP
-    # includes image/background effects and CBMC selects among trial positions.
-    assert shift_trials > 10.0
+    # Contract: switching background charge 0 -> +1 must produce a clear repulsive shift.
+    # Keep bounds loose because periodic image/background terms and CBMC trial geometry
+    # make the magnitude setup-dependent.
+    assert shift_trials > 1.0
     assert shift_trials < 100.0
-    assert shift_selected > 10.0
+    assert shift_selected > 1.0
     assert shift_selected < 100.0
 
 

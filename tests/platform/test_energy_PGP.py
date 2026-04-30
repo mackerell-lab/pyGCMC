@@ -250,6 +250,9 @@ from energyPGP.pgp_accuracy_analysis import (
     test_pgp_accuracy_vs_pme_basic,
     test_pgp_mesh_convergence
 )
+from energyPGP.unified_reciprocal_audit_runner import (
+    test_unified_pgp_pme_reciprocal_audit_runner
+)
 
 # Support direct execution for testing
 if __name__ == "__main__":

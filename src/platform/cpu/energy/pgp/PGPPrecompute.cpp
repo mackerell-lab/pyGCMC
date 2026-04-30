@@ -147,6 +147,12 @@ void precomputeGridPotentialImpl(model::MCState& state, bool fixed_only) {
             }
         }
     }
+
+    // Remove k=0 mode explicitly before inverse FFT.
+    // Keeping the DC component injects a uniform potential offset proportional to total charge.
+    if (!getPMEParams().pmeGrid.empty()) {
+        getPMEParams().pmeGrid[0] = std::complex<double>(0.0, 0.0);
+    }
     
     performFFTBackward();
     

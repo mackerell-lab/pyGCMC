@@ -38,11 +38,17 @@ double computeSelfEnergyPGPImpl(model::MCState& state, bool movement_only) {
         }
     } 
     else {
-        // Sum q^2 for all atoms in the system
-        for(int i = 0; i < state.activeAtomCount; i++) {
-            double charge = state.atoms[i].charge;
-            double q2 = charge * charge;
-            sum_q2 += q2;
+        // Sum q^2 for active residues/atoms only.
+        // Do not rely on activeAtomCount because deleted residues can leave ghost atoms.
+        for (int r = 0; r < state.activeResidueCount; ++r) {
+            const auto& residue = state.residues[r];
+            if (!residue.active) continue;
+            for (int j = residue.atomStart; j < residue.atomStart + residue.atomCount; ++j) {
+                if (j < 0 || j >= static_cast<int>(state.atoms.size())) continue;
+                double charge = state.atoms[j].charge;
+                double q2 = charge * charge;
+                sum_q2 += q2;
+            }
         }
     }
     
