@@ -16,9 +16,9 @@ import pygcmc
 
 from cpu_cli.inp_units_compat_helpers import _write_inp
 
-PACKAGE_DIR = Path(__file__).resolve().parents[3] / "python"
-if PACKAGE_DIR.exists() and str(PACKAGE_DIR) not in sys.path:
-    sys.path.insert(0, str(PACKAGE_DIR))
+PY_BINDINGS_DIR = Path(__file__).resolve().parents[3] / "src" / "bindings" / "python"
+if PY_BINDINGS_DIR.exists() and str(PY_BINDINGS_DIR) not in sys.path:
+    sys.path.insert(0, str(PY_BINDINGS_DIR))
 
 from pygcmc_tools.paper_validation import PAPER_MODES, run_paper_modes
 

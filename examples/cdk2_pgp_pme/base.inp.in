@@ -1,0 +1,42 @@
+energy_method:__MODE__
+random_seed:__SEED__
+temperature:1e30
+par:__ROOT__/data/paper_pgp_pme/charmm36.ff/ffnonbonded.itp
+par:__ROOT__/data/paper_pgp_pme/charmm36.ff/silcs.itp
+par:__ROOT__/data/paper_pgp_pme/charmm36.ff/nbfix.itp
+fragitp:__ROOT__/data/paper_pgp_pme/charmm36.ff/mol/benx.itp
+fragitp:__ROOT__/data/paper_pgp_pme/charmm36.ff/mol/prpx.itp
+fragitp:__ROOT__/data/paper_pgp_pme/charmm36.ff/mol/dmee.itp
+fragitp:__ROOT__/data/paper_pgp_pme/charmm36.ff/mol/meoh.itp
+fragitp:__ROOT__/data/paper_pgp_pme/charmm36.ff/mol/form.itp
+fragitp:__ROOT__/data/paper_pgp_pme/charmm36.ff/mol/imia.itp
+fragitp:__ROOT__/data/paper_pgp_pme/charmm36.ff/mol/acey.itp
+fragitp:__ROOT__/data/paper_pgp_pme/charmm36.ff/mol/mamy.itp
+fragitp:__ROOT__/data/paper_pgp_pme/charmm36.ff/mol/sol.itp
+atomtypes:__ROOT__/data/paper_pgp_pme/charmm36.ff/atomtypes.atp
+monomerdir:__ROOT__/data/paper_pgp_pme/charmm36.ff/mol
+top:__ROOT__/data/paper_pgp_pme/systems/cdk2/1h1q_silcs.1.top
+pdb:__ROOT__/data/paper_pgp_pme/systems/cdk2/1h1q_silcs.1.pdb
+protitp:__ROOT__/data/paper_pgp_pme/systems/cdk2/1h1q_silcs.1.top
+grid_dx:1.000
+box_size:40.269 61.062 61.817
+cutoff:12.0
+gc_center:35.135 45.531 45.908
+sys_center:35.135 45.531 45.908
+use_gcmc_cutoff:no
+energy_cutoff:12
+fragname:benx prpx dmee meoh form imia acey mamy sol
+fragconc:0.50 0.50 0.50 0.50 0.50 0.50 0.50 0.50 55.00
+fragmuex:20.000 15.000 -1.790 -5.360 -10.920 -14.180 -97.310 -68.490 -5.600
+mctime:0 0 0 0 0 0 0 0 1
+mcsteps:__STEPS__
+nprint:__STEPS__
+moves_per_step:1
+mc_move_prob:0 0 1 0
+max_translation:2.0
+max_rotation:0.0
+use_cavity_bias:no
+use_conf_bias:no
+use_number_water_nbar:no
+op_top:__RUN_DIR__/out.top
+op_pdb:__RUN_DIR__/out.pdb

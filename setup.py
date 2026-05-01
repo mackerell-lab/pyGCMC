@@ -108,7 +108,7 @@ setup(
     ext_modules=[CMakeExtension("pygcmc")],
     cmdclass={"build_ext": CMakeBuild},
     packages=["pygcmc_tools"],
-    package_dir={"": "python"},
+    package_dir={"pygcmc_tools": "src/bindings/python/pygcmc_tools"},
     package_data={"pygcmc_tools": ["bin/gcmc_cpu"]},
     entry_points={
         "console_scripts": [

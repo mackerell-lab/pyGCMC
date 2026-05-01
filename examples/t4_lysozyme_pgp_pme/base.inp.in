@@ -1,0 +1,42 @@
+energy_method:__MODE__
+random_seed:__SEED__
+temperature:1e30
+par:__ROOT__/data/paper_pgp_pme/charmm36.ff/ffnonbonded.itp
+par:__ROOT__/data/paper_pgp_pme/charmm36.ff/silcs.itp
+par:__ROOT__/data/paper_pgp_pme/charmm36.ff/nbfix.itp
+fragitp:__ROOT__/data/paper_pgp_pme/charmm36.ff/mol/benx.itp
+fragitp:__ROOT__/data/paper_pgp_pme/charmm36.ff/mol/prpx.itp
+fragitp:__ROOT__/data/paper_pgp_pme/charmm36.ff/mol/dmee.itp
+fragitp:__ROOT__/data/paper_pgp_pme/charmm36.ff/mol/meoh.itp
+fragitp:__ROOT__/data/paper_pgp_pme/charmm36.ff/mol/form.itp
+fragitp:__ROOT__/data/paper_pgp_pme/charmm36.ff/mol/imia.itp
+fragitp:__ROOT__/data/paper_pgp_pme/charmm36.ff/mol/acey.itp
+fragitp:__ROOT__/data/paper_pgp_pme/charmm36.ff/mol/mamy.itp
+fragitp:__ROOT__/data/paper_pgp_pme/charmm36.ff/mol/sol.itp
+atomtypes:__ROOT__/data/paper_pgp_pme/charmm36.ff/atomtypes.atp
+monomerdir:__ROOT__/data/paper_pgp_pme/charmm36.ff/mol
+top:__ROOT__/data/paper_pgp_pme/systems/t4_lysozyme/181L_apo_silcs.1.top
+pdb:__ROOT__/data/paper_pgp_pme/systems/t4_lysozyme/181L_apo_silcs.1.equil.rec.pdb
+protitp:__ROOT__/data/paper_pgp_pme/systems/t4_lysozyme/181L_apo_silcs.1.top
+grid_dx:1.000
+box_size:36.736 40.850 49.379
+cutoff:12.0
+gc_center:33.368 35.425 39.690
+sys_center:33.368 35.425 39.690
+use_gcmc_cutoff:no
+energy_cutoff:12
+fragname:benx prpx dmee meoh form imia acey mamy sol
+fragconc:0.25 0.25 0.25 0.25 0.25 0.25 0.25 0.25 55.00
+fragmuex:-0.79 1.96 -1.79 -5.36 -10.92 -14.18 -97.31 -68.49 -5.60
+mctime:0 0 0 0 0 0 0 0 1
+mcsteps:__STEPS__
+nprint:__STEPS__
+moves_per_step:1
+mc_move_prob:0 0 1 0
+max_translation:2.0
+max_rotation:0.0
+use_cavity_bias:no
+use_conf_bias:no
+use_number_water_nbar:no
+op_top:__RUN_DIR__/out.top
+op_pdb:__RUN_DIR__/out.pdb
