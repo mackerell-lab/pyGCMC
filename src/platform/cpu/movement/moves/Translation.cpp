@@ -1,6 +1,7 @@
 #include "Translation.hpp"
 #include "../../energy/EnergyModule.hpp"
 #include "../pool/ActivePool.hpp"
+#include "../common/MoveCommon.hpp"
 #include "../common/MovementUtils.hpp"
 #include "../../../../model/montecarlo/MCMain.hpp"
 #include <vector>
@@ -75,12 +76,7 @@ MovementResult TranslationMove::performTranslation(MCState& state, const Movemen
     
     // Calculate energy before translation
     platform::cpu::computeSystemEnergyPBCCutoff(state);
-    double energyBefore = 0.0;
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        energyBefore += state.residues[i].energy_vdw;
-        energyBefore += state.residues[i].energy_elec;
-    }
-    energyBefore *= 0.5;  // Account for double counting
+    double energyBefore = move_common::sumResiduePairEnergy(state);
     
     // Apply translation
     translateResidue(state, targetResIdx, displacement);
@@ -101,12 +97,7 @@ MovementResult TranslationMove::performTranslation(MCState& state, const Movemen
     
     // Calculate energy after translation
     platform::cpu::computeSystemEnergyPBCCutoff(state);
-    double energyAfter = 0.0;
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        energyAfter += state.residues[i].energy_vdw;
-        energyAfter += state.residues[i].energy_elec;
-    }
-    energyAfter *= 0.5;
+    double energyAfter = move_common::sumResiduePairEnergy(state);
     
     double deltaE = energyAfter - energyBefore;
     result.energyChange = deltaE;
@@ -149,25 +140,7 @@ std::vector<MovementResult> TranslationMove::performBatchTranslations(
 }
 
 int TranslationMove::selectResidueForTranslation(const MCState& state) {
-    if (state.activeResidueCount == 0) {
-        return -1;
-    }
-    
-    // Get list of active residues
-    std::vector<int> activeResidues;
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        if (state.residues[i].active) {
-            activeResidues.push_back(i);
-        }
-    }
-    
-    if (activeResidues.empty()) {
-        return -1;
-    }
-    
-    // Select random active residue
-    int idx = utils::RandomUtils::uniformInt(0, static_cast<int>(activeResidues.size()) - 1);
-    return activeResidues[idx];
+    return move_common::selectRandomActiveResidue(state);
 }
 
 Vector3 TranslationMove::generateDisplacement(double maxTranslation) {
@@ -240,24 +213,14 @@ std::pair<double, double> TranslationMove::calculateEnergyChange(
     
     // Calculate energy before
     platform::cpu::computeSystemEnergyPBCCutoff(state);
-    double energyBefore = 0.0;
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        energyBefore += state.residues[i].energy_vdw;
-        energyBefore += state.residues[i].energy_elec;
-    }
-    energyBefore *= 0.5;
+    double energyBefore = move_common::sumResiduePairEnergy(state);
     
     // Apply translation
     translateResidue(state, residueIndex, displacement);
     
     // Calculate energy after
     platform::cpu::computeSystemEnergyPBCCutoff(state);
-    double energyAfter = 0.0;
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        energyAfter += state.residues[i].energy_vdw;
-        energyAfter += state.residues[i].energy_elec;
-    }
-    energyAfter *= 0.5;
+    double energyAfter = move_common::sumResiduePairEnergy(state);
     
     // Restore positions
     restoreAtomPositions(state, residueIndex, originalPos);

@@ -2,6 +2,7 @@
 #include "../../energy/EnergyModule.hpp"
 #include "../pool/ActivePool.hpp"
 #include "../bias/ConfigBias.hpp"
+#include "../common/MoveCommon.hpp"
 #include "../common/MovementUtils.hpp"
 #include "../../../../model/montecarlo/MCMain.hpp"
 #include <cmath>
@@ -83,24 +84,14 @@ MovementResult RotationMove::performSimpleRotation(MCState& state, const Movemen
     
     // Calculate energy before rotation
     platform::cpu::computeSystemEnergyPBCCutoff(state);
-    double energyBefore = 0.0;
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        energyBefore += state.residues[i].energy_vdw;
-        energyBefore += state.residues[i].energy_elec;
-    }
-    energyBefore *= 0.5;  // Account for double counting
+    double energyBefore = move_common::sumResiduePairEnergy(state);
     
     // Apply rotation around center of mass
     rotateResidue(state, targetResIdx, rotation);
     
     // Calculate energy after rotation
     platform::cpu::computeSystemEnergyPBCCutoff(state);
-    double energyAfter = 0.0;
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        energyAfter += state.residues[i].energy_vdw;
-        energyAfter += state.residues[i].energy_elec;
-    }
-    energyAfter *= 0.5;
+    double energyAfter = move_common::sumResiduePairEnergy(state);
     
     double deltaE = energyAfter - energyBefore;
     result.energyChange = deltaE;
@@ -209,12 +200,7 @@ RotationMove::ConfigBiasRotationResult RotationMove::performConfigBiasRotationIn
         
         // Calculate energy
         platform::cpu::computeSystemEnergyPBCCutoff(state);
-        config.energy = 0.0;
-        for (int j = 0; j < state.activeResidueCount; ++j) {
-            config.energy += state.residues[j].energy_vdw;
-            config.energy += state.residues[j].energy_elec;
-        }
-        config.energy *= 0.5;
+        config.energy = move_common::sumResiduePairEnergy(state);
         
         configs.push_back(config);
         
@@ -252,25 +238,7 @@ RotationMove::ConfigBiasRotationResult RotationMove::performConfigBiasRotationIn
 }
 
 int RotationMove::selectResidueForRotation(const MCState& state) {
-    if (state.activeResidueCount == 0) {
-        return -1;
-    }
-    
-    // Get list of active residues
-    std::vector<int> activeResidues;
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        if (state.residues[i].active) {
-            activeResidues.push_back(i);
-        }
-    }
-    
-    if (activeResidues.empty()) {
-        return -1;
-    }
-    
-    // Select random active residue
-    int idx = utils::RandomUtils::uniformInt(0, static_cast<int>(activeResidues.size()) - 1);
-    return activeResidues[idx];
+    return move_common::selectRandomActiveResidue(state);
 }
 
 Quaternion RotationMove::generateRandomRotation(double maxAngle) {
@@ -313,12 +281,7 @@ RotationMove::RotationConfig RotationMove::saveConfiguration(const MCState& stat
         
         // Calculate original energy
         platform::cpu::computeSystemEnergyPBCCutoff(const_cast<MCState&>(state));
-        config.originalEnergy = 0.0;
-        for (int i = 0; i < state.activeResidueCount; ++i) {
-            config.originalEnergy += state.residues[i].energy_vdw;
-            config.originalEnergy += state.residues[i].energy_elec;
-        }
-        config.originalEnergy *= 0.5;
+        config.originalEnergy = move_common::sumResiduePairEnergy(state);
     }
     
     return config;

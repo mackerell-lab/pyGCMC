@@ -183,12 +183,6 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
     }
     result.volumeNm3 = paramsWithVolume.volumeNm3;
     result.logVolume = std::log(std::max(result.volumeNm3, 1e-30));
-    result.effectiveVolumeNm3 = result.volumeNm3 * std::max(result.cavityBiasFactor, 0.0);
-    if (result.cavityVolumeNm3 <= 0.0) {
-        result.cavityVolumeNm3 = result.effectiveVolumeNm3;
-    }
-    result.volumeNm3 = paramsWithVolume.volumeNm3;
-    result.logVolume = std::log(std::max(result.volumeNm3, 1e-30));
     result.cavityBiasFactor = 1.0;
     result.logCavityFactor = 0.0;
     result.effectiveVolumeNm3 = result.volumeNm3;

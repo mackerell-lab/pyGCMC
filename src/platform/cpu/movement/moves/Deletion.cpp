@@ -367,25 +367,7 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
 }
 
 int DeletionMove::selectResidueForDeletion(const MCState& state) {
-    if (state.activeResidueCount == 0) {
-        return -1;
-    }
-    
-    // Get list of active residues
-    std::vector<int> activeResidues;
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        if (state.residues[i].active) {
-            activeResidues.push_back(i);
-        }
-    }
-    
-    if (activeResidues.empty()) {
-        return -1;
-    }
-    
-    // Select random active residue
-    int idx = utils::RandomUtils::uniformInt(0, static_cast<int>(activeResidues.size()) - 1);
-    return activeResidues[idx];
+    return move_common::selectRandomActiveResidue(state);
 }
 
 double DeletionMove::calculateDeletionProbability(
