@@ -9,6 +9,7 @@
 #include "../moves/Translation.hpp"
 #include "../moves/Rotation.hpp"
 #include "../moves/MultiInsertionCBMC.hpp"
+#include "../common/MoveCommon.hpp"
 #include "../common/MovementUtils.hpp"
 #ifdef PYGCMC_USE_PROPOSAL_LAYER
 #include "../proposal/ProposalMain.hpp"
@@ -541,7 +542,7 @@ bool MovementModule::trimExcessPopulation(MCState& state) {
         if (limit < 0) {
             continue;
         }
-        int current = countActiveResiduesOfType(state, type);
+        int current = move_common::countActiveResiduesOfType(state, type);
         int toRemove = current - limit;
         if (toRemove <= 0) {
             continue;
@@ -562,23 +563,6 @@ bool MovementModule::trimExcessPopulation(MCState& state) {
     }
 
     return mutated;
-}
-
-int MovementModule::countActiveResiduesOfType(const MCState& state, int moleculeType) {
-    if (moleculeType < 0) {
-        return state.activeResidueCount;
-    }
-
-    int count = 0;
-    const int maxResidues = std::min(state.activeResidueCount,
-                                     static_cast<int>(state.residues.size()));
-    for (int i = 0; i < maxResidues; ++i) {
-        const auto& residue = state.residues[i];
-        if (residue.active && residue.type == moleculeType) {
-            ++count;
-        }
-    }
-    return count;
 }
 
 std::map<std::string, double> MovementModule::getPopulationControlStatsMap() const {

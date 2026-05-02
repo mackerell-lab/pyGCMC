@@ -4,6 +4,7 @@
 #include "../bias/CavityBias.hpp"
 #include "../bias/CavityBiasCore.hpp"  // New cavity bias implementation
 #include "../bias/UnifiedAcceptance.hpp"  // Unified acceptance probability
+#include "../common/MoveCommon.hpp"
 #include "../common/MovementUtils.hpp"
 #include "../gcmc/GCMCAcceptance.hpp"
 #include "../../../../model/montecarlo/MCMain.hpp"
@@ -19,28 +20,6 @@ using namespace model::montecarlo;
 using gcmc::GCMCAcceptance;
 
 namespace {
-
-inline double logSafe(double value) {
-    return std::log(std::max(value, 1e-30));
-}
-
-int countActiveResiduesOfType(const MCState& state, int moleculeType) {
-    if (moleculeType < 0) {
-        return state.activeResidueCount;
-    }
-    int count = 0;
-    int maxResidues = std::min(state.activeResidueCount, static_cast<int>(state.residues.size()));
-    for (int i = 0; i < maxResidues; ++i) {
-        const MCResidue& residue = state.residues[i];
-        if (!residue.active) {
-            continue;
-        }
-        if (residue.type == moleculeType) {
-            ++count;
-        }
-    }
-    return count;
-}
 
 struct DeletionCbmcResult {
     double logWeight = 0.0;
@@ -268,19 +247,14 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     
     result.residueIndex = targetResIdx;
     result.moleculeType = state.residues[targetResIdx].type;
-    const int speciesCountBefore = countActiveResiduesOfType(state, result.moleculeType);
+    const int speciesCountBefore = move_common::countActiveResiduesOfType(state, result.moleculeType);
     const auto scheduler = params.getBiasedMoveProbabilitySet(result.moleculeType, speciesCountBefore);
     result.logProposalForward = utils::safeLogProbability(scheduler.deletion);
     result.logProposalReverse = utils::safeLogProbability(scheduler.insertion);
     
     // Calculate energy before deletion
     platform::cpu::computeSystemEnergyPBCCutoff(state);
-    double energyBefore = 0.0;
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        energyBefore += state.residues[i].energy_vdw;
-        energyBefore += state.residues[i].energy_elec;
-    }
-    energyBefore *= 0.5;  // Account for double counting
+    double energyBefore = move_common::sumResiduePairEnergy(state);
     
     // Save residue information for potential restoration
     MCResidue savedResidue = state.residues[targetResIdx];
@@ -301,7 +275,7 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     } else {
         result.cbmcTrialsUsed = 1;
         result.rosenbluthWeight = storedWeight;
-        result.logWReverse = logSafe(storedWeight);
+        result.logWReverse = utils::safeLogProbability(storedWeight);
     }
     result.logWForward = 0.0;
     
@@ -310,14 +284,7 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     
     // Calculate energy after deletion (with residue marked inactive)
     platform::cpu::computeSystemEnergyPBCCutoff(state);
-    double energyAfter = 0.0;
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        if (i != targetResIdx && state.residues[i].active) {
-            energyAfter += state.residues[i].energy_vdw;
-            energyAfter += state.residues[i].energy_elec;
-        }
-    }
-    energyAfter *= 0.5;
+    double energyAfter = move_common::sumResiduePairEnergy(state, targetResIdx, true);
     
     double deltaE = energyAfter - energyBefore;
     result.energyChange = deltaE;
@@ -355,7 +322,7 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     bool useCavityBiasFlag = paramsWithVolume.useCavityBias && (cavityCore_ || cavityManager_);
     const double populationNorm = std::max(1, speciesCountBefore);
     if (useCavityBiasFlag) {
-        result.logCavityFactor = logSafe(cavityBias);
+        result.logCavityFactor = utils::safeLogProbability(cavityBias);
         result.cavityVolumeNm3 = Vcav_after;
         result.effectiveVolumeNm3 = Vcav_after / populationNorm;
     } else {

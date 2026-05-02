@@ -6,6 +6,7 @@
 #include "../bias/CavityBias.hpp"
 #include "../bias/CavityBiasCore.hpp"  // New cavity bias implementation
 #include "../bias/UnifiedAcceptance.hpp"  // Unified acceptance probability
+#include "../common/MoveCommon.hpp"
 #include "../common/MovementUtils.hpp"
 #include "../gcmc/GCMCAcceptance.hpp"
 #include "../../../../model/montecarlo/MCMain.hpp"
@@ -21,28 +22,6 @@ using namespace model::montecarlo;
 using gcmc::GCMCAcceptance;
 
 namespace {
-
-inline double logSafe(double value) {
-    return std::log(std::max(value, 1e-30));
-}
-
-int countActiveResiduesOfType(const MCState& state, int moleculeType) {
-    if (moleculeType < 0) {
-        return state.activeResidueCount;
-    }
-    int count = 0;
-    int maxResidues = std::min(state.activeResidueCount, static_cast<int>(state.residues.size()));
-    for (int i = 0; i < maxResidues; ++i) {
-        const MCResidue& residue = state.residues[i];
-        if (!residue.active) {
-            continue;
-        }
-        if (residue.type == moleculeType) {
-            ++count;
-        }
-    }
-    return count;
-}
 
 void finalizeInsertionAcceptance(
     MovementResult& result,
@@ -129,7 +108,7 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
     MovementResult result;
     result.moveType = "insert";
     result.moleculeType = moleculeType;
-    const int speciesCountBefore = countActiveResiduesOfType(state, moleculeType);
+    const int speciesCountBefore = move_common::countActiveResiduesOfType(state, moleculeType);
     const auto scheduler = params.getBiasedMoveProbabilitySet(moleculeType, speciesCountBefore);
     result.logProposalForward = utils::safeLogProbability(scheduler.insertion);
     result.logProposalReverse = utils::safeLogProbability(scheduler.deletion);
@@ -174,12 +153,7 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
     
     // Calculate energy before insertion
     platform::cpu::computeSystemEnergyPBCCutoff(state);
-    double energyBefore = 0.0;
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        energyBefore += state.residues[i].energy_vdw;
-        energyBefore += state.residues[i].energy_elec;
-    }
-    energyBefore *= 0.5;  // Account for double counting
+    double energyBefore = move_common::sumResiduePairEnergy(state);
     
     // Temporarily insert molecule into state for energy calculation
     int tempResIdx = state.addResidue(MCResidue());
@@ -197,12 +171,7 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
     
     // Calculate energy after insertion
     platform::cpu::computeSystemEnergyPBCCutoff(state);
-    double energyAfter = 0.0;
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        energyAfter += state.residues[i].energy_vdw;
-        energyAfter += state.residues[i].energy_elec;
-    }
-    energyAfter *= 0.5;  // Account for double counting
+    double energyAfter = move_common::sumResiduePairEnergy(state);
     
     double deltaE = energyAfter - energyBefore;
     result.energyChange = deltaE;
@@ -281,7 +250,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
     MovementResult result;
     result.moveType = "insert";
     result.moleculeType = moleculeType;
-    const int speciesCountBefore = countActiveResiduesOfType(state, moleculeType);
+    const int speciesCountBefore = move_common::countActiveResiduesOfType(state, moleculeType);
     const auto scheduler = params.getBiasedMoveProbabilitySet(moleculeType, speciesCountBefore);
     result.logProposalForward = utils::safeLogProbability(scheduler.insertion);
     result.logProposalReverse = utils::safeLogProbability(scheduler.deletion);
@@ -381,12 +350,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         
         // Calculate energy before any insertion
         platform::cpu::computeSystemEnergyPBCCutoff(state);
-        double energyBefore = 0.0;
-        for (int i = 0; i < state.activeResidueCount; ++i) {
-            energyBefore += state.residues[i].energy_vdw;
-            energyBefore += state.residues[i].energy_elec;
-        }
-        energyBefore *= 0.5;
+        double energyBefore = move_common::sumResiduePairEnergy(state);
         
         // Evaluate trial energies
         auto [deltaEnergies, Keff] = evaluateTrialEnergies(state, trials, moleculeType, energyBefore);
@@ -516,12 +480,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
     
     // Calculate energy before insertion
     platform::cpu::computeSystemEnergyPBCCutoff(state);
-    double energyBefore = 0.0;
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        energyBefore += state.residues[i].energy_vdw;
-        energyBefore += state.residues[i].energy_elec;
-    }
-    energyBefore *= 0.5;
+    double energyBefore = move_common::sumResiduePairEnergy(state);
     
     // Temporarily insert molecule
     int tempResIdx = state.addResidue(MCResidue());
@@ -538,12 +497,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
     
     // Calculate energy after insertion
     platform::cpu::computeSystemEnergyPBCCutoff(state);
-    double energyAfter = 0.0;
-    for (int i = 0; i < state.activeResidueCount; ++i) {
-        energyAfter += state.residues[i].energy_vdw;
-        energyAfter += state.residues[i].energy_elec;
-    }
-    energyAfter *= 0.5;
+    double energyAfter = move_common::sumResiduePairEnergy(state);
     
     double deltaE = energyAfter - energyBefore;
     result.energyChange = deltaE;

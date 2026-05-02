@@ -24,16 +24,15 @@ public:
     ~DrudeFBP() = default;
     
     bool optimize(
-        model::MCState& state,
-        const std::vector<DrudeParticle>& particles,
-        const std::vector<ScreenedPair>& screenedPairs,
-        const DrudeSCFParams& params
-    ) override;
+        model::MCState&,
+        const std::vector<DrudeParticle>&,
+        const std::vector<ScreenedPair>&,
+        const DrudeSCFParams&
+    ) override {
+        return false;
+    }
     
     const char* getName() const override { return "FBP"; }
-    
-private:
-    // TODO: Implement FBP algorithm following old code structure
 };
 
 } // namespace cpu

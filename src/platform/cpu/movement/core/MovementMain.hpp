@@ -110,7 +110,6 @@ private:
     void applyLifecycleControls(model::montecarlo::MCState& state);
     bool applyInitialRemoval(model::montecarlo::MCState& state);
     bool trimExcessPopulation(model::montecarlo::MCState& state);
-    static int countActiveResiduesOfType(const model::montecarlo::MCState& state, int moleculeType);
 
     // Statistics tracking
     std::map<std::string, Statistics> stats_;
