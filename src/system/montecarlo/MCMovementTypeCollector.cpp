@@ -13,7 +13,7 @@ std::vector<int> MCMovementTypeCollector::collectMovementTypes(
     const std::vector<MovementMolecularInfo>& molecules,
     model::TypeMaps& residueTypes,
     model::TypeMaps& atomTypes) {
-    
+
     std::vector<int> newMovementAtomTypes;
     processedResidueNames_.clear();
     processedResidueNames_.reserve(molecules.size());
@@ -23,10 +23,10 @@ std::vector<int> MCMovementTypeCollector::collectMovementTypes(
         if (!info.molecular) {
             throw std::runtime_error("Movement molecular data is null");
         }
-        
+
         const auto& molRes = info.molecular->residues[0];
         std::string resName = processResidueName(molRes->get_resname());
-        
+
         // Add this new residue name to the map
         residueTypes.getOrAddType(resName);
         processedResidueNames_.push_back(resName);
@@ -35,15 +35,15 @@ std::vector<int> MCMovementTypeCollector::collectMovementTypes(
         const auto& topology_atoms = info.molecular->topology_atoms;
         for (const auto& top_atom : topology_atoms) {
             int typeIdx = atomTypes.getOrAddType(top_atom.type);
-            if (std::find(newMovementAtomTypes.begin(), newMovementAtomTypes.end(), typeIdx) 
+            if (std::find(newMovementAtomTypes.begin(), newMovementAtomTypes.end(), typeIdx)
                 == newMovementAtomTypes.end()) {
                 newMovementAtomTypes.push_back(typeIdx);
             }
         }
 
-        system::log::LogMain::log(system::common::LogLevel::DEBUG, 
+        system::log::LogMain::log(system::common::LogLevel::DEBUG,
                          "Expected movement residue name for molecule: '", resName, "'");
-        system::log::LogMain::log(system::common::LogLevel::DEBUG, 
+        system::log::LogMain::log(system::common::LogLevel::DEBUG,
                          "Movement molecule residues:\n  resname='", resName, "'");
     }
 
@@ -72,4 +72,4 @@ std::string MCMovementTypeCollector::trim(const std::string& s) const {
 
 } // namespace montecarlo
 } // namespace system
-} // namespace pygcmc 
+} // namespace pygcmc

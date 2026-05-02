@@ -41,7 +41,7 @@ enum class GCMCEnergyBackend {
 
 /**
  * @brief Core GCMC engine that handles all move operations
- * 
+ *
  * This class implements the core GCMC algorithm, managing:
  * - Fragment insertion and deletion
  * - Translation and rotation moves
@@ -61,7 +61,7 @@ public:
             REGROWTH,
             CLUSTER
         };
-        
+
         MoveType type;
         bool accepted;
         double energyBefore;
@@ -98,14 +98,14 @@ public:
                       rosenbluthWeight(1.0), cbmcSelectedEnergy(0.0), cbmcLogWOverK(0.0),
                       cavityBiasComponent(1.0), effectiveVolume(0.0), cbmcTrialsUsed(1) {}
     };
-    
+
     // Constructor
     GCMCEngine();
     ~GCMCEngine();
-    
+
     // Initialize
     void initialize(MCState* state, FragmentReservoir* reservoir);
-    
+
     // Set components
     void setCavityManager(CavityManager* cavityManager) {
         cavityManager_ = cavityManager;
@@ -116,7 +116,7 @@ public:
     void setRegionConstraint(std::unique_ptr<RegionConstraint> constraint) {
         regionConstraint_ = std::move(constraint);
     }
-    
+
     // Core move operations
     MoveResult attemptInsertion(int typeId);
     MoveResult attemptDeletion(int typeId);
@@ -125,66 +125,66 @@ public:
     MoveResult attemptSwap(int typeId1, int typeId2);
     MoveResult attemptRegrowth(int residueIdx);
     MoveResult attemptClusterMove(int residueIdx, double cutoff);
-    
+
     // Fragment selection
     int selectRandomFragment();
     int selectRandomInstance(int typeId = -1);
     std::vector<int> selectCluster(int seedIdx, double cutoff);
-    
+
     // Position and orientation generation
     Vector3 generateRandomPosition();
     Vector3 generateCavityPosition();
     Quaternion generateRandomOrientation();
     Vector3 generateTranslationVector(double maxDist);
     Quaternion generateRotationQuaternion(double maxAngle);
-    
+
     // Energy calculations
     double calculateSystemEnergy();
     double calculateFragmentEnergy(int residueIdx);
     double calculateInteractionEnergy(int residueIdx);
     double calculatePairEnergy(int idx1, int idx2);
-    
+
     // Bias calculations
-    double calculateInsertionBias(const FragmentTemplate& tmpl, 
+    double calculateInsertionBias(const FragmentTemplate& tmpl,
                                   const Vector3& position,
                                   const Quaternion& orientation);
     double calculateDeletionBias(int residueIdx);
     double calculateDeletionBiasAtPosition(const Vector3& position);
-    
+
     // State synchronization
     void synchronizeStateWithReservoir(int instanceId, bool isInsertion);
     void updateAtomCoordinates(int residueIdx);  // Update positions without changing count
     double calculateRegrowthBias(int residueIdx);
-    
+
     // Acceptance criteria
     bool acceptMove(double deltaE, double bias, double temperature);
-    double calculateAcceptanceProbability(const MoveResult& result, 
+    double calculateAcceptanceProbability(const MoveResult& result,
                                          double temperature);
-    
+
     // Residue position and orientation queries
     Vector3 getResiduePosition(int residueIdx);
     Quaternion getResidueOrientation(int residueIdx);
-    
+
     // Configuration
     void setTemperature(double T) { temperature_ = T; }
     void setEnergyBackend(GCMCEnergyBackend backend);
     GCMCEnergyBackend getEnergyBackend() const { return energyBackend_; }
-    void setEnergyMethod(EnergyMethod method) { 
-        energyMethod_ = method; 
+    void setEnergyMethod(EnergyMethod method) {
+        energyMethod_ = method;
         if (energyCallback_) {
             energyCallback_->setEnergyMethod(method);
         }
     }
     void setCutoff(double cutoff) { cutoff_ = cutoff; }
     void setSeed(unsigned int seed);
-    void setAcceptanceCalculator(GCMCAcceptance* acceptCalc) { 
+    void setAcceptanceCalculator(GCMCAcceptance* acceptCalc) {
         acceptanceCalculator_ = acceptCalc;
         // Auto-seed acceptance if engine has been seeded
         if (acceptCalc && lastSeed_ != 0) {
             acceptCalc->setSeed(lastSeed_ + 1);
         }
     }
-    
+
     // Set energy callback
     void setEnergyCallback(std::unique_ptr<GCMCEnergyCallback> callback) {
         energyCallback_ = std::move(callback);
@@ -212,20 +212,20 @@ public:
     void setCBMCTrialsPerType(const std::vector<int>& trials) {
         cbmcTrialsPerType_ = trials;
     }
-    
+
     // Statistics
     int getTotalMoves() const { return totalMoves_; }
     int getAcceptedMoves() const { return acceptedMoves_; }
     double getAcceptanceRate() const {
-        return totalMoves_ > 0 ? 
+        return totalMoves_ > 0 ?
                static_cast<double>(acceptedMoves_) / totalMoves_ : 0.0;
     }
     double getBoxVolume() const;
-    
+
     // Dynamic configuration
     void setConfigValue(const std::string& key, double value);
     double getConfigValue(const std::string& key) const;
-    
+
     // Statistics management
     void enableStatistics(bool enable) {
         collectStats_ = enable;
@@ -242,7 +242,7 @@ public:
     // Diagnostics: CBMC trial energies for the last move (kJ/mol, internal units).
     // When CBMC is disabled or the last move was not CBMC-based, this vector is empty.
     const std::vector<double>& getLastCBMCTrialEnergies() const { return lastCbmcTrialEnergies_; }
-    
+
 private:
     // State and components
     MCState* state_;
@@ -252,7 +252,7 @@ private:
     GCMCAcceptance* acceptanceCalculator_;
     std::unique_ptr<GCMCEnergyCallback> energyCallback_;
     std::unique_ptr<RegionConstraint> regionConstraint_;
-    
+
     // Parameters
     double temperature_;
     double cutoff_;
@@ -277,11 +277,11 @@ private:
     std::mt19937 rng_;
     std::uniform_real_distribution<double> uniform_;
     std::normal_distribution<double> normal_;
-    
+
     // Statistics
     int totalMoves_;
     int acceptedMoves_;
-    
+
     // Configuration parameters for moves
     double maxTranslationStep_;
     double maxRotationAngleRad_;
@@ -289,16 +289,16 @@ private:
     bool useConfBias_ = false;
     std::vector<int> cbmcTrialsPerType_;  // CBMC trials per fragment type
     unsigned int lastSeed_ = 0;  // Store last seed for auto-seeding acceptance
-    
+
     // Smart statistics collection
     GCMCStatistics statistics_;
     bool collectStats_ = false;
     int statsInterval_ = 1000;  // Default: sample every 1000 steps
     int statsCountdown_ = 1000; // Lightweight countdown to next sample
-    
+
     // Dynamic configuration
     std::unordered_map<std::string, double> configMap_;
-    
+
     // Performance optimization: cache probability storage flag
     mutable bool storeProbabilityCached_ = false;
     mutable bool storeProbabilityValue_ = false;
@@ -338,7 +338,7 @@ private:
 
     // Region constraint helper: ensure all atoms of a fragment lie within region
     bool isMoleculeWithinRegion(int typeId, const Vector3& position, const Quaternion& orientation) const;
-    
+
     // Probability storage control
     bool shouldStoreProbability() const;
 
@@ -354,13 +354,13 @@ private:
     };
     TrialConfiguration performCBMCInsertion(int typeId, int numTrials);
     double calculateCBMCBias(const std::vector<TrialConfiguration>& trials, int selectedIdx);
-    
+
     // Energy caching (optional optimization)
     struct EnergyCache {
         bool valid;
         double totalEnergy;
         std::vector<double> fragmentEnergies;
-        
+
         void invalidate() { valid = false; }
     };
     EnergyCache energyCache_;

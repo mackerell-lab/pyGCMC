@@ -24,7 +24,7 @@ public:
 
 private:
     static std::map<std::string, int> count_atoms_per_molecule(const SectionProcessorResult& result);
-    
+
     static bool add_molecule_copies(model::Topology& topology,
                                   const std::string& mol_type,
                                   int count,
@@ -32,7 +32,7 @@ private:
                                   int& atom_offset,
                                   const std::map<std::string, int>& atoms_per_molecule,
                                   const SectionProcessorResult& result);
-    
+
     static bool add_molecule_instance(model::Topology& topology,
                                     const std::string& mol_type,
                                     const std::string& segment_name,

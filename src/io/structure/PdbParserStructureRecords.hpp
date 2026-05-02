@@ -18,7 +18,7 @@ public:
     static bool parseSheetRecord(const std::string& line, model::Structure& structure);
     static bool parseSSBondRecord(const std::string& line, model::Structure& structure);
     static bool parseCryst1Record(const std::string& line, model::Structure& structure);
-    
+
     // Helper function for small molecule identification
     static bool isSmallMolecule(const std::string& resName);
 };

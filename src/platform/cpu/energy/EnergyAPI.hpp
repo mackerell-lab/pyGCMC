@@ -3,7 +3,7 @@
 /**
  * @file EnergyAPI.hpp
  * @brief Public API for energy calculations
- * 
+ *
  * This file provides the public interface for energy calculations,
  * extracted from the simulation module to provide direct access to
  * CPU energy computation functions.
@@ -57,9 +57,9 @@ inline void computeSystemEnergy(MCState& state) {
     if (SystemLogger::isDebugEnabled()) {
         SystemLogger::debug("Computing nonbonded energy for all active residues");
     }
-    
+
     platform::cpu::computeSystemEnergy(state, EnergyMethod::DIRECT, false, false);
-    
+
     // Log total energy in debug mode
     if (SystemLogger::isDebugEnabled()) {
         float total_vdw = 0.0f;
@@ -70,12 +70,12 @@ inline void computeSystemEnergy(MCState& state) {
                 total_elec += state.residues[i].energy_elec;
             }
         }
-        
+
         total_vdw /= 2.0f;
         total_elec /= 2.0f;
-        
-        SystemLogger::debug("Total system energy: vdw=", total_vdw, 
-            ", elec=", total_elec, 
+
+        SystemLogger::debug("Total system energy: vdw=", total_vdw,
+            ", elec=", total_elec,
             ", total=", (total_vdw + total_elec));
     }
 }
@@ -86,7 +86,7 @@ inline void computeSystemEnergy(MCState& state) {
 inline std::pair<double, double> getTotalEnergyComponents(const MCState& state) {
     double total_elec = 0.0;
     double total_vdw = 0.0;
-    
+
     // Sum energy components from all active residues
     for (int i = 0; i < state.activeResidueCount; ++i) {
         if (state.residues[i].active) {
@@ -94,11 +94,11 @@ inline std::pair<double, double> getTotalEnergyComponents(const MCState& state) 
             total_vdw += state.residues[i].energy_vdw;
         }
     }
-    
+
     // Divide by 2 to account for double-counting in pairwise interactions
     total_elec /= 2.0;
     total_vdw /= 2.0;
-    
+
     return std::make_pair(total_elec, total_vdw);
 }
 
@@ -118,9 +118,9 @@ inline void computeSystemEnergyCutoff(MCState& state) {
     if (SystemLogger::isDebugEnabled()) {
         SystemLogger::debug("Computing cutoff nonbonded energy for all active residues");
     }
-    
+
     platform::cpu::computeSystemEnergyCutoff(state);
-    
+
     // Log total energy in debug mode
     if (SystemLogger::isDebugEnabled()) {
         float total_vdw = 0.0f;
@@ -131,12 +131,12 @@ inline void computeSystemEnergyCutoff(MCState& state) {
                 total_elec += state.residues[i].energy_elec;
             }
         }
-        
+
         total_vdw /= 2.0f;
         total_elec /= 2.0f;
-        
-        SystemLogger::debug("Total system energy: vdw=", total_vdw, 
-            ", elec=", total_elec, 
+
+        SystemLogger::debug("Total system energy: vdw=", total_vdw,
+            ", elec=", total_elec,
             ", total=", (total_vdw + total_elec));
     }
 }
@@ -158,11 +158,11 @@ inline void computeSystemEnergyPBC(MCState& state) {
     if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
         throw std::runtime_error("Invalid box dimensions for PBC calculation");
     }
-    
+
     if (SystemLogger::isDebugEnabled()) {
         SystemLogger::debug("Computing PBC nonbonded energy for all active residues");
     }
-    
+
     platform::cpu::computeSystemEnergyPBC(state);
 }
 
@@ -198,7 +198,7 @@ inline void setEwaldParameters(float alpha, const int kmax[3], float tolerance =
         SystemLogger::debug("Setting Ewald parameters: alpha=", alpha,
             ", kmax=[", kmax[0], ",", kmax[1], ",", kmax[2], "], tolerance=", tolerance);
     }
-    
+
     // Call the actual Ewald implementation
     platform::cpu::setEwaldParameters(alpha, kmax, tolerance);
 }
@@ -206,13 +206,13 @@ inline void setEwaldParameters(float alpha, const int kmax[3], float tolerance =
 /**
  * @brief Initialize Ewald parameters with automatic optimization
  */
-inline void initializeEwaldParameters(float cutoff, const float box[3], 
+inline void initializeEwaldParameters(float cutoff, const float box[3],
                                       float alpha = 0.0f, float tolerance = 1e-5f) {
     if (SystemLogger::isDebugEnabled()) {
-        SystemLogger::debug("Initializing Ewald parameters: cutoff=", cutoff, 
+        SystemLogger::debug("Initializing Ewald parameters: cutoff=", cutoff,
             ", box=[", box[0], ",", box[1], ",", box[2], "]");
     }
-    
+
     // Use EwaldComposite initialization
     double dbox[3] = {box[0], box[1], box[2]};
     EwaldComposite::initialize(cutoff, dbox, alpha, tolerance);
@@ -253,13 +253,13 @@ inline void setPMEParameters(float alpha, const int meshSize[3], int splineOrder
 /**
  * @brief Initialize PME parameters with automatic optimization
  */
-inline void initializePMEParameters(float cutoff, const float box[3], 
+inline void initializePMEParameters(float cutoff, const float box[3],
                                     float alpha = 0.0f, const int* meshSize = nullptr,
                                     int splineOrder = 4, float tolerance = 1e-5f) {
     if (SystemLogger::isDebugEnabled()) {
         SystemLogger::debug("Initializing PME parameters");
     }
-    
+
     // Use PMEComposite initialization
     double dbox[3] = {box[0], box[1], box[2]};
     PMEComposite::initialize(cutoff, dbox, tolerance, alpha, meshSize, splineOrder);
@@ -316,7 +316,7 @@ inline void computeSystemEnergyCutoffComplete(MCState& state) {
 }
 
 // ============================================================================
-// PGP Method Functions  
+// PGP Method Functions
 // ============================================================================
 
 /**
@@ -333,38 +333,38 @@ inline void resetPGPState() {
 /**
  * @brief Set PGP parameters
  */
-inline void setPGPParameters(float alpha, const int meshSize[3], float potential_cutoff, 
+inline void setPGPParameters(float alpha, const int meshSize[3], float potential_cutoff,
                              const int pairGridSize[3], int splineOrder = 4, float tolerance = 1e-5f) {
     if (SystemLogger::isDebugEnabled()) {
         SystemLogger::debug("Setting PGP parameters");
     }
-    
+
     // Call the actual PGP implementation
-    ::pygcmc::platform::cpu::setPGPParameters(alpha, meshSize, potential_cutoff, 
+    ::pygcmc::platform::cpu::setPGPParameters(alpha, meshSize, potential_cutoff,
                                                pairGridSize, splineOrder, tolerance);
 }
 
 /**
  * @brief Initialize PGP parameters with automatic optimization
  */
-inline void initializePGPParameters(float cutoff, float pair_cutoff, const float box[3], 
+inline void initializePGPParameters(float cutoff, float pair_cutoff, const float box[3],
                                     float alpha = 0.0f, const int* meshSize = nullptr,
                                     const int* pairGridSize = nullptr,
                                     int splineOrder = 4, float tolerance = 1e-5f) {
     if (SystemLogger::isDebugEnabled()) {
         SystemLogger::debug("Initializing PGP parameters");
     }
-    
+
     // Use default values if not provided
     int default_mesh[3] = {32, 32, 32};
     int default_pair[3] = {64, 64, 64};
-    
+
     const int* mesh = meshSize ? meshSize : default_mesh;
     const int* pair = pairGridSize ? pairGridSize : default_pair;
-    
+
     // Convert float box to double for PGPComposite
     double dbox[3] = {box[0], box[1], box[2]};
-    
+
     // Initialize using PGPComposite
     PGPComposite::initialize(cutoff, dbox, alpha, mesh, pair_cutoff, pair, splineOrder, tolerance);
 }

@@ -12,10 +12,10 @@ namespace cpu {
 namespace coulomb {
 
 std::pair<double, double> calcPairEnergy(
-    double r2, double sigma, double eps, double q1, double q2, 
+    double r2, double sigma, double eps, double q1, double q2,
     const model::MCInfo& info,
     bool calc_coulomb) {
-    
+
     if (getEnergyDebugOutput()) {
         std::stringstream ss;
         ss << std::fixed << std::setprecision(6);
@@ -31,13 +31,13 @@ std::pair<double, double> calcPairEnergy(
 
     // Calculate LJ energy using the new LJ module
     double vdw_energy = lj::calcLJEnergyWithSwitching(r2, sigma, eps, info);
-    
+
     double r = std::sqrt(r2);
-    
+
     if (getEnergyDebugOutput()) {
         platform::log(LogLevel::DEBUG, "Distance r = ", r, " nm");
     }
-    
+
     // Calculate Coulomb energy only if requested
     double elec_energy = 0.0;
     if (calc_coulomb) {
@@ -55,7 +55,7 @@ std::pair<double, double> calcPairEnergy(
         ss << "\n  Electrostatic energy = " << elec_energy << " kJ/mol";
         platform::log(LogLevel::DEBUG, ss.str());
     }
-    
+
     // Apply energy capping for numerical stability
     if (getEnergyDebugOutput() && (std::abs(vdw_energy) > MAX_SAFE_ENERGY || std::abs(elec_energy) > MAX_SAFE_ENERGY)) {
         std::stringstream ss;
@@ -64,11 +64,11 @@ std::pair<double, double> calcPairEnergy(
         ss << "\n  Original Elec energy = " << elec_energy << " kJ/mol";
         platform::log(LogLevel::DEBUG, ss.str());
     }
-    
+
     // LJ energy is already capped in the LJ module, only cap elec_energy here
     elec_energy = std::min(elec_energy, static_cast<double>(MAX_SAFE_ENERGY));
     elec_energy = std::max(elec_energy, -static_cast<double>(MAX_SAFE_ENERGY));
-    
+
     if (getEnergyDebugOutput() && (std::abs(vdw_energy) > MAX_SAFE_ENERGY || std::abs(elec_energy) > MAX_SAFE_ENERGY)) {
         std::stringstream ss;
         ss << "\nAfter individual capping:";
@@ -76,12 +76,12 @@ std::pair<double, double> calcPairEnergy(
         ss << "\n  Capped Elec energy = " << elec_energy << " kJ/mol";
         platform::log(LogLevel::DEBUG, ss.str());
     }
-    
+
     // Cap total energy
     double total_energy = vdw_energy + elec_energy;
     double original_total = total_energy;
     float max_safe = MAX_SAFE_ENERGY;  // Use float version of safe value
-    
+
     if (total_energy > max_safe) {
         double scale = max_safe / total_energy;
         vdw_energy *= scale;
@@ -121,11 +121,11 @@ std::pair<double, double> calcPairEnergy(
         ss << "\n  Total energy = " << (vdw_energy + elec_energy) << " kJ/mol";
         platform::log(LogLevel::DEBUG, ss.str());
     }
-    
+
     return {vdw_energy, elec_energy};
 }
 
 } // namespace coulomb
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

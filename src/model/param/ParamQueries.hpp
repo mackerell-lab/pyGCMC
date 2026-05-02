@@ -26,8 +26,8 @@ public:
     }
 
     static bool hasRequiredFiles(const FileInfo& file_info) {
-        return !file_info.topology_file.empty() && 
-               !file_info.input_pdb_file.empty() && 
+        return !file_info.topology_file.empty() &&
+               !file_info.input_pdb_file.empty() &&
                !file_info.output_pdb_file.empty();
     }
 
@@ -35,7 +35,7 @@ public:
         return hasRequiredFiles(file_info);
     }
 
-    static bool isValidParam(const BasicInfo& basic_info, const SpaceInfo& space_info, 
+    static bool isValidParam(const BasicInfo& basic_info, const SpaceInfo& space_info,
                            const MCParams& mc_params, const EnergyInfo& energy_info,
                            const FragmentInfo& fragment_info, const BiasInfo& bias_info,
                            const FileInfo& file_info) {
@@ -43,8 +43,8 @@ public:
         (void)space_info;
         (void)fragment_info;
         (void)bias_info;
-        return isValidMCParams(mc_params) && 
-               isValidEnergyInfo(energy_info) && 
+        return isValidMCParams(mc_params) &&
+               isValidEnergyInfo(energy_info) &&
                isValidFileInfo(file_info);
     }
 
@@ -69,7 +69,7 @@ public:
         ss << "  Version: " << basic_info.version << "\n";
         ss << "  Temperature: " << mc_params.temperature << " K\n";
         ss << "  MC Steps: " << mc_params.mc_steps << "\n";
-        ss << "  Box Size: [" << space_info.box_size[0] << ", " 
+        ss << "  Box Size: [" << space_info.box_size[0] << ", "
            << space_info.box_size[1] << ", " << space_info.box_size[2] << "] nm\n";
         ss << "  Cutoff: " << space_info.cutoff << " nm\n";
         ss << "  Number of fragments: " << file_info.fragment_names.size();
@@ -79,7 +79,7 @@ public:
     // === Component-specific queries ===
     static std::string getBasicInfoString(const BasicInfo& basic_info) {
         std::stringstream ss;
-        ss << "Basic Info: version=" << basic_info.version 
+        ss << "Basic Info: version=" << basic_info.version
            << ", verbosity=" << basic_info.verbosity
            << ", debug=" << basic_info.debug;
         return ss.str();
@@ -87,8 +87,8 @@ public:
 
     static std::string getSpaceInfoString(const SpaceInfo& space_info) {
         std::stringstream ss;
-        ss << "Space Info: box=[" << space_info.box_size[0] << "," 
-           << space_info.box_size[1] << "," << space_info.box_size[2] 
+        ss << "Space Info: box=[" << space_info.box_size[0] << ","
+           << space_info.box_size[1] << "," << space_info.box_size[2]
            << "], volume=" << space_info.volume << ", cutoff=" << space_info.cutoff;
         return ss.str();
     }

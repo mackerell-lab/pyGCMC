@@ -16,7 +16,7 @@ namespace cpu {
 
 /**
  * @brief PGP-PME algorithm parameter structure (Precomputed Grid-Potential Particle Mesh Ewald)
- * 
+ *
  * This structure contains all parameters and data structures required by the Precomputed Grid-Potential Particle Mesh Ewald algorithm.
  * PGP-PME is an optimized PME method that accelerates energy evaluation in Monte Carlo simulations by precomputing potential grids.
  */
@@ -26,7 +26,7 @@ struct PGPParams : public PMEParams {
     int potential_grid_size[3];           // Precomputed potential grid dimensions
     double grid_spacing;                  // Grid spacing
     std::vector<std::complex<double>> potentialGrid;  // Precomputed potential grid data
-    
+
     // Debug flags
     bool debug_mode = true;  // Debug mode enabled by default
 
@@ -40,7 +40,7 @@ struct PGPParams : public PMEParams {
 // Use getPGPParams() to access the parameters
 
 // Core function declarations
-void setPGPParameters(double alpha, const int meshSize[3], double potential_cutoff, 
+void setPGPParameters(double alpha, const int meshSize[3], double potential_cutoff,
                         const int potentialGridSize[3], int splineOrder, double tolerance);
 
 void precomputeGridPotential(model::MCState& state, bool fixed_only = true);
@@ -52,7 +52,7 @@ double calculateMoleculeEnergy(model::MCState& state);
 // Reset function to clear global state - fixes memory corruption bug
 void resetPGPState();
 
-double computeMoleculeEnergyGlobal(model::MCState& state, const std::vector<int>& movementResidues, 
+double computeMoleculeEnergyGlobal(model::MCState& state, const std::vector<int>& movementResidues,
                                    const std::vector<int>& nearbyResidues, int threadIndex);
 
 void computeRealSpacePGP(model::MCState& state, bool movement_only, bool store_in_residues = true);
@@ -72,4 +72,4 @@ void computeMovementEnergyPGPFixed(model::MCState& state);
 
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

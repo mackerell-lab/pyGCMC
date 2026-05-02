@@ -22,7 +22,7 @@ void MCGeometry::applyPBC(const model::MCState& state, float& x, float& y, float
 
 void MCGeometry::updateGeometricCenter(const model::MCState& state, model::MCResidue& res) const {
     res.center[0] = res.center[1] = res.center[2] = 0.0f;
-    
+
     // All coordinates are already in nm, no conversion needed
     for (int i = 0; i < res.atomCount; ++i) {
         const model::MCAtom& atom = state.atoms[res.atomStart + i];
@@ -30,7 +30,7 @@ void MCGeometry::updateGeometricCenter(const model::MCState& state, model::MCRes
         res.center[1] += atom.y;
         res.center[2] += atom.z;
     }
-    
+
     if (res.atomCount > 0) {
         float invCount = 1.0f / res.atomCount;
         res.center[0] *= invCount;
@@ -39,26 +39,26 @@ void MCGeometry::updateGeometricCenter(const model::MCState& state, model::MCRes
     }
 }
 
-float MCGeometry::getDistance(const model::MCState& state, 
+float MCGeometry::getDistance(const model::MCState& state,
                              float x1, float y1, float z1,
                              float x2, float y2, float z2) const {
     float dx = x2 - x1;
     float dy = y2 - y1;
     float dz = z2 - z1;
-    
+
     return std::sqrt(getMinImageDistSqr(state, dx, dy, dz));
 }
 
-float MCGeometry::getDistanceSquared(const model::MCState& state, 
+float MCGeometry::getDistanceSquared(const model::MCState& state,
                                     float x1, float y1, float z1,
                                     float x2, float y2, float z2) const {
     float dx = x2 - x1;
     float dy = y2 - y1;
     float dz = z2 - z1;
-    
+
     return getMinImageDistSqr(state, dx, dy, dz);
 }
 
 } // namespace montecarlo
 } // namespace system
-} // namespace pygcmc 
+} // namespace pygcmc

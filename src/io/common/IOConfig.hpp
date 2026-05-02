@@ -12,7 +12,7 @@ struct IOConfig {
     // Control whether to print error messages to stderr
     // Default is false to reduce noise during testing
     static bool verbose_errors;
-    
+
     // Helper function to conditionally print errors
     static void printError(const std::string& message) {
         if (verbose_errors) {

@@ -28,12 +28,12 @@ std::string TopParserUtilities::trim(std::string& str) {
     str.erase(str.begin(), std::find_if(str.begin(), str.end(), [](unsigned char ch) {
         return !std::isspace(ch);
     }));
-    
+
     // Trim trailing spaces
     str.erase(std::find_if(str.rbegin(), str.rend(), [](unsigned char ch) {
         return !std::isspace(ch);
     }).base(), str.end());
-    
+
     return str;
 }
 
@@ -41,12 +41,12 @@ std::vector<std::string> TopParserUtilities::split(const std::string& str) {
     std::vector<std::string> tokens;
     std::istringstream iss(str);
     std::string token;
-    
+
     while (iss >> token) {
         if (token[0] == ';') break;  // Stop at comments
         tokens.push_back(token);
     }
-    
+
     return tokens;
 }
 

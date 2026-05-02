@@ -34,13 +34,13 @@ bool validateGridIndices(int x, int y, int z, int nx, int ny, int nz) {
  * @brief Get grid statistics for debugging
  */
 void getGridStatistics(const std::vector<std::complex<double>>& grid,
-                      int& nonZeroCount, 
-                      double& maxValue, 
+                      int& nonZeroCount,
+                      double& maxValue,
                       double& totalCharge) {
     nonZeroCount = 0;
     maxValue = 0.0;
     totalCharge = 0.0;
-    
+
     for (const auto& point : grid) {
         double magnitude = std::abs(point);
         if (magnitude > 1e-10) {
@@ -53,4 +53,4 @@ void getGridStatistics(const std::vector<std::complex<double>>& grid,
 
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

@@ -17,8 +17,8 @@ struct LineInfo {
     std::string content;      ///< The actual line content
     std::string source_file;  ///< Source file path
     int line_number;          ///< Line number in source file
-    
-    LineInfo(const std::string& content, const std::string& file, int line) 
+
+    LineInfo(const std::string& content, const std::string& file, int line)
         : content(content), source_file(file), line_number(line) {}
 };
 
@@ -30,7 +30,7 @@ struct PreprocessorState {
     std::vector<bool> ifdef_stack;               ///< Stack for #ifdef/#ifndef nesting
     std::vector<bool> else_encountered;          ///< Track if #else was encountered at each nesting level
     bool skip_section = false;                   ///< Whether to skip current section due to #ifdef
-    
+
     bool should_skip() const {
         // Skip if any level in the stack is false
         for (bool val : ifdef_stack) {

@@ -21,21 +21,21 @@ public:
     void setLogLevel(common::LogLevel level) override;
     common::LogLevel getLogLevel() const override;
     bool isVerbose() const override;
-    
+
     // Static interface for backward compatibility
     static void set_verbose(bool verbose);
     static void set_log_level(common::LogLevel level);
     static bool get_verbose();
     static common::LogLevel get_log_level();
-    
+
     // Template logging function (must be in header for template instantiation)
     template<typename... Args>
     static void log(common::LogLevel level, Args... args) {
         if (!common::LoggingState::should_log_system(level)) return;
-        
+
         std::stringstream ss;
         (ss << ... << args);
-        
+
         switch (level) {
             case common::LogLevel::DEBUG:
                 std::cout << "[DEBUG] ";
@@ -52,23 +52,23 @@ public:
         }
         std::cout << ss.str() << std::endl;
     }
-    
+
     // Convenience logging functions
     template<typename... Args>
     static void debug(Args... args) {
         log(common::LogLevel::DEBUG, args...);
     }
-    
+
     template<typename... Args>
     static void info(Args... args) {
         log(common::LogLevel::INFO, args...);
     }
-    
+
     template<typename... Args>
     static void warning(Args... args) {
         log(common::LogLevel::WARNING, args...);
     }
-    
+
     template<typename... Args>
     static void error(Args... args) {
         log(common::LogLevel::ERROR, args...);
@@ -77,7 +77,7 @@ public:
 
 /**
  * @brief Initialize logging system with specified settings
- * 
+ *
  * @param verbose Enable verbose logging output
  * @param level Minimum logging level to display
  */
@@ -88,7 +88,7 @@ inline void initializeLogging(bool verbose = false, common::LogLevel level = com
 
 /**
  * @brief Quick access to set verbose mode
- * 
+ *
  * @param verbose Enable verbose mode
  */
 inline void setVerbose(bool verbose) {
@@ -97,7 +97,7 @@ inline void setVerbose(bool verbose) {
 
 /**
  * @brief Quick access to set log level
- * 
+ *
  * @param level Log level to set
  */
 inline void setLogLevel(common::LogLevel level) {
@@ -115,4 +115,4 @@ using log::setLogLevel;
 } // namespace system
 } // namespace pygcmc
 
-#endif // PYGCMC_SYSTEM_LOG_LOGMAIN_HPP 
+#endif // PYGCMC_SYSTEM_LOG_LOGMAIN_HPP

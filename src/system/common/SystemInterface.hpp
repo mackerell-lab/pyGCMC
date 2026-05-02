@@ -34,17 +34,17 @@ enum class LogLevel {
 class ISystem {
 public:
     virtual ~ISystem() = default;
-    
+
     /**
      * @brief Initialize the system
      */
     virtual void initialize() = 0;
-    
+
     /**
      * @brief Get system type
      */
     virtual SystemKind getSystemKind() const = 0;
-    
+
     /**
      * @brief Check if system is initialized
      */
@@ -57,22 +57,22 @@ public:
 class ILogger {
 public:
     virtual ~ILogger() = default;
-    
+
     /**
      * @brief Set verbose mode
      */
     virtual void setVerbose(bool enable) = 0;
-    
+
     /**
      * @brief Set log level
      */
     virtual void setLogLevel(LogLevel level) = 0;
-    
+
     /**
      * @brief Get current log level
      */
     virtual LogLevel getLogLevel() const = 0;
-    
+
     /**
      * @brief Check if verbose mode is enabled
      */
@@ -85,7 +85,7 @@ public:
 class IMolecularSystem : public ISystem {
 public:
     virtual ~IMolecularSystem() = default;
-    
+
     SystemKind getSystemKind() const override { return SystemKind::MOLECULAR; }
 };
 
@@ -95,7 +95,7 @@ public:
 class IMonteCarloSystem : public ISystem {
 public:
     virtual ~IMonteCarloSystem() = default;
-    
+
     SystemKind getSystemKind() const override { return SystemKind::MONTE_CARLO; }
 };
 
@@ -103,4 +103,4 @@ public:
 } // namespace system
 } // namespace pygcmc
 
-#endif // PYGCMC_SYSTEM_COMMON_SYSTEMINTERFACE_HPP 
+#endif // PYGCMC_SYSTEM_COMMON_SYSTEMINTERFACE_HPP

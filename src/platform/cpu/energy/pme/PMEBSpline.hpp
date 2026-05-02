@@ -12,7 +12,7 @@ void initializePMEBsplines();
 
 /**
  * @brief Set PME parameters
- * 
+ *
  * @param alpha Ewald alpha parameter
  * @param meshSize Grid dimensions
  * @param splineOrder B-spline order
@@ -22,7 +22,7 @@ void setPMEParameters(double alpha, const int meshSize[3], int splineOrder, doub
 
 /**
  * @brief Auto-adjust PME parameters based on system properties
- * 
+ *
  * @param error_tolerance Target error tolerance
  * @param cutoff_distance Real-space cutoff distance
  * @param box Box dimensions
@@ -33,4 +33,4 @@ void autoAdjustPMEParameters(double error_tolerance, double cutoff_distance, con
 } // namespace platform
 } // namespace pygcmc
 
-#endif // PMEBSPLINE_HPP 
+#endif // PMEBSPLINE_HPP

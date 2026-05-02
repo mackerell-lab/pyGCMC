@@ -27,16 +27,16 @@ float MCSwitching::calculateSwitchingFunction(const model::MCState& state, float
     if (r >= state.info.r_off) {
         return 0.0f;  // Energy is zero when r >= r_off
     }
-    
+
     // Calculate CHARMM-style switching function
     // S(r) = [(r_off^2 - r^2)^2 * (r_off^2 + 2r^2 - 3r_on^2)] / (r_off^2 - r_on^2)^3
     float r2 = r * r;
     float ron2 = state.info.r_on * state.info.r_on;
     float roff2 = state.info.r_off * state.info.r_off;
-    
+
     float numerator = (roff2 - r2) * (roff2 - r2) * (roff2 + 2.0f*r2 - 3.0f*ron2);
     float denominator = (roff2 - ron2) * (roff2 - ron2) * (roff2 - ron2);
-    
+
     return numerator / denominator;
 }
 
@@ -60,4 +60,4 @@ void MCSwitching::applySwitchingToState(const model::MCState& sourceState, model
 
 } // namespace montecarlo
 } // namespace system
-} // namespace pygcmc 
+} // namespace pygcmc

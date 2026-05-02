@@ -24,10 +24,10 @@ void PrmParserOperations::parseStream(std::istream& input, pygcmc::model::ForceF
     std::string line;
     bool inSection = false;
     std::string currentSection;
-    
+
     // Sync debug flags
     PrmParserSections::getDebugFlag() = debug_output;
-    
+
     // Debug output
     static int call_count = 0;
     call_count++;
@@ -35,34 +35,34 @@ void PrmParserOperations::parseStream(std::istream& input, pygcmc::model::ForceF
     int total_lines = 0;
     int atom_lines = 0;
     std::string first_line, last_line;
-    
+
     // First pass: collect all ATOM lines with ALPHA/THOLE from the entire file
     PrmParserDrudeScan::prescanForDrudeParameters(input, ff, debug_output);
-    
+
     // Now do normal parsing
     while (std::getline(input, line)) {
         total_lines++;
         if (total_lines == 1) first_line = line;
         last_line = line;
         if (debug_output) std::cerr << "Raw line: [" << line << "]" << std::endl;
-        
+
         if (PrmParserStructures::isCommentLine(line)) {
             if (debug_output) std::cerr << "Skipping comment line" << std::endl;
             continue;
         }
-        
+
         std::string cleanLine = PrmParserStructures::removeComments(line);
         cleanLine = PrmParserStructures::trim(cleanLine);
         if (debug_output) std::cerr << "Cleaned line: [" << cleanLine << "]" << std::endl;
-        
+
         if (cleanLine.empty()) continue;
-        
+
         // Skip topology lines from STR files (ATOM lines with ALPHA/THOLE were handled in pre-scan)
         if (PrmParserStructures::isTopologyLine(cleanLine)) {
             if (debug_output) std::cerr << "Skipping topology line: " << cleanLine << std::endl;
             continue;
         }
-        
+
         // Note: In STR files, "end" may mark the end of topology section,
         // not the end of the file. Continue parsing for parameter sections.
         if (cleanLine == "END" || cleanLine == "end") {
@@ -70,7 +70,7 @@ void PrmParserOperations::parseStream(std::istream& input, pygcmc::model::ForceF
             currentSection.clear();
             continue;
         }
-        
+
         if (PrmParserStructures::isAtomsSection(cleanLine)) {
             if (debug_output) std::cerr << "Found ATOMS section" << std::endl;
             inSection = true;
@@ -100,16 +100,16 @@ void PrmParserOperations::parseStream(std::istream& input, pygcmc::model::ForceF
             if (debug_output) std::cerr << "Found NONBONDED section" << std::endl;
             inSection = true;
             currentSection = "NONBONDED";
-            
+
             // If the line starts with cutnb, we need to look for the previous NONBONDED line
             if (cleanLine.find("NONBONDED") == std::string::npos && cleanLine.find("cutnb") != std::string::npos) {
                 // Store current position
                 auto currentPos = input.tellg();
                 std::string prevLine;
-                
+
                 // Go back to beginning of file
                 input.seekg(0);
-                
+
                 // Read lines until we reach our current position
                 while (input.tellg() < currentPos && std::getline(input, prevLine)) {
                     if (PrmParserStructures::isCommentLine(prevLine)) continue;
@@ -121,11 +121,11 @@ void PrmParserOperations::parseStream(std::istream& input, pygcmc::model::ForceF
                         break;
                     }
                 }
-                
+
                 // Restore position
                 input.seekg(currentPos);
             }
-            
+
             PrmParserSections::parseNonbondedSection(input, ff, cleanLine);
         } else if (PrmParserStructures::isNBFixSection(cleanLine)) {
             if (debug_output) std::cerr << "Found NBFIX section" << std::endl;
@@ -152,7 +152,7 @@ void PrmParserOperations::parseStream(std::istream& input, pygcmc::model::ForceF
             auto tokens = PrmParserStructures::tokenize(cleanLine);
             if (!tokens.empty()) {
                 // Process any standalone parameters or commands
-                if (tokens[0] == "set" || tokens[0] == "if" || tokens[0] == "read" || 
+                if (tokens[0] == "set" || tokens[0] == "if" || tokens[0] == "read" ||
                     tokens[0] == "return" || tokens[0] == "BOMLEV" || tokens[0] == "WRNLEV") {
                     // Skip CHARMM control statements
                     continue;
@@ -160,10 +160,10 @@ void PrmParserOperations::parseStream(std::istream& input, pygcmc::model::ForceF
             }
         }
     }
-    
+
     // Debug output
     if (debug_output) {
-        std::cerr << "DEBUG: parseStream #" << call_count << " finished. Total lines: " << total_lines 
+        std::cerr << "DEBUG: parseStream #" << call_count << " finished. Total lines: " << total_lines
                   << ", ATOM lines with ALPHA/THOLE: " << atom_lines << std::endl;
         if (total_lines > 0) {
             std::cerr << "  First line: " << first_line << std::endl;

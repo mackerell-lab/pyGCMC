@@ -27,17 +27,17 @@ using model::montecarlo::MCState;
 class MovementInterface {
 public:
     virtual ~MovementInterface() = default;
-    
+
     // Core movement operations
     virtual MovementResult attemptInsertion(MCState& state, const MovementParams& params) = 0;
     virtual MovementResult attemptDeletion(MCState& state, const MovementParams& params) = 0;
     virtual MovementResult attemptTranslation(MCState& state, const MovementParams& params) = 0;
     virtual MovementResult attemptRotation(MCState& state, const MovementParams& params) = 0;
-    
+
     // Optional: batch operations for efficiency
     virtual std::vector<MovementResult> attemptBatchInsertions(
-        MCState& state, 
-        const MovementParams& params, 
+        MCState& state,
+        const MovementParams& params,
         int numAttempts) {
         std::vector<MovementResult> results;
         results.reserve(numAttempts);

@@ -25,7 +25,7 @@ void init_fragment_reservoir_bindings(py::module& m) {
             .def_readwrite("z", &Quaternion::z)
             .def("normalize", &Quaternion::normalize);
     }
-    
+
     // FragmentTemplate binding
     py::class_<FragmentTemplate>(m, "FragmentTemplate")
         .def(py::init<>())
@@ -49,7 +49,7 @@ void init_fragment_reservoir_bindings(py::module& m) {
         .def("getInsertionProbability", &FragmentTemplate::getInsertionProbability)
         .def("updateActivity", &FragmentTemplate::updateActivity)
         .def("calculateActivity", &FragmentTemplate::calculateActivity);
-    
+
     // FragmentInstance binding
     py::class_<FragmentInstance>(m, "FragmentInstance")
         .def(py::init<>())
@@ -73,7 +73,7 @@ void init_fragment_reservoir_bindings(py::module& m) {
         .def("getAcceptanceRate", &FragmentInstance::getAcceptanceRate)
         .def("getLifetime", &FragmentInstance::getLifetime)
         .def("needsNeighborUpdate", &FragmentInstance::needsNeighborUpdate);
-    
+
     // FragmentReservoir::Config binding
     py::class_<FragmentReservoir::Config>(m, "FragmentReservoirConfig")
         .def(py::init<>())
@@ -84,7 +84,7 @@ void init_fragment_reservoir_bindings(py::module& m) {
         .def_readwrite("compactThreshold", &FragmentReservoir::Config::compactThreshold)
         .def_readwrite("trackStatistics", &FragmentReservoir::Config::trackStatistics)
         .def_readwrite("statisticsWindow", &FragmentReservoir::Config::statisticsWindow);
-    
+
     // FragmentReservoir::Statistics binding
     py::class_<FragmentReservoir::Statistics>(m, "FragmentReservoirStatistics")
         .def(py::init<>())
@@ -106,12 +106,12 @@ void init_fragment_reservoir_bindings(py::module& m) {
         .def_readwrite("cacheMisses", &FragmentReservoir::Statistics::cacheMisses)
         .def("print", &FragmentReservoir::Statistics::print)
         .def("reset", &FragmentReservoir::Statistics::reset);
-    
+
     // FragmentReservoir binding
     py::class_<FragmentReservoir>(m, "FragmentReservoir")
         .def(py::init<>())
         .def(py::init<const FragmentReservoir::Config&>())
-        
+
         // Template management
         .def("addTemplate", &FragmentReservoir::addTemplate,
              py::arg("template"),
@@ -121,7 +121,7 @@ void init_fragment_reservoir_bindings(py::module& m) {
              py::arg("name"),
              py::arg("chemicalPotential") = 0.0,
              "Load template from file")
-        .def("getTemplate", 
+        .def("getTemplate",
              py::overload_cast<int>(&FragmentReservoir::getTemplate),
              py::arg("templateId"),
              py::return_value_policy::reference,
@@ -144,7 +144,7 @@ void init_fragment_reservoir_bindings(py::module& m) {
         .def("updateAllActivities", &FragmentReservoir::updateAllActivities,
              py::arg("beta"),
              "Update activities for all templates")
-        
+
         // Instance management
         .def("createInstance", &FragmentReservoir::createInstance,
              py::arg("templateId"),
@@ -162,7 +162,7 @@ void init_fragment_reservoir_bindings(py::module& m) {
         .def("purgeInstance", &FragmentReservoir::purgeInstance,
              py::arg("instanceId"),
              "Permanently remove an instance")
-        
+
         // Ghost management
         .def("recycleGhost", &FragmentReservoir::recycleGhost,
              py::arg("templateId"),
@@ -173,9 +173,9 @@ void init_fragment_reservoir_bindings(py::module& m) {
         .def("getGhostCount", &FragmentReservoir::getGhostCount,
              py::arg("templateId") = -1,
              "Get ghost count")
-        
+
         // Query methods
-        .def("getInstance", 
+        .def("getInstance",
              py::overload_cast<int>(&FragmentReservoir::getInstance),
              py::arg("instanceId"),
              py::return_value_policy::reference_internal,
@@ -186,7 +186,7 @@ void init_fragment_reservoir_bindings(py::module& m) {
         .def("getActiveCount", &FragmentReservoir::getActiveCount,
              py::arg("templateId") = -1,
              "Get active instance count")
-        
+
         // Statistics
         .def("getStatistics", &FragmentReservoir::getStatistics,
              py::return_value_policy::copy,
@@ -195,7 +195,7 @@ void init_fragment_reservoir_bindings(py::module& m) {
              "Reset statistics")
         .def("printStatistics", &FragmentReservoir::printStatistics,
              "Print statistics")
-        
+
         // Memory management
         .def("compact", &FragmentReservoir::compact,
              "Compact memory")

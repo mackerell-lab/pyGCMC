@@ -25,13 +25,13 @@ class EnergyInterface;
 class RotationMove : public MovementInterface {
 public:
     // Constructor
-    RotationMove(ActivePool* activePool, 
+    RotationMove(ActivePool* activePool,
                  ConfigBiasManager* configBiasManager,
                  EnergyInterface* energyCalc);
-    
+
     // Destructor
     virtual ~RotationMove();
-    
+
     // Perform rotation attempt
     virtual MovementResult attemptRotation(MCState& state, const MovementParams& params) override;
     virtual MovementResult attemptInsertion(MCState& /*state*/, const MovementParams& /*params*/) override {
@@ -46,11 +46,11 @@ public:
         // Not implemented in this class
         return MovementResult(false, 0.0, 0.0, "translate");
     }
-    
+
     // Specific rotation methods
     MovementResult performSimpleRotation(MCState& state, const MovementParams& params, int residueIndex = -1);
     MovementResult performConfigBiasRotation(MCState& state, const MovementParams& params, int residueIndex = -1);
-    
+
     // Statistics
     struct Statistics {
         int totalAttempts = 0;
@@ -65,14 +65,14 @@ public:
             return totalAttempts > 0 ? static_cast<double>(acceptedRotations) / totalAttempts : 0.0;
         }
         double configBiasAcceptanceRate() const {
-            return configBiasRotations > 0 ? 
+            return configBiasRotations > 0 ?
                 static_cast<double>(acceptedRotations - simpleRotations + acceptedRotations) / configBiasRotations : 0.0;
         }
     };
-    
+
     const Statistics& getStatistics() const { return stats_; }
     void resetStatistics();
-    
+
 protected:
     // Configuration for rotation
     struct RotationConfig {
@@ -81,25 +81,25 @@ protected:
         std::vector<Vector3> originalPositions;
         double originalEnergy;
     };
-    
+
     // Select a residue for rotation
     int selectResidueForRotation(const MCState& state);
-    
+
     // Generate random rotation
     Quaternion generateRandomRotation(double maxAngle = M_PI);
-    
+
     // Save configuration
     RotationConfig saveConfiguration(const MCState& state, int residueIndex);
-    
+
     // Restore configuration
     void restoreConfiguration(MCState& state, int residueIndex, const RotationConfig& config);
-    
+
     // Rotate a residue
     void rotateResidue(MCState& state, int residueIndex, const Quaternion& quaternion);
-    
+
     // Calculate center of mass for rotation
     Vector3 calculateCenterOfMass(const MCState& state, int residueIndex);
-    
+
     // Configurational bias rotation implementation
     struct ConfigBiasRotationResult {
         bool accepted;
@@ -108,21 +108,21 @@ protected:
         int selectedConfigIndex;
         int totalConfigs;
     };
-    
+
     ConfigBiasRotationResult performConfigBiasRotationInternal(
-        MCState& state, 
+        MCState& state,
         int residueIndex,
         const MovementParams& params
     );
-    
+
 private:
     ActivePool* activePool_;
     ConfigBiasManager* configBiasManager_;
     EnergyInterface* energyCalc_;
     Statistics stats_;
-    
+
     // Update statistics
-    void updateStatistics(bool accepted, bool usedConfigBias, 
+    void updateStatistics(bool accepted, bool usedConfigBias,
                          double angle, double energyChange, double biasFactor);
 };
 

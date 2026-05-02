@@ -18,18 +18,18 @@ ActivePool::ActivePool(int maxAtoms, int maxResidues)
       activeResidueCount_(0),
       nextFreeAtomIndex_(0),
       nextFreeResidueIndex_(0) {
-    
+
     // Pre-allocate memory
     atoms_.reserve(maxAtoms);
     residueInfo_.resize(maxResidues);
     atomActive_.resize(maxAtoms, false);
     residueActive_.resize(maxResidues, false);
-    
+
     // Initialize free residue slots
     for (int i = 0; i < maxResidues; ++i) {
         freeResidueSlots_.insert(i);
     }
-    
+
     // Reset statistics
     resetStatistics();
 }
@@ -41,13 +41,13 @@ int ActivePool::insertMolecule(const std::vector<MCAtom>& atoms, int resType) {
     if (!canInsert(static_cast<int>(atoms.size()))) {
         return -1;
     }
-    
+
     // Find a free residue slot
     int resIdx = findFreeResidueSlot();
     if (resIdx < 0) {
         return -1;
     }
-    
+
     // Find space for atoms (append-only strategy for now)
     int atomStartIdx = nextFreeAtomIndex_;
     if (atomStartIdx + static_cast<int>(atoms.size()) > maxAtoms_) {
@@ -62,10 +62,10 @@ int ActivePool::insertMolecule(const std::vector<MCAtom>& atoms, int resType) {
             return -1;
         }
     }
-    
+
     // Copy atoms to pool
     copyAtomsToPool(atoms, atomStartIdx);
-    
+
     // Update residue info
     ResidueMetadata& resInfo = residueInfo_[resIdx];
     resInfo.residueType = resType;
@@ -73,27 +73,27 @@ int ActivePool::insertMolecule(const std::vector<MCAtom>& atoms, int resType) {
     resInfo.atomStartIndex = atomStartIdx;
     resInfo.atomCount = static_cast<int>(atoms.size());
     resInfo.insertionTime = static_cast<double>(stats_.totalInserts);  // Use insert count as pseudo-time
-    
+
     // Update active masks
     residueActive_[resIdx] = true;
     for (int i = 0; i < resInfo.atomCount; ++i) {
         atomActive_[atomStartIdx + i] = true;
     }
-    
+
     // Update counters
     activeAtomCount_ += resInfo.atomCount;
     activeResidueCount_++;
     nextFreeAtomIndex_ += resInfo.atomCount;
     freeResidueSlots_.erase(resIdx);
-    
+
     // Update statistics
     stats_.totalInserts++;
     stats_.peakAtoms = std::max(stats_.peakAtoms, activeAtomCount_);
     stats_.peakResidues = std::max(stats_.peakResidues, activeResidueCount_);
-    
+
     // Update center of mass
     updateCenterOfMass(resIdx);
-    
+
     return resIdx;
 }
 
@@ -101,26 +101,26 @@ bool ActivePool::deleteResidue(int resIdx) {
     if (resIdx < 0 || resIdx >= maxResidues_ || !residueActive_[resIdx]) {
         return false;
     }
-    
+
     // Mark residue as inactive
     residueActive_[resIdx] = false;
     ResidueMetadata& resInfo = residueInfo_[resIdx];
     resInfo.active = false;
-    
+
     // Mark atoms as inactive
     for (int i = 0; i < resInfo.atomCount; ++i) {
         atomActive_[resInfo.atomStartIndex + i] = false;
     }
-    
+
     // Update counters
     activeAtomCount_ -= resInfo.atomCount;
     activeResidueCount_--;
     freeResidueSlots_.insert(resIdx);
-    
+
     // Update statistics
     stats_.totalDeletes++;
     updateFragmentationStats();
-    
+
     return true;
 }
 
@@ -128,22 +128,22 @@ int ActivePool::compact(bool force) {
     if (!force && !shouldCompact()) {
         return 0;
     }
-    
+
     int compactedAtoms = 0;
     int writeIdx = 0;
-    
+
     // Create new atom array with only active atoms
     std::vector<MCAtom> compactedAtoms_;
     compactedAtoms_.reserve(activeAtomCount_);
-    
+
     // Compact atoms and update residue indices
     for (int resIdx = 0; resIdx < maxResidues_; ++resIdx) {
         if (!residueActive_[resIdx]) continue;
-        
+
         ResidueMetadata& resInfo = residueInfo_[resIdx];
         int oldStart = resInfo.atomStartIndex;
         int newStart = writeIdx;
-        
+
         // Copy active atoms
         for (int i = 0; i < resInfo.atomCount; ++i) {
             if (atomActive_[oldStart + i]) {
@@ -151,26 +151,26 @@ int ActivePool::compact(bool force) {
                 writeIdx++;
             }
         }
-        
+
         // Update residue atom indices
         resInfo.atomStartIndex = newStart;
         compactedAtoms += (oldStart - newStart);
     }
-    
+
     // Replace atom array
     atoms_ = std::move(compactedAtoms_);
     nextFreeAtomIndex_ = writeIdx;
-    
+
     // Reset active masks for compacted atoms
     std::fill(atomActive_.begin(), atomActive_.end(), false);
     for (int i = 0; i < writeIdx; ++i) {
         atomActive_[i] = true;
     }
-    
+
     // Update statistics
     stats_.compactions++;
     updateFragmentationStats();
-    
+
     return compactedAtoms;
 }
 
@@ -185,7 +185,7 @@ void ActivePool::queueDelete(int resIdx) {
 std::pair<int, int> ActivePool::flushBatch() {
     int inserted = 0;
     int deleted = 0;
-    
+
     // Process deletions first (to free space)
     while (!deleteQueue_.empty()) {
         if (deleteResidue(deleteQueue_.front())) {
@@ -193,7 +193,7 @@ std::pair<int, int> ActivePool::flushBatch() {
         }
         deleteQueue_.pop();
     }
-    
+
     // Process insertions
     while (!insertQueue_.empty()) {
         const auto& op = insertQueue_.front();
@@ -202,9 +202,9 @@ std::pair<int, int> ActivePool::flushBatch() {
         }
         insertQueue_.pop();
     }
-    
+
     stats_.batchOperations++;
-    
+
     return {inserted, deleted};
 }
 
@@ -214,20 +214,20 @@ void ActivePool::syncToState(MCState& state) {
     state.residues.clear();
     state.atoms.reserve(activeAtomCount_);
     state.residues.reserve(activeResidueCount_);
-    
+
     // Copy active atoms and build residues
     for (int resIdx = 0; resIdx < maxResidues_; ++resIdx) {
         if (!residueActive_[resIdx]) continue;
-        
+
         const ResidueMetadata& resInfo = residueInfo_[resIdx];
-        
+
         // Create MCResidue
         MCResidue mcRes;
         mcRes.atomStart = static_cast<int>(state.atoms.size());
         mcRes.atomCount = resInfo.atomCount;
         mcRes.type = resInfo.residueType;
         mcRes.active = true;
-        
+
         // Copy atoms for this residue
         for (int i = 0; i < resInfo.atomCount; ++i) {
             int atomIdx = resInfo.atomStartIndex + i;
@@ -235,10 +235,10 @@ void ActivePool::syncToState(MCState& state) {
                 state.atoms.push_back(atoms_[atomIdx]);
             }
         }
-        
+
         state.residues.push_back(mcRes);
     }
-    
+
     // Update state counters
     state.activeAtomCount = static_cast<int>(state.atoms.size());
     state.activeResidueCount = static_cast<int>(state.residues.size());
@@ -250,38 +250,38 @@ void ActivePool::syncFromState(const MCState& state) {
     std::fill(atomActive_.begin(), atomActive_.end(), false);
     std::fill(residueActive_.begin(), residueActive_.end(), false);
     freeResidueSlots_.clear();
-    
+
     // Reset counters
     activeAtomCount_ = 0;
     activeResidueCount_ = 0;
     nextFreeAtomIndex_ = 0;
     nextFreeResidueIndex_ = 0;
-    
+
     // Copy atoms from state
     atoms_ = state.atoms;
     activeAtomCount_ = state.activeAtomCount;
     nextFreeAtomIndex_ = activeAtomCount_;
-    
+
     // Rebuild residue info
     for (int i = 0; i < state.activeResidueCount; ++i) {
         const MCResidue& mcRes = state.residues[i];
         if (!mcRes.active) continue;
-        
+
         ResidueMetadata& resInfo = residueInfo_[i];
         resInfo.residueType = mcRes.type;
         resInfo.active = true;
         resInfo.atomStartIndex = mcRes.atomStart;
         resInfo.atomCount = mcRes.atomCount;
-        
+
         residueActive_[i] = true;
         for (int j = 0; j < mcRes.atomCount; ++j) {
             atomActive_[mcRes.atomStart + j] = true;
         }
-        
+
         updateCenterOfMass(i);
         activeResidueCount_++;
     }
-    
+
     // Update free slots
     for (int i = activeResidueCount_; i < maxResidues_; ++i) {
         freeResidueSlots_.insert(i);
@@ -301,13 +301,13 @@ std::pair<int, int> ActivePool::getActiveCounts() const {
 std::vector<int> ActivePool::getActiveResidueIndices() const {
     std::vector<int> indices;
     indices.reserve(activeResidueCount_);
-    
+
     for (int i = 0; i < maxResidues_; ++i) {
         if (residueActive_[i]) {
             indices.push_back(i);
         }
     }
-    
+
     return indices;
 }
 
@@ -335,7 +335,7 @@ void ActivePool::resetStatistics() {
 
 bool ActivePool::canInsert(int atomCount) const {
     bool hasResidueSlot = !freeResidueSlots_.empty() || nextFreeResidueIndex_ < maxResidues_;
-    bool hasAtomSpace = (nextFreeAtomIndex_ + atomCount <= maxAtoms_) || 
+    bool hasAtomSpace = (nextFreeAtomIndex_ + atomCount <= maxAtoms_) ||
                         (shouldCompact() && activeAtomCount_ + atomCount <= maxAtoms_);
     return hasResidueSlot && hasAtomSpace;
 }
@@ -346,11 +346,11 @@ int ActivePool::findFreeResidueSlot() {
     if (!freeResidueSlots_.empty()) {
         return *freeResidueSlots_.begin();
     }
-    
+
     if (nextFreeResidueIndex_ < maxResidues_) {
         return nextFreeResidueIndex_++;
     }
-    
+
     return -1;
 }
 
@@ -359,14 +359,14 @@ int ActivePool::findFreeAtomRange(int count) {
     if (nextFreeAtomIndex_ + count <= maxAtoms_) {
         return nextFreeAtomIndex_;
     }
-    
+
     // Could implement more sophisticated free range tracking later
     return -1;
 }
 
 void ActivePool::updateFragmentationStats() {
     double frag = getFragmentation();
-    stats_.averageFragmentation = (stats_.averageFragmentation * (stats_.totalInserts + stats_.totalDeletes - 1) + frag) / 
+    stats_.averageFragmentation = (stats_.averageFragmentation * (stats_.totalInserts + stats_.totalDeletes - 1) + frag) /
                                   (stats_.totalInserts + stats_.totalDeletes);
 }
 
@@ -379,7 +379,7 @@ void ActivePool::copyAtomsToPool(const std::vector<MCAtom>& atoms, int startIdx)
     while (static_cast<int>(atoms_.size()) < startIdx + static_cast<int>(atoms.size())) {
         atoms_.emplace_back();
     }
-    
+
     // Copy atoms
     for (size_t i = 0; i < atoms.size(); ++i) {
         atoms_[startIdx + i] = atoms[i];
@@ -388,10 +388,10 @@ void ActivePool::copyAtomsToPool(const std::vector<MCAtom>& atoms, int startIdx)
 
 void ActivePool::updateCenterOfMass(int resIdx) {
     if (!residueActive_[resIdx]) return;
-    
+
     ResidueMetadata& resInfo = residueInfo_[resIdx];
     Vector3 com(0.0, 0.0, 0.0);
-    
+
     for (int i = 0; i < resInfo.atomCount; ++i) {
         int atomIdx = resInfo.atomStartIndex + i;
         if (atomIdx < static_cast<int>(atoms_.size())) {
@@ -401,13 +401,13 @@ void ActivePool::updateCenterOfMass(int resIdx) {
             com.z += atom.z;
         }
     }
-    
+
     if (resInfo.atomCount > 0) {
         com.x /= resInfo.atomCount;
         com.y /= resInfo.atomCount;
         com.z /= resInfo.atomCount;
     }
-    
+
     resInfo.centerOfMass = com;
 }
 

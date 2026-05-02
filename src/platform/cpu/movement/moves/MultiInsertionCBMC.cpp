@@ -35,7 +35,7 @@ MultiInsertionCBMC::MultiInsertionCBMC(const MultiInsertionConfig& config,
       rng_(static_cast<unsigned>(std::chrono::steady_clock::now().time_since_epoch().count())),
       uniform_(0.0, 1.0),
       cavityManager_(cavityManager) {
-    
+
     // When using cavity bias, detailed balance is not guaranteed with Vbox normalization
     // Only show warning if PYGCMC_VERBOSE environment variable is set
     if (config_.useCavityBias) {
@@ -47,7 +47,7 @@ MultiInsertionCBMC::MultiInsertionCBMC(const MultiInsertionConfig& config,
             warningShown = true;
         }
     }
-    
+
     resetStatistics();
 }
 
@@ -64,33 +64,33 @@ std::pair<int, std::vector<InsertionRegion>> MultiInsertionCBMC::performMultiIns
     MCState& state,
     int moleculeType,
     const MovementParams& params) {
-    
+
     // Guard seeding: ensure RNG is seeded on first use
     if (stats_.totalAttempts == 0 && params.seed != 0) {
         setSeed(params.seed);
     }
-    
+
     stats_.totalAttempts++;
-    
+
     // 1. Divide box into regions
     auto allRegions = divideBoxIntoRegions(state);
     if (allRegions.empty()) {
         return {0, {}};
     }
-    
+
     // 2. Select non-adjacent regions
     int numToSelect = std::min(config_.maxParallelInsertions, static_cast<int>(allRegions.size()));
     auto selectedRegions = selectNonAdjacentRegions(allRegions, numToSelect);
-    
+
     // 3. Generate trial configurations
     generateTrialConfigurations(selectedRegions, moleculeType, state);
-    
+
     // 4. Calculate energies
     batchCalculateEnergies(selectedRegions, state);
-    
+
     // 5. Select optimal configurations
     selectOptimalConfigurations(selectedRegions, params.beta);
-    
+
     // 6. Accept insertions
     auto acceptedRegions = acceptInsertions(
         selectedRegions,
@@ -99,7 +99,7 @@ std::pair<int, std::vector<InsertionRegion>> MultiInsertionCBMC::performMultiIns
         params.chemicalPotential,
         params.thermalLambdaNm,
         moleculeType);
-    
+
     // Count accepts
     int acceptCount = 0;
     for (const auto& region : acceptedRegions) {
@@ -108,7 +108,7 @@ std::pair<int, std::vector<InsertionRegion>> MultiInsertionCBMC::performMultiIns
         }
     }
     stats_.totalAccepts += acceptCount;
-    
+
     return {acceptCount, acceptedRegions};
 }
 
@@ -127,7 +127,7 @@ void MultiInsertionCBMC::resetStatistics() {
 
 std::vector<InsertionRegion> MultiInsertionCBMC::divideBoxIntoRegions(const MCState& state) {
     std::vector<InsertionRegion> regions;
-    
+
     // Priority: use cavity points if available
     if (config_.useCavityBias && cavityManager_) {
         auto cavities = cavityManager_->findCavities(state);
@@ -135,7 +135,7 @@ std::vector<InsertionRegion> MultiInsertionCBMC::divideBoxIntoRegions(const MCSt
             double minSepNm = config_.minSeparation; // Already in nm
             double regionRadius = 0.5 * minSepNm;     // Consistent with non-adjacent rules
             regions.reserve(cavities.size());
-            
+
             for (const auto& pos : cavities) {
                 InsertionRegion r;
                 r.center[0] = pos.x;
@@ -151,23 +151,23 @@ std::vector<InsertionRegion> MultiInsertionCBMC::divideBoxIntoRegions(const MCSt
         }
         // If no cavities found, fall back to uniform division
     }
-    
+
     // Fallback: uniform grid division (original implementation)
     // Note: state.info.box is in nm
     double boxX = state.info.box[0];  // nm
     double boxY = state.info.box[1];  // nm
     double boxZ = state.info.box[2];  // nm
-    
+
     double cellSize = config_.minSeparation;  // nm
-    
+
     int nx = std::max(1, static_cast<int>(boxX / cellSize));
     int ny = std::max(1, static_cast<int>(boxY / cellSize));
     int nz = std::max(1, static_cast<int>(boxZ / cellSize));
-    
+
     double actualCellX = boxX / nx;  // nm
     double actualCellY = boxY / ny;  // nm
     double actualCellZ = boxZ / nz;  // nm
-    
+
     for (int ix = 0; ix < nx; ++ix) {
         for (int iy = 0; iy < ny; ++iy) {
             for (int iz = 0; iz < nz; ++iz) {
@@ -183,55 +183,55 @@ std::vector<InsertionRegion> MultiInsertionCBMC::divideBoxIntoRegions(const MCSt
             }
         }
     }
-    
+
     return regions;
 }
 
 std::vector<InsertionRegion> MultiInsertionCBMC::selectNonAdjacentRegions(
     const std::vector<InsertionRegion>& allRegions,
     int numToSelect) {
-    
+
     std::vector<InsertionRegion> selected;
     if (allRegions.empty() || numToSelect <= 0) {
         return selected;
     }
-    
+
     // Create random order
     std::vector<size_t> indices(allRegions.size());
     for (size_t i = 0; i < allRegions.size(); ++i) {
         indices[i] = i;
     }
     std::shuffle(indices.begin(), indices.end(), rng_);
-    
+
     // Calculate effective minimum separation for independence
     double minSepNm = config_.minSeparation;  // Already in nm
-    
+
     if (config_.enforceIndependence) {
         // Use cutoff from config (should be set from MCState when initialized)
         double cutoffNm = config_.cutoffNm;
-        
+
         // Calculate required separation for true independence
         // Need: separation > cutoff + sqrt(3)*disp + 2*molExtent
         double disp = (minSepNm * 0.5) * config_.displacementFraction;  // Upper bound estimate
         double requiredNm = cutoffNm + std::sqrt(3.0) * disp + 2.0 * config_.moleculeExtentNm;
-        
+
         // Use the larger of user-specified and required separation
         double effectiveMinSep = std::max(minSepNm, requiredNm);
-        
+
         // Log warning if user separation is too small
         if (minSepNm < requiredNm) {
             // Note: In production, should use proper logging
-            // std::cerr << "Warning: minSeparation=" << minSepNm 
-            //           << " nm is less than required=" << requiredNm 
+            // std::cerr << "Warning: minSeparation=" << minSepNm
+            //           << " nm is less than required=" << requiredNm
             //           << " nm for independence\n";
         }
-        
+
         minSepNm = effectiveMinSep;
     }
-    
+
     for (size_t idx : indices) {
         const auto& candidate = allRegions[idx];
-        
+
         // Check distance to all selected regions
         bool tooClose = false;
         for (const auto& sel : selected) {
@@ -239,13 +239,13 @@ std::vector<InsertionRegion> MultiInsertionCBMC::selectNonAdjacentRegions(
             double dy = candidate.center[1] - sel.center[1];
             double dz = candidate.center[2] - sel.center[2];
             double dist = std::sqrt(dx*dx + dy*dy + dz*dz);
-            
+
             if (dist < minSepNm) {
                 tooClose = true;
                 break;
             }
         }
-        
+
         if (!tooClose) {
             selected.push_back(candidate);
             if (static_cast<int>(selected.size()) >= numToSelect) {
@@ -253,7 +253,7 @@ std::vector<InsertionRegion> MultiInsertionCBMC::selectNonAdjacentRegions(
             }
         }
     }
-    
+
     return selected;
 }
 
@@ -261,33 +261,33 @@ void MultiInsertionCBMC::generateTrialConfigurations(
     std::vector<InsertionRegion>& regions,
     int moleculeType,
     const MCState& state) {
-    
+
     for (auto& region : regions) {
         region.trialConfigs.clear();
         region.trialEnergies.clear();
-        
+
         // Generate K trial configurations
         for (int k = 0; k < config_.numTrialsPerRegion; ++k) {
             // Create molecule at region center
             auto atoms = createMolecule(moleculeType, region.center);
-            
+
             // Add random rotation and small displacement
             if (k > 0) {
                 // Random rotation
                 auto quat = generateRandomQuaternion();
                 rotateWithQuaternion(atoms, quat);
-                
+
                 // Small random displacement within region
                 double disp = region.radius * config_.displacementFraction;
                 double dx = (uniform_(rng_) - 0.5) * disp;
                 double dy = (uniform_(rng_) - 0.5) * disp;
                 double dz = (uniform_(rng_) - 0.5) * disp;
-                
+
                 for (auto& atom : atoms) {
                     atom.x += dx;
                     atom.y += dy;
                     atom.z += dz;
-                    
+
                     // Apply PBC
                     while (atom.x < 0) atom.x += state.info.box[0];
                     while (atom.x >= state.info.box[0]) atom.x -= state.info.box[0];
@@ -297,10 +297,10 @@ void MultiInsertionCBMC::generateTrialConfigurations(
                     while (atom.z >= state.info.box[2]) atom.z -= state.info.box[2];
                 }
             }
-            
+
             region.trialConfigs.push_back(atoms);
         }
-        
+
         // Initialize energies
         region.trialEnergies.resize(region.trialConfigs.size(), 0.0);
     }
@@ -314,19 +314,19 @@ static void calculateEnergiesForRegionImpl(InsertionRegion& region, MCState& sta
         for (const auto& atom : trialAtoms) {
             state.addAtom(atom);
         }
-        
+
         MCResidue tempRes;
         tempRes.atomStart = startIdx;
         tempRes.atomCount = static_cast<int>(trialAtoms.size());
         tempRes.type = 0;
         tempRes.active = true;
         int resIdx = state.addResidue(tempRes);
-        
+
         // Compute only the interaction energy for the new residue
         platform::cpu::computeResidueEnergyCutoffPBC(state, resIdx);
-        region.trialEnergies[t] = state.residues[resIdx].energy_vdw + 
+        region.trialEnergies[t] = state.residues[resIdx].energy_vdw +
                                   state.residues[resIdx].energy_elec;
-        
+
         state.removeResidue(resIdx);
         for (size_t i = 0; i < trialAtoms.size(); ++i) {
             state.removeAtom(state.activeAtomCount - 1);
@@ -337,7 +337,7 @@ static void calculateEnergiesForRegionImpl(InsertionRegion& region, MCState& sta
 void MultiInsertionCBMC::batchCalculateEnergies(
     std::vector<InsertionRegion>& regions,
     MCState& state) {
-    
+
 #ifdef PYGCMC_USE_OPENMP
     // Use static schedule for deterministic ordering
     #pragma omp parallel for schedule(static)
@@ -356,17 +356,17 @@ void MultiInsertionCBMC::batchCalculateEnergies(
 void MultiInsertionCBMC::selectOptimalConfigurations(
     std::vector<InsertionRegion>& regions,
     double beta) {
-    
+
     for (auto& region : regions) {
         // Calculate Rosenbluth weight
         region.rosenbluthWeight = calculateRosenbluthWeight(region.trialEnergies, beta);
-        
+
         // Select configuration using Gumbel-max trick
         std::vector<double> logWeights;
         for (double energy : region.trialEnergies) {
             logWeights.push_back(-beta * energy);
         }
-        
+
         region.selectedConfig = selectByGumbelMax(logWeights);
     }
 }
@@ -378,13 +378,13 @@ std::vector<InsertionRegion> MultiInsertionCBMC::acceptInsertions(
     double chemicalPotential,
     double lambdaNm,
     int moleculeType) {
-    
+
     // Count current molecules
     int currentN = state.activeResidueCount;
-    
+
     // Precompute box volume in nm^3
     double Vbox = state.info.box[0] * state.info.box[1] * state.info.box[2];
-    
+
     double lambda = (lambdaNm > 0.0) ? lambdaNm : 1.0;
     double logLambda3 = 3.0 * std::log(lambda);
 
@@ -393,38 +393,38 @@ std::vector<InsertionRegion> MultiInsertionCBMC::acceptInsertions(
         // Find max log weight for numerical stability
         double maxLogW = -std::numeric_limits<double>::infinity();
         int Keff = 0;
-        
+
         for (double e : region.trialEnergies) {
             double lw = -beta * e;
             if (!std::isfinite(lw)) continue;
             if (lw > maxLogW) maxLogW = lw;
         }
-        
+
         // If all energies are infinite, reject
         if (!std::isfinite(maxLogW)) {
             region.accepted = false;
             region.acceptanceProbability = 0.0;
             continue;
         }
-        
+
         // Compute Rosenbluth weight
         double sumExp = 0.0;
-        
+
         for (double e : region.trialEnergies) {
             double lw = -beta * e;
             if (!std::isfinite(lw)) continue;
             sumExp += std::exp(lw - maxLogW);
             Keff++;
         }
-        
+
         if (Keff == 0) {
             region.accepted = false;
             region.acceptanceProbability = 0.0;
             continue;
         }
-        
+
         double logW = maxLogW + std::log(sumExp);
-        
+
         region.countBefore = currentN;
         region.effectiveTrials = Keff;
         if (region.selectedConfig >= 0 &&
@@ -464,23 +464,23 @@ std::vector<InsertionRegion> MultiInsertionCBMC::acceptInsertions(
 
         // Accept or reject
         region.accepted = (uniform_(rng_) < region.acceptanceProbability);
-        
+
         // Update molecule count if accepted
         if (region.accepted) {
             currentN++;
         }
     }
-    
+
     return regions;
 }
 
 std::vector<MCAtom> MultiInsertionCBMC::createMolecule(
     int moleculeType,
     const std::array<double, 3>& position) {
-    
+
     (void)moleculeType;  // Suppress unused parameter warning
     std::vector<MCAtom> atoms;
-    
+
     // Create water molecule (TIP3P)
     // Note: sigma and epsilon are stored in force field parameters, not in MCAtom
     MCAtom oxygen;
@@ -490,7 +490,7 @@ std::vector<MCAtom> MultiInsertionCBMC::createMolecule(
     oxygen.charge = -0.834f;
     oxygen.type = 0;  // Oxygen type
     atoms.push_back(oxygen);
-    
+
     MCAtom hydrogen1;
     hydrogen1.x = position[0] + 0.0957f;
     hydrogen1.y = position[1];
@@ -498,7 +498,7 @@ std::vector<MCAtom> MultiInsertionCBMC::createMolecule(
     hydrogen1.charge = 0.417f;
     hydrogen1.type = 1;  // Hydrogen type
     atoms.push_back(hydrogen1);
-    
+
     MCAtom hydrogen2;
     hydrogen2.x = position[0] - 0.0239f;
     hydrogen2.y = position[1] + 0.0927f;
@@ -506,7 +506,7 @@ std::vector<MCAtom> MultiInsertionCBMC::createMolecule(
     hydrogen2.charge = 0.417f;
     hydrogen2.type = 1;  // Hydrogen type
     atoms.push_back(hydrogen2);
-    
+
     return atoms;
 }
 
@@ -515,21 +515,21 @@ std::array<double, 4> MultiInsertionCBMC::generateRandomQuaternion() {
     double u1 = uniform_(rng_);
     double u2 = uniform_(rng_);
     double u3 = uniform_(rng_);
-    
+
     double q0 = std::sqrt(1 - u1) * std::sin(2 * M_PI * u2);
     double q1 = std::sqrt(1 - u1) * std::cos(2 * M_PI * u2);
     double q2 = std::sqrt(u1) * std::sin(2 * M_PI * u3);
     double q3 = std::sqrt(u1) * std::cos(2 * M_PI * u3);
-    
+
     return {q0, q1, q2, q3};
 }
 
 void MultiInsertionCBMC::rotateWithQuaternion(
     std::vector<MCAtom>& atoms,
     const std::array<double, 4>& quat) {
-    
+
     if (atoms.empty()) return;
-    
+
     // Calculate center of mass
     double cx = 0, cy = 0, cz = 0;
     for (const auto& atom : atoms) {
@@ -540,21 +540,21 @@ void MultiInsertionCBMC::rotateWithQuaternion(
     cx /= atoms.size();
     cy /= atoms.size();
     cz /= atoms.size();
-    
+
     // Rotate around center
     double q0 = quat[0], q1 = quat[1], q2 = quat[2], q3 = quat[3];
-    
+
     for (auto& atom : atoms) {
         // Translate to origin
         double x = atom.x - cx;
         double y = atom.y - cy;
         double z = atom.z - cz;
-        
+
         // Apply rotation
         double xx = (q0*q0 + q1*q1 - q2*q2 - q3*q3) * x + 2*(q1*q2 - q0*q3) * y + 2*(q1*q3 + q0*q2) * z;
         double yy = 2*(q1*q2 + q0*q3) * x + (q0*q0 - q1*q1 + q2*q2 - q3*q3) * y + 2*(q2*q3 - q0*q1) * z;
         double zz = 2*(q1*q3 - q0*q2) * x + 2*(q2*q3 + q0*q1) * y + (q0*q0 - q1*q1 - q2*q2 + q3*q3) * z;
-        
+
         // Translate back
         atom.x = xx + cx;
         atom.y = yy + cy;
@@ -565,7 +565,7 @@ void MultiInsertionCBMC::rotateWithQuaternion(
 double MultiInsertionCBMC::calculateRosenbluthWeight(
     const std::vector<double>& energies,
     double beta) {
-    
+
     double weight = 0.0;
     for (double energy : energies) {
         weight += std::exp(-beta * energy);
@@ -575,22 +575,22 @@ double MultiInsertionCBMC::calculateRosenbluthWeight(
 
 int MultiInsertionCBMC::selectByGumbelMax(const std::vector<double>& logWeights) {
     if (logWeights.empty()) return -1;
-    
+
     int bestIdx = 0;
     double bestScore = -std::numeric_limits<double>::infinity();
-    
+
     for (size_t i = 0; i < logWeights.size(); ++i) {
         // Add Gumbel noise
         double u = uniform_(rng_);
         double gumbel = -std::log(-std::log(u + 1e-10) + 1e-10);
         double score = logWeights[i] + gumbel;
-        
+
         if (score > bestScore) {
             bestScore = score;
             bestIdx = static_cast<int>(i);
         }
     }
-    
+
     return bestIdx;
 }
 

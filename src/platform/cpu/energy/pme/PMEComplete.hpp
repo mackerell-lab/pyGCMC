@@ -22,7 +22,7 @@ struct EnergyComponents {
 
 /**
  * @brief Complete PME energy calculation with proper integration of all components
- * 
+ *
  * This class provides a complete energy calculation
  * that includes both intermolecular and intramolecular interactions,
  * matching the behavior of reference implementations.
@@ -34,12 +34,12 @@ public:
 
     /**
      * @brief Compute complete system energy with all interactions
-     * 
+     *
      * This method calculates:
      * - Electrostatic energy (real + reciprocal + self)
      * - Van der Waals energy including intramolecular interactions
      * - Proper handling of exclusions and 1-4 interactions
-     * 
+     *
      * @param state The molecular state
      * @return Total energy struct with all components
      */
@@ -47,10 +47,10 @@ public:
 
     /**
      * @brief Compute complete energy with cutoff method
-     * 
+     *
      * Similar to computeCompleteEnergy but uses cutoff instead of PME
      * for electrostatics. Useful for comparison and validation.
-     * 
+     *
      * @param state The molecular state
      * @return Total energy struct with all components
      */
@@ -59,10 +59,10 @@ public:
 private:
     /**
      * @brief Calculate intramolecular LJ interactions
-     * 
+     *
      * Computes LJ interactions within residues that are normally excluded
      * in the Fixed methods but needed for complete energy matching.
-     * 
+     *
      * @param state The molecular state
      * @return Intramolecular LJ energy
      */
@@ -70,9 +70,9 @@ private:
 
     /**
      * @brief Apply proper exclusion rules for electrostatics
-     * 
+     *
      * Handles 1-2, 1-3, and 1-4 exclusions based on force field rules
-     * 
+     *
      * @param state The molecular state
      * @param energy Current energy components
      */

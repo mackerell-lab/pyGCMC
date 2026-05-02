@@ -12,7 +12,7 @@ namespace gcmc {
 
 /**
  * @brief Global configuration for GCMC simulations
- * 
+ *
  * Singleton pattern for managing runtime configuration
  * without impacting performance when features are disabled.
  */
@@ -22,7 +22,7 @@ public:
         static GCMCConfig instance;
         return instance;
     }
-    
+
     // Performance-related configuration
     struct Performance {
         bool storeProbability = false;      // Store acceptance probability
@@ -32,7 +32,7 @@ public:
         bool enableCaching = true;         // Enable various caches
         int cacheSize = 1000;              // Max cache entries
     } performance;
-    
+
     // Debug configuration
     struct Debug {
         bool verbose = false;               // Verbose output
@@ -40,7 +40,7 @@ public:
         bool trackMemory = false;          // Track memory usage
         bool logMoves = false;             // Log all moves
     } debug;
-    
+
     // Advanced features
     struct Advanced {
         bool enableBatchOperations = false; // Batch insertions/deletions
@@ -48,7 +48,7 @@ public:
         int batchSize = 10;                // Default batch size
         int numThreads = 1;                // Number of OpenMP threads
     } advanced;
-    
+
     // Update configuration from environment variables
     void updateFromEnvironment() {
         // Performance settings
@@ -65,7 +65,7 @@ public:
         if (std::getenv("GCMC_NO_CACHE")) {
             performance.enableCaching = false;
         }
-        
+
         // Debug settings
         if (std::getenv("GCMC_DEBUG")) {
             debug.verbose = true;
@@ -76,7 +76,7 @@ public:
         if (std::getenv("GCMC_TRACK_MEMORY")) {
             debug.trackMemory = true;
         }
-        
+
         // Advanced settings
         if (std::getenv("GCMC_BATCH_OPS")) {
             advanced.enableBatchOperations = true;
@@ -85,7 +85,7 @@ public:
                 advanced.batchSize = std::atoi(bsize);
             }
         }
-        
+
 #ifdef PYGCMC_USE_OPENMP
         if (std::getenv("GCMC_PARALLEL")) {
             advanced.enableParallel = true;
@@ -96,27 +96,27 @@ public:
         }
 #endif
     }
-    
+
     // Reset to defaults
     void reset() {
         performance = Performance();
         debug = Debug();
         advanced = Advanced();
     }
-    
+
     // Check if any performance-impacting features are enabled
     bool hasPerformanceImpact() const {
-        return performance.storeProbability || 
+        return performance.storeProbability ||
                performance.enableDetailedStats ||
                debug.verbose ||
                debug.checkDetailedBalance;
     }
-    
+
 private:
     GCMCConfig() {
         updateFromEnvironment();
     }
-    
+
     // Prevent copying
     GCMCConfig(const GCMCConfig&) = delete;
     GCMCConfig& operator=(const GCMCConfig&) = delete;
@@ -133,7 +133,7 @@ inline bool shouldStoreProbability() {
     // For production: cache at first call for maximum performance
     // For testing: always check to allow test isolation
     static const bool is_testing = (std::getenv("PYTEST_CURRENT_TEST") != nullptr);
-    
+
     if (is_testing) {
         // In test mode, always check the environment variable
         return std::getenv("GCMC_STORE_PROB") != nullptr;
@@ -147,12 +147,12 @@ inline bool shouldStoreProbability() {
 inline bool shouldCollectStats(int step) {
     // Check if we're in test mode
     static const bool is_testing = (std::getenv("PYTEST_CURRENT_TEST") != nullptr);
-    
+
     if (is_testing) {
         // In test mode, always check environment variables
         const char* enable_str = std::getenv("GCMC_ENABLE_STATS");
         if (!enable_str) return false;
-        
+
         const char* interval_str = std::getenv("GCMC_STATS_INTERVAL");
         int interval = interval_str ? std::atoi(interval_str) : 1000;
         return (step > 0) && (step % interval == 0);
@@ -163,7 +163,7 @@ inline bool shouldCollectStats(int step) {
             const char* interval_str = std::getenv("GCMC_STATS_INTERVAL");
             return interval_str ? std::atoi(interval_str) : 1000;
         }();
-        
+
         if (!enable_stats) return false;
         return (step > 0) && (step % interval == 0);
     }

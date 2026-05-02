@@ -21,13 +21,13 @@ namespace {
 namespace pygcmc {
 namespace io {
 
-bool PSFParserSectionsConnectivity::parse_bonds_from_lines(const std::vector<std::string>& lines, 
+bool PSFParserSectionsConnectivity::parse_bonds_from_lines(const std::vector<std::string>& lines,
                                                          model::Topology& topology) {
     // Parse number of bonds from the first line
     std::istringstream iss(trim(lines[0]));
     int num_bonds = 0;
     std::string marker;  // For "!NBOND" marker
-    
+
     // Try to parse the line with or without the marker
     if (!(iss >> num_bonds)) {
         iss.clear();
@@ -79,7 +79,7 @@ bool PSFParserSectionsConnectivity::parse_bonds_from_lines(const std::vector<std
     return true;
 }
 
-bool PSFParserSectionsConnectivity::parse_angles_from_lines(const std::vector<std::string>& lines, 
+bool PSFParserSectionsConnectivity::parse_angles_from_lines(const std::vector<std::string>& lines,
                                                           model::Topology& topology) {
     // Parse number of angles from the first line
     std::istringstream iss(trim(lines[0]));
@@ -130,7 +130,7 @@ bool PSFParserSectionsConnectivity::parse_angles_from_lines(const std::vector<st
 }
 
 bool PSFParserSectionsConnectivity::parse_dihedrals_from_lines(const std::vector<std::string>& dihedral_lines,
-                                                             model::Topology& topology, 
+                                                             model::Topology& topology,
                                                              const std::string& /* section_name */) {
     if (dihedral_lines.empty()) {
         std::cerr << "No lines provided for dihedrals section." << std::endl;
@@ -179,7 +179,7 @@ bool PSFParserSectionsConnectivity::parse_dihedrals_from_lines(const std::vector
 
     // Add all dihedrals to topology
     for (size_t i = 0; i < all_indices.size(); i += 4) {
-        topology.add_dihedral(all_indices[i], all_indices[i+1], 
+        topology.add_dihedral(all_indices[i], all_indices[i+1],
                             all_indices[i+2], all_indices[i+3]);
     }
 

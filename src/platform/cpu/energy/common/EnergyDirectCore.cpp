@@ -34,11 +34,11 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
 
     auto& residues = state.residues;
     auto& forcefield = state.forcefield;  // Non-const to allow rebuild
-    
+
     // Build NxN matrix if needed (from mixing rules + NBFIX)
-    const size_t expected_size_check = static_cast<size_t>(forcefield.numTotalTypes) * 
+    const size_t expected_size_check = static_cast<size_t>(forcefield.numTotalTypes) *
                                        static_cast<size_t>(forcefield.numTotalTypes);
-    
+
     if ((!forcefield.ljMatrixInitialized) ||
         (forcefield.ljSigma.size() != expected_size_check) ||
         (forcefield.ljEps.size() != expected_size_check)) {
@@ -46,27 +46,27 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
     }
 
     // Validate basic state parameters
-    if (state.activeResidueCount < 0 || 
+    if (state.activeResidueCount < 0 ||
         static_cast<size_t>(state.activeResidueCount) > residues.size()) {
-        throw std::runtime_error("Invalid activeResidueCount: " + 
+        throw std::runtime_error("Invalid activeResidueCount: " +
                                std::to_string(state.activeResidueCount) +
                                " (residues size: " + std::to_string(residues.size()) + ")");
     }
 
     if (forcefield.numTotalTypes <= 0) {
-        throw std::runtime_error("Invalid numTotalTypes: " + 
+        throw std::runtime_error("Invalid numTotalTypes: " +
                                std::to_string(forcefield.numTotalTypes));
     }
 
     if (movement_only && forcefield.numMovementTypes <= 0) {
-        throw std::runtime_error("Invalid numMovementTypes: " + 
+        throw std::runtime_error("Invalid numMovementTypes: " +
                                std::to_string(forcefield.numMovementTypes));
     }
 
     // Always expect full matrix size
-    size_t expected_size = static_cast<size_t>(forcefield.numTotalTypes) * 
+    size_t expected_size = static_cast<size_t>(forcefield.numTotalTypes) *
                            static_cast<size_t>(forcefield.numTotalTypes);
-    
+
     if (forcefield.ljEps.size() != expected_size || forcefield.ljSigma.size() != expected_size) {
         std::stringstream ss;
         ss << "Force field parameters array size mismatch. Expected size "
@@ -114,11 +114,11 @@ void computeResidueNonbondedEnergy(model::MCState& state,
                                    ResiduePartnerFilter partner_filter) {
     auto& residues = state.residues;
     auto& forcefield = state.forcefield;  // Non-const to allow rebuild
-    
+
     // Build NxN matrix if needed (from mixing rules + NBFIX)
-    const size_t expected_size_check = static_cast<size_t>(forcefield.numTotalTypes) * 
+    const size_t expected_size_check = static_cast<size_t>(forcefield.numTotalTypes) *
                                        static_cast<size_t>(forcefield.numTotalTypes);
-    
+
     if ((!forcefield.ljMatrixInitialized) ||
         (forcefield.ljSigma.size() != expected_size_check) ||
         (forcefield.ljEps.size() != expected_size_check)) {
@@ -129,14 +129,14 @@ void computeResidueNonbondedEnergy(model::MCState& state,
 
     const double cutoff2 = use_cutoff ? state.info.cutoff * state.info.cutoff : std::numeric_limits<double>::max();
     const bool usePairtypes14 = forcefield.pairtypes14Enabled;
-    
+
     if (!residues[residue_idx].active) {
         return;
     }
-    
+
     residues[residue_idx].energy_vdw = 0.0f;
     residues[residue_idx].energy_elec = 0.0f;
-    
+
     for (int atom_i = residues[residue_idx].atomStart;
          atom_i < residues[residue_idx].atomStart + residues[residue_idx].atomCount;
          ++atom_i) {
@@ -157,35 +157,35 @@ void computeResidueNonbondedEnergy(model::MCState& state,
                 if (atoms[atom_j].name == "LP" || atoms[atom_j].name == "LPA") continue;
 
                 int type_j = atoms[atom_j].type;
-                
+
                 double dx = atoms[atom_j].x - atoms[atom_i].x;
                 double dy = atoms[atom_j].y - atoms[atom_i].y;
                 double dz = atoms[atom_j].z - atoms[atom_i].z;
-                
+
                 if (use_pbc) {
                     dx -= box[0] * std::round(dx / box[0]);
                     dy -= box[1] * std::round(dy / box[1]);
                     dz -= box[2] * std::round(dz / box[2]);
                 }
-                
+
                 double r2 = dx*dx + dy*dy + dz*dz;
-                
+
                 if (r2 > cutoff2) continue;
-                
+
                 int param_index = type_i * forcefield.numTotalTypes + type_j;
                 size_t idx = static_cast<size_t>(param_index);
-                
+
                 // Bounds check to prevent accessing invalid force field parameters
                 if (idx >= forcefield.ljEps.size() || idx >= forcefield.ljSigma.size()) {
                     // Skip if force field tables don't cover this pair
                     continue;
                 }
-                
+
                 double eps = forcefield.ljEps[idx];
                 double sigma = forcefield.ljSigma[idx];
                 double q1 = atoms[atom_i].charge;
                 double q2 = atoms[atom_j].charge;
-                
+
                 auto [vdw, elec] = coulomb::calcPairEnergy(r2, sigma, eps, q1, q2, state.info, !vdw_only);
 
                 residues[residue_idx].energy_vdw += static_cast<float>(vdw);
@@ -269,16 +269,16 @@ void computeSystemEnergyPBC(model::MCState& state) {
     if (getEnergyDebugOutput()) {
         std::stringstream ss;
         ss << "\n=== Starting PBC nonbonded energy calculation (no cutoff) ===";
-        ss << "\nBox dimensions: " << state.info.box[0] << " x " 
+        ss << "\nBox dimensions: " << state.info.box[0] << " x "
            << state.info.box[1] << " x " << state.info.box[2] << " nm";
         platform::log(LogLevel::DEBUG, ss.str());
     }
-    
+
     // Validate box dimensions before proceeding
     if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
         throw std::runtime_error("Invalid box dimensions for PBC calculation");
     }
-    
+
     computeNonbondedEnergy(state, false, false, true);
 }
 
@@ -286,16 +286,16 @@ void computeSystemEnergyPBCCutoff(model::MCState& state) {
     if (getEnergyDebugOutput()) {
         std::stringstream ss;
         ss << "\n=== Starting PBC nonbonded energy calculation (with cutoff) ===";
-        ss << "\nBox dimensions: " << state.info.box[0] << " x " 
+        ss << "\nBox dimensions: " << state.info.box[0] << " x "
            << state.info.box[1] << " x " << state.info.box[2] << " nm";
         platform::log(LogLevel::DEBUG, ss.str());
     }
-    
+
     // Validate box dimensions before proceeding
     if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
         throw std::runtime_error("Invalid box dimensions for PBC calculation");
     }
-    
+
     computeNonbondedEnergy(state, true, false, true);
 }
 
@@ -545,4 +545,4 @@ void computeResidueEnergyWithNeighborList(
 
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

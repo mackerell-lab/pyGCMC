@@ -14,10 +14,10 @@ namespace gcmc {
 
 /**
  * @brief Centralized Random Number Generator for GCMC
- * 
+ *
  * This class provides a single source of randomness for all GCMC components,
  * ensuring reproducibility and avoiding multiple independent RNG instances.
- * 
+ *
  * Features:
  * - Single master RNG with controlled seeding
  * - Sub-stream creation for parallel components
@@ -31,11 +31,11 @@ public:
         uint64_t step;
         uint64_t stateHash;
         std::string component;
-        
+
         ReproRecord(uint64_t s, uint64_t h, const std::string& c)
             : step(s), stateHash(h), component(c) {}
     };
-    
+
     /**
      * @brief Constructor with explicit seed
      * @param seed Master seed for reproducibility
@@ -46,18 +46,18 @@ public:
           currentStep_(0),
           recordRepro_(recordReproducibility),
           masterSeed_(seed) {
-        
+
         // Initialize distributions
         uniform_ = std::uniform_real_distribution<double>(0.0, 1.0);
         normal_ = std::normal_distribution<double>(0.0, 1.0);
     }
-    
+
     /**
      * @brief Get the master RNG engine
      * @warning Direct access - use with caution
      */
     std::mt19937_64& engine() { return masterRng_; }
-    
+
     /**
      * @brief Generate uniform random number [0, 1)
      */
@@ -65,7 +65,7 @@ public:
         recordAccess("uniform");
         return uniform_(masterRng_);
     }
-    
+
     /**
      * @brief Generate uniform random number in range [min, max)
      */
@@ -73,7 +73,7 @@ public:
         recordAccess("uniform_range");
         return min + (max - min) * uniform_(masterRng_);
     }
-    
+
     /**
      * @brief Generate uniform integer in range [min, max]
      */
@@ -82,7 +82,7 @@ public:
         std::uniform_int_distribution<int> dist(min, max);
         return dist(masterRng_);
     }
-    
+
     /**
      * @brief Generate normal distributed random number
      */
@@ -90,7 +90,7 @@ public:
         recordAccess("normal");
         return mean + stddev * normal_(masterRng_);
     }
-    
+
     /**
      * @brief Create a sub-stream RNG for a component
      * Uses jump-ahead or split-mix seeding to avoid correlation
@@ -101,7 +101,7 @@ public:
         recordAccess("create_substream:" + componentName);
         return std::make_unique<std::mt19937_64>(subSeed);
     }
-    
+
     /**
      * @brief Reset to initial state with same seed
      */
@@ -110,7 +110,7 @@ public:
         currentStep_ = 0;
         reproRecords_.clear();
     }
-    
+
     /**
      * @brief Reset with new seed
      */
@@ -120,27 +120,27 @@ public:
         currentStep_ = 0;
         reproRecords_.clear();
     }
-    
+
     /**
      * @brief Advance step counter (for tracking)
      */
     void advanceStep() { currentStep_++; }
-    
+
     /**
      * @brief Get current step
      */
     uint64_t getCurrentStep() const { return currentStep_; }
-    
+
     /**
      * @brief Get master seed
      */
     uint64_t getMasterSeed() const { return masterSeed_; }
-    
+
     /**
      * @brief Get reproducibility records
      */
     const std::vector<ReproRecord>& getReproRecords() const { return reproRecords_; }
-    
+
     /**
      * @brief Save RNG state for checkpoint
      */
@@ -152,7 +152,7 @@ public:
         // would need to serialize internal state array
         return state;
     }
-    
+
     /**
      * @brief Restore RNG state from checkpoint
      */
@@ -166,28 +166,28 @@ public:
             masterRng_.seed(combinedSeed);
         }
     }
-    
+
     /**
      * @brief Enable/disable reproducibility recording
      */
     void setRecordReproducibility(bool record) { recordRepro_ = record; }
-    
+
 private:
     // Master RNG engine
     std::mt19937_64 masterRng_;
-    
+
     // Distributions
     std::uniform_real_distribution<double> uniform_;
     std::normal_distribution<double> normal_;
-    
+
     // State tracking
     uint64_t masterSeed_;
     uint64_t currentStep_;
-    
+
     // Reproducibility tracking
     bool recordRepro_;
     std::vector<ReproRecord> reproRecords_;
-    
+
     /**
      * @brief Record access for reproducibility debugging
      */
@@ -198,7 +198,7 @@ private:
             reproRecords_.emplace_back(currentStep_, stateHash, operation);
         }
     }
-    
+
     /**
      * @brief SplitMix64 for generating uncorrelated seeds
      */
@@ -214,7 +214,7 @@ private:
 
 /**
  * @brief Global GCMC RNG singleton (optional pattern)
- * 
+ *
  * Usage:
  *   auto& rng = GlobalGCMCRNG::getInstance();
  *   double r = rng.uniform();
@@ -225,11 +225,11 @@ public:
         static GCMCRNG instance;
         return instance;
     }
-    
+
     // Delete copy/move constructors
     GlobalGCMCRNG(const GlobalGCMCRNG&) = delete;
     GlobalGCMCRNG& operator=(const GlobalGCMCRNG&) = delete;
-    
+
 private:
     GlobalGCMCRNG() = default;
 };

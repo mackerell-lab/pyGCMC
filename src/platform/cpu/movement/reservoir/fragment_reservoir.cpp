@@ -19,23 +19,23 @@ void FragmentReservoir::Statistics::print() const {
     std::cout << "  Memory Compactions: " << memoryCompactions << std::endl;
     std::cout << "  Peak Active Count: " << peakActiveCount << std::endl;
     std::cout << "  Average Active Count: " << averageActiveCount << std::endl;
-    
+
     if (!activeCountByType.empty()) {
         std::cout << "\nPer-Type Statistics:" << std::endl;
         for (const auto& [typeId, count] : activeCountByType) {
             std::cout << "  Type " << typeId << ":" << std::endl;
             std::cout << "    Active: " << count;
-            
+
             auto ghostIt = ghostCountByType.find(typeId);
             if (ghostIt != ghostCountByType.end()) {
                 std::cout << ", Ghost: " << ghostIt->second;
             }
-            
+
             auto lifetimeIt = averageLifetimeByType.find(typeId);
             if (lifetimeIt != averageLifetimeByType.end() && lifetimeIt->second > 0) {
                 std::cout << ", Avg Lifetime: " << lifetimeIt->second;
             }
-            
+
             auto acceptIt = acceptanceRateByType.find(typeId);
             if (acceptIt != acceptanceRateByType.end()) {
                 std::cout << ", Accept Rate: " << (acceptIt->second * 100) << "%";
@@ -43,7 +43,7 @@ void FragmentReservoir::Statistics::print() const {
             std::cout << std::endl;
         }
     }
-    
+
     if (insertionTimeMs > 0 || deletionTimeMs > 0) {
         std::cout << "\nPerformance Metrics:" << std::endl;
         if (totalInsertions > 0) {
@@ -65,7 +65,7 @@ void FragmentReservoir::Statistics::reset() {
     ghostCountByType.clear();
     averageLifetimeByType.clear();
     acceptanceRateByType.clear();
-    
+
     // Reset global statistics
     totalInsertions = 0;
     totalDeletions = 0;
@@ -74,7 +74,7 @@ void FragmentReservoir::Statistics::reset() {
     averageGhostLifetime = 0.0;
     peakActiveCount = 0;
     averageActiveCount = 0.0;
-    
+
     // Reset performance metrics
     insertionTimeMs = 0.0;
     deletionTimeMs = 0.0;
@@ -204,12 +204,12 @@ void FragmentReservoir::updateAllActivities(double beta) {
 int FragmentReservoir::createInstance(int templateId, const Vector3& position, const Quaternion& orientation) {
     auto* tmpl = getTemplate(templateId);
     if (!tmpl) return -1;
-    
+
     int instanceId = -1;
-    
+
     // Priority 1: Try to recycle a ghost instance
     instanceId = recycleGhost(templateId);
-    
+
     if (instanceId >= 0) {
         // Reuse existing ghost instance
         auto& instance = instances_[instanceId];
@@ -220,7 +220,7 @@ int FragmentReservoir::createInstance(int templateId, const Vector3& position, c
         instance.isGhost = false;
         instance.insertionTime = currentStep_;
         // residueIndex will be set by pool if needed
-        
+
         activeInstances_.insert(instanceId);
         ghostInstances_.erase(instanceId);
         stats_.ghostRecycles++;
@@ -237,31 +237,31 @@ int FragmentReservoir::createInstance(int templateId, const Vector3& position, c
         instance.isGhost = false;
         instance.insertionTime = currentStep_;
         instance.residueIndex = -1;  // Initialize residueIndex
-        
+
         instances_[instanceId] = instance;
         activeInstances_.insert(instanceId);
     }
-    
+
     // Update template instances mapping
     templateInstances_[templateId].insert(instanceId);
-    
+
     // Update per-type active count
     perTypeActiveCount_[templateId]++;
-    
+
     // Update statistics
     stats_.totalInsertions++;
-    
+
     // Update peak active count
     int currentActive = activeInstances_.size();
     if (currentActive > stats_.peakActiveCount) {
         stats_.peakActiveCount = currentActive;
     }
-    
+
     // Update per-type statistics
     stats_.activeCountByType[templateId] = perTypeActiveCount_[templateId];
-    
+
     // TODO: If pool_ is not null, call pool_->insertMolecule() to get residueIndex
-    
+
     return instanceId;
 }
 
@@ -274,52 +274,52 @@ int FragmentReservoir::createInstanceCBMC(int templateId, const std::vector<Vect
 bool FragmentReservoir::deleteInstance(int instanceId) {
     auto it = instances_.find(instanceId);
     if (it == instances_.end() || !it->second.isActive) return false;
-    
+
     int templateId = it->second.templateId;
-    
+
     // Mark as ghost
     it->second.isActive = false;
     it->second.isGhost = true;
-    
+
     // Move from active to ghost sets
     activeInstances_.erase(instanceId);
     ghostInstances_.insert(instanceId);
-    
+
     // Add to ghost pool for this template (FIFO)
     GhostRecord ghost;
     ghost.instanceId = instanceId;
     ghost.templateId = templateId;
     ghost.deletionStep = currentStep_;
     ghostPools_[templateId].push_back(ghost);
-    
+
     // Update per-type active count
     if (perTypeActiveCount_[templateId] > 0) {
         perTypeActiveCount_[templateId]--;
     }
-    
+
     // TODO: If pool_ is not null and residueIndex >= 0, call pool_->deleteResidue(residueIndex)
     int residueIndex = it->second.residueIndex;
     if (pool_ && residueIndex >= 0) {
         // pool_->deleteResidue(residueIndex); // Uncomment when ActivePool is ready
         it->second.residueIndex = -1;
     }
-    
+
     // Update statistics
     stats_.totalDeletions++;
-    
+
     // Update per-type statistics
     stats_.activeCountByType[templateId] = perTypeActiveCount_[templateId];
     stats_.ghostCountByType[templateId] = ghostPools_[templateId].size();
-    
+
     return true;
 }
 
 bool FragmentReservoir::restoreInstance(int instanceId, const Vector3& position, const Quaternion& orientation) {
     auto it = instances_.find(instanceId);
     if (it == instances_.end() || it->second.isActive) return false;
-    
+
     int templateId = it->second.templateId;
-    
+
     // Reset instance state
     it->second.isActive = true;
     it->second.isGhost = false;
@@ -327,11 +327,11 @@ bool FragmentReservoir::restoreInstance(int instanceId, const Vector3& position,
     it->second.centerOfMass = position;
     it->second.orientation = orientation;
     it->second.insertionTime = currentStep_;
-    
+
     // Move from ghost to active sets
     ghostInstances_.erase(instanceId);
     activeInstances_.insert(instanceId);
-    
+
     // Remove from ghost pool if present
     auto poolIt = ghostPools_.find(templateId);
     if (poolIt != ghostPools_.end()) {
@@ -342,23 +342,23 @@ bool FragmentReservoir::restoreInstance(int instanceId, const Vector3& position,
             ghosts.end()
         );
     }
-    
+
     // Update per-type active count
     perTypeActiveCount_[templateId]++;
-    
+
     // TODO: If pool_ is not null, call pool_->insertMolecule() to reallocate residueIndex
-    
+
     return true;
 }
 
 bool FragmentReservoir::purgeInstance(int instanceId) {
     auto it = instances_.find(instanceId);
     if (it == instances_.end()) return false;
-    
+
     activeInstances_.erase(instanceId);
     ghostInstances_.erase(instanceId);
     instances_.erase(it);
-    
+
     return true;
 }
 
@@ -386,14 +386,14 @@ int FragmentReservoir::recycleGhost(int templateId) {
     if (it == ghostPools_.end() || it->second.empty()) {
         return -1;  // No ghosts available
     }
-    
+
     // Get the oldest ghost (FIFO)
     GhostRecord ghost = it->second.front();
     it->second.pop_front();
-    
+
     // Remove from ghostInstances_ set
     ghostInstances_.erase(ghost.instanceId);
-    
+
     // Return the instance ID for reuse
     return ghost.instanceId;
 }
@@ -403,9 +403,9 @@ int FragmentReservoir::purgeGhosts(int maxToKeep) {
     if (maxToKeep < 0) {
         maxToKeep = config_.maxGhosts;
     }
-    
+
     int totalPurged = 0;
-    
+
     // Process each template's ghost pool
     for (auto& [templateId, ghosts] : ghostPools_) {
         // Keep only the newest maxToKeep ghosts
@@ -413,13 +413,13 @@ int FragmentReservoir::purgeGhosts(int maxToKeep) {
             // Remove the oldest ghost (from front)
             GhostRecord ghost = ghosts.front();
             ghosts.pop_front();
-            
+
             // Completely purge this instance
             purgeInstance(ghost.instanceId);
             totalPurged++;
         }
     }
-    
+
     return totalPurged;
 }
 
@@ -432,7 +432,7 @@ int FragmentReservoir::getGhostCount(int templateId) const {
         }
         return totalCount;
     }
-    
+
     // Return ghost count for specific template
     auto it = ghostPools_.find(templateId);
     if (it != ghostPools_.end()) {
@@ -478,7 +478,7 @@ std::vector<int> FragmentReservoir::getActiveInstances(int templateId) const {
 
 int FragmentReservoir::getActiveCount(int templateId) const {
     if (templateId < 0) return activeInstances_.size();
-    
+
     int count = 0;
     for (int id : activeInstances_) {
         auto it = instances_.find(id);
@@ -492,7 +492,7 @@ int FragmentReservoir::getActiveCount(int templateId) const {
 std::vector<int> FragmentReservoir::findInstancesInSphere(const Vector3& center, double radius) const {
     std::vector<int> result;
     double radiusSq = radius * radius;
-    
+
     for (int id : activeInstances_) {
         auto it = instances_.find(id);
         if (it != instances_.end()) {
@@ -510,7 +510,7 @@ std::vector<int> FragmentReservoir::findInstancesInSphere(const Vector3& center,
 
 std::vector<int> FragmentReservoir::findInstancesInBox(const Vector3& min, const Vector3& max) const {
     std::vector<int> result;
-    
+
     for (int id : activeInstances_) {
         auto it = instances_.find(id);
         if (it != instances_.end()) {
@@ -527,7 +527,7 @@ std::vector<int> FragmentReservoir::findInstancesInBox(const Vector3& min, const
 
 std::vector<int> FragmentReservoir::getInstancesByEnergy(double minE, double maxE) const {
     std::vector<int> result;
-    
+
     for (int id : activeInstances_) {
         auto it = instances_.find(id);
         if (it != instances_.end()) {
@@ -542,7 +542,7 @@ std::vector<int> FragmentReservoir::getInstancesByEnergy(double minE, double max
 
 std::vector<int> FragmentReservoir::getInstancesByLifetime(double minTime, double maxTime, double currentStep) const {
     std::vector<int> result;
-    
+
     for (int id : activeInstances_) {
         auto it = instances_.find(id);
         if (it != instances_.end()) {
@@ -573,16 +573,16 @@ void FragmentReservoir::printStatistics() const {
 void FragmentReservoir::compact() {
     // Check if compaction is needed based on config
     if (!config_.autoCompact) return;
-    
+
     double fragmentation = getFragmentation();
     if (fragmentation < config_.compactThreshold) return;
-    
+
     // If pool is available, delegate compaction to it
     if (pool_) {
         // pool_->compact(); // Uncomment when ActivePool::compact is ready
         stats_.memoryCompactions++;
     }
-    
+
     // Clean up excess ghosts if needed
     if (config_.maxGhosts > 0) {
         purgeGhosts(config_.maxGhosts);
@@ -591,14 +591,14 @@ void FragmentReservoir::compact() {
 
 double FragmentReservoir::getFragmentation() const {
     if (!pool_) return 0.0;
-    
+
     // Simple fragmentation metric: ratio of ghosts to total instances
     int totalInstances = instances_.size();
     if (totalInstances == 0) return 0.0;
-    
+
     int ghostCount = ghostInstances_.size();
     return static_cast<double>(ghostCount) / totalInstances;
-    
+
     // TODO: When ActivePool provides getFragmentation(), use:
     // return pool_->getFragmentation();
 }

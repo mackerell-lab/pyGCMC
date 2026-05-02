@@ -68,19 +68,19 @@ public:
 
     // Get atom count
     size_t get_num_atoms() const { return atoms.size(); }
-    
+
     // Get residue count
     size_t get_num_residues() const { return residues.size(); }
-    
+
     // Get fragment count
     size_t get_num_segments() const { return segments.size(); }
-    
+
     // Get bond count
     size_t get_num_bonds() const { return bonds.size(); }
-    
+
     // Get bond angle count
     size_t get_num_angles() const { return angles.size(); }
-    
+
     // Get dihedral angle count (excluding improper)
     size_t get_num_dihedrals() const {
         size_t count = 0;
@@ -89,7 +89,7 @@ public:
         }
         return count;
     }
-    
+
     // Get improper count
     size_t get_num_impropers() const {
         size_t count = 0;
@@ -104,7 +104,7 @@ public:
         StandardCmap std_cmap;
         std_cmap.raw_atoms = cmap.atoms;
         std_cmap.is_psf_format = (cmap.atoms[5] != -1);  // Determine if it is PSF format
-        
+
         // Set standardized 5 atoms
         if (std_cmap.is_psf_format) {
             // PSF format: Use the first 4 atoms and the 8th atom

@@ -28,7 +28,7 @@ void MCComposite::initializeForceField(const model::ForceField& ff) {
 void MCComposite::initializeFromMolecular(const std::shared_ptr<model::Molecular>& molecular) {
     // Store molecular system for later parameter validation
     molecular_ = molecular;
-    
+
     // Initialize state from molecular system
     initializer_.initializeFromMolecular(state_, molecular);
 }
@@ -43,7 +43,7 @@ void MCComposite::addMovementMolecules(const std::vector<MovementMolecularInfo>&
     MCMovementTypeCollector typeCollector;
     model::TypeMaps preResidueTypes = state_.residueTypes;
     model::TypeMaps preAtomTypes = state_.atomTypes;
-    
+
     std::vector<int> newMovementAtomTypes = typeCollector.collectMovementTypes(
         molecules, preResidueTypes, preAtomTypes);
 
@@ -53,7 +53,7 @@ void MCComposite::addMovementMolecules(const std::vector<MovementMolecularInfo>&
     newState.forcefield = state_.forcefield;
     newState.residueTypes = preResidueTypes;
     newState.atomTypes = preAtomTypes;
-    
+
     // Preserve previous movement residues information
     newState.movementResidues = state_.movementResidues;
     newState.movementAtomTypes = state_.movementAtomTypes;
@@ -61,7 +61,7 @@ void MCComposite::addMovementMolecules(const std::vector<MovementMolecularInfo>&
 
     // Add new movement atom types
     for (int typeIdx : newMovementAtomTypes) {
-        if (std::find(newState.movementAtomTypes.begin(), newState.movementAtomTypes.end(), typeIdx) 
+        if (std::find(newState.movementAtomTypes.begin(), newState.movementAtomTypes.end(), typeIdx)
             == newState.movementAtomTypes.end()) {
             newState.movementAtomTypes.push_back(typeIdx);
         }
@@ -122,4 +122,4 @@ void MCComposite::validateParameters(const model::ForceField& ff, const std::sha
 
 } // namespace montecarlo
 } // namespace system
-} // namespace pygcmc 
+} // namespace pygcmc

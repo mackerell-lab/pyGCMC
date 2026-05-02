@@ -40,11 +40,11 @@ static void computeRealSpacePGPFixed(model::MCState& state, bool movement_only, 
     const float* box = state.info.box;
     const float cutoff = state.info.cutoff;
     const float cutoff2 = cutoff * cutoff;
-    
+
     double real_space_total = 0.0;
     int debug_count = 0;
     const int max_debug_pairs = 5;
-    
+
     // Calculate residue pairs.
     // For movement_only mode, evaluate pairs where at least one residue is movement.
     for(int r1 = 0; r1 < state.activeResidueCount; r1++) {
@@ -63,53 +63,53 @@ static void computeRealSpacePGPFixed(model::MCState& state, bool movement_only, 
                 // Moving-moving pairs are evaluated once.
                 if (r2_is_movement && r2 < r1) continue;
             }
-            
+
             // If both residues are fixed, skip (already in precomputed grid)
             if(residues[r1].fixed && residues[r2].fixed) continue;
-            
+
             // Loop over atoms in each residue
-            for(int i = residues[r1].atomStart; 
+            for(int i = residues[r1].atomStart;
                 i < residues[r1].atomStart + residues[r1].atomCount; i++) {
-                
+
                 if(i >= state.activeAtomCount) continue;
-                
+
                 int j_start = (r1 == r2) ? i + 1 : residues[r2].atomStart;
                 int j_end = residues[r2].atomStart + residues[r2].atomCount;
-                
+
                 for(int j = j_start; j < j_end; j++) {
-                    
+
                     if(j >= state.activeAtomCount) continue;
-                    
+
                     float dx = atoms[i].x - atoms[j].x;
                     float dy = atoms[i].y - atoms[j].y;
                     float dz = atoms[i].z - atoms[j].z;
-                    
+
                     // Apply periodic boundary conditions
                     dx -= box[0] * round(dx / box[0]);
                     dy -= box[1] * round(dy / box[1]);
                     dz -= box[2] * round(dz / box[2]);
-                    
+
                     float r2 = dx*dx + dy*dy + dz*dz;
-                    
+
                     // Skip pairs beyond cutoff
                     if(r2 > cutoff2) continue;
-                    
+
                     // Compute energy
                     float r = sqrt(r2);
                     float qi = atoms[i].charge;
                     float qj = atoms[j].charge;
-                    
+
                     // Skip neutral atoms
                     if(std::abs(qi) < 1e-6 || std::abs(qj) < 1e-6) continue;
-                    
+
                     // FIXED: Calculate erfc directly using getPGPParams()
                     double alphaR = getPGPParams().alpha * r;
                     double erfc_val = std::erfc(alphaR);
                     double pair_energy = qi * qj * erfc_val / r;
-                    
+
                     // Print debug information
                     if (platform::is_debug_mode() && debug_count < max_debug_pairs) {
-                        platform::log(LogLevel::DEBUG, 
+                        platform::log(LogLevel::DEBUG,
                             "PGPFixed: Atom pair (", i, ",", j, "): ",
                             "r = ", r, " nm, ",
                             "q1*q2 = ", qi * qj, ", ",
@@ -121,7 +121,7 @@ static void computeRealSpacePGPFixed(model::MCState& state, bool movement_only, 
 
                     // Accumulate to total energy
                     real_space_total += pair_energy;
-                    
+
                     // Store energy in residues
                     if (store_in_residues) {
                         if (r1 == r2) {
@@ -137,7 +137,7 @@ static void computeRealSpacePGPFixed(model::MCState& state, bool movement_only, 
             }
         }
     }
-    
+
     // Store total real-space energy (not yet multiplied by COULOMB)
     state.ewald_energy.real_space = real_space_total;
 }
@@ -150,27 +150,27 @@ void computeSystemEnergyPGPFixed(model::MCState& state) {
     if (!getPGPParams().initialized) {
         throw std::runtime_error("PGP parameters not initialized. Call setPGPParameters() first.");
     }
-    
+
     if (platform::is_debug_mode()) {
         platform::log(LogLevel::DEBUG, "Computing total system energy using PGP-Fixed method");
     }
-    
+
     // 1. Calculate grid potential interpolation part
     double grid_energy = 0.0;
     interpolateMoleculeEnergy(state, grid_energy);
-    
+
     // 2. Calculate real space part with FIXED implementation
     computeRealSpacePGPFixed(state, false, true);
-    
+
     // 3. Calculate self energy correction
     state.ewald_energy.self = computeSelfEnergyPGPImpl(state, false);
-    
+
     // 4. Calculate LJ interactions using direct cutoff method
     computeSystemVdwEnergyCutoff(state);
-    
+
     // Multiply real space energy by COULOMB constant
     state.ewald_energy.real_space *= COULOMB;
-    
+
     // Calculate total LJ energy
     double vdw_total = 0.0;
     for (const auto& residue : state.residues) {
@@ -178,12 +178,12 @@ void computeSystemEnergyPGPFixed(model::MCState& state) {
             vdw_total += residue.energy_vdw;
         }
     }
-    
+
     // Calculate total energy
     state.ewald_energy.reciprocal = grid_energy;
-    state.ewald_energy.total = grid_energy + state.ewald_energy.real_space + 
+    state.ewald_energy.total = grid_energy + state.ewald_energy.real_space +
                              state.ewald_energy.self + vdw_total;
-    
+
     if (platform::is_debug_mode()) {
         platform::log(LogLevel::DEBUG, "PGP-Fixed system energy components: ");
         platform::log(LogLevel::DEBUG, "  Grid energy = ", grid_energy);
@@ -201,21 +201,21 @@ void computeMovementEnergyPGPFixed(model::MCState& state) {
     if (!getPGPParams().initialized) {
         throw std::runtime_error("PGP parameters not initialized. Call setPGPParameters() first.");
     }
-    
+
     if (platform::is_debug_mode()) {
         platform::log(LogLevel::DEBUG, "Computing movement residue energy using PGP-Fixed method");
     }
-    
+
     // 1. Calculate grid potential interpolation part
     double grid_energy = 0.0;
     interpolateMoleculeEnergy(state, grid_energy);
-    
+
     // 2. Calculate real space part (only for moving residues)
     computeRealSpacePGPFixed(state, true, true);
-    
+
     // 3. Calculate self energy correction (only for moving residues)
     state.ewald_energy.self = computeSelfEnergyPGPImpl(state, true);
-    
+
     // 4. Calculate LJ interactions for movement residues only.
     // If movementResidues is empty, use all non-fixed active residues as implicit movement set.
     const bool injected_implicit_movement = state.movementResidues.empty();
@@ -238,10 +238,10 @@ void computeMovementEnergyPGPFixed(model::MCState& state) {
     }
     computeMovementVdwEnergyDirect(state, true, false);
     state.forcefield.numMovementTypes = original_num_movement_types;
-    
+
     // Multiply real space energy by COULOMB constant
     state.ewald_energy.real_space *= COULOMB;
-    
+
     // Only accumulate LJ energy for moving residues
     double vdw_total = 0.0;
     for (const auto& movementInfo : state.movementResidues) {
@@ -252,16 +252,16 @@ void computeMovementEnergyPGPFixed(model::MCState& state) {
             }
         }
     }
-    
+
     // Calculate total energy
     state.ewald_energy.reciprocal = grid_energy;
-    state.ewald_energy.total = grid_energy + state.ewald_energy.real_space + 
+    state.ewald_energy.total = grid_energy + state.ewald_energy.real_space +
                              state.ewald_energy.self + vdw_total;
 
     if (injected_implicit_movement) {
         state.movementResidues.clear();
     }
-    
+
     if (platform::is_debug_mode()) {
         platform::log(LogLevel::DEBUG, "PGP-Fixed movement energy components: ");
         platform::log(LogLevel::DEBUG, "  Grid energy = ", grid_energy);

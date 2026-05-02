@@ -9,7 +9,7 @@ namespace montecarlo {
 
 /**
  * @brief Main class for Monte Carlo simulation management (Compatibility Layer)
- * 
+ *
  * This is a compatibility layer that maintains the original MonteCarloSystem API
  * while internally using the new modular architecture. All original functionality
  * is preserved while gaining the benefits of the refactored design.
@@ -33,7 +33,7 @@ public:
     // ------------------------------------------------------------
     // System initialization and setup
     // ------------------------------------------------------------
-    
+
     /**
      * @brief Initialize the Monte Carlo system with given parameters
      * @param info System parameters including box size, temperature, cutoff distance
@@ -94,14 +94,14 @@ public:
      * @brief Get current type mappings
      * @return Current atom type mapping system
      */
-    const model::TypeMaps& getTypeMaps() const { 
-        return impl_.getTypeMaps(); 
+    const model::TypeMaps& getTypeMaps() const {
+        return impl_.getTypeMaps();
     }
 
     // ------------------------------------------------------------
     // Core GCMC operations
     // ------------------------------------------------------------
-    
+
     /**
      * @brief Insert a new residue
      * @param res Residue to insert
@@ -153,37 +153,37 @@ public:
     // ------------------------------------------------------------
     // State access
     // ------------------------------------------------------------
-    
+
     /**
      * @brief Get current system state
      * @return Const reference to current state
      */
-    const model::MCState& getState() const { 
-        return impl_.getState(); 
+    const model::MCState& getState() const {
+        return impl_.getState();
     }
 
     /**
      * @brief Get modifiable system state
      * @return Modifiable reference to current state
      */
-    model::MCState& getState() { 
-        return impl_.getState(); 
+    model::MCState& getState() {
+        return impl_.getState();
     }
 
     /**
      * @brief Get number of active residues
      * @return Current active residue count
      */
-    int getActiveResidueCount() const { 
-        return impl_.getActiveResidueCount(); 
+    int getActiveResidueCount() const {
+        return impl_.getActiveResidueCount();
     }
 
     /**
      * @brief Get number of active atoms
      * @return Current active atom count
      */
-    int getActiveAtomCount() const { 
-        return impl_.getActiveAtomCount(); 
+    int getActiveAtomCount() const {
+        return impl_.getActiveAtomCount();
     }
 
     /**
@@ -219,7 +219,7 @@ public:
      * @brief Get whether the switching function is currently enabled
      * @return Whether the switching function is enabled
      */
-    bool isUsingSwitchingFunction() const { 
+    bool isUsingSwitchingFunction() const {
         return impl_.getState().info.use_switching;
     }
 
@@ -227,7 +227,7 @@ public:
      * @brief Get inner cutoff radius
      * @return Inner cutoff radius (nm)
      */
-    float getSwitchingROn() const { 
+    float getSwitchingROn() const {
         return impl_.getState().info.r_on;
     }
 
@@ -235,7 +235,7 @@ public:
      * @brief Get outer cutoff radius
      * @return Outer cutoff radius (nm)
      */
-    float getSwitchingROff() const { 
+    float getSwitchingROff() const {
         return impl_.getState().info.r_off;
     }
 
@@ -261,4 +261,4 @@ using MonteCarloSystem = montecarlo::MCMain;
 using MovementMolecularInfo = montecarlo::MovementMolecularInfo;
 
 } // namespace system
-} // namespace pygcmc 
+} // namespace pygcmc

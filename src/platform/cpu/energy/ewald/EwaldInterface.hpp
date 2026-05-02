@@ -9,14 +9,14 @@ namespace cpu {
 
 /**
  * @brief Compute energy for moving residues only
- * 
+ *
  * @param state MC state
  */
 void computeMovementEwaldEnergy(model::MCState& state);
 
 /**
  * @brief Initialize Ewald with automatic parameter optimization
- * 
+ *
  * @param cutoff Cutoff distance
  * @param box Box dimensions
  * @param alpha Alpha parameter (0 for auto)
@@ -26,7 +26,7 @@ void initializeEwald(double cutoff, const double box[3], double alpha = 0.0, dou
 
 /**
  * @brief Check if Ewald is properly initialized
- * 
+ *
  * @return true if initialized
  */
 bool isEwaldInitialized();
@@ -38,7 +38,7 @@ void resetEwald();
 
 /**
  * @brief Get convergence information for all components
- * 
+ *
  * @param state MC state
  * @param realSpaceError Real space error estimate
  * @param reciprocalError Reciprocal space error estimate
@@ -58,4 +58,4 @@ void checkEwaldParameterConsistency();
 } // namespace platform
 } // namespace pygcmc
 
-#endif // EWALDINTERFACE_HPP 
+#endif // EWALDINTERFACE_HPP

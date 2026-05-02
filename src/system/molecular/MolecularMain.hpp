@@ -15,7 +15,7 @@ class MolecularComposite;
 
 /**
  * @brief Main interface for molecular system operations
- * 
+ *
  * This class provides backward compatibility with the original MolecularSystem class
  * while using the new modular architecture internally.
  */
@@ -62,4 +62,4 @@ using MolecularSystem = molecular::MolecularMain;
 } // namespace system
 } // namespace pygcmc
 
-#endif // PYGCMC_SYSTEM_MOLECULAR_MAIN_HPP 
+#endif // PYGCMC_SYSTEM_MOLECULAR_MAIN_HPP

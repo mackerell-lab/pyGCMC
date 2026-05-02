@@ -14,7 +14,7 @@ namespace cpu {
 
 /**
  * @brief FBP optimizer for Drude positions
- * 
+ *
  * Uses force balance equation: r_drude = r_parent + F_external/k
  * Typically converges in 2-5 iterations
  */
@@ -22,7 +22,7 @@ class DrudeFBP : public DrudeOptimizer {
 public:
     DrudeFBP() = default;
     ~DrudeFBP() = default;
-    
+
     bool optimize(
         model::MCState&,
         const std::vector<DrudeParticle>&,
@@ -31,7 +31,7 @@ public:
     ) override {
         return false;
     }
-    
+
     const char* getName() const override { return "FBP"; }
 };
 

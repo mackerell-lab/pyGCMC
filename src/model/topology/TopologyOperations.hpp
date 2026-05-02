@@ -74,9 +74,9 @@ public:
     }
 
     // Add connectivity operations
-    static inline void addBond(std::vector<TopologyBond>& bonds, 
+    static inline void addBond(std::vector<TopologyBond>& bonds,
                               const std::vector<TopologyAtom>& atoms,
-                              int atom1, int atom2, double length = 0.0, 
+                              int atom1, int atom2, double length = 0.0,
                               double force_constant = 0.0, int function_type = 1) {
         if (!hasAtom(atoms, atom1) || !hasAtom(atoms, atom2)) {
             throw std::out_of_range("Invalid atom indices in add_bond");
@@ -110,7 +110,7 @@ public:
     static inline void addDihedral(std::vector<TopologyDihedral>& dihedrals,
                                   const std::vector<TopologyAtom>& atoms,
                                   int atom1, int atom2, int atom3, int atom4, int multiplicity = 1,
-                                  double angle = 0.0, double force_constant = 0.0, 
+                                  double angle = 0.0, double force_constant = 0.0,
                                   bool improper = false, int function_type = 1) {
         if (!hasAtom(atoms, atom1) || !hasAtom(atoms, atom2) || !hasAtom(atoms, atom3) || !hasAtom(atoms, atom4)) {
             throw std::out_of_range("Invalid atom indices in add_dihedral");

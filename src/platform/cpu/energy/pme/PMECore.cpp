@@ -17,7 +17,7 @@ namespace cpu {
 void clearPMEState() {
     // Reset PME parameters using smart pointer
     resetPMEParamsPtr();
-    
+
     // Clear FFT static weights to force regeneration on next use
     CustomFFT::clearFFTWeights();
 }
@@ -26,4 +26,4 @@ void clearPMEState() {
 
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

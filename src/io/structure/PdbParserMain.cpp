@@ -34,7 +34,7 @@ bool PdbParserMain::parse_to_structure(const std::string& filename, model::Struc
         IOConfig::printError("Error: Could not open file " + filename);
         return false;
     }
-    
+
     return parse_common(file, structure);
 }
 
@@ -47,12 +47,12 @@ bool PdbParserMain::parse_common(std::istream& input, model::Structure& structur
     std::string line;
     std::shared_ptr<model::Residue> currentResidue = nullptr;
     bool success = true;
-    
+
     while (std::getline(input, line)) {
         if (line.empty()) continue;
-        
+
         PdbParserStructures::RecordType recordType = PdbParserStructures::getRecordType(line);
-        
+
         switch (recordType) {
             case PdbParserStructures::RecordType::ATOM:
             case PdbParserStructures::RecordType::HETATM:
@@ -76,17 +76,17 @@ bool PdbParserMain::parse_common(std::istream& input, model::Structure& structur
             default:
                 continue;
         }
-        
+
         if (!success) {
             return false;
         }
     }
-    
+
     // Calculate center of mass for the last residue if not already done
     if (currentResidue) {
         currentResidue->calculate_center_of_mass();
     }
-    
+
     return true;
 }
 

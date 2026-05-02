@@ -113,16 +113,16 @@ void init_montecarlo_bindings(py::module& m, py::module&) {
             new_state.numMovementAtomTypes = state.numMovementAtomTypes;
             return new_state;
         }, "Create a deep copy of the MCState object")
-        .def("addAtom", &pygcmc::model::MCState::addAtom, 
+        .def("addAtom", &pygcmc::model::MCState::addAtom,
              py::arg("atom"),
              "Add an atom and update activeAtomCount")
-        .def("removeAtom", &pygcmc::model::MCState::removeAtom, 
+        .def("removeAtom", &pygcmc::model::MCState::removeAtom,
              py::arg("index"),
              "Remove an atom by index")
-        .def("addResidue", &pygcmc::model::MCState::addResidue, 
+        .def("addResidue", &pygcmc::model::MCState::addResidue,
              py::arg("residue"),
              "Add a residue and update activeResidueCount")
-        .def("removeResidue", &pygcmc::model::MCState::removeResidue, 
+        .def("removeResidue", &pygcmc::model::MCState::removeResidue,
              py::arg("index"),
              "Remove a residue by index")
         .def_property("atoms",
@@ -176,13 +176,13 @@ void init_montecarlo_bindings(py::module& m, py::module&) {
 
     // Bind MCForceField
     py::class_<pygcmc::model::MCForceField> forcefield_class(m, "MCForceField");
-    
+
     // Bind MixingRule enum
     py::enum_<pygcmc::model::MCForceField::MixingRule>(forcefield_class, "MixingRule")
         .value("None", pygcmc::model::MCForceField::MixingRule::None)
         .value("LorentzBerthelot", pygcmc::model::MCForceField::MixingRule::LorentzBerthelot)
         .value("Geometric", pygcmc::model::MCForceField::MixingRule::Geometric);
-    
+
     // Bind NBFixEntry struct
     py::class_<pygcmc::model::MCForceField::NBFixEntry>(forcefield_class, "NBFixEntry")
         .def(py::init<>())
@@ -190,7 +190,7 @@ void init_montecarlo_bindings(py::module& m, py::module&) {
         .def_readwrite("type2", &pygcmc::model::MCForceField::NBFixEntry::type2)
         .def_readwrite("sigma", &pygcmc::model::MCForceField::NBFixEntry::sigma)
         .def_readwrite("eps", &pygcmc::model::MCForceField::NBFixEntry::eps);
-    
+
     forcefield_class
         .def(py::init<>())
         .def_readwrite("numTotalTypes", &pygcmc::model::MCForceField::numTotalTypes)

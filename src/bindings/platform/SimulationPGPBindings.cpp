@@ -22,9 +22,9 @@ void init_pgp_bindings(py::module& m) {
         },
         "Reset PGP global state to fix memory corruption issues. "
         "Call this between tests or when reinitializing PGP parameters.");
-        
+
     m.def("setPGPParameters",
-        [](float alpha, const std::vector<int>& meshSize, float potential_cutoff, const std::vector<int>& potentialGridSize, 
+        [](float alpha, const std::vector<int>& meshSize, float potential_cutoff, const std::vector<int>& potentialGridSize,
            int splineOrder, float tolerance) {
             if (meshSize.size() != 3) {
                 throw std::runtime_error("meshSize must have exactly three elements");
@@ -32,11 +32,11 @@ void init_pgp_bindings(py::module& m) {
             if (potentialGridSize.size() != 3) {
                 throw std::runtime_error("potentialGridSize must have exactly three elements");
             }
-            
+
             int meshSize_array[3] = { meshSize[0], meshSize[1], meshSize[2] };
             int potentialGridSize_array[3] = { potentialGridSize[0], potentialGridSize[1], potentialGridSize[2] };
-            
-            ::pygcmc::platform::cpu::energy::setPGPParameters(alpha, meshSize_array, potential_cutoff, 
+
+            ::pygcmc::platform::cpu::energy::setPGPParameters(alpha, meshSize_array, potential_cutoff,
                                                       potentialGridSize_array, splineOrder, tolerance);
         },
         "Set parameters for Precomputed Grid-Potential PME summation",
@@ -60,7 +60,7 @@ void init_pgp_bindings(py::module& m) {
             splineOrder (int, optional): B-spline interpolation order, default is 4
             tolerance (float, optional): Precision tolerance, default is 1e-5
         )docstring");
-        
+
     // Added core PGP function bindings
     m.def("precomputeGridPotential",
         [](::pygcmc::model::MCState& state, bool fixed_only) {
@@ -79,7 +79,7 @@ void init_pgp_bindings(py::module& m) {
             state (MCState): System state, containing atom coordinates, charges, and box information
             fixed_only (bool, optional): Whether to calculate only the fixed parts, default is True
         )docstring");
-        
+
     m.def("interpolateMoleculeEnergy",
         [](::pygcmc::model::MCState& state) {
             double energy = 0.0;
@@ -96,11 +96,11 @@ void init_pgp_bindings(py::module& m) {
 
         Parameters:
             state (MCState): System state, containing information about moving molecules
-        
+
         Returns:
             float: The calculated energy value
         )docstring");
-        
+
     // Add new function binding: calculateMoleculeEnergy
     m.def("calculateMoleculeEnergy",
         [](::pygcmc::model::MCState& state) {
@@ -113,30 +113,30 @@ void init_pgp_bindings(py::module& m) {
 
         This is an equivalent function to interpolateMoleculeEnergy, providing a more intuitive naming.
         It retrieves the energy value of moving molecules through B-spline interpolation from the precomputed potential grid.
-        
+
         Parameters:
             state (MCState): System state, containing information about moving molecules
-        
+
         Returns:
             float: The calculated energy value
         )docstring");
 
-    m.def("computeSystemEnergyPGP", 
+    m.def("computeSystemEnergyPGP",
         [](::pygcmc::model::MCState& state) {
             // Call fixed C++ function to calculate energy
             ::pygcmc::platform::cpu::energy::computeSystemEnergyPGPFixed(state);
-            
+
             // Convert from C++ struct to Python dictionary
             py::dict pgp_dict;
             pgp_dict["grid_energy"] = state.ewald_energy.reciprocal;  // grid energy is stored in reciprocal field
             pgp_dict["real_space"] = state.ewald_energy.real_space;
             pgp_dict["self"] = state.ewald_energy.self;
-            
+
             // Calculate total electrostatic energy
-            double electrostatic_total = state.ewald_energy.reciprocal + 
-                                        state.ewald_energy.real_space + 
+            double electrostatic_total = state.ewald_energy.reciprocal +
+                                        state.ewald_energy.real_space +
                                         state.ewald_energy.self;
-            
+
             // Accumulate VDW energy from residues
             double vdw = 0.0;
             for(const auto& res : state.residues) {
@@ -144,32 +144,32 @@ void init_pgp_bindings(py::module& m) {
                     vdw += res.energy_vdw;
                 }
             }
-            
+
             // Correctly calculate and save total energy
             double total = electrostatic_total + vdw;
             pgp_dict["total"] = total;
-            
+
             // Return tuple: (electrostatic_total, vdw_energy, pgp_dict)
             return py::make_tuple(electrostatic_total, vdw, pgp_dict);
         },
         "Calculate system energy using PGP-PME method");
-          
-    m.def("computeMovementEnergyPGP", 
+
+    m.def("computeMovementEnergyPGP",
         [](::pygcmc::model::MCState& state) {
             // Call fixed C++ function to calculate energy
             ::pygcmc::platform::cpu::energy::computeMovementEnergyPGPFixed(state);
-            
+
             // Convert from C++ struct to Python dictionary
             py::dict pgp_dict;
             pgp_dict["grid_energy"] = state.ewald_energy.reciprocal;  // grid energy is stored in reciprocal field
             pgp_dict["real_space"] = state.ewald_energy.real_space;
             pgp_dict["self"] = state.ewald_energy.self;
-            
+
             // Calculate total electrostatic energy
-            double electrostatic_total = state.ewald_energy.reciprocal + 
-                                        state.ewald_energy.real_space + 
+            double electrostatic_total = state.ewald_energy.reciprocal +
+                                        state.ewald_energy.real_space +
                                         state.ewald_energy.self;
-            
+
             // Only accumulate VDW energy from movement residues
             double vdw = 0.0;
             for(const auto& movementInfo : state.movementResidues) {
@@ -180,27 +180,27 @@ void init_pgp_bindings(py::module& m) {
                     }
                 }
             }
-            
+
             // Correctly calculate and save total energy
             double total = electrostatic_total + vdw;
             pgp_dict["total"] = total;
-            
+
             // Return tuple: (electrostatic_total, vdw_energy, pgp_dict)
             return py::make_tuple(electrostatic_total, vdw, pgp_dict);
         },
         "Calculate movement residue energy using PGP-PME method");
-        
+
     // PGP Complete bindings
-    m.def("computeSystemEnergyPGPComplete", 
+    m.def("computeSystemEnergyPGPComplete",
         [](::pygcmc::model::MCState& state) {
             // Call C++ function
             ::pygcmc::platform::cpu::energy::computeSystemEnergyPGPComplete(state);
-            
+
             // Calculate total electrostatic energy
-            double electrostatic_total = state.ewald_energy.real_space + 
-                                       state.ewald_energy.reciprocal + 
+            double electrostatic_total = state.ewald_energy.real_space +
+                                       state.ewald_energy.reciprocal +
                                        state.ewald_energy.self;
-            
+
             // Accumulate VDW energy from all residues
             double vdw = 0.0;
             for (const auto& res : state.residues) {
@@ -208,28 +208,28 @@ void init_pgp_bindings(py::module& m) {
                     vdw += res.energy_vdw;
                 }
             }
-            
+
             // Return tuple: (electrostatic_total, vdw_energy, total_energy)
             return py::make_tuple(electrostatic_total, vdw, electrostatic_total + vdw);
         },
         "Calculate complete system energy using PGP with intramolecular LJ interactions");
-        
-    m.def("computeMovementEnergyPGPComplete", 
+
+    m.def("computeMovementEnergyPGPComplete",
         [](::pygcmc::model::MCState& state) {
             // Call C++ function
             ::pygcmc::platform::cpu::energy::computeMovementEnergyPGPComplete(state);
-            
+
             // Convert from C++ struct to Python dictionary
             py::dict pgp_dict;
             pgp_dict["real_space"] = state.ewald_energy.real_space;
             pgp_dict["reciprocal"] = state.ewald_energy.reciprocal;
             pgp_dict["self"] = state.ewald_energy.self;
-            
+
             // Calculate total electrostatic energy
-            double electrostatic_total = state.ewald_energy.real_space + 
-                                       state.ewald_energy.reciprocal + 
+            double electrostatic_total = state.ewald_energy.real_space +
+                                       state.ewald_energy.reciprocal +
                                        state.ewald_energy.self;
-            
+
             // Only accumulate VDW energy from movement residues
             double vdw = 0.0;
             for(const auto& movementInfo : state.movementResidues) {
@@ -240,32 +240,32 @@ void init_pgp_bindings(py::module& m) {
                     }
                 }
             }
-            
+
             // Save total energy
             double total = electrostatic_total + vdw;
             pgp_dict["total"] = total;
-            
+
             // Return tuple: (electrostatic_total, vdw_energy, pgp_dict)
             return py::make_tuple(electrostatic_total, vdw, pgp_dict);
         },
         "Calculate movement energy using PGP Complete with LJ interactions");
-        
-    m.def("computeMovementEnergyPGPCompleteCorrect", 
+
+    m.def("computeMovementEnergyPGPCompleteCorrect",
         [](::pygcmc::model::MCState& state) {
             // Call the dedicated corrected implementation
             ::pygcmc::platform::cpu::energy::computeMovementEnergyPGPCompleteCorrect(state);
-            
+
             // Convert from C++ struct to Python dictionary
             py::dict pgp_dict;
             pgp_dict["real_space"] = state.ewald_energy.real_space;
             pgp_dict["reciprocal"] = state.ewald_energy.reciprocal;
             pgp_dict["self"] = state.ewald_energy.self;
-            
+
             // Calculate total electrostatic energy
-            double electrostatic_total = state.ewald_energy.real_space + 
-                                       state.ewald_energy.reciprocal + 
+            double electrostatic_total = state.ewald_energy.real_space +
+                                       state.ewald_energy.reciprocal +
                                        state.ewald_energy.self;
-            
+
             // Only accumulate VDW energy from movement residues
             double vdw = 0.0;
             if(state.movementResidues.empty()) {
@@ -285,11 +285,11 @@ void init_pgp_bindings(py::module& m) {
                     }
                 }
             }
-            
+
             // Save total energy
             double total = electrostatic_total + vdw;
             pgp_dict["total"] = total;
-            
+
             // Return tuple: (electrostatic_total, vdw_energy, pgp_dict)
             return py::make_tuple(electrostatic_total, vdw, pgp_dict);
         },

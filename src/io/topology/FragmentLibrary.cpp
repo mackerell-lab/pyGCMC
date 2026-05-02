@@ -64,26 +64,26 @@ bool FragmentLibrary::loadFromITP(const std::string& path, const std::string& na
                                   const std::string& coordinatePdbFile) {
     std::ifstream file(path);
     if (!file.good()) return false;
-    
+
     TemplateData tmpl;
     tmpl.name = name;
     tmpl.typeId = typeId;
-    
+
     std::string line, section;
     double totalMass = 0.0;
     double totalCharge = 0.0;
-    
+
     while (std::getline(file, line)) {
         // Remove comments
         size_t comment = line.find(';');
         if (comment != std::string::npos) {
             line = line.substr(0, comment);
         }
-        
+
         // Trim whitespace
         line.erase(line.begin(), std::find_if(line.begin(), line.end(), [](char c) { return !std::isspace(c); }));
         line.erase(std::find_if(line.rbegin(), line.rend(), [](char c) { return !std::isspace(c); }).base(), line.end());
-        
+
         // Check for section headers
         if (line.find("[ atoms ]") != std::string::npos) {
             section = "atoms";
@@ -96,10 +96,10 @@ bool FragmentLibrary::loadFromITP(const std::string& path, const std::string& na
             section = "";
             continue;
         }
-        
+
         // Skip empty lines
         if (line.empty()) continue;
-        
+
         // Parse atoms section
         if (section == "atoms") {
             std::istringstream iss(line);
@@ -108,7 +108,7 @@ bool FragmentLibrary::loadFromITP(const std::string& path, const std::string& na
             int resnr, cgnr;
             double charge;
             double mass = 0.0;
-            
+
             // Format: nr type resnr residue atom cgnr charge mass
             // Some GROMACS ITPs omit the mass column (mass can be derived from atomtypes);
             // accept both 7- and 8-column forms.
@@ -122,13 +122,13 @@ bool FragmentLibrary::loadFromITP(const std::string& path, const std::string& na
                 // Placeholder until remapped to MCState atom type indices.
                 atom.type = 0;
                 atom.name = atomname;
-                
+
                 // Initialize position to zero (will be set from PDB if available)
                 atom.x = 0.0f;
                 atom.y = 0.0f;
                 atom.z = 0.0f;
                 atom.updatePosition();
-                
+
                 tmpl.atoms.push_back(atom);
                 tmpl.atomTypeNames.push_back(atomType);
                 totalMass += mass;
@@ -172,10 +172,10 @@ bool FragmentLibrary::loadFromITP(const std::string& path, const std::string& na
         }
         tmpl.bonds.swap(filtered);
     }
-    
+
     // Calculate molecular weight and radius
     tmpl.molecularWeight = totalMass;
-    
+
     bool coordsLoaded = false;
     if (!coordinatePdbFile.empty() && !tmpl.atoms.empty()) {
         const auto pdbAtoms = readPdbAtomCoords(coordinatePdbFile);
@@ -258,15 +258,15 @@ bool FragmentLibrary::loadFromITP(const std::string& path, const std::string& na
     if (!coordsLoaded && !tmpl.atoms.empty()) {
         tmpl.radius = 0.15 * std::sqrt(static_cast<double>(tmpl.atoms.size()));
     }
-    
+
     file.close();
-    
+
     // Only add template if we successfully parsed atoms
     if (!tmpl.atoms.empty()) {
         addTemplate(tmpl);
         return true;
     }
-    
+
     return false;
 }
 

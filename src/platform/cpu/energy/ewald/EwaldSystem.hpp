@@ -9,14 +9,14 @@ namespace cpu {
 
 /**
  * @brief Compute total system energy using Ewald summation
- * 
+ *
  * @param state MC state
  */
 void computeSystemEwaldEnergy(model::MCState& state);
 
 /**
  * @brief Validate Ewald setup and parameters
- * 
+ *
  * @param state MC state
  * @return true if setup is valid
  */
@@ -24,7 +24,7 @@ bool validateEwaldSetup(const model::MCState& state);
 
 /**
  * @brief Get Ewald energy components breakdown
- * 
+ *
  * @param state MC state
  * @param realSpace Real space energy
  * @param reciprocal Reciprocal space energy
@@ -41,7 +41,7 @@ void getEwaldEnergyBreakdown(const model::MCState& state,
 
 /**
  * @brief Validate system properties
- * 
+ *
  * @param state MC state
  */
 void validateEwaldSystemProperties(const model::MCState& state);
@@ -50,4 +50,4 @@ void validateEwaldSystemProperties(const model::MCState& state);
 } // namespace platform
 } // namespace pygcmc
 
-#endif // EWALDSYSTEMENERGY_HPP 
+#endif // EWALDSYSTEMENERGY_HPP

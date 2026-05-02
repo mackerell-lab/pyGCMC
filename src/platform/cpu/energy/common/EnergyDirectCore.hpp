@@ -9,14 +9,14 @@ namespace cpu {
 
 /**
  * @brief Direct summation for nonbonded interactions
- * 
+ *
  * This module provides direct summation implementations for calculating
  * nonbonded interactions between all pairs of atoms.
  */
 
 /**
  * @brief Universal function for calculating all nonbonded interactions
- * 
+ *
  * @param state MC state
  * @param use_cutoff Whether to use distance cutoff
  * @param movement_only Whether to calculate only movement residues
@@ -27,7 +27,7 @@ void computeNonbondedEnergy(model::MCState& state, bool use_cutoff, bool movemen
 
 /**
  * @brief Calculate nonbonded interactions between a single residue and all other active residues
- * 
+ *
  * @param state MC state
  * @param residue_idx Index of the residue to calculate
  * @param use_cutoff Whether to use distance cutoff
@@ -50,7 +50,7 @@ void computeResidueNonbondedEnergy(model::MCState& state,
 
 /**
  * @brief Compute nonbonded energy (vdw+elec) for a single residue vs the rest, with cutoff and PBC
- * 
+ *
  * @param state MC state
  * @param residue_idx Index of the residue to calculate
  */
@@ -117,4 +117,4 @@ void computeResidueEnergyWithNeighborList(
 
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

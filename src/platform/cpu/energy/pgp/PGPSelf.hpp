@@ -9,7 +9,7 @@ namespace cpu {
 
 /**
  * @brief Calculate self energy correction for PGP method
- * 
+ *
  * @param state MC state
  * @param movement_only Only calculate for moving residues
  * @return Self energy correction
@@ -25,4 +25,4 @@ double computeSelfEnergyPGP(model::MCState& state, bool movement_only);
 } // namespace platform
 } // namespace pygcmc
 
-#endif // PGPSELFENERGY_HPP 
+#endif // PGPSELFENERGY_HPP

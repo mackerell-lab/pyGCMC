@@ -20,11 +20,11 @@ void init_common_bindings(py::module& m, py::module&) {
 
     py::class_<::pygcmc::system::System>(m, "System")
         .def(py::init<>())
-        .def_static("set_verbose", &::pygcmc::system::System::set_verbose, 
+        .def_static("set_verbose", &::pygcmc::system::System::set_verbose,
                    "Set verbose mode for logging")
-        .def_static("set_log_level", &::pygcmc::system::System::set_log_level, 
+        .def_static("set_log_level", &::pygcmc::system::System::set_log_level,
                    "Set the minimum log level")
-        .def("initialize_parameters", &::pygcmc::system::System::initialize_parameters, 
+        .def("initialize_parameters", &::pygcmc::system::System::initialize_parameters,
              "Initialize all system parameters")
         .def("process_cavity_list", &::pygcmc::system::System::process_cavity_list,
              "Process and sort the cavity list")

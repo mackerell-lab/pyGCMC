@@ -88,4 +88,4 @@ private:
 } // namespace system
 } // namespace pygcmc
 
-#endif // PYGCMC_SYSTEM_MOLECULAR_COMBINER_HPP 
+#endif // PYGCMC_SYSTEM_MOLECULAR_COMBINER_HPP

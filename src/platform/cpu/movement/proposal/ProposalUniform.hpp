@@ -21,14 +21,14 @@ class ProposalUniform : public ProposalInterface {
 private:
     mutable std::mt19937 rng_;
     mutable std::uniform_real_distribution<double> dist_;
-    
+
 public:
     ProposalUniform(unsigned seed = 0u);  // Deterministic default, should be set via setSeed()
-    
+
     Vector3 propose(const MCState& state, ProposalInfo& info) override;
-    
-    ProposalType getType() const override { 
-        return ProposalType::Uniform; 
+
+    ProposalType getType() const override {
+        return ProposalType::Uniform;
     }
 };
 

@@ -14,7 +14,7 @@ class SafetyChecks {
 private:
     static std::atomic<bool> cleanup_called;
     static std::atomic<int> initialization_count;
-    
+
 public:
     /**
      * @brief Mark that cleanup has been called
@@ -22,7 +22,7 @@ public:
     static void markCleanupCalled() {
         cleanup_called.store(true);
     }
-    
+
     /**
      * @brief Mark that initialization has been done
      */
@@ -30,20 +30,20 @@ public:
         initialization_count.fetch_add(1);
         cleanup_called.store(false);
     }
-    
+
     /**
      * @brief Check if it's safe to proceed with operations
      */
     static void checkSafeToOperate(const char* operation_name) {
         if (cleanup_called.load() && initialization_count.load() > 0) {
             throw std::runtime_error(
-                std::string("Operation '") + operation_name + 
+                std::string("Operation '") + operation_name +
                 "' called after cleanup without re-initialization. " +
                 "Please re-initialize parameters before continuing."
             );
         }
     }
-    
+
     /**
      * @brief Reset all safety flags (for testing only)
      */
@@ -63,12 +63,12 @@ inline std::atomic<int> SafetyChecks::initialization_count{0};
 class OperationGuard {
 private:
     const char* operation_name;
-    
+
 public:
     explicit OperationGuard(const char* name) : operation_name(name) {
         SafetyChecks::checkSafeToOperate(operation_name);
     }
-    
+
     ~OperationGuard() = default;
 };
 

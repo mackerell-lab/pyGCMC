@@ -31,10 +31,10 @@ inline bool is_debug_mode() { return ::pygcmc::system::common::LoggingState::pla
 template<typename... Args>
 inline void log(LogLevel level, Args... args) {
     if (!::pygcmc::system::common::LoggingState::should_log_platform_int(static_cast<int>(level))) return;
-    
+
     std::stringstream ss;
     (ss << ... << args);
-    
+
     switch (level) {
         case LogLevel::DEBUG:
             std::cout << "[PLATFORM DEBUG] ";
@@ -73,4 +73,4 @@ public:
 };
 
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

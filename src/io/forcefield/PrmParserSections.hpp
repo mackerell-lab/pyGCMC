@@ -15,7 +15,7 @@ class PrmParserSections {
 public:
     // Parse nonbonded section (the most complex section)
     static void parseNonbondedSection(std::istream& input, pygcmc::model::ForceField& ff, const std::string& firstLine);
-    
+
     // Debug flag access
     static bool& getDebugFlag();
 };

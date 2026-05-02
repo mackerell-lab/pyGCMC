@@ -57,8 +57,8 @@ public:
     void add_atom(const std::shared_ptr<atom::Atom>& atom) { atoms_.push_back(atom); }
     void add_residue(const std::shared_ptr<residue::Residue>& residue) { residues_.push_back(residue); }
     void add_terminal(const TerminalInfo& terminal) { terminals_.push_back(terminal); }
-    void add_helix(const std::string& chainId, const SecondaryStructure& helix) { 
-        helices_[chainId].push_back(helix); 
+    void add_helix(const std::string& chainId, const SecondaryStructure& helix) {
+        helices_[chainId].push_back(helix);
     }
     void add_sheet(const std::string& chainId, const std::string& sheetInfo) {
         sheets_[chainId].push_back(sheetInfo);

@@ -9,4 +9,4 @@ bool energy_debug_output = false;
 
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

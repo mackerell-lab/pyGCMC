@@ -14,8 +14,8 @@ namespace model {
 
 void init_atom_bindings(py::module& m, py::module& model_module) {
     // ----------------------------------------------------------
-    // Internal base class bindings (no Python exposure)        
-    // Needed so that derived classes can list them as bases    
+    // Internal base class bindings (no Python exposure)
+    // Needed so that derived classes can list them as bases
     // ----------------------------------------------------------
     py::class_<::pygcmc::model::atom::AtomCore, std::shared_ptr<::pygcmc::model::atom::AtomCore>>(m, "_AtomCore");
 

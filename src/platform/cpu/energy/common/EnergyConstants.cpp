@@ -11,4 +11,4 @@ const float MAX_SAFE_ENERGY = 1e6f;     // kJ/mol
 
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

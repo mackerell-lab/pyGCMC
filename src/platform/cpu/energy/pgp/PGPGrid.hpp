@@ -8,7 +8,7 @@ namespace cpu {
 
 /**
  * @brief Grid management functions for PGP-PME
- * 
+ *
  * This module handles the initialization and management of the potential grid
  * used in the Precomputed Grid-Potential Particle Mesh Ewald algorithm.
  */
@@ -20,4 +20,4 @@ void initializePotentialGridImpl();
 
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

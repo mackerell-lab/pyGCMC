@@ -29,7 +29,7 @@ void init_ewald_bindings(py::module& m) {
         py::arg("alpha"),
         py::arg("kmax"),
         py::arg("tolerance") = 1e-5f);
-    
+
     m.def("initializeEwaldParameters",
         [](float cutoff, const std::vector<float>& box, float alpha, float tolerance) {
             if (box.size() != 3) {
@@ -44,23 +44,23 @@ void init_ewald_bindings(py::module& m) {
         py::arg("box"),
         py::arg("alpha") = 0.0f,
         py::arg("tolerance") = 1e-5f);
-          
-    m.def("computeSystemEnergyEwald", 
+
+    m.def("computeSystemEnergyEwald",
         [](::pygcmc::model::MCState& state) {
             // Call C++ function to calculate energy
             ::pygcmc::platform::cpu::energy::computeSystemEnergyEwald(state);
-            
+
             // Convert from C++ struct to Python dictionary
             py::dict ewald_dict;
             ewald_dict["real_space"] = state.ewald_energy.real_space;
             ewald_dict["reciprocal"] = state.ewald_energy.reciprocal;
             ewald_dict["self"] = state.ewald_energy.self;
-            
+
             // Calculate total electrostatic energy
-            double electrostatic_total = state.ewald_energy.real_space + 
-                                         state.ewald_energy.reciprocal + 
+            double electrostatic_total = state.ewald_energy.real_space +
+                                         state.ewald_energy.reciprocal +
                                          state.ewald_energy.self;
-            
+
             // Accumulate VDW energy from residues
             double vdw = 0.0;
             for(const auto& res : state.residues) {
@@ -68,32 +68,32 @@ void init_ewald_bindings(py::module& m) {
                     vdw += res.energy_vdw;
                 }
             }
-            
+
             // Correctly calculate and save total energy
             double total = electrostatic_total + vdw;
             ewald_dict["total"] = total;
-            
+
             // Return tuple: (electrostatic_total, vdw_energy, ewald_dict)
             return py::make_tuple(electrostatic_total, vdw, ewald_dict);
         },
         "Calculate system energy using Ewald summation");
-          
-    m.def("computeMovementEnergyEwald", 
+
+    m.def("computeMovementEnergyEwald",
         [](::pygcmc::model::MCState& state) {
             // Call C++ function to calculate energy
             ::pygcmc::platform::cpu::energy::computeMovementEnergyEwald(state);
-            
+
             // Convert from C++ struct to Python dictionary
             py::dict ewald_dict;
             ewald_dict["real_space"] = state.ewald_energy.real_space;
             ewald_dict["reciprocal"] = state.ewald_energy.reciprocal;
             ewald_dict["self"] = state.ewald_energy.self;
-            
+
             // Calculate total electrostatic energy
-            double electrostatic_total = state.ewald_energy.real_space + 
-                                         state.ewald_energy.reciprocal + 
+            double electrostatic_total = state.ewald_energy.real_space +
+                                         state.ewald_energy.reciprocal +
                                          state.ewald_energy.self;
-            
+
             // Only accumulate VDW energy from movement residues
             double vdw = 0.0;
             for(const auto& movementInfo : state.movementResidues) {
@@ -104,11 +104,11 @@ void init_ewald_bindings(py::module& m) {
                     }
                 }
             }
-            
+
             // Correctly calculate and save total energy
             double total = electrostatic_total + vdw;
             ewald_dict["total"] = total;
-            
+
             // Return tuple: (electrostatic_total, vdw_energy, ewald_dict)
             return py::make_tuple(electrostatic_total, vdw, ewald_dict);
         },

@@ -42,13 +42,13 @@ inline void validateBox(const float box[3], float cutoff = 0.0f) {
     if (box[0] <= 0.0f || box[1] <= 0.0f || box[2] <= 0.0f) {
         throw std::runtime_error("Invalid box dimensions for PBC calculation");
     }
-    
+
     if (cutoff > 0.0f) {
         float minBoxSize = std::min(box[0], std::min(box[1], box[2]));
         if (cutoff >= 0.5f * minBoxSize) {
-            platform::log(LogLevel::WARNING, 
-                "Warning: Cutoff distance (", cutoff, 
-                " nm) is larger than half the smallest box dimension (", 
+            platform::log(LogLevel::WARNING,
+                "Warning: Cutoff distance (", cutoff,
+                " nm) is larger than half the smallest box dimension (",
                 minBoxSize/2, " nm). This may affect minimum image convention.");
         }
     }
@@ -80,4 +80,4 @@ inline void logEnergyDebug(const std::string& message) {
 
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

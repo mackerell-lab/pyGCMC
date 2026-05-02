@@ -37,84 +37,84 @@ void GCMCModule::Config::normalizeProbs() {
 void GCMCModule::Config::validate() const {
     // Temperature validation
     if (temperature <= 0) {
-        throw std::invalid_argument("GCMCModule::Config::validate(): temperature must be > 0, got " 
+        throw std::invalid_argument("GCMCModule::Config::validate(): temperature must be > 0, got "
                                    + std::to_string(temperature));
     }
-    
+
     // Pressure validation
     if (pressure <= 0) {
-        throw std::invalid_argument("GCMCModule::Config::validate(): pressure must be > 0, got " 
+        throw std::invalid_argument("GCMCModule::Config::validate(): pressure must be > 0, got "
                                    + std::to_string(pressure));
     }
-    
+
     // Step validation
     if (equilibrationSteps < 0) {
-        throw std::invalid_argument("GCMCModule::Config::validate(): equilibrationSteps must be >= 0, got " 
+        throw std::invalid_argument("GCMCModule::Config::validate(): equilibrationSteps must be >= 0, got "
                                    + std::to_string(equilibrationSteps));
     }
     if (productionSteps <= 0) {
-        throw std::invalid_argument("GCMCModule::Config::validate(): productionSteps must be > 0, got " 
+        throw std::invalid_argument("GCMCModule::Config::validate(): productionSteps must be > 0, got "
                                    + std::to_string(productionSteps));
     }
     if (saveFrequency < 0) {
-        throw std::invalid_argument("GCMCModule::Config::validate(): saveFrequency must be >= 0, got " 
+        throw std::invalid_argument("GCMCModule::Config::validate(): saveFrequency must be >= 0, got "
                                    + std::to_string(saveFrequency));
     }
-    
+
     // Probability validation
     double probSum = insertProb + deleteProb + translateProb + rotateProb + swapProb;
     if (probSum <= 0) {
-        throw std::invalid_argument("GCMCModule::Config::validate(): sum of move probabilities must be > 0, got " 
+        throw std::invalid_argument("GCMCModule::Config::validate(): sum of move probabilities must be > 0, got "
                                    + std::to_string(probSum));
     }
     if (insertProb < 0 || deleteProb < 0 || translateProb < 0 || rotateProb < 0 || swapProb < 0) {
         throw std::invalid_argument("GCMCModule::Config::validate(): all move probabilities must be >= 0");
     }
-    
+
     // Bias parameter validation
     if (gridSpacing <= 0) {
-        throw std::invalid_argument("GCMCModule::Config::validate(): gridSpacing must be > 0, got " 
+        throw std::invalid_argument("GCMCModule::Config::validate(): gridSpacing must be > 0, got "
                                    + std::to_string(gridSpacing));
     }
     if (probeRadius < 0) {
-        throw std::invalid_argument("GCMCModule::Config::validate(): probeRadius must be >= 0, got " 
+        throw std::invalid_argument("GCMCModule::Config::validate(): probeRadius must be >= 0, got "
                                    + std::to_string(probeRadius));
     }
     if (configTrials < 1) {
-        throw std::invalid_argument("GCMCModule::Config::validate(): configTrials must be >= 1, got " 
+        throw std::invalid_argument("GCMCModule::Config::validate(): configTrials must be >= 1, got "
                                    + std::to_string(configTrials));
     }
-    
+
     // Cutoff validation
     if (cutoff <= 0) {
-        throw std::invalid_argument("GCMCModule::Config::validate(): cutoff must be > 0, got " 
+        throw std::invalid_argument("GCMCModule::Config::validate(): cutoff must be > 0, got "
                                    + std::to_string(cutoff));
     }
-    
+
     // Cluster cutoff validation
     if (useClusterMoves && clusterCutoff <= 0) {
-        throw std::invalid_argument("GCMCModule::Config::validate(): clusterCutoff must be > 0 when useClusterMoves is true, got " 
+        throw std::invalid_argument("GCMCModule::Config::validate(): clusterCutoff must be > 0 when useClusterMoves is true, got "
                                    + std::to_string(clusterCutoff));
     }
 }
 
 // Constructor
-GCMCModule::GCMCModule(const Config& config) 
+GCMCModule::GCMCModule(const Config& config)
     : state_(nullptr),
       config_(config),
       initialized_(false),
       currentStep_(0),
       currentPhase_(Phase::EQUILIBRATION) {
-    
+
     // Validate configuration
     config_.validate();
-    
+
     // Normalize probabilities
     config_.normalizeProbs();
-    
+
     // Create core components
     engine_ = std::make_unique<GCMCEngine>();
-    
+
     // Configure reservoir to prevent slot reordering/compaction
     FragmentReservoir::Config reservoirConfig;
     reservoirConfig.autoCompact = false;          // CRITICAL: Never compact/reorder slots
@@ -122,22 +122,22 @@ GCMCModule::GCMCModule(const Config& config)
     reservoirConfig.maxGhosts = 10000;            // Large limit to avoid purging
     reservoirConfig.maxInstances = 10000;         // Sufficient for most simulations
     reservoir_ = std::make_unique<FragmentReservoir>(reservoirConfig);
-    
+
     moveSelector_ = std::make_unique<GCMCMoveSelector>();
     biasCalc_ = std::make_unique<GCMCBias>();
     acceptCalc_ = std::make_unique<GCMCAcceptance>();
     statistics_ = std::make_unique<GCMCStats>();
-    
+
     // Initialize cavity manager if needed
     if (config_.useCavityBias) {
         cavityManager_ = std::make_unique<CavityManager>();
     }
-    
+
     // Initialize config bias if needed
     if (config_.useConfigBias) {
         configBias_ = std::make_unique<ConfigBiasManager>();
     }
-    
+
     // Configure move selector
     std::map<GCMCMoveSelector::MoveType, double> probs;
     probs[GCMCMoveSelector::MoveType::INSERT] = config_.insertProb;
@@ -146,7 +146,7 @@ GCMCModule::GCMCModule(const Config& config)
     probs[GCMCMoveSelector::MoveType::ROTATE] = config_.rotateProb;
     probs[GCMCMoveSelector::MoveType::SWAP] = config_.swapProb;
     moveSelector_->setProbabilities(probs);
-    
+
     // Configure acceptance calculator
     acceptCalc_->setTemperature(config_.temperature);
 }
@@ -157,52 +157,52 @@ GCMCModule::~GCMCModule() = default;
 // Initialize with system state
 void GCMCModule::initialize(model::montecarlo::MCState& state) {
     state_ = &state;
-    
+
     // CRITICAL: Ensure periodicBox is initialized from info.box if not set
     // This prevents segfaults in functions that directly index periodicBox[0..2]
-    if (state.periodicBox.size() < 3 && 
+    if (state.periodicBox.size() < 3 &&
         state.info.box[0] > 0 && state.info.box[1] > 0 && state.info.box[2] > 0) {
         state.periodicBox.resize(3);
         state.periodicBox[0] = state.info.box[0];
         state.periodicBox[1] = state.info.box[1];
         state.periodicBox[2] = state.info.box[2];
-        
+
         if (config_.verbose) {
-            std::cout << "Auto-initialized periodicBox from info.box: " 
-                     << state.periodicBox[0] << " x " 
-                     << state.periodicBox[1] << " x " 
+            std::cout << "Auto-initialized periodicBox from info.box: "
+                     << state.periodicBox[0] << " x "
+                     << state.periodicBox[1] << " x "
                      << state.periodicBox[2] << " nm" << std::endl;
         }
     }
-    
+
     // Initialize engine
     engine_->initialize(state_, reservoir_.get());
     engine_->setTemperature(config_.temperature);
-    
+
     // Determine actual energy method to use based on system setup
     EnergyMethod actualMethod = config_.energyMethod;
-    bool hasValidBox = (state.periodicBox.size() == 3 && 
-                       state.periodicBox[0] > 0 && 
-                       state.periodicBox[1] > 0 && 
+    bool hasValidBox = (state.periodicBox.size() == 3 &&
+                       state.periodicBox[0] > 0 &&
+                       state.periodicBox[1] > 0 &&
                        state.periodicBox[2] > 0);
-    
+
     // PME/Ewald require valid periodic box - fallback to DIRECT if not available
     if ((actualMethod == EnergyMethod::PME || actualMethod == EnergyMethod::EWALD) && !hasValidBox) {
         if (config_.verbose) {
-            std::cerr << "WARNING: " << (actualMethod == EnergyMethod::PME ? "PME" : "Ewald") 
+            std::cerr << "WARNING: " << (actualMethod == EnergyMethod::PME ? "PME" : "Ewald")
                      << " energy method requires valid periodic box. Falling back to DIRECT." << std::endl;
         }
         actualMethod = EnergyMethod::DIRECT;
     }
-    
+
     engine_->setEnergyMethod(actualMethod);
     engine_->setCutoff(config_.cutoff);
-    
+
     // Configure energy callback
     if (auto* callback = engine_->getEnergyCallback()) {
         callback->setEnergyMethod(actualMethod);
         callback->setParameters(true, hasValidBox);  // Use cutoff, PBC only if box valid
-        
+
         // Initialize Ewald/PME if needed and possible
         if (actualMethod == EnergyMethod::EWALD && hasValidBox) {
             callback->initializeEwald(config_.cutoff, state.periodicBox);
@@ -211,7 +211,7 @@ void GCMCModule::initialize(model::montecarlo::MCState& state) {
             callback->initializePME(config_.cutoff, state.periodicBox, gridSize);
         }
     }
-    
+
     // Setup acceptance calculator for proper GCMC
     if (state.periodicBox.size() == 3) {
         double volume = state.periodicBox[0] * state.periodicBox[1] * state.periodicBox[2];
@@ -219,11 +219,11 @@ void GCMCModule::initialize(model::montecarlo::MCState& state) {
     }
     acceptCalc_->setTemperature(config_.temperature);
     engine_->setAcceptanceCalculator(acceptCalc_.get());
-    
+
     // Set bias components in engine
     if (cavityManager_) {
         engine_->setCavityManager(cavityManager_.get());
-        
+
         // Initialize cavity manager with box dimensions
         if (state.periodicBox.size() == 3) {
             // Configure cavity manager - convert nm to Angstrom
@@ -233,11 +233,11 @@ void GCMCModule::initialize(model::montecarlo::MCState& state) {
             cavityManager_->findCavities(state);
         }
     }
-    
+
     if (configBias_) {
         engine_->setConfigBiasManager(configBias_.get());
     }
-    
+
     // Initialize bias calculator
     biasCalc_->initialize(state_);
     biasCalc_->setTemperature(config_.temperature);
@@ -247,7 +247,7 @@ void GCMCModule::initialize(model::montecarlo::MCState& state) {
     if (configBias_) {
         biasCalc_->setConfigBiasManager(configBias_.get());
     }
-    
+
     // Initialize energy calculation based on method
     if (config_.energyMethod == EnergyMethod::PME && state.periodicBox.size() == 3) {
         double box[3] = {
@@ -264,24 +264,24 @@ void GCMCModule::initialize(model::montecarlo::MCState& state) {
         };
         initializeEwaldParameters(config_.cutoff, box);
     }
-    
+
     // Initialize statistics
     statistics_->initialize(reservoir_->getTemplateCount());
-    
+
     initialized_ = true;
 }
 
 // Add fragment type
 int GCMCModule::addFragmentType(const FragmentTemplate& tmpl) {
     int typeId = reservoir_->addTemplate(tmpl);
-    
+
     // Update acceptance calculator
     acceptCalc_->setChemicalPotential(typeId, tmpl.chemicalPotential);
     acceptCalc_->setActivity(typeId, tmpl.activity);
-    
+
     // Update statistics
     statistics_->setFragmentInfo(typeId, tmpl.name, tmpl.chemicalPotential);
-    
+
     return typeId;
 }
 
@@ -312,16 +312,16 @@ void GCMCModule::runEquilibration(int steps) {
     if (!initialized_) {
         throw std::runtime_error("GCMCModule not initialized");
     }
-    
+
     currentPhase_ = Phase::EQUILIBRATION;
     int nSteps = (steps < 0) ? config_.equilibrationSteps : steps;
-    
+
     if (config_.verbose) {
         std::cout << "Starting equilibration for " << nSteps << " steps..." << std::endl;
     }
-    
+
     runSteps(nSteps);
-    
+
     if (config_.verbose) {
         std::cout << "Equilibration complete." << std::endl;
         printStatistics();
@@ -333,28 +333,28 @@ void GCMCModule::runProduction(int steps) {
     if (!initialized_) {
         throw std::runtime_error("GCMCModule not initialized");
     }
-    
+
     currentPhase_ = Phase::PRODUCTION;
     int nSteps = (steps < 0) ? config_.productionSteps : steps;
-    
+
     if (config_.verbose) {
         std::cout << "Starting production for " << nSteps << " steps..." << std::endl;
     }
-    
+
     // Reset statistics for production phase
     statistics_->resetMoveStatistics();
-    
+
     runSteps(nSteps);
-    
+
     // Calculate final averages
     statistics_->updateAverages();
     statistics_->calculateFluctuations();
-    
+
     if (state_->periodicBox.size() == 3) {
         double volume = state_->periodicBox[0] * state_->periodicBox[1] * state_->periodicBox[2];
         statistics_->calculateChemicalPotentials(volume, config_.temperature);
     }
-    
+
     if (config_.verbose) {
         std::cout << "Production complete." << std::endl;
         printStatistics();
@@ -364,33 +364,33 @@ void GCMCModule::runProduction(int steps) {
 // Run specified number of steps
 void GCMCModule::runSteps(int nSteps) {
     auto startTime = std::chrono::high_resolution_clock::now();
-    
+
     for (int i = 0; i < nSteps; ++i) {
         currentStep_++;
-        
+
         // Perform move
         performMove();
-        
+
         // Update statistics
         if (currentPhase_ == Phase::PRODUCTION) {
             updateStatistics();
         }
-        
+
         // Save trajectory if needed
         if (config_.saveFrequency > 0 && currentStep_ % config_.saveFrequency == 0) {
             saveSnapshot();
         }
-        
+
         // Verbose output
         if (config_.verbose && currentStep_ % 1000 == 0) {
-            std::cout << "Step " << currentStep_ 
+            std::cout << "Step " << currentStep_
                      << " | Molecules: " << reservoir_->getActiveCount()
                      << " | Energy: " << calculateSystemEnergy()
                      << " | Accept rate: " << statistics_->getTranslateStats().acceptanceRate()
                      << std::endl;
         }
     }
-    
+
     auto endTime = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
     statistics_->recordStepTime(duration.count() / static_cast<double>(nSteps));
@@ -418,9 +418,9 @@ void GCMCModule::setSeed(unsigned int seed) {
 bool GCMCModule::performMove() {
     // Select move type
     GCMCMoveSelector::MoveType moveType = moveSelector_->selectMove();
-    
+
     bool accepted = false;
-    
+
     switch (moveType) {
         case GCMCMoveSelector::MoveType::INSERT:
             accepted = attemptInsertion();
@@ -450,18 +450,18 @@ bool GCMCModule::performMove() {
         default:
             break;
     }
-    
+
     // Record move statistics
     moveSelector_->recordAttempt(moveType);
     if (accepted) {
         moveSelector_->recordAcceptance(moveType);
     }
-    
+
 #ifdef DEBUG
     // Verify state consistency after move
     validateStateConsistency();
 #endif
-    
+
     return accepted;
 }
 
@@ -472,18 +472,18 @@ bool GCMCModule::attemptInsertion(int typeId) {
         typeId = engine_->selectRandomFragment();
         if (typeId < 0) return false;
     }
-    
+
     // Perform insertion
     auto result = engine_->attemptInsertion(typeId);
-    
+
     // Update statistics
     statistics_->recordInsertion(typeId, result.accepted, result.deltaE);
-    
+
     // Update cavity manager if needed
     if (result.accepted && cavityManager_) {
         cavityManager_->updateAfterInsertion(result.residueIndex, *state_);
     }
-    
+
     return result.accepted;
 }
 
@@ -494,26 +494,26 @@ bool GCMCModule::attemptDeletion(int typeId) {
         typeId = engine_->selectRandomFragment();
         if (typeId < 0) return false;
     }
-    
+
     // Select instance to delete
     int residueIdx = engine_->selectRandomInstance(typeId);
     if (residueIdx < 0) return false;
-    
+
     // Get position before deletion for cavity update
     auto instance = reservoir_->getInstanceByResidueIndex(residueIdx);
     movement::Vector3 position = instance ? instance->position : movement::Vector3();
-    
+
     // Perform deletion
     auto result = engine_->attemptDeletion(typeId);
-    
+
     // Update statistics
     statistics_->recordDeletion(typeId, result.accepted, result.deltaE);
-    
+
     // Update cavity manager if needed
     if (result.accepted && cavityManager_) {
         cavityManager_->updateAfterDeletion(position, *state_);
     }
-    
+
     return result.accepted;
 }
 
@@ -522,13 +522,13 @@ bool GCMCModule::attemptTranslation() {
     // Select random instance
     int residueIdx = engine_->selectRandomInstance();
     if (residueIdx < 0) return false;
-    
+
     // Perform translation
     auto result = engine_->attemptTranslation(residueIdx);
-    
+
     // Update statistics
     statistics_->recordTranslation(result.fragmentType, result.accepted, result.deltaE);
-    
+
     return result.accepted;
 }
 
@@ -537,13 +537,13 @@ bool GCMCModule::attemptRotation() {
     // Select random instance
     int residueIdx = engine_->selectRandomInstance();
     if (residueIdx < 0) return false;
-    
+
     // Perform rotation
     auto result = engine_->attemptRotation(residueIdx);
-    
+
     // Update statistics
     statistics_->recordRotation(result.fragmentType, result.accepted, result.deltaE);
-    
+
     return result.accepted;
 }
 
@@ -551,19 +551,19 @@ bool GCMCModule::attemptRotation() {
 bool GCMCModule::attemptSwap() {
     // Select two different fragment types
     if (reservoir_->getTemplateCount() < 2) return false;
-    
+
     int type1 = engine_->selectRandomFragment();
     int type2 = engine_->selectRandomFragment();
     while (type2 == type1) {
         type2 = engine_->selectRandomFragment();
     }
-    
+
     // Perform swap
     auto result = engine_->attemptSwap(type1, type2);
-    
+
     // Update statistics
     statistics_->recordSwap(type1, type2, result.accepted, result.deltaE);
-    
+
     return result.accepted;
 }
 
@@ -572,13 +572,13 @@ bool GCMCModule::attemptRegrowth() {
     // Select random instance
     int residueIdx = engine_->selectRandomInstance();
     if (residueIdx < 0) return false;
-    
+
     // Perform regrowth
     auto result = engine_->attemptRegrowth(residueIdx);
-    
+
     // Update statistics (record as rotation for now)
     statistics_->recordRotation(result.fragmentType, result.accepted, result.deltaE);
-    
+
     return result.accepted;
 }
 
@@ -587,13 +587,13 @@ bool GCMCModule::attemptClusterMove() {
     // Select seed instance
     int seedIdx = engine_->selectRandomInstance();
     if (seedIdx < 0) return false;
-    
+
     // Perform cluster move
     auto result = engine_->attemptClusterMove(seedIdx, config_.clusterCutoff);
-    
+
     // Update statistics (record as translation for now)
     statistics_->recordTranslation(result.fragmentType, result.accepted, result.deltaE);
-    
+
     return result.accepted;
 }
 
@@ -610,19 +610,19 @@ void GCMCModule::saveStatistics(const std::string& filename) const {
 // Save snapshot
 void GCMCModule::saveSnapshot() {
     if (config_.trajectoryFile.empty()) return;
-    
+
     std::ofstream file(config_.trajectoryFile, std::ios::app);
     if (!file.is_open()) return;
-    
+
     file << "MODEL " << currentStep_ << "\n";
-    
+
     // Write all active atoms
     int atomIdx = 1;
     for (const auto& residue : state_->residues) {
         if (!residue.active) continue;
-        
+
         for (const auto& atom : residue.atoms) {
-            file << "ATOM  " << std::setw(5) << atomIdx++ 
+            file << "ATOM  " << std::setw(5) << atomIdx++
                  << " " << std::setw(4) << atom.name
                  << " " << std::setw(3) << residue.resname
                  << "  " << std::setw(4) << residue.resid
@@ -634,7 +634,7 @@ void GCMCModule::saveSnapshot() {
                  << "\n";
         }
     }
-    
+
     file << "ENDMDL\n";
     file.close();
 }
@@ -660,14 +660,14 @@ std::pair<double, double> GCMCModule::calculateEnergyComponents() {
     // Sum up VDW and electrostatic components
     double vdwEnergy = 0.0;
     double elecEnergy = 0.0;
-    
+
     for (const auto& residue : state_->residues) {
         if (residue.active) {
             vdwEnergy += residue.energy_vdw;
             elecEnergy += residue.energy_elec;
         }
     }
-    
+
     return {elecEnergy, vdwEnergy};
 }
 
@@ -678,11 +678,11 @@ void GCMCModule::updateStatistics() {
     for (int typeId = 0; typeId < reservoir_->getTemplateCount(); ++typeId) {
         moleculeCounts.push_back(reservoir_->getActiveCount(typeId));
     }
-    
+
     // Calculate current energy
     double totalEnergy = calculateSystemEnergy();
     auto [elecEnergy, vdwEnergy] = calculateEnergyComponents();
-    
+
     // Record state
     statistics_->recordState(moleculeCounts, totalEnergy, vdwEnergy, elecEnergy);
 }
@@ -697,12 +697,12 @@ void GCMCModule::checkConvergence() {
             break;
         }
     }
-    
+
     // Check energy convergence
     if (!statistics_->isEnergyConverged(0.01)) {
         converged = false;
     }
-    
+
     if (converged && config_.verbose) {
         std::cout << "System has converged!" << std::endl;
     }
@@ -713,7 +713,7 @@ void GCMCModule::adaptBiasing() {
     if (moveSelector_) {
         moveSelector_->updateAdaptiveProbabilities();
     }
-    
+
     if (biasCalc_) {
         biasCalc_->updateBiasParameters();
     }
@@ -724,7 +724,7 @@ void GCMCModule::enableAdaptiveBiasing() {
     if (moveSelector_) {
         moveSelector_->enableAdaptiveProbabilities();
     }
-    
+
     if (biasCalc_) {
         biasCalc_->enableAdaptiveBiasing();
     }
@@ -736,7 +736,7 @@ void GCMCModule::setTargetDensity(double density) {
     if (state_ && state_->periodicBox.size() == 3) {
         double volume = state_->periodicBox[0] * state_->periodicBox[1] * state_->periodicBox[2];
         double targetN = density * volume * 6.022e23 / 1e24;  // Convert to molecules/nm^3
-        
+
         // Adjust chemical potentials to achieve target density
         // This is a placeholder - actual implementation would use iterative adjustment
         if (config_.verbose) {
@@ -757,54 +757,54 @@ void GCMCModule::enableFlatHistogram() {
 // Validate state consistency (debug only)
 void GCMCModule::validateStateConsistency() {
     if (!state_ || !reservoir_) return;
-    
+
     // Check that all active instances in reservoir have corresponding active residues
     auto activeInstances = reservoir_->getActiveInstances();
     for (int instanceId : activeInstances) {
         // Check bounds
         if (instanceId < 0 || instanceId >= static_cast<int>(state_->residues.size())) {
-            std::cerr << "ERROR: Active instance " << instanceId 
+            std::cerr << "ERROR: Active instance " << instanceId
                      << " out of bounds (residues.size=" << state_->residues.size() << ")" << std::endl;
             assert(false);
         }
-        
+
         // Check if residue is active
         if (!state_->residues[instanceId].active) {
-            std::cerr << "ERROR: Instance " << instanceId 
+            std::cerr << "ERROR: Instance " << instanceId
                      << " is active in reservoir but inactive in MCState" << std::endl;
             assert(false);
         }
-        
+
         // CRITICAL: Verify instance-residue index consistency
         FragmentInstance* instance = reservoir_->getInstance(instanceId);
         if (instance) {
             if (instance->instanceId != instanceId) {
-                std::cerr << "ERROR: Instance ID mismatch: expected " << instanceId 
+                std::cerr << "ERROR: Instance ID mismatch: expected " << instanceId
                          << " got " << instance->instanceId << std::endl;
                 assert(false);
             }
             if (instance->residueIndex != instanceId) {
-                std::cerr << "ERROR: Instance " << instanceId 
-                         << " has residueIndex=" << instance->residueIndex 
+                std::cerr << "ERROR: Instance " << instanceId
+                         << " has residueIndex=" << instance->residueIndex
                          << " (should match instanceId)" << std::endl;
                 assert(false);
             }
-            
+
             // Verify atoms exist for active residue
             const FragmentTemplate* tmpl = reservoir_->getTemplate(instance->templateId);
             if (tmpl && state_->residues[instanceId].atoms.size() != tmpl->atoms.size()) {
-                std::cerr << "ERROR: Residue " << instanceId 
-                         << " has " << state_->residues[instanceId].atoms.size() 
+                std::cerr << "ERROR: Residue " << instanceId
+                         << " has " << state_->residues[instanceId].atoms.size()
                          << " atoms but template has " << tmpl->atoms.size() << std::endl;
                 assert(false);
             }
         }
     }
-    
+
     // Check that inactive residues don't have atoms
     for (size_t i = 0; i < state_->residues.size(); ++i) {
         if (!state_->residues[i].active && !state_->residues[i].atoms.empty()) {
-            std::cerr << "ERROR: Inactive residue " << i << " has " 
+            std::cerr << "ERROR: Inactive residue " << i << " has "
                      << state_->residues[i].atoms.size() << " atoms" << std::endl;
             assert(false);
         }

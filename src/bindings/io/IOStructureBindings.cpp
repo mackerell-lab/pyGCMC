@@ -13,17 +13,17 @@ namespace io {
 
 void init_structure_bindings(py::module& m, py::module& io_module) {
     // Add IO configuration functions
-    io_module.def("set_io_verbose", [](bool verbose) { 
-            pygcmc::io::IOConfig::verbose_errors = verbose; 
+    io_module.def("set_io_verbose", [](bool verbose) {
+            pygcmc::io::IOConfig::verbose_errors = verbose;
         },
         py::arg("verbose") = false,
         "Set whether IO operations should print error messages (default: False)");
-    
-    io_module.def("get_io_verbose", []() { 
-            return pygcmc::io::IOConfig::verbose_errors; 
+
+    io_module.def("get_io_verbose", []() {
+            return pygcmc::io::IOConfig::verbose_errors;
         },
         "Get current IO verbosity setting");
-    
+
     // IOConfig class (optional, for direct access)
     py::class_<pygcmc::io::IOConfig>(io_module, "IOConfig", "Configuration for IO operations")
         .def_property_static("verbose_errors",
@@ -45,7 +45,7 @@ void init_structure_bindings(py::module& m, py::module& io_module) {
         .def_static("parse_string_to_structure", &pygcmc::io::PDBParser::parse_string_to_structure,
             py::arg("pdbStr"), py::arg("structure"),
             "Parse PDB string and populate Structure object");
-    
+
     // Also add to main module for backward compatibility
     m.attr("PDBParser") = pdb_parser;
 }

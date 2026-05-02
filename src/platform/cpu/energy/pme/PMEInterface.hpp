@@ -9,7 +9,7 @@ namespace cpu {
 /**
  * @brief Function Reference Guide:
  * - System energy calculation: computeSystemEnergyPME
- * - Movement energy calculation: computeMovementEnergyPME  
+ * - Movement energy calculation: computeMovementEnergyPME
  * - Component calculations: computeReciprocalPME, computeSelfEnergyPME, computeRealSpacePME
  * - Pair energy calculation: calcPairEnergyPME
  */
@@ -18,19 +18,19 @@ namespace cpu {
 
 /**
  * @brief Compute total system energy using PME
- * 
+ *
  * Calculates all components: real space + reciprocal space + self energy + VdW
- * 
+ *
  * @param state MC state containing system information
  */
 void computeSystemEnergyPME(model::MCState& state);
 
 /**
  * @brief Compute energy for moving residues only
- * 
+ *
  * Optimized calculation for Monte Carlo moves that only affect
  * a subset of the system.
- * 
+ *
  * @param state MC state
  */
 void computeMovementEnergyPME(model::MCState& state);
@@ -39,7 +39,7 @@ void computeMovementEnergyPME(model::MCState& state);
 
 /**
  * @brief Compute reciprocal space energy using PME
- * 
+ *
  * @param state MC state
  * @return Reciprocal space energy
  */
@@ -47,7 +47,7 @@ double computeReciprocalPME(model::MCState& state);
 
 /**
  * @brief Compute self-energy correction for PME
- * 
+ *
  * @param state MC state containing particle charges
  * @param movement_only If true, only calculate for moving particles
  * @return Self-energy correction (negative value)
@@ -56,10 +56,10 @@ double computeSelfEnergyPME(model::MCState& state, bool movement_only);
 
 /**
  * @brief Calculate real-space part of PME
- * 
+ *
  * Computes the real-space energy contribution using erfc(αr)/r terms
  * for all particle pairs within the cutoff distance.
- * 
+ *
  * @param state MC state containing system information
  * @param movement_only Whether to calculate only for moving residues
  * @param store_in_residues Whether to store energy in residue objects
@@ -70,47 +70,47 @@ void computeRealSpacePME(model::MCState& state, bool movement_only, bool store_i
 
 /**
  * @brief Calculate pair energy for PME real-space part
- * 
+ *
  * For normal pairs: erfc(αr)/r
  * For excluded pairs: -erf(αr)/r to compensate for reciprocal space
- * 
+ *
  * @param r2 Squared distance between particles
  * @param sigma Lennard-Jones sigma parameter
- * @param eps Lennard-Jones epsilon parameter  
+ * @param eps Lennard-Jones epsilon parameter
  * @param q1 Charge of first particle
  * @param q2 Charge of second particle
  * @param info Simulation info containing cutoffs and parameters
  * @param is_excluded Whether this is an excluded pair interaction
  * @return Pair containing VdW energy and electrostatic energy
  */
-std::pair<double, double> calcPairEnergyPME(double r2, double sigma, double eps, 
-                                          double q1, double q2, 
-                                          const model::MCInfo& info, 
+std::pair<double, double> calcPairEnergyPME(double r2, double sigma, double eps,
+                                          double q1, double q2,
+                                          const model::MCInfo& info,
                                           bool is_excluded = false);
 
 // === Complete Energy Calculation Functions ===
 
 /**
  * @brief Compute complete system energy using PME with all interactions
- * 
+ *
  * This version includes intramolecular LJ interactions that are normally
  * excluded in the Fixed methods, providing energy values that match
  * reference implementations like OpenMM.
- * 
+ *
  * @param state MC state containing system information
  */
 void computeSystemEnergyPMEComplete(model::MCState& state);
 
 /**
  * @brief Compute complete system energy using cutoff with all interactions
- * 
+ *
  * This version includes intramolecular LJ interactions for comparison
  * with PME complete method and reference implementations.
- * 
+ *
  * @param state MC state containing system information
  */
 void computeSystemEnergyCutoffComplete(model::MCState& state);
 
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

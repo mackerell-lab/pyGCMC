@@ -12,7 +12,7 @@ namespace coulomb {
 
 /**
  * @brief Calculate LJ and Coulomb energy with safety checks
- * 
+ *
  * @param r2 Squared distance in nm²
  * @param sigma LJ sigma parameter in nm
  * @param eps LJ epsilon parameter in kJ/mol
@@ -23,11 +23,11 @@ namespace coulomb {
  * @return Pair of energies: {vdw_energy, elec_energy} in kJ/mol
  */
 std::pair<double, double> calcPairEnergy(
-    double r2, double sigma, double eps, double q1, double q2, 
+    double r2, double sigma, double eps, double q1, double q2,
     const model::MCInfo& info,
     bool calc_coulomb = true);
 
 } // namespace coulomb
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

@@ -13,23 +13,23 @@ float calculateSwitchingFunction(float r, const model::MCInfo& info) {
     if (r >= info.r_off) {
         return 0.0f;  // Zero potential beyond r_off
     }
-    
+
     // Calculate CHARMM-style switching function
     // S(r) = [(r_off^2 - r^2)^2 * (r_off^2 + 2r^2 - 3r_on^2)] / (r_off^2 - r_on^2)^3
     float r2 = r * r;
     float ron2 = info.r_on * info.r_on;
     float roff2 = info.r_off * info.r_off;
-    
+
     float numerator = (roff2 - r2) * (roff2 - r2) * (roff2 + 2.0f*r2 - 3.0f*ron2);
     float denominator = (roff2 - ron2) * (roff2 - ron2) * (roff2 - ron2);
-    
+
     return numerator / denominator;
 }
 
 double calcLJEnergyWithSwitching(double r2, double sigma, double eps, const model::MCInfo& info) {
     return calculateLJEnergyWithSwitching<double>(
-        r2, sigma, eps, info, 
-        double(LJ_MIN_SAFE_DISTANCE), 
+        r2, sigma, eps, info,
+        double(LJ_MIN_SAFE_DISTANCE),
         double(LJ_MAX_SAFE_ENERGY)
     );
 }
@@ -43,4 +43,4 @@ void setSwitchingFunction(model::MCState& state, bool use_switching, float r_on,
 } // namespace lj
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

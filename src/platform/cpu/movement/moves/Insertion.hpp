@@ -39,17 +39,17 @@ class EnergyInterface;
 class InsertionMove : public MovementInterface {
 public:
     // Constructor
-    InsertionMove(ActivePool* activePool, 
+    InsertionMove(ActivePool* activePool,
                   CavityManager* cavityManager,
                   EnergyInterface* energyCalc,
                   CavityBiasCore* cavityCore = nullptr);
-    
+
     // Destructor
     virtual ~InsertionMove();
-    
+
     // Perform insertion attempt
     virtual MovementResult attemptInsertion(MCState& state, const MovementParams& params) override;
-    virtual MovementResult attemptDeletion(MCState& /*state*/, const MovementParams& /*params*/) override { 
+    virtual MovementResult attemptDeletion(MCState& /*state*/, const MovementParams& /*params*/) override {
         // Not implemented in this class
         return MovementResult(false, 0.0, 0.0, "delete");
     }
@@ -61,15 +61,15 @@ public:
         // Not implemented in this class
         return MovementResult(false, 0.0, 0.0, "rotate");
     }
-    
+
     // Specific insertion methods
     MovementResult performSimpleInsertion(MCState& state, const MovementParams& params, int moleculeType = 0);
     MovementResult performCavityBiasInsertion(MCState& state, const MovementParams& params, int moleculeType = 0);
-    
+
     // Configuration
     void setMoleculeType(int type) { moleculeType_ = type; }
     int getMoleculeType() const { return moleculeType_; }
-    
+
     // Statistics
     struct Statistics {
         int totalAttempts = 0;
@@ -93,7 +93,7 @@ public:
             return cbmcAttempts > 0 ? static_cast<double>(cbmcAccepted) / cbmcAttempts : 0.0;
         }
     };
-    
+
     const Statistics& getStatistics() const { return stats_; }
     void resetStatistics();
 
@@ -105,7 +105,7 @@ public:
 protected:
     // Create a molecule at a given position
     std::vector<MCAtom> createMolecule(int moleculeType, const Vector3& position);
-    
+
     // Calculate insertion acceptance probability
     double calculateInsertionProbability(
         int n,
@@ -113,28 +113,28 @@ protected:
         const MovementParams& params,
         double cavityBiasFactor
     );
-    
+
     // Select insertion position
     Vector3 selectInsertionPosition(MCState& state, const MovementParams& params, double& cavityBias);
-    
+
     // CBMC helper functions
     std::vector<std::vector<MCAtom>> generateTrialConfigurations(
         int moleculeType,
         const Vector3& position,
         const MovementParams& params,
         const MCState& state);
-    
+
     std::pair<std::vector<double>, int> evaluateTrialEnergies(
         MCState& state,
         const std::vector<std::vector<MCAtom>>& trials,
         int moleculeType,
         double energyBefore);
-    
+
     int selectByBoltzmannWeight(
         const std::vector<double>& deltaEnergies,
         double beta,
         double& logWnew);
-    
+
 private:
     ActivePool* activePool_;
     CavityManager* cavityManager_;

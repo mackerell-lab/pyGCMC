@@ -18,26 +18,26 @@ namespace movement {
 // 3D Vector type
 struct Vector3 {
     double x, y, z;
-    
+
     Vector3() : x(0), y(0), z(0) {}
     Vector3(double x_, double y_, double z_) : x(x_), y(y_), z(z_) {}
-    
+
     Vector3 operator+(const Vector3& other) const {
         return Vector3(x + other.x, y + other.y, z + other.z);
     }
-    
+
     Vector3 operator-(const Vector3& other) const {
         return Vector3(x - other.x, y - other.y, z - other.z);
     }
-    
+
     Vector3 operator*(double scalar) const {
         return Vector3(x * scalar, y * scalar, z * scalar);
     }
-    
+
     double norm() const {
         return std::sqrt(x*x + y*y + z*z);
     }
-    
+
     double dot(const Vector3& other) const {
         return x*other.x + y*other.y + z*other.z;
     }
@@ -46,15 +46,15 @@ struct Vector3 {
 // Quaternion for rotations
 struct Quaternion {
     double w, x, y, z;
-    
+
     Quaternion() : w(1), x(0), y(0), z(0) {}
     Quaternion(double w_, double x_, double y_, double z_) : w(w_), x(x_), y(y_), z(z_) {}
-    
+
     void normalize() {
         double norm = std::sqrt(w*w + x*x + y*y + z*z);
         w /= norm; x /= norm; y /= norm; z /= norm;
     }
-    
+
     // CRITICAL ADDITION: Quaternion multiplication for proper rotation composition
     Quaternion operator*(const Quaternion& q) const {
         return Quaternion(
@@ -64,31 +64,31 @@ struct Quaternion {
             w * q.z + x * q.y - y * q.x + z * q.w
         );
     }
-    
+
     // Apply rotation to a vector (using verified formula)
     Vector3 rotate(const Vector3& v) const {
         // Standard quaternion rotation formula
         double qw = w, qx = x, qy = y, qz = z;
         double vx = v.x, vy = v.y, vz = v.z;
-        
+
         // Rotation matrix form
         double qw2 = qw * qw;
         double qx2 = qx * qx;
         double qy2 = qy * qy;
         double qz2 = qz * qz;
-        
-        double rx = vx * (qw2 + qx2 - qy2 - qz2) + 
-                   vy * 2.0 * (qx * qy - qw * qz) + 
+
+        double rx = vx * (qw2 + qx2 - qy2 - qz2) +
+                   vy * 2.0 * (qx * qy - qw * qz) +
                    vz * 2.0 * (qx * qz + qw * qy);
-                   
-        double ry = vx * 2.0 * (qx * qy + qw * qz) + 
-                   vy * (qw2 - qx2 + qy2 - qz2) + 
+
+        double ry = vx * 2.0 * (qx * qy + qw * qz) +
+                   vy * (qw2 - qx2 + qy2 - qz2) +
                    vz * 2.0 * (qy * qz - qw * qx);
-                   
-        double rz = vx * 2.0 * (qx * qz - qw * qy) + 
-                   vy * 2.0 * (qy * qz + qw * qx) + 
+
+        double rz = vx * 2.0 * (qx * qz - qw * qy) +
+                   vy * 2.0 * (qy * qz + qw * qx) +
                    vz * (qw2 - qx2 - qy2 + qz2);
-        
+
         return Vector3(rx, ry, rz);
     }
 };
@@ -105,22 +105,22 @@ public:
      */
     static double logSumExp(const std::vector<double>& logValues) {
         if (logValues.empty()) return -std::numeric_limits<double>::infinity();
-        
+
         // Find maximum value for numerical stability
         double maxVal = *std::max_element(logValues.begin(), logValues.end());
-        
+
         // Handle case where all values are -inf
         if (std::isinf(maxVal)) return maxVal;
-        
+
         // Compute sum in a stable way
         double sum = 0.0;
         for (double val : logValues) {
             sum += std::exp(val - maxVal);
         }
-        
+
         return maxVal + std::log(sum);
     }
-    
+
     /**
      * Calculate acceptance probability in log-space
      */
@@ -359,36 +359,36 @@ public:
         double u1 = dis_(gen_);
         double u2 = dis_(gen_);
         double u3 = dis_(gen_);
-        
+
         Quaternion q;
         q.w = std::sqrt(1 - u1) * std::sin(2 * M_PI * u2);
         q.x = std::sqrt(1 - u1) * std::cos(2 * M_PI * u2);
         q.y = std::sqrt(u1) * std::sin(2 * M_PI * u3);
         q.z = std::sqrt(u1) * std::cos(2 * M_PI * u3);
-        
+
         q.normalize();
         return q;
     }
-    
+
     /**
      * Convert quaternion to 3x3 rotation matrix
      */
     static void quaternionToMatrix(const Quaternion& q, double matrix[3][3]) {
         double w = q.w, x = q.x, y = q.y, z = q.z;
-        
+
         matrix[0][0] = 1 - 2*y*y - 2*z*z;
         matrix[0][1] = 2*x*y - 2*w*z;
         matrix[0][2] = 2*x*z + 2*w*y;
-        
+
         matrix[1][0] = 2*x*y + 2*w*z;
         matrix[1][1] = 1 - 2*x*x - 2*z*z;
         matrix[1][2] = 2*y*z - 2*w*x;
-        
+
         matrix[2][0] = 2*x*z - 2*w*y;
         matrix[2][1] = 2*y*z + 2*w*x;
         matrix[2][2] = 1 - 2*x*x - 2*y*y;
     }
-    
+
     /**
      * Apply rotation matrix to a vector
      */
@@ -399,7 +399,7 @@ public:
             matrix[2][0]*v.x + matrix[2][1]*v.y + matrix[2][2]*v.z
         );
     }
-    
+
     /**
      * Create quaternion from axis-angle representation
      */
@@ -431,7 +431,7 @@ private:
         }
         return gen;
     }
-    
+
 public:
     /**
      * Set the seed for reproducible random numbers
@@ -446,21 +446,21 @@ public:
             getGenerator().seed(static_cast<unsigned int>(seed));
         }
     }
-    
+
     static double uniform(double min = 0.0, double max = 1.0) {
         std::uniform_real_distribution<> dis(min, max);
         return dis(getGenerator());
     }
-    
+
     static int uniformInt(int min, int max) {
         std::uniform_int_distribution<> dis(min, max);
         return dis(getGenerator());
     }
-    
+
     static bool metropolisAccept(double probability) {
         return uniform() < probability;
     }
-    
+
     static Vector3 randomVector(double maxMagnitude) {
         return Vector3(
             uniform(-maxMagnitude, maxMagnitude),
@@ -482,17 +482,17 @@ public:
             position.z - box.z * std::floor(position.z / box.z)
         );
     }
-    
+
     static void applyPBC(float& x, float& y, float& z, float boxArray[3]) {
         // Apply PBC in-place
         x -= boxArray[0] * std::floor(x / boxArray[0]);
         y -= boxArray[1] * std::floor(y / boxArray[1]);
         z -= boxArray[2] * std::floor(z / boxArray[2]);
     }
-    
+
     static double minimumImageDistance(const Vector3& pos1, const Vector3& pos2, const Vector3& box) {
         Vector3 diff = pos2 - pos1;
-        
+
         // Apply minimum image convention
         if (diff.x > box.x * 0.5) diff.x -= box.x;
         if (diff.x < -box.x * 0.5) diff.x += box.x;
@@ -500,7 +500,7 @@ public:
         if (diff.y < -box.y * 0.5) diff.y += box.y;
         if (diff.z > box.z * 0.5) diff.z -= box.z;
         if (diff.z < -box.z * 0.5) diff.z += box.z;
-        
+
         return diff.norm();
     }
 };

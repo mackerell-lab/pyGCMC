@@ -56,12 +56,12 @@ public:
         // Left align atom name according to PDB format
         // Element symbols are right-justified in columns 13-14
         if (name.length() >= 4) return name;
-        
+
         // Check if first character is a digit (indicating branch)
         if (!name.empty() && std::isdigit(name[0])) {
             return name;  // Left justify if starts with digit
         }
-        
+
         // Right justify element symbol
         std::string result(4, ' ');
         if (name.length() == 1) {
@@ -70,12 +70,12 @@ public:
             result[0] = name[0];  // Two character element
             result[1] = name[1];
         }
-        
+
         // Add remaining characters
         for (size_t i = 2; i < name.length() && i < 4; ++i) {
             result[i] = name[i];
         }
-        
+
         return result;
     }
 
@@ -117,7 +117,7 @@ public:
         } catch (const std::exception&) {
             throw std::invalid_argument("Invalid residue ID format");
         }
-        
+
         if (numLen < resid.length()) {
             inscode = resid[numLen];
         } else {
@@ -130,10 +130,10 @@ public:
 
 
     bool operator==(const Atom& other) const {
-        return bynu == other.bynu && 
-               type == other.type && 
+        return bynu == other.bynu &&
+               type == other.type &&
                resname == other.resname &&
-               ires == other.ires && 
+               ires == other.ires &&
                segid == other.segid &&
                std::abs(coor[0] - other.coor[0]) < 1e-9 &&
                std::abs(coor[1] - other.coor[1]) < 1e-9 &&
@@ -152,4 +152,4 @@ public:
 } // namespace model
 } // namespace pygcmc
 
-#endif // PYGCMC_MODEL_ATOM_MAIN_HPP 
+#endif // PYGCMC_MODEL_ATOM_MAIN_HPP

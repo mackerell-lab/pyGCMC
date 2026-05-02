@@ -95,21 +95,21 @@ double GCMCAcceptance::calculateInsertionProbability(
     int currentNumber,
     double deltaE,
     double bias) {
-    
+
     double beta = getBeta();
     double activity = getActivity(typeId);
-    
+
     // Grand canonical acceptance: min(1, (zV/(N+1)) * exp(-beta*deltaE) * bias)
     double prefactor = activity * volume_ / (currentNumber + 1);
     double boltzmann = std::exp(-beta * deltaE);
-    
+
     return std::min(1.0, prefactor * boltzmann * bias);
 }
 
 double GCMCAcceptance::calculateInsertionProbabilityDetailed(
     const GrandCanonicalInsertionTerms& terms,
     double* logRatioOut) {
-    
+
     if (terms.typeId < 0) {
         if (logRatioOut) {
             *logRatioOut = -std::numeric_limits<double>::infinity();
@@ -168,23 +168,23 @@ double GCMCAcceptance::calculateDeletionProbability(
     int currentNumber,
     double deltaE,
     double bias) {
-    
+
     if (currentNumber == 0) return 0.0;
-    
+
     double beta = getBeta();
     double activity = getActivity(typeId);
-    
+
     // Grand canonical acceptance: min(1, (N/(zV)) * exp(-beta*deltaE) * bias)
     double prefactor = currentNumber / (activity * volume_);
     double boltzmann = std::exp(-beta * deltaE);
-    
+
     return std::min(1.0, prefactor * boltzmann * bias);
 }
 
 double GCMCAcceptance::calculateDeletionProbabilityDetailed(
     const GrandCanonicalDeletionTerms& terms,
     double* logRatioOut) {
-    
+
     if (terms.typeId < 0 || terms.countBefore <= 0) {
         if (logRatioOut) {
             *logRatioOut = -std::numeric_limits<double>::infinity();
@@ -239,7 +239,7 @@ double GCMCAcceptance::calculateDeletionProbabilityDetailed(
 double GCMCAcceptance::calculateTranslationProbability(
     double deltaE,
     double bias) {
-    
+
     double beta = getBeta();
     return std::min(1.0, std::exp(-beta * deltaE) * bias);
 }
@@ -248,7 +248,7 @@ double GCMCAcceptance::calculateTranslationProbability(
 double GCMCAcceptance::calculateRotationProbability(
     double deltaE,
     double bias) {
-    
+
     double beta = getBeta();
     return std::min(1.0, std::exp(-beta * deltaE) * bias);
 }
@@ -259,15 +259,15 @@ double GCMCAcceptance::calculateSwapProbability(
     int n1, int n2,
     double deltaE,
     double bias) {
-    
+
     double beta = getBeta();
     double activity1 = activities_[type1];
     double activity2 = activities_[type2];
-    
+
     // Swap acceptance: min(1, (a2*n1)/(a1*(n2+1)) * exp(-beta*deltaE) * bias)
     double prefactor = (activity2 * n1) / (activity1 * (n2 + 1));
     double boltzmann = std::exp(-beta * deltaE);
-    
+
     return std::min(1.0, prefactor * boltzmann * bias);
 }
 
@@ -277,16 +277,16 @@ double GCMCAcceptance::calculateVolumeChangeProbability(
     double newVolume,
     int nMolecules,
     double deltaE) {
-    
+
     double beta = getBeta();
-    
+
     // NPT acceptance: min(1, (V_new/V_old)^N * exp(-beta*(deltaE + P*deltaV)))
     double volumeRatio = newVolume / oldVolume;
     double volumeTerm = std::pow(volumeRatio, nMolecules);
     double deltaV = newVolume - oldVolume;
     double pvTerm = pressure_ * deltaV;
     double boltzmann = std::exp(-beta * (deltaE + pvTerm));
-    
+
     return std::min(1.0, volumeTerm * boltzmann);
 }
 
@@ -296,28 +296,28 @@ double GCMCAcceptance::calculateAcceptance(
     double deltaE,
     double bias,
     double additionalFactor) {
-    
+
     double beta = getBeta();
-    
+
     switch (criterion) {
         case CriterionType::METROPOLIS:
             return std::min(1.0, std::exp(-beta * deltaE) * bias * additionalFactor);
-            
+
         case CriterionType::GRAND_CANONICAL:
             return std::min(1.0, std::exp(-beta * deltaE) * bias * additionalFactor);
-            
+
         case CriterionType::ISOTHERMAL_ISOBARIC:
             return std::min(1.0, std::exp(-beta * deltaE) * bias * additionalFactor);
-            
+
         case CriterionType::GIBBS_ENSEMBLE:
             return std::min(1.0, std::exp(-beta * deltaE) * bias * additionalFactor);
-            
+
         case CriterionType::WANG_LANDAU:
             return calculateWangLandauAcceptance(1.0, additionalFactor);
-            
+
         case CriterionType::TRANSITION_MATRIX:
             return std::min(1.0, bias * additionalFactor);
-            
+
         default:
             return std::min(1.0, std::exp(-beta * deltaE) * bias * additionalFactor);
     }
@@ -343,12 +343,12 @@ double GCMCAcceptance::calculateGibbsAcceptance(
     int boxFrom, int boxTo,
     int typeId,
     double deltaE) {
-    
+
     // Suppress unused parameter warnings
     (void)boxFrom;
     (void)boxTo;
     (void)typeId;
-    
+
     double beta = getBeta();
     // Simplified Gibbs acceptance
     return std::min(1.0, std::exp(-beta * deltaE));
@@ -358,7 +358,7 @@ double GCMCAcceptance::calculateGibbsAcceptance(
 double GCMCAcceptance::calculateWangLandauAcceptance(
     double currentBias,
     double newBias) {
-    
+
     // Wang-Landau: always accept if going to less visited state
     return std::min(1.0, currentBias / newBias);
 }
@@ -368,7 +368,7 @@ double GCMCAcceptance::calculateTransitionMatrixAcceptance(
     int oldState,
     int newState,
     const std::vector<std::vector<double>>& transitionMatrix) {
-    
+
     if (oldState >= 0 && oldState < static_cast<int>(transitionMatrix.size()) &&
         newState >= 0 && newState < static_cast<int>(transitionMatrix[oldState].size())) {
         return transitionMatrix[oldState][newState];
@@ -381,7 +381,7 @@ bool GCMCAcceptance::checkDetailedBalance(
     double forwardProb,
     double reverseProb,
     double tolerance) {
-    
+
     double ratio = forwardProb / (reverseProb + 1e-10);
     return std::abs(ratio - 1.0) < tolerance;
 }
@@ -399,7 +399,7 @@ double GCMCAcceptance::getDeBroglieWavelength(double mass) const {
     const double h = 6.626e-34;
     const double k = 1.381e-23;
     const double pi = 3.14159265359;
-    
+
     double lambda = h / std::sqrt(2.0 * pi * mass * k * temperature_);
     return lambda * 1e10; // Convert to Angstroms
 }
@@ -419,7 +419,7 @@ double GCMCAcceptance::safeExp(double logValue) const {
 gcmc::GrandCanonicalEvaluation GCMCAcceptance::evaluate(
     const gcmc::GrandCanonicalTerms& terms,
     MoveType moveType) {
-    
+
     auto safeLogLocal = [](double value) {
         return std::log(std::max(value, 1e-30));
     };
@@ -432,7 +432,7 @@ gcmc::GrandCanonicalEvaluation GCMCAcceptance::evaluate(
     };
 
     gcmc::GrandCanonicalEvaluation eval;
-    
+
     if (moveType == MoveType::INSERTION) {
         int countAfter = terms.countAfter > 0 ? terms.countAfter : terms.countBefore + 1;
         if (countAfter <= 0) {
@@ -462,14 +462,14 @@ gcmc::GrandCanonicalEvaluation GCMCAcceptance::evaluate(
         return eval;
     }
 
-	double logN = safeLogLocal(static_cast<double>(terms.countBefore));
-	double logRatio =
-	    (terms.logProposalReverse - terms.logProposalForward)
-	    - terms.beta * terms.deltaEnergy
-	    - terms.beta * terms.chemicalPotential
-	    + logN
-	    - terms.logVolume
-	    + (terms.logCavityForward - terms.logCavityReverse)
+    double logN = safeLogLocal(static_cast<double>(terms.countBefore));
+    double logRatio =
+        (terms.logProposalReverse - terms.logProposalForward)
+        - terms.beta * terms.deltaEnergy
+        - terms.beta * terms.chemicalPotential
+        + logN
+        - terms.logVolume
+        + (terms.logCavityForward - terms.logCavityReverse)
         + (terms.logRosenbluthForward - terms.logRosenbluthReverse)
         + terms.logLambda3
         + (terms.logExtraForward - terms.logExtraReverse);
@@ -510,13 +510,13 @@ void GCMCSmartAcceptance::learnFromHistory(
     const std::vector<double>& deltaEs,
     const std::vector<bool>& accepted,
     const std::vector<double>& systemProperties) {
-    
+
     // Simple gradient descent learning
     for (size_t i = 0; i < deltaEs.size(); ++i) {
         std::vector<double> features = extractFeatures(deltaEs[i], systemProperties);
         double prediction = predictAcceptance(deltaEs[i], systemProperties);
         double error = (accepted[i] ? 1.0 : 0.0) - prediction;
-        
+
         // Update weights
         for (size_t j = 0; j < weights_.size() && j < features.size(); ++j) {
             weights_[j] += learningRate_ * error * features[j];
@@ -528,15 +528,15 @@ void GCMCSmartAcceptance::learnFromHistory(
 double GCMCSmartAcceptance::predictAcceptance(
     double deltaE,
     const std::vector<double>& systemProperties) {
-    
+
     std::vector<double> features = extractFeatures(deltaE, systemProperties);
-    
+
     // Linear combination of features
     double score = 0.0;
     for (size_t i = 0; i < weights_.size() && i < features.size(); ++i) {
         score += weights_[i] * features[i];
     }
-    
+
     // Sigmoid activation
     return 1.0 / (1.0 + std::exp(-score));
 }
@@ -544,7 +544,7 @@ double GCMCSmartAcceptance::predictAcceptance(
 // Adjust criterion dynamically
 void GCMCSmartAcceptance::adjustCriterion(double targetAcceptance) {
     double currentAcceptance = getAverageAcceptance();
-    
+
     if (currentAcceptance < targetAcceptance - 0.1) {
         // Too low acceptance - increase temperature artificially
         temperature_ *= 1.05;
@@ -558,24 +558,24 @@ void GCMCSmartAcceptance::adjustCriterion(double targetAcceptance) {
 std::vector<double> GCMCSmartAcceptance::extractFeatures(
     double deltaE,
     const std::vector<double>& properties) {
-    
+
     std::vector<double> features;
-    
+
     // Energy-based features
     features.push_back(deltaE);
     features.push_back(deltaE * deltaE);
     features.push_back(std::exp(-getBeta() * deltaE));
-    
+
     // System property features
     for (double prop : properties) {
         features.push_back(prop);
     }
-    
+
     // Ensure we have at least 10 features
     while (features.size() < 10) {
         features.push_back(0.0);
     }
-    
+
     return features;
 }
 

@@ -17,7 +17,7 @@ namespace io {
 
 /**
  * @brief Parser for GROMACS topology (.top) file format
- * 
+ *
  * This class handles reading topology files and populating a Topology object.
  * The topology file contains structural information about a molecular system,
  * including atoms, bonds, angles, dihedrals, improper dihedrals, and more.
@@ -63,7 +63,7 @@ private:
     int current_molecule_nrexcl_ = 3;
     std::vector<std::pair<std::string, int>> molecule_order_;
     std::map<std::string, std::string> molecule_to_segment_type_;
-    
+
     // Store molecule definitions
     std::map<std::string, std::vector<LineInfo>> molecule_atoms_;
     std::map<std::string, std::vector<LineInfo>> molecule_bonds_;

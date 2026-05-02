@@ -22,7 +22,7 @@ namespace atom {
 class AtomCore {
 public:
     // Core constructors
-    AtomCore() : 
+    AtomCore() :
         bynu(0), ires(0), iseg(0), igro(0),
         altloc(' '),
         chain(' '),
@@ -45,7 +45,7 @@ public:
     AtomCore(int bynu, const std::string& type, const std::string& resname,
              int ires, const std::string& segid = "", int iseg = 0,
              double x = 0.0, double y = 0.0, double z = 0.0,
-             double wmain = 1.0, 
+             double wmain = 1.0,
              double mass = 0.0, double charge = 0.0,
              const std::string& chem = "", bool hetatm = false) :
         bynu(bynu), type(type), resname(resname), ires(ires),
@@ -68,7 +68,7 @@ public:
     bool is_valid() const {
         return bynu >= 0 && !type.empty() && !resname.empty() &&
                ires >= 0 && std::isfinite(mass) && std::isfinite(charge) &&
-               std::all_of(coor.begin(), coor.end(), 
+               std::all_of(coor.begin(), coor.end(),
                           [](double x) { return std::isfinite(x); }) &&
                std::isfinite(occupancy) && std::isfinite(tempfactor) &&
                std::isfinite(alpha) && std::isfinite(thole);
@@ -86,7 +86,7 @@ public:
     double get_wmain() const noexcept { return wmain; }
     double get_mass() const noexcept { return mass; }
     double get_charge() const noexcept { return charge; }
-    
+
     // Coordinate access
     const std::array<double, 3>& get_coor() const noexcept { return coor; }
     double get_x() const noexcept { return coor[0]; }
@@ -96,7 +96,7 @@ public:
     // Force field parameters
     double get_eps() const noexcept { return eps; }
     double get_rmin() const noexcept { return rmin; }
-    
+
     // Drude force field parameters
     double get_alpha() const noexcept { return alpha; }
     double get_thole() const noexcept { return thole; }
@@ -132,23 +132,23 @@ public:
         eps = epsilon;
         rmin = r;
     }
-    
+
     void set_drude_params(double polarizability, double thole_param) {
-        if (!std::isfinite(polarizability) || polarizability < 0.0 || 
+        if (!std::isfinite(polarizability) || polarizability < 0.0 ||
             !std::isfinite(thole_param)) {
             throw std::invalid_argument("Invalid Drude parameters");
         }
         alpha = polarizability;
         thole = thole_param;
     }
-    
+
     void set_alpha(double polarizability) {
         if (!std::isfinite(polarizability) || polarizability < 0.0) {
             throw std::invalid_argument("Invalid polarizability");
         }
         alpha = polarizability;
     }
-    
+
     void set_thole(double thole_param) {
         if (!std::isfinite(thole_param)) {
             throw std::invalid_argument("Invalid Thole parameter");
@@ -157,25 +157,25 @@ public:
     }
 
     // Basic setters
-    void set_type(const std::string& t) { 
+    void set_type(const std::string& t) {
         if (t.empty()) throw std::invalid_argument("Empty atom type");
-        type = t; 
+        type = t;
     }
-    
-    void set_resname(const std::string& rn) { 
+
+    void set_resname(const std::string& rn) {
         if (rn.empty()) throw std::invalid_argument("Empty residue name");
-        resname = rn; 
+        resname = rn;
     }
-    
-    void set_ires(int ir) { 
+
+    void set_ires(int ir) {
         if (ir < 0) throw std::invalid_argument("Invalid residue number");
-        ires = ir; 
+        ires = ir;
     }
-    
+
     void set_segid(const std::string& sid) { segid = sid; }
     void set_chain(char ch) { chain = ch; }
     void set_hetatm(bool het) { hetatm = het; }
-    
+
     void set_bynu(int num) {
         if (num < 0) throw std::invalid_argument("Invalid atom number");
         bynu = num;
@@ -193,7 +193,7 @@ protected:
     std::string resname;         ///< Residue name (RESNAME)
     int ires;                    ///< Residue number (IRES)
     std::string segid;           ///< Segment ID (SEGID)
-    int iseg;                    ///< Segment number (ISEG)  
+    int iseg;                    ///< Segment number (ISEG)
     int igro;                    ///< Group number (IGRO)
     char altloc;                 ///< Alternate location (PDB)
     char chain;                  ///< Chain identifier (PDB)
@@ -230,4 +230,4 @@ protected:
 } // namespace model
 } // namespace pygcmc
 
-#endif // PYGCMC_MODEL_ATOM_CORE_HPP 
+#endif // PYGCMC_MODEL_ATOM_CORE_HPP

@@ -9,7 +9,7 @@ namespace cpu {
 
 /**
  * @brief Compute energy from the PME grid after FFT
- * 
+ *
  * @param energy Output energy
  * @param box Box dimensions
  */
@@ -17,7 +17,7 @@ void computeEnergyFromGrid(double& energy, const double box[3]);
 
 /**
  * @brief Compute reciprocal space energy using PME
- * 
+ *
  * @param state MC state
  * @return Reciprocal space energy
  */
@@ -27,4 +27,4 @@ double computeReciprocalPME(model::MCState& state);
 } // namespace platform
 } // namespace pygcmc
 
-#endif // PMEENERGYCALC_HPP 
+#endif // PMEENERGYCALC_HPP

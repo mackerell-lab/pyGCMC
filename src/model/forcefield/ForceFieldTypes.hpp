@@ -136,4 +136,4 @@ struct DrudeGlobalParams {
 } // namespace model
 } // namespace pygcmc
 
-#endif // PYGCMC_MODEL_FORCEFIELD_TYPES_HPP 
+#endif // PYGCMC_MODEL_FORCEFIELD_TYPES_HPP

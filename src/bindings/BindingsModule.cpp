@@ -20,7 +20,7 @@ void init_montecarlo_bindings(py::module& m, py::module& system_module);
 void init_system(py::module& m) {
     // Create system submodule
     auto system_module = m.def_submodule("system", "System management classes");
-    
+
     // Initialize all System binding groups
     init_common_bindings(m, system_module);
     init_molecular_bindings(m, system_module);
@@ -42,7 +42,7 @@ void init_montecarlo_bindings(py::module& m, py::module& model_module);
 void init_model(py::module& m) {
     // Create model submodule
     auto model_module = m.def_submodule("model", "Data model classes");
-    
+
     // Initialize all Model binding groups
     init_structure_bindings(m, model_module);
     init_atom_bindings(m, model_module);
@@ -92,7 +92,7 @@ void init_trajectory_bindings(py::module& m);
 void init_io_bindings(py::module& m) {
     // Create io submodule
     auto io_module = m.def_submodule("io", "Input/Output operations");
-    
+
     // Initialize all IO binding groups
     init_structure_bindings(m, io_module);
     init_topology_bindings(m, io_module);
@@ -113,20 +113,20 @@ static void cleanup_global_state() {
 // Main pybind11 module definition
 PYBIND11_MODULE(pygcmc, m) {
     m.doc() = "Python bindings for GCMC simulation library";
-    
+
     // Initialize bindings - all consolidated under platform
     pygcmc::bindings::io::init_io_bindings(m);
     pygcmc::bindings::model::init_model(m);
     pygcmc::bindings::system::init_system(m);
     pygcmc::bindings::platform::init_platform_bindings(m);
-    
+
     // Register cleanup function - can be called manually if needed
-    // NOTE: We do NOT automatically register with atexit to avoid 
+    // NOTE: We do NOT automatically register with atexit to avoid
     // pybind11 deallocation issues during Python shutdown
-    m.def("_cleanup", &cleanup_global_state, 
+    m.def("_cleanup", &cleanup_global_state,
           "Internal cleanup function - call manually before exit if needed",
           py::call_guard<py::gil_scoped_release>());
-    
+
     // Export OpenMP capability flag
 #ifdef PYGCMC_USE_OPENMP
     m.attr("PYGCMC_USE_OPENMP") = py::bool_(true);

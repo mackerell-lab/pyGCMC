@@ -1,7 +1,7 @@
 /**
  * @file DrudeDirectPolarization.hpp
  * @brief Direct polarization approximation for Drude oscillators
- * 
+ *
  * Ignores induced-induced interactions for maximum speed.
  * Suitable for GCMC screening where 5-10% error is acceptable.
  */
@@ -20,16 +20,16 @@ class DrudeDirectPolarization : public DrudeOptimizer {
 public:
     DrudeDirectPolarization() = default;
     ~DrudeDirectPolarization() override = default;
-    
+
     bool optimize(
         model::MCState& state,
         const std::vector<DrudeParticle>& particles,
         const std::vector<ScreenedPair>& screenedPairs,
         const DrudeSCFParams& params
     ) override;
-    
+
     const char* getName() const override { return "DirectPolarization"; }
-    
+
 private:
     /**
      * Compute permanent electric field at Drude parent positions
@@ -40,7 +40,7 @@ private:
         const std::vector<DrudeParticle>& particles,
         std::vector<Vec3>& fields
     );
-    
+
     /**
      * Check if two atoms are in the same molecule
      */
@@ -48,7 +48,7 @@ private:
 };
 
 } // namespace cpu
-} // namespace platform  
+} // namespace platform
 } // namespace pygcmc
 
 #endif // PYGCMC_DRUDE_DIRECT_POLARIZATION_HPP

@@ -26,7 +26,7 @@ public:
 
     // Extra API for experimental path
     void autoScreenPairs(double thole, double cutoff_nm);
-    
+
     // Configuration
     void setAlgorithm(platform::cpu::DrudeAlgorithm algorithm) override; // kept for interface
     void setDrudeAlgorithm(int algo); // Set experimental algorithm (0=S1, 1=S3S5, 2=S1_dipole, 3=direct)
@@ -39,10 +39,10 @@ public:
     // Enable/disable Coulomb energy (for testing)
     void setIncludeCoulomb(bool include) { m_includeCoulomb = include; }
     bool getIncludeCoulomb() const { return m_includeCoulomb; }
-    
+
     // Get spectral radius for monitoring
     double getSpectralRadius(const model::MCState& state) const;
-    
+
     // Get last SCF iteration count
     int getSCFIterationCount() const;
 

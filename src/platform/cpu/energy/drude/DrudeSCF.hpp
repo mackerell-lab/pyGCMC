@@ -14,7 +14,7 @@ namespace cpu {
 
 /**
  * @brief SCF optimizer for Drude positions
- * 
+ *
  * Iteratively optimizes Drude positions to minimize total energy
  * using self-consistent field approach with adaptive damping.
  */
@@ -22,22 +22,22 @@ class DrudeSCF : public DrudeOptimizer {
 public:
     DrudeSCF() = default;
     ~DrudeSCF() = default;
-    
+
     bool optimize(
         model::MCState& state,
         const std::vector<DrudeParticle>& particles,
         const std::vector<ScreenedPair>& screenedPairs,
         const DrudeSCFParams& params
     ) override;
-    
+
     const char* getName() const override { return "SCF"; }
-    
+
     /**
      * @brief Get the number of iterations from last optimization
      * @return Number of iterations used
      */
     int getIterationCount() const { return m_lastIterationCount; }
-    
+
 private:
     mutable int m_lastIterationCount = 0;
 
@@ -47,7 +47,7 @@ private:
 
     /**
      * @brief Calculate electric field at Drude particles
-     * 
+     *
      * Includes contributions from:
      * 1. External charges (atoms)
      * 2. Other Drude particles (with Thole screening)
@@ -60,7 +60,7 @@ private:
         const std::vector<int>& activeAtoms,
         const std::vector<char>& activeAtomMask
     ) const;
-    
+
     /**
      * @brief Calculate field from external charges
      */
@@ -70,7 +70,7 @@ private:
         std::vector<Vec3>& electricField,
         const std::vector<int>& activeAtoms
     ) const;
-    
+
     /**
      * @brief Calculate field from other Drude particles
      */
@@ -81,7 +81,7 @@ private:
         std::vector<Vec3>& electricField,
         const std::vector<char>& activeAtomMask
     ) const;
-    
+
     /**
      * @brief Update Drude positions based on electric field
      * @return Maximum displacement
@@ -94,7 +94,7 @@ private:
         double maxDrudeDistance,
         const std::vector<char>& activeAtomMask
     ) const;
-    
+
     /**
      * @brief Calculate force on each Drude particle
      */
@@ -105,12 +105,12 @@ private:
         std::vector<Vec3>& forces,
         const std::vector<char>& activeAtomMask
     ) const;
-    
+
     /**
      * @brief Apply periodic boundary conditions
      */
     void applyPBC(double& dx, double& dy, double& dz, const std::array<double, 3>& box) const;
-    
+
     /**
      * @brief Check if two atoms are in the same molecule
      */

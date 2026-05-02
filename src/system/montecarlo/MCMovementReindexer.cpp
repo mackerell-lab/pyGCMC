@@ -12,10 +12,10 @@ std::pair<std::vector<model::MCResidue>, std::vector<std::vector<model::MCAtom>>
 MCMovementReindexer::reindexExistingResidues(const model::MCState& oldState,
                                            model::TypeMaps& newResidueTypes,
                                            model::TypeMaps& newAtomTypes) {
-    
+
     std::vector<model::MCResidue> reindexedResidues;
     std::vector<std::vector<model::MCAtom>> reindexedAtoms;
-    
+
     reindexedResidues.reserve(oldState.activeResidueCount);
     reindexedAtoms.reserve(oldState.activeResidueCount);
 
@@ -35,7 +35,7 @@ MCMovementReindexer::reindexExistingResidues(const model::MCState& oldState,
 
     for (int i = 0; i < oldState.activeResidueCount; i++) {
         const auto& oldRes = oldState.residues[i];
-        
+
         // Get the old residue name and process it
         std::string oldResName = oldState.residueTypes.getTypeName(oldRes.type);
         std::string processedResName = processResidueName(oldResName);
@@ -87,4 +87,4 @@ std::string MCMovementReindexer::processResidueName(const std::string& rawName) 
 
 } // namespace montecarlo
 } // namespace system
-} // namespace pygcmc 
+} // namespace pygcmc

@@ -14,13 +14,13 @@ namespace cpu {
 
 /**
  * @brief Perform forward FFT on the grid
- * 
+ *
  * Uses custom FFT implementation
  */
 void performFFTForward() {
     // Console output - same as pme.cpp
     platform::log(LogLevel::DEBUG, "Performing forward FFT on PME grid");
-    
+
     // For debugging backup data, only execute in debug mode
     if (platform::is_debug_mode()) {
         // In debug mode, backup grid data for comparison
@@ -28,7 +28,7 @@ void performFFTForward() {
         fftGridBackup.resize(pme_params.pmeGrid.size());
         std::copy(pme_params.pmeGrid.begin(), pme_params.pmeGrid.end(), fftGridBackup.begin());
     }
-    
+
     // Only execute test code in debug mode
     if (platform::is_debug_mode()) {
         // Calculate non-zero points before FFT
@@ -38,15 +38,15 @@ void performFFTForward() {
         }
         platform::log(LogLevel::DEBUG, "Grid before FFT: non-zero points = " + std::to_string(nonZeroBeforeFFT));
     }
-    
+
     // Get grid dimensions
     int nx = pme_params.meshSize[0];
     int ny = pme_params.meshSize[1];
     int nz = pme_params.meshSize[2];
-    
+
     // Use custom FFT implementation
     CustomFFT::fft3D_forward(pme_params.pmeGrid.data(), nx, ny, nz);
-    
+
     // Non-zero point counting - only perform detailed counting in debug mode
     if (platform::is_debug_mode()) {
         // Calculate non-zero points after FFT
@@ -61,7 +61,7 @@ void performFFTForward() {
 
 /**
  * @brief Perform backward FFT on the grid
- * 
+ *
  * Uses custom FFT implementation, matches pme.cpp implementation
  */
 void performFFTBackward() {
@@ -69,7 +69,7 @@ void performFFTBackward() {
     int nx = pme_params.meshSize[0];
     int ny = pme_params.meshSize[1];
     int nz = pme_params.meshSize[2];
-    
+
     // Only execute test code in debug mode
     if (platform::is_debug_mode()) {
         // Calculate non-zero points before backward FFT
@@ -79,10 +79,10 @@ void performFFTBackward() {
         }
         platform::log(LogLevel::DEBUG, "Grid before backward FFT: non-zero points = " + std::to_string(nonZeroBeforeFFT));
     }
-    
+
     // Use custom FFT implementation
     CustomFFT::fft3D_backward(pme_params.pmeGrid.data(), nx, ny, nz);
-    
+
     // Only execute test code in debug mode
     if (platform::is_debug_mode()) {
         // Calculate non-zero points after backward FFT
@@ -100,4 +100,4 @@ void performFFTBackward() {
 
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

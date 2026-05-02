@@ -36,13 +36,13 @@ std::vector<std::string> PrmParserStructures::tokenize(const std::string& line) 
     std::vector<std::string> tokens;
     std::istringstream iss(line);
     std::string token;
-    
+
     while (iss >> token) {
         if (token[0] == '!' || token[0] == '#') break;  // Stop at comments
         if (token == "-") continue;  // Skip continuation character
         tokens.push_back(token);
     }
-    
+
     return tokens;
 }
 
@@ -69,49 +69,49 @@ std::string PrmParserStructures::readContinuationLine(std::istream& input, std::
     // Debug output removed from utility functions for better separation
     std::string fullLine = firstLine;
     std::string currentLine;
-    
+
     bool hasContinuation = false;
     if (!fullLine.empty() && fullLine.back() == '-') {
         hasContinuation = true;
         fullLine.pop_back();
         fullLine = trim(fullLine);
     }
-    
+
     while (hasContinuation) {
         if (!std::getline(input, currentLine)) {
             break;
         }
         // Debug output removed
-        
+
         while (isCommentLine(currentLine)) {
             if (!std::getline(input, currentLine)) {
                 return fullLine;
             }
             // Debug output removed
         }
-        
+
         currentLine = removeComments(currentLine);
         currentLine = trim(currentLine);
-        
+
         if (currentLine.empty()) {
             break;
         }
-        
+
         hasContinuation = false;
         if (!currentLine.empty() && currentLine.back() == '-') {
             hasContinuation = true;
             currentLine.pop_back();
             currentLine = trim(currentLine);
         }
-        
+
         if (!fullLine.empty() && !currentLine.empty()) {
             fullLine += " ";
         }
         fullLine += currentLine;
-        
+
         // Debug output removed
     }
-    
+
     // Debug output removed
     return fullLine;
 }
@@ -128,7 +128,7 @@ bool PrmParserStructures::isBondsSection(const std::string& line) {
 }
 
 bool PrmParserStructures::isAnglesSection(const std::string& line) {
-    // Only treat a line that is exactly "ANGLES" (after trimming) 
+    // Only treat a line that is exactly "ANGLES" (after trimming)
     // as the start of the parameter ANGLES section.
     const std::string trimmed = trim(line);
     return trimmed == "ANGLES";
@@ -146,7 +146,7 @@ bool PrmParserStructures::isImproperSection(const std::string& line) {
 }
 
 bool PrmParserStructures::isNonbondedSection(const std::string& line) {
-    return line.find("NONBONDED") != std::string::npos || 
+    return line.find("NONBONDED") != std::string::npos ||
            line.find("cutnb") != std::string::npos;
 }
 
@@ -193,7 +193,7 @@ std::tuple<std::string, std::string, std::string> PrmParserStructures::make_type
 }
 
 std::tuple<std::string, std::string, std::string, std::string> PrmParserStructures::make_type_quad(
-    const std::string& type1, const std::string& type2, 
+    const std::string& type1, const std::string& type2,
     const std::string& type3, const std::string& type4) {
     return std::make_tuple(type1, type2, type3, type4);
 }
@@ -201,95 +201,95 @@ std::tuple<std::string, std::string, std::string, std::string> PrmParserStructur
 bool PrmParserStructures::isTopologyLine(const std::string& line) {
     // Check if this line is a topology definition from STR files
     // These should be skipped when parsing parameters
-    
+
     // SPECIAL CASE: ATOM lines with ALPHA/THOLE are parameter definitions, not topology
-    if (line.find("ATOM ") == 0 && 
+    if (line.find("ATOM ") == 0 &&
         (line.find("ALPHA") != std::string::npos || line.find("THOLE") != std::string::npos)) {
         return false;  // This is a parameter line, not topology
     }
-    
+
     // Residue and patch definitions
     if (line.find("RESI ") == 0 || line.find("PRES ") == 0) {
         return true;
     }
-    
+
     // Atom definitions within topology (without ALPHA/THOLE)
     if (line.find("ATOM ") == 0) {
         return true;
     }
-    
+
     // Group definitions
     if (line.find("GROUP") == 0) {
         return true;
     }
-    
+
     // Topology bonds (note the space after BOND to distinguish from BONDS section)
     if (line.find("BOND ") == 0) {
         return true;
     }
-    
+
     // Topology impropers (note: IMPR with space, not IMPROPER section)
     if (line.find("IMPR ") == 0) {
         return true;
     }
-    
+
     // Topology dihedrals
     if (line.find("DIHE ") == 0) {
         return true;
     }
-    
+
     // Other topology-specific keywords
     if (line.find("DONOR ") == 0 || line.find("ACCEPTOR ") == 0) {
         return true;
     }
-    
+
     // IC (internal coordinate) definitions
     if (line.find("IC ") == 0) {
         return true;
     }
-    
+
     // PATCH applications
     if (line.find("PATCH") == 0) {
         return true;
     }
-    
+
     // patch first none last none (lowercase patch)
     if (line.find("patch ") == 0) {
         return true;
     }
-    
+
     // Other STR-specific keywords that should be ignored
     if (line.find("NOANG") == 0 || line.find("NODIHE") == 0) {
         return true;
     }
-    
+
     // LONEPAIR definitions (Drude-specific) - but not if they have parameters
     if (line.find("LONEPAIR") == 0) {
         // If line contains parameter keywords, it's a parameter line not topology
-        if (line.find("distance") != std::string::npos || 
+        if (line.find("distance") != std::string::npos ||
             line.find("angle") != std::string::npos ||
             line.find("dihe") != std::string::npos) {
             return false;
         }
         return true;
     }
-    
+
     // ANISOTROPY definitions (Drude-specific) - but not if they have parameters
     if (line.find("ANISOTROPY") == 0) {
         // If line contains A11, A22, A33, it's a parameter line not topology
-        if (line.find("A11") != std::string::npos || 
+        if (line.find("A11") != std::string::npos ||
             line.find("A22") != std::string::npos ||
             line.find("A33") != std::string::npos) {
             return false;
         }
         return true;
     }
-    
+
     // CMAP definitions in topology
     if (line.find("CMAP") == 0) {
         return true;
     }
-    
+
     // Other topology directives from STR files
     if (line.find("AUTOGENERATE") == 0 ||
         line.find("DECL") == 0 ||
@@ -297,7 +297,7 @@ bool PrmParserStructures::isTopologyLine(const std::string& line) {
         line.find("ANGLE ") == 0) {
         return true;
     }
-    
+
     return false;
 }
 

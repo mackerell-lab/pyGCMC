@@ -27,10 +27,10 @@ public:
     static void parseImproperSection(std::istream& input, pygcmc::model::ForceField& ff);
     static void parseNonbondedSection(std::istream& input, pygcmc::model::ForceField& ff, const std::string& firstLine);
     static void parseNBFixSection(std::istream& input, pygcmc::model::ForceField& ff);
-    
+
     // Stream parsing
     static void parseStream(std::istream& input, pygcmc::model::ForceField& ff);
-    
+
     // High-level parsing operations
     static void parse_string(const std::string& content, pygcmc::model::ForceField& ff);
     static void parse_file_to_forcefield(const std::string& filename, pygcmc::model::ForceField& ff);

@@ -70,7 +70,7 @@ public:
         return false;
     }
 
-    static inline bool hasDihedral(const std::vector<TopologyDihedral>& dihedrals, 
+    static inline bool hasDihedral(const std::vector<TopologyDihedral>& dihedrals,
                                   int atom1, int atom2, int atom3, int atom4) {
         for (const auto& dihedral : dihedrals) {
             if (dihedral.improper) continue;
@@ -167,12 +167,12 @@ public:
 
     // Count operations
     static inline size_t countDihedrals(const std::vector<TopologyDihedral>& dihedrals) {
-        return std::count_if(dihedrals.begin(), dihedrals.end(), 
+        return std::count_if(dihedrals.begin(), dihedrals.end(),
                             [](const TopologyDihedral& d) { return !d.improper; });
     }
 
     static inline size_t countImpropers(const std::vector<TopologyDihedral>& dihedrals) {
-        return std::count_if(dihedrals.begin(), dihedrals.end(), 
+        return std::count_if(dihedrals.begin(), dihedrals.end(),
                             [](const TopologyDihedral& d) { return d.improper; });
     }
 

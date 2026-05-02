@@ -25,7 +25,7 @@ namespace cpu {
 
 /**
  * @brief Core implementation of Drude force calculations
- * 
+ *
  * This class manages Drude particles, implements energy/force calculations,
  * and delegates optimization to specific algorithm implementations.
  */
@@ -33,7 +33,7 @@ class DrudeCore : public DrudeInterface {
 public:
     DrudeCore();
     ~DrudeCore() = default;
-    
+
     // DrudeInterface implementation
     double calculateEnergy(model::MCState& state) override;
     void calculateForces(model::MCState& state, std::vector<Vec3>& forces) override;
@@ -43,24 +43,24 @@ public:
     void setParameters(const DrudeSCFParams& params) override;
     void clear() override;
     size_t getNumParticles() const override;
-    
+
     // Static instance access for global interface
     static DrudeCore& getInstance();
-    
+
     // ASPC history management
     void enableASPC(bool enable) { m_useASPC = enable; }
     bool isASPCEnabled() const { return m_useASPC; }
     void clearHistory() { m_hasHistory = false; }
-    
+
     // FastFBP access for configuration
     DrudeFastFBP* getFastFBPOptimizer() { return m_fastFbpOptimizer.get(); }
-    
+
     // Hybrid access for configuration
     DrudeHybrid* getHybridOptimizer() { return m_hybridOptimizer.get(); }
-    
+
     // MultiStage access for configuration
     DrudeMultiStage* getMultiStageOptimizer() { return m_multiStageOptimizer.get(); }
-    
+
 private:
     static void buildActiveAtomMask(const model::MCState& state, std::vector<char>& mask);
     static bool isActiveAtom(int atomIndex, const std::vector<char>& mask);
@@ -70,23 +70,23 @@ private:
     double calculateScreenedCoulombEnergy(const model::MCState& state) const;
     double calculateCoulombEnergy(const model::MCState& state, const std::vector<char>& activeAtomMask) const;
     double calculateTholeCorrectionEnergy(const model::MCState& state, const std::vector<char>& activeAtomMask) const;
-    
+
     // Force calculation components
-    void calculateHarmonicForces(const model::MCState& state, 
+    void calculateHarmonicForces(const model::MCState& state,
                                 std::vector<Vec3>& forces) const;
     void calculateScreenedCoulombForces(const model::MCState& state,
                                        std::vector<Vec3>& forces) const;
-    
+
     // Utility functions
     void applyPBC(double& dx, double& dy, double& dz, const std::array<double, 3>& box) const;
     bool inSameMolecule(int atom1, int atom2, const model::MCState& state) const;
-    
+
     // Data members
     std::vector<DrudeParticle> m_particles;
     std::vector<ScreenedPair> m_screenedPairs;
     DrudeSCFParams m_params;
     DrudeAlgorithm m_algorithm;
-    
+
     // Algorithm implementations
     std::unique_ptr<DrudeSCF> m_scfOptimizer;
     std::unique_ptr<DrudeOPT3> m_opt3Optimizer;
@@ -99,12 +99,12 @@ private:
     std::unique_ptr<DrudeHybrid> m_hybridOptimizer;
     std::unique_ptr<DrudeMultiStage> m_multiStageOptimizer;
     DrudeOptimizer* m_currentOptimizer;
-    
+
     // ASPC history for prediction
     bool m_useASPC = false;
     bool m_hasHistory = false;
     std::vector<Vec3> m_lastDrudePositions;
-    
+
     // ASPC helper methods
     void saveCurrentPositions(const model::MCState& state);
     void applyHistoryPositions(model::MCState& state);

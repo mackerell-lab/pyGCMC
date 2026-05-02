@@ -101,7 +101,7 @@ bool TopParserSections::parse_bonds_section(const std::vector<LineInfo>& lines, 
             // Always parse the first two atoms (required)
             int atom1 = std::stoi(tokens[0]) - 1 + atom_offset;  // Convert to 0-based indexing and add offset
             int atom2 = std::stoi(tokens[1]) - 1 + atom_offset;
-            
+
             // Parse function type if present (default to 1)
             int func_type = 1;
             if (tokens.size() >= 3) {
@@ -122,8 +122,8 @@ bool TopParserSections::parse_bonds_section(const std::vector<LineInfo>& lines, 
             // Add bond to topology
             topology.add_bond(atom1, atom2, length, force_const, func_type);
         } catch (const std::exception& e) {
-            TopParserUtilities::debug_print("Warning: Error parsing bond line: ", line, " at ", 
-                     line_info.source_file, ":", line_info.line_number, 
+            TopParserUtilities::debug_print("Warning: Error parsing bond line: ", line, " at ",
+                     line_info.source_file, ":", line_info.line_number,
                      " - ", e.what(), "\n");
             continue;  // Continue with next line instead of failing
         }
@@ -142,7 +142,7 @@ bool TopParserSections::parse_angles_section(const std::vector<LineInfo>& lines,
             int atom1 = std::stoi(tokens[0]) - 1 + atom_offset;
             int atom2 = std::stoi(tokens[1]) - 1 + atom_offset;
             int atom3 = std::stoi(tokens[2]) - 1 + atom_offset;
-            
+
             // Parse function type if present (default to 1)
             int func_type = 1;
             if (tokens.size() >= 4) {
@@ -164,7 +164,7 @@ bool TopParserSections::parse_angles_section(const std::vector<LineInfo>& lines,
             topology.add_angle(atom1, atom2, atom3, angle, force_const, func_type);
         } catch (const std::exception& e) {
             TopParserUtilities::debug_print("Warning: Error parsing angle line: ", line, " at ",
-                     line_info.source_file, ":", line_info.line_number, 
+                     line_info.source_file, ":", line_info.line_number,
                      " - ", e.what(), "\n");
             continue;  // Continue with next line instead of failing
         }
@@ -187,10 +187,10 @@ bool TopParserSections::parse_dihedrals_section(const std::vector<LineInfo>& lin
             int atom2 = std::stoi(tokens[1]) - 1 + atom_offset;
             int atom3 = std::stoi(tokens[2]) - 1 + atom_offset;
             int atom4 = std::stoi(tokens[3]) - 1 + atom_offset;
-            
+
             // Default to function type 1 (proper dihedral) if not specified
             int funcType = (tokens.size() >= 5) ? std::stoi(tokens[4]) : 1;
-            
+
             if (funcType == 2 || funcType == 4) {
                 topology.add_improper(atom1, atom2, atom3, atom4);
                 improper_count++;
@@ -210,8 +210,8 @@ bool TopParserSections::parse_dihedrals_section(const std::vector<LineInfo>& lin
             return false;
         }
     }
-    
-    TopParserUtilities::debug_print("Added ", proper_count, " proper dihedrals and ", 
+
+    TopParserUtilities::debug_print("Added ", proper_count, " proper dihedrals and ",
               improper_count, " improper dihedrals\n");
     return true;
 }
@@ -227,7 +227,7 @@ bool TopParserSections::parse_impropers_section(const std::vector<LineInfo>& lin
             int atom2 = std::stoi(tokens[1]) - 1 + atom_offset;
             int atom3 = std::stoi(tokens[2]) - 1 + atom_offset;
             int atom4 = std::stoi(tokens[3]) - 1 + atom_offset;
-            
+
             // Add improper to topology
             topology.add_improper(atom1, atom2, atom3, atom4);
         } catch (const std::exception& e) {
@@ -248,7 +248,7 @@ bool TopParserSections::parse_molecules_section(const std::vector<LineInfo>& lin
         try {
             std::string mol_type = tokens[0];
             int count = std::stoi(tokens[1]);
-            
+
             // Store molecule type and count
             molecule_order.push_back(std::make_pair(mol_type, count));
         } catch (const std::exception& e) {
@@ -276,14 +276,14 @@ bool TopParserSections::parse_cmaps_section(const std::vector<LineInfo>& lines, 
                 cmap_atoms[i] = std::stoi(tokens[i]) - 1 + atom_offset;  // Convert to 0-based indexing
             }
             int function_type = std::stoi(tokens[5]);
-            
+
             // Add CMAP to topology using the GROMACS format overload
             topology.add_cmap(cmap_atoms, function_type);
-            
+
             TopParserUtilities::debug_print("Added CMAP between atoms: ", cmap_atoms[0], " ", cmap_atoms[1], " ", cmap_atoms[2], " ", cmap_atoms[3], " ", cmap_atoms[4], " (function type ", function_type, ")\n");
         } catch (const std::exception& e) {
-            TopParserUtilities::debug_print("Error parsing CMAP line: ", line, " at ", 
-                     line_info.source_file, ":", line_info.line_number, 
+            TopParserUtilities::debug_print("Error parsing CMAP line: ", line, " at ",
+                     line_info.source_file, ":", line_info.line_number,
                      " - ", e.what(), "\n");
             return false;
         }

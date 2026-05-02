@@ -57,7 +57,7 @@ bool PSFParser::parse_to_topology(const std::string& filename, model::Topology& 
     if (!readFileToLines(filename, lines)) {
         return false;
     }
-    
+
     // Check for extended Drude format in header
     bool is_extended_format = false;
     bool is_drude_format = false;
@@ -66,7 +66,7 @@ bool PSFParser::parse_to_topology(const std::string& filename, model::Topology& 
         if (header.find("PSF") != std::string::npos) {
             is_extended_format = header.find("EXT") != std::string::npos;
             is_drude_format = header.find("DRUDE") != std::string::npos;
-            
+
             if (is_drude_format && is_extended_format) {
                 std::cout << "Detected extended Drude PSF format" << std::endl;
             }

@@ -43,7 +43,7 @@ public:
         Vector3 centerOfMass;
         double insertionTime = 0.0;  // For analysis
     };
-    
+
     // Statistics for monitoring
     struct Statistics {
         int totalInserts = 0;
@@ -54,61 +54,61 @@ public:
         double averageFragmentation = 0.0;
         int batchOperations = 0;
     };
-    
+
     // Constructor
     explicit ActivePool(int maxAtoms = 100000, int maxResidues = 30000);
-    
+
     // Destructor
     ~ActivePool();
-    
+
     // Core operations
     int insertMolecule(const std::vector<MCAtom>& atoms, int resType = 0);
     bool deleteResidue(int resIdx);
     int compact(bool force = false);
-    
+
     // Batch operations for efficiency
     void queueInsert(const std::vector<MCAtom>& atoms, int resType = 0);
     void queueDelete(int resIdx);
     std::pair<int, int> flushBatch();  // Returns (inserted, deleted)
-    
+
     // State synchronization
     void syncToState(MCState& state);
     void syncFromState(const MCState& state);
-    
+
     // Query operations
     double getFragmentation() const;
     std::pair<int, int> getActiveCounts() const;  // (activeAtoms, activeResidues)
     std::vector<int> getActiveResidueIndices() const;
     bool isResidueActive(int resIdx) const;
-    
+
     // Metadata access
     ResidueMetadata* getResidueMetadata(int resIdx);
     const ResidueMetadata* getResidueMetadata(int resIdx) const;
-    
+
     // Statistics
     const Statistics& getStatistics() const { return stats_; }
     void resetStatistics();
-    
+
     // Configuration
     void setFragmentationThreshold(double threshold) { fragmentationThreshold_ = threshold; }
     double getFragmentationThreshold() const { return fragmentationThreshold_; }
-    
+
     // Capacity management
     int getMaxAtoms() const { return maxAtoms_; }
     int getMaxResidues() const { return maxResidues_; }
     bool canInsert(int atomCount) const;
-    
+
 private:
     // Pre-allocated arrays
     std::vector<MCAtom> atoms_;                  // Pre-allocated atom array
     std::vector<ResidueMetadata> residueInfo_;   // Residue metadata
     std::vector<bool> atomActive_;               // Active mask for atoms
     std::vector<bool> residueActive_;            // Active mask for residues
-    
+
     // Free slot management
     std::set<int> freeResidueSlots_;            // Available residue indices
     std::queue<int> freeAtomRanges_;            // Available atom index ranges
-    
+
     // Batch operation queues
     struct InsertOperation {
         std::vector<MCAtom> atoms;
@@ -116,31 +116,31 @@ private:
     };
     std::queue<InsertOperation> insertQueue_;
     std::queue<int> deleteQueue_;
-    
+
     // Capacity and thresholds
     int maxAtoms_;
     int maxResidues_;
     double fragmentationThreshold_;
-    
+
     // Current state
     int activeAtomCount_;
     int activeResidueCount_;
     int nextFreeAtomIndex_;
     int nextFreeResidueIndex_;
-    
+
     // Statistics
     mutable Statistics stats_;
-    
+
     // Helper functions
     int findFreeResidueSlot();
     int findFreeAtomRange(int count);
     void updateFragmentationStats();
     void performCompaction();
     bool shouldCompact() const;
-    
+
     // Copy atoms to pool
     void copyAtomsToPool(const std::vector<MCAtom>& atoms, int startIdx);
-    
+
     // Update center of mass for a residue
     void updateCenterOfMass(int resIdx);
 };

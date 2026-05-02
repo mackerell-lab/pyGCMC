@@ -14,7 +14,7 @@ model::Topology PSFParserStringUtils::parse_string(const std::string& psf_str) {
     // Create a temporary file to write the string to
     std::filesystem::path temp_dir = std::filesystem::temp_directory_path();
     std::filesystem::path temp_file = temp_dir / "temp_topology.psf";
-    
+
     // Write the string to the temporary file
     std::ofstream out(temp_file);
     if (!out) {
@@ -22,14 +22,14 @@ model::Topology PSFParserStringUtils::parse_string(const std::string& psf_str) {
     }
     out << psf_str;
     out.close();
-    
+
     try {
         // Parse the temporary file
         model::Topology topology = PSFParser::parse_file(temp_file.string());
-        
+
         // Clean up
         std::filesystem::remove(temp_file);
-        
+
         return topology;
     } catch (const std::exception& e) {
         // Clean up on error

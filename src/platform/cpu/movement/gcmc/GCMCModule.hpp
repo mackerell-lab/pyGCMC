@@ -4,14 +4,14 @@
 /**
  * @file GCMCModule.hpp
  * @brief GCMC Module - Complete Grand Canonical Monte Carlo Implementation
- * 
+ *
  * This module provides a comprehensive GCMC implementation that combines:
  * - Fragment Reservoir management
  * - Cavity-biased insertion
  * - Configurational bias (CBMC)
  * - Move selection and execution
  * - Statistical analysis
- * 
+ *
  * All functionality is implemented in C++ for maximum performance.
  * Python bindings are only for testing and validation.
  */
@@ -52,7 +52,7 @@ namespace gcmc {
 
 /**
  * @brief Main GCMC module class that orchestrates all components
- * 
+ *
  * This class provides a high-level interface for GCMC simulations,
  * managing all subcomponents and coordinating their interactions.
  */
@@ -63,40 +63,40 @@ public:
         // Temperature and thermodynamics
         double temperature;
         double pressure;
-        
+
         // Simulation parameters
         int equilibrationSteps;
         int productionSteps;
         int saveFrequency;
-        
+
         // Move probabilities (should sum to 1.0)
         double insertProb;
         double deleteProb;
         double translateProb;
         double rotateProb;
         double swapProb;          // For multi-component
-        
+
         // Bias parameters
         bool useCavityBias;
         double gridSpacing;        // nm
         double probeRadius;       // nm
         bool useConfigBias;
         int configTrials;
-        
+
         // Advanced options
         bool useRegrowth;        // Regrowth moves
         bool useClusterMoves;    // Cluster translation/rotation
         double clusterCutoff;     // nm
-        
+
         // Energy calculation
         platform::cpu::EnergyMethod energyMethod;
         double cutoff;             // nm
-        
+
         // Output
         bool verbose;
         std::string trajectoryFile;
         std::string statisticsFile;
-        
+
         // Constructor with default values
         Config()
             : temperature(300.0),
@@ -122,35 +122,35 @@ public:
               verbose(false),
               trajectoryFile(""),
               statisticsFile("") {}
-        
+
         // Normalize move probabilities
         void normalizeProbs();
-        
+
         // Validate configuration
         void validate() const;
     };
-    
+
     // Constructor
     explicit GCMCModule(const Config& config = Config());
     ~GCMCModule();
-    
+
     // Initialize with system state
     void initialize(model::montecarlo::MCState& state);
-    
+
     // Fragment management
     int addFragmentType(const FragmentTemplate& tmpl);
     void setChemicalPotential(int typeId, double mu);
     void setActivity(int typeId, double activity);
-    
+
     // Run simulation
     void runEquilibration(int steps = -1);
     void runProduction(int steps = -1);
     void runSteps(int nSteps);
     bool performMove();
-    
+
     // Random number generation
     void setSeed(unsigned int seed);
-    
+
     // Individual move types
     bool attemptInsertion(int typeId = -1);
     bool attemptDeletion(int typeId = -1);
@@ -159,39 +159,39 @@ public:
     bool attemptSwap();
     bool attemptRegrowth();
     bool attemptClusterMove();
-    
+
     // Analysis
     const GCMCStats& getStatistics() const { return *statistics_; }
     void printStatistics() const;
     void saveStatistics(const std::string& filename) const;
-    
+
     // Trajectory output
     void saveSnapshot();
     void saveTrajectory(const std::string& filename);
-    
+
     // Energy calculation
     double calculateSystemEnergy();
     double calculateFragmentEnergy(int residueIdx);
     std::pair<double, double> calculateEnergyComponents();
-    
+
     // Access to components
     GCMCEngine* getEngine() { return engine_.get(); }
     FragmentReservoir* getReservoir() { return reservoir_.get(); }
     CavityManager* getCavityManager() { return cavityManager_.get(); }
-    
+
     // Configuration
     void setConfig(const Config& config) { config_ = config; }
     const Config& getConfig() const { return config_; }
-    
+
     // Advanced features
     void enableAdaptiveBiasing();
     void setTargetDensity(double density);
     void enableFlatHistogram();
-    
+
 private:
     // Debug helpers
     void validateStateConsistency();
-    
+
     // Core components
     std::unique_ptr<GCMCEngine> engine_;
     std::unique_ptr<FragmentReservoir> reservoir_;
@@ -199,24 +199,24 @@ private:
     std::unique_ptr<GCMCBias> biasCalc_;
     std::unique_ptr<GCMCAcceptance> acceptCalc_;
     std::unique_ptr<GCMCStats> statistics_;
-    
+
     // Bias components
     std::unique_ptr<CavityManager> cavityManager_;
     std::unique_ptr<ConfigBiasManager> configBias_;
-    
+
     // State
     model::montecarlo::MCState* state_;
     Config config_;
     bool initialized_;
     int currentStep_;
-    
+
     // Phase enum
     enum class Phase {
         EQUILIBRATION,
         PRODUCTION
     };
     Phase currentPhase_;
-    
+
     // Helper methods
     void updateStatistics();
     void checkConvergence();

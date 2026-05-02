@@ -16,29 +16,29 @@ namespace cpu {
 
 void cleanupAllGlobalState() {
     platform::log(LogLevel::INFO, "Starting global state cleanup...");
-    
+
     // IMPORTANT: Avoid double-free by not calling functions that reset the same pointers
-    
+
     // Only clear FFT weights - this is safe as it's just a vector clear
     try {
         CustomFFT::clearFFTWeights();
     } catch (...) {
         // Ignore errors during cleanup
     }
-    
+
     // Reset smart pointers ONCE
     try {
         resetPGPParamsPtr();
     } catch (...) {
-        // Ignore errors  
+        // Ignore errors
     }
-    
+
     try {
         resetPMEParamsPtr();
     } catch (...) {
         // Ignore errors
     }
-    
+
     // Clear memory pool to release all cached buffers
     try {
         getGridMemoryPool().clear();
@@ -46,10 +46,10 @@ void cleanupAllGlobalState() {
     } catch (...) {
         // Ignore errors
     }
-    
+
     // Mark that cleanup has been called
     SafetyChecks::markCleanupCalled();
-    
+
     platform::log(LogLevel::INFO, "Global state cleanup completed.");
 }
 

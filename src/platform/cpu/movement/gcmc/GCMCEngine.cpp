@@ -186,18 +186,18 @@ void GCMCEngine::setSeed(unsigned int seed) {
     // Set engine's RNG seed
     rng_.seed(seed);
     lastSeed_ = seed;  // Store for auto-seeding acceptance
-    
+
     // Also set acceptance calculator's RNG seed if present
     if (acceptanceCalculator_) {
         acceptanceCalculator_->setSeed(seed + 1);  // Use different but deterministic seed
     }
-    
+
     // Set reservoir's RNG seed if it has one
     if (reservoir_) {
         // Note: Add setSeed to FragmentReservoir if it needs random operations
         // reservoir_->setSeed(seed + 2);
     }
-    
+
     // Set cavity manager's RNG seed if it has one
     if (cavityManager_) {
         // Note: Add setSeed to CavityManager if it needs random operations
@@ -724,19 +724,19 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
 
     // Diagnostics: CBMC trial energies for this move (only populated when CBMC is used).
     lastCbmcTrialEnergies_.clear();
-    
+
     if (!state_ || !reservoir_) {
         result.accepted = false;
         return result;
     }
-    
+
     // Get template
     FragmentTemplate* tmpl = reservoir_->getTemplate(typeId);
     if (!tmpl) {
         result.accepted = false;
         return result;
     }
-    
+
     double baseVolume = getBoxVolume();
     if (baseVolume <= 0.0) {
         baseVolume = 1.0;
@@ -854,7 +854,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     result.effectiveVolume = baseVolume * cavityVolumeFraction;
 
     result.position = position;
-    
+
     // Precompute any PGP background grid before adding the new residue, so the grid does not
     // accidentally include the trial/inserted charges.
     if (energyBackend_ == GCMCEnergyBackend::PgpHost) {
@@ -875,17 +875,17 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
     } else {
         result.energyBefore = 0.0;
     }
-    
+
     // Create instance
     int instanceId = reservoir_->createInstance(typeId, position, orientation);
     if (instanceId < 0) {
         result.accepted = false;
         return result;
     }
-    
+
     // Synchronize MCState with the new instance
     synchronizeStateWithReservoir(instanceId, true);
-    
+
     // Calculate energy change using the selected backend.
     if (useSystemEnergyDelta) {
         result.energyAfter = calculateSystemEnergy();
@@ -939,17 +939,17 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         terms.cbmcTrials = result.cbmcTrialsUsed;
         terms.proposalLogRatio = proposalLogRatio;
         prob = acceptanceCalculator_->calculateInsertionProbabilityDetailed(terms);
-        
+
         // Only store probability if configured
         result.acceptanceProbability = shouldStoreProbability() ? prob : -1.0;
-        
+
         accept = acceptanceCalculator_->acceptMove(prob);
     } else {
         throw std::runtime_error(
             "GCMCEngine::attemptInsertion requires an acceptance calculator; "
             "log-space fallback acceptance has been removed.");
     }
-    
+
     if (accept) {
         result.accepted = true;
         result.residueIndex = instanceId;
@@ -968,9 +968,9 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
         relaxDrudeIfEnabled();
         result.accepted = false;
     }
-    
+
     totalMoves_++;
-    
+
     // Sample statistics if configured using a lightweight countdown
     if (collectStats_) {
         if (--statsCountdown_ <= 0) {
@@ -981,7 +981,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptInsertion(int typeId) {
             statsCountdown_ = std::max(1, statsInterval_);
         }
     }
-    
+
     return result;
 }
 
@@ -993,15 +993,15 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
 
     // Diagnostics: CBMC trial energies for this move (only populated when CBMC is used).
     lastCbmcTrialEnergies_.clear();
-    
+
     if (!state_ || !reservoir_) {
         result.accepted = false;
         return result;
     }
-    
+
     // CRITICAL FIX: Get N BEFORE deletion for correct acceptance calculation
     int N_before = reservoir_->getActiveCount(typeId);
-    
+
     // Check if any instances exist
     if (N_before == 0) {
         result.accepted = false;
@@ -1009,7 +1009,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
         result.acceptanceProbability = shouldStoreProbability() ? 0.0 : -1.0;
         return result;
     }
-    
+
     // Select random instance of this type
     int instanceId = selectRandomInstance(typeId);
     if (instanceId < 0) {
@@ -1018,16 +1018,16 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
         result.acceptanceProbability = shouldStoreProbability() ? 0.0 : -1.0;
         return result;
     }
-    
+
     result.residueIndex = instanceId;
-    
+
     // Get instance info before deletion
     FragmentInstance* instance = reservoir_->getInstance(instanceId);
     if (!instance) {
         result.accepted = false;
         return result;
     }
-    
+
     // Save position and orientation for potential restoration
     Vector3 savedPosition = instance->position;
     Quaternion savedOrientation = instance->orientation;
@@ -1295,17 +1295,17 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
         // Full system energy for Drude/EWALD/PME modes.
         result.energyBefore = calculateSystemEnergy();
     }
-    
+
     // Temporarily delete (convert to ghost)
     reservoir_->deleteInstance(instanceId);
     synchronizeStateWithReservoir(instanceId, false);
-    
+
     // Calculate energy after deletion for full-system modes.
     if (useSystemEnergyDelta) {
         result.energyAfter = calculateSystemEnergy();
         result.deltaE = result.energyAfter - result.energyBefore;
     }
-    
+
     // Calculate cavity bias component separately for detailed balance tracking
     if (useCavityBias_ && cavityManager_) {
         cavityVolumeFraction = std::max(1e-12, cavityManager_->getCavityVolumeFraction(*state_));
@@ -1346,17 +1346,17 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
         terms.cbmcTrials = trialsUsed;
         terms.proposalLogRatio = proposalLogRatio;
         prob = acceptanceCalculator_->calculateDeletionProbabilityDetailed(terms);
-        
+
         // Only store probability if configured
         result.acceptanceProbability = shouldStoreProbability() ? prob : -1.0;
-        
+
         accept = acceptanceCalculator_->acceptMove(prob);
     } else {
         throw std::runtime_error(
             "GCMCEngine::attemptDeletion requires an acceptance calculator; "
             "log-space fallback acceptance has been removed.");
     }
-    
+
     if (accept) {
         result.accepted = true;
         acceptedMoves_++;
@@ -1389,9 +1389,9 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
         }
         result.accepted = false;
     }
-    
+
     totalMoves_++;
-    
+
     // Sample statistics if configured using a lightweight countdown
     if (collectStats_) {
         if (--statsCountdown_ <= 0) {
@@ -1402,7 +1402,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptDeletion(int typeId) {
             statsCountdown_ = std::max(1, statsInterval_);
         }
     }
-    
+
     return result;
 }
 
@@ -1414,24 +1414,24 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
 
     // Diagnostics: non-CBMC move; prevent leaking previous trial energies.
     lastCbmcTrialEnergies_.clear();
-    
+
     if (!state_ || !reservoir_) {
         result.accepted = false;
         return result;
     }
-    
+
     FragmentInstance* instance = reservoir_->getInstance(residueIdx);
     if (!instance || !instance->isActive) {
         result.accepted = false;
         return result;
     }
-    
+
     result.fragmentType = instance->templateId;
-    
+
     // Store old position
     Vector3 oldPos = instance->position;
     result.position = oldPos;
-    
+
     // Calculate energy before move
     if (useDrude_ ||
         energyBackend_ == GCMCEnergyBackend::Ewald ||
@@ -1440,7 +1440,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
     } else {
         result.energyBefore = calculateFragmentEnergy(residueIdx);
     }
-    
+
     // Generate translation using configured step size
     Vector3 displacement = generateTranslationVector(maxTranslationStep_);
     Vector3 newPos = oldPos + displacement;
@@ -1475,7 +1475,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
 
     // Update position
     updateFragmentPosition(residueIdx, newPos);
-    
+
     // Calculate energy after move
     if (useDrude_ ||
         energyBackend_ == GCMCEnergyBackend::Ewald ||
@@ -1485,16 +1485,16 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
         result.energyAfter = calculateFragmentEnergy(residueIdx);
     }
     result.deltaE = result.energyAfter - result.energyBefore;
-    
+
     // Accept or reject using unified acceptance calculator
     bool accept = false;
     double prob = 0.0;
     if (acceptanceCalculator_) {
         prob = acceptanceCalculator_->calculateTranslationProbability(result.deltaE, 1.0);
-        
+
         // Only store probability if configured
         result.acceptanceProbability = shouldStoreProbability() ? prob : -1.0;
-        
+
         accept = acceptanceCalculator_->acceptMove(prob);
     } else {
         // Metropolis criterion
@@ -1504,7 +1504,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
         result.acceptanceProbability = shouldStoreProbability() ? prob : -1.0;
         accept = acceptMove(result.deltaE, 1.0, temperature_);
     }
-    
+
     if (accept) {
         result.accepted = true;
         result.position = newPos;
@@ -1516,9 +1516,9 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
         relaxDrudeIfEnabled();
         result.accepted = false;
     }
-    
+
     totalMoves_++;
-    
+
     // Sample statistics if configured using a lightweight countdown
     if (collectStats_) {
         if (--statsCountdown_ <= 0) {
@@ -1529,7 +1529,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptTranslation(int residueIdx) {
             statsCountdown_ = std::max(1, statsInterval_);
         }
     }
-    
+
     return result;
 }
 
@@ -1541,24 +1541,24 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
 
     // Diagnostics: non-CBMC move; prevent leaking previous trial energies.
     lastCbmcTrialEnergies_.clear();
-    
+
     if (!state_ || !reservoir_) {
         result.accepted = false;
         return result;
     }
-    
+
     FragmentInstance* instance = reservoir_->getInstance(residueIdx);
     if (!instance || !instance->isActive) {
         result.accepted = false;
         return result;
     }
-    
+
     result.fragmentType = instance->templateId;
     result.position = instance->position;
-    
+
     // Store old orientation
     Quaternion oldOrient = instance->orientation;
-    
+
     // Calculate energy before rotation
     if (useDrude_ ||
         energyBackend_ == GCMCEnergyBackend::Ewald ||
@@ -1567,13 +1567,13 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
     } else {
         result.energyBefore = calculateFragmentEnergy(residueIdx);
     }
-    
+
     // Generate rotation using configured angle
     Quaternion rotation = generateRotationQuaternion(maxRotationAngleRad_);
     // CRITICAL FIX: Actually apply the rotation by quaternion multiplication
     Quaternion newOrient = oldOrient * rotation;
     newOrient.normalize();
-    
+
     // Enforce region constraint: reject rotations that push atoms outside region
     if (regionConstraint_) {
         if (!isMoleculeWithinRegion(result.fragmentType, result.position, newOrient)) {
@@ -1598,7 +1598,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
 
     // Update orientation
     updateFragmentOrientation(residueIdx, newOrient);
-    
+
     // Calculate energy after rotation
     if (useDrude_ ||
         energyBackend_ == GCMCEnergyBackend::Ewald ||
@@ -1608,7 +1608,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
         result.energyAfter = calculateFragmentEnergy(residueIdx);
     }
     result.deltaE = result.energyAfter - result.energyBefore;
-    
+
     // Use unified acceptance calculation for rotation
     bool accept = false;
     double prob = 0.0;
@@ -1616,10 +1616,10 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
         // Rotation uses standard Metropolis criterion (no N dependence)
         prob = acceptanceCalculator_->calculateTranslationProbability(
             result.deltaE, 1.0);  // bias = 1.0 for rotation
-        
+
         // Only store probability if configured
         result.acceptanceProbability = shouldStoreProbability() ? prob : -1.0;
-        
+
         accept = acceptanceCalculator_->acceptMove(prob);
     } else {
         // Fallback to direct calculation
@@ -1629,7 +1629,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
         result.acceptanceProbability = shouldStoreProbability() ? prob : -1.0;
         accept = acceptMove(result.deltaE, 1.0, temperature_);
     }
-    
+
     if (accept) {
         result.accepted = true;
         acceptedMoves_++;
@@ -1640,9 +1640,9 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
         relaxDrudeIfEnabled();
         result.accepted = false;
     }
-    
+
     totalMoves_++;
-    
+
     // Sample statistics if configured using a lightweight countdown
     if (collectStats_) {
         if (--statsCountdown_ <= 0) {
@@ -1653,7 +1653,7 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
             statsCountdown_ = std::max(1, statsInterval_);
         }
     }
-    
+
     return result;
 }
 
@@ -1661,24 +1661,24 @@ GCMCEngine::MoveResult GCMCEngine::attemptRotation(int residueIdx) {
 GCMCEngine::MoveResult GCMCEngine::attemptSwap(int typeId1, int typeId2) {
     MoveResult result;
     result.type = MoveResult::SWAP;
-    
+
     if (!state_ || !reservoir_) {
         result.accepted = false;
         return result;
     }
-    
+
     // Select instances to swap
     int idx1 = selectRandomInstance(typeId1);
     int idx2 = selectRandomInstance(typeId2);
-    
+
     if (idx1 < 0 || idx2 < 0) {
         result.accepted = false;
         return result;
     }
-    
+
     // For simplicity, swap is delete type1 + insert type2
     // In practice, would swap identities directly
-    
+
     result.accepted = false;  // Not fully implemented
     totalMoves_++;
     return result;
@@ -1689,15 +1689,15 @@ GCMCEngine::MoveResult GCMCEngine::attemptRegrowth(int residueIdx) {
     MoveResult result;
     result.type = MoveResult::REGROWTH;
     result.residueIndex = residueIdx;
-    
+
     if (!state_ || !reservoir_) {
         result.accepted = false;
         return result;
     }
-    
+
     // Regrowth = deletion + insertion at new position
     // Simplified implementation
-    
+
     result.accepted = false;  // Not fully implemented
     totalMoves_++;
     return result;
@@ -1708,23 +1708,23 @@ GCMCEngine::MoveResult GCMCEngine::attemptClusterMove(int residueIdx, double cut
     MoveResult result;
     result.type = MoveResult::CLUSTER;
     result.residueIndex = residueIdx;
-    
+
     if (!state_ || !reservoir_) {
         result.accepted = false;
         return result;
     }
-    
+
     // Find cluster
     std::vector<int> cluster = selectCluster(residueIdx, cutoff);
-    
+
     if (cluster.empty()) {
         result.accepted = false;
         return result;
     }
-    
+
     // Move entire cluster together
     // Simplified - not fully implemented
-    
+
     result.accepted = false;
     totalMoves_++;
     return result;
@@ -1733,10 +1733,10 @@ GCMCEngine::MoveResult GCMCEngine::attemptClusterMove(int residueIdx, double cut
 // Select random fragment type
 int GCMCEngine::selectRandomFragment() {
     if (!reservoir_) return -1;
-    
+
     int nTypes = reservoir_->getTemplateCount();
     if (nTypes == 0) return -1;
-    
+
     std::uniform_int_distribution<int> dist(0, nTypes - 1);
     return dist(rng_);
 }
@@ -1779,26 +1779,26 @@ int GCMCEngine::selectRandomInstance(int typeId) {
 std::vector<int> GCMCEngine::selectCluster(int seedIdx, double cutoff) {
     std::vector<int> cluster;
     if (!reservoir_) return cluster;
-    
+
     FragmentInstance* seed = reservoir_->getInstance(seedIdx);
     if (!seed) return cluster;
-    
+
     cluster.push_back(seedIdx);
-    
+
     // Find neighbors within cutoff
     std::vector<int> allInstances = reservoir_->getActiveInstances();
     for (int idx : allInstances) {
         if (idx == seedIdx) continue;
-        
+
         FragmentInstance* instance = reservoir_->getInstance(idx);
         if (!instance) continue;
-        
+
         double dist = minimumImageDistance(seed->position, instance->position);
         if (dist < cutoff) {
             cluster.push_back(idx);
         }
     }
-    
+
     return cluster;
 }
 
@@ -1809,7 +1809,7 @@ Vector3 GCMCEngine::generateRandomPosition() {
                       uniform_(rng_) * 100,
                       uniform_(rng_) * 100);
     }
-    
+
     // Get box dimensions with fallback
     double boxX, boxY, boxZ;
     if (state_->periodicBox.size() >= 3) {
@@ -1825,7 +1825,7 @@ Vector3 GCMCEngine::generateRandomPosition() {
         // No valid box dimensions, use default
         boxX = boxY = boxZ = 100.0;
     }
-    
+
     // If region constraint is set, sample from constrained region
     if (regionConstraint_) {
         movement::Vector3 movPos = regionConstraint_->samplePosition();
@@ -1883,12 +1883,12 @@ Quaternion GCMCEngine::generateRandomOrientation() {
     double u = uniform_(rng_);
     double v = uniform_(rng_);
     double w = uniform_(rng_);
-    
+
     double sqrt_1_minus_u = std::sqrt(1.0 - u);
     double sqrt_u = std::sqrt(u);
     double two_pi_v = 2.0 * M_PI * v;
     double two_pi_w = 2.0 * M_PI * w;
-    
+
     Quaternion q(
         sqrt_u * std::cos(two_pi_w),           // w component
         sqrt_1_minus_u * std::sin(two_pi_v),   // x component
@@ -1896,7 +1896,7 @@ Quaternion GCMCEngine::generateRandomOrientation() {
         sqrt_u * std::sin(two_pi_w)            // z component
     );
     q.normalize();
-    
+
     return q;
 }
 
@@ -1905,10 +1905,10 @@ Vector3 GCMCEngine::generateTranslationVector(double maxDist) {
     // Random direction
     double theta = uniform_(rng_) * 2 * M_PI;
     double phi = std::acos(2 * uniform_(rng_) - 1);
-    
+
     // Random magnitude
     double r = uniform_(rng_) * maxDist;
-    
+
     return Vector3(r * std::sin(phi) * std::cos(theta),
                   r * std::sin(phi) * std::sin(theta),
                   r * std::cos(phi));
@@ -1922,17 +1922,17 @@ Quaternion GCMCEngine::generateRotationQuaternion(double maxAngle) {
     if (norm > 0) {
         axis = axis * (1.0 / norm);
     }
-    
+
     // Random angle
     double angle = uniform_(rng_) * maxAngle;
-    
+
     // Create quaternion from axis-angle
     double halfAngle = angle / 2;
     double s = std::sin(halfAngle);
-    
+
     Quaternion q(std::cos(halfAngle), s * axis.x, s * axis.y, s * axis.z);
     q.normalize();
-    
+
     return q;
 }
 
@@ -2212,16 +2212,16 @@ double GCMCEngine::calculateSystemEnergy() {
             // DIRECT with cutoff and PBC
             computeSystemEnergy(*state_, EnergyMethod::DIRECT, true, true);
         }
-        
+
         // Get total energy from state
         totalEnergy = energy::getTotalEnergyUniquePairs(*state_, energyMethod_);
     }
 
     totalEnergy += drudeEnergy;
-    
+
     energyCache_.totalEnergy = totalEnergy;
     energyCache_.valid = true;
-    
+
     return totalEnergy;
 }
 
@@ -2230,7 +2230,7 @@ double GCMCEngine::calculateFragmentEnergy(int residueIdx) {
     if (!state_ || residueIdx < 0 || residueIdx >= static_cast<int>(state_->residues.size())) {
         return 0.0;
     }
-    
+
     // Get residue from state
     auto& residue = state_->residues[residueIdx];
     if (!residue.active) return 0.0;
@@ -2248,7 +2248,7 @@ double GCMCEngine::calculateFragmentEnergy(int residueIdx) {
         ensurePgpFullGridReadyExcluding(residueIdx);
         return calculateFragmentEnergyPgpFullUsingCurrentGrid(residueIdx);
     }
-    
+
     // Check cache
     if (reservoir_) {
         FragmentInstance* instance = reservoir_->getInstance(residueIdx);
@@ -2256,9 +2256,9 @@ double GCMCEngine::calculateFragmentEnergy(int residueIdx) {
             return instance->energy_total;
         }
     }
-    
+
     double energy = 0.0;
-    
+
     // Use energy callback if available
     if (energyCallback_) {
         energy = energyCallback_->calculateResidueEnergy(*state_, residueIdx);
@@ -2266,7 +2266,7 @@ double GCMCEngine::calculateFragmentEnergy(int residueIdx) {
         // Fallback to direct energy module usage
         // Mark residue as moved for movement energy calculation
         // residue.moved /* moved flag not in MCResidue */ = true;
-        
+
         // Calculate movement energy for this residue
         if (energyMethod_ == EnergyMethod::PME) {
             computeMovementEnergy(*state_, EnergyMethod::PME, true, true);
@@ -2275,13 +2275,13 @@ double GCMCEngine::calculateFragmentEnergy(int residueIdx) {
         } else {
             computeMovementEnergy(*state_, EnergyMethod::DIRECT, true, true);
         }
-        
+
         // Reset moved flag
         // residue.moved /* moved flag not in MCResidue */ = false;
-        
+
         energy = residue.energy_vdw + residue.energy_elec;
     }
-    
+
     // Update cache
     if (reservoir_) {
         FragmentInstance* instance = reservoir_->getInstance(residueIdx);
@@ -2290,7 +2290,7 @@ double GCMCEngine::calculateFragmentEnergy(int residueIdx) {
             instance->lastEnergyUpdate = totalMoves_;
         }
     }
-    
+
     return energy;
 }
 
@@ -2306,7 +2306,7 @@ double GCMCEngine::calculatePairEnergy(int idx1, int idx2) {
     // Suppress unused parameter warnings
     (void)idx1;
     (void)idx2;
-    
+
     // This function is now deprecated - the energy module handles
     // all pair interactions properly with the correct force field parameters
     // Use calculateFragmentEnergy or calculateSystemEnergy instead
@@ -2352,14 +2352,14 @@ double GCMCEngine::calculateDeletionBiasAtPosition(const Vector3& position) {
         bias *= 1.0;
     }
 
-	// Proposal bias for detailed balance when using target_numwaters
-	// For deletion: multiply by p_insert/p_delete ratio
-	double proposalBias = getConfigValue("proposalBias");
-	if (proposalBias > 0) {
-	    bias *= proposalBias;
-	}
+    // Proposal bias for detailed balance when using target_numwaters
+    // For deletion: multiply by p_insert/p_delete ratio
+    double proposalBias = getConfigValue("proposalBias");
+    if (proposalBias > 0) {
+        bias *= proposalBias;
+    }
 
-	return bias;
+    return bias;
 }
 
 // Calculate deletion bias (legacy - depends on reservoir state)
@@ -2378,10 +2378,10 @@ double GCMCEngine::calculateDeletionBias(int residueIdx) {
 double GCMCEngine::calculateRegrowthBias(int residueIdx) {
     // Combination of deletion and insertion biases
     double deletionBias = calculateDeletionBias(residueIdx);
-    
+
     // Would calculate insertion bias at new position
     double insertionBias = 1.0;
-    
+
     return deletionBias * insertionBias;
 }
 
@@ -2405,10 +2405,10 @@ double GCMCEngine::getBoxVolume() const {
 // Accept move
 bool GCMCEngine::acceptMove(double deltaE, double bias, double temperature) {
     if (deltaE <= 0) return true;
-    
+
     double beta = 1.0 / (8.314e-3 * temperature);  // kJ/(mol*K)
     double probability = bias * std::exp(-beta * deltaE);
-    
+
     return uniform_(rng_) < probability;
 }
 
@@ -2422,21 +2422,21 @@ double GCMCEngine::calculateAcceptanceProbability(const MoveResult& result,
 // Synchronize MCState with reservoir
 void GCMCEngine::synchronizeStateWithReservoir(int instanceId, bool isInsertion) {
     if (!state_ || !reservoir_) return;
-    
+
     FragmentInstance* instance = reservoir_->getInstance(instanceId);
     if (!instance) return;
-    
+
     if (isInsertion) {
         // Add residue to MCState
         if (instanceId >= static_cast<int>(state_->residues.size())) {
             // Need to expand residues vector
             state_->residues.resize(instanceId + 1);
         }
-        
+
         // Get template for atom information
         const FragmentTemplate* tmpl = reservoir_->getTemplate(instance->templateId);
         if (!tmpl) return;
-        
+
         // Update residue in state
         auto& residue = state_->residues[instanceId];
         residue.active = true;
@@ -2446,15 +2446,15 @@ void GCMCEngine::synchronizeStateWithReservoir(int instanceId, bool isInsertion)
         // residue.moved /* moved flag not in MCResidue */ = false;
         residue.energy_vdw = 0.0;
         residue.energy_elec = 0.0;
-        
+
         // CRITICAL: Set atomStart and atomCount for energy calculations
         residue.atomStart = state_->activeAtomCount;
         residue.atomCount = static_cast<int>(tmpl->atoms.size());
-        
+
         // Clear and add atoms
         residue.atoms.clear();
         residue.atoms.reserve(tmpl->atoms.size());
-        
+
         // Transform template atoms by instance position and orientation
         for (const auto& tmplAtom : tmpl->atoms) {
             MCAtom atom;
@@ -2465,27 +2465,27 @@ void GCMCEngine::synchronizeStateWithReservoir(int instanceId, bool isInsertion)
             atom.charge = tmplAtom.charge;
             atom.mass = tmplAtom.mass;
             atom.name = tmplAtom.name;
-            
+
             // Apply rotation and translation
             // Quaternion rotation of vector: q * v * q^-1
             // For unit quaternion, q^-1 = (w, -x, -y, -z)
             Vector3 v(tmplAtom.x, tmplAtom.y, tmplAtom.z);
             Quaternion q = instance->orientation;
-            
+
             // Use the movement layer's Quaternion::rotate() method
             double vx = v.x, vy = v.y, vz = v.z;
             Vector3 templatePos(vx, vy, vz);
             Vector3 rotatedPos = q.rotate(templatePos);
-            
+
             atom.x = instance->position.x + rotatedPos.x;
             atom.y = instance->position.y + rotatedPos.y;
             atom.z = instance->position.z + rotatedPos.z;
-            
+
             // Sync position vector with x,y,z coordinates
             atom.updatePosition();
-            
+
             residue.atoms.push_back(atom);
-            
+
             // CRITICAL: Also add to global atoms array for energy calculations
             if (state_->activeAtomCount < static_cast<int>(state_->atoms.size())) {
                 state_->atoms[state_->activeAtomCount] = atom;
@@ -2494,10 +2494,10 @@ void GCMCEngine::synchronizeStateWithReservoir(int instanceId, bool isInsertion)
             }
             state_->activeAtomCount++;
         }
-        
+
         // Update residue index in fragment instance
         instance->residueIndex = instanceId;
-        
+
         // CRITICAL: Update activeResidueCount
         // Find the highest active residue index + 1
         state_->activeResidueCount = 0;
@@ -2511,11 +2511,11 @@ void GCMCEngine::synchronizeStateWithReservoir(int instanceId, bool isInsertion)
         if (instanceId < static_cast<int>(state_->residues.size())) {
             auto& residue = state_->residues[instanceId];
             residue.active = false;
-            
+
             // CRITICAL: Don't actually remove atoms from global array to avoid shifting indices
             // Just mark the residue as inactive so energy calculations skip it
             residue.atoms.clear();
-            
+
             // CRITICAL: Update activeResidueCount
             // Find the highest active residue index + 1
             state_->activeResidueCount = 0;
@@ -2524,7 +2524,7 @@ void GCMCEngine::synchronizeStateWithReservoir(int instanceId, bool isInsertion)
                     state_->activeResidueCount = i + 1;
                 }
             }
-            
+
             // Note: We don't decrement activeAtomCount here to avoid index shifting
             // This is a simplification for now - a production system would compact arrays
         }
@@ -2540,14 +2540,14 @@ void GCMCEngine::synchronizeStateWithReservoir(int instanceId, bool isInsertion)
 // Update fragment position
 void GCMCEngine::updateFragmentPosition(int residueIdx, const Vector3& newPos) {
     if (!reservoir_) return;
-    
+
     reservoir_->updatePosition(residueIdx, newPos);
     if (auto* instance = reservoir_->getInstance(residueIdx)) {
         // Position change invalidates any per-instance cached energy for this MC move.
         instance->lastEnergyUpdate = -1.0;
     }
     energyCache_.invalidate();
-    
+
     // Update atom coordinates without adding new atoms
     updateAtomCoordinates(residueIdx);
 }
@@ -2555,14 +2555,14 @@ void GCMCEngine::updateFragmentPosition(int residueIdx, const Vector3& newPos) {
 // Update fragment orientation
 void GCMCEngine::updateFragmentOrientation(int residueIdx, const Quaternion& newOrient) {
     if (!reservoir_) return;
-    
+
     reservoir_->updateOrientation(residueIdx, newOrient);
     if (auto* instance = reservoir_->getInstance(residueIdx)) {
         // Orientation change invalidates any per-instance cached energy for this MC move.
         instance->lastEnergyUpdate = -1.0;
     }
     energyCache_.invalidate();
-    
+
     // Update atom coordinates without adding new atoms
     updateAtomCoordinates(residueIdx);
 }
@@ -2570,30 +2570,30 @@ void GCMCEngine::updateFragmentOrientation(int residueIdx, const Quaternion& new
 // Update atom coordinates for an existing residue without changing atom count
 void GCMCEngine::updateAtomCoordinates(int residueIdx) {
     if (!state_ || !reservoir_) return;
-    
+
     if (residueIdx >= static_cast<int>(state_->residues.size())) return;
-    
+
     auto& residue = state_->residues[residueIdx];
     if (!residue.active) return;
-    
+
     FragmentInstance* instance = reservoir_->getInstance(residueIdx);
     if (!instance) return;
-    
+
     const FragmentTemplate* tmpl = reservoir_->getTemplate(instance->templateId);
     if (!tmpl) return;
-    
+
     // Update atoms in both residue.atoms and state->atoms arrays
     int atomIdx = 0;
     for (const auto& tmplAtom : tmpl->atoms) {
         if (atomIdx >= residue.atomCount) break;
-        
+
         // Apply rotation and translation
         Vector3 v(tmplAtom.x, tmplAtom.y, tmplAtom.z);
         Quaternion q = instance->orientation;
-        
+
         // Use the verified Quaternion::rotate() method
         Vector3 rotatedPos = q.rotate(v);
-        
+
         // Update coordinates in residue.atoms
         if (atomIdx < static_cast<int>(residue.atoms.size())) {
             residue.atoms[atomIdx].x = instance->position.x + rotatedPos.x;
@@ -2601,7 +2601,7 @@ void GCMCEngine::updateAtomCoordinates(int residueIdx) {
             residue.atoms[atomIdx].z = instance->position.z + rotatedPos.z;
             residue.atoms[atomIdx].updatePosition();
         }
-        
+
         // Update coordinates in global atoms array
         int globalIdx = residue.atomStart + atomIdx;
         if (globalIdx < static_cast<int>(state_->atoms.size())) {
@@ -2610,7 +2610,7 @@ void GCMCEngine::updateAtomCoordinates(int residueIdx) {
             state_->atoms[globalIdx].z = instance->position.z + rotatedPos.z;
             state_->atoms[globalIdx].updatePosition();
         }
-        
+
         atomIdx++;
     }
 }
@@ -2618,7 +2618,7 @@ void GCMCEngine::updateAtomCoordinates(int residueIdx) {
 // Apply periodic boundary conditions
 void GCMCEngine::applyPeriodicBoundary(Vector3& position) {
     if (!state_) return;
-    
+
     // Get box dimensions with fallback
     double boxX, boxY, boxZ;
     if (state_->periodicBox.size() >= 3) {
@@ -2634,7 +2634,7 @@ void GCMCEngine::applyPeriodicBoundary(Vector3& position) {
         // No valid box dimensions, skip PBC
         return;
     }
-    
+
     // Use [0, L) coordinate system
     while (position.x < 0) position.x += boxX;
     while (position.x >= boxX) position.x -= boxX;
@@ -2667,9 +2667,9 @@ double GCMCEngine::minimumImageDistance(const Vector3& r1, const Vector3& r2) {
     if (!state_) {
         return (r1 - r2).norm();
     }
-    
+
     Vector3 dr = r1 - r2;
-    
+
     // Get box dimensions with fallback (same as applyPeriodicBoundary)
     double boxX, boxY, boxZ;
     if (state_->periodicBox.size() >= 3) {
@@ -2685,7 +2685,7 @@ double GCMCEngine::minimumImageDistance(const Vector3& r1, const Vector3& r2) {
         // No valid box dimensions, return direct distance
         return dr.norm();
     }
-    
+
     // Apply minimum image convention for [0, L) coordinate system
     if (std::abs(dr.x) > boxX/2) {
         dr.x = dr.x - std::copysign(boxX, dr.x);
@@ -2696,14 +2696,14 @@ double GCMCEngine::minimumImageDistance(const Vector3& r1, const Vector3& r2) {
     if (std::abs(dr.z) > boxZ/2) {
         dr.z = dr.z - std::copysign(boxZ, dr.z);
     }
-    
+
     return dr.norm();
 }
 
 // Dynamic configuration implementation
 void GCMCEngine::setConfigValue(const std::string& key, double value) {
     configMap_[key] = value;
-    
+
     // Apply specific configuration changes
     if (key == "temperature") {
         temperature_ = value;
@@ -2741,7 +2741,7 @@ double GCMCEngine::getConfigValue(const std::string& key) const {
     if (it != configMap_.end()) {
         return it->second;
     }
-    
+
     // Return current values for known keys
     if (key == "temperature") return temperature_;
     if (key == "cutoff") return cutoff_;
@@ -2752,7 +2752,7 @@ double GCMCEngine::getConfigValue(const std::string& key) const {
     if (key == "useCavityBias") return useCavityBias_ ? 1.0 : 0.0;
     if (key == "useConfBias") return useConfBias_ ? 1.0 : 0.0;
     if (key == "storeProbabilities") return shouldStoreProbability() ? 1.0 : 0.0;
-    
+
     return 0.0;  // Default for unknown keys
 }
 
@@ -2956,20 +2956,20 @@ double GCMCEngine::calculateCBMCBias(const std::vector<TrialConfiguration>& tria
 // Get residue position
 Vector3 GCMCEngine::getResiduePosition(int residueIdx) {
     if (!reservoir_) return Vector3(0, 0, 0);
-    
+
     FragmentInstance* instance = reservoir_->getInstance(residueIdx);
     if (!instance) return Vector3(0, 0, 0);
-    
+
     return Vector3(instance->position.x, instance->position.y, instance->position.z);
 }
 
 // Get residue orientation
 Quaternion GCMCEngine::getResidueOrientation(int residueIdx) {
     if (!reservoir_) return Quaternion(1, 0, 0, 0);
-    
+
     FragmentInstance* instance = reservoir_->getInstance(residueIdx);
     if (!instance) return Quaternion(1, 0, 0, 0);
-    
+
     return instance->orientation;
 }
 

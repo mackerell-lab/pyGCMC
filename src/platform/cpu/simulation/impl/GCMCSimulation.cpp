@@ -222,9 +222,9 @@ RigidPose fitTemplateToResiduePose(
 
 } // namespace
 
-GCMCSimulation::GCMCSimulation(const Config& config) 
+GCMCSimulation::GCMCSimulation(const Config& config)
     : config_(config), uniform_(0.0, 1.0) {
-    
+
     // Initialize random number generator
     if (config.randomSeed < 0) {
         std::random_device rd;
@@ -232,7 +232,7 @@ GCMCSimulation::GCMCSimulation(const Config& config)
     } else {
         rng_.seed(config.randomSeed);
     }
-    
+
     // Set up logging
     if (config.verbose) {
         system::log::LogMain::set_verbose(true);
@@ -261,15 +261,15 @@ bool GCMCSimulation::initialize() {
     builderConfig.loadTopology = true;
     builderConfig.loadParameters = true;
     builderConfig.verbose = config_.verbose;
-    
+
     setup::SimulationInputBuilder builder(builderConfig);
-    
+
     try {
         auto result = builder.build();
-        
+
         // Store fragment templates from builder for later use
         fragmentTemplatesFromBuilder_ = result.fragmentTemplates;
-        
+
         // Store force field from builder
         if (result.forceField && result.parametersLoaded) {
             forceFieldFromBuilder_ = result.forceField;
@@ -278,18 +278,18 @@ bool GCMCSimulation::initialize() {
         if (result.molecular) {
             molecularFromBuilder_ = result.molecular;
         }
-        
+
         // Use the loaded data
         if (result.parameters) {
             params_ = std::make_unique<model::param::Param>(*result.parameters);
-            
+
             // Print parameter summary for test compatibility
             printParameterSummary();
         }
         if (result.mcState) {
             state_ = std::make_unique<model::montecarlo::MCState>(*result.mcState);
         }
-        
+
         if (result.structureLoaded) {
             log("Loaded structure from PDB");
             if (config_.verbose) {
@@ -311,9 +311,9 @@ bool GCMCSimulation::initialize() {
         if (!fragmentTemplatesFromBuilder_.empty()) {
             log("Loaded ", fragmentTemplatesFromBuilder_.size(), " fragment templates from ITP files");
         }
-        
-	    } catch (const std::exception& e) {
-	        log("Warning: SimulationInputBuilder encountered error: ", e.what());
+
+        } catch (const std::exception& e) {
+            log("Warning: SimulationInputBuilder encountered error: ", e.what());
 
         // Mirror error to stdout so tests can match 'not found'/'Failed to load'
         std::string errorMsg = e.what();
@@ -344,13 +344,13 @@ bool GCMCSimulation::initialize() {
             log("Note: Initial system capacity exceeded, continuing with adjusted settings");
         }
 
-	        // Fall back to legacy loader for parameters
-	        log("Using fallback parameter loading...");
-		        if (!loadParameters()) {
-		            log("ERROR: Failed to load parameters");
-		            return false;
-		        }
-		    }
+            // Fall back to legacy loader for parameters
+            log("Using fallback parameter loading...");
+                if (!loadParameters()) {
+                    log("ERROR: Failed to load parameters");
+                    return false;
+                }
+            }
 
         if (!params_) {
             log("ERROR: Failed to load parameters (params_ is null)");
@@ -373,18 +373,18 @@ bool GCMCSimulation::initialize() {
             }
         }
 
-	    // If CLI did not provide a seed, allow legacy INP keys (random_seed/seed) to drive RNG determinism.
-	    if (config_.randomSeed < 0 && params_) {
-	        const unsigned int inpSeed = params_->get_basic_info().random_seed;
-	        if (inpSeed > 0) {
-	            config_.randomSeed = static_cast<int>(inpSeed);
-	            rng_.seed(inpSeed);
-	        }
-	    }
-	    // If print frequency wasn't explicitly set via CLI, use INP nprint
-	    if (config_.printFrequency <= 0) {
-	        config_.printFrequency = params_->get_mc_info().print_freq;
-	        if (config_.printFrequency <= 0) {
+        // If CLI did not provide a seed, allow legacy INP keys (random_seed/seed) to drive RNG determinism.
+        if (config_.randomSeed < 0 && params_) {
+            const unsigned int inpSeed = params_->get_basic_info().random_seed;
+            if (inpSeed > 0) {
+                config_.randomSeed = static_cast<int>(inpSeed);
+                rng_.seed(inpSeed);
+            }
+        }
+        // If print frequency wasn't explicitly set via CLI, use INP nprint
+        if (config_.printFrequency <= 0) {
+            config_.printFrequency = params_->get_mc_info().print_freq;
+            if (config_.printFrequency <= 0) {
             config_.printFrequency = 100;  // Default fallback
         }
     }
@@ -455,29 +455,29 @@ bool GCMCSimulation::initialize() {
         log("ERROR: Failed to setup system");
         return false;
     }
-    
+
     // Setup fragment types and reservoir
     if (!setupFragments()) {
         log("ERROR: Failed to setup fragments");
         return false;
     }
-    
+
     // Setup acceptance calculator
     if (!setupAcceptance()) {
         log("ERROR: Failed to setup acceptance calculator");
         return false;
     }
-    
+
     // Setup GCMC engine
     if (!setupEngine()) {
         log("ERROR: Failed to setup GCMC engine");
         return false;
     }
-    
+
     // Initialize statistics
     statistics_.setAutoAdjust(config_.enableAdaptiveSampling);
     statistics_.setSamplingInterval(config_.statisticsInterval);
-    
+
     initialized_ = true;
     log("Initialization complete");
 
@@ -514,30 +514,30 @@ bool GCMCSimulation::initialize() {
 
 void GCMCSimulation::printParameterSummary() {
     if (!params_) return;
-    
+
     log("====== GCMC Parameters Summary ======");
     log("Input file: ", config_.inputFile);
-    
+
     // System parameters
     const auto& spaceInfo = params_->get_space_info();
     // Use "Box size:" for backward compatibility with tests
-    log("Box size: ", spaceInfo.box_size[0], " x ", 
-        spaceInfo.box_size[1], " x ", 
+    log("Box size: ", spaceInfo.box_size[0], " x ",
+        spaceInfo.box_size[1], " x ",
         spaceInfo.box_size[2], " nm");
     double volume = spaceInfo.box_size[0] * spaceInfo.box_size[1] * spaceInfo.box_size[2];
     log("Box volume: ", volume, " nm³");
-    
+
     // Thermodynamic parameters
     const auto& mcInfo = params_->get_mc_info();
     log("Temperature: ", mcInfo.temperature, " K");
     log("Beta (1/kT): ", mcInfo.beta, " mol/kJ");
-    
+
     // MC parameters
     log("MC steps: ", mcInfo.mc_steps);
     log("Moves per step: ", config_.movesPerStep);
     log("Total moves: ", mcInfo.mc_steps * config_.movesPerStep);
     log("Print frequency: ", mcInfo.print_freq);
-    
+
     // Fragment information
     const auto& fragInfo = params_->get_fragment_info();
     const auto& fileInfo = params_->get_file_info();
@@ -558,7 +558,7 @@ void GCMCSimulation::printParameterSummary() {
             }
         }
     }
-    
+
     // File information
     if (!fileInfo.topology_file.empty()) {
         log("Topology file: ", fileInfo.topology_file);
@@ -622,18 +622,18 @@ void GCMCSimulation::printParameterSummary() {
 bool GCMCSimulation::loadParameters() {
     try {
         params_ = std::make_unique<model::param::Param>();
-        
+
         // Parse INP file (use extended GCMC parser)
         pygcmc::io::parameters::InpParserGCMC::parse_to_param(config_.inputFile, *params_);
-        
+
         // Update derived values
         params_->update_derived_values();
-        
+
         // Print parameter summary
         printParameterSummary();
-        
+
         return true;
-        
+
     } catch (const std::exception& e) {
         log("ERROR: Exception loading parameters: ", e.what());
         return false;
@@ -644,13 +644,13 @@ bool GCMCSimulation::setupSystem() {
     // Only create new state if we don't already have one from builder
     if (!state_) {
         state_ = std::make_unique<model::montecarlo::MCState>();
-        
+
         // Set box dimensions
         const auto& box = params_->get_space_info().box_size;
         state_->info.box[0] = box[0];
         state_->info.box[1] = box[1];
         state_->info.box[2] = box[2];
-        
+
         // Set temperature through beta from parameters
         const double beta = params_->get_mc_info().beta;
         state_->info.beta = beta;
@@ -658,7 +658,7 @@ bool GCMCSimulation::setupSystem() {
         // State already populated by builder, just log
         log("Using pre-populated MC state from input files");
     }
-    
+
     // Load initial structure if provided
     const auto& pdbFile = params_->get_file_info().input_pdb_file;
     if (!pdbFile.empty()) {
@@ -667,10 +667,10 @@ bool GCMCSimulation::setupSystem() {
         /*
         try {
             auto structure = io::PdbParserMain::parse_file(pdbFile);
-            
+
             // Convert PDB structure to MCState atoms and residues
             state_->atoms.resize(structure.get_atoms().size());
-            
+
             for (size_t i = 0; i < structure.get_atoms().size(); ++i) {
                 const auto& pdbAtom = structure.get_atoms()[i];
                 auto& mcAtom = state_->atoms[i];
@@ -681,10 +681,10 @@ bool GCMCSimulation::setupSystem() {
                 mcAtom.name = pdbAtom.get_name();
                 mcAtom.updatePosition();
             }
-            
+
             // Convert residues
             state_->residues.resize(structure.get_residues().size());
-            
+
             for (size_t i = 0; i < structure.get_residues().size(); ++i) {
                 const auto& pdbRes = structure.get_residues()[i];
                 auto& mcRes = state_->residues[i];
@@ -694,15 +694,15 @@ bool GCMCSimulation::setupSystem() {
                 mcRes.atomCount = pdbRes.get_atom_indices().size();
                 mcRes.active = true;
                 mcRes.fixed = false;
-                
+
                 // Calculate center of mass
                 mcRes.center[0] = pdbRes.get_center_of_mass()[0] / 10.0;  // Convert to nm
                 mcRes.center[1] = pdbRes.get_center_of_mass()[1] / 10.0;
                 mcRes.center[2] = pdbRes.get_center_of_mass()[2] / 10.0;
             }
-            
+
             log("Loaded %zu atoms and %zu residues from PDB");
-                
+
         } catch (const std::exception& e) {
             log("ERROR: Failed to parse PDB file: ", e.what());
             return false;
@@ -710,7 +710,7 @@ bool GCMCSimulation::setupSystem() {
         */
         log("PDB loading temporarily disabled - using empty initial state");
     }
-    
+
     // Load topology and setup force field
     const auto& topFile = params_->get_file_info().topology_file;
     if (!topFile.empty()) {
@@ -719,18 +719,18 @@ bool GCMCSimulation::setupSystem() {
         /*
         try {
             auto topology = io::TOPParser::parse_file(topFile);
-            
+
             // Extract atom types and build force field
             // For now, use simple placeholder values
             // TODO: Integrate with proper force field parameters from PAR files
             size_t numTypes = 10;  // Placeholder - should come from topology
             state_->forcefield.numTotalTypes = numTypes;
             state_->forcefield.numMovementTypes = 4;  // Water, ions, etc.
-            
+
             // Initialize LJ parameters with placeholder values
             state_->forcefield.ljSigma.resize(numTypes * numTypes);
             state_->forcefield.ljEpsilon.resize(numTypes * numTypes);
-            
+
             for (size_t i = 0; i < numTypes; ++i) {
                 for (size_t j = 0; j < numTypes; ++j) {
                     size_t idx = i * numTypes + j;
@@ -739,9 +739,9 @@ bool GCMCSimulation::setupSystem() {
                     state_->forcefield.ljEps[idx] = 0.5f + 0.05f * (i * j);  // kJ/mol
                 }
             }
-            
+
             log("Initialized force field with %zu types");
-            
+
         } catch (const std::exception& e) {
             log("WARNING: Failed to parse topology file: ", e.what());
             log("Using default force field parameters");
@@ -752,17 +752,17 @@ bool GCMCSimulation::setupSystem() {
         */
         log("Topology loading temporarily disabled - using placeholder force field");
     }
-    
+
     // Use force field from builder if available
     if (forceFieldFromBuilder_) {
         log("Applying force field parameters from input files");
-        
+
         // Convert ForceField to MCState force field format
         // Extract actual LJ parameters from the ForceField
-        
+
         const auto& ljParamsMap = forceFieldFromBuilder_->get_lj_params_map();
         const auto& nbfixMap = forceFieldFromBuilder_->get_nbfix_map();
-        
+
         // Build a mapping from atom type names to indices
         std::map<std::string, size_t> typeNameToIndex;
         size_t typeIndex = 0;
@@ -774,31 +774,31 @@ bool GCMCSimulation::setupSystem() {
         atomTypeNameToIndex_ = typeNameToIndex;
 
         size_t numTypes = std::max(typeNameToIndex.size(), size_t(10));  // At least 10 types
-        
+
         state_->forcefield.numTotalTypes = numTypes;
         state_->forcefield.numMovementTypes = 4;  // Will be updated based on fragments
-        
+
         // Initialize LJ parameter matrices
         state_->forcefield.ljSigma.resize(numTypes * numTypes);
         state_->forcefield.ljEps.resize(numTypes * numTypes);
-        
+
         // Fill in LJ parameters using Lorentz-Berthelot mixing rules
         for (size_t i = 0; i < numTypes; ++i) {
             for (size_t j = 0; j < numTypes; ++j) {
                 size_t idx = i * numTypes + j;
-                
+
                 // Find the type names for indices i and j
                 std::string typeI, typeJ;
                 for (const auto& [name, index] : typeNameToIndex) {
                     if (index == i) typeI = name;
                     if (index == j) typeJ = name;
                 }
-                
+
                 if (!typeI.empty() && !typeJ.empty()) {
                     // Check for NBFIX override first
                     auto nbfixKey = model::forcefield::ForceField::makeTypePair(typeI, typeJ);
                     auto nbfixIt = nbfixMap.find(nbfixKey);
-                    
+
                     if (nbfixIt != nbfixMap.end()) {
                         // Use NBFIX parameters directly
                         state_->forcefield.ljEps[idx] = nbfixIt->second.epsilon * 4.184f;  // kcal/mol to kJ/mol
@@ -807,13 +807,13 @@ bool GCMCSimulation::setupSystem() {
                         // Use Lorentz-Berthelot mixing rules
                         auto ljI = ljParamsMap.find(typeI);
                         auto ljJ = ljParamsMap.find(typeJ);
-                        
+
                         if (ljI != ljParamsMap.end() && ljJ != ljParamsMap.end()) {
                             // epsilon_ij = sqrt(epsilon_i * epsilon_j)
                             float epsI = ljI->second.epsilon * 4.184f;  // kcal/mol to kJ/mol
                             float epsJ = ljJ->second.epsilon * 4.184f;
                             state_->forcefield.ljEps[idx] = std::sqrt(epsI * epsJ);
-                            
+
                             // sigma_ij = (rmin_i + rmin_j) / 2
                             // Note: rmin_half is Rmin/2, so rmin = 2 * rmin_half
                             float rminI = 2.0f * ljI->second.rmin_half * 0.1f;  // Angstrom to nm
@@ -835,12 +835,12 @@ bool GCMCSimulation::setupSystem() {
                 }
             }
         }
-        
+
         log("Initialized force field with ", ljParamsMap.size(), " atom types from PAR files");
         if (!nbfixMap.empty()) {
             log("Applied ", nbfixMap.size(), " NBFIX corrections");
         }
-        
+
     } else if (state_->forcefield.numTotalTypes == 0) {
         // Only use default force field if state was not populated by builder
         // or if force field is empty
@@ -856,7 +856,7 @@ bool GCMCSimulation::setupSystem() {
         atomTypeNameToIndex_["HW"] = 1;  // Water hydrogen
         atomTypeNameToIndex_["H1"] = 1;  // Water hydrogen 1
         atomTypeNameToIndex_["H2"] = 1;  // Water hydrogen 2
-        
+
         // Initialize LJ parameters with reasonable water-like values
         state_->forcefield.ljSigma.resize(numTypes * numTypes);
         state_->forcefield.ljEps.resize(numTypes * numTypes);
@@ -889,15 +889,15 @@ bool GCMCSimulation::setupSystem() {
                 }
             }
         }
-	    } else {
-	        // Pre-populated state (e.g., built by SimulationInputBuilder).
-	        // Ensure we also have a typeName->index mapping for fragment template remapping.
-	        atomTypeNameToIndex_.clear();
-	        for (size_t i = 0; i < state_->atomTypes.atomTypes.size(); ++i) {
-	            atomTypeNameToIndex_[state_->atomTypes.atomTypes[i]] = i;
-	        }
-	        log("Using force field from pre-populated MC state");
-	    }
+        } else {
+            // Pre-populated state (e.g., built by SimulationInputBuilder).
+            // Ensure we also have a typeName->index mapping for fragment template remapping.
+            atomTypeNameToIndex_.clear();
+            for (size_t i = 0; i < state_->atomTypes.atomTypes.size(); ++i) {
+                atomTypeNameToIndex_[state_->atomTypes.atomTypes[i]] = i;
+            }
+            log("Using force field from pre-populated MC state");
+        }
 
     // Setup switching function if enabled
     const auto& mc = params_->get_mc_info();
@@ -947,13 +947,13 @@ bool GCMCSimulation::setupFragments() {
 
     // Create multi-type fragment reservoir
     reservoir_ = std::make_unique<movement::MultiTypeReservoir>();
-    
+
     // Process each fragment type
     for (size_t i = 0; i < fileInfo.fragment_names.size(); ++i) {
         FragmentInfo frag;
         frag.name = fileInfo.fragment_names[i];
         frag.typeId = i;
-        
+
         // Set concentration and chemical potential
         if (i < fragInfo.conc_list.size()) {
             frag.concentration = fragInfo.conc_list[i];
@@ -961,7 +961,7 @@ bool GCMCSimulation::setupFragments() {
         if (i < fragInfo.muex_list.size()) {
             frag.chemicalPotential = fragInfo.muex_list[i];
         }
-        
+
         // Calculate activity from chemical potential
         double beta = state_->info.beta;
         frag.activity = std::exp(beta * frag.chemicalPotential);
@@ -988,11 +988,11 @@ bool GCMCSimulation::setupFragments() {
         const auto itCount = initialCounts.find(normalizeName(frag.name));
         const int initialCount = (itCount == initialCounts.end()) ? 0 : itCount->second;
         frag.maxCount = initialCount + maxInsertions + kMaxCountBuffer;
-        
+
         // Check if we have a template from the builder
         movement::FragmentTemplate tmpl;
         bool usingBuilderTemplate = false;
-        
+
         // Try exact match first
         auto builderTemplateIt = fragmentTemplatesFromBuilder_.find(frag.name);
 
@@ -1003,10 +1003,10 @@ bool GCMCSimulation::setupFragments() {
             builderTemplateIt = fragmentTemplatesFromBuilder_.find(lowerName);
         }
 
-	        if (builderTemplateIt != fragmentTemplatesFromBuilder_.end()) {
-	            // Use template from builder (loaded from ITP)
-	            tmpl = builderTemplateIt->second;
-	            usingBuilderTemplate = true;
+            if (builderTemplateIt != fragmentTemplatesFromBuilder_.end()) {
+                // Use template from builder (loaded from ITP)
+                tmpl = builderTemplateIt->second;
+                usingBuilderTemplate = true;
                 // Always override thermodynamic parameters from INP-derived fragment info.
                 // The fragment template name (and ITP filename stem) may differ from INP fragname
                 // (e.g., WAT vs sol.itp), and activity is maintained by the acceptance calculator.
@@ -1015,53 +1015,53 @@ bool GCMCSimulation::setupFragments() {
                 tmpl.concentration = frag.concentration;
                 tmpl.chemicalPotential = frag.chemicalPotential;
                 tmpl.activity = frag.activity;
-	            log("Using ITP template for fragment ", frag.name,
-	                " with ", tmpl.atoms.size(), " atoms");
+                log("Using ITP template for fragment ", frag.name,
+                    " with ", tmpl.atoms.size(), " atoms");
 
-	            // Remap template atom types to MCState atom type indices.
-	            // Preferred: use ITP "type" column (tmpl.atomTypeNames) which matches force field atomtypes.
-	            if (!tmpl.atomTypeNames.empty() && tmpl.atomTypeNames.size() == tmpl.atoms.size()) {
-	                for (size_t ai = 0; ai < tmpl.atoms.size(); ++ai) {
-	                    const std::string& typeName = tmpl.atomTypeNames[ai];
-	                    auto it = atomTypeNameToIndex_.find(typeName);
-	                    if (it != atomTypeNameToIndex_.end()) {
-	                        tmpl.atoms[ai].type = static_cast<int>(it->second);
-	                    } else if (config_.verbose) {
-	                        log("WARNING: Could not find type mapping for ITP type ", typeName,
-	                            " (atom ", tmpl.atoms[ai].name, "), keeping type ", tmpl.atoms[ai].type);
-	                    }
-	                }
-	            } else {
-	                // Fallback: legacy heuristic based on atom names (mostly for simple water templates).
-	                for (auto& atom : tmpl.atoms) {
-	                    bool typeFound = false;
-	                    for (const auto& [typeName, idx] : atomTypeNameToIndex_) {
-	                        if (atom.name == typeName ||
-	                            (atom.name == "O" && (typeName == "OW" || typeName == "O_TIP3P")) ||
-	                            (atom.name == "H" && (typeName == "HW" || typeName == "H_TIP3P")) ||
-	                            (atom.name == "H1" && (typeName == "HW" || typeName == "H_TIP3P")) ||
-	                            (atom.name == "H2" && (typeName == "HW" || typeName == "H_TIP3P"))) {
-	                            atom.type = static_cast<int>(idx);
-	                            typeFound = true;
-	                            break;
-	                        }
-	                    }
-	                    if (!typeFound && config_.verbose) {
-	                        log("WARNING: Could not find type mapping for atom ", atom.name,
-	                            ", keeping type ", atom.type);
-	                    }
-	                }
-	            }
-	        } else {
-	            // Fall back to creating template from parameters
-	            tmpl.name = frag.name;
-	            tmpl.typeId = frag.typeId;
+                // Remap template atom types to MCState atom type indices.
+                // Preferred: use ITP "type" column (tmpl.atomTypeNames) which matches force field atomtypes.
+                if (!tmpl.atomTypeNames.empty() && tmpl.atomTypeNames.size() == tmpl.atoms.size()) {
+                    for (size_t ai = 0; ai < tmpl.atoms.size(); ++ai) {
+                        const std::string& typeName = tmpl.atomTypeNames[ai];
+                        auto it = atomTypeNameToIndex_.find(typeName);
+                        if (it != atomTypeNameToIndex_.end()) {
+                            tmpl.atoms[ai].type = static_cast<int>(it->second);
+                        } else if (config_.verbose) {
+                            log("WARNING: Could not find type mapping for ITP type ", typeName,
+                                " (atom ", tmpl.atoms[ai].name, "), keeping type ", tmpl.atoms[ai].type);
+                        }
+                    }
+                } else {
+                    // Fallback: legacy heuristic based on atom names (mostly for simple water templates).
+                    for (auto& atom : tmpl.atoms) {
+                        bool typeFound = false;
+                        for (const auto& [typeName, idx] : atomTypeNameToIndex_) {
+                            if (atom.name == typeName ||
+                                (atom.name == "O" && (typeName == "OW" || typeName == "O_TIP3P")) ||
+                                (atom.name == "H" && (typeName == "HW" || typeName == "H_TIP3P")) ||
+                                (atom.name == "H1" && (typeName == "HW" || typeName == "H_TIP3P")) ||
+                                (atom.name == "H2" && (typeName == "HW" || typeName == "H_TIP3P"))) {
+                                atom.type = static_cast<int>(idx);
+                                typeFound = true;
+                                break;
+                            }
+                        }
+                        if (!typeFound && config_.verbose) {
+                            log("WARNING: Could not find type mapping for atom ", atom.name,
+                                ", keeping type ", atom.type);
+                        }
+                    }
+                }
+            } else {
+                // Fall back to creating template from parameters
+                tmpl.name = frag.name;
+                tmpl.typeId = frag.typeId;
             tmpl.chemicalPotential = frag.chemicalPotential;
             tmpl.activity = frag.activity;
             tmpl.concentration = frag.concentration;
             tmpl.radius = (i < fragInfo.radius_list.size()) ? fragInfo.radius_list[i] : 0.0;
         }
-        
+
         // Create fragment atoms if not loaded from ITP
         if (!usingBuilderTemplate && tmpl.atoms.empty()) {
             // Fall back to hardcoded templates
@@ -1153,7 +1153,7 @@ bool GCMCSimulation::setupFragments() {
             tmpl.atoms[0].mass = 12.0;
         }
         }  // End of if (!usingBuilderTemplate && tmpl.atoms.empty())
-        
+
         // Create type info for multi-type reservoir
         movement::MultiTypeReservoir::TypeInfo typeInfo;
         typeInfo.typeId = frag.typeId;
@@ -1163,16 +1163,16 @@ bool GCMCSimulation::setupFragments() {
         typeInfo.probability = frag.probability;
         typeInfo.maxCount = frag.maxCount;
         typeInfo.radius = tmpl.radius;
-        
+
         // Add to reservoir
         reservoir_->addType(typeInfo, tmpl);
         log("Fragment ", frag.name, ": maxCount=", frag.maxCount,
             " for mu=", frag.chemicalPotential, " concentration=", frag.concentration);
-        
+
         // Store fragment info
         fragmentTypes_.push_back(frag);
         fragmentNameToId_[frag.name] = frag.typeId;
-        
+
         // Enhanced logging for fragment details
         log("Fragment ", frag.name, " (Type ID ", frag.typeId, "):");
         log("  Concentration: ", frag.concentration, " M");
@@ -1259,18 +1259,18 @@ bool GCMCSimulation::setupFragments() {
 
 bool GCMCSimulation::setupAcceptance() {
     log("====== Setting up acceptance calculator ======");
-    
+
     acceptance_ = std::make_unique<GCMCAcceptance>();
-    
+
     // Set temperature from parameters
     const double temperature = params_->get_mc_info().temperature;
     acceptance_->setTemperature(temperature);
-    
+
     // Set volume
     const auto& box = state_->info.box;
     double volume = box[0] * box[1] * box[2];
     acceptance_->setVolume(volume);
-    
+
     // Set activities for each fragment type (initial)
     const double beta = params_->get_mc_info().beta;
 
@@ -1315,7 +1315,7 @@ bool GCMCSimulation::setupAcceptance() {
             ", mu_ex=", frag.chemicalPotential, " kJ/mol",
             ", exp(beta*mu)=", std::exp(params_->get_mc_info().beta * frag.chemicalPotential));
     }
-    
+
     return true;
 }
 
@@ -1944,14 +1944,14 @@ bool GCMCSimulation::run() {
         log("ERROR: Simulation not initialized");
         return false;
     }
-    
+
     log("Starting GCMC simulation for ", params_->get_mc_info().mc_steps, " steps");
-    
+
     running_ = true;
     startTime_ = std::chrono::steady_clock::now();
-    
+
     int mcSteps = params_->get_mc_info().mc_steps;
-    
+
     for (int step = 0; step < mcSteps && running_; ++step) {
         // Perform MC move
         if (!performMCStep()) {
@@ -1960,7 +1960,7 @@ bool GCMCSimulation::run() {
         }
 
         // Remove double-counting: totalSteps is incremented in performSingleMove
-        
+
         // Print statistics (ensure positive frequency)
         if (config_.printFrequency > 0 && step % config_.printFrequency == 0 && step > 0) {
             writeStatistics(step);
@@ -1970,12 +1970,12 @@ bool GCMCSimulation::run() {
         if (config_.trajectoryFrequency > 0 && step % config_.trajectoryFrequency == 0 && step > 0) {
             writeTrajectory(step);
         }
-        
+
         // Save checkpoint (disabled by default)
         if (config_.checkpointFrequency > 0 && step % config_.checkpointFrequency == 0 && step > 0) {
             writeCheckpoint(step);
         }
-        
+
         // Check convergence
         if (config_.enableAdaptiveSampling && step % 10000 == 0 && step > 0) {
             if (checkConvergence()) {
@@ -1984,7 +1984,7 @@ bool GCMCSimulation::run() {
             }
         }
     }
-    
+
     running_ = false;
 
     // Calculate final statistics
@@ -2119,17 +2119,17 @@ bool GCMCSimulation::performSingleMove() {
                     accepted = true;
                 }
             }
-            
+
             stats_.moveAttempts["deletion"]++;
             if (accepted) stats_.moveAccepted["deletion"]++;
-            
+
             // Update new statistics module
             if (fragType >= 0) {
                 simulationStats_.recordMove("delete", fragmentTypes_[fragType].name, accepted);
             }
             break;
         }
-        
+
         case TRANSLATE: {
             std::vector<int> activeIndices;
             if (reservoir_->getActiveCount() > 0) {
@@ -2138,7 +2138,7 @@ bool GCMCSimulation::performSingleMove() {
                     int idx = activeIndices[rng_() % activeIndices.size()];
                     result = engine_->attemptTranslation(idx);
                     accepted = result.accepted;
-                    
+
                     // Update new statistics module for translation
                     // Note: We'll skip type lookup for now as getInstanceType doesn't exist
                     // Just record with generic "fragment" name
@@ -2151,7 +2151,7 @@ bool GCMCSimulation::performSingleMove() {
             }
             break;
         }
-        
+
         case ROTATE: {
             std::vector<int> activeIndices;
             if (reservoir_->getActiveCount() > 0) {
@@ -2160,7 +2160,7 @@ bool GCMCSimulation::performSingleMove() {
                     int idx = activeIndices[rng_() % activeIndices.size()];
                     result = engine_->attemptRotation(idx);
                     accepted = result.accepted;
-                    
+
                     // Update new statistics module for rotation
                     // Note: We'll skip type lookup for now as getInstanceType doesn't exist
                     // Just record with generic "fragment" name
@@ -2174,7 +2174,7 @@ bool GCMCSimulation::performSingleMove() {
             break;
         }
     }
-    
+
     if (accepted) {
         stats_.acceptedMoves++;
     }
@@ -2408,18 +2408,18 @@ int GCMCSimulation::selectFragmentType() {
     if (fragmentTypes_.size() == 1) {
         return 0;
     }
-    
+
     // Use weighted selection based on MC time allocation
     double r = uniform_(rng_);
     double cumSum = 0.0;
-    
+
     for (size_t i = 0; i < fragmentTypes_.size(); ++i) {
         cumSum += fragmentTypes_[i].probability;
         if (r < cumSum) {
             return i;
         }
     }
-    
+
     return fragmentTypes_.size() - 1;
 }
 
@@ -2429,7 +2429,7 @@ int GCMCSimulation::selectActiveFragment() {
     if (activeIndices.empty()) {
         return -1;
     }
-    
+
     int idx = activeIndices[rng_() % activeIndices.size()];
     auto instance = reservoir_->getInstance(idx);
     if (instance && instance->isActive) {
@@ -2437,7 +2437,7 @@ int GCMCSimulation::selectActiveFragment() {
         const auto* tpl = reservoir_->getTemplate(instance->templateId);
         return tpl ? tpl->typeId : -1;
     }
-    
+
     return -1;
 }
 
@@ -2450,31 +2450,31 @@ void GCMCSimulation::updateStatistics() {
     // Update acceptance rates
     stats_.acceptanceRate = (stats_.totalSteps > 0) ?
         static_cast<double>(stats_.acceptedMoves) / stats_.totalSteps : 0.0;
-    
+
     for (auto& [move, attempts] : stats_.moveAttempts) {
         if (attempts > 0) {
-            stats_.moveAcceptanceRates[move] = 
+            stats_.moveAcceptanceRates[move] =
                 static_cast<double>(stats_.moveAccepted[move]) / attempts;
         }
     }
-    
+
     // Update fragment statistics
     for (auto& frag : fragmentTypes_) {
         stats_.fragmentCounts[frag.name] = frag.currentCount;
-        
+
         // Calculate density (molecules/nm^3)
         double volume = state_->info.box[0] * state_->info.box[1] * state_->info.box[2];
         stats_.fragmentDensities[frag.name] = frag.currentCount / volume;
-        
+
         // Calculate acceptance rates
         if (frag.insertAttempts > 0) {
             double insertRate = static_cast<double>(frag.insertAccepted) / frag.insertAttempts;
-            double deleteRate = (frag.deleteAttempts > 0) ? 
+            double deleteRate = (frag.deleteAttempts > 0) ?
                 static_cast<double>(frag.deleteAccepted) / frag.deleteAttempts : 0.0;
             stats_.fragmentAcceptanceRates[frag.name] = (insertRate + deleteRate) / 2.0;
         }
     }
-    
+
     // Update energy statistics
     if (!stats_.energyHistory.empty()) {
         double sum = 0.0;
@@ -2482,7 +2482,7 @@ void GCMCSimulation::updateStatistics() {
             sum += e;
         }
         stats_.averageEnergy = sum / stats_.energyHistory.size();
-        
+
         // Calculate standard deviation
         double sumSq = 0.0;
         for (double e : stats_.energyHistory) {
@@ -2498,13 +2498,13 @@ bool GCMCSimulation::checkConvergence() {
     if (stats_.energyHistory.size() < 100) {
         return false;
     }
-    
+
     // Check if energy standard deviation is small relative to average
     if (stats_.averageEnergy != 0.0) {
         double relStdDev = stats_.energyStdDev / std::abs(stats_.averageEnergy);
         return relStdDev < config_.convergenceTolerance;
     }
-    
+
     return false;
 }
 
@@ -2744,18 +2744,18 @@ void GCMCSimulation::writeFinalResults() {
     out << "  Box: " << state_->info.box[0] << " x " << state_->info.box[1]
         << " x " << state_->info.box[2] << " nm\n";
     out << "  Total steps: " << stats_.totalSteps << "\n\n";
-    
+
     if (config_.enableStatistics) {
         out << "Performance:\n";
         out << "  Total time: " << stats_.totalTime << " seconds\n";
         out << "  Steps/second: " << stats_.stepsPerSecond << "\n\n";
     }
-    
+
     out << "Statistics:\n";
     out << "  Overall acceptance: " << stats_.acceptanceRate * 100 << "%\n";
-    out << "  Average energy: " << stats_.averageEnergy << " +/- " 
+    out << "  Average energy: " << stats_.averageEnergy << " +/- "
         << stats_.energyStdDev << " kJ/mol\n\n";
-    
+
     out << "Fragment Statistics:\n";
     for (const auto& frag : fragmentTypes_) {
         out << "  " << frag.name << ":\n";
@@ -2766,7 +2766,7 @@ void GCMCSimulation::writeFinalResults() {
         out << "    Delete attempts: " << frag.deleteAttempts << "\n";
         out << "    Delete accepted: " << frag.deleteAccepted << "\n";
     }
-    
+
     out.close();
     log("Wrote final results to ", filename);
 }
@@ -2835,17 +2835,17 @@ void GCMCSimulation::finalize() {
 void GCMCSimulation::printStatistics() const {
     // Use the new statistics module for formatted output
     simulationStats_.printSummary(stats_.totalSteps);
-    
+
     // Also print legacy statistics if needed
     if (config_.verbose) {
         std::cout << "\n=== GCMC Simulation Statistics ===" << std::endl;
         std::cout << "Total steps: " << stats_.totalSteps << std::endl;
         std::cout << "Accepted moves: " << stats_.acceptedMoves << std::endl;
         if (stats_.totalSteps > 0) {
-            std::cout << "Acceptance rate: " 
+            std::cout << "Acceptance rate: "
                       << (100.0 * stats_.acceptedMoves / stats_.totalSteps) << "%" << std::endl;
         }
-        
+
         for (const auto& frag : fragmentTypes_) {
             std::cout << "Fragment " << frag.name << ": " << frag.currentCount << " molecules" << std::endl;
         }
@@ -3047,23 +3047,23 @@ void GCMCSimulation::saveTopology(const std::string& filename) const {
 
 void GCMCSimulation::saveCheckpoint(const std::string& filename) const {
     if (!state_ || !engine_) return;
-    
+
     std::ofstream out(filename, std::ios::binary);
     if (!out) {
         log("ERROR: Failed to open checkpoint file ", filename);
         return;
     }
-    
+
     // Write checkpoint header
     const std::string header = "GCMC_CHECKPOINT_V2";
     out.write(header.c_str(), header.size());
-    
+
     // Write simulation state
     out.write(reinterpret_cast<const char*>(&stats_.totalSteps), sizeof(stats_.totalSteps));
     out.write(reinterpret_cast<const char*>(&stats_.acceptedMoves), sizeof(stats_.acceptedMoves));
     out.write(reinterpret_cast<const char*>(&stats_.currentEnergy), sizeof(stats_.currentEnergy));
     out.write(reinterpret_cast<const char*>(&stats_.totalTime), sizeof(stats_.totalTime));
-    
+
     // Write fragment counts
     size_t numFragTypes = fragmentTypes_.size();
     out.write(reinterpret_cast<const char*>(&numFragTypes), sizeof(numFragTypes));
@@ -3077,7 +3077,7 @@ void GCMCSimulation::saveCheckpoint(const std::string& filename) const {
         out.write(reinterpret_cast<const char*>(&frag.deleteAttempts), sizeof(frag.deleteAttempts));
         out.write(reinterpret_cast<const char*>(&frag.deleteAccepted), sizeof(frag.deleteAccepted));
     }
-    
+
     // Write atom positions
     const size_t numAtoms = state_->activeAtomCount > 0 ? static_cast<size_t>(state_->activeAtomCount) : 0;
     out.write(reinterpret_cast<const char*>(&numAtoms), sizeof(numAtoms));
@@ -3095,7 +3095,7 @@ void GCMCSimulation::saveCheckpoint(const std::string& filename) const {
         out.write(reinterpret_cast<const char*>(&nameLen), sizeof(nameLen));
         out.write(atom.name.c_str(), nameLen);
     }
-    
+
     // Write residue information
     const size_t numResidues = state_->activeResidueCount > 0 ? static_cast<size_t>(state_->activeResidueCount) : 0;
     out.write(reinterpret_cast<const char*>(&numResidues), sizeof(numResidues));
@@ -3111,7 +3111,7 @@ void GCMCSimulation::saveCheckpoint(const std::string& filename) const {
         out.write(reinterpret_cast<const char*>(&res.atomCount), sizeof(res.atomCount));
         out.write(reinterpret_cast<const char*>(&res.resid), sizeof(res.resid));
     }
-    
+
     out.close();
     log("Saved checkpoint to ", filename);
 }
@@ -3127,7 +3127,7 @@ bool GCMCSimulation::loadCheckpoint(const std::string& filename) {
         log("ERROR: Failed to open checkpoint file ", filename);
         return false;
     }
-    
+
     // Read and verify header
     const std::string headerV1 = "GCMC_CHECKPOINT_V1";
     const std::string headerV2 = "GCMC_CHECKPOINT_V2";
@@ -3138,7 +3138,7 @@ bool GCMCSimulation::loadCheckpoint(const std::string& filename) {
         log("ERROR: Invalid checkpoint file format");
         return false;
     }
-    
+
     // Read simulation state
     in.read(reinterpret_cast<char*>(&stats_.totalSteps), sizeof(stats_.totalSteps));
     in.read(reinterpret_cast<char*>(&stats_.acceptedMoves), sizeof(stats_.acceptedMoves));
@@ -3233,7 +3233,7 @@ bool GCMCSimulation::loadCheckpoint(const std::string& filename) {
             in.read(reinterpret_cast<char*>(&state_->residues[i].resid), sizeof(state_->residues[i].resid));
         }
     }
-    
+
     // Update active atom/residue counts
     if (isV2) {
         state_->activeAtomCount = static_cast<int>(numAtoms);
@@ -3290,7 +3290,7 @@ bool GCMCSimulation::loadCheckpoint(const std::string& filename) {
             engine_->setDrudeForceFieldModel(forceFieldFromBuilder_.get());
         }
     }
-    
+
     in.close();
     log("Loaded checkpoint from ", filename, " (step ", stats_.totalSteps, ")");
     return true;
@@ -3744,30 +3744,30 @@ void GCMCSimulation::dumpParamsJson(const std::string& filename) const {
 
     ofs << "{";
 
-		    ofs << "\"basic\":{"
-		        << "\"version\":\"" << escapeJsonString(basic.version) << "\","
-		        << "\"inp_units\":\"" << escapeJsonString(basic.inp_units) << "\","
-		        << "\"inp_units_explicit\":" << (basic.inp_units_explicit ? "true" : "false") << ","
-	        << "\"inp_units_converted\":" << (basic.inp_units_converted ? "true" : "false") << ","
-	        << "\"energy_method\":\"" << escapeJsonString(basic.energy_method) << "\","
-	        << "\"itp_pairtypes_mode\":\"" << escapeJsonString(basic.itp_pairtypes_mode) << "\","
-	        << "\"gromacs_defaults_present\":" << (basic.gromacs_defaults_present ? "true" : "false") << ","
-	        << "\"gromacs_nbfunc\":" << basic.gromacs_nbfunc << ","
-	        << "\"gromacs_comb_rule\":" << basic.gromacs_comb_rule << ","
-	        << "\"gromacs_gen_pairs_present\":" << (basic.gromacs_gen_pairs_present ? "true" : "false") << ","
-	        << "\"gromacs_gen_pairs\":\"" << escapeJsonString(basic.gromacs_gen_pairs) << "\","
-	        << "\"gromacs_fudge_present\":" << (basic.gromacs_fudge_present ? "true" : "false") << ","
-	        << "\"gromacs_fudge_lj\":" << basic.gromacs_fudge_lj << ","
-	        << "\"gromacs_fudge_qq\":" << basic.gromacs_fudge_qq << ","
-		        << "\"unknown_inp_keys\":";
-		    writeJsonStringVector(ofs, basic.inp_keys_unknown);
-		    ofs << ",\"ignored_inp_keys\":";
-		    writeJsonStringVector(ofs, basic.inp_keys_ignored);
-		    ofs << ",\"warnings\":";
-		    writeJsonInpWarnings(ofs, basic.inp_warnings);
-		    ofs << ","
-		        << "\"random_seed\":" << basic.random_seed
-		        << "},";
+            ofs << "\"basic\":{"
+                << "\"version\":\"" << escapeJsonString(basic.version) << "\","
+                << "\"inp_units\":\"" << escapeJsonString(basic.inp_units) << "\","
+                << "\"inp_units_explicit\":" << (basic.inp_units_explicit ? "true" : "false") << ","
+            << "\"inp_units_converted\":" << (basic.inp_units_converted ? "true" : "false") << ","
+            << "\"energy_method\":\"" << escapeJsonString(basic.energy_method) << "\","
+            << "\"itp_pairtypes_mode\":\"" << escapeJsonString(basic.itp_pairtypes_mode) << "\","
+            << "\"gromacs_defaults_present\":" << (basic.gromacs_defaults_present ? "true" : "false") << ","
+            << "\"gromacs_nbfunc\":" << basic.gromacs_nbfunc << ","
+            << "\"gromacs_comb_rule\":" << basic.gromacs_comb_rule << ","
+            << "\"gromacs_gen_pairs_present\":" << (basic.gromacs_gen_pairs_present ? "true" : "false") << ","
+            << "\"gromacs_gen_pairs\":\"" << escapeJsonString(basic.gromacs_gen_pairs) << "\","
+            << "\"gromacs_fudge_present\":" << (basic.gromacs_fudge_present ? "true" : "false") << ","
+            << "\"gromacs_fudge_lj\":" << basic.gromacs_fudge_lj << ","
+            << "\"gromacs_fudge_qq\":" << basic.gromacs_fudge_qq << ","
+                << "\"unknown_inp_keys\":";
+            writeJsonStringVector(ofs, basic.inp_keys_unknown);
+            ofs << ",\"ignored_inp_keys\":";
+            writeJsonStringVector(ofs, basic.inp_keys_ignored);
+            ofs << ",\"warnings\":";
+            writeJsonInpWarnings(ofs, basic.inp_warnings);
+            ofs << ","
+                << "\"random_seed\":" << basic.random_seed
+                << "},";
 
     ofs << "\"space\":{"
         << "\"box_size_nm\":";

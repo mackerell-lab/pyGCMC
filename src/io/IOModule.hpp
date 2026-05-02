@@ -4,7 +4,7 @@
 // Structure parsers
 #include "structure/PdbParserMain.hpp"
 
-// Topology parsers  
+// Topology parsers
 #include "topology/psfParserMain.hpp"
 #include "topology/topParserMain.hpp"
 
@@ -19,7 +19,7 @@ namespace io {
     // Maintain backward compatibility - all original class names remain accessible
     using PDBParser = structure::PdbParserMain;  // Map structure::PdbParserMain to PDBParser
     using INPParser = parameters::InpParserMain;  // Map parameters::InpParserMain to INPParser
-    
+
     // Note: PSFParser, TOPParser, and PRMParser are already defined directly in pygcmc::io namespace
     // so no using declarations are needed for them
 }

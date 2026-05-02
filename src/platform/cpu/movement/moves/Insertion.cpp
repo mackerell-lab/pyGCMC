@@ -67,7 +67,7 @@ inline void syncInsertedResidueWeight(
 
 } // namespace
 
-InsertionMove::InsertionMove(ActivePool* activePool, 
+InsertionMove::InsertionMove(ActivePool* activePool,
                              CavityManager* cavityManager,
                              EnergyInterface* energyCalc,
                              CavityBiasCore* cavityCore)
@@ -76,11 +76,11 @@ InsertionMove::InsertionMove(ActivePool* activePool,
       cavityCore_(cavityCore),
       energyCalc_(energyCalc),
       moleculeType_(0) {
-    
+
     if (cavityManager_) {
         cavityBiasInsertion_ = std::make_unique<CavityBiasInsertion>(cavityManager_);
     }
-    
+
     resetStatistics();
 }
 
@@ -89,11 +89,11 @@ InsertionMove::~InsertionMove() = default;
 MovementResult InsertionMove::attemptInsertion(MCState& state, const MovementParams& params) {
     // Debug output
     if (std::getenv("DEBUG_CAVITY")) {
-        std::cout << "[InsertionMove::attemptInsertion] useCavityBias=" << params.useCavityBias 
+        std::cout << "[InsertionMove::attemptInsertion] useCavityBias=" << params.useCavityBias
                   << " cavityCore_=" << (cavityCore_ ? "yes" : "null")
                   << " cavityBiasInsertion_=" << (cavityBiasInsertion_ ? "yes" : "null") << std::endl;
     }
-    
+
     // Use new CavityBiasCore if available, otherwise fallback to legacy
     if (params.useCavityBias && cavityCore_) {
         return performCavityBiasInsertion(state, params, moleculeType_);
@@ -117,7 +117,7 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
     result.logLambda3 = (std::abs(result.lambdaNm - 1.0) > 1e-12)
         ? 3.0 * std::log(result.lambdaNm)
         : 0.0;
-    
+
     // Check for valid box dimensions
     if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
         result.accepted = false;
@@ -127,7 +127,7 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
         stats_.totalAttempts++;
         return result;
     }
-    
+
     // Select random insertion position (in nm)
     Vector3 position;
     if (regionConstraint_) {
@@ -141,7 +141,7 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
             utils::RandomUtils::uniform(0.0, state.info.box[2])
         );
     }
-    
+
     // Create molecule at position
     std::vector<MCAtom> atoms = createMolecule(moleculeType, position);
     if (atoms.empty()) {
@@ -150,11 +150,11 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
         stats_.totalAttempts++;
         return result;
     }
-    
+
     // Calculate energy before insertion
     platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyBefore = move_common::sumResiduePairEnergy(state);
-    
+
     // Temporarily insert molecule into state for energy calculation
     int tempResIdx = state.addResidue(MCResidue());
     MCResidue& newRes = state.residues[tempResIdx];
@@ -162,20 +162,20 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
     newRes.atomCount = static_cast<int>(atoms.size());
     newRes.type = moleculeType;
     newRes.active = true;
-    
+
     // Add atoms to state and residue
     for (const auto& atom : atoms) {
         state.addAtom(atom);
         newRes.atoms.push_back(atom);
     }
-    
+
     // Calculate energy after insertion
     platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyAfter = move_common::sumResiduePairEnergy(state);
-    
+
     double deltaE = energyAfter - energyBefore;
     result.energyChange = deltaE;
-    
+
     // Calculate system volume from box dimensions
     MovementParams paramsWithVolume = params;
     if (paramsWithVolume.volumeNm3 <= 0.0) {
@@ -193,11 +193,11 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
     result.logWReverse = 0.0;
 
     finalizeInsertionAcceptance(result, paramsWithVolume, moleculeType, speciesCountBefore);
-    
+
     // Accept or reject
     bool accepted = utils::RandomUtils::metropolisAccept(result.acceptanceProbability);
     result.accepted = accepted;
-    
+
     if (accepted) {
         // Keep the insertion - sync with active pool
         int poolResIdx = activePool_->insertMolecule(atoms, moleculeType);
@@ -207,7 +207,7 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
             result.residueIndex = tempResIdx;
             syncInsertedResidueWeight(state, tempResIdx, result);
             stats_.acceptedInsertions++;
-            
+
             // Invalidate cavity cache since system changed
             if (cavityCore_) {
                 cavityCore_->invalidateCache();
@@ -231,12 +231,12 @@ MovementResult InsertionMove::performSimpleInsertion(MCState& state, const Movem
             state.removeAtom(state.activeAtomCount - 1);
         }
     }
-    
+
     // Update statistics
     stats_.totalAttempts++;
     stats_.randomInsertions++;
     updateStatistics(accepted, false, deltaE, result.cavityBiasFactor);
-    
+
     return result;
 }
 
@@ -252,7 +252,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
     result.logLambda3 = (std::abs(result.lambdaNm - 1.0) > 1e-12)
         ? 3.0 * std::log(result.lambdaNm)
         : 0.0;
-    
+
     // Check for valid box dimensions
     if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
         result.accepted = false;
@@ -262,34 +262,34 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         stats_.totalAttempts++;
         return result;
     }
-    
+
     // 1) Calculate box volume
     const double Vbox = state.info.box[0] * state.info.box[1] * state.info.box[2];  // nm³
     result.volumeNm3 = Vbox;
     result.logVolume = std::log(std::max(Vbox, 1e-30));
-    
+
     // 2) Get cavity position and V_cav_before (before-state)
     Vector3 position;
     double Vcav_before = Vbox;
     bool usedCavity = false;
-    
+
     if (params.useCavityBias && cavityCore_) {
         // Use new CavityBiasCore with selectable mode
         // Prefer FAST_APPROX here to reduce discretization bias in DB tests
         CavityMode mode = CavityMode::FAST_APPROX;
         Vcav_before = std::max(1e-30, cavityCore_->calculateCavityVolume(state, mode, moleculeType));
         double cavityRatio = Vcav_before / Vbox;
-        
+
         // Debug output
         if (std::getenv("DEBUG_CAVITY")) {
-            std::cout << "[Insertion] Using CavityBiasCore: Vcav=" << Vcav_before 
+            std::cout << "[Insertion] Using CavityBiasCore: Vcav=" << Vcav_before
                       << " Vbox=" << Vbox << " ratio=" << cavityRatio << std::endl;
         }
-        
+
         // Always record the actual cavity fraction for diagnostics
         result.cavityBiasFactor = cavityRatio;  // Actual Vcav/Vbox ratio
         result.cavityVolumeNm3 = Vcav_before;
-        
+
         // Heuristic: if cavity fraction is very high, fall back to uniform proposal
         // to avoid unnecessary biasing that can reduce acceptance in sparse systems
         if (cavityRatio > 0.95) {  // Slightly higher threshold
@@ -333,22 +333,22 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
     if (result.cavityVolumeNm3 <= 0.0) {
         result.cavityVolumeNm3 = result.effectiveVolumeNm3;
     }
-    
+
     // Check if CBMC is enabled for insertion
     if (params.useConfigBiasForInsertion) {
         // === CBMC Two-step Method ===
-        
+
         // Generate K trial configurations
         std::vector<std::vector<MCAtom>> trials = generateTrialConfigurations(
             moleculeType, position, params, state);
-        
+
         // Calculate energy before any insertion
         platform::cpu::computeSystemEnergyPBCCutoff(state);
         double energyBefore = move_common::sumResiduePairEnergy(state);
-        
+
         // Evaluate trial energies
         auto [deltaEnergies, Keff] = evaluateTrialEnergies(state, trials, moleculeType, energyBefore);
-        
+
         // Handle case where no valid trials or too few effective trials
         if (Keff == 0 || (Keff < params.numConfigTrials / 4 && params.numConfigTrials < 20)) {
             // Adaptive strategy: fallback to regular insertion or increase K
@@ -356,7 +356,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
                 // After multiple low Keff, suggest increasing K or translation range
                 result.rejectReason = "Low Keff - consider increasing numConfigTrials or configTranslationRange";
             }
-            
+
             // Fallback to simple insertion for this attempt
             result.accepted = false;
             result.acceptanceProbability = 0.0;
@@ -364,11 +364,11 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
             stats_.totalAttempts++;
             return result;
         }
-        
+
         // Select configuration by Boltzmann weight
         double logWnew;
         int selectedIdx = selectByBoltzmannWeight(deltaEnergies, params.beta, logWnew);
-        
+
         // Actually insert the selected configuration
         int tempResIdx = state.addResidue(MCResidue());
         MCResidue& newRes = state.residues[tempResIdx];
@@ -376,12 +376,12 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         newRes.atomCount = static_cast<int>(trials[selectedIdx].size());
         newRes.type = moleculeType;
         newRes.active = true;
-        
+
         for (const auto& atom : trials[selectedIdx]) {
             state.addAtom(atom);
             newRes.atoms.push_back(atom);
         }
-        
+
         // Calculate system volume from box dimensions
         MovementParams paramsWithVolume = params;
         if (paramsWithVolume.volumeNm3 <= 0.0) {
@@ -394,7 +394,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
 
         const double logK = std::log(static_cast<double>(std::max(Keff, 1)));
         double logWForward = logWnew - logK;
-        
+
         result.configBiasFactor = std::exp(logWForward);
         result.numConfigTrials = Keff;
         result.cbmcTrialsUsed = Keff;
@@ -404,11 +404,11 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         result.energyChange = deltaEnergies[selectedIdx];  // For statistics only
 
         finalizeInsertionAcceptance(result, params, moleculeType, speciesCountBefore);
-        
+
         // Final decision
         bool accepted = utils::RandomUtils::metropolisAccept(result.acceptanceProbability);
         result.accepted = accepted;
-        
+
         if (accepted) {
             // Keep the insertion
             int poolResIdx = activePool_->insertMolecule(trials[selectedIdx], moleculeType);
@@ -417,7 +417,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
                 result.residueIndex = tempResIdx;
                 syncInsertedResidueWeight(state, tempResIdx, result);
                 stats_.acceptedInsertions++;
-                
+
                 // Invalidate cavity cache since system changed
                 if (cavityManager_) {
                     cavityManager_->invalidateCache();
@@ -438,7 +438,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
                 state.removeAtom(state.activeAtomCount - 1);
             }
         }
-        
+
         // Update statistics
         stats_.totalAttempts++;
         stats_.cbmcAttempts++;
@@ -450,18 +450,18 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         } else {
             stats_.randomInsertions++;
         }
-        
+
         // Update CBMC-specific statistics
         stats_.averageLogWnew = (stats_.averageLogWnew * (stats_.cbmcAttempts - 1) + logWnew) / stats_.cbmcAttempts;
         stats_.averageKeff = (stats_.averageKeff * (stats_.cbmcAttempts - 1) + Keff) / stats_.cbmcAttempts;
         stats_.minKeff = std::min(stats_.minKeff, static_cast<double>(Keff));
         stats_.maxKeff = std::max(stats_.maxKeff, static_cast<double>(Keff));
-        
+
         updateStatistics(accepted, usedCavity, deltaEnergies[selectedIdx], result.cavityBiasFactor);
-        
+
         return result;  // Return early for CBMC path
     }
-    
+
     // === Original non-CBMC path ===
     // Create molecule at position
     std::vector<MCAtom> atoms = createMolecule(moleculeType, position);
@@ -471,11 +471,11 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         stats_.totalAttempts++;
         return result;
     }
-    
+
     // Calculate energy before insertion
     platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyBefore = move_common::sumResiduePairEnergy(state);
-    
+
     // Temporarily insert molecule
     int tempResIdx = state.addResidue(MCResidue());
     MCResidue& newRes = state.residues[tempResIdx];
@@ -483,25 +483,25 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
     newRes.atomCount = static_cast<int>(atoms.size());
     newRes.type = moleculeType;
     newRes.active = true;
-    
+
     for (const auto& atom : atoms) {
         state.addAtom(atom);
         newRes.atoms.push_back(atom);
     }
-    
+
     // Calculate energy after insertion
     platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyAfter = move_common::sumResiduePairEnergy(state);
-    
+
     double deltaE = energyAfter - energyBefore;
     result.energyChange = deltaE;
-    
+
     // Calculate system volume from box dimensions
     MovementParams paramsWithVolume = params;
     if (paramsWithVolume.volumeNm3 <= 0.0) {
         paramsWithVolume.volumeNm3 = state.info.box[0] * state.info.box[1] * state.info.box[2];
     }
-    
+
     bool useCavityBias = params.useCavityBias && (std::abs(result.cavityBiasFactor - 1.0) > 1e-6);
     if (!useCavityBias) {
         result.cavityBiasFactor = 1.0;
@@ -512,11 +512,11 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
     result.logWForward = 0.0;
     result.logWReverse = 0.0;
     finalizeInsertionAcceptance(result, paramsWithVolume, moleculeType, speciesCountBefore);
-    
+
     // Accept or reject
     bool accepted = utils::RandomUtils::metropolisAccept(result.acceptanceProbability);
     result.accepted = accepted;
-    
+
     if (accepted) {
         // Keep the insertion
         int poolResIdx = activePool_->insertMolecule(atoms, moleculeType);
@@ -526,7 +526,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
             result.residueIndex = tempResIdx;
             syncInsertedResidueWeight(state, tempResIdx, result);
             stats_.acceptedInsertions++;
-            
+
             // Invalidate cavity cache since system changed
             if (cavityCore_) {
                 cavityCore_->invalidateCache();
@@ -550,7 +550,7 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
             state.removeAtom(state.activeAtomCount - 1);
         }
     }
-    
+
     // Update statistics
     stats_.totalAttempts++;
     if (usedCavity) {
@@ -559,13 +559,13 @@ MovementResult InsertionMove::performCavityBiasInsertion(MCState& state, const M
         stats_.randomInsertions++;
     }
     updateStatistics(accepted, usedCavity, deltaE, result.cavityBiasFactor);
-    
+
     return result;
 }
 
 std::vector<MCAtom> InsertionMove::createMolecule(int moleculeType, const Vector3& position) {
     std::vector<MCAtom> atoms;
-    
+
     // Create different molecules based on type
     switch (moleculeType) {
         case 0:  // Water molecule (TIP3P-like)
@@ -578,7 +578,7 @@ std::vector<MCAtom> InsertionMove::createMolecule(int moleculeType, const Vector
             oxygen.charge = 0.0f;  // Neutralized for test stability
             oxygen.type = 0;  // Single type for test compatibility
             atoms.push_back(oxygen);
-            
+
             // Hydrogen 1 (0.0957 nm from O)
             MCAtom h1;
             h1.x = position.x + 0.0957f;
@@ -587,7 +587,7 @@ std::vector<MCAtom> InsertionMove::createMolecule(int moleculeType, const Vector
             h1.charge = 0.0f;  // Neutralized for test stability
             h1.type = 0;  // Single type for test compatibility
             atoms.push_back(h1);
-            
+
             // Hydrogen 2 (104.5 degree angle)
             MCAtom h2;
             h2.x = position.x - 0.0239f;
@@ -596,10 +596,10 @@ std::vector<MCAtom> InsertionMove::createMolecule(int moleculeType, const Vector
             h2.charge = 0.0f;  // Neutralized for test stability
             h2.type = 0;  // Single type for test compatibility
             atoms.push_back(h2);
-            
+
             break;
         }
-        
+
         case 1:  // Methane (simplified)
         {
             // Carbon
@@ -610,11 +610,11 @@ std::vector<MCAtom> InsertionMove::createMolecule(int moleculeType, const Vector
             carbon.charge = 0.0f;  // Neutralized for test stability
             carbon.type = 0;  // Single type for test compatibility
             atoms.push_back(carbon);
-            
+
             // 4 Hydrogens in tetrahedral geometry (0.109 nm from C)
             const float dist = 0.109f;
             // const float angle = 109.47f * M_PI / 180.0f;  // TODO: Use for tetrahedral geometry
-            
+
             // H1
             MCAtom h1;
             h1.x = position.x + dist;
@@ -623,18 +623,18 @@ std::vector<MCAtom> InsertionMove::createMolecule(int moleculeType, const Vector
             h1.charge = 0.0f;  // Neutralized for test stability
             h1.type = 0;  // Single type for test compatibility
             atoms.push_back(h1);
-            
+
             // Add other hydrogens...
             // Simplified for now
-            
+
             break;
         }
-        
+
         default:
             // Default to water
             return createMolecule(0, position);
     }
-    
+
     return atoms;
 }
 
@@ -643,7 +643,7 @@ double InsertionMove::calculateInsertionProbability(
     double deltaE,
     const MovementParams& params,
     double cavityBiasFactor) {
-    
+
     // Get system volume in nm^3
     double volumeNm3 = params.volumeNm3;
     if (volumeNm3 <= 0.0) {
@@ -651,7 +651,7 @@ double InsertionMove::calculateInsertionProbability(
         // before calling this function
         volumeNm3 = 1.0;  // Default fallback
     }
-    
+
     // Use version with thermal wavelength if specified
     if (params.thermalLambdaNm != 1.0) {
         return utils::LogSpaceCalculator::calculateInsertionProbabilityWithLambda(
@@ -688,7 +688,7 @@ Vector3 InsertionMove::selectInsertionPosition(MCState& state, const MovementPar
         }
         return pos;
     }
-    
+
     // Random position (with optional region constraint)
     cavityBias = 1.0;
     if (regionConstraint_) {
@@ -708,11 +708,11 @@ void InsertionMove::resetStatistics() {
 
 void InsertionMove::updateStatistics(bool accepted, bool /*usedCavity*/, double energyChange, double cavityBias) {
     if (accepted) {
-        stats_.averageEnergyChange = (stats_.averageEnergyChange * stats_.acceptedInsertions + energyChange) / 
+        stats_.averageEnergyChange = (stats_.averageEnergyChange * stats_.acceptedInsertions + energyChange) /
                                      (stats_.acceptedInsertions + 1);
     }
-    
-    stats_.averageCavityBias = (stats_.averageCavityBias * (stats_.totalAttempts - 1) + cavityBias) / 
+
+    stats_.averageCavityBias = (stats_.averageCavityBias * (stats_.totalAttempts - 1) + cavityBias) /
                                stats_.totalAttempts;
 }
 

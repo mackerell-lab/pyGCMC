@@ -12,7 +12,7 @@ class PrmParserOperations {
 public:
     // Stream parsing - the main parsing loop
     static void parseStream(std::istream& input, pygcmc::model::ForceField& ff);
-    
+
     // Debug flag access
     static bool& getDebugFlag();
 };

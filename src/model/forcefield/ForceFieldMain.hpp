@@ -36,7 +36,7 @@ public:
     void add_improper_params(const std::string& type1, const std::string& type2,
                             const std::string& type3, const std::string& type4,
                             double kpsi, double psi0);
-    
+
     // === Drude-specific Parameter Addition Methods ===
     void add_alpha_thole_params(const std::string& type, double alpha, double thole);
     void add_lonepair(const LonePairParams& params);
@@ -57,7 +57,7 @@ public:
                                                           const std::string& type4) const;
     const ImproperParams& get_improper_params(const std::string& type1, const std::string& type2,
                                             const std::string& type3, const std::string& type4) const;
-    
+
     // === Drude-specific Parameter Retrieval Methods ===
     const AlphaTHoleParams& get_alpha_params(const std::string& type) const;
     const std::vector<LonePairParams>& get_lonepairs() const { return lonepairs_; }
@@ -77,7 +77,7 @@ public:
                             const std::string& type3, const std::string& type4) const;
     bool has_improper_params(const std::string& type1, const std::string& type2,
                             const std::string& type3, const std::string& type4) const;
-    
+
     // === Drude-specific Existence Check Methods ===
     bool has_alpha_params(const std::string& type) const;
     bool has_nbthole(const std::string& type1, const std::string& type2) const;
@@ -90,7 +90,7 @@ public:
     size_t get_num_angle_types() const { return angle_params_.size(); }
     size_t get_num_dihedral_types() const { return dihedral_params_.size(); }
     size_t get_num_improper_types() const { return improper_params_.size(); }
-    
+
     // === Drude-specific Size Methods ===
     size_t get_num_alpha_params() const { return alpha_thole_params_.size(); }
     size_t get_num_lonepairs() const { return lonepairs_.size(); }
@@ -136,7 +136,7 @@ private:
     std::map<std::tuple<std::string, std::string, std::string, std::string>, std::vector<DihedralParams>> dihedral_params_;
     std::map<std::tuple<std::string, std::string, std::string, std::string>, ImproperParams> improper_params_;
     NonbondedParams nonbonded_params_;
-    
+
     // Drude-specific parameters
     std::map<std::string, AlphaTHoleParams> alpha_thole_params_;
     std::vector<LonePairParams> lonepairs_;
@@ -152,4 +152,4 @@ private:
 // Include implementations
 #include "ForceFieldAccessors.hpp"
 
-#endif // PYGCMC_MODEL_FORCEFIELD_MAIN_HPP 
+#endif // PYGCMC_MODEL_FORCEFIELD_MAIN_HPP

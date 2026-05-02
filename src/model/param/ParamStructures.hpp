@@ -88,7 +88,7 @@ struct SpaceInfo {
     float sys_box_volume = 0.0;
     float gcmc_volume = 0.0;
     float protein_volume = 0.0;
-    
+
     bool use_vdw_radius_for_grid = false;
     bool exclude_hydrogens_from_grid = false;
     bool exclude_protein_volume = false;

@@ -20,4 +20,4 @@ namespace cpu {
 
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

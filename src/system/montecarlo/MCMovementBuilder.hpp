@@ -10,7 +10,7 @@ namespace montecarlo {
 
 /**
  * @brief Movement state builder
- * 
+ *
  * Constructs the final Monte Carlo state by combining reindexed existing residues
  * with new movement molecules and their inactive copies.
  */
@@ -29,12 +29,12 @@ public:
 
     /**
      * @brief Build final Monte Carlo state
-     * 
+     *
      * Combines all components into the final state including:
      * - Unmatched residues (non-movement molecules)
      * - Matched residues (existing movement molecules)
      * - New inactive copies for movement molecules
-     * 
+     *
      * @param newState State to populate
      * @param molecules Movement molecule information
      * @param processedResidueNames Processed residue names from type collector
@@ -51,7 +51,7 @@ public:
 private:
     /**
      * @brief Match residues to movement molecules
-     * 
+     *
      * @param reindexedResidues All reindexed residues
      * @param reindexedAtoms All reindexed atoms
      * @param processedResidueNames Target residue names to match
@@ -71,7 +71,7 @@ private:
 
     /**
      * @brief Add unmatched residues to state
-     * 
+     *
      * @param newState State to modify
      * @param otherResidues Unmatched residues
      * @param otherAtoms Atoms for unmatched residues
@@ -87,7 +87,7 @@ private:
 
     /**
      * @brief Add movement molecule groups to state
-     * 
+     *
      * @param newState State to modify
      * @param molecules Movement molecule information
      * @param processedResidueNames Processed residue names
@@ -107,7 +107,7 @@ private:
 
     /**
      * @brief Trim whitespace from string
-     * 
+     *
      * @param s Input string
      * @return Trimmed string
      */
@@ -116,4 +116,4 @@ private:
 
 } // namespace montecarlo
 } // namespace system
-} // namespace pygcmc 
+} // namespace pygcmc

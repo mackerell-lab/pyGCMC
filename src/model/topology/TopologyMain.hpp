@@ -20,8 +20,8 @@ public:
     // Add elements to topology - delegate to TopologyOperations
     inline int add_atom(const std::string& name, const std::string& type, double charge, double mass,
                 const std::string& residue_name, int residue_number, const std::string& segment_name) {
-        return TopologyOperations::addAtom(atoms_, residues_, segments_, segment_map_, 
-                                          residue_map_, atom_map_, name, type, charge, mass, 
+        return TopologyOperations::addAtom(atoms_, residues_, segments_, segment_map_,
+                                          residue_map_, atom_map_, name, type, charge, mass,
                                           residue_name, residue_number, segment_name);
     }
 
@@ -35,12 +35,12 @@ public:
 
     inline void add_dihedral(int atom1, int atom2, int atom3, int atom4, int multiplicity = 1,
                      double angle = 0.0, double force_constant = 0.0, bool improper = false, int function_type = 1) {
-        TopologyOperations::addDihedral(dihedrals_, atoms_, atom1, atom2, atom3, atom4, 
+        TopologyOperations::addDihedral(dihedrals_, atoms_, atom1, atom2, atom3, atom4,
                                        multiplicity, angle, force_constant, improper, function_type);
     }
 
     inline void add_improper(int atom1, int atom2, int atom3, int atom4, double angle = 0.0, double force_constant = 0.0) {
-        TopologyOperations::addDihedral(dihedrals_, atoms_, atom1, atom2, atom3, atom4, 
+        TopologyOperations::addDihedral(dihedrals_, atoms_, atom1, atom2, atom3, atom4,
                                        0, angle, force_constant, true, 1);
     }
 
@@ -82,7 +82,7 @@ public:
         if (!TopologyQueries::hasAtom(atoms_, index)) throw std::out_of_range("Invalid atom index");
         return atoms_[index];
     }
-    
+
     inline TopologyAtom& get_atom(int index) {
         if (!TopologyQueries::hasAtom(atoms_, index)) throw std::out_of_range("Invalid atom index");
         return atoms_[index];

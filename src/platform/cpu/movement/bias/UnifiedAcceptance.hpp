@@ -27,10 +27,10 @@ public:
                        + std::log(V_cavity_before)
                        - std::log(static_cast<double>(n_before + 1))
                        - std::log(lambda3);
-        
+
         return std::min(1.0, std::exp(logProb));
     }
-    
+
     // Deletion acceptance probability with proper cavity bias
     // Based on: A_del = min(1, exp(-βμ - βΔE) · n·Λ³ / V_cav_after)
     static double deletionProbability(
@@ -42,15 +42,15 @@ public:
         double lambda3 = 1.0   // Thermal wavelength cubed (nm³)
     ) {
         if (n_before <= 0) return 0.0;
-        
+
         double logProb = -beta * mu - beta * deltaE
                        + std::log(static_cast<double>(n_before))
                        + std::log(lambda3)
                        - std::log(V_cavity_after);
-        
+
         return std::min(1.0, std::exp(logProb));
     }
-    
+
     // Standard GCMC without cavity bias (for comparison)
     static double insertionProbabilityStandard(
         int n_before,
@@ -62,7 +62,7 @@ public:
     ) {
         return insertionProbability(n_before, deltaE, beta, mu, V_total, lambda3);
     }
-    
+
     static double deletionProbabilityStandard(
         int n_before,
         double deltaE,

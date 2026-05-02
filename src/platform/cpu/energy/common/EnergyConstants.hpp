@@ -21,4 +21,4 @@ static const float LJ_MAX_SAFE_ENERGY = 1e6f;     // Maximum energy value (kJ/mo
 
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

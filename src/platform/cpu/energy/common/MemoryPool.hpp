@@ -12,7 +12,7 @@ namespace cpu {
 
 /**
  * @brief Thread-safe memory pool for grid allocations
- * 
+ *
  * This class manages a pool of pre-allocated memory buffers to avoid
  * frequent allocations/deallocations that can cause heap fragmentation
  */
@@ -22,27 +22,27 @@ private:
         std::unique_ptr<std::complex<double>[]> data;
         size_t size;
         bool in_use;
-        
+
         Buffer(size_t sz) : size(sz), in_use(false) {
             data = std::make_unique<std::complex<double>[]>(sz);
         }
     };
-    
+
     mutable std::mutex pool_mutex;
     std::vector<std::unique_ptr<Buffer>> buffers;
     size_t max_buffers = 10;  // Maximum number of buffers to keep
-    
+
     // Statistics
     size_t allocations = 0;
     size_t reuses = 0;
-    
+
 public:
     /**
      * @brief Get a buffer of at least the requested size
      */
     std::complex<double>* acquire(size_t size) {
         std::lock_guard<std::mutex> lock(pool_mutex);
-        
+
         // First, try to find an unused buffer of sufficient size
         for (auto& buf : buffers) {
             if (!buf->in_use && buf->size >= size) {
@@ -53,7 +53,7 @@ public:
                 return buf->data.get();
             }
         }
-        
+
         // No suitable buffer found, create a new one
         if (buffers.size() < max_buffers) {
             buffers.push_back(std::make_unique<Buffer>(size));
@@ -61,7 +61,7 @@ public:
             allocations++;
             return buffers.back()->data.get();
         }
-        
+
         // Pool is full, find the smallest buffer and resize it
         size_t smallest_idx = 0;
         size_t smallest_size = buffers[0]->size;
@@ -71,7 +71,7 @@ public:
                 smallest_size = buffers[i]->size;
             }
         }
-        
+
         // Resize the buffer if needed
         if (buffers[smallest_idx]->size < size) {
             buffers[smallest_idx] = std::make_unique<Buffer>(size);
@@ -81,15 +81,15 @@ public:
         std::fill_n(buffers[smallest_idx]->data.get(), size, std::complex<double>(0.0, 0.0));
         return buffers[smallest_idx]->data.get();
     }
-    
+
     /**
      * @brief Release a buffer back to the pool
      */
     void release(std::complex<double>* ptr) {
         if (!ptr) return;
-        
+
         std::lock_guard<std::mutex> lock(pool_mutex);
-        
+
         for (auto& buf : buffers) {
             if (buf->data.get() == ptr) {
                 buf->in_use = false;
@@ -97,7 +97,7 @@ public:
             }
         }
     }
-    
+
     /**
      * @brief Clear all buffers from the pool
      */
@@ -107,7 +107,7 @@ public:
         allocations = 0;
         reuses = 0;
     }
-    
+
     /**
      * @brief Get pool statistics
      */
@@ -131,29 +131,29 @@ class GridMemoryHandle {
 private:
     std::complex<double>* ptr;
     size_t size;
-    
+
 public:
     GridMemoryHandle(size_t sz) : size(sz) {
         ptr = getGridMemoryPool().acquire(sz);
     }
-    
+
     ~GridMemoryHandle() {
         if (ptr) {
             getGridMemoryPool().release(ptr);
         }
     }
-    
+
     // Delete copy constructor and assignment
     GridMemoryHandle(const GridMemoryHandle&) = delete;
     GridMemoryHandle& operator=(const GridMemoryHandle&) = delete;
-    
+
     // Allow move
-    GridMemoryHandle(GridMemoryHandle&& other) noexcept 
+    GridMemoryHandle(GridMemoryHandle&& other) noexcept
         : ptr(other.ptr), size(other.size) {
         other.ptr = nullptr;
         other.size = 0;
     }
-    
+
     GridMemoryHandle& operator=(GridMemoryHandle&& other) noexcept {
         if (this != &other) {
             if (ptr) {
@@ -166,7 +166,7 @@ public:
         }
         return *this;
     }
-    
+
     std::complex<double>* get() { return ptr; }
     const std::complex<double>* get() const { return ptr; }
     size_t getSize() const { return size; }

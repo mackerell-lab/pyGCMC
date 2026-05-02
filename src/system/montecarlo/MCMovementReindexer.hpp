@@ -9,7 +9,7 @@ namespace montecarlo {
 
 /**
  * @brief Movement residue reindexer
- * 
+ *
  * Handles reindexing of existing residues and atoms when adding movement molecules.
  * This ensures type consistency across the expanded type maps.
  */
@@ -28,10 +28,10 @@ public:
 
     /**
      * @brief Reindex existing residues and atoms
-     * 
+     *
      * Takes the current system state and reindexes all residues and atoms
      * to use the new expanded type maps.
-     * 
+     *
      * @param oldState Original state with old type maps
      * @param newResidueTypes New expanded residue type map
      * @param newAtomTypes New expanded atom type map
@@ -45,7 +45,7 @@ public:
 private:
     /**
      * @brief Trim whitespace from string
-     * 
+     *
      * @param s Input string
      * @return Trimmed string
      */
@@ -53,7 +53,7 @@ private:
 
     /**
      * @brief Process residue name (trim and uppercase)
-     * 
+     *
      * @param rawName Raw residue name
      * @return Processed name (trimmed and uppercased)
      */
@@ -62,4 +62,4 @@ private:
 
 } // namespace montecarlo
 } // namespace system
-} // namespace pygcmc 
+} // namespace pygcmc

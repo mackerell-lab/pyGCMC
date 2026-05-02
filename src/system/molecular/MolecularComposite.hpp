@@ -13,7 +13,7 @@ namespace molecular {
 
 /**
  * @brief Composite interface for molecular system operations
- * 
+ *
  * This class provides a unified interface for all molecular system operations,
  * encapsulating the complexity of individual components.
  */
@@ -46,8 +46,8 @@ public:
      * @brief Get the current molecular object
      * @return Current molecular object
      */
-    const std::shared_ptr<model::Molecular>& getCurrentMolecular() const { 
-        return current_molecular_; 
+    const std::shared_ptr<model::Molecular>& getCurrentMolecular() const {
+        return current_molecular_;
     }
 
 private:
@@ -59,4 +59,4 @@ private:
 } // namespace system
 } // namespace pygcmc
 
-#endif // PYGCMC_SYSTEM_MOLECULAR_COMPOSITE_HPP 
+#endif // PYGCMC_SYSTEM_MOLECULAR_COMPOSITE_HPP

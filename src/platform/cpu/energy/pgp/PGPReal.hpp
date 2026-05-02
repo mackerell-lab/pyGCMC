@@ -9,7 +9,7 @@ namespace cpu {
 
 /**
  * @brief Calculate real-space part of the PGP method for short-range electrostatics
- * 
+ *
  * @param state MC state
  * @param movement_only Only calculate for moving residues
  * @param store_in_residues Whether to store energy in residue objects
@@ -25,4 +25,4 @@ void computeRealSpacePGP(model::MCState& state, bool movement_only, bool store_i
 } // namespace platform
 } // namespace pygcmc
 
-#endif // PGPREALSPACE_HPP 
+#endif // PGPREALSPACE_HPP

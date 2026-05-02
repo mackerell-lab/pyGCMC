@@ -32,7 +32,7 @@ namespace platform {
 void init_movement_bindings(py::module& m) {
     // Create movement submodule
     auto movement = m.def_submodule("movement", "GCMC Movement operations");
-    
+
     // Expose unified grand-canonical bookkeeping types
     py::class_<gcmc::GrandCanonicalTerms>(movement, "GrandCanonicalTerms")
         .def(py::init<>())
@@ -158,12 +158,12 @@ void init_movement_bindings(py::module& m) {
              py::arg("population_before"))
         .def("updateDerivedParameters", &MovementParams::updateDerivedParameters)
         .def("validateParameters", &MovementParams::validateParameters);
-    
+
     // Bind MovementResult class
     py::class_<MovementResult>(movement, "MovementResult")
         .def(py::init<>())
         .def(py::init<bool, double, double, const std::string&>(),
-             py::arg("accepted"), py::arg("energyChange"), 
+             py::arg("accepted"), py::arg("energyChange"),
              py::arg("acceptanceProbability"), py::arg("moveType"))
         .def_readonly("accepted", &MovementResult::accepted)
         .def_readonly("energyChange", &MovementResult::energyChange)
@@ -195,18 +195,18 @@ void init_movement_bindings(py::module& m) {
         .def_readonly("numericalError", &MovementResult::numericalError)
         .def_readonly("proposalInfoFilled", &MovementResult::proposalInfoFilled)
         // 实现为方法以保持向后兼容性（原simulation模块中是方法）
-        .def("isSuccessful", [](const MovementResult& r) { return r.accepted; }, 
+        .def("isSuccessful", [](const MovementResult& r) { return r.accepted; },
              "Check if the move was successful")
         .def("summary", [](const MovementResult& r) {
-            return std::string(r.moveType) + " " + (r.accepted ? "accepted" : "rejected") + 
+            return std::string(r.moveType) + " " + (r.accepted ? "accepted" : "rejected") +
                    " (ΔE=" + std::to_string(r.energyChange) + " kJ/mol)";
         }, "Get a summary string of the result")
         .def("__repr__", [](const MovementResult& r) {
-            return std::string("MovementResult(") + 
-                   (r.accepted ? "accepted" : "rejected") + 
+            return std::string("MovementResult(") +
+                   (r.accepted ? "accepted" : "rejected") +
                    ", energy=" + std::to_string(r.energyChange) + ")";
         });
-    
+
     // Bind MovementModule class
     py::class_<MovementModule>(movement, "MovementModule")
         .def(py::init<>())
@@ -321,64 +321,64 @@ void init_movement_bindings(py::module& m) {
         py::arg("volumeNm3"),
         py::arg("thermalLambdaNm"),
         "Compute deletion acceptance probability with both cavity and thermal wavelength factors");
-    
+
     // Basic GCMC functions using MovementAPI
     movement.def("initializeGCMC", &initializeGCMC,
                 "Initialize GCMC module with state");
-    
+
     movement.def("performGCMCMove", &performGCMCMove,
                 "Perform a single GCMC move");
-    
+
     movement.def("runGCMCSteps", &runGCMCSteps,
                 "Run multiple GCMC steps",
                 py::arg("nSteps"));
-    
+
     movement.def("getGCMCStatistics", &getGCMCStatistics,
                 "Get GCMC statistics");
-    
+
     // Fragment reservoir functions
     movement.def("addFragmentToReservoir", &addFragmentToReservoir,
                 "Add a fragment to the reservoir",
                 py::arg("name"),
                 py::arg("atoms"),
                 py::arg("chemicalPotential") = -15.7);
-    
+
     movement.def("clearFragmentReservoir", &clearFragmentReservoir,
                 "Clear the fragment reservoir");
-    
+
     movement.def("getFragmentCount", &getFragmentCount,
                 "Get number of fragments in reservoir");
-    
+
     // Individual move types
     movement.def("attemptInsertion", &attemptInsertion,
                 "Attempt an insertion move");
-    
+
     movement.def("attemptDeletion", &attemptDeletion,
                 "Attempt a deletion move");
-    
+
     movement.def("attemptTranslation", &attemptTranslation,
                 "Attempt a translation move",
                 py::arg("state"),
                 py::arg("residueIndex"));
-    
+
     movement.def("attemptRotation", &attemptRotation,
                 "Attempt a rotation move",
                 py::arg("state"),
                 py::arg("residueIndex"));
-    
+
     // Utility functions
     movement.def("setRandomSeed", &setRandomSeed,
                 "Set random seed for movement operations",
                 py::arg("seed"));
-    
+
     movement.def("setCavityBiasEnabled", &setCavityBiasEnabled,
                 "Enable/disable cavity bias",
                 py::arg("enabled"));
-    
+
     movement.def("setConfigBiasEnabled", &setConfigBiasEnabled,
                 "Enable/disable configurational bias",
                 py::arg("enabled"));
-    
+
     // Bind Vector3 class (required for several other classes)
     // Note: using the movement namespace Vector3
     py::class_<::pygcmc::platform::cpu::movement::Vector3>(movement, "Vector3")
@@ -387,7 +387,7 @@ void init_movement_bindings(py::module& m) {
         .def_readwrite("x", &::pygcmc::platform::cpu::movement::Vector3::x)
         .def_readwrite("y", &::pygcmc::platform::cpu::movement::Vector3::y)
         .def_readwrite("z", &::pygcmc::platform::cpu::movement::Vector3::z);
-    
+
     // Bind ActivePool::ResidueMetadata
     py::class_<ActivePool::ResidueMetadata>(movement, "ResidueMetadata")
         .def(py::init<>())
@@ -397,7 +397,7 @@ void init_movement_bindings(py::module& m) {
         .def_readwrite("atomCount", &ActivePool::ResidueMetadata::atomCount)
         .def_readwrite("centerOfMass", &ActivePool::ResidueMetadata::centerOfMass)
         .def_readwrite("insertionTime", &ActivePool::ResidueMetadata::insertionTime);
-    
+
     // Bind ActivePool::Statistics
     py::class_<ActivePool::Statistics>(movement, "ActivePoolStatistics")
         .def(py::init<>())
@@ -408,7 +408,7 @@ void init_movement_bindings(py::module& m) {
         .def_readonly("peakResidues", &ActivePool::Statistics::peakResidues)
         .def_readonly("averageFragmentation", &ActivePool::Statistics::averageFragmentation)
         .def_readonly("batchOperations", &ActivePool::Statistics::batchOperations);
-    
+
     // Bind ActivePool class
     py::class_<ActivePool>(movement, "ActivePool")
         .def(py::init<int, int>(), py::arg("maxAtoms") = 100000, py::arg("maxResidues") = 30000)
@@ -430,26 +430,26 @@ void init_movement_bindings(py::module& m) {
         .def("getMaxAtoms", &ActivePool::getMaxAtoms)
         .def("getMaxResidues", &ActivePool::getMaxResidues)
         .def("canInsert", &ActivePool::canInsert);
-    
-    // Bind MovementStatistics class 
+
+    // Bind MovementStatistics class
     py::class_<MovementStatistics>(movement, "MovementStatistics")
         .def(py::init<>())
         .def_readwrite("attempts", &MovementStatistics::attempts)
         .def_readwrite("accepts", &MovementStatistics::accepts)
         .def_readwrite("totalEnergyChange", &MovementStatistics::totalEnergyChange)
         .def("acceptanceRate", &MovementStatistics::acceptanceRate);
-    
+
     // Bind CavityMode enum
     py::enum_<CavityMode>(movement, "CavityMode")
         .value("FAST_APPROX", CavityMode::FAST_APPROX, "Global cavity fraction (default)")
         .value("CLUSTER_VOLUME", CavityMode::CLUSTER_VOLUME, "Cluster-based accurate sampling")
         .value("LOCAL_VEFF", CavityMode::LOCAL_VEFF, "Local effective volume (highest accuracy)")
         .export_values();
-    
+
     // Bind CavityBiasCore class
     py::class_<CavityBiasCore>(movement, "CavityBiasCore")
-        .def(py::init<double, double>(), 
-             py::arg("gridSpacing") = 0.25, 
+        .def(py::init<double, double>(),
+             py::arg("gridSpacing") = 0.25,
              py::arg("probeRadius") = 0.14,
              "Create CavityBiasCore with grid spacing and probe radius in nm")
         .def("calculateCavityVolume",
@@ -486,7 +486,7 @@ void init_movement_bindings(py::module& m) {
         .def("__repr__", [](const CavityBiasCore& /*c*/) {
             return std::string("CavityBiasCore(gridSpacing=0.25, probeRadius=0.14)");
         });
-    
+
     // Register FragmentReservoir and related classes
     pygcmc::bindings::platform::init_fragment_reservoir_bindings(movement);
 }

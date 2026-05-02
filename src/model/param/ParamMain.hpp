@@ -32,7 +32,7 @@ public:
 
     // === IValidatable Interface ===
     bool is_valid() const {
-        return ParamQueries::isValidParam(basic_info_, space_info_, mc_info_, 
+        return ParamQueries::isValidParam(basic_info_, space_info_, mc_info_,
                                         energy_info_, fragment_info_, bias_info_, file_info_);
     }
 
@@ -106,7 +106,7 @@ public:
     }
 
     std::string to_string() const {
-        return ParamQueries::toString(basic_info_, space_info_, mc_info_, 
+        return ParamQueries::toString(basic_info_, space_info_, mc_info_,
                                     energy_info_, fragment_info_, bias_info_, file_info_);
     }
 

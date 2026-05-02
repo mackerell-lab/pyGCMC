@@ -27,43 +27,43 @@ private:
     ProposalType currentType_;
     const MovementParams& params_;
     std::shared_ptr<CavityManager> cavityManager_;
-    
+
     // P2: Enhanced statistics
     ProposalStatistics stats_;
-    
+
     // Timing helpers
     using Clock = std::chrono::high_resolution_clock;
     using TimePoint = std::chrono::time_point<Clock>;
-    
+
 public:
     ProposalMain(const MovementParams& params,
                  std::shared_ptr<CavityManager> cavityManager = nullptr);
-    
+
     /**
      * Generate a proposal
      */
     ProposalInfo generateProposal(const MCState& state);
-    
+
     /**
      * Update after move
      */
     void updateState(bool accepted, const ProposalInfo& info);
-    
+
     /**
      * Switch proposal type
      */
     void switchType(ProposalType type);
-    
+
     /**
      * Get current type
      */
     ProposalType getCurrentType() const { return currentType_; }
-    
+
     /**
      * Get statistics (P2 enhanced)
      */
     const ProposalStatistics& getStatistics() const { return stats_; }
-    
+
     /**
      * Get cavity manager statistics (if available)
      */
@@ -73,17 +73,17 @@ public:
         }
         return CavityManager::Statistics();
     }
-    
+
     /**
      * Check if should switch mode (adaptive)
      */
     bool shouldSwitchMode(const MCState& state) const;
-    
+
     /**
      * Reset all
      */
     void reset();
-    
+
 private:
     ProposalType determineType(const MovementParams& params);
     std::unique_ptr<ProposalInterface> createSampler(ProposalType type);

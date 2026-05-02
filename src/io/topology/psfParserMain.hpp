@@ -11,7 +11,7 @@ namespace io {
 
 /**
  * @brief Parser for CHARMM PSF (Protein Structure File) format
- * 
+ *
  * This class handles reading PSF files and populating a Topology object.
  * The PSF file contains structural information about a molecular system,
  * including atoms, bonds, angles, dihedrals, improper dihedrals, and more.
@@ -23,7 +23,7 @@ public:
 
     /**
      * @brief Parse a PSF file and return a new Topology object
-     * 
+     *
      * @param filename Path to the PSF file
      * @return model::Topology The parsed topology
      * @throws std::runtime_error if parsing fails
@@ -32,7 +32,7 @@ public:
 
     /**
      * @brief Parse a PSF string and return a new Topology object
-     * 
+     *
      * @param psf_str String containing PSF data
      * @return model::Topology The parsed topology
      * @throws std::runtime_error if parsing fails
@@ -41,7 +41,7 @@ public:
 
     /**
      * @brief Parse a PSF file and populate a Topology object
-     * 
+     *
      * @param filename Path to the PSF file
      * @param topology Topology object to populate
      * @return true if parsing was successful
@@ -55,4 +55,4 @@ private:
 };
 
 } // namespace io
-} // namespace pygcmc 
+} // namespace pygcmc

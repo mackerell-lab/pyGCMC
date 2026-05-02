@@ -27,15 +27,15 @@ using MCState = pygcmc::model::montecarlo::MCState;
 
 /**
  * DrudeSequentialOptimizer - Order-sensitive Drude optimizer
- * 
+ *
  * This optimizer executes Drude optimization algorithms in the exact order specified,
  * allowing DrudeOptimizer(direct=1, fast_fbp=5) to behave differently from
  * DrudeOptimizer(fast_fbp=5, direct=1).
- * 
+ *
  * Example usage from Python:
  *   opt = DrudeOptimizer(direct=1, fast_fbp=5, tcg=3)
  *   energy = opt.optimize(state)
- * 
+ *
  * The optimization sequence will be: Direct(1) → FastFBP(5) → TCG(3)
  */
 class DrudeSequentialOptimizer {
@@ -95,14 +95,14 @@ public:
 
 private:
     OptimizationSequence sequence_;
-    
+
     /**
      * Convert algorithm name to DrudeAlgorithm enum
      * @param name Algorithm name string
      * @return Corresponding DrudeAlgorithm enum value
      */
     DrudeAlgorithm stringToAlgorithm(const std::string& name) const;
-    
+
     /**
      * Execute a single algorithm step
      * @param state The molecular state
@@ -111,7 +111,7 @@ private:
      * @return Energy after this step
      */
     double executeStep(MCState& state, DrudeAlgorithm algorithm, double parameter);
-    
+
     /**
      * Configure algorithm-specific parameters before execution
      * @param algorithm The algorithm to configure
@@ -127,36 +127,36 @@ private:
 class DrudeOptimizerBuilder {
 public:
     DrudeOptimizerBuilder() = default;
-    
+
     /**
      * Add Direct polarization step
      * @param iterations Number of iterations (usually 1)
      * @return Reference to this builder
      */
     DrudeOptimizerBuilder& direct(int iterations = 1);
-    
+
     /**
      * Add Fast Force Balance Predictor step
      * @param iterations Number of iterations (default 5)
      * @return Reference to this builder
      */
     DrudeOptimizerBuilder& fastFBP(int iterations = 5);
-    
+
     /**
      * Add Truncated Conjugate Gradient step
      * @param iterations Number of iterations (default 3)
      * @return Reference to this builder
      */
     DrudeOptimizerBuilder& tcg(int iterations = 3);
-    
+
     /**
      * Add Self-Consistent Field step
      * @param tolerance Convergence tolerance in nm (default 0.01)
      * @return Reference to this builder
      */
     DrudeOptimizerBuilder& scf(double tolerance = 0.01);
-    
-    
+
+
     /**
      * Add custom algorithm step
      * @param algorithm Algorithm name
@@ -164,13 +164,13 @@ public:
      * @return Reference to this builder
      */
     DrudeOptimizerBuilder& add(const std::string& algorithm, double parameter);
-    
+
     /**
      * Build the final optimizer
      * @return Unique pointer to the constructed optimizer
      */
     std::unique_ptr<DrudeSequentialOptimizer> build();
-    
+
 private:
     DrudeSequentialOptimizer::OptimizationSequence sequence_;
 };

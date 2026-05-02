@@ -83,4 +83,4 @@ private:
 } // namespace system
 } // namespace pygcmc
 
-#endif // PYGCMC_SYSTEM_MOLECULAR_MERGER_HPP 
+#endif // PYGCMC_SYSTEM_MOLECULAR_MERGER_HPP

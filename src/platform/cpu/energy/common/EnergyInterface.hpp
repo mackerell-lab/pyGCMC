@@ -14,14 +14,14 @@ enum class EnergyMethod {
 };
 
 // Unified energy calculation interface
-void computeSystemEnergy(model::MCState& state, 
+void computeSystemEnergy(model::MCState& state,
                          EnergyMethod method = EnergyMethod::DIRECT,
-                         bool use_cutoff = false, 
+                         bool use_cutoff = false,
                          bool use_pbc = false);
 
-void computeMovementEnergy(model::MCState& state, 
+void computeMovementEnergy(model::MCState& state,
                           EnergyMethod method = EnergyMethod::DIRECT,
-                          bool use_cutoff = false, 
+                          bool use_cutoff = false,
                           bool use_pbc = false);
 
 // Forward declarations for all direct calculation functions to avoid ambiguity
@@ -63,11 +63,11 @@ inline double getEwaldTotalEnergy(const model::MCState& state) {
             residue_total += residue.energy_vdw + residue.energy_elec;
         }
     }
-    
+
     // Add reciprocal-space energy and self-energy from EwaldEnergy
     return residue_total + state.ewald_energy.reciprocal + state.ewald_energy.self;
 }
 
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

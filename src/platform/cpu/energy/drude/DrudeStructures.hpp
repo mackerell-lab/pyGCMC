@@ -29,7 +29,7 @@ enum class TholeMode {
 
 /**
  * @brief Drude oscillator parameters for a single particle
- * 
+ *
  * Following OpenMM's parameter convention for compatibility
  */
 struct DrudeParticle {
@@ -43,12 +43,12 @@ struct DrudeParticle {
     double polarizability;    // Isotropic polarizability (nm^3)
     double aniso12 = 1.0;     // Anisotropy scale factor for axis 1-2
     double aniso34 = 1.0;     // Anisotropy scale factor for axis 3-4
-    
+
     // Derived quantities (computed once for efficiency)
     double kSpring;           // Spring constant = charge^2 / (4πε₀α)
     double kAniso1 = 0.0;     // Anisotropic spring constant 1
     double kAniso2 = 0.0;     // Anisotropic spring constant 2
-    
+
     /**
      * @brief Compute derived spring constants
      */
@@ -63,7 +63,7 @@ struct DrudeParticle {
         // Thus: k = q_drude² / α
         // In MD units: k[kJ/mol/nm²] = q²[e²] × ONE_4PI_EPS0[kJ·nm/mol/e²] / α[nm³]
         kSpring = charge * charge * DrudeConstants::ONE_4PI_EPS0 / polarizability;
-        
+
         // Anisotropic contributions (if needed)
         if (aniso1Index >= 0 && aniso2Index >= 0) {
             kAniso1 = kSpring * (aniso12 - 1.0);
@@ -85,7 +85,7 @@ struct ScreenedPair {
 
 /**
  * @brief SCF convergence parameters
- * 
+ *
  * Default values optimized for GCMC simulations
  */
 struct DrudeSCFParams {
@@ -104,12 +104,12 @@ struct DrudeSCFParams {
     bool requireConvergence = false;      // If true, throw exception on SCF non-convergence
     int logLevel = 0;                     // Logging level: 0=silent, 1=brief, 2=verbose
     TholeMode tholeMode = TholeMode::StandardS1;  // Thole screening mode (default: standard)
-    
+
     // Small-u softening parameters (OpenMMCompat mode only)
     bool compatSmallUSoftening = false;   // Enable small-u softening for P-D interactions
     double compatUSoftenStart = 0.2;      // u0: below this, S1 approaches 1
     double compatUSoftenEnd = 0.9;        // u1: above this, use standard S1
-    
+
     // OpenMM-exact mode
     bool requireExactMatch = false;       // Enable OpenMM-exact optimizer (default: false)
 };
@@ -132,7 +132,7 @@ enum class DrudeAlgorithm {
 
 /**
  * @brief OPT3 expansion coefficients
- * 
+ *
  * For the expansion: r = c0*r0 + c1*r1 + c2*r2 + c3*r3
  * Default is pure first-order response
  */
@@ -156,18 +156,18 @@ inline double computeTholeScreening(double r, double alpha_i, double alpha_j, do
     if (thole == 0.0) {
         return 1.0;
     }
-    
+
     // Calculate effective polarizability
     double alpha_eff = std::pow(alpha_i * alpha_j, 1.0/6.0);
-    
+
     // Calculate screening parameter u = thole * r / alpha_eff
     double u = thole * r / alpha_eff;
-    
+
     // Avoid numerical issues for very large u
     if (u > 50.0) {
         return 1.0;
     }
-    
+
     // Calculate screening function S(u) = 1 - (1 + u/2) * exp(-u)
     return 1.0 - (1.0 + u / 2.0) * std::exp(-u);
 }

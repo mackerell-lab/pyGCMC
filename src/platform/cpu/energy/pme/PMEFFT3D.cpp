@@ -17,7 +17,7 @@ void fft_1d_batch(cmplx* data, int dimension, int nx, int ny, int nz, bool inver
     // Choose transform size and processing method based on dimension
     int transform_size;
     int num_transforms;
-    
+
     switch (dimension) {
         case 0: // X direction
             transform_size = nx;
@@ -34,19 +34,19 @@ void fft_1d_batch(cmplx* data, int dimension, int nx, int ny, int nz, bool inver
         default:
             throw std::invalid_argument("Invalid dimension for 3D FFT");
     }
-    
+
     // Check if transform size is a power of 2
     if ((transform_size & (transform_size - 1)) != 0) {
         throw std::runtime_error("FFT size must be a power of 2");
     }
-    
+
     // Process each 1D transform
     for (int t = 0; t < num_transforms; t++) {
         int y, z, x;
-        
+
         // Temporary buffer for single transform
         std::vector<cmplx> buffer(transform_size);
-        
+
         // Calculate corresponding 2D index based on dimension
         switch (dimension) {
             case 0: // X direction
@@ -55,53 +55,53 @@ void fft_1d_batch(cmplx* data, int dimension, int nx, int ny, int nz, bool inver
                 // So for fixed (y,z), the x-line has stride ny*nz.
                 y = t % ny;
                 z = t / ny;
-                
+
                 // Read data into buffer
                 for (int x = 0; x < nx; x++) {
                     buffer[x] = data[x * ny * nz + y * nz + z];
                 }
-                
+
                 // Perform FFT/IFFT
                 padded_fft(buffer.data(), transform_size, inverse);
-                
+
                 // Write result back
                 for (int x = 0; x < nx; x++) {
                     data[x * ny * nz + y * nz + z] = buffer[x];
                 }
                 break;
-                
+
             case 1: // Y direction
                 // For fixed (x,z), the y-line has stride nz.
                 x = t / nz;
                 z = t % nz;
-                
+
                 // Read data into buffer
                 for (int y = 0; y < ny; y++) {
                     buffer[y] = data[x * ny * nz + y * nz + z];
                 }
-                
+
                 // Perform FFT/IFFT
                 padded_fft(buffer.data(), transform_size, inverse);
-                
+
                 // Write result back
                 for (int y = 0; y < ny; y++) {
                     data[x * ny * nz + y * nz + z] = buffer[y];
                 }
                 break;
-                
+
             case 2: // Z direction
                 // For fixed (x,y), the z-line is contiguous.
                 x = t / ny;
                 y = t % ny;
-                
+
                 // Read data into buffer
                 for (int z = 0; z < nz; z++) {
                     buffer[z] = data[x * ny * nz + y * nz + z];
                 }
-                
+
                 // Perform FFT/IFFT
                 padded_fft(buffer.data(), transform_size, inverse);
-                
+
                 // Write result back
                 for (int z = 0; z < nz; z++) {
                     data[x * ny * nz + y * nz + z] = buffer[z];

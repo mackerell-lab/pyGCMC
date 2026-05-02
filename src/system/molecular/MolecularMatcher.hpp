@@ -49,7 +49,7 @@ public:
 
 private:
     std::unique_ptr<MolecularValidator> validator_;
-    
+
     // Standard amino acid list
     static const std::set<std::string> standard_amino_acids_;
 
@@ -93,4 +93,4 @@ private:
 } // namespace system
 } // namespace pygcmc
 
-#endif // PYGCMC_SYSTEM_MOLECULAR_MATCHER_HPP 
+#endif // PYGCMC_SYSTEM_MOLECULAR_MATCHER_HPP

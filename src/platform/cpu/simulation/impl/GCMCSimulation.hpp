@@ -28,7 +28,7 @@ namespace simulation {
 
 /**
  * @brief Main GCMC simulation class that coordinates all CPU platform components
- * 
+ *
  * This class provides a complete GCMC simulation framework that:
  * - Reads input files (INP format compatible with gcmc_gpu/gcmc_opencl)
  * - Manages multiple fragment types with individual chemical potentials
@@ -51,20 +51,20 @@ public:
         int randomSeed = -1;                // Random seed (-1 for auto)
         bool strictInpKeys = false;         // Fail if INP contains unknown/ignored keys
         bool strictInpWarnings = false;     // Fail if INP produces heuristic warnings (e.g., unit mistakes)
-        
+
         // Performance options
         bool enableStatistics = true;       // Enable statistics collection
         int movesPerStep = 1;               // Number of moves per MC step (default 1 for proper GCMC)
         int statisticsInterval = 1000;      // Statistics sampling interval
         bool storeProbabilities = false;    // Store acceptance probabilities
-        
+
         // Advanced options
         bool enableAdaptiveSampling = false;  // Adjust move probabilities
         bool enableEnergyMinimization = false; // Minimize after insertion
         double convergenceTolerance = 0.01;    // Convergence criterion
         int maxMoleculesPerType = 10000;       // Max molecules per fragment type (-1 = disabled)
     };
-    
+
     /**
      * @brief Statistics for the simulation
      */
@@ -73,23 +73,23 @@ public:
         int totalSteps = 0;
         int acceptedMoves = 0;
         double acceptanceRate = 0.0;
-        
+
         // Move-specific statistics
         std::map<std::string, int> moveAttempts;
         std::map<std::string, int> moveAccepted;
         std::map<std::string, double> moveAcceptanceRates;
-        
+
         // Fragment-specific statistics
         std::map<std::string, int> fragmentCounts;
         std::map<std::string, double> fragmentDensities;
         std::map<std::string, double> fragmentAcceptanceRates;
-        
+
         // Energy statistics
         double currentEnergy = 0.0;
         double averageEnergy = 0.0;
         double energyStdDev = 0.0;
         std::vector<double> energyHistory;
-        
+
         // Timing
         double totalTime = 0.0;  // seconds
         double timePerStep = 0.0;  // seconds
@@ -175,27 +175,27 @@ public:
 
         // Template information
         movement::FragmentTemplate template_;
-        
+
         // Statistics
         int insertAttempts = 0;
         int insertAccepted = 0;
         int deleteAttempts = 0;
         int deleteAccepted = 0;
     };
-    
+
     // Constructor and destructor
     explicit GCMCSimulation(const Config& config);
     ~GCMCSimulation();
-    
+
     // Main simulation methods
     bool initialize();           // Load input and setup system
     bool run();                 // Run the simulation
     void finalize();            // Clean up and write final output
-    
+
     // Control methods
     void stop() { running_ = false; }
     bool isRunning() const { return running_; }
-    
+
     // Analysis methods
     Statistics getStatistics() const { return stats_; }
     void printStatistics() const;
@@ -203,11 +203,11 @@ public:
     void saveTopology(const std::string& filename) const;
     void saveCheckpoint(const std::string& filename) const;
     bool loadCheckpoint(const std::string& filename);
-    
+
     // Configuration access
     Config getConfig() const { return config_; }
     void updateConfig(const Config& config) { config_ = config; }
-    
+
     // Fragment information access
     std::vector<FragmentInfo> getFragmentInfo() const { return fragmentTypes_; }
 
@@ -228,7 +228,7 @@ private:
     Config config_;
     bool initialized_ = false;
     bool running_ = false;
-    
+
     // Core components
     std::unique_ptr<model::param::Param> params_;
     std::unique_ptr<model::montecarlo::MCState> state_;
@@ -238,22 +238,22 @@ private:
     std::unique_ptr<movement::CavityManager> cavityManager_;  // Cavity bias manager
     movement::RegionConstraint* regionConstraint_ = nullptr;  // Raw pointer to region constraint (owned by engine)
     movement::gcmc::GCMCStatistics statistics_;
-    
+
     // Fragment management
     std::vector<FragmentInfo> fragmentTypes_;
     std::map<std::string, int> fragmentNameToId_;
     std::map<std::string, movement::FragmentTemplate> fragmentTemplatesFromBuilder_;
     std::map<std::string, size_t> atomTypeNameToIndex_;  // Atom type name to force field index mapping
-    
+
     // Force field from builder (if loaded)
     std::shared_ptr<model::ForceField> forceFieldFromBuilder_;
     std::shared_ptr<model::Molecular> molecularFromBuilder_;
-    
+
     // Statistics
     Statistics stats_;
     StatisticsTracker simulationStats_;  // New modular statistics tracker
     std::chrono::steady_clock::time_point startTime_;
-    
+
     // Random number generation
     std::mt19937 rng_;
     std::uniform_real_distribution<double> uniform_;
@@ -290,19 +290,19 @@ private:
     MoveType selectMoveType();
     int selectFragmentType();
     int selectActiveFragment();
-    
+
     // Energy and analysis
     double calculateSystemEnergy();
     void updateStatistics();
     bool checkConvergence();
-    
+
     // Output methods
     void writeStatistics(int step);
     void writeTrajectory(int step);
     void writeCheckpoint(int step);
     void writeFinalResults();
     void outputWaterDensity(int step);
-    
+
     // Logging helper
     template<typename... Args>
     void log(const std::string& format, Args... args) const;

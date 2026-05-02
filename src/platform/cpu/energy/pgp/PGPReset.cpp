@@ -12,13 +12,13 @@ namespace cpu {
 
 void resetPGPState() {
     platform::log(LogLevel::INFO, "Resetting PGP state completely");
-    
+
     // Simply reset the smart pointer - this will automatically:
     // 1. Call destructor of PGPParams which cleans up all vectors
     // 2. Free all memory
     // 3. Next call to getPGPParams() will create a fresh instance
     resetPGPParamsPtr();
-    
+
     platform::log(LogLevel::INFO, "PGP state reset complete");
 }
 

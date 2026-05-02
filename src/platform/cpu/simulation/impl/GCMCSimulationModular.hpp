@@ -22,7 +22,7 @@ namespace simulation {
 
 /**
  * @brief Modular GCMC simulation class
- * 
+ *
  * This is a refactored version that uses separate modules for:
  * - Core simulation logic (SimulationRunner)
  * - System setup (SystemInitializer)
@@ -46,60 +46,60 @@ public:
         int statisticsInterval = 1000;
         double convergenceTolerance = 0.01;
     };
-    
+
     // Constructor and destructor
     explicit GCMCSimulationModular(const Config& config);
     ~GCMCSimulationModular();
-    
+
     // Main simulation methods
     bool initialize();
     bool run();
     void finalize();
-    
+
     // Control methods
     void stop();
     bool isRunning() const;
-    
+
     // Analysis methods
     const StatisticsTracker& getStatistics() const;
     void printStatistics() const;
-    
+
     // Trajectory and checkpoint methods (delegated to IO module)
     void writeTrajectory(int step);
     void writeCheckpoint(int step);
     bool loadCheckpoint(const std::string& filename);
-    
+
     // Configuration access
     const Config& getConfig() const { return config_; }
     void updateConfig(const Config& config);
-    
+
     // Fragment information access
-    std::vector<SystemInitializer::FragmentConfig> getFragmentInfo() const { 
-        return fragmentConfigs_; 
+    std::vector<SystemInitializer::FragmentConfig> getFragmentInfo() const {
+        return fragmentConfigs_;
     }
-    
+
 private:
     // Configuration
     Config config_;
     bool initialized_;
     bool running_;
-    
+
     // Modules
     std::unique_ptr<SimulationRunner> core_;
     std::unique_ptr<SystemInitializer> setup_;
     std::unique_ptr<io::output::TrajectoryWriter> trajectoryWriter_;
     std::unique_ptr<io::output::CheckpointManager> checkpointManager_;
-    
+
     // Core components
     std::unique_ptr<model::param::Param> params_;
     std::unique_ptr<model::montecarlo::MCState> state_;
     std::unique_ptr<movement::gcmc::GCMCEngine> engine_;
     std::unique_ptr<movement::gcmc::GCMCAcceptance> acceptance_;
     std::unique_ptr<movement::MultiTypeReservoir> reservoir_;
-    
+
     // Fragment configuration
     std::vector<SystemInitializer::FragmentConfig> fragmentConfigs_;
-    
+
     // Helper methods
     void log(const std::string& message) const;
 };

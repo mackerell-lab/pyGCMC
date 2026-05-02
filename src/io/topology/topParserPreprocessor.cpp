@@ -19,7 +19,7 @@ bool& TopParserPreprocessor::getDebugFlag() {
 }
 
 bool TopParserPreprocessor::collect_all_lines(const std::string& filename, std::vector<LineInfo>& all_lines,
-                                            PreprocessorState& pp_state, bool is_main_file, 
+                                            PreprocessorState& pp_state, bool is_main_file,
                                             std::set<std::string>& processed_files) {
     // Check if we've already processed this file
     if (processed_files.find(filename) != processed_files.end()) {
@@ -49,7 +49,7 @@ bool TopParserPreprocessor::collect_all_lines(const std::string& filename, std::
         line.erase(std::find_if(line.rbegin(), line.rend(), [](unsigned char ch) {
             return !std::isspace(ch);
         }).base(), line.end());
-        
+
         // Skip empty lines and comments
         if (line.empty() || line[0] == ';') {
             continue;
@@ -95,7 +95,7 @@ bool TopParserPreprocessor::process_preprocessor_line(const std::string& line, c
             include_path.erase(std::find_if(include_path.rbegin(), include_path.rend(), [](unsigned char ch) {
                 return !std::isspace(ch);
             }).base(), include_path.end());
-            
+
             // Remove quotes if present
             if (include_path.front() == '"' && include_path.back() == '"') {
                 include_path = include_path.substr(1, include_path.length() - 2);
@@ -107,7 +107,7 @@ bool TopParserPreprocessor::process_preprocessor_line(const std::string& line, c
                     return false;
                 }
             } else {
-                debug_print("Warning: Include file not found: ", include_path, 
+                debug_print("Warning: Include file not found: ", include_path,
                          " (referenced from ", parent_file, ":", line_number, ")\n");
             }
         }
@@ -116,7 +116,7 @@ bool TopParserPreprocessor::process_preprocessor_line(const std::string& line, c
         std::string macro_name;
         iss >> macro_name;
         bool is_defined = (pp_state.defines.find(macro_name) != pp_state.defines.end());
-        
+
         // If we're already in a skipped section, push false to maintain nesting
         if (pp_state.should_skip()) {
             pp_state.ifdef_stack.push_back(false);
@@ -126,11 +126,11 @@ bool TopParserPreprocessor::process_preprocessor_line(const std::string& line, c
             pp_state.ifdef_stack.push_back(condition_met);
             pp_state.else_encountered.push_back(false);
         }
-        
+
         pp_state.skip_section = pp_state.should_skip();
-        
-        debug_print("Processing ", directive, " ", macro_name, 
-                 ": defined=", is_defined, ", skip=", pp_state.skip_section, 
+
+        debug_print("Processing ", directive, " ", macro_name,
+                 ": defined=", is_defined, ", skip=", pp_state.skip_section,
                  ", stack_size=", pp_state.ifdef_stack.size(), "\n");
     }
     else if (directive == "#else") {
@@ -138,7 +138,7 @@ bool TopParserPreprocessor::process_preprocessor_line(const std::string& line, c
             debug_print("Warning: Unmatched #else at ", parent_file, ":", line_number, "\n");
             return false;
         }
-        
+
         // Only flip the condition if we haven't seen an #else at this level yet
         // AND we're not in an outer skipped section
         if (!pp_state.else_encountered.back()) {
@@ -150,15 +150,15 @@ bool TopParserPreprocessor::process_preprocessor_line(const std::string& line, c
                     break;
                 }
             }
-            
+
             if (!outer_skip) {
                 pp_state.ifdef_stack.back() = !pp_state.ifdef_stack.back();
             }
             pp_state.else_encountered.back() = true;
             pp_state.skip_section = pp_state.should_skip();
-            
-            debug_print("Processing #else: skip=", pp_state.skip_section, 
-                     ", stack_size=", pp_state.ifdef_stack.size(), 
+
+            debug_print("Processing #else: skip=", pp_state.skip_section,
+                     ", stack_size=", pp_state.ifdef_stack.size(),
                      ", outer_skip=", outer_skip, "\n");
         } else {
             debug_print("Warning: Multiple #else directives at the same nesting level at ",
@@ -170,12 +170,12 @@ bool TopParserPreprocessor::process_preprocessor_line(const std::string& line, c
             debug_print("Warning: Unmatched #endif at ", parent_file, ":", line_number, "\n");
             return false;
         }
-        
+
         pp_state.ifdef_stack.pop_back();
         pp_state.else_encountered.pop_back();
         pp_state.skip_section = pp_state.should_skip();
-        
-        debug_print("Processing #endif: skip=", pp_state.skip_section, 
+
+        debug_print("Processing #endif: skip=", pp_state.skip_section,
                  ", stack_size=", pp_state.ifdef_stack.size(), "\n");
     }
     else if (directive == "#define") {
@@ -203,7 +203,7 @@ bool TopParserPreprocessor::process_preprocessor_line(const std::string& line, c
             debug_print("Undefined macro: ", macro_name, "\n");
         }
     }
-    
+
     return true;
 }
 
@@ -212,7 +212,7 @@ void TopParserPreprocessor::parse_sections(const std::vector<LineInfo>& all_line
     std::string current_section;
     for (const auto& line_info : all_lines) {
         const std::string& line = line_info.content;
-        
+
         // Check for section header
         if (line[0] == '[') {
             std::string tmp = line;
@@ -234,7 +234,7 @@ void TopParserPreprocessor::parse_sections(const std::vector<LineInfo>& all_line
                 return !std::isspace(ch);
             }).base(), tmp.end());
             current_section = tmp;
-            
+
             // Ensure section exists in map
             if (sections.find(current_section) == sections.end()) {
                 sections[current_section] = std::vector<LineInfo>();
@@ -251,27 +251,27 @@ void TopParserPreprocessor::parse_sections(const std::vector<LineInfo>& all_line
 
 std::string TopParserPreprocessor::resolve_include_path(const std::string& include_path, const std::string& parent_file) {
     namespace fs = std::filesystem;
-    
+
     // Convert parent path to absolute and get its directory
     fs::path parent_path = fs::absolute(parent_file);
     fs::path parent_dir = parent_path.parent_path();
-    
+
     // Debug output
     debug_print("Resolving include path: ", include_path, "\n",
              "Parent file: ", parent_file, "\n",
              "Parent dir: ", parent_dir.string(), "\n");
-    
+
     // Simply combine parent directory with include path
     fs::path resolved = parent_dir / include_path;
     if (fs::exists(resolved)) {
         debug_print("Found include file at: ", resolved.string(), "\n");
         return resolved.string();
     }
-    
+
     // If not found, provide error message
     debug_print("Warning: Include file not found: ", include_path, "\n",
              "Tried path: ", resolved.string(), "\n");
-    
+
     return "";
 }
 

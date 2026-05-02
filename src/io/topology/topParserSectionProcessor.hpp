@@ -35,7 +35,7 @@ public:
     static SectionProcessorResult process_sections(const std::vector<LineInfo>& all_lines);
 
 private:
-    static void process_moleculetype_section(const std::string& trimmed, 
+    static void process_moleculetype_section(const std::string& trimmed,
                                            [[maybe_unused]] const LineInfo& line_info,
                                            std::string& current_mol_type,
                                            std::vector<std::string>& molecule_types_order,

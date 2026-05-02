@@ -189,7 +189,7 @@ inline double getStoredRosenbluthWeight(const MCState& state, int residueIndex) 
 
 } // namespace
 
-DeletionMove::DeletionMove(ActivePool* activePool, CavityManager* cavityManager, 
+DeletionMove::DeletionMove(ActivePool* activePool, CavityManager* cavityManager,
                            EnergyInterface* energyCalc, CavityBiasCore* cavityCore)
     : activePool_(activePool),
       cavityManager_(cavityManager),
@@ -212,7 +212,7 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     result.logLambda3 = (std::abs(result.lambdaNm - 1.0) > 1e-12)
         ? 3.0 * std::log(result.lambdaNm)
         : 0.0;
-    
+
     // Check for valid box dimensions
     if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
         result.accepted = false;
@@ -222,7 +222,7 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
         stats_.totalAttempts++;
         return result;
     }
-    
+
     // Check if there are any molecules to delete
     if (state.activeResidueCount == 0) {
         result.accepted = false;
@@ -231,31 +231,31 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
         stats_.rejectedEmpty++;
         return result;
     }
-    
+
     // Select residue to delete
     int targetResIdx = residueIndex;
     if (targetResIdx < 0) {
         targetResIdx = selectResidueForDeletion(state);
     }
-    
+
     if (targetResIdx < 0 || targetResIdx >= state.activeResidueCount) {
         result.accepted = false;
         result.rejectReason = "Invalid residue index";
         stats_.totalAttempts++;
         return result;
     }
-    
+
     result.residueIndex = targetResIdx;
     result.moleculeType = state.residues[targetResIdx].type;
     const int speciesCountBefore = move_common::countActiveResiduesOfType(state, result.moleculeType);
     const auto scheduler = params.getBiasedMoveProbabilitySet(result.moleculeType, speciesCountBefore);
     result.logProposalForward = utils::safeLogProbability(scheduler.deletion);
     result.logProposalReverse = utils::safeLogProbability(scheduler.insertion);
-    
+
     // Calculate energy before deletion
     platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyBefore = move_common::sumResiduePairEnergy(state);
-    
+
     // Save residue information for potential restoration
     MCResidue savedResidue = state.residues[targetResIdx];
     std::vector<MCAtom> savedAtoms;
@@ -278,17 +278,17 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
         result.logWReverse = utils::safeLogProbability(storedWeight);
     }
     result.logWForward = 0.0;
-    
+
     // Temporarily mark residue as inactive
     state.residues[targetResIdx].active = false;
-    
+
     // Calculate energy after deletion (with residue marked inactive)
     platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyAfter = move_common::sumResiduePairEnergy(state, targetResIdx, true);
-    
+
     double deltaE = energyAfter - energyBefore;
     result.energyChange = deltaE;
-    
+
     // Calculate system volume from box dimensions
     MovementParams paramsWithVolume = params;
     if (paramsWithVolume.volumeNm3 <= 0.0) {
@@ -296,14 +296,14 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     }
     result.volumeNm3 = paramsWithVolume.volumeNm3;
     result.logVolume = std::log(std::max(result.volumeNm3, 1e-30));
-    
+
     // Calculate cavity bias for deletion if enabled
     // IMPORTANT: Calculate cavity bias in the post-deletion state (residue inactive)
     // This represents the reverse insertion probability
     double cavityBias = 1.0;
     double Vbox = paramsWithVolume.volumeNm3;
     double Vcav_after = Vbox;
-    
+
     if (paramsWithVolume.useCavityBias && cavityCore_) {
         cavityCore_->invalidateCache();
         CavityMode mode = CavityMode::FAST_APPROX;
@@ -314,7 +314,7 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
         cavityBias = cavityManager_->calculateCavityBiasFactor(state, result.moleculeType);
         Vcav_after = cavityBias * Vbox;
     }
-    
+
     // Restore active flag before acceptance decision
     state.residues[targetResIdx].active = true;
 
@@ -332,37 +332,37 @@ MovementResult DeletionMove::performDeletion(MCState& state, const MovementParam
     }
 
     finalizeDeletionAcceptance(result, paramsWithVolume, result.moleculeType, speciesCountBefore);
-    
+
     // Accept or reject
     bool accepted = utils::RandomUtils::metropolisAccept(result.acceptanceProbability);
     result.accepted = accepted;
-    
+
     if (accepted) {
         // Permanently delete the residue
         // Mark as inactive again for deletion
         state.residues[targetResIdx].active = false;
-        
+
         // Directly manipulate state to ensure correct deletion
         // This ensures we delete exactly the residue we tested
         state.removeResidue(targetResIdx);
-        
+
         // Sync pool with the updated state
         if (activePool_) {
             activePool_->syncFromState(state);
         }
-        
+
         // Invalidate cavity cache after accepted deletion
         if (cavityCore_) cavityCore_->invalidateCache();
         if (cavityManager_) cavityManager_->invalidateCache();
-        
+
         stats_.acceptedDeletions++;
     }
     // else: residue is already active from restoration before acceptance decision
-    
+
     // Update statistics
     stats_.totalAttempts++;
     updateStatistics(accepted, deltaE);
-    
+
     return result;
 }
 
@@ -374,7 +374,7 @@ double DeletionMove::calculateDeletionProbability(
     int n,
     double deltaE,
     const MovementParams& params) {
-    
+
     // Get system volume in nm^3
     double volumeNm3 = params.volumeNm3;
     if (volumeNm3 <= 0.0) {
@@ -382,7 +382,7 @@ double DeletionMove::calculateDeletionProbability(
         // before calling this function
         volumeNm3 = 1.0;  // Default fallback
     }
-    
+
     // Use version with thermal wavelength if specified
     if (params.thermalLambdaNm != 1.0) {
         // Use cavity bias = 1.0 for non-cavity case
@@ -412,12 +412,12 @@ double DeletionMove::calculateResidueEnergy(const MCState& state, int residueInd
     if (residueIndex < 0 || residueIndex >= state.activeResidueCount) {
         return 0.0;
     }
-    
+
     const MCResidue& residue = state.residues[residueIndex];
     if (!residue.active) {
         return 0.0;
     }
-    
+
     // Return pre-calculated energy if available
     return residue.energy_vdw + residue.energy_elec;
 }
@@ -428,7 +428,7 @@ void DeletionMove::resetStatistics() {
 
 void DeletionMove::updateStatistics(bool accepted, double energyChange) {
     if (accepted) {
-        stats_.averageEnergyChange = (stats_.averageEnergyChange * stats_.acceptedDeletions + energyChange) / 
+        stats_.averageEnergyChange = (stats_.averageEnergyChange * stats_.acceptedDeletions + energyChange) /
                                      (stats_.acceptedDeletions + 1);
     }
 }

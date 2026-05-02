@@ -24,10 +24,10 @@ class TranslationMove : public MovementInterface {
 public:
     // Constructor
     TranslationMove(ActivePool* activePool, EnergyInterface* energyCalc);
-    
+
     // Destructor
     virtual ~TranslationMove();
-    
+
     // Perform translation attempt
     virtual MovementResult attemptTranslation(MCState& state, const MovementParams& params) override;
     virtual MovementResult attemptInsertion(MCState& /*state*/, const MovementParams& /*params*/) override {
@@ -42,17 +42,17 @@ public:
         // Not implemented in this class
         return MovementResult(false, 0.0, 0.0, "rotate");
     }
-    
+
     // Specific translation method
     MovementResult performTranslation(MCState& state, const MovementParams& params, int residueIndex = -1);
-    
+
     // Batch translation for efficiency
     std::vector<MovementResult> performBatchTranslations(
-        MCState& state, 
-        const MovementParams& params, 
+        MCState& state,
+        const MovementParams& params,
         int numAttempts
     );
-    
+
     // Statistics
     struct Statistics {
         int totalAttempts = 0;
@@ -64,38 +64,38 @@ public:
             return totalAttempts > 0 ? static_cast<double>(acceptedTranslations) / totalAttempts : 0.0;
         }
     };
-    
+
     const Statistics& getStatistics() const { return stats_; }
     void resetStatistics();
-    
+
 protected:
     // Select a residue for translation
     int selectResidueForTranslation(const MCState& state);
-    
+
     // Generate random displacement
     Vector3 generateDisplacement(double maxTranslation);
-    
+
     // Save atom positions for a residue
     std::vector<Vector3> saveAtomPositions(const MCState& state, int residueIndex);
-    
+
     // Restore atom positions for a residue
     void restoreAtomPositions(MCState& state, int residueIndex, const std::vector<Vector3>& positions);
-    
+
     // Translate a residue
     void translateResidue(MCState& state, int residueIndex, const Vector3& displacement);
-    
+
     // Calculate energy before and after translation
     std::pair<double, double> calculateEnergyChange(
-        MCState& state, 
-        int residueIndex, 
+        MCState& state,
+        int residueIndex,
         const Vector3& displacement
     );
-    
+
 private:
     ActivePool* activePool_;
     EnergyInterface* energyCalc_;
     Statistics stats_;
-    
+
     // Update statistics
     void updateStatistics(bool accepted, double displacement, double energyChange);
 };

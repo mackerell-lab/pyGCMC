@@ -12,20 +12,20 @@ namespace cpu {
  * @brief Calculate pair energy for Ewald real-space part
  */
 std::pair<double, double> calcPairEnergyEwaldRealSpace(
-    double r2, double sigma, double eps, double q1, double q2, 
+    double r2, double sigma, double eps, double q1, double q2,
     const model::MCInfo& info,
     bool is_excluded)
-{    
+{
     // Calculate VdW energy using simplified interface
     double vdw_energy = lj::calcLJEnergyWithSwitching(r2, sigma, eps, info);
-    
+
     // Apply minimum safe distance
     if (r2 < MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE) {
         r2 = MIN_SAFE_DISTANCE * MIN_SAFE_DISTANCE;
     }
-    
+
     double r = std::sqrt(r2);
-    
+
     // Calculate electrostatic energy
     double elec_energy;
     if (is_excluded) {
@@ -38,11 +38,11 @@ std::pair<double, double> calcPairEnergyEwaldRealSpace(
         double erfc_term = ewald_params.erfcApprox(r) / r;
         elec_energy = q1 * q2 * erfc_term;
     }
-    
+
     // Apply energy limits
     const double max_safe_energy = static_cast<double>(MAX_SAFE_ENERGY);
     elec_energy = std::min(std::max(elec_energy, -max_safe_energy), max_safe_energy);
-    
+
     return {vdw_energy, elec_energy};
 }
 
@@ -61,10 +61,10 @@ void computeRealSpaceEwald(model::MCState& state, bool movement_only, bool store
             residue.energy_elec = 0.0f;
         }
     }
-    
+
     // Real-space total energy
     double real_space_total = 0.0;
-    
+
     // Debug information
     int debug_count = 0;
     const int max_debug_pairs = 5;
@@ -75,7 +75,7 @@ void computeRealSpaceEwald(model::MCState& state, bool movement_only, bool store
         if(movement_only) {
             bool in_movement = false;
             for(const auto& movementInfo : state.movementResidues) {
-                if(r1 >= movementInfo.startIndex && 
+                if(r1 >= movementInfo.startIndex &&
                    r1 < movementInfo.startIndex + movementInfo.activeCount) {
                     in_movement = true;
                     break;
@@ -88,12 +88,12 @@ void computeRealSpaceEwald(model::MCState& state, bool movement_only, bool store
             if(!residues[r2].active) continue;
 
             // Loop over atom pairs between residues
-            for(int i = residues[r1].atomStart; 
+            for(int i = residues[r1].atomStart;
                 i < residues[r1].atomStart + residues[r1].atomCount; i++) {
-                
+
                 for(int j = residues[r2].atomStart;
                     j < residues[r2].atomStart + residues[r2].atomCount; j++) {
-                    
+
                     // Calculate minimum image distance
                     float dx = atoms[i].x - atoms[j].x;
                     float dy = atoms[i].y - atoms[j].y;
@@ -118,13 +118,13 @@ void computeRealSpaceEwald(model::MCState& state, bool movement_only, bool store
                         // Calculate erfc(αr)/r directly
                         double alphaR = ewald_params.alpha * r;
                         double term = std::erfc(alphaR) / r;
-                        
+
                         // Calculate energy contribution
                         double pair_energy = qi * qj * term;
 
                         // Debug output for first few pairs
                         if (debug_count < max_debug_pairs) {
-                            platform::log(LogLevel::INFO, 
+                            platform::log(LogLevel::INFO,
                                 "Debug EwaldRealSpace: Atom pair (", i, ",", j, "): ",
                                 "r = ", r, " nm, ",
                                 "q1*q2 = ", qi * qj, ", ",
@@ -136,7 +136,7 @@ void computeRealSpaceEwald(model::MCState& state, bool movement_only, bool store
 
                         // Accumulate to total energy
                         real_space_total += pair_energy;
-                        
+
                         // Store energy in residues if requested
                         if (store_in_residues) {
                             // Each residue gets half of the pair interaction energy
@@ -148,7 +148,7 @@ void computeRealSpaceEwald(model::MCState& state, bool movement_only, bool store
             }
         }
     }
-    
+
     // Store total real-space energy (not yet multiplied by COULOMB)
     state.ewald_energy.real_space = real_space_total;
 }
@@ -162,33 +162,33 @@ bool validateRealSpaceParameters(const model::MCState& state) {
         platform::log(LogLevel::ERROR, "Ewald parameters not initialized");
         return false;
     }
-    
+
     // Check periodic boundary conditions
     if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
         platform::log(LogLevel::ERROR, "Ewald method requires periodic boundary conditions");
         return false;
     }
-    
+
     // Check cutoff vs box size
     float minBoxSize = std::min(state.info.box[0], std::min(state.info.box[1], state.info.box[2]));
     if (ewald_params.cutoff >= 0.5f * minBoxSize) {
-        platform::log(LogLevel::WARNING, 
-            "Warning: Cutoff distance (", ewald_params.cutoff, 
-            " nm) is larger than half the smallest box dimension (", 
+        platform::log(LogLevel::WARNING,
+            "Warning: Cutoff distance (", ewald_params.cutoff,
+            " nm) is larger than half the smallest box dimension (",
             minBoxSize/2, " nm). This may affect minimum image convention.");
     }
-    
+
     return true;
 }
 
 /**
  * @brief Get real space energy breakdown by residue
  */
-void getRealSpaceEnergyBreakdown(const model::MCState& state, 
+void getRealSpaceEnergyBreakdown(const model::MCState& state,
                                std::vector<double>& energies) {
     energies.clear();
     energies.reserve(state.activeResidueCount);
-    
+
     for(int i = 0; i < state.activeResidueCount; i++) {
         if(state.residues[i].active) {
             energies.push_back(static_cast<double>(state.residues[i].energy_elec));
@@ -202,4 +202,4 @@ void getRealSpaceEnergyBreakdown(const model::MCState& state,
 
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

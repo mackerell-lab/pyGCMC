@@ -3,7 +3,7 @@
 /**
  * @file MovementAPI.hpp
  * @brief Public API for GCMC movement operations
- * 
+ *
  * This file provides the public interface for movement operations,
  * extracted from the simulation module to provide direct access to
  * CPU movement functions.
@@ -74,7 +74,7 @@ inline void runGCMCSteps(int nSteps) {
     if (SystemLogger::isDebugEnabled()) {
         SystemLogger::debug("Running ", nSteps, " GCMC steps");
     }
-    
+
     getGlobalGCMCModule()->runSteps(nSteps);
 }
 
@@ -94,21 +94,21 @@ inline std::map<std::string, double> getGCMCStatistics() {
 /**
  * @brief Add a fragment to the reservoir
  */
-inline void addFragmentToReservoir(const std::string& name, 
+inline void addFragmentToReservoir(const std::string& name,
                                    const std::vector<MCAtom>& atoms,
                                    double chemicalPotential = -15.7) {
     if (SystemLogger::isDebugEnabled()) {
-        SystemLogger::debug("Adding fragment '", name, "' to reservoir with ", 
+        SystemLogger::debug("Adding fragment '", name, "' to reservoir with ",
                            atoms.size(), " atoms and chemical potential ", chemicalPotential);
     }
-    
+
     // Create and add fragment to the reservoir
     // Note: Actual implementation depends on FragmentTemplate structure
     // For now, just acknowledge the parameters to avoid warnings
     (void)name;
     (void)atoms;
     (void)chemicalPotential;
-    
+
     // TODO: Implement when FragmentTemplate is available
     // FragmentTemplate tmpl;
     // tmpl.name = name;
@@ -185,7 +185,7 @@ inline bool attemptRotation(MCState& state, int residueIndex) {
     if (SystemLogger::isDebugEnabled()) {
         SystemLogger::debug("Attempting rotation of residue ", residueIndex);
     }
-    // Ensure state is initialized in GCMC module  
+    // Ensure state is initialized in GCMC module
     getGlobalGCMCModule()->initialize(state);
     // TODO: Pass residueIndex to the move selector when available
     (void)residueIndex; // Acknowledge parameter to avoid warning

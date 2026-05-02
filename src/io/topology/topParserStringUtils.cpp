@@ -17,11 +17,11 @@ model::Topology TopParserStringUtils::parse_string(const std::string& top_str) {
     if (trimmed_str.empty()) {
         return model::Topology();
     }
-    
+
     // Create a temporary file to write the string to
     std::filesystem::path temp_dir = std::filesystem::temp_directory_path();
     std::filesystem::path temp_file = temp_dir / "temp_topology.top";
-    
+
     // Write the string to the temporary file
     std::ofstream out(temp_file);
     if (!out) {
@@ -29,14 +29,14 @@ model::Topology TopParserStringUtils::parse_string(const std::string& top_str) {
     }
     out << top_str;  // Write original string to preserve formatting
     out.close();
-    
+
     try {
         // Parse the temporary file
         model::Topology topology = TOPParser::parse_file(temp_file.string());
-        
+
         // Clean up
         std::filesystem::remove(temp_file);
-        
+
         return topology;
     } catch (const std::exception& e) {
         // Clean up on error

@@ -10,7 +10,7 @@ namespace io {
 
 SectionProcessorResult TopParserSectionProcessor::process_sections(const std::vector<LineInfo>& all_lines) {
     SectionProcessorResult result;
-    
+
     // Parse sections using state machine
     std::string current_mol_type;
     bool inside_molecule = false;
@@ -30,7 +30,7 @@ SectionProcessorResult TopParserSectionProcessor::process_sections(const std::ve
             section_name = TopParserUtilities::trim(section_name);
 
             // Convert to lowercase
-            std::transform(section_name.begin(), section_name.end(), 
+            std::transform(section_name.begin(), section_name.end(),
                          section_name.begin(), ::tolower);
 
             if (section_name == "moleculetype") {
@@ -38,7 +38,7 @@ SectionProcessorResult TopParserSectionProcessor::process_sections(const std::ve
                 current_mol_type.clear();
                 current_section = "moleculetype";
                 result.found_valid_section = true;
-                TopParserUtilities::debug_print("\n=== Found [ moleculetype ] section at ", line_info.source_file, 
+                TopParserUtilities::debug_print("\n=== Found [ moleculetype ] section at ", line_info.source_file,
                          ":" , line_info.line_number, " ===\n");
             }
             else if (section_name == "molecules") {
@@ -46,13 +46,13 @@ SectionProcessorResult TopParserSectionProcessor::process_sections(const std::ve
                 current_mol_type.clear();
                 current_section = "molecules";
                 result.found_valid_section = true;
-                TopParserUtilities::debug_print("\n=== Found [ molecules ] section at ", line_info.source_file, 
+                TopParserUtilities::debug_print("\n=== Found [ molecules ] section at ", line_info.source_file,
                          ":" , line_info.line_number, " ===\n");
             }
             else if (inside_molecule) {
                 current_section = section_name;
                 result.found_valid_section = true;
-                TopParserUtilities::debug_print("Found [ ", section_name, " ] section for molecule ", 
+                TopParserUtilities::debug_print("Found [ ", section_name, " ] section for molecule ",
                          current_mol_type, "\n");
             }
             else {
@@ -65,7 +65,7 @@ SectionProcessorResult TopParserSectionProcessor::process_sections(const std::ve
         if (inside_molecule) {
             if (current_section == "moleculetype") {
                 process_moleculetype_section(trimmed, line_info,
-                                            current_mol_type, 
+                                            current_mol_type,
                                             result.molecule_types_order,
                                             result.molecule_atoms_temp,
                                             result.molecule_bonds_temp,
@@ -78,13 +78,13 @@ SectionProcessorResult TopParserSectionProcessor::process_sections(const std::ve
                     result.molecule_atoms_temp[current_mol_type].push_back(line_info);
                     auto tokens = TopParserUtilities::split(trimmed);
                     if (tokens.size() >= 4) {
-                        TopParserUtilities::debug_print("Added atom to ", current_mol_type, ": ", 
-                                 tokens[0], " ", tokens[1], " (residue ", 
+                        TopParserUtilities::debug_print("Added atom to ", current_mol_type, ": ",
+                                 tokens[0], " ", tokens[1], " (residue ",
                                  tokens[3], ")\n");
                     }
                 }
                 else if (current_section == "settles") {
-                    TopParserUtilities::debug_print("Found settles for ", current_mol_type, ": ", 
+                    TopParserUtilities::debug_print("Found settles for ", current_mol_type, ": ",
                              trimmed, "\n");
                 }
                 else if (current_section == "bonds") {
@@ -101,7 +101,7 @@ SectionProcessorResult TopParserSectionProcessor::process_sections(const std::ve
                 }
                 else if (current_section == "cmap") {
                     result.molecule_cmaps_temp[current_mol_type].push_back(line_info);
-                    TopParserUtilities::debug_print("Found CMAP entry for ", current_mol_type, ": ", 
+                    TopParserUtilities::debug_print("Found CMAP entry for ", current_mol_type, ": ",
                              trimmed, "\n");
                 }
             }
@@ -110,7 +110,7 @@ SectionProcessorResult TopParserSectionProcessor::process_sections(const std::ve
             result.molecules_lines.push_back(line_info);
             auto tokens = TopParserUtilities::split(trimmed);
             if (tokens.size() >= 2) {
-                TopParserUtilities::debug_print("Found molecule in [ molecules ]: ", tokens[0], 
+                TopParserUtilities::debug_print("Found molecule in [ molecules ]: ", tokens[0],
                          " count=", tokens[1], "\n");
             }
         }
@@ -123,7 +123,7 @@ SectionProcessorResult TopParserSectionProcessor::process_sections(const std::ve
     return result;
 }
 
-void TopParserSectionProcessor::process_moleculetype_section(const std::string& trimmed, 
+void TopParserSectionProcessor::process_moleculetype_section(const std::string& trimmed,
                                                            const LineInfo& line_info,
                                                            std::string& current_mol_type,
                                                            std::vector<std::string>& molecule_types_order,
@@ -137,25 +137,25 @@ void TopParserSectionProcessor::process_moleculetype_section(const std::string& 
     if (tokens.size() >= 2) {
         current_mol_type = tokens[0];
         int current_molecule_nrexcl = std::stoi(tokens[1]);
-        
+
         // If this molecule type already exists, we'll override it
-        auto it = std::find(molecule_types_order.begin(), molecule_types_order.end(), 
+        auto it = std::find(molecule_types_order.begin(), molecule_types_order.end(),
                           current_mol_type);
         if (it != molecule_types_order.end()) {
             molecule_types_order.erase(it);
-            TopParserUtilities::debug_print("Warning: Overriding previous definition of molecule type ", 
+            TopParserUtilities::debug_print("Warning: Overriding previous definition of molecule type ",
                      current_mol_type, "\n");
         }
         molecule_types_order.push_back(current_mol_type);
-        
+
         // Clear all previous definitions for this molecule type
         molecule_atoms_temp[current_mol_type].clear();
         molecule_bonds_temp[current_mol_type].clear();
         molecule_angles_temp[current_mol_type].clear();
         molecule_dihedrals_temp[current_mol_type].clear();
         molecule_impropers_temp[current_mol_type].clear();
-        
-        TopParserUtilities::debug_print("Processing moleculetype: ", current_mol_type, 
+
+        TopParserUtilities::debug_print("Processing moleculetype: ", current_mol_type,
                  "(nrexcl=", current_molecule_nrexcl, ")\n");
     }
 }
@@ -165,7 +165,7 @@ void TopParserSectionProcessor::process_molecules_section(const std::vector<Line
                                                         std::vector<std::pair<std::string, int>>& molecule_order,
                                                         std::set<std::string>& used_molecule_types) {
     TopParserUtilities::debug_print("\n=== Processing [ molecules ] section ===\n");
-    
+
     if (!molecules_lines.empty()) {
         for (const auto& line_info : molecules_lines) {
             std::string line_no_comment = TopParserUtilities::remove_comment(line_info.content);

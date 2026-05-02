@@ -323,7 +323,7 @@ void InpParserMain::validate_parameters(model::Param& param) {
     // For GCMC simulations with fragment top files (fragitp), we don't require PDB or TOP files
     // Only validate them if they're provided
     bool has_fragitp = !file_info.fragment_top_files.empty();
-    
+
     // If no fragment files, then we need both PDB and TOP for a valid simulation
     // Check in the order expected by tests: top first, then pdb
     if (!has_fragitp) {
@@ -334,7 +334,7 @@ void InpParserMain::validate_parameters(model::Param& param) {
             throw std::runtime_error("Missing required parameter: pdb");
         }
     }
-    
+
     // Fragment parameter consistency checks
     // Both fragconc and fragmuex are optional
     if (!fragment_info.conc_list.empty() &&
@@ -368,7 +368,7 @@ void InpParserMain::validate_parameters(model::Param& param) {
             throw std::runtime_error("Invalid fragconc: must be non-negative");
         }
     }
-    
+
     // Grid and space checks
     if (space_info.grid_spacing <= 0.0f) {
         throw std::runtime_error("Invalid grid_dx: must be positive");
@@ -376,10 +376,10 @@ void InpParserMain::validate_parameters(model::Param& param) {
     if (space_info.cutoff <= 0.0f) {
         throw std::runtime_error("Invalid cutoff: must be positive");
     }
-    
+
     // Only check volume if box_size was actually provided (not all zeros)
-    bool box_provided = (space_info.box_size[0] > 0.0f || 
-                         space_info.box_size[1] > 0.0f || 
+    bool box_provided = (space_info.box_size[0] > 0.0f ||
+                         space_info.box_size[1] > 0.0f ||
                          space_info.box_size[2] > 0.0f);
     if (box_provided && space_info.volume <= 0.0f) {
         throw std::runtime_error("Invalid box_size: volume must be positive");

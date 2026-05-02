@@ -15,7 +15,7 @@ namespace cpu {
 
 /**
  * @brief OPT3 optimizer for Drude positions
- * 
+ *
  * Uses perturbation theory expansion to approximate Drude positions:
  * r = c0*r0 + c1*r1 + c2*r2 + c3*r3
  */
@@ -23,26 +23,26 @@ class DrudeOPT3 : public DrudeOptimizer {
 public:
     DrudeOPT3() = default;
     ~DrudeOPT3() = default;
-    
+
     bool optimize(
         model::MCState& state,
         const std::vector<DrudeParticle>& particles,
         const std::vector<ScreenedPair>& screenedPairs,
         const DrudeSCFParams& params
     ) override;
-    
+
     const char* getName() const override { return "OPT3"; }
-    
+
     /**
      * @brief Set expansion coefficients
      */
     void setCoefficients(const OPT3Coefficients& coeffs) {
         m_coefficients = coeffs;
     }
-    
+
 private:
     OPT3Coefficients m_coefficients;
-    
+
     /**
      * @brief Calculate electric field at atom positions
      * @param state MCState containing atom positions and charges
@@ -58,7 +58,7 @@ private:
         const std::vector<ScreenedPair>& screenedPairs,
         bool includeDrudes
     ) const;
-    
+
     /**
      * @brief Check if two atoms are in the same molecule/residue
      */

@@ -47,24 +47,24 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
     // This supports gcmc_gpu/opencl style inputs where the TOP describes the protein/framework,
     // while fragment ITPs define the GCMC species (which may already appear in the initial PDB).
     std::vector<std::shared_ptr<Residue>> extraStructureResidues;
-    
+
     // Step 1: Parse INP file
     log("Parsing INP file: " + config_.inpFile);
     result.parameters = parseINP(config_.inpFile);
     if (!result.parameters) {
         throw std::runtime_error("Failed to parse INP file");
     }
-    
+
     // Determine base directory for resolving relative paths
     std::filesystem::path baseDir = std::filesystem::path(config_.inpFile).parent_path();
     if (baseDir.empty()) {
         baseDir = std::filesystem::current_path();
     }
-    
+
     const auto& fileInfo = result.parameters->get_file_info();
     io::ItpNonbondedParser::Result itpNonbonded;
     bool itpNonbondedLoaded = false;
-    
+
     // Step 2: Load PDB structure if available
     std::shared_ptr<Structure> structure;
     if (config_.loadStructure && !fileInfo.input_pdb_file.empty()) {
@@ -138,7 +138,7 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
             throw;
         }
     }
-    
+
     // Step 3: Load TOP topology if available
     std::shared_ptr<Topology> topology;
     if (config_.loadTopology && !fileInfo.topology_file.empty()) {
@@ -155,7 +155,7 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
             throw;
         }
     }
-    
+
     // Step 4: Load PAR force field parameters if available
     // NOTE: gcmc_gpu uses GROMACS .itp for nonbonded; existing PRMParser targets CHARMM .prm/.str.
     if (config_.loadParameters && !fileInfo.par_files.empty()) {
@@ -244,7 +244,7 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
             log("Warning: Failed to load parameters: " + std::string(e.what()));
         }
     }
-    
+
     // Step 4b: Load fragment templates if available
     if (!fileInfo.fragment_top_files.empty()) {
         log("Loading fragment templates");
@@ -252,19 +252,19 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
         for (const auto& fragFile : fileInfo.fragment_top_files) {
             resolvedFragFiles.push_back(resolveFilePath(fragFile, baseDir));
         }
-        result.fragmentTemplates = loadFragmentTemplates(resolvedFragFiles, 
+        result.fragmentTemplates = loadFragmentTemplates(resolvedFragFiles,
                                                          result.parameters,
                                                          baseDir);
         log("Loaded " + std::to_string(result.fragmentTemplates.size()) + " fragment templates");
     }
-    
+
     // Step 5: Combine molecular data if we have BOTH structure and topology with actual data
     if (result.structureLoaded && result.topologyLoaded) {
         log("Combining molecular data");
         // Use already loaded structure instead of re-loading
-        
+
         // Only combine if we have actual atoms
-        if (structure && structure->get_atoms().size() > 0 && 
+        if (structure && structure->get_atoms().size() > 0 &&
             topology && topology->get_num_atoms() > 0) {
             try {
                 result.molecular = combineMolecular(structure, topology, result.forceField);
@@ -342,11 +342,11 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
             result.topologyLoaded = false;
         }
     }
-    
+
     // Step 6: Initialize MC state
     log("Initializing MC state");
     result.mcState = std::make_shared<montecarlo::MCState>();
-    
+
     // Use MCInitializer if we have complete molecular data with actual atoms.
     // NOTE: This should work even when force field parameters are provided as GROMACS ITP
     // (via ItpNonbondedParser) and no CHARMM ForceField object is available.
@@ -544,7 +544,7 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
         // Fall back to empty state with box dimensions from INP
         const auto& spaceInfo = result.parameters->get_space_info();
         result.mcState->setBoxDimensions(spaceInfo.box_size[0], spaceInfo.box_size[1], spaceInfo.box_size[2]);
-        
+
         // Set temperature
         const auto& mcInfo = result.parameters->get_mc_info();
         result.mcState->info.beta = mcInfo.beta;
@@ -816,7 +816,7 @@ SimulationInputBuilder::Result SimulationInputBuilder::build() {
 
         log("Seeded " + std::to_string(seededFragments) + " initial fragment residues from PDB into MCState");
     }
-    
+
     return result;
 }
 
@@ -824,13 +824,13 @@ std::map<std::string, platform::cpu::movement::FragmentTemplate> SimulationInput
     const std::vector<std::string>& fragItpFiles,
     const std::shared_ptr<model::param::Param>& parameters,
     const std::filesystem::path& baseDir) {
-    
+
     std::map<std::string, platform::cpu::movement::FragmentTemplate> templates;
-    
+
     if (!parameters) {
         throw std::runtime_error("Parameters not available for fragment template loading");
     }
-    
+
     // Get fragment info from parameters for matching
     const auto& fragNames = parameters->get_file_info().fragment_names;
     const auto& fragConcs = parameters->get_fragment_info().conc_list;
@@ -841,11 +841,11 @@ std::map<std::string, platform::cpu::movement::FragmentTemplate> SimulationInput
     if (!monomerDir.empty()) {
         monomerDirResolved = std::filesystem::path(resolveFilePath(monomerDir, baseDir));
     }
-    
+
     for (size_t i = 0; i < fragItpFiles.size(); ++i) {
         const auto& itpFile = fragItpFiles[i];
         log("Loading fragment template from: " + itpFile);
-        
+
         // Check if file exists
         std::ifstream file(itpFile);
         if (!file.good()) {
@@ -853,7 +853,7 @@ std::map<std::string, platform::cpu::movement::FragmentTemplate> SimulationInput
             throw std::runtime_error("Fragment template not found: " + itpFile);
         }
         file.close();
-        
+
         // Resolve fragment name: prefer INP fragname list (aligned by index with fragitp),
         // fallback to ITP filename stem if missing.
         std::filesystem::path itpPath(itpFile);
@@ -889,19 +889,19 @@ std::map<std::string, platform::cpu::movement::FragmentTemplate> SimulationInput
             }
         }
         const std::string coordPdbPath = !coordPdb.empty() ? coordPdb.string() : "";
-        
+
         // Use FragmentLibrary to load the ITP file
         io::topology::FragmentLibrary fragLib;
         if (!fragLib.loadFromITP(itpFile, fragName, templates.size(), coordPdbPath)) {
             throw std::runtime_error("Failed to parse fragment template: " + itpFile);
         }
-        
+
         // Get the fragment data
         auto fragmentData = fragLib.get(fragName);
         if (!fragmentData) {
             throw std::runtime_error("Failed to retrieve fragment data for: " + fragName);
         }
-        
+
         // Build complete FragmentTemplate
         platform::cpu::movement::FragmentTemplate tmpl;
         tmpl.name = fragmentData->name;
@@ -919,7 +919,7 @@ std::map<std::string, platform::cpu::movement::FragmentTemplate> SimulationInput
             bond.length = 0.0;
             tmpl.bonds.push_back(bond);
         }
-        
+
         // Assign concentration and chemical potential by index (fragitp order).
         if (i < fragConcs.size()) {
             tmpl.concentration = fragConcs[i];
@@ -930,18 +930,18 @@ std::map<std::string, platform::cpu::movement::FragmentTemplate> SimulationInput
         // Calculate activity: z = exp(β*μ) (acceptance uses its own activity model; this is for completeness)
         const double beta = parameters->get_mc_info().beta;
         tmpl.activity = std::exp(beta * tmpl.chemicalPotential);
-        
+
         templates[tmpl.name] = tmpl;
-        log("Loaded fragment " + tmpl.name + " with " + 
+        log("Loaded fragment " + tmpl.name + " with " +
             std::to_string(tmpl.atoms.size()) + " atoms, " +
             "conc=" + std::to_string(tmpl.concentration) + " M, " +
             "μ=" + std::to_string(tmpl.chemicalPotential) + " kJ/mol");
     }
-    
+
     if (templates.empty() && !fragItpFiles.empty()) {
         throw std::runtime_error("Failed to load any fragment templates");
     }
-    
+
     return templates;
 }
 
@@ -958,7 +958,7 @@ std::shared_ptr<model::Structure> SimulationInputBuilder::loadPDB(const std::str
         throw std::runtime_error("PDB file not found: " + filename);
     }
     file.close();
-    
+
     auto structure = std::make_shared<model::Structure>();
     io::structure::PdbParserMain::parse_to_structure(filename, *structure);
     return structure;
@@ -971,7 +971,7 @@ std::shared_ptr<model::Topology> SimulationInputBuilder::loadTopology(const std:
         throw std::runtime_error("Topology file not found: " + filename);
     }
     file.close();
-    
+
     auto topology = std::make_shared<model::Topology>();
 
     std::string ext = std::filesystem::path(filename).extension().string();
@@ -994,9 +994,9 @@ std::shared_ptr<model::Topology> SimulationInputBuilder::loadTopology(const std:
 
 std::shared_ptr<model::ForceField> SimulationInputBuilder::loadParameters(
     const std::vector<std::string>& parFiles) {
-    
+
     auto forceField = std::make_shared<model::ForceField>();
-    
+
     for (const auto& parFile : parFiles) {
         try {
             log("Loading parameters from: " + parFile);
@@ -1005,7 +1005,7 @@ std::shared_ptr<model::ForceField> SimulationInputBuilder::loadParameters(
             log("Warning: Failed to load " + parFile + ": " + e.what());
         }
     }
-    
+
     return forceField;
 }
 
@@ -1013,12 +1013,12 @@ std::shared_ptr<model::Molecular> SimulationInputBuilder::combineMolecular(
     const std::shared_ptr<model::Structure>& structure,
     const std::shared_ptr<model::Topology>& topology,
     const std::shared_ptr<model::ForceField>& /*forceField*/) {
-    
+
     system::molecular::MolecularCombiner combiner;
-    
+
     // Create molecular system
     auto molecular = std::make_shared<model::Molecular>();
-    
+
     if (structure && topology) {
         // Combine structure and topology
         molecular = combiner.combine(structure, topology);
@@ -1033,39 +1033,39 @@ std::shared_ptr<model::Molecular> SimulationInputBuilder::combineMolecular(
         molecular->angles = topology->get_angles();
         molecular->dihedrals = topology->get_dihedrals();
     }
-    
+
     // Note: ForceField is separate and not stored in Molecular
-    
+
     return molecular;
 }
 
 std::shared_ptr<model::MCState> SimulationInputBuilder::initializeMCState(
     const std::shared_ptr<model::Molecular>& molecular,
     const std::shared_ptr<model::ForceField>& forceField) {
-    
+
     auto mcState = std::make_shared<model::MCState>();
-    
+
     if (molecular) {
         system::montecarlo::MCInitializer initializer;
         initializer.initializeFromMolecular(*mcState, molecular);
-        
+
         if (forceField) {
             initializer.initializeForceField(*mcState, *forceField);
         }
     }
-    
+
     return mcState;
 }
 
-std::string SimulationInputBuilder::resolveFilePath(const std::string& path, 
+std::string SimulationInputBuilder::resolveFilePath(const std::string& path,
                                                     const std::filesystem::path& baseDir) const {
     std::filesystem::path filePath(path);
-    
+
     // If path is already absolute, return as-is
     if (filePath.is_absolute()) {
         return path;
     }
-    
+
     // Otherwise resolve relative to base directory
     std::filesystem::path resolved = baseDir / filePath;
     return resolved.string();

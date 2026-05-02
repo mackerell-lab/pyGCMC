@@ -37,7 +37,7 @@ bool TOPParser::parse_to_topology(const std::string& filename, model::Topology& 
     if (!TopParserPreprocessor::collect_all_lines(filename, all_lines, pp_state, true, processed_files_)) {
         return false;
     }
-    
+
     if (all_lines.empty()) {
         TopParserUtilities::debug_print("Error: No valid content found in topology file\n");
         return false;
@@ -45,7 +45,7 @@ bool TOPParser::parse_to_topology(const std::string& filename, model::Topology& 
 
     // Process sections
     SectionProcessorResult result = TopParserSectionProcessor::process_sections(all_lines);
-    
+
     // Return false if no valid sections were found
     if (!result.found_valid_section) {
         TopParserUtilities::debug_print("Error: No valid topology sections found in file\n");

@@ -20,14 +20,14 @@ namespace cpu {
 
 /**
  * @brief Use PGP method to calculate system energy
- * 
+ *
  * @param state MC state
  */
 void computeSystemEnergyPGPImpl(model::MCState& state);
 
 /**
  * @brief Use PGP method to calculate energy of moving residues
- * 
+ *
  * @param state MC state
  */
 void computeMovementEnergyPGPImpl(model::MCState& state);
@@ -46,4 +46,4 @@ void computeMovementEnergyPGP(model::MCState& state);
 } // namespace platform
 } // namespace pygcmc
 
-#endif // PGPSYSTEMENERGY_HPP 
+#endif // PGPSYSTEMENERGY_HPP

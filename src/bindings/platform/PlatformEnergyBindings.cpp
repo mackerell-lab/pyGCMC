@@ -16,49 +16,49 @@ void init_energy_bindings(py::module& m) {
     // Create platform and cpu submodules if they don't exist
     py::module m_platform;
     py::module m_cpu;
-    
+
     // Check if platform submodule already exists
     if (!py::hasattr(m, "platform")) {
         m_platform = m.def_submodule("platform", "Platform-specific implementations");
     } else {
         m_platform = m.attr("platform");
     }
-    
+
     // Check if cpu submodule already exists
     if (!py::hasattr(m_platform, "cpu")) {
         m_cpu = m_platform.def_submodule("cpu", "CPU implementations");
     } else {
         m_cpu = m_platform.attr("cpu");
     }
-    
+
     // Expose energy calculation functions
     m_cpu.def("computeSystemEnergyPBCCutoff",
               &pygcmc::platform::cpu::computeSystemEnergyPBCCutoff,
               py::arg("state"),
               "Compute full system energy with PBC and cutoff");
-    
+
     m_cpu.def("computeResidueEnergyCutoffPBC",
               &pygcmc::platform::cpu::computeResidueEnergyCutoffPBC,
               py::arg("state"),
               py::arg("residue_idx"),
               "Compute single residue interaction energy with PBC and cutoff");
-    
+
     // Also expose other useful energy functions
     m_cpu.def("computeSystemEnergy",
               &pygcmc::platform::cpu::computeSystemEnergy,
               py::arg("state"),
               "Compute full system energy without cutoff");
-    
+
     m_cpu.def("computeSystemEnergyCutoff",
               &pygcmc::platform::cpu::computeSystemEnergyCutoff,
               py::arg("state"),
               "Compute full system energy with cutoff but no PBC");
-    
+
     m_cpu.def("computeSystemEnergyPBC",
               &pygcmc::platform::cpu::computeSystemEnergyPBC,
               py::arg("state"),
               "Compute full system energy with PBC but no cutoff");
-    
+
     m_cpu.def("computeMovementEnergyCutoff",
               &pygcmc::platform::cpu::computeMovementEnergyCutoff,
               py::arg("state"),
@@ -69,7 +69,7 @@ void init_energy_bindings(py::module& m) {
         .value("FixedOnly", pygcmc::platform::cpu::ResiduePartnerFilter::FixedOnly)
         .value("NonFixedOnly", pygcmc::platform::cpu::ResiduePartnerFilter::NonFixedOnly)
         .export_values();
-    
+
     m_cpu.def("computeResidueNonbondedEnergy",
               &pygcmc::platform::cpu::computeResidueNonbondedEnergy,
               py::arg("state"),

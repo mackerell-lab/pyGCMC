@@ -12,7 +12,7 @@ namespace system {
 
 /**
  * @brief Original System class for backward compatibility
- * 
+ *
  * This class maintains the exact same interface as the original System class,
  * but internally delegates to the new modular implementation.
  */
@@ -21,16 +21,16 @@ public:
     // Static log control (backward compatibility)
     static bool& verbose_;
     static common::LogLevel& log_level_;
-    
+
     // Logging functionality (delegated to log::LogMain)
     static void set_verbose(bool verbose) {
         log::LogMain::set_verbose(verbose);
     }
-    
+
     static void set_log_level(common::LogLevel level) {
         log::LogMain::set_log_level(level);
     }
-    
+
     // Template logging function (delegated to log::LogMain)
     template<typename... Args>
     static void log(common::LogLevel level, Args... args) {
@@ -53,4 +53,4 @@ inline common::LogLevel& System::log_level_ = common::LoggingState::system_level
 } // namespace system
 } // namespace pygcmc
 
-#endif // PYGCMC_SYSTEM_COMMON_SYSTEMMAIN_HPP 
+#endif // PYGCMC_SYSTEM_COMMON_SYSTEMMAIN_HPP

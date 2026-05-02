@@ -31,15 +31,15 @@ struct ProposalInfo {
     Vector3 position;                     // Position in nm
     double normalizationFactor = 1.0;     // q_norm for detailed balance
     ProposalType type = ProposalType::Uniform;
-    
+
     // Cavity-specific
     bool usedCavity = false;
     double cavityBiasFactor = 1.0;        // Ntotal/Ncav
-    
+
     // Multi-insertion
     int numProposals = 1;                 // M_proposal
     double regionVolume = -1.0;            // V_region in nm³
-    
+
     /**
      * Calculate normalization for acceptance
      */

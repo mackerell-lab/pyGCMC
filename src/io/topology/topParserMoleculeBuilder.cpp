@@ -26,7 +26,7 @@ bool TopParserMoleculeBuilder::build_molecules(model::Topology& topology, const 
             continue;
         }
 
-        if (!add_molecule_copies(topology, mol_type, count, mol_index, atom_offset, 
+        if (!add_molecule_copies(topology, mol_type, count, mol_index, atom_offset,
                                atoms_per_molecule, result)) {
             return false;
         }
@@ -57,7 +57,7 @@ std::map<std::string, int> TopParserMoleculeBuilder::count_atoms_per_molecule(co
                 auto tokens = TopParserUtilities::split(TopParserUtilities::remove_comment(line_info.content));
                 if (tokens.size() >= 8) {
                     atom_count++;
-                    TopParserUtilities::debug_print("  Atom ", tokens[0], " (", tokens[1], 
+                    TopParserUtilities::debug_print("  Atom ", tokens[0], " (", tokens[1],
                              ") in residue ", tokens[3], "\n");
                 }
             }
@@ -111,7 +111,7 @@ bool TopParserMoleculeBuilder::add_molecule_instance(model::Topology& topology,
     if (atoms_it != result.molecule_atoms_temp.end()) {
         if (!TopParserSections::parse_atoms_section(atoms_it->second, topology, segment_name)) {
             const auto& line = atoms_it->second.front();
-            TopParserUtilities::debug_print("Error parsing atoms for molecule ", mol_type, 
+            TopParserUtilities::debug_print("Error parsing atoms for molecule ", mol_type,
                      " at ", line.source_file, ":", line.line_number, "\n");
             return false;
         }
@@ -123,7 +123,7 @@ bool TopParserMoleculeBuilder::add_molecule_instance(model::Topology& topology,
     if (bonds_it != result.molecule_bonds_temp.end()) {
         if (!TopParserSections::parse_bonds_section(bonds_it->second, topology, atom_offset)) {
             const auto& line = bonds_it->second.front();
-            TopParserUtilities::debug_print("Error parsing bonds for molecule ", mol_type, 
+            TopParserUtilities::debug_print("Error parsing bonds for molecule ", mol_type,
                      " at ", line.source_file, ":", line.line_number, "\n");
             return false;
         }
@@ -135,7 +135,7 @@ bool TopParserMoleculeBuilder::add_molecule_instance(model::Topology& topology,
     if (angles_it != result.molecule_angles_temp.end()) {
         if (!TopParserSections::parse_angles_section(angles_it->second, topology, atom_offset)) {
             const auto& line = angles_it->second.front();
-            TopParserUtilities::debug_print("Error parsing angles for molecule ", mol_type, 
+            TopParserUtilities::debug_print("Error parsing angles for molecule ", mol_type,
                      " at ", line.source_file, ":", line.line_number, "\n");
             return false;
         }
@@ -147,7 +147,7 @@ bool TopParserMoleculeBuilder::add_molecule_instance(model::Topology& topology,
     if (dihedrals_it != result.molecule_dihedrals_temp.end()) {
         if (!TopParserSections::parse_dihedrals_section(dihedrals_it->second, topology, atom_offset)) {
             const auto& line = dihedrals_it->second.front();
-            TopParserUtilities::debug_print("Error parsing dihedrals for molecule ", mol_type, 
+            TopParserUtilities::debug_print("Error parsing dihedrals for molecule ", mol_type,
                      " at ", line.source_file, ":", line.line_number, "\n");
             return false;
         }
@@ -159,7 +159,7 @@ bool TopParserMoleculeBuilder::add_molecule_instance(model::Topology& topology,
     if (impropers_it != result.molecule_impropers_temp.end()) {
         if (!TopParserSections::parse_impropers_section(impropers_it->second, topology, atom_offset)) {
             const auto& line = impropers_it->second.front();
-            TopParserUtilities::debug_print("Error parsing impropers for molecule ", mol_type, 
+            TopParserUtilities::debug_print("Error parsing impropers for molecule ", mol_type,
                      " at ", line.source_file, ":", line.line_number, "\n");
             return false;
         }
@@ -171,7 +171,7 @@ bool TopParserMoleculeBuilder::add_molecule_instance(model::Topology& topology,
     if (cmaps_it != result.molecule_cmaps_temp.end()) {
         if (!TopParserSections::parse_cmaps_section(cmaps_it->second, topology, atom_offset)) {
             const auto& line = cmaps_it->second.front();
-            TopParserUtilities::debug_print("Error parsing CMAPs for molecule ", mol_type, 
+            TopParserUtilities::debug_print("Error parsing CMAPs for molecule ", mol_type,
                      " at ", line.source_file, ":", line.line_number, "\n");
             return false;
         }

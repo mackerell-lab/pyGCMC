@@ -6,68 +6,68 @@
 /**
  * @file ModelModule.hpp
  * @brief Model Module - Unified Entry Point for All Data Structures
- * 
+ *
  * This is the ONLY header file you need to include to access all molecular modeling
  * data structures and utilities in the GCMC simulation framework. The module provides
  * a complete data layer for molecular systems, force fields, and Monte Carlo states.
- * 
+ *
  * **Module Organization:**
- * 
+ *
  * **atom** - Atomic-Level Data (Core + Inheritance Pattern)
  * - AtomCore.hpp: Foundation class with 25+ properties (coordinates, force field parameters, PDB fields)
  * - AtomMain.hpp: Extended class adding PDB formatting, validation, and comparison operators
- * 
+ *
  * **residue** - Residue-Level Composition (Core + Composition Pattern)
  * - ResidueCore.hpp: Pure data structures including secondary structure and disulfide bond support
  * - ResidueMain.hpp: Container class managing atom collections with validation and center-of-mass calculation
- * 
+ *
  * **molecule** - Molecular System Integration (Single File)
  * - MolecularMain.hpp: Data fusion class combining structural (PDB) and topological (PSF/TOP) information
  *   with standardized CMAP handling and comprehensive lookup mappings
- * 
+ *
  * **topology** - Molecular Connectivity (4-File Modular Pattern)
  * - TopologyStructures.hpp: Data structures for atoms, bonds, angles, dihedrals, and special features
  * - TopologyOperations.hpp: Static methods for adding topology elements with hierarchical validation
  * - TopologyQueries.hpp: Static methods for finding, checking, and counting topology elements
  * - TopologyMain.hpp: Main interface class delegating to operations and queries with private data storage
- * 
+ *
  * **forcefield** - Force Field Parameters (3-File Optimized Pattern)
  * - ForceFieldTypes.hpp: Parameter type definitions for LJ, bonded, and NBFIX interactions
  * - ForceFieldAccessors.hpp: Comprehensive inline implementations with smart key generation and symmetry
  * - ForceFieldMain.hpp: Main class declaration providing parameter access interface
- * 
+ *
  * **montecarlo** - Monte Carlo Simulation (2-File Efficient Pattern)
  * - MCStructures.hpp: Performance-optimized data structures for simulation state and type mapping
  * - MCMain.hpp: Complete MCState class with atom/residue management and statistics tracking
- * 
+ *
  * **param** - Simulation Parameters (4-File Modular Pattern)
  * - ParamStructures.hpp: Seven parameter structure definitions covering all GCMC simulation aspects
  * - ParamOperations.hpp: Static utility methods for parameter updates and derived value calculations
  * - ParamQueries.hpp: Validation, string conversion, and parameter query methods
  * - ParamMain.hpp: Main interface class with complete delegation to operations and queries
- * 
+ *
  * **structure** - Basic Structural Data (Single File)
  * - StructureMain.hpp: Simple container for atoms, residues, and secondary structure elements
- * 
+ *
  * **Usage Examples:**
- * 
+ *
  * ```cpp
  * #include "model/ModelModule.hpp"
  * using namespace pygcmc::model;
- * 
+ *
  * // Create molecular components
  * auto molecular = std::make_shared<Molecular>();
  * auto topology = std::make_shared<Topology>();
  * auto mcstate = std::make_shared<MCState>();
- * 
+ *
  * // Version info
  * std::cout << "Version: " << getModelVersion() << std::endl;
  * ```
- * 
+ *
  * **Backward Compatibility:**
  * All original APIs (Atom, Residue, Molecular, etc.) are preserved through
  * direct type aliases. Existing code requires no changes when upgrading.
- * 
+ *
  * **Design Philosophy:**
  * - Single header inclusion for all data structure functionality
  * - Optimal pattern selection: each module uses the best file organization for its complexity
@@ -139,4 +139,4 @@ inline const char* getModelVersion() {
 } // namespace model
 } // namespace pygcmc
 
-#endif // PYGCMC_MODEL_MODULE_HPP 
+#endif // PYGCMC_MODEL_MODULE_HPP

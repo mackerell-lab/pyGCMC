@@ -10,14 +10,14 @@ namespace cpu {
 
 /**
  * @brief Calculate grid indices and fractional coordinates for atoms
- * 
+ *
  * @param state MC state
  * @param atomsToProcess List of atom indices to process
  * @param recipBoxVectors Reciprocal lattice vectors
  * @param gridIndices Output grid indices for each atom
  * @param gridFractions Output fractional coordinates for each atom
  */
-void calculateGridIndicesAndFractions(const model::MCState& state, 
+void calculateGridIndicesAndFractions(const model::MCState& state,
                                      const std::vector<int>& atomsToProcess,
                                      const double recipBoxVectors[3][3],
                                      std::vector<std::vector<int>>& gridIndices,
@@ -25,7 +25,7 @@ void calculateGridIndicesAndFractions(const model::MCState& state,
 
 /**
  * @brief Calculate B-spline coefficients for all atoms
- * 
+ *
  * @param atomsToProcess List of atom indices to process
  * @param gridFractions Fractional coordinates for each atom
  * @param bsplines_theta Output B-spline coefficients
@@ -36,7 +36,7 @@ void calculateBSplineCoefficients(const std::vector<int>& atomsToProcess,
 
 /**
  * @brief Distribute charges to the grid
- * 
+ *
  * @param state MC state
  * @param atomsToProcess List of atom indices to process
  * @param gridIndices Grid indices for each atom
@@ -52,4 +52,4 @@ double distributeChargesToGrid(const model::MCState& state,
 } // namespace platform
 } // namespace pygcmc
 
-#endif // PMEGRIDMAPPING_HPP 
+#endif // PMEGRIDMAPPING_HPP

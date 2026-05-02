@@ -21,7 +21,7 @@ inline void ForceField::add_lj_params(const std::string& type, double epsilon, d
     lj_params_[type] = LJParams{epsilon, rmin_half};
 }
 
-inline void ForceField::add_nbfix(const std::string& type1, const std::string& type2, 
+inline void ForceField::add_nbfix(const std::string& type1, const std::string& type2,
                                  double epsilon, double rmin) {
     auto key = ForceField::makeTypePair(type1, type2);
     nbfix_[key] = NBFIXParams{epsilon, rmin};
@@ -70,7 +70,7 @@ inline const LJParams& ForceField::get_lj_params(const std::string& type) const 
     return it->second;
 }
 
-inline std::pair<NBFIXParams, bool> ForceField::get_nbfix(const std::string& type1, 
+inline std::pair<NBFIXParams, bool> ForceField::get_nbfix(const std::string& type1,
                                                          const std::string& type2) const {
     auto key = ForceField::makeTypePair(type1, type2);
     auto it = nbfix_.find(key);
@@ -97,14 +97,14 @@ inline const AngleParams& ForceField::get_angle_params(const std::string& type1,
     if (it != angle_params_.end()) {
         return it->second;
     }
-    
+
     auto key2 = std::make_tuple(type3, type2, type1);
     it = angle_params_.find(key2);
     if (it != angle_params_.end()) {
         return it->second;
     }
-    
-    throw std::runtime_error("Angle parameters not found for types: " + 
+
+    throw std::runtime_error("Angle parameters not found for types: " +
                            type1 + "-" + type2 + "-" + type3);
 }
 
@@ -233,4 +233,4 @@ inline void ForceField::set_drude_global_params(double tcut, int maxnbthole) {
 } // namespace model
 } // namespace pygcmc
 
-#endif // PYGCMC_MODEL_FORCEFIELD_ACCESSORS_HPP 
+#endif // PYGCMC_MODEL_FORCEFIELD_ACCESSORS_HPP

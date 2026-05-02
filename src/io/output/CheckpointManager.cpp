@@ -21,32 +21,32 @@ bool CheckpointManager::saveCheckpoint(const model::montecarlo::MCState& state,
                                       int step,
                                       const std::string& filename) {
     std::string fname = filename.empty() ? generateFilename(step) : filename;
-    
+
     std::ofstream out(fname, std::ios::binary);
     if (!out) {
         std::cerr << "Failed to open checkpoint file: " << fname << std::endl;
         return false;
     }
-    
+
     // Write header
     if (!writeHeader(out, config_.version)) {
         return false;
     }
-    
+
     // Write step
     out.write(reinterpret_cast<const char*>(&step), sizeof(step));
-    
+
     // Write state dimensions
-    out.write(reinterpret_cast<const char*>(&state.activeAtomCount), 
+    out.write(reinterpret_cast<const char*>(&state.activeAtomCount),
              sizeof(state.activeAtomCount));
-    out.write(reinterpret_cast<const char*>(&state.activeResidueCount), 
+    out.write(reinterpret_cast<const char*>(&state.activeResidueCount),
              sizeof(state.activeResidueCount));
-    
+
     // Write box
     for (double dim : state.periodicBox) {
         out.write(reinterpret_cast<const char*>(&dim), sizeof(dim));
     }
-    
+
     // Write atoms (simplified)
     for (int i = 0; i < state.activeAtomCount; ++i) {
         const auto& atom = state.atoms[i];
@@ -54,16 +54,16 @@ bool CheckpointManager::saveCheckpoint(const model::montecarlo::MCState& state,
         out.write(reinterpret_cast<const char*>(&atom.y), sizeof(atom.y));
         out.write(reinterpret_cast<const char*>(&atom.z), sizeof(atom.z));
     }
-    
+
     // Write statistics (basic info)
     size_t totalSteps = stats.getTotalSteps();
     size_t totalAccepted = stats.getTotalAccepted();
     double currentEnergy = stats.getCurrentEnergy();
-    
+
     out.write(reinterpret_cast<const char*>(&totalSteps), sizeof(totalSteps));
     out.write(reinterpret_cast<const char*>(&totalAccepted), sizeof(totalAccepted));
     out.write(reinterpret_cast<const char*>(&currentEnergy), sizeof(currentEnergy));
-    
+
     return true;
 }
 
@@ -74,34 +74,34 @@ bool CheckpointManager::loadCheckpoint(model::montecarlo::MCState& state,
     if (!validateCheckpoint(filename)) {
         return false;
     }
-    
+
     std::ifstream in(filename, std::ios::binary);
     if (!in) {
         std::cerr << "Failed to open checkpoint file: " << filename << std::endl;
         return false;
     }
-    
+
     // Read header
     int version;
     if (!readHeader(in, version)) {
         return false;
     }
-    
+
     // Read step
     in.read(reinterpret_cast<char*>(&step), sizeof(step));
-    
+
     // Read state dimensions
-    in.read(reinterpret_cast<char*>(&state.activeAtomCount), 
+    in.read(reinterpret_cast<char*>(&state.activeAtomCount),
            sizeof(state.activeAtomCount));
-    in.read(reinterpret_cast<char*>(&state.activeResidueCount), 
+    in.read(reinterpret_cast<char*>(&state.activeResidueCount),
            sizeof(state.activeResidueCount));
-    
+
     // Read box
     state.periodicBox.resize(3);
     for (double& dim : state.periodicBox) {
         in.read(reinterpret_cast<char*>(&dim), sizeof(dim));
     }
-    
+
     // Read atoms
     state.atoms.resize(state.activeAtomCount);
     for (int i = 0; i < state.activeAtomCount; ++i) {
@@ -110,22 +110,22 @@ bool CheckpointManager::loadCheckpoint(model::montecarlo::MCState& state,
         in.read(reinterpret_cast<char*>(&atom.y), sizeof(atom.y));
         in.read(reinterpret_cast<char*>(&atom.z), sizeof(atom.z));
     }
-    
+
     // Read statistics
     size_t totalSteps, totalAccepted;
     double currentEnergy;
-    
+
     in.read(reinterpret_cast<char*>(&totalSteps), sizeof(totalSteps));
     in.read(reinterpret_cast<char*>(&totalAccepted), sizeof(totalAccepted));
     in.read(reinterpret_cast<char*>(&currentEnergy), sizeof(currentEnergy));
-    
+
     // Reset stats and restore basic info
     stats.reset();
     for (size_t i = 0; i < totalSteps; ++i) {
         stats.recordMove("restore", "fragment", i < totalAccepted);
     }
     stats.recordEnergy(currentEnergy);
-    
+
     return true;
 }
 
@@ -134,11 +134,11 @@ bool CheckpointManager::validateCheckpoint(const std::string& filename) const {
     if (!in) {
         return false;
     }
-    
+
     // Check magic number
     char magic[5] = {0};
     in.read(magic, 4);
-    
+
     return std::string(magic) == "GCMC";
 }
 

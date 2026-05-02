@@ -28,11 +28,11 @@ struct CavityGrid {
     Vector3 box;      // Box dimensions in nm
     int nx, ny, nz;   // Grid dimensions
     std::vector<bool> occupied;
-    
+
     int getIndex(int i, int j, int k) const {
         return i + j * nx + k * nx * ny;
     }
-    
+
     bool isValid(int i, int j, int k) const {
         return i >= 0 && i < nx && j >= 0 && j < ny && k >= 0 && k < nz;
     }
@@ -43,25 +43,25 @@ class CavityBiasCore {
 public:
     CavityBiasCore(double gridSpacing = 0.25, double probeRadius = 0.14);
     ~CavityBiasCore() = default;
-    
+
     // Main interface
     double calculateCavityVolume(const MCState& state, CavityMode mode, int speciesId = -1);
     Vector3 proposeCavityPosition(const MCState& state, CavityMode mode);
     void invalidateCache() { cacheValid_ = false; }
-    
+
     // Configuration
-    void setGridSpacing(double spacing) { 
-        gridSpacing_ = spacing; 
+    void setGridSpacing(double spacing) {
+        gridSpacing_ = spacing;
         invalidateCache();  // Invalidate cache when parameters change
     }
-    void setProbeRadius(double radius) { 
-        probeRadius_ = radius; 
+    void setProbeRadius(double radius) {
+        probeRadius_ = radius;
         invalidateCache();  // Invalidate cache when parameters change
     }
 
     void setSpeciesParameters(int speciesId, double gridSpacing, double probeRadius, int maskId = -1);
     void clearSpeciesParameters();
-    
+
 private:
     struct SpeciesParameters {
         double gridSpacingNm = -1.0;
@@ -72,24 +72,24 @@ private:
     // Grid building
     void buildGrid(const MCState& state);
     void markOccupied(const MCState& state);
-    
+
     // Mode-specific calculations
     double calculateFastApprox(const MCState& state);
     double calculateClusterVolume(const MCState& state);
     double calculateLocalVeff(const MCState& state, const Vector3& pos);
-    
+
     // Sampling
     Vector3 sampleFastApprox();
     Vector3 sampleClusterVolume();
     Vector3 sampleLocalVeff(const MCState& state);
-    
+
     // Helper functions
     std::vector<std::vector<int>> findClusters();
     double distance(const Vector3& a, const Vector3& b) const;
     bool isIdealGas(const MCState& state) const;
     SpeciesParameters resolveSpeciesParameters(int speciesId) const;
     void applySpeciesParameters(int speciesId);
-    
+
     // Member variables
     double gridSpacing_;  // nm
     double probeRadius_;  // nm

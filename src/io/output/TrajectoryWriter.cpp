@@ -67,7 +67,7 @@ inline std::string formatAtomNameForPDB(const std::string& element, const std::s
     // Strip spaces
     name.erase(std::remove_if(name.begin(), name.end(), ::isspace), name.end());
     if (name.empty()) name = element;  // Use element as fallback
-    
+
     std::ostringstream oss;
     if (element.size() == 1 && name.size() < 4) {
         // One-letter element: right-justify in 4 columns with leading space
@@ -92,25 +92,25 @@ bool TrajectoryWriter::open(const std::string& filename) {
     if (isOpen_) {
         close();
     }
-    
+
     std::string fname = filename.empty() ? generateFilename(0) : filename;
     file_.open(fname);
-    
+
     if (!file_.is_open()) {
         std::cerr << "Failed to open trajectory file: " << fname << std::endl;
         return false;
     }
-    
+
     isOpen_ = true;
     currentFilename_ = fname;
-    
+
     // Write header for PDB format
     if (config_.format == "pdb") {
         file_ << "REMARK   PyGCMC Trajectory File\n";
         std::time_t now = std::time(nullptr);
         file_ << "REMARK   Created: " << std::put_time(std::localtime(&now), "%Y-%m-%d %H:%M:%S") << "\n";
     }
-    
+
     return true;
 }
 
@@ -139,7 +139,7 @@ bool TrajectoryWriter::writeTrajectory(const model::montecarlo::MCState& state,
             return false;
         }
     }
-    
+
     // Write based on format
     bool success = false;
     if (config_.format == "pdb") {
@@ -151,17 +151,17 @@ bool TrajectoryWriter::writeTrajectory(const model::montecarlo::MCState& state,
     } else if (config_.format == "top") {
         success = writeTOP(state, step, file_);
     }
-    
+
     if (success) {
         frameCount_++;
         file_.flush();  // Ensure data is written
     }
-    
+
     // If not writing continuous trajectory, close after each write
     if (!config_.continuousFile) {
         close();
     }
-    
+
     return success;
 }
 
@@ -172,7 +172,7 @@ bool TrajectoryWriter::writePDB(const model::montecarlo::MCState& state,
     if (config_.multiFrame) {
         out << "MODEL " << std::setw(8) << frameCount_ + 1 << "\n";
     }
-    
+
     // Write crystal information
     std::vector<double> box;
     if (!state.periodicBox.empty() && state.periodicBox.size() >= 3) {
@@ -182,24 +182,24 @@ bool TrajectoryWriter::writePDB(const model::montecarlo::MCState& state,
         box = {state.info.box[0], state.info.box[1], state.info.box[2]};
     }
     writePDBBox(out, box);
-    
+
     // Write atoms
     int atomSerial = 1;
-    
+
     // Check if we have residues to work with
     if (!state.residues.empty()) {
         // Write by residues
         for (size_t i = 0; i < state.residues.size(); ++i) {
             const auto& residue = state.residues[i];
             if (!residue.active) continue;
-            
+
             std::string resName = !residue.resname.empty() ? residue.resname : "UNK";
             int resSeq = (residue.resid > 0) ? residue.resid : static_cast<int>(i + 1);
-            
+
             for (int j = 0; j < residue.atomCount; ++j) {
                 int atomIdx = residue.atomStart + j;
                 if (atomIdx >= static_cast<int>(state.atoms.size())) continue;
-                
+
                 const auto& atom = state.atoms[atomIdx];
                 // Try to get type name for better element inference
                 std::string typeName = "";
@@ -208,7 +208,7 @@ bool TrajectoryWriter::writePDB(const model::montecarlo::MCState& state,
                 }
                 std::string element = inferElementSymbol(typeName, atom.name);
                 std::string atomNamePDB = formatAtomNameForPDB(element, atom.name);
-                
+
                 out << formatPDBAtom(atomSerial++, atomNamePDB, resName, resSeq,
                                    atom.x * 10.0,  // nm to Angstrom
                                    atom.y * 10.0,
@@ -229,7 +229,7 @@ bool TrajectoryWriter::writePDB(const model::montecarlo::MCState& state,
             }
             std::string element = inferElementSymbol(typeName, atom.name);
             std::string atomNamePDB = formatAtomNameForPDB(element, atom.name);
-            
+
             out << formatPDBAtom(atomSerial++, atomNamePDB, "UNK", i + 1,
                                atom.x * 10.0,  // nm to Angstrom
                                atom.y * 10.0,
@@ -239,11 +239,11 @@ bool TrajectoryWriter::writePDB(const model::montecarlo::MCState& state,
                                element);
         }
     }
-    
+
     if (config_.multiFrame) {
         out << "ENDMDL\n";
     }
-    
+
     return true;
 }
 
@@ -253,7 +253,7 @@ bool TrajectoryWriter::writeXYZ(const model::montecarlo::MCState& state,
     // Count actual atoms
     int atomCount = 0;
     double totalEnergy = 0.0;
-    
+
     if (!state.residues.empty()) {
         for (const auto& residue : state.residues) {
             if (residue.active) {
@@ -269,21 +269,21 @@ bool TrajectoryWriter::writeXYZ(const model::montecarlo::MCState& state,
     } else {
         atomCount = state.activeAtomCount;
     }
-    
+
     // Write XYZ header
     out << atomCount << "\n";
-    out << "Frame " << step << " Energy: " << std::fixed << std::setprecision(6) 
+    out << "Frame " << step << " Energy: " << std::fixed << std::setprecision(6)
         << totalEnergy << "\n";
-    
+
     // Write atoms
     if (!state.residues.empty()) {
         for (const auto& residue : state.residues) {
             if (!residue.active) continue;
-            
+
             for (int j = 0; j < residue.atomCount; ++j) {
                 int atomIdx = residue.atomStart + j;
                 if (atomIdx >= static_cast<int>(state.atoms.size())) continue;
-                
+
                 const auto& atom = state.atoms[atomIdx];
                 // Try to get type name for better element inference
                 std::string typeName = "";
@@ -291,7 +291,7 @@ bool TrajectoryWriter::writeXYZ(const model::montecarlo::MCState& state,
                     typeName = state.atomTypes.getTypeName(atom.type);
                 }
                 std::string element = inferElementSymbol(typeName, atom.name);
-                
+
                 out << std::setw(2) << element
                     << std::fixed << std::setprecision(8)
                     << std::setw(16) << atom.x * 10.0  // nm to Angstrom
@@ -309,7 +309,7 @@ bool TrajectoryWriter::writeXYZ(const model::montecarlo::MCState& state,
                 typeName = state.atomTypes.getTypeName(atom.type);
             }
             std::string element = inferElementSymbol(typeName, atom.name);
-            
+
             out << std::setw(2) << element
                 << std::fixed << std::setprecision(8)
                 << std::setw(16) << atom.x * 10.0
@@ -318,7 +318,7 @@ bool TrajectoryWriter::writeXYZ(const model::montecarlo::MCState& state,
                 << "\n";
         }
     }
-    
+
     return true;
 }
 
@@ -328,7 +328,7 @@ bool TrajectoryWriter::writeDAT(const model::montecarlo::MCState& state,
     // Write simple data format: step, n_molecules, total_energy, box_volume
     int activeMolecules = 0;
     double totalEnergy = 0.0;
-    
+
     // Only access residues if they exist
     if (!state.residues.empty()) {
         for (const auto& residue : state.residues) {
@@ -341,7 +341,7 @@ bool TrajectoryWriter::writeDAT(const model::montecarlo::MCState& state,
         // Fallback: count active atoms as molecules
         activeMolecules = state.activeAtomCount;
     }
-    
+
     // Calculate volume from periodic box or info.box
     double volume = 0.0;
     if (!state.periodicBox.empty() && state.periodicBox.size() >= 3) {
@@ -349,14 +349,14 @@ bool TrajectoryWriter::writeDAT(const model::montecarlo::MCState& state,
     } else {
         volume = state.info.box[0] * state.info.box[1] * state.info.box[2];
     }
-    
+
     out << std::setw(10) << step
         << std::setw(10) << activeMolecules
         << std::fixed << std::setprecision(6)
         << std::setw(15) << totalEnergy
         << std::setw(15) << volume
         << "\n";
-    
+
     return true;
 }
 
@@ -365,38 +365,38 @@ bool TrajectoryWriter::writeTOP(const model::montecarlo::MCState& state,
                                std::ofstream& out) {
     // Write topology information
     out << "# PyGCMC Topology File\n";
-    
+
     // Write box information if available
     if (!state.periodicBox.empty() && state.periodicBox.size() >= 3) {
-        out << "# Box: " << state.periodicBox[0] << " " << state.periodicBox[1] 
+        out << "# Box: " << state.periodicBox[0] << " " << state.periodicBox[1]
             << " " << state.periodicBox[2] << " nm\n";
     } else {
         // info.box is a fixed array [3]
-        out << "# Box: " << state.info.box[0] << " " << state.info.box[1] 
+        out << "# Box: " << state.info.box[0] << " " << state.info.box[1]
             << " " << state.info.box[2] << " nm\n";
     }
-    
+
     // Write temperature if beta is available
     if (state.info.beta > 0) {
         // Use the BOLTZMANN constant from MCInfo
         double temperature = 1.0 / (state.info.beta * model::montecarlo::MCInfo::BOLTZMANN);
-        out << "# Temperature: " << std::fixed << std::setprecision(2) 
+        out << "# Temperature: " << std::fixed << std::setprecision(2)
             << temperature << " K\n";
     }
     out << "\n";
-    
+
     // Write atom types section
     out << "[ atomtypes ]\n";
     out << "; type  mass  charge  sigma  epsilon\n";
-    
+
     // Write each atom type
     for (int i = 0; i < state.forcefield.numTotalTypes; ++i) {
         std::string typeName = "T" + std::to_string(i);
-        
+
         // Get LJ parameters
         double sigma = 0.3;  // Default
         double eps = 0.5;    // Default
-        
+
         // Try to get actual parameters if available
         if (!state.forcefield.ljSigmaType.empty() && i < static_cast<int>(state.forcefield.ljSigmaType.size())) {
             sigma = state.forcefield.ljSigmaType[i];
@@ -409,7 +409,7 @@ bool TrajectoryWriter::writeTOP(const model::montecarlo::MCState& state,
                 eps = state.forcefield.ljEps[idx];
             }
         }
-        
+
         out << std::setw(6) << typeName
             << std::setw(8) << "12.01"  // Default mass
             << std::setw(8) << "0.0"    // Default charge
@@ -418,17 +418,17 @@ bool TrajectoryWriter::writeTOP(const model::montecarlo::MCState& state,
             << std::setw(8) << eps
             << "\n";
     }
-    
+
     // Write molecules section
     out << "\n[ molecules ]\n";
     out << "; molname  count\n";
-    
+
     // Count molecule types
     std::map<std::string, int> molCounts;
     if (!state.residues.empty()) {
         for (size_t i = 0; i < state.residues.size(); ++i) {
             if (state.residues[i].active) {
-                std::string molName = !state.residues[i].resname.empty() ? 
+                std::string molName = !state.residues[i].resname.empty() ?
                     state.residues[i].resname : ("MOL" + std::to_string(state.residues[i].type));
                 molCounts[molName]++;
             }
@@ -437,11 +437,11 @@ bool TrajectoryWriter::writeTOP(const model::montecarlo::MCState& state,
         // Fallback if no residues
         molCounts["MOL"] = state.activeAtomCount;
     }
-    
+
     for (const auto& [name, count] : molCounts) {
         out << std::setw(10) << name << std::setw(8) << count << "\n";
     }
-    
+
     return true;
 }
 
@@ -449,7 +449,7 @@ std::string TrajectoryWriter::generateFilename(int step) const {
     std::stringstream ss;
     ss << config_.prefix << "_";
     ss << std::setfill('0') << std::setw(8) << step;
-    
+
     if (config_.format == "pdb") {
         ss << ".pdb";
     } else if (config_.format == "xyz") {
@@ -459,24 +459,24 @@ std::string TrajectoryWriter::generateFilename(int step) const {
     } else {
         ss << ".traj";
     }
-    
+
     return ss.str();
 }
 
 void TrajectoryWriter::writePDBHeader(std::ofstream& out, int step) const {
     out << "REMARK GCMC Trajectory\n";
     out << "REMARK Step: " << step << "\n";
-    
+
     std::time_t now = std::time(nullptr);
-    out << "REMARK Generated: " 
-        << std::put_time(std::localtime(&now), "%Y-%m-%d %H:%M:%S") 
+    out << "REMARK Generated: "
+        << std::put_time(std::localtime(&now), "%Y-%m-%d %H:%M:%S")
         << "\n";
 }
 
 void TrajectoryWriter::writePDBBox(std::ofstream& out,
                                   const std::vector<double>& box) const {
     if (box.size() >= 3) {
-        out << "CRYST1" 
+        out << "CRYST1"
             << std::fixed << std::setprecision(3)
             << std::setw(9) << box[0] * 10.0  // nm to Angstrom
             << std::setw(9) << box[1] * 10.0
@@ -497,39 +497,39 @@ std::string TrajectoryWriter::formatPDBAtom(int serial,
                                            double tempFactor,
                                            const std::string& element) const {
     std::ostringstream oss;
-    
+
     // PDB format: strict column alignment
     oss << "ATOM  ";
     oss << std::right << std::setw(5) << serial;
     oss << " ";
-    
+
     // Atom name: centered if less than 4 chars
     if (atomName.length() < 4) {
         oss << " " << std::left << std::setw(3) << atomName;
     } else {
         oss << std::left << std::setw(4) << atomName.substr(0, 4);
     }
-    
+
     oss << " ";
     oss << std::right << std::setw(3) << resName.substr(0, 3);
     oss << " ";
     oss << " ";  // Chain ID
     oss << std::right << std::setw(4) << resSeq;
     oss << "    ";  // Insertion code + blanks
-    
+
     oss << std::fixed << std::setprecision(3);
     oss << std::right << std::setw(8) << x;
     oss << std::right << std::setw(8) << y;
     oss << std::right << std::setw(8) << z;
-    
+
     oss << std::fixed << std::setprecision(2);
     oss << std::right << std::setw(6) << occupancy;
     oss << std::right << std::setw(6) << tempFactor;
-    
+
     oss << "          ";  // 10 blanks
     oss << std::right << std::setw(2) << element;
     oss << "\n";
-    
+
     return oss.str();
 }
 
@@ -553,7 +553,7 @@ void DataWriter::close() {
 
 void DataWriter::writeHeader(const std::vector<std::string>& columns) {
     if (headerWritten_) return;
-    
+
     file_ << "# ";
     for (size_t i = 0; i < columns.size(); ++i) {
         file_ << std::setw(14) << columns[i];

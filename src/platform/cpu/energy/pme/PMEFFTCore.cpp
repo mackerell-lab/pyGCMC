@@ -20,22 +20,22 @@ private:
     std::vector<cmplx> weights;
     mutable std::mutex weights_mutex;
     int current_size = 0;
-    
+
 public:
     // Get weights for given size, initializing if necessary
     const cmplx* getWeights(int size, int k) {
         std::lock_guard<std::mutex> lock(weights_mutex);
-        
+
         // Check if we need to resize/reinitialize
         if (weights.size() < static_cast<size_t>(size) || current_size != size) {
             weights.resize(size);
             tfft_init(k, weights.data());
             current_size = size;
         }
-        
+
         return weights.data();
     }
-    
+
     // Clear weights safely
     void clear() {
         std::lock_guard<std::mutex> lock(weights_mutex);
@@ -76,13 +76,13 @@ int bit_reverse(int x, int n) {
 void apply_bit_reverse(cmplx* A, int k) {
     const int m = 1 << k;
     std::vector<cmplx> temp(m);
-    
+
     // Copy data to temporary array, reordering by bit-reversed order
     for (int i = 0; i < m; i++) {
         int j = bit_reverse(i, k);
         temp[i] = A[j];
     }
-    
+
     // Copy back to original array
     for (int i = 0; i < m; i++) {
         A[i] = temp[i];
@@ -158,7 +158,7 @@ void tfft_fft(int k, cmplx *A, const cmplx *w) {
         u <<= 2;
         v >>= 2;
     }
-    
+
     // Add bit-reverse sorting to make results compatible with FFTW
     apply_bit_reverse(A, k);
 }
@@ -168,15 +168,15 @@ void tfft_fft(int k, cmplx *A, const cmplx *w) {
  */
 void tfft_ifft(int k, cmplx *A, const cmplx *w) {
     const int m = 1 << k;
-    
+
     // Step 1: Conjugate input data
     for (int i = 0; i < m; i++) {
         A[i] = std::conj(A[i]);
     }
-    
+
     // Step 2: Use forward FFT transform
     tfft_fft(k, A, w);
-    
+
     // Step 3: Conjugate result again and normalize
     for (int i = 0; i < m; i++) {
         A[i] = std::conj(A[i]) / static_cast<double>(m);
@@ -201,18 +201,18 @@ int log2_power_of_2(int n) {
 void padded_fft(cmplx* data, int actual_size, bool inverse) {
     // Check if it's a power of two
     bool is_power_of_two = (actual_size & (actual_size - 1)) == 0;
-    
+
     if (!is_power_of_two) {
         platform::log(LogLevel::ERROR, "padded_fft received non-power-of-two size", actual_size);
         throw std::runtime_error("FFT size must be a power of 2");
     }
-    
+
     // Calculate k where 2^k = actual_size
     int k = log2_power_of_2(actual_size);
-    
+
     // Get weights from thread-safe manager
     const cmplx* w = getWeightsManager().getWeights(actual_size, k);
-    
+
     // Execute FFT
     if (inverse) {
         tfft_ifft(k, data, w);
@@ -242,7 +242,7 @@ void tfft_convolver(int k, cmplx *A, const cmplx *w) {
 
     for(i = 0; i < m; i+=2) {
         double scale = 4.0 * m;
-        A[i/2] = (-(A[i]+A[i^1])*std::complex<double>(0, 1) + 
+        A[i/2] = (-(A[i]+A[i^1])*std::complex<double>(0, 1) +
                   (A[i]-A[i^1])*std::conj(w[i/2]))/scale;
     }
 

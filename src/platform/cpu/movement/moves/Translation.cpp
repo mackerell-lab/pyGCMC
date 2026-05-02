@@ -28,7 +28,7 @@ MovementResult TranslationMove::attemptTranslation(MCState& state, const Movemen
 MovementResult TranslationMove::performTranslation(MCState& state, const MovementParams& params, int residueIndex) {
     MovementResult result;
     result.moveType = "translate";
-    
+
     // Check for valid box dimensions
     if (state.info.box[0] <= 0.0f || state.info.box[1] <= 0.0f || state.info.box[2] <= 0.0f) {
         result.accepted = false;
@@ -38,7 +38,7 @@ MovementResult TranslationMove::performTranslation(MCState& state, const Movemen
         stats_.totalAttempts++;
         return result;
     }
-    
+
     // Check if there are any molecules to translate
     if (state.activeResidueCount == 0) {
         result.accepted = false;
@@ -47,40 +47,40 @@ MovementResult TranslationMove::performTranslation(MCState& state, const Movemen
         stats_.rejectedEmpty++;
         return result;
     }
-    
+
     // Select residue to translate
     int targetResIdx = residueIndex;
     if (targetResIdx < 0) {
         targetResIdx = selectResidueForTranslation(state);
     }
-    
+
     if (targetResIdx < 0 || targetResIdx >= state.activeResidueCount) {
         result.accepted = false;
         result.rejectReason = "Invalid residue index";
         stats_.totalAttempts++;
         return result;
     }
-    
+
     result.residueIndex = targetResIdx;
     MCResidue& residue = state.residues[targetResIdx];
     const auto scheduler = params.getMoveProbabilitySet(residue.type);
     double logProb = utils::safeLogProbability(scheduler.translation);
     result.logProposalForward = logProb;
     result.logProposalReverse = logProb;
-    
+
     // Save original atom positions
     std::vector<Vector3> originalPositions = saveAtomPositions(state, targetResIdx);
-    
+
     // Generate random displacement
     Vector3 displacement = generateDisplacement(params.maxTranslation);
-    
+
     // Calculate energy before translation
     platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyBefore = move_common::sumResiduePairEnergy(state);
-    
+
     // Apply translation
     translateResidue(state, targetResIdx, displacement);
-    
+
     // Apply PBC to ensure atoms stay in box
     for (int i = 0; i < residue.atomCount; ++i) {
         int atomIdx = residue.atomStart + i;
@@ -94,48 +94,48 @@ MovementResult TranslationMove::performTranslation(MCState& state, const Movemen
             atom.z = pos.z;
         }
     }
-    
+
     // Calculate energy after translation
     platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyAfter = move_common::sumResiduePairEnergy(state);
-    
+
     double deltaE = energyAfter - energyBefore;
     result.energyChange = deltaE;
-    
+
     // Calculate acceptance probability (Metropolis criterion)
     double acceptProb = std::min(1.0, std::exp(-params.beta * deltaE));
     result.acceptanceProbability = acceptProb;
-    
+
     // Accept or reject
     bool accepted = utils::RandomUtils::metropolisAccept(acceptProb);
     result.accepted = accepted;
-    
+
     if (!accepted) {
         // Restore original positions
         restoreAtomPositions(state, targetResIdx, originalPositions);
     } else {
         stats_.acceptedTranslations++;
     }
-    
+
     // Update statistics
     stats_.totalAttempts++;
     updateStatistics(accepted, displacement.norm(), deltaE);
-    
+
     return result;
 }
 
 std::vector<MovementResult> TranslationMove::performBatchTranslations(
-    MCState& state, 
-    const MovementParams& params, 
+    MCState& state,
+    const MovementParams& params,
     int numAttempts) {
-    
+
     std::vector<MovementResult> results;
     results.reserve(numAttempts);
-    
+
     for (int i = 0; i < numAttempts; ++i) {
         results.push_back(performTranslation(state, params, -1));
     }
-    
+
     return results;
 }
 
@@ -154,11 +154,11 @@ Vector3 TranslationMove::generateDisplacement(double maxTranslation) {
 
 std::vector<Vector3> TranslationMove::saveAtomPositions(const MCState& state, int residueIndex) {
     std::vector<Vector3> positions;
-    
+
     if (residueIndex >= 0 && residueIndex < state.activeResidueCount) {
         const MCResidue& residue = state.residues[residueIndex];
         positions.reserve(residue.atomCount);
-        
+
         for (int i = 0; i < residue.atomCount; ++i) {
             int atomIdx = residue.atomStart + i;
             if (atomIdx < state.activeAtomCount) {
@@ -167,14 +167,14 @@ std::vector<Vector3> TranslationMove::saveAtomPositions(const MCState& state, in
             }
         }
     }
-    
+
     return positions;
 }
 
 void TranslationMove::restoreAtomPositions(MCState& state, int residueIndex, const std::vector<Vector3>& positions) {
     if (residueIndex >= 0 && residueIndex < state.activeResidueCount) {
         MCResidue& residue = state.residues[residueIndex];
-        
+
         for (int i = 0; i < residue.atomCount && i < static_cast<int>(positions.size()); ++i) {
             int atomIdx = residue.atomStart + i;
             if (atomIdx < state.activeAtomCount) {
@@ -190,7 +190,7 @@ void TranslationMove::restoreAtomPositions(MCState& state, int residueIndex, con
 void TranslationMove::translateResidue(MCState& state, int residueIndex, const Vector3& displacement) {
     if (residueIndex >= 0 && residueIndex < state.activeResidueCount) {
         MCResidue& residue = state.residues[residueIndex];
-        
+
         for (int i = 0; i < residue.atomCount; ++i) {
             int atomIdx = residue.atomStart + i;
             if (atomIdx < state.activeAtomCount) {
@@ -204,27 +204,27 @@ void TranslationMove::translateResidue(MCState& state, int residueIndex, const V
 }
 
 std::pair<double, double> TranslationMove::calculateEnergyChange(
-    MCState& state, 
-    int residueIndex, 
+    MCState& state,
+    int residueIndex,
     const Vector3& displacement) {
-    
+
     // Save current positions
     auto originalPos = saveAtomPositions(state, residueIndex);
-    
+
     // Calculate energy before
     platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyBefore = move_common::sumResiduePairEnergy(state);
-    
+
     // Apply translation
     translateResidue(state, residueIndex, displacement);
-    
+
     // Calculate energy after
     platform::cpu::computeSystemEnergyPBCCutoff(state);
     double energyAfter = move_common::sumResiduePairEnergy(state);
-    
+
     // Restore positions
     restoreAtomPositions(state, residueIndex, originalPos);
-    
+
     return {energyBefore, energyAfter};
 }
 
@@ -234,9 +234,9 @@ void TranslationMove::resetStatistics() {
 
 void TranslationMove::updateStatistics(bool accepted, double displacement, double energyChange) {
     if (accepted) {
-        stats_.averageDisplacement = (stats_.averageDisplacement * stats_.acceptedTranslations + displacement) / 
+        stats_.averageDisplacement = (stats_.averageDisplacement * stats_.acceptedTranslations + displacement) /
                                      (stats_.acceptedTranslations + 1);
-        stats_.averageEnergyChange = (stats_.averageEnergyChange * stats_.acceptedTranslations + energyChange) / 
+        stats_.averageEnergyChange = (stats_.averageEnergyChange * stats_.acceptedTranslations + energyChange) /
                                      (stats_.acceptedTranslations + 1);
     }
 }

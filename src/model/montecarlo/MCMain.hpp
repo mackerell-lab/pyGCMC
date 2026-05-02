@@ -79,14 +79,14 @@ struct MCState {
     }
 
     // === System Management ===
-    void setTemperature(float temperature) { 
-        info.setTemperature(temperature); 
+    void setTemperature(float temperature) {
+        info.setTemperature(temperature);
     }
 
-    void setBoxDimensions(float x, float y, float z) { 
+    void setBoxDimensions(float x, float y, float z) {
         info.box[0] = x; info.box[1] = y; info.box[2] = z;
         info.volume = x * y * z;
-        
+
         // CRITICAL: Also set periodicBox to prevent segfaults in GCMCEngine
         // Many functions directly index periodicBox[0..2] without checking size
         periodicBox.resize(3);
@@ -95,16 +95,16 @@ struct MCState {
         periodicBox[2] = static_cast<double>(z);
     }
 
-    void setupForceField(int totalTypes, int movementTypes = 0) { 
+    void setupForceField(int totalTypes, int movementTypes = 0) {
         forcefield.numTotalTypes = totalTypes;
         forcefield.numMovementTypes = movementTypes;
         size_t matrix_size = totalTypes * totalTypes;
         forcefield.ljSigma.resize(matrix_size, 0.0f);
         forcefield.ljEps.resize(matrix_size, 0.0f);
-        numMovementAtomTypes = movementTypes; 
+        numMovementAtomTypes = movementTypes;
     }
 
-    void setLJParameters(int type1, int type2, float sigma, float epsilon) { 
+    void setLJParameters(int type1, int type2, float sigma, float epsilon) {
         if (type1 >= forcefield.numTotalTypes || type2 >= forcefield.numTotalTypes || type1 < 0 || type2 < 0) {
             throw std::out_of_range("Type index out of range");
         }
@@ -141,26 +141,26 @@ struct MCState {
     }
 
     // === Type Management ===
-    int getOrAddAtomType(const std::string& type) { 
-        return atomTypes.getOrAddType(type); 
+    int getOrAddAtomType(const std::string& type) {
+        return atomTypes.getOrAddType(type);
     }
 
-    int getOrAddResidueType(const std::string& type) { 
-        return residueTypes.getOrAddType(type); 
+    int getOrAddResidueType(const std::string& type) {
+        return residueTypes.getOrAddType(type);
     }
 
     // === Statistics ===
-    void incrementMoveStats(bool accepted) { 
+    void incrementMoveStats(bool accepted) {
         info.stats.totalMoves++;
         if (accepted) info.stats.acceptedMoves++;
     }
 
-    void incrementInsertionStats(bool accepted) { 
+    void incrementInsertionStats(bool accepted) {
         info.stats.insertionAttempts++;
         if (accepted) info.stats.acceptedInsertions++;
     }
 
-    void incrementDeletionStats(bool accepted) { 
+    void incrementDeletionStats(bool accepted) {
         info.stats.deletionAttempts++;
         if (accepted) info.stats.acceptedDeletions++;
     }
@@ -187,14 +187,14 @@ struct MCState {
         if (activeAtomCount < 0 || activeResidueCount < 0) return false;
         if (activeAtomCount > static_cast<int>(atoms.size())) return false;
         if (activeResidueCount > static_cast<int>(residues.size())) return false;
-        
+
         for (int i = 0; i < activeResidueCount; ++i) {
             const auto& residue = residues[i];
             if (!residue.active) continue;
             if (residue.atomStart < 0 || residue.atomCount <= 0) return false;
             if (residue.atomStart + residue.atomCount > activeAtomCount) return false;
         }
-        
+
         return true;
     }
 

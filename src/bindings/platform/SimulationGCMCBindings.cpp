@@ -225,10 +225,10 @@ void init_gcmc_bindings(py::module& m) {
         .value("DIRECT", ::pygcmc::platform::cpu::EnergyMethod::DIRECT)
         .value("EWALD", ::pygcmc::platform::cpu::EnergyMethod::EWALD)
         .value("PME", ::pygcmc::platform::cpu::EnergyMethod::PME);
-    
+
     // Note: FragmentTemplate, FragmentInstance, and FragmentReservoir are already
     // registered in FragmentReservoirBindings.cpp, so we don't re-register them here.
-    
+
     // GCMCEngine class
     py::class_<GCMCEngine>(m, "GCMCEngine")
         .def(py::init<>())
@@ -294,7 +294,7 @@ void init_gcmc_bindings(py::module& m) {
         .def("setStatisticsInterval", &GCMCEngine::setStatisticsInterval,
              py::arg("interval"),
              "Set the interval for statistics sampling")
-        .def("getStatistics", 
+        .def("getStatistics",
              (GCMCStatistics& (GCMCEngine::*)()) &GCMCEngine::getStatistics,
              py::return_value_policy::reference_internal,
              "Get the statistics collector")
@@ -303,7 +303,7 @@ void init_gcmc_bindings(py::module& m) {
              py::arg("residueIdx"), "Get position of residue")
         .def("getResidueOrientation", &GCMCEngine::getResidueOrientation,
              py::arg("residueIdx"), "Get orientation of residue");
-    
+
     // GCMCStatistics class
     py::class_<GCMCStatistics>(m, "GCMCStatistics")
         .def(py::init<>())
@@ -327,7 +327,7 @@ void init_gcmc_bindings(py::module& m) {
              "Get current variance for auto-adjustment")
         .def("clear", &GCMCStatistics::clear,
              "Clear all samples");
-    
+
     // Stats structure
     py::class_<GCMCStatistics::Stats>(m, "GCMCStats")
         .def_readonly("mean", &GCMCStatistics::Stats::mean)
@@ -335,7 +335,7 @@ void init_gcmc_bindings(py::module& m) {
         .def_readonly("min", &GCMCStatistics::Stats::min)
         .def_readonly("max", &GCMCStatistics::Stats::max)
         .def_readonly("count", &GCMCStatistics::Stats::count);
-    
+
     // MoveResult struct for GCMCEngine
     py::class_<GCMCEngine::MoveResult>(m, "GCMCMoveResult")
         .def_readonly("accepted", &GCMCEngine::MoveResult::accepted)
@@ -350,7 +350,7 @@ void init_gcmc_bindings(py::module& m) {
         .def_readonly("cavityBiasComponent", &GCMCEngine::MoveResult::cavityBiasComponent)
         .def_readonly("effectiveVolume", &GCMCEngine::MoveResult::effectiveVolume)
         .def_readonly("cbmcTrialsUsed", &GCMCEngine::MoveResult::cbmcTrialsUsed);
-    
+
     // GCMCAcceptance class
     py::class_<GCMCAcceptance>(m, "GCMCAcceptance")
         .def(py::init<>())
@@ -372,9 +372,9 @@ void init_gcmc_bindings(py::module& m) {
         .def("getThermalLambda", &GCMCAcceptance::getThermalLambda,
              py::arg("typeId"),
              "Get thermal de Broglie wavelength (nm) for a type")
-        .def("calculateInsertionProbability", 
+        .def("calculateInsertionProbability",
              &GCMCAcceptance::calculateInsertionProbability,
-             py::arg("typeId"), py::arg("currentNumber"), 
+             py::arg("typeId"), py::arg("currentNumber"),
              py::arg("deltaE"), py::arg("bias"),
              "Calculate insertion acceptance probability")
         .def("calculateDeletionProbability",
@@ -462,7 +462,7 @@ void init_gcmc_bindings(py::module& m) {
              py::arg("seed"), "Set random seed for acceptance decisions")
         .def("acceptMove", &GCMCAcceptance::acceptMove,
              py::arg("probability"), "Accept or reject based on probability");
-    
+
     // CavityManager class
     py::class_<CavityManager>(m, "CavityManager")
         .def(py::init<double, double>(),

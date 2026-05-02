@@ -24,7 +24,7 @@ public:
      * @param currentResidue Current residue being processed
      * @return bool True if parsing succeeded
      */
-    static bool parseAtomRecord(const std::string& line, 
+    static bool parseAtomRecord(const std::string& line,
                                PdbParserStructures::RecordType type,
                                model::Structure& structure,
                                std::shared_ptr<model::Residue>& currentResidue);

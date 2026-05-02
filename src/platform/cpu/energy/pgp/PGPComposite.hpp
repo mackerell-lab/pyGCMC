@@ -15,7 +15,7 @@ namespace cpu {
 
 /**
  * @brief Composite interface for PGP calculations
- * 
+ *
  * This module provides a unified interface for PGP energy calculations,
  * orchestrating all the individual PGP components (grid operations, interpolation,
  * precomputation, evaluation) to provide high-level energy calculation functions.
@@ -24,7 +24,7 @@ class PGPComposite {
 public:
     /**
      * @brief Initialize PGP with automatic parameter optimization
-     * 
+     *
      * @param cutoff Real space cutoff distance
      * @param box Simulation box dimensions
      * @param alpha Ewald parameter
@@ -34,7 +34,7 @@ public:
      * @param splineOrder B-spline order
      * @param tolerance Error tolerance
      */
-    static void initialize(double cutoff, 
+    static void initialize(double cutoff,
                          const double box[3],
                          double alpha,
                          const int meshSize[3],
@@ -45,26 +45,26 @@ public:
 
     /**
      * @brief Compute total system energy using PGP
-     * 
+     *
      * Calculates all components: real space + reciprocal space + self energy + VdW
-     * 
+     *
      * @param state MC state containing system information
      */
     static void computeSystemEnergy(model::MCState& state);
 
     /**
      * @brief Compute energy for moving residues only
-     * 
+     *
      * Optimized calculation for Monte Carlo moves that only affect
      * a subset of the system.
-     * 
+     *
      * @param state MC state
      */
     static void computeMovementEnergy(model::MCState& state);
 
     /**
      * @brief Validate PGP setup and parameters
-     * 
+     *
      * @param state MC state
      * @return true if PGP is properly configured
      */
@@ -72,7 +72,7 @@ public:
 
     /**
      * @brief Get PGP energy components breakdown
-     * 
+     *
      * @param state MC state
      * @param realSpace Output: real space energy
      * @param reciprocal Output: reciprocal space energy (from precomputed grid)
@@ -89,7 +89,7 @@ public:
 
     /**
      * @brief Check if PGP is properly initialized
-     * 
+     *
      * @return true if PGP parameters are initialized and ready
      */
     static bool isInitialized();
@@ -101,14 +101,14 @@ public:
 
     /**
      * @brief Enable or disable debug output
-     * 
+     *
      * @param enable Whether to enable debug logging
      */
     static void setDebugMode(bool enable);
 
     /**
      * @brief Precompute potential grids
-     * 
+     *
      * @param state MC state
      * @param fixedOnly Whether to only consider fixed residues
      */
@@ -129,12 +129,12 @@ private:
  */
 inline void initializePGPParameters(double cutoff, const double box[3],
                                   double alpha,
-                                  const int meshSize[3], 
+                                  const int meshSize[3],
                                   double potentialCutoff,
                                   const int potentialGridSize[3],
                                   int splineOrder = 4,
                                   double tolerance = 1e-5) {
-    PGPComposite::initialize(cutoff, box, alpha, meshSize, 
+    PGPComposite::initialize(cutoff, box, alpha, meshSize,
                            potentialCutoff, potentialGridSize,
                            splineOrder, tolerance);
 }
@@ -164,4 +164,4 @@ inline void precomputeGridPotential(model::MCState& state, bool fixedOnly) {
 
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

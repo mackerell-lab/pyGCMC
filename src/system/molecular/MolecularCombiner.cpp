@@ -9,7 +9,7 @@ namespace pygcmc {
 namespace system {
 namespace molecular {
 
-MolecularCombiner::MolecularCombiner() 
+MolecularCombiner::MolecularCombiner()
     : validator_(std::make_unique<MolecularValidator>()),
       matcher_(std::make_unique<MolecularMatcher>()),
       merger_(std::make_unique<MolecularMerger>()) {
@@ -18,7 +18,7 @@ MolecularCombiner::MolecularCombiner()
 std::shared_ptr<model::Molecular> MolecularCombiner::combine(
     const std::shared_ptr<model::Structure>& structure,
     const std::shared_ptr<model::Topology>& topology) {
-    
+
     // Validate input parameters
     validator_->validateCombination(structure, topology);
 
@@ -43,7 +43,7 @@ std::shared_ptr<model::Molecular> MolecularCombiner::combine(
 std::shared_ptr<model::Molecular> MolecularCombiner::combineMultiple(
     const std::shared_ptr<model::Structure>& structure,
     const std::vector<std::shared_ptr<model::Topology>>& topologies) {
-    
+
     if (!structure || topologies.empty()) {
         throw std::invalid_argument("Structure and Topologies cannot be null/empty");
     }
@@ -56,7 +56,7 @@ std::shared_ptr<model::Molecular> MolecularCombiner::combineMultiple(
 
     // Match residues with topologies - this is the key step that determines which topologies are actually used
     auto matched_topologies = matchResidues(structure, topologies);
-    
+
     // Calculate totals AFTER matching
     size_t total_atoms = 0;
     size_t total_residues = 0;
@@ -67,17 +67,17 @@ std::shared_ptr<model::Molecular> MolecularCombiner::combineMultiple(
 
     // Validate MATCHED topologies against structure
     validator_->validateMultipleCombination(structure, matched_topologies, total_atoms, total_residues);
-    
+
     // Merge all matched topologies
     merger_->mergeTopologies(molecular, matched_topologies);
-    
+
     return molecular;
 }
 
 void MolecularCombiner::copyStructureData(
     std::shared_ptr<model::Molecular>& molecular,
     const std::shared_ptr<model::Structure>& structure) {
-    
+
     molecular->atoms = structure->get_atoms();
     molecular->residues = structure->get_residues();
     molecular->terminals = structure->get_terminals();
@@ -90,7 +90,7 @@ void MolecularCombiner::copyStructureData(
 void MolecularCombiner::copyTopologyData(
     std::shared_ptr<model::Molecular>& molecular,
     const std::shared_ptr<model::Topology>& topology) {
-    
+
     const auto num_atoms = static_cast<size_t>(topology->get_num_atoms());
     const auto num_residues = static_cast<size_t>(topology->get_num_residues());
     const auto num_segments = static_cast<size_t>(topology->get_num_segments());
@@ -118,19 +118,19 @@ void MolecularCombiner::copyTopologyData(
     molecular->exclusions = topology->get_exclusions();
     molecular->groups = topology->get_groups();
     molecular->cmaps = topology->get_cmaps();
-    
+
     // Add standardized CMAPs
     for (const auto& cmap : topology->get_cmaps()) {
         molecular->add_standard_cmap(cmap);
     }
-    
+
     molecular->titles = topology->get_titles();
 }
 
 void MolecularCombiner::buildLookupMappings(
     std::shared_ptr<model::Molecular>& molecular,
     const std::shared_ptr<model::Topology>& topology) {
-    
+
     const auto num_atoms = static_cast<size_t>(topology->get_num_atoms());
     const auto num_residues = static_cast<size_t>(topology->get_num_residues());
     const auto num_segments = static_cast<size_t>(topology->get_num_segments());
@@ -156,15 +156,15 @@ void MolecularCombiner::buildLookupMappings(
 std::vector<std::shared_ptr<model::Topology>> MolecularCombiner::matchResidues(
     const std::shared_ptr<model::Structure>& structure,
     const std::vector<std::shared_ptr<model::Topology>>& topologies) {
-    
+
     const auto& residues = structure->get_residues();
     std::vector<bool> residue_matched(residues.size(), false);
     std::vector<std::shared_ptr<model::Topology>> matched_topologies;
-    
+
     // Try to match each topology
     for (size_t start_idx = 0; start_idx < residues.size(); ++start_idx) {
         if (residue_matched[start_idx]) continue;
-        
+
         for (const auto& topology : topologies) {
             size_t matched_count = 0;
             if (matcher_->matchResidueSequence(residues, topology, start_idx, matched_count)) {
@@ -177,21 +177,21 @@ std::vector<std::shared_ptr<model::Topology>> MolecularCombiner::matchResidues(
             }
         }
     }
-    
+
     // Check if all residues have been matched
     for (size_t i = 0; i < residue_matched.size(); ++i) {
         if (!residue_matched[i]) {
             std::stringstream ss;
-            ss << "Could not find matching topology for residue " 
+            ss << "Could not find matching topology for residue "
                << residues[i]->get_resname()
                << " " << residues[i]->get_ires();
             throw std::runtime_error(ss.str());
         }
     }
-    
+
     return matched_topologies;
 }
 
 } // namespace molecular
 } // namespace system
-} // namespace pygcmc 
+} // namespace pygcmc

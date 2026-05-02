@@ -20,10 +20,10 @@ namespace montecarlo {
  */
 struct Vector3 {
     double x, y, z;
-    
+
     Vector3() : x(0), y(0), z(0) {}
     Vector3(double x_, double y_, double z_) : x(x_), y(y_), z(z_) {}
-    
+
     Vector3 operator+(const Vector3& v) const { return Vector3(x+v.x, y+v.y, z+v.z); }
     Vector3 operator-(const Vector3& v) const { return Vector3(x-v.x, y-v.y, z-v.z); }
     Vector3 operator*(double s) const { return Vector3(x*s, y*s, z*s); }
@@ -37,15 +37,15 @@ struct Vector3 {
  */
 struct Quaternion {
     double w, x, y, z;
-    
+
     Quaternion() : w(1), x(0), y(0), z(0) {}
     Quaternion(double w_, double x_, double y_, double z_) : w(w_), x(x_), y(y_), z(z_) {}
-    
+
     void normalize() {
         double n = std::sqrt(w*w + x*x + y*y + z*z);
         if (n > 0) { w /= n; x /= n; y /= n; z /= n; }
     }
-    
+
     // CRITICAL ADDITION: Quaternion multiplication for proper rotation composition
     Quaternion operator*(const Quaternion& q) const {
         return Quaternion(
@@ -55,32 +55,32 @@ struct Quaternion {
             w * q.z + x * q.y - y * q.x + z * q.w
         );
     }
-    
+
     // Apply rotation to a vector
     Vector3 rotate(const Vector3& v) const {
         // Standard quaternion rotation formula: v' = q * v * q^*
         // Using the correct formula from computer graphics/robotics
         double qw = w, qx = x, qy = y, qz = z;
         double vx = v.x, vy = v.y, vz = v.z;
-        
+
         // Rotation matrix form (verified formula)
         double qw2 = qw * qw;
         double qx2 = qx * qx;
         double qy2 = qy * qy;
         double qz2 = qz * qz;
-        
-        double rx = vx * (qw2 + qx2 - qy2 - qz2) + 
-                   vy * 2.0 * (qx * qy - qw * qz) + 
+
+        double rx = vx * (qw2 + qx2 - qy2 - qz2) +
+                   vy * 2.0 * (qx * qy - qw * qz) +
                    vz * 2.0 * (qx * qz + qw * qy);
-                   
-        double ry = vx * 2.0 * (qx * qy + qw * qz) + 
-                   vy * (qw2 - qx2 + qy2 - qz2) + 
+
+        double ry = vx * 2.0 * (qx * qy + qw * qz) +
+                   vy * (qw2 - qx2 + qy2 - qz2) +
                    vz * 2.0 * (qy * qz - qw * qx);
-                   
-        double rz = vx * 2.0 * (qx * qz - qw * qy) + 
-                   vy * 2.0 * (qy * qz + qw * qx) + 
+
+        double rz = vx * 2.0 * (qx * qz - qw * qy) +
+                   vy * 2.0 * (qy * qz + qw * qx) +
                    vz * (qw2 - qx2 - qy2 + qz2);
-        
+
         return Vector3(rx, ry, rz);
     }
 };
@@ -91,7 +91,7 @@ struct Quaternion {
 struct TypeMaps {
     std::vector<std::string> atomTypes;
     std::unordered_map<std::string, int> atomTypeIndices;
-    
+
     int getOrAddType(const std::string& type) {
         auto it = atomTypeIndices.find(type);
         if (it != atomTypeIndices.end()) {
@@ -102,7 +102,7 @@ struct TypeMaps {
         atomTypeIndices[type] = newIndex;
         return newIndex;
     }
-    
+
     std::string getTypeName(int index) const {
         if (index >= 0 && static_cast<size_t>(index) < atomTypes.size()) {
             return atomTypes[index];
@@ -158,7 +158,7 @@ struct MCForceField {
     std::vector<float> ljEps14;    // NxN matrix of 1-4 epsilon overrides (kJ/mol)
     std::vector<uint8_t> pairtypes14Mask;  // NxN mask for 1-4 overrides
     bool pairtypes14Enabled{false};
-    
+
     // NBFIX support and mixing rules
     struct NBFixEntry {
         int type1;
@@ -166,23 +166,23 @@ struct MCForceField {
         float sigma;  // nm
         float eps;    // kJ/mol
     };
-    
+
     std::vector<NBFixEntry> nbfix;      // Pair-specific overrides
     std::vector<float> ljSigmaType;     // Per-type sigma values (nm)
     std::vector<float> ljEpsType;       // Per-type epsilon values (kJ/mol)
-    
-    enum class MixingRule { 
+
+    enum class MixingRule {
         None,              // Use explicit NxN matrix
         LorentzBerthelot,  // sigma_ij = (sigma_i + sigma_j)/2, eps_ij = sqrt(eps_i * eps_j)
         Geometric          // sigma_ij = sqrt(sigma_i * sigma_j), eps_ij = sqrt(eps_i * eps_j)
     };
     MixingRule mixingRule = MixingRule::None;
-    
+
     bool ljMatrixInitialized = false;
-    
+
     /**
      * @brief Rebuild the NxN LJ parameter matrix from per-type values and NBFIX overrides
-     * 
+     *
      * This function constructs the full NxN matrix by:
      * 1. Applying mixing rules to per-type parameters
      * 2. Overriding specific pairs with NBFIX values
@@ -190,22 +190,22 @@ struct MCForceField {
     inline void rebuildLJMatrix() {
         const int n = numTotalTypes;
         const size_t expected = static_cast<size_t>(n) * n;
-        
+
         // Ensure matrix has correct size
         if (ljSigma.size() != expected || ljEps.size() != expected) {
             ljSigma.assign(expected, 0.0f);
             ljEps.assign(expected, 0.0f);
         }
-        
+
         // Build from per-type parameters with mixing rule
         if (mixingRule != MixingRule::None &&
             ljSigmaType.size() == static_cast<size_t>(n) &&
             ljEpsType.size() == static_cast<size_t>(n)) {
-            
+
             for (int i = 0; i < n; ++i) {
                 for (int j = 0; j < n; ++j) {
                     float sigma, eps;
-                    
+
                     if (mixingRule == MixingRule::LorentzBerthelot) {
                         // Lorentz-Berthelot: arithmetic mean for sigma
                         sigma = 0.5f * (ljSigmaType[i] + ljSigmaType[j]);
@@ -213,16 +213,16 @@ struct MCForceField {
                         // Geometric: geometric mean for sigma
                         sigma = std::sqrt(ljSigmaType[i] * ljSigmaType[j]);
                     }
-                    
+
                     // Both rules use geometric mean for epsilon
                     eps = std::sqrt(ljEpsType[i] * ljEpsType[j]);
-                    
+
                     ljSigma[i*n + j] = sigma;
                     ljEps[i*n + j] = eps;
                 }
             }
         }
-        
+
         // Apply NBFIX overrides (symmetric)
         for (const auto& p : nbfix) {
             if (p.type1 >= 0 && p.type1 < n && p.type2 >= 0 && p.type2 < n) {
@@ -232,7 +232,7 @@ struct MCForceField {
                 ljEps[idx1] = ljEps[idx2] = p.eps;
             }
         }
-        
+
         ljMatrixInitialized = true;
     }
 
@@ -278,7 +278,7 @@ struct MCForceField {
         }
         return pairtypes14Mask[static_cast<size_t>(idx)] != 0;
     }
-    
+
     /**
      * @brief Add an NBFIX override for a specific atom pair
      */
@@ -286,11 +286,11 @@ struct MCForceField {
         nbfix.push_back({type1, type2, sigma, eps});
         ljMatrixInitialized = false;  // Force rebuild
     }
-    
+
     /**
      * @brief Set per-type LJ parameters
      */
-    inline void setPerTypeParameters(const std::vector<float>& sigmas, 
+    inline void setPerTypeParameters(const std::vector<float>& sigmas,
                                      const std::vector<float>& epsilons) {
         ljSigmaType = sigmas;
         ljEpsType = epsilons;
@@ -308,12 +308,12 @@ struct MCAtom {
     int   type{-1};
     std::string name;  // Atom name (e.g., "O", "H1", "H2")
     Vector3 position;  // Position as Vector3 (for convenience)
-    
+
     // Helper to update position from x,y,z
     void updatePosition() {
         position = Vector3(x, y, z);
     }
-    
+
     // Helper to set x,y,z from position
     void setFromPosition() {
         x = static_cast<float>(position.x);
@@ -361,7 +361,7 @@ struct EwaldEnergy {
     double reciprocal{0.0};
     double self{0.0};
     double total{0.0};
-    
+
     void reset() { real_space = reciprocal = self = total = 0.0; }
     void updateTotal() { total = real_space + reciprocal + self; }
 };

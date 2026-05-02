@@ -25,7 +25,7 @@ void init_parameters_bindings(py::module& m, py::module& io_module) {
         .def_static("parse_string_to_param", &pygcmc::io::INPParser::parse_string_to_param,
             py::arg("content"), py::arg("param"),
             "Parse an input string into an existing Param object");
-    
+
     // Add to main module for backward compatibility
     m.attr("INPParser") = inp_parser;
 }

@@ -16,7 +16,7 @@ public:
      * @return Parsed topology
      */
     static model::Topology parse_string(const std::string& psf_str);
-    
+
     /**
      * Trim whitespace from both ends of a string
      * @param str Input string

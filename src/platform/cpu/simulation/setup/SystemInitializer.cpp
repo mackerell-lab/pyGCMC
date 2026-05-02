@@ -22,19 +22,19 @@ bool SystemInitializer::loadParameters(const std::string& inputFile,
     try {
         // Parse the input file
         io::parameters::InpParserGCMC::parse_to_param(inputFile, params);
-        
+
         // Enhance parameters
         io::parameters::InpParserGCMC::enhance_param(params);
-        
+
         // Update derived values
         params.update_derived_values();
-        
+
         // Validate parameters
         if (!params.is_valid()) {
             reportError("Invalid parameters after loading");
             return false;
         }
-        
+
         return true;
     } catch (const std::exception& e) {
         reportError("Failed to load parameters: " + std::string(e.what()));
@@ -50,14 +50,14 @@ bool SystemInitializer::setupSystem(const model::param::Param& params,
     state.periodicBox[0] = space.box_size[0];
     state.periodicBox[1] = space.box_size[1];
     state.periodicBox[2] = space.box_size[2];
-    
+
     // Set system information
     state.info.box[0] = space.box_size[0];
     state.info.box[1] = space.box_size[1];
     state.info.box[2] = space.box_size[2];
     state.info.setTemperature(params.get_mc_info().temperature);
     // beta is set automatically by setTemperature
-    
+
     // Load topology if specified
     const auto& files = params.get_file_info();
     if (!files.topology_file.empty()) {
@@ -65,21 +65,21 @@ bool SystemInitializer::setupSystem(const model::param::Param& params,
             return false;
         }
     }
-    
+
     // Load coordinates if specified
     if (!files.input_pdb_file.empty()) {
         if (!loadCoordinates(files.input_pdb_file, state)) {
             return false;
         }
     }
-    
+
     // Load force field parameters
     for (const auto& prmFile : files.par_files) {
         if (!loadForceField(prmFile, state.forcefield)) {
             return false;
         }
     }
-    
+
     return true;
 }
 
@@ -89,15 +89,15 @@ bool SystemInitializer::setupFragments(const model::param::Param& params,
     const auto& fragInfo = params.get_fragment_info();
     const auto& fileInfo = params.get_file_info();
     const auto& mcInfo = params.get_mc_info();
-    
+
     fragments.clear();
-    
+
     // Setup each fragment type
     for (size_t i = 0; i < fileInfo.fragment_names.size(); ++i) {
         FragmentConfig config;
         config.name = fileInfo.fragment_names[i];
         config.typeId = static_cast<int>(i);
-        
+
         // Set concentration and chemical potential
         if (i < fragInfo.conc_list.size()) {
             config.concentration = fragInfo.conc_list[i];
@@ -105,15 +105,15 @@ bool SystemInitializer::setupFragments(const model::param::Param& params,
         if (i < fragInfo.muex_list.size()) {
             config.chemicalPotential = fragInfo.muex_list[i];
         }
-        
+
         // Load fragment template
         if (i < fileInfo.fragment_top_files.size()) {
-            if (!loadFragmentTemplate(fileInfo.fragment_top_files[i], 
+            if (!loadFragmentTemplate(fileInfo.fragment_top_files[i],
                                     config.template_)) {
                 return false;
             }
         }
-        
+
         // Calculate max count based on volume and concentration
         double volume = params.get_space_info().volume;
         if (volume > 0) {
@@ -124,9 +124,9 @@ bool SystemInitializer::setupFragments(const model::param::Param& params,
         } else {
             config.maxCount = 1000;  // Default
         }
-        
+
         fragments.push_back(config);
-        
+
         // Register with reservoir
         movement::MultiTypeReservoir::TypeInfo typeInfo;
         typeInfo.typeId = config.typeId;
@@ -134,11 +134,11 @@ bool SystemInitializer::setupFragments(const model::param::Param& params,
         typeInfo.maxCount = config.maxCount;
         reservoir.addType(typeInfo, config.template_);
     }
-    
+
     // Calculate activities and probabilities
     calculateActivities(fragments, mcInfo.temperature);
     calculateProbabilities(fragments);
-    
+
     return true;
 }
 
@@ -152,25 +152,25 @@ bool SystemInitializer::setupEngine(movement::gcmc::GCMCEngine& engine,
         reportError("Invalid reservoir type for engine initialization");
         return false;
     }
-    
+
     engine.initialize(state, fragReservoir);
-    
+
     // Configure engine settings
     engine.setTemperature(params.get_mc_info().temperature);
     engine.setCutoff(params.get_space_info().cutoff);  // Use cutoff from parameters
-    
+
     return true;
 }
 
 bool SystemInitializer::setupAcceptance(movement::gcmc::GCMCAcceptance& acceptance,
                                      const model::param::Param& params) {
     const auto& mcInfo = params.get_mc_info();
-    
+
     // Configure acceptance calculator
     acceptance.setTemperature(mcInfo.temperature);
     // Note: GCMCAcceptance may not have these setters
     // The acceptance calculator typically gets these from the engine
-    
+
     return true;
 }
 
@@ -184,20 +184,20 @@ bool SystemInitializer::validateSetup(const model::param::Param& params,
         reportError("Invalid box dimensions");
         return false;
     }
-    
+
     // Check temperature
     // Check beta instead of temperature
     if (state.info.beta <= 0) {
         reportError("Invalid beta/temperature");
         return false;
     }
-    
+
     // Check MC steps
     if (params.get_mc_info().mc_steps <= 0) {
         reportError("Invalid number of MC steps");
         return false;
     }
-    
+
     return true;
 }
 
@@ -231,7 +231,7 @@ bool SystemInitializer::loadCoordinates(const std::string& filename,
 bool SystemInitializer::loadForceField(const std::string& filename,
                                     model::montecarlo::MCForceField& /* ff */) {
     try {
-        // Note: namespace needs to be corrected  
+        // Note: namespace needs to be corrected
         // io::forcefield::PRMParser parser;
         // Simplified - actual implementation would load force field
         std::cout << "Loading force field from: " << filename << std::endl;
@@ -257,7 +257,7 @@ bool SystemInitializer::loadFragmentTemplate(const std::string& filename,
 void SystemInitializer::calculateActivities(std::vector<FragmentConfig>& fragments,
                                          double temperature) {
     const double R = 8.314e-3;  // kJ/(mol*K)
-    
+
     for (auto& frag : fragments) {
         // Calculate activity from chemical potential
         // a = exp(mu / RT)
@@ -267,7 +267,7 @@ void SystemInitializer::calculateActivities(std::vector<FragmentConfig>& fragmen
 
 void SystemInitializer::calculateProbabilities(std::vector<FragmentConfig>& fragments) {
     if (fragments.empty()) return;
-    
+
     // For now, use equal probabilities
     double prob = 1.0 / fragments.size();
     for (auto& frag : fragments) {

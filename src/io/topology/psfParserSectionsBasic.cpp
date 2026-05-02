@@ -55,7 +55,7 @@ bool PSFParserSectionsBasic::parse_atoms_from_lines(const std::vector<std::strin
     std::istringstream iss(trim(lines[0]));  // Always use first line as header
     int num_atoms = 0;
     std::string marker;  // For "!NATOM" marker
-    
+
     // Try to parse the line with or without the marker
     if (!(iss >> num_atoms)) {
         iss.clear();
@@ -91,10 +91,10 @@ bool PSFParserSectionsBasic::parse_atoms_from_lines(const std::vector<std::strin
         double alpha = 0.0;   // Polarizability (column 11 in extended format)
 
         bool parsed_successfully = false;
-        
+
         if (is_extended_format && is_drude_format) {
             // Extended Drude format: try to parse 11 fields
-            // Format: atomIndex segmentName residueNumber residueName atomName atomType 
+            // Format: atomIndex segmentName residueNumber residueName atomName atomType
             //         charge mass unusedField thole alpha
             if (iss >> atomIndex >> segment_name >> residue_number
                     >> residue_name >> atom_name >> atom_type
@@ -102,12 +102,12 @@ bool PSFParserSectionsBasic::parse_atoms_from_lines(const std::vector<std::strin
                 parsed_successfully = true;
             }
         }
-        
+
         if (!parsed_successfully) {
             // Fall back to standard format
             iss.clear();
             iss.seekg(0);
-            
+
             // Try to parse with unusedField
             if (iss >> atomIndex >> segment_name >> residue_number
                     >> residue_name >> atom_name >> atom_type
@@ -125,7 +125,7 @@ bool PSFParserSectionsBasic::parse_atoms_from_lines(const std::vector<std::strin
                 }
             }
         }
-        
+
         if (!parsed_successfully) {
             std::cerr << "Failed to parse atom line: " << line << std::endl;
             return false;
@@ -147,7 +147,7 @@ bool PSFParserSectionsBasic::parse_atoms_from_lines(const std::vector<std::strin
             residue_number,
             segment_name
         );
-        
+
         // Set Drude parameters if extended format was used
         if (is_extended_format && is_drude_format && (alpha > 0.0 || thole != 0.0)) {
             // Get the atom and set the Drude parameters
@@ -155,14 +155,14 @@ bool PSFParserSectionsBasic::parse_atoms_from_lines(const std::vector<std::strin
                 model::TopologyAtom& atom = topology.get_atom(atom_index);
                 atom.set_drude_params(alpha, thole);
                 // Debug output disabled - uncomment if needed for debugging
-                // std::cout << "Set alpha=" << alpha << " thole=" << thole 
+                // std::cout << "Set alpha=" << alpha << " thole=" << thole
                 //           << " for atom " << atom_name << " (index " << atom_index << ")" << std::endl;
             } catch (const std::exception& e) {
-                std::cerr << "Failed to set Drude parameters for atom " << atom_index 
+                std::cerr << "Failed to set Drude parameters for atom " << atom_index
                           << ": " << e.what() << std::endl;
             }
         }
-        
+
         atoms_read++;
     }
 

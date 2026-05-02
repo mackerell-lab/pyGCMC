@@ -64,7 +64,7 @@ bool MCCore::removeResidue(model::MCState& state, int resIdx) {
             state.residues[resIdx].atomStart = atomStart;
         }
     }
-    
+
     state.activeResidueCount--;
     return true;
 }
@@ -93,7 +93,7 @@ void MCCore::applyPBC(const model::MCState& state, float& x, float& y, float& z)
 
 void MCCore::updateGeometricCenter(const model::MCState& state, model::MCResidue& res) const {
     res.center[0] = res.center[1] = res.center[2] = 0.0f;
-    
+
     // All coordinates are already in nm, no conversion needed
     for (int i = 0; i < res.atomCount; ++i) {
         const model::MCAtom& atom = state.atoms[res.atomStart + i];
@@ -101,7 +101,7 @@ void MCCore::updateGeometricCenter(const model::MCState& state, model::MCResidue
         res.center[1] += atom.y;
         res.center[2] += atom.z;
     }
-    
+
     if (res.atomCount > 0) {
         float invCount = 1.0f / res.atomCount;
         res.center[0] *= invCount;
@@ -112,4 +112,4 @@ void MCCore::updateGeometricCenter(const model::MCState& state, model::MCResidue
 
 } // namespace montecarlo
 } // namespace system
-} // namespace pygcmc 
+} // namespace pygcmc

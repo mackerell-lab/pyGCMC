@@ -14,7 +14,7 @@ namespace montecarlo {
 
 /**
  * @brief Information for movement molecule initialization
- * 
+ *
  * Contains molecular structure and number of copies to pre-allocate
  * for each movement molecule type.
  */
@@ -28,7 +28,7 @@ struct MovementMolecularInfo {
 
 /**
  * @brief Composite Monte Carlo system
- * 
+ *
  * Combines all Monte Carlo subsystems into a unified interface.
  * Provides all functionality needed for GCMC simulations.
  */
@@ -48,7 +48,7 @@ public:
     // --------------------------------------------------------
     // System initialization and setup
     // --------------------------------------------------------
-    
+
     /**
      * @brief Initialize the Monte Carlo system with given parameters
      * @param info System parameters (box size, temperature, cutoff, etc.)
@@ -95,7 +95,7 @@ public:
     // --------------------------------------------------------
     // Core GCMC operations
     // --------------------------------------------------------
-    
+
     /**
      * @brief Insert a new residue
      * @param res Residue to insert
@@ -123,7 +123,7 @@ public:
     // --------------------------------------------------------
     // Energy calculations
     // --------------------------------------------------------
-    
+
     /**
      * @brief Calculate non-bonded energy between residues
      * @param res1 First residue
@@ -141,7 +141,7 @@ public:
     // --------------------------------------------------------
     // Switching function management
     // --------------------------------------------------------
-    
+
     /**
      * @brief Set or disable CHARMM-style smooth switching function
      * @param enable Whether to enable the switching function
@@ -160,7 +160,7 @@ public:
     // --------------------------------------------------------
     // State access
     // --------------------------------------------------------
-    
+
     /**
      * @brief Get current system state
      * @return Const reference to current state
@@ -194,7 +194,7 @@ public:
     // --------------------------------------------------------
     // Parameter validation
     // --------------------------------------------------------
-    
+
     /**
      * @brief Check if all atoms have valid topology and force field parameters
      * @param ff Force field to check against
@@ -209,10 +209,10 @@ private:
     MCGeometry geometry_;               ///< Geometric calculations
     MCSwitching switching_;             ///< Switching function management
     MCInitializer initializer_;         ///< System initialization
-    
+
     std::shared_ptr<model::Molecular> molecular_;  ///< Stored molecular system for validation
 };
 
 } // namespace montecarlo
 } // namespace system
-} // namespace pygcmc 
+} // namespace pygcmc

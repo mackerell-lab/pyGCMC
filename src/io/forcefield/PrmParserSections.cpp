@@ -18,10 +18,10 @@ bool& PrmParserSections::getDebugFlag() {
 void PrmParserSections::parseNonbondedSection(std::istream& input, pygcmc::model::ForceField& ff, const std::string& firstLine) {
     std::string line = firstLine;
     std::string fullLine = PrmParserStructures::readContinuationLine(input, line);
-    
+
     if (debug_output) std::cerr << "=== Entering NONBONDED section parsing ===" << std::endl;
     if (debug_output) std::cerr << "First line: [" << firstLine << "]" << std::endl;
-    
+
     // Parse header parameters
     auto tokens = PrmParserStructures::tokenize(fullLine);
     if (!tokens.empty()) {
@@ -32,18 +32,18 @@ void PrmParserSections::parseNonbondedSection(std::istream& input, pygcmc::model
             }
             std::cerr << std::endl;
         }
-        
+
         // Skip the NONBONDED keyword
         if (tokens[0] == "NONBONDED") {
             if (debug_output) std::cerr << "Skipping NONBONDED keyword" << std::endl;
             tokens.erase(tokens.begin());
         }
-        
+
         // Process parameters
         auto& params = ff.get_nonbonded_params();
         for (size_t i = 0; i < tokens.size(); ++i) {
             if (debug_output) std::cerr << "Processing parameter token: [" << tokens[i] << "]" << std::endl;
-            
+
             if (tokens[i] == "nbxmod" && i + 1 < tokens.size()) {
                 params.nbxmod = PrmParserStructures::safe_stoi(tokens[++i], "nbxmod");
                 if (debug_output) std::cerr << "Set nbxmod = " << params.nbxmod << std::endl;
@@ -83,10 +83,10 @@ void PrmParserSections::parseNonbondedSection(std::istream& input, pygcmc::model
             }
         }
     }
-    
+
     if (debug_output) std::cerr << "\n=== Starting atom type parameters parsing ===" << std::endl;
     if (debug_output) std::cerr << "Current lj_params map size: " << ff.get_num_lj_params() << std::endl;
-    
+
     // Parse atom type parameters
     while (true) {
         const std::streampos linePos = input.tellg();
@@ -94,20 +94,20 @@ void PrmParserSections::parseNonbondedSection(std::istream& input, pygcmc::model
             break;
         }
         if (PrmParserStructures::isCommentLine(line)) continue;
-        
+
         line = PrmParserStructures::removeComments(line);
         line = PrmParserStructures::trim(line);
         if (line.empty()) {
             if (debug_output) std::cerr << "Skipping empty line" << std::endl;
             continue;
         }
-        
+
         // Skip topology lines from STR files
         if (PrmParserStructures::isTopologyLine(line)) {
             if (debug_output) std::cerr << "Skipping topology line in nonbonded section: " << line << std::endl;
             continue;
         }
-        
+
         if (debug_output) std::cerr << "Processing cleaned line: [" << line << "]" << std::endl;
         tokens = PrmParserStructures::tokenize(line);
         if (debug_output) {
@@ -117,12 +117,12 @@ void PrmParserSections::parseNonbondedSection(std::istream& input, pygcmc::model
             }
             std::cerr << std::endl;
         }
-        
+
         if (tokens.empty()) continue;
-        
+
         // Check for section end or new section
-        if (line == "END" || line == "end" || PrmParserStructures::isAtomsSection(line) || PrmParserStructures::isBondsSection(line) || 
-            PrmParserStructures::isAnglesSection(line) || PrmParserStructures::isDihedralsSection(line) || 
+        if (line == "END" || line == "end" || PrmParserStructures::isAtomsSection(line) || PrmParserStructures::isBondsSection(line) ||
+            PrmParserStructures::isAnglesSection(line) || PrmParserStructures::isDihedralsSection(line) ||
             PrmParserStructures::isImproperSection(line)) {
             if (debug_output) std::cerr << "Found section end marker: " << tokens[0] << std::endl;
             break;
@@ -137,14 +137,14 @@ void PrmParserSections::parseNonbondedSection(std::istream& input, pygcmc::model
             input.seekg(linePos);
             break;
         }
-        
+
         // If we find NBFIX, parse it as a new section
         if (PrmParserStructures::isNBFixSection(line)) {
             if (debug_output) std::cerr << "Found NBFIX section" << std::endl;
             PrmParserBondedSections::parseNBFixSection(input, ff, debug_output);
             break;
         }
-        
+
         // Format: atomType ignored epsilon Rmin [ignored ignored ignored ignored]
         if (tokens.size() >= 4) {
             std::string atomType = tokens[0];
@@ -152,15 +152,15 @@ void PrmParserSections::parseNonbondedSection(std::istream& input, pygcmc::model
             try {
                 double epsilon = PrmParserStructures::safe_stod(tokens[2], "LJ epsilon for " + atomType);
                 double rmin_half = PrmParserStructures::safe_stod(tokens[3], "LJ Rmin/2 for " + atomType);
-                
+
                 if (debug_output) {
                     std::cerr << "\n*** Parsing atom type: " << atomType << " ***" << std::endl;
                     std::cerr << "  epsilon = " << epsilon << std::endl;
                     std::cerr << "  rmin_half = " << rmin_half << std::endl;
                 }
-                
+
                 ff.add_lj_params(atomType, epsilon, rmin_half);
-                
+
                 if (debug_output) {
                     std::cerr << "Successfully stored " << atomType << " parameters" << std::endl;
                     std::cerr << "Current lj_params map size: " << ff.get_num_lj_params() << std::endl;
@@ -169,11 +169,11 @@ void PrmParserSections::parseNonbondedSection(std::istream& input, pygcmc::model
                 throw std::runtime_error("Failed to parse LJ parameters for " + atomType + ": " + e.what());
             }
         } else if (!tokens.empty() && !PrmParserStructures::isCommentLine(line)) {
-            throw std::runtime_error("Malformed NONBONDED parameters in line: " + line + 
+            throw std::runtime_error("Malformed NONBONDED parameters in line: " + line +
                                    "\nExpected at least 4 tokens, got " + std::to_string(tokens.size()));
         }
     }
-    
+
     if (debug_output) std::cerr << "\n=== Finished NONBONDED section parsing ===" << std::endl;
     if (debug_output) std::cerr << "Final lj_params map size: " << ff.get_num_lj_params() << std::endl;
 }

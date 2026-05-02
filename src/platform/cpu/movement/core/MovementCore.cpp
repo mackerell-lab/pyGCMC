@@ -32,9 +32,9 @@ public:
     std::unique_ptr<TranslationMove> translationMove;
     std::unique_ptr<RotationMove> rotationMove;
     std::unique_ptr<MultiInsertionCBMC> multiInsertionCBMC;
-    
+
     std::mt19937 rng;
-    
+
     Impl() : rng(std::chrono::steady_clock::now().time_since_epoch().count()) {}
 };
 
@@ -51,7 +51,7 @@ MovementModule::MovementModule(const MovementParams& params)
       cavityCore_(std::make_unique<CavityBiasCore>(params.cavityGridSpacing, params.probeRadius)),  // New, uses nm directly
       configBiasManager_(std::make_unique<ConfigBiasManager>(params.numConfigTrials)),
       energyCalc_(nullptr) {
-    
+
     initializeComponents();
 }
 
@@ -62,36 +62,36 @@ void MovementModule::initializeComponents() {
     if (params_.seed != 0) {
         utils::RandomUtils::setSeed(params_.seed);
     }
-    
+
     // Adjust cavity grid spacing
     if (cavityManager_ && params_.useCavityBias) {
         double spacingNm = params_.cavityGridSpacing;
-        
+
         // Avoid overly fine grids that cause performance issues
         spacingNm = std::max(spacingNm, 0.2);  // Minimum 0.2 nm
         cavityManager_->setGridSpacing(spacingNm * 10.0);  // Convert to Angstroms
     }
-    
+
     // Configure new cavity core (uses nm directly)
     if (cavityCore_ && params_.useCavityBias) {
         double spacingNm = std::max(params_.cavityGridSpacing, 0.2);  // Minimum 0.2 nm
         cavityCore_->setGridSpacing(spacingNm);
         cavityCore_->setProbeRadius(params_.probeRadius);
     }
-    
+
     // Initialize movement implementations
     pImpl_->insertionMove = std::make_unique<InsertionMove>(
         activePool_.get(), cavityManager_.get(), energyCalc_.get(), cavityCore_.get());
-    
+
     pImpl_->deletionMove = std::make_unique<DeletionMove>(
         activePool_.get(), cavityManager_.get(), energyCalc_.get(), cavityCore_.get());
-    
+
     pImpl_->translationMove = std::make_unique<TranslationMove>(
         activePool_.get(), energyCalc_.get());
-    
+
     pImpl_->rotationMove = std::make_unique<RotationMove>(
         activePool_.get(), configBiasManager_.get(), energyCalc_.get());
-    
+
     // Initialize multi-insertion CBMC if enabled
     if (params_.useMultiInsertionCBMC && params_.maxParallelInsertions > 0) {
         MultiInsertionConfig config;
@@ -102,20 +102,20 @@ void MovementModule::initializeComponents() {
         config.displacementFraction = params_.multiDisplacementFraction;
         config.useRegionVolume = params_.multiUseRegionVolume;
         config.useCavityBias = params_.useCavityBias;  // Pass cavity bias flag
-        
+
         // Set independence control parameters
         // Note: cutoff will be set from MCState when actually used
         config.cutoffNm = 1.2;  // Default cutoff in nm (will be updated from state)
         config.moleculeExtentNm = 0.15;    // Default for water, should be configurable
         config.enforceIndependence = true; // Always enforce for correctness
         config.recomputeAfterAccept = false; // Expensive fallback, off by default
-        
+
         pImpl_->multiInsertionCBMC = std::make_unique<MultiInsertionCBMC>(config, cavityManager_.get());
         if (params_.seed != 0) {
             pImpl_->multiInsertionCBMC->setSeed(params_.seed);
         }
     }
-    
+
     // Initialize statistics
     stats_["insert"] = Statistics();
     stats_["delete"] = Statistics();
@@ -162,21 +162,21 @@ MovementResult MovementModule::attemptInsertion(MCState& state, int moleculeType
     auto startTime = std::chrono::high_resolution_clock::now();
 
     applyLifecycleControls(state);
-    
+
     if (moleculeType >= 0) {
         pImpl_->insertionMove->setMoleculeType(moleculeType);
     }
-    
+
     // Use InsertionMove's attemptInsertion which properly routes to the right method
     MovementResult result = pImpl_->insertionMove->attemptInsertion(state, params_);
-    
+
     auto endTime = std::chrono::high_resolution_clock::now();
     result.computeTimeMs = std::chrono::duration<double, std::milli>(endTime - startTime).count();
-    
+
     updateStatistics("insert", result.accepted, result.energyChange);
-    
+
     // No longer tracking last inserted residue to ensure standard GCMC uniform deletion
-    
+
     return result;
 }
 
@@ -184,24 +184,24 @@ MovementResult MovementModule::attemptDeletion(MCState& state, int residueIndex)
     auto startTime = std::chrono::high_resolution_clock::now();
 
     applyLifecycleControls(state);
-    
+
     // For standard GCMC, deletion target should be selected uniformly at random
     // The previous "last inserted" preference was non-standard and biased the ensemble
     // This is now handled in DeletionMove::performDeletion() with uniform selection
-    
+
     MovementResult result = pImpl_->deletionMove->performDeletion(state, params_, residueIndex);
-    
+
     auto endTime = std::chrono::high_resolution_clock::now();
     result.computeTimeMs = std::chrono::duration<double, std::milli>(endTime - startTime).count();
-    
+
     updateStatistics("delete", result.accepted, result.energyChange);
-    
+
     // Invalidate cavity cache after accepted deletion
     if (result.accepted) {
         if (cavityManager_) cavityManager_->invalidateCache();
         if (cavityCore_) cavityCore_->invalidateCache();
     }
-    
+
     return result;
 }
 
@@ -209,20 +209,20 @@ MovementResult MovementModule::attemptTranslation(MCState& state, int residueInd
     auto startTime = std::chrono::high_resolution_clock::now();
 
     applyLifecycleControls(state);
-    
+
     MovementResult result = pImpl_->translationMove->performTranslation(state, params_, residueIndex);
-    
+
     auto endTime = std::chrono::high_resolution_clock::now();
     result.computeTimeMs = std::chrono::duration<double, std::milli>(endTime - startTime).count();
-    
+
     updateStatistics("translate", result.accepted, result.energyChange);
-    
+
     // Invalidate cavity cache after accepted translation
     if (result.accepted) {
         if (cavityManager_) cavityManager_->invalidateCache();
         if (cavityCore_) cavityCore_->invalidateCache();
     }
-    
+
     return result;
 }
 
@@ -230,26 +230,26 @@ MovementResult MovementModule::attemptRotation(MCState& state, int residueIndex)
     auto startTime = std::chrono::high_resolution_clock::now();
 
     applyLifecycleControls(state);
-    
+
     MovementResult result;
-    
+
     if (params_.useConfigBias) {
         result = pImpl_->rotationMove->performConfigBiasRotation(state, params_, residueIndex);
     } else {
         result = pImpl_->rotationMove->performSimpleRotation(state, params_, residueIndex);
     }
-    
+
     auto endTime = std::chrono::high_resolution_clock::now();
     result.computeTimeMs = std::chrono::duration<double, std::milli>(endTime - startTime).count();
-    
+
     updateStatistics("rotate", result.accepted, result.energyChange);
-    
+
     // Invalidate cavity cache after accepted rotation
     if (result.accepted) {
         if (cavityManager_) cavityManager_->invalidateCache();
         if (cavityCore_) cavityCore_->invalidateCache();
     }
-    
+
     return result;
 }
 
@@ -257,11 +257,11 @@ MovementResult MovementModule::attemptCavityBiasInsertion(MCState& state, int mo
     // Force cavity bias
     bool originalSetting = params_.useCavityBias;
     params_.useCavityBias = true;
-    
+
     MovementResult result = attemptInsertion(state, moleculeType);
-    
+
     params_.useCavityBias = originalSetting;
-    
+
     return result;
 }
 
@@ -269,11 +269,11 @@ MovementResult MovementModule::attemptConfigBiasRotation(MCState& state, int res
     // Force configurational bias
     bool originalSetting = params_.useConfigBias;
     params_.useConfigBias = true;
-    
+
     MovementResult result = attemptRotation(state, residueIndex);
-    
+
     params_.useConfigBias = originalSetting;
-    
+
     return result;
 }
 
@@ -304,12 +304,12 @@ void MovementModule::resetStatistics() {
     for (auto& pair : stats_) {
         pair.second = Statistics();
     }
-    
+
     pImpl_->insertionMove->resetStatistics();
     pImpl_->deletionMove->resetStatistics();
     pImpl_->translationMove->resetStatistics();
     pImpl_->rotationMove->resetStatistics();
-    
+
     activePool_->resetStatistics();
     cavityManager_->resetStatistics();
     configBiasManager_->resetStatistics();
@@ -324,7 +324,7 @@ void MovementModule::setParams(const MovementParams& params) {
     initialRemovalApplied_ = false;
     forcedInitialRemovals_.clear();
     forcedExcessRemovals_.clear();
-    
+
     // Reseed RNGs when a non-zero seed is provided
     if (params_.seed != 0) {
         utils::RandomUtils::setSeed(params_.seed);
@@ -332,7 +332,7 @@ void MovementModule::setParams(const MovementParams& params) {
             pImpl_->multiInsertionCBMC->setSeed(params_.seed);
         }
     }
-    
+
     // Update component configurations (convert nm to Angstroms by multiplying by 10)
     cavityManager_->setGridSpacing(params_.cavityGridSpacing * 10.0);
     cavityManager_->setProbeRadius(params_.probeRadius * 10.0);
@@ -362,7 +362,7 @@ std::vector<MovementResult> MovementModule::attemptMultiInsertionCBMC(MCState& s
     std::vector<MovementResult> results;
 
     applyLifecycleControls(state);
-    
+
     if (!pImpl_->multiInsertionCBMC) {
         // Initialize if not already done
         MultiInsertionConfig config;
@@ -374,43 +374,43 @@ std::vector<MovementResult> MovementModule::attemptMultiInsertionCBMC(MCState& s
         config.displacementFraction = params_.multiDisplacementFraction > 0 ? params_.multiDisplacementFraction : 0.5;
         config.useRegionVolume = params_.multiUseRegionVolume;
         config.useCavityBias = params_.useCavityBias;  // Pass cavity bias flag
-        
+
         // Set independence control parameters
         // Get cutoff from state
         config.cutoffNm = state.info.cutoff;  // Already in nm
         config.moleculeExtentNm = 0.15;    // Default for water
         config.enforceIndependence = true; // Always enforce for correctness
         config.recomputeAfterAccept = false; // Expensive fallback, off by default
-        
+
         pImpl_->multiInsertionCBMC = std::make_unique<MultiInsertionCBMC>(config, cavityManager_.get());
-        
+
         // Set seed for reproducibility in fallback path
         if (params_.seed != 0) {
             pImpl_->multiInsertionCBMC->setSeed(params_.seed);
         }
     }
-    
+
     auto startTime = std::chrono::high_resolution_clock::now();
-    
+
     // Perform multi-insertion
     auto [acceptCount, regions] = pImpl_->multiInsertionCBMC->performMultiInsertion(
         state, moleculeType, params_);
-    
+
     auto endTime = std::chrono::high_resolution_clock::now();
     double totalTimeMs = std::chrono::duration<double, std::milli>(endTime - startTime).count();
-    
+
     // Create results for each region
     // First, commit accepted molecules to the state in batch
     for (const auto& region : regions) {
         if (region.accepted && region.selectedConfig >= 0) {
             // Insert accepted configuration into active pool and state
             activePool_->insertMolecule(region.trialConfigs[region.selectedConfig], moleculeType);
-            
+
             // Sync to state - add atoms and residue
             for (const auto& atom : region.trialConfigs[region.selectedConfig]) {
                 state.addAtom(atom);
             }
-            
+
             // Add residue
             MCResidue newRes;
             newRes.atomStart = state.activeAtomCount - region.trialConfigs[region.selectedConfig].size();
@@ -422,18 +422,18 @@ std::vector<MovementResult> MovementModule::attemptMultiInsertionCBMC(MCState& s
                 region.rosenbluthWeight > 0.0 ? region.rosenbluthWeight : 1.0;
         }
     }
-    
+
     // Count accepts
     int actualAccepts = 0;
     for (const auto& region : regions) {
         if (region.accepted) actualAccepts++;
     }
-    
+
     // Invalidate cavity cache only when necessary (when molecules were actually accepted)
     if (cavityManager_ && params_.useCavityBias && actualAccepts > 0) {
         cavityManager_->invalidateCache();
     }
-    
+
     const double perRegionTime = regions.empty() ? 0.0 : totalTimeMs / regions.size();
 
     for (const auto& region : regions) {
@@ -465,10 +465,10 @@ std::vector<MovementResult> MovementModule::attemptMultiInsertionCBMC(MCState& s
         result.logAcceptanceRatio = region.grandEval.logRatio;
         result.acceptanceProbability = region.grandEval.probability;
         results.push_back(result);
-        
+
         updateStatistics("multi_insert", result.accepted, result.energyChange);
     }
-    
+
     return results;
 }
 

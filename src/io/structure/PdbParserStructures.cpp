@@ -36,7 +36,7 @@ const std::map<std::string, double> PdbParserStructures::ELEMENT_MASSES = {
 
 PdbParserStructures::RecordType PdbParserStructures::getRecordType(const std::string& line) {
     if (line.length() < 6) return RecordType::UNKNOWN;
-    
+
     std::string recordName = line.substr(0, 6);
     if (recordName == "ATOM  ") return RecordType::ATOM;
     if (recordName == "HETATM") return RecordType::HETATM;

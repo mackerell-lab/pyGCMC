@@ -42,12 +42,12 @@ struct FragmentTemplate {
     std::vector<std::string> atomTypeNames;
     double molecularWeight{0.0};           // Molecular weight (g/mol)
     double radius{0.0};                    // Effective radius (nm)
-    
+
     // Thermodynamic properties
     double chemicalPotential{0.0};         // Chemical potential μ (kJ/mol)
     double activity{1.0};                  // Activity z = exp(β*μ)
     double concentration{0.0};             // Target concentration (M)
-    
+
     // Topology information
     struct Bond {
         int atom1, atom2;
@@ -61,36 +61,36 @@ struct FragmentTemplate {
         int atom1, atom2, atom3, atom4;
         double angle;  // in radians
     };
-    
+
     std::vector<Bond> bonds;
     std::vector<Angle> angles;
     std::vector<Dihedral> dihedrals;
-    
+
     // Insertion preferences
     bool useCavityBias = true;            // Use cavity-biased insertion
     bool useConfigBias = false;           // Use configurational bias (CBMC)
     int configBiasTrials = 10;            // Number of trial configurations
-    
+
     // Constraints
     bool isRigid = true;                  // Rigid molecule (no internal DOF)
     bool allowRotation = true;            // Allow rotation during MC
     bool allowTranslation = true;         // Allow translation during MC
-    
+
     // Statistics (mutable for const access)
     mutable int totalInsertions = 0;
     mutable int successfulInsertions = 0;
     mutable double averageLifetime = 0.0;
-    
+
     // Helper functions
     double getInsertionProbability() const {
-        return totalInsertions > 0 ? 
+        return totalInsertions > 0 ?
             static_cast<double>(successfulInsertions) / totalInsertions : 0.0;
     }
-    
+
     void updateActivity(double beta) {
         activity = std::exp(beta * chemicalPotential);
     }
-    
+
     void calculateActivity(double temperature) {
         double beta = 1.0 / (8.314e-3 * temperature);  // kJ/mol/K
         updateActivity(beta);
@@ -106,46 +106,46 @@ struct FragmentInstance {
     int templateId;                        // Template ID
     int instanceId;                        // Unique instance ID
     int residueIndex;                      // Index in ActivePool
-    
+
     // State
     bool isActive = true;                  // Active in simulation
     bool isGhost = false;                  // Ghost state (deleted but not recycled)
     bool isFixed = false;                  // Fixed position (no movement)
-    
+
     // Position and orientation
     Vector3 centerOfMass;                  // Center of mass position
     Vector3 position;                       // Position (alias for centerOfMass)
     Quaternion orientation;                // Orientation quaternion
     Vector3 velocity;                      // Velocity (for future MD)
-    
+
     // Energy
     double energy_vdw = 0.0;              // van der Waals energy
-    double energy_elec = 0.0;             // Electrostatic energy  
+    double energy_elec = 0.0;             // Electrostatic energy
     double energy_total = 0.0;            // Total energy
     double lastEnergyUpdate = -1.0;       // MC step of last energy update (-1 => invalid/uncomputed)
-    
+
     // Neighbor lists (cached)
     std::vector<int> proteinNeighbors;    // Neighboring protein atoms
     std::vector<int> fragmentNeighbors;   // Neighboring fragment instances
     double neighborListCutoff = 12.0;     // Cutoff for neighbor list
     double lastNeighborUpdate = 0.0;      // MC step of last update
-    
+
     // History
     double insertionTime = 0.0;            // MC step when inserted
     double lastMoveTime = 0.0;             // MC step of last accepted move
     int moveAttempts = 0;                 // Total move attempts
     int acceptedMoves = 0;                // Accepted moves
-    
+
     // Helper functions
     double getAcceptanceRate() const {
-        return moveAttempts > 0 ? 
+        return moveAttempts > 0 ?
             static_cast<double>(acceptedMoves) / moveAttempts : 0.0;
     }
-    
+
     double getLifetime(double currentStep) const {
         return currentStep - insertionTime;
     }
-    
+
     bool needsNeighborUpdate(double currentStep, double updateFrequency = 100) const {
         return (currentStep - lastNeighborUpdate) > updateFrequency;
     }
@@ -167,7 +167,7 @@ public:
         bool trackStatistics = true;       // Enable detailed statistics
         int statisticsWindow = 1000;       // Window for moving averages
     };
-    
+
     // Statistics
     struct Statistics {
         // Per-type statistics
@@ -175,7 +175,7 @@ public:
         std::map<int, int> ghostCountByType;
         std::map<int, double> averageLifetimeByType;
         std::map<int, double> acceptanceRateByType;
-        
+
         // Global statistics
         int totalInsertions = 0;
         int totalDeletions = 0;
@@ -184,49 +184,49 @@ public:
         double averageGhostLifetime = 0.0;
         double peakActiveCount = 0;
         double averageActiveCount = 0.0;
-        
+
         // Performance metrics
         double insertionTimeMs = 0.0;
         double deletionTimeMs = 0.0;
         double queryTimeMs = 0.0;
         int cacheHits = 0;
         int cacheMisses = 0;
-        
+
         void print() const;
         void reset();
     };
-    
+
 public:
     // Constructor/Destructor
     explicit FragmentReservoir(std::shared_ptr<ActivePool> pool = nullptr);
     FragmentReservoir(const Config& config, std::shared_ptr<ActivePool> pool = nullptr);
     ~FragmentReservoir();
-    
+
     // === Template Management ===
-    
+
     // Add a new fragment template
     int addTemplate(const FragmentTemplate& tmpl);
-    
+
     // Load template from file
     int loadTemplate(const std::string& filename, const std::string& name,
                     double chemicalPotential = 0.0);
-    
+
     // Get template by ID or name
     FragmentTemplate* getTemplate(int templateId);
     const FragmentTemplate* getTemplate(int templateId) const;
     FragmentTemplate* getTemplate(const std::string& name);
     const FragmentTemplate* getTemplate(const std::string& name) const;
     int getTemplateCount() const { return templates_.size(); }
-    
+
     // Update template properties
     void updateChemicalPotential(int templateId, double mu);
     void updateActivity(int templateId, double beta);
     void updateAllActivities(double beta);
-    
+
     // === Instance Management ===
-    
+
     // Create a new fragment instance
-    int createInstance(int templateId, 
+    int createInstance(int templateId,
                       const Vector3& position,
                       const Quaternion& orientation = Quaternion());
 
@@ -246,95 +246,95 @@ public:
     // Clear all instances (active/ghost) while keeping templates/types.
     // Useful for checkpoint restore where MCState is restored externally.
     void clearInstances();
-    
+
     // Create with configurational bias
     int createInstanceCBMC(int templateId,
                           const std::vector<Vector3>& trialPositions,
                           const std::vector<double>& trialEnergies);
-    
+
     // Delete an instance (convert to ghost)
     bool deleteInstance(int instanceId);
-    
+
     // Restore a deleted (ghost) instance back to active state
     // Returns true if successfully restored, false otherwise
-    bool restoreInstance(int instanceId, 
+    bool restoreInstance(int instanceId,
                         const Vector3& position,
                         const Quaternion& orientation);
-    
+
     // Permanently remove an instance
     bool purgeInstance(int instanceId);
-    
+
     // Batch operations
-    std::vector<int> createMultipleInstances(int templateId, 
+    std::vector<int> createMultipleInstances(int templateId,
                                             const std::vector<Vector3>& positions);
     int deleteMultipleInstances(const std::vector<int>& instanceIds);
-    
+
     // === Ghost Management ===
-    
+
     // Recycle a ghost fragment
     int recycleGhost(int templateId);
-    
+
     // Purge old ghosts
     int purgeGhosts(int maxToKeep = -1);
-    
+
     // Get ghost statistics
     int getGhostCount(int templateId = -1) const;
     std::vector<int> getGhostIndices() const;
-    
+
     // === Query Operations ===
-    
+
     // Get active instances
     std::vector<int> getActiveInstances(int templateId = -1) const;
     int getActiveCount(int templateId = -1) const;
-    
+
     // Get instance
     FragmentInstance* getInstance(int instanceId);
     const FragmentInstance* getInstance(int instanceId) const;
     FragmentInstance* getInstanceByResidueIndex(int residueIdx);
-    
+
     // Find instances in region
     std::vector<int> findInstancesInSphere(const Vector3& center, double radius) const;
     std::vector<int> findInstancesInBox(const Vector3& min, const Vector3& max) const;
-    
+
     // Get instances by property
     std::vector<int> getInstancesByEnergy(double minE, double maxE) const;
-    std::vector<int> getInstancesByLifetime(double minTime, double maxTime, 
+    std::vector<int> getInstancesByLifetime(double minTime, double maxTime,
                                            double currentStep) const;
-    
+
     // === Energy Management ===
-    
+
     // Get energy (inline implementations at bottom)
     double getTotalEnergy(int instanceId) const;
     double getVdwEnergy(int instanceId) const;
     double getElecEnergy(int instanceId) const;
-    
-    // NOTE: Additional methods for neighbor management, movement tracking, 
+
+    // NOTE: Additional methods for neighbor management, movement tracking,
     // and synchronization are not implemented in this stub version
-    
+
     // Minimal methods required by GCMCEngine
     void updatePosition(int instanceId, const Vector3& newPos);
     void updateOrientation(int instanceId, const Quaternion& newOrient);
-    
+
     // === Statistics ===
-    
+
     const Statistics& getStatistics() const { return stats_; }
     void resetStatistics();
     void printStatistics() const;
-    
+
     // === Configuration ===
-    
+
     const Config& getConfig() const { return config_; }
     void setConfig(const Config& config) { config_ = config; }
-    
+
     // === Utility ===
-    
+
     // Memory management
     void compact();
     double getFragmentation() const;
-    
+
     // NOTE: Additional utility methods (time management, validation, serialization)
     // are not implemented in this stub version
-    
+
 private:
     // Ghost record structure for tracking deleted instances
     struct GhostRecord {
@@ -342,59 +342,59 @@ private:
         int templateId;
         double deletionStep;
     };
-    
+
     // === Private Data Members ===
-    
+
     // Templates
     std::map<int, FragmentTemplate> templates_;
     std::map<std::string, int> templateNameMap_;
-    
-    // Instances  
+
+    // Instances
     std::map<int, FragmentInstance> instances_;
     std::set<int> activeInstances_;                     // Active instance IDs
     std::set<int> ghostInstances_;                      // Ghost instance IDs
     std::map<int, std::set<int>> templateInstances_;    // Instances by template
     std::map<int, std::queue<int>> ghostQueues_;        // Ghost queues by template
-    
+
     // Active management
     std::shared_ptr<ActivePool> pool_;                  // Underlying storage
-    
+
     // Configuration and statistics
     Config config_;
     mutable Statistics stats_;
-    
+
     // Current state
     int nextInstanceId_ = 0;
     int nextTemplateId_ = 0;
     double currentStep_ = 0.0;
-    
+
     // Ghost pool management (using deque for FIFO)
     std::unordered_map<int, std::deque<GhostRecord>> ghostPools_;  // Per-template FIFO ghost pools
     std::unordered_map<int, int> perTypeActiveCount_;               // Active count per template type
-    
+
     // === Private Helper Functions ===
-    
+
     // Instance management helpers
     int allocateInstanceSlot();
     void freeInstanceSlot(int slot);
     std::vector<MCAtom> transformAtoms(const std::vector<MCAtom>& atoms,
                                        const Vector3& position,
                                        const Quaternion& orientation) const;
-    
-    // Ghost management helpers  
+
+    // Ghost management helpers
     void convertToGhost(int instanceId);
     void recycleGhostSlot(int instanceId);
     int selectGhostForRecycling(int templateId);
-    
+
     // Statistics helpers
     void updateStatistics(int templateId, const std::string& operation);
     void updateAverageLifetime(int templateId, double lifetime);
     void updateAcceptanceRate(int templateId, double rate);
-    
+
     // Memory management helpers
     bool shouldCompact() const;
     void performCompaction();
-    
+
     // Validation helpers
     bool isValidInstanceId(int id) const;
     bool isValidTemplateId(int id) const;

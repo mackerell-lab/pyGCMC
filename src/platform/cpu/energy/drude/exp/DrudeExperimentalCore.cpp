@@ -10,13 +10,13 @@ namespace platform {
 namespace cpu {
 namespace exp {
 
-DrudeExperimentalCore::DrudeExperimentalCore() 
+DrudeExperimentalCore::DrudeExperimentalCore()
     : m_includeCoulomb(false) {
     m_scf = std::make_unique<DrudeSCFOM>();
-    
+
     // Default to S1_POINT_CHARGE algorithm - the standard CHARMM/OpenMM model
     m_scf->setAlgorithm(DrudeAlgorithm::S1_POINT_CHARGE);
-    
+
     // Set parameters optimized for standard S1 point charge model
     m_params.tolerance = 1e-5;
     m_params.maxIterations = 300;  // More iterations for better convergence
@@ -46,7 +46,7 @@ double DrudeExperimentalCore::calculateEnergy(model::MCState& state) {
         // Use fast SCF optimizer
         converged = m_scf->optimize(state, m_particles, m_screenedPairs, m_params);
     }
-    
+
     if (!converged) {
         if (m_params.requireConvergence) {
             throw std::runtime_error("Experimental Drude SCF did not converge in calculateEnergy");
@@ -58,40 +58,40 @@ double DrudeExperimentalCore::calculateEnergy(model::MCState& state) {
 
     // Return polarization (spring) energy only to avoid double counting
     double energy = 0.0;
-    
+
     for (const auto& p : m_particles) {
         if (p.drudeIndex < 0 || p.drudeIndex >= state.activeAtomCount ||
             p.parentIndex < 0 || p.parentIndex >= state.activeAtomCount) {
             continue;
         }
-        
+
         const auto& d = state.atoms[p.drudeIndex];
         const auto& o = state.atoms[p.parentIndex];
-        
+
         double dx = d.x - o.x;
         double dy = d.y - o.y;
         double dz = d.z - o.z;
-        
+
         // Apply PBC
         std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
         DrudeSCFOM::applyPBC(dx, dy, dz, box);
-        
+
         double r2 = dx*dx + dy*dy + dz*dz;
         energy += 0.5 * p.kSpring * r2;
-        
+
         // Add anisotropic terms if present
         if (p.aniso12 != 0 || p.aniso34 != 0) {
             // Simple anisotropy for now (can be expanded)
             // This would need proper orientation vectors in full implementation
         }
     }
-    
+
     // Optionally include Coulomb energy for testing (normally should be false)
     if (m_includeCoulomb) {
         // This would add Coulomb energy calculation
         // Not implemented here as we want to avoid double counting
     }
-    
+
     return energy;
 }
 
@@ -99,11 +99,11 @@ void DrudeExperimentalCore::calculateForces(model::MCState& state, std::vector<V
     if (forces.size() != static_cast<size_t>(state.activeAtomCount)) {
         forces.assign(state.activeAtomCount, {0.0, 0.0, 0.0});
     }
-    
+
     if (m_particles.empty()) {
         return;
     }
-    
+
     // Ensure positions are at SCF minimum
     bool converged = m_scf->optimize(state, m_particles, m_screenedPairs, m_params);
     if (!converged) {
@@ -114,31 +114,31 @@ void DrudeExperimentalCore::calculateForces(model::MCState& state, std::vector<V
             std::cerr << "Warning: Experimental Drude SCF did not converge in calculateForces\n";
         }
     }
-    
+
     // Spring forces only; Coulomb handled by main nonbonded module
     for (const auto& p : m_particles) {
         if (p.drudeIndex < 0 || p.drudeIndex >= state.activeAtomCount ||
             p.parentIndex < 0 || p.parentIndex >= state.activeAtomCount) {
             continue;
         }
-        
+
         const auto& d = state.atoms[p.drudeIndex];
         const auto& o = state.atoms[p.parentIndex];
-        
+
         double dx = d.x - o.x;
         double dy = d.y - o.y;
         double dz = d.z - o.z;
-        
+
         std::array<double, 3> box = {state.info.box[0], state.info.box[1], state.info.box[2]};
         DrudeSCFOM::applyPBC(dx, dy, dz, box);
-        
+
         Vec3 f = {-p.kSpring * dx, -p.kSpring * dy, -p.kSpring * dz};
-        
+
         // Apply equal and opposite forces
         forces[p.drudeIndex][0] += f[0];
         forces[p.drudeIndex][1] += f[1];
         forces[p.drudeIndex][2] += f[2];
-        
+
         forces[p.parentIndex][0] -= f[0];
         forces[p.parentIndex][1] -= f[1];
         forces[p.parentIndex][2] -= f[2];
@@ -153,8 +153,8 @@ int DrudeExperimentalCore::addParticle(const DrudeParticle& particle) {
 }
 
 void DrudeExperimentalCore::addScreenedPair(const ScreenedPair& pair) {
-    if (pair.dipole1 < 0 || pair.dipole2 < 0 || 
-        static_cast<size_t>(pair.dipole1) >= m_particles.size() || 
+    if (pair.dipole1 < 0 || pair.dipole2 < 0 ||
+        static_cast<size_t>(pair.dipole1) >= m_particles.size() ||
         static_cast<size_t>(pair.dipole2) >= m_particles.size()) {
         throw std::runtime_error("Invalid screened pair indices");
     }
@@ -231,19 +231,19 @@ bool DrudeExperimentalCore::inSameMolecule(int atom1, int atom2, const model::MC
         if (i >= static_cast<int>(state.residues.size())) {
             break;
         }
-        
+
         const auto& res = state.residues[i];
         int start = res.atomStart;
         int end = start + res.atomCount;
-        
+
         bool atom1InRes = (atom1 >= start && atom1 < end);
         bool atom2InRes = (atom2 >= start && atom2 < end);
-        
+
         if (atom1InRes && atom2InRes) {
             return true;  // Both atoms in same residue
         }
     }
-    
+
     return false;  // Atoms in different residues
 }
 

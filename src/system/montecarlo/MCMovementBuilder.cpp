@@ -19,19 +19,19 @@ void MCMovementBuilder::buildFinalState(
     // Reserve space for efficiency
     newState.atoms.reserve(newState.atoms.capacity());
     newState.residues.reserve(newState.residues.capacity());
-    
+
     int newAtomStart = 0;
     int newResIdx = 0;
 
     // Match residues to movement molecules
-    auto [matchingResidues, matchingAtoms, otherResidues, otherAtoms] = 
+    auto [matchingResidues, matchingAtoms, otherResidues, otherAtoms] =
         matchResidues(reindexedResidues, reindexedAtoms, processedResidueNames, newState);
 
     // First put unmatched residues into newState
     addUnmatchedResidues(newState, otherResidues, otherAtoms, newAtomStart, newResIdx);
 
     // Then add movement molecule groups
-    addMovementMoleculeGroups(newState, molecules, processedResidueNames, 
+    addMovementMoleculeGroups(newState, molecules, processedResidueNames,
                              matchingResidues, matchingAtoms, newAtomStart, newResIdx);
 
     // Update newState's active counts
@@ -47,7 +47,7 @@ void MCMovementBuilder::buildFinalState(
     // Print final mapping and residue information
     system::log::LogMain::log(system::common::LogLevel::DEBUG, "\nFinal ResidueTypes mapping (newState):");
     for (size_t idx = 0; idx < newState.residueTypes.atomTypes.size(); idx++) {
-        system::log::LogMain::log(system::common::LogLevel::DEBUG, "  index=", idx, 
+        system::log::LogMain::log(system::common::LogLevel::DEBUG, "  index=", idx,
                          " name='", newState.residueTypes.atomTypes[idx], "'");
     }
 
@@ -92,13 +92,13 @@ std::tuple<
         const auto& oldRes = reindexedResidues[i];
         std::string oldResNameUpper = newState.residueTypes.getTypeName(oldRes.type);
 
-        system::log::LogMain::log(system::common::LogLevel::DEBUG, "Processing residue ", i, 
+        system::log::LogMain::log(system::common::LogLevel::DEBUG, "Processing residue ", i,
                          ": upper='", oldResNameUpper, "'",
                          oldRes.active ? " (active)" : " (inactive)");
 
         bool matched = false;
         for (size_t m = 0; m < processedResidueNames.size(); m++) {
-            system::log::LogMain::log(system::common::LogLevel::DEBUG, "   Comparing with processedResidueNames[", m, "]: '", 
+            system::log::LogMain::log(system::common::LogLevel::DEBUG, "   Comparing with processedResidueNames[", m, "]: '",
                              processedResidueNames[m], "'");
             if (oldResNameUpper == processedResidueNames[m]) {
                 system::log::LogMain::log(system::common::LogLevel::DEBUG, "   Residue ", i, " matched movement molecule index ", m);
@@ -117,12 +117,12 @@ std::tuple<
 
     // Output the number of residues matched for each movement molecule type
     for (size_t m = 0; m < processedResidueNames.size(); m++) {
-        system::log::LogMain::log(system::common::LogLevel::DEBUG, "Movement molecule index ", m, " ('", 
-                         processedResidueNames[m], "') collected ", 
+        system::log::LogMain::log(system::common::LogLevel::DEBUG, "Movement molecule index ", m, " ('",
+                         processedResidueNames[m], "') collected ",
                          matchingResidues[m].size(), " active residues.");
     }
 
-    return std::make_tuple(std::move(matchingResidues), std::move(matchingAtoms), 
+    return std::make_tuple(std::move(matchingResidues), std::move(matchingAtoms),
                           std::move(otherResidues), std::move(otherAtoms));
 }
 
@@ -205,7 +205,7 @@ void MCMovementBuilder::addMovementMoleculeGroups(
             const auto& molAtoms = molRes->get_atoms();
             const auto& topRes = molInfo.molecular->topology_residues[0];
             int atomsPerResidue = static_cast<int>(molAtoms.size());
-            
+
             for (int c = 0; c < molInfo.maxCopies; c++) {
                 model::MCResidue newRes;
                 newRes.atomStart = newAtomStart;
@@ -225,12 +225,12 @@ void MCMovementBuilder::addMovementMoleculeGroups(
                 for (size_t i = 0; i < molAtoms.size(); i++) {
                     const auto& molAtom = molAtoms[i];
                     const auto& topAtom = molInfo.molecular->topology_atoms[topRes.atoms[i]];
-                    
+
                     model::MCAtom mcAtom;
-                    // Convert coordinates from Å to nm  
+                    // Convert coordinates from Å to nm
                     mcAtom.x = molAtom->get_x() * 0.1f;  // ANGSTROM_TO_NM
-                    mcAtom.y = molAtom->get_y() * 0.1f;  
-                    mcAtom.z = molAtom->get_z() * 0.1f;  
+                    mcAtom.y = molAtom->get_y() * 0.1f;
+                    mcAtom.z = molAtom->get_z() * 0.1f;
                     mcAtom.charge = topAtom.charge;
                     mcAtom.type = newState.atomTypes.getOrAddType(topAtom.type);
                     newState.atoms.push_back(mcAtom);
@@ -243,7 +243,7 @@ void MCMovementBuilder::addMovementMoleculeGroups(
                     newRes.center[1] += atom->get_y() * 0.1f;
                     newRes.center[2] += atom->get_z() * 0.1f;
                 }
-                
+
                 if (atomsPerResidue > 0) {
                     float invCount = 1.0f / atomsPerResidue;
                     newRes.center[0] *= invCount;
@@ -264,7 +264,7 @@ void MCMovementBuilder::addMovementMoleculeGroups(
             moveInfo.resName = resName;
             newState.movementResidues.push_back(moveInfo);
 
-            system::log::LogMain::log(system::common::LogLevel::DEBUG, 
+            system::log::LogMain::log(system::common::LogLevel::DEBUG,
                              "Added movement residue info: ", resName,
                              " start=", moveInfo.startIndex,
                              " active=", moveInfo.activeCount,
@@ -287,4 +287,4 @@ std::string MCMovementBuilder::trim(const std::string& s) const {
 
 } // namespace montecarlo
 } // namespace system
-} // namespace pygcmc 
+} // namespace pygcmc

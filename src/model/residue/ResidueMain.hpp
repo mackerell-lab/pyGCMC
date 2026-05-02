@@ -22,7 +22,7 @@ public:
     // Constructors
     Residue() = default;
 
-    Residue(const std::string& resname, int ires, 
+    Residue(const std::string& resname, int ires,
             const std::string& segid = "", int iseg = 0,
             char chain = ' ', char inscode = ' ') {
         data_.resname = resname;
@@ -40,10 +40,10 @@ public:
     int get_iseg() const noexcept { return data_.iseg; }
     char get_chain() const noexcept { return data_.chain; }
     char get_inscode() const noexcept { return data_.inscode; }
-    
+
     // CHARMM standard setters
     void set_resname(const std::string& name) noexcept { data_.resname = name; }
-    
+
     // Atom management
     void add_atom(const atom::Atom& atom) {
         // Verify atom belongs to this residue
@@ -63,8 +63,8 @@ public:
         atoms_.push_back(atom);
     }
 
-    const std::vector<std::shared_ptr<atom::Atom>>& get_atoms() const noexcept { 
-        return atoms_; 
+    const std::vector<std::shared_ptr<atom::Atom>>& get_atoms() const noexcept {
+        return atoms_;
     }
 
     std::shared_ptr<atom::Atom> find_atom(const std::string& type) const {
@@ -157,7 +157,7 @@ public:
         } catch (const std::exception&) {
             throw std::invalid_argument("Invalid residue ID format");
         }
-        
+
         if (numLen < resid.length()) {
             data_.inscode = resid[numLen];
         } else {
@@ -215,12 +215,12 @@ private:
  */
 inline bool validate_residue(const Residue& residue) {
     if (!residue.is_valid()) return false;
-    
+
     // Check all atoms in the residue
     for (const auto& atom : residue.get_atoms()) {
         if (!atom || !atom->is_valid()) return false;
     }
-    
+
     return true;
 }
 

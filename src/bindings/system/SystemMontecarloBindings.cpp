@@ -21,7 +21,7 @@ void init_montecarlo_bindings(py::module& m, py::module&) {
             if (molecular.is_none()) {
                 throw py::value_error("Molecular object cannot be None");
             }
-            
+
             try {
                 // First try MolecularSystem
                 auto* molSys = molecular.cast<pygcmc::system::MolecularSystem*>();
@@ -30,7 +30,7 @@ void init_montecarlo_bindings(py::module& m, py::module&) {
                     return;
                 }
             } catch (py::cast_error&) {}
-            
+
             try {
                 // Then try Molecular directly
                 auto mol = molecular.cast<std::shared_ptr<pygcmc::model::Molecular>>();
@@ -39,7 +39,7 @@ void init_montecarlo_bindings(py::module& m, py::module&) {
                     return;
                 }
             } catch (py::cast_error&) {}
-            
+
             throw py::type_error("Argument must be either MolecularSystem or Molecular");
         })
         .def("add_movement_molecules", [](pygcmc::system::MonteCarloSystem& self, py::list molecules) {

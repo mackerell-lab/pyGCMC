@@ -82,7 +82,7 @@ struct ResidueData {
     std::array<double, 3> com{0.0, 0.0, 0.0};  // Center of mass
 
     // Default constructor
-    ResidueData() : 
+    ResidueData() :
         resname(""),      // Residue name (e.g., ALA)
         ires(0),         // Residue number (IRES)
         segid(""),       // Segment ID (SEGID)

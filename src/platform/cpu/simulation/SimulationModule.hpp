@@ -3,7 +3,7 @@
 /**
  * @file SimulationModule.hpp
  * @brief Internal module interface for simulation components
- * 
+ *
  * This file provides internal interfaces and utilities for simulation modules,
  * similar to EnergyModule.hpp and MovementModule.hpp
  */
@@ -51,7 +51,7 @@ namespace impl {
 
 // Internal utility functions
 namespace internal {
-    
+
     /**
      * @brief Create default simulation configuration
      */
@@ -66,7 +66,7 @@ namespace internal {
         config.randomSeed = -1;
         return config;
     }
-    
+
     /**
      * @brief Create default I/O configuration
      */
@@ -81,7 +81,7 @@ namespace internal {
         config.appendMode = false;
         return config;
     }
-    
+
 } // namespace internal
 
 } // namespace simulation

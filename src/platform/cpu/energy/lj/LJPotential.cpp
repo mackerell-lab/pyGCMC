@@ -7,8 +7,8 @@ namespace lj {
 
 double calcLJEnergyBasic(double r2, double sigma, double eps) {
     return calculateLJEnergyNoSwitch<double>(
-        r2, sigma, eps, 
-        double(LJ_MIN_SAFE_DISTANCE), 
+        r2, sigma, eps,
+        double(LJ_MIN_SAFE_DISTANCE),
         double(LJ_MAX_SAFE_ENERGY)
     );
 }
@@ -16,4 +16,4 @@ double calcLJEnergyBasic(double r2, double sigma, double eps) {
 } // namespace lj
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

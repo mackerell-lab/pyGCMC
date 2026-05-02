@@ -10,7 +10,7 @@ namespace montecarlo {
 
 /**
  * @brief Movement molecule type collector
- * 
+ *
  * Collects and processes types from movement molecules for addMovementMolecules
  * operation. Handles type mapping expansion and validation.
  */
@@ -29,10 +29,10 @@ public:
 
     /**
      * @brief Collect movement types from molecule list
-     * 
+     *
      * Processes the input molecules and extracts all unique residue types
      * and atom types, adding them to the provided type maps.
-     * 
+     *
      * @param molecules List of movement molecules
      * @param residueTypes Residue type map to expand
      * @param atomTypes Atom type map to expand
@@ -45,7 +45,7 @@ public:
 
     /**
      * @brief Get processed residue names
-     * 
+     *
      * @return Vector of processed residue names (trimmed and uppercased)
      */
     const std::vector<std::string>& getProcessedResidueNames() const {
@@ -57,7 +57,7 @@ private:
 
     /**
      * @brief Process residue name (trim and uppercase)
-     * 
+     *
      * @param rawName Raw residue name from molecular data
      * @return Processed name (trimmed and uppercased)
      */
@@ -65,7 +65,7 @@ private:
 
     /**
      * @brief Trim whitespace from string
-     * 
+     *
      * @param s Input string
      * @return Trimmed string
      */
@@ -74,4 +74,4 @@ private:
 
 } // namespace montecarlo
 } // namespace system
-} // namespace pygcmc 
+} // namespace pygcmc

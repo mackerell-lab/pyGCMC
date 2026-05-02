@@ -27,7 +27,7 @@ void init_drude_bindings(py::module& m) {
     py::module constants = m.def_submodule("DrudeConstants", "Physical constants for Drude calculations");
     constants.attr("ONE_4PI_EPS0") = DrudeConstants::ONE_4PI_EPS0;
     constants.attr("DRUDE_MASS") = DrudeConstants::DRUDE_MASS;
-    
+
     // DrudeParticle
     py::class_<DrudeParticle>(m, "DrudeParticle", "Drude oscillator parameters for a single particle")
         .def(py::init<>())
@@ -46,14 +46,14 @@ void init_drude_bindings(py::module& m) {
         .def_readonly("kAniso2", &DrudeParticle::kAniso2)
         .def("computeSpringConstants", &DrudeParticle::computeSpringConstants,
              "Compute derived spring constants from charge and polarizability");
-    
+
     // ScreenedPair
     py::class_<ScreenedPair>(m, "ScreenedPair", "Thole-screened dipole-dipole interaction")
         .def(py::init<>())
         .def_readwrite("dipole1", &ScreenedPair::dipole1)
         .def_readwrite("dipole2", &ScreenedPair::dipole2)
         .def_readwrite("thole", &ScreenedPair::thole);
-    
+
     // DrudeSCFParams
     py::class_<DrudeSCFParams>(m, "DrudeSCFParams", "SCF convergence parameters")
         .def(py::init<>())
@@ -95,12 +95,12 @@ void init_drude_bindings(py::module& m) {
                        "u1: above this, use standard S1 (default: 0.9)")
         .def_readwrite("requireExactMatch", &DrudeSCFParams::requireExactMatch,
                        "Enable OpenMM-exact optimizer (default: False)");
-    
+
     // TholeMode enum
     py::enum_<TholeMode>(m, "TholeMode", "Thole screening modes")
         .value("StandardS1", TholeMode::StandardS1, "Standard theoretical S1 function")
         .value("OpenMMCompat", TholeMode::OpenMMCompat, "OpenMM-compatible implementation");
-    
+
     // DrudeAlgorithm enum
     py::enum_<DrudeAlgorithm>(m, "DrudeAlgorithm", "Available Drude optimization algorithms")
         .value("SCF", DrudeAlgorithm::SCF, "Self-Consistent Field iteration")
@@ -113,7 +113,7 @@ void init_drude_bindings(py::module& m) {
         .value("Direct", DrudeAlgorithm::Direct, "Direct polarization (ignores induced-induced)")
         .value("Hybrid", DrudeAlgorithm::Hybrid, "Hybrid FastFBP+SCF strategy")
         .value("MultiStage", DrudeAlgorithm::MultiStage, "Multi-stage Direct→FastFBP→TCG→SCF optimization");
-    
+
     // OPT3Coefficients
     py::class_<OPT3Coefficients>(m, "OPT3Coefficients", "OPT3 expansion coefficients")
         .def(py::init<>())
@@ -121,10 +121,10 @@ void init_drude_bindings(py::module& m) {
         .def_readwrite("c1", &OPT3Coefficients::c1, "First-order coefficient")
         .def_readwrite("c2", &OPT3Coefficients::c2, "Second-order coefficient")
         .def_readwrite("c3", &OPT3Coefficients::c3, "Third-order coefficient");
-    
+
     // DrudeComplete static interface
     py::class_<DrudeComplete>(m, "DrudeComplete", "Main interface for Drude force calculations")
-        .def_static("calculateEnergy", 
+        .def_static("calculateEnergy",
                     py::overload_cast<pygcmc::model::MCState&>(&DrudeComplete::calculateEnergy),
                     py::arg("state"),
                     "Calculate Drude energy with SCF optimization")
@@ -152,25 +152,25 @@ void init_drude_bindings(py::module& m) {
                     "Check if ASPC history prediction is enabled")
         .def_static("clearHistory", &DrudeComplete::clearHistory,
                     "Clear ASPC history (useful when system changes significantly)");
-    
+
     // Free function for Thole screening
     m.def("computeTholeScreening", &computeTholeScreening,
           py::arg("r"), py::arg("alpha_i"), py::arg("alpha_j"), py::arg("thole"),
           "Compute Thole screening function value");
-    
+
     // FastFBP IterationMode enum
     py::enum_<DrudeFastFBP::IterationMode>(m, "FastFBPIterationMode", "Iteration modes for FastFBP")
         .value("Fixed", DrudeFastFBP::IterationMode::Fixed, "Use fixed number of iterations")
         .value("Dynamic", DrudeFastFBP::IterationMode::Dynamic, "Dynamic iterations based on convergence")
         .value("Adaptive", DrudeFastFBP::IterationMode::Adaptive, "Adaptive with parameter adjustment");
-    
+
     // FastFBP ConvergenceStats
     py::class_<DrudeFastFBP::ConvergenceStats>(m, "FastFBPConvergenceStats", "Convergence statistics for FastFBP")
         .def_readonly("actualIterations", &DrudeFastFBP::ConvergenceStats::actualIterations)
         .def_readonly("finalError", &DrudeFastFBP::ConvergenceStats::finalError)
         .def_readonly("convergenceRate", &DrudeFastFBP::ConvergenceStats::convergenceRate)
         .def_readonly("converged", &DrudeFastFBP::ConvergenceStats::converged);
-    
+
     // FastFBPConfig class for configuration
     py::class_<DrudeFastFBP>(m, "FastFBPConfig", "Configuration for FastFBP algorithm")
         .def_static("getInstance", []() -> DrudeFastFBP* {
@@ -191,13 +191,13 @@ void init_drude_bindings(py::module& m) {
         .def("getStats", &DrudeFastFBP::getStats,
              py::return_value_policy::reference_internal,
              "Get convergence statistics from last optimization");
-    
+
     // DrudeHybrid.HybridMode enum
     py::enum_<DrudeHybrid::HybridMode>(m, "HybridMode", "Hybrid optimization strategy modes")
         .value("Fixed", DrudeHybrid::HybridMode::Fixed, "Fixed FastFBP iterations before SCF")
         .value("Dynamic", DrudeHybrid::HybridMode::Dynamic, "Dynamic switching based on convergence")
         .value("Adaptive", DrudeHybrid::HybridMode::Adaptive, "Adaptive with learning");
-    
+
     // DrudeHybrid.HybridStats
     py::class_<DrudeHybrid::HybridStats>(m, "HybridStats", "Statistics from hybrid optimization")
         .def_readonly("fbpIterations", &DrudeHybrid::HybridStats::fbpIterations, "Actual FastFBP iterations used")
@@ -206,7 +206,7 @@ void init_drude_bindings(py::module& m) {
         .def_readonly("scfTime", &DrudeHybrid::HybridStats::scfTime, "Time spent in SCF (seconds)")
         .def_readonly("switchError", &DrudeHybrid::HybridStats::switchError, "Error when switching to SCF")
         .def_readonly("converged", &DrudeHybrid::HybridStats::converged, "Final convergence status");
-    
+
     // HybridConfig class for configuration
     py::class_<DrudeHybrid>(m, "HybridConfig", "Configuration for Hybrid FastFBP+SCF algorithm")
         .def_static("getInstance", []() -> DrudeHybrid* {
@@ -225,7 +225,7 @@ void init_drude_bindings(py::module& m) {
         .def("getStats", &DrudeHybrid::getStats,
              py::return_value_policy::reference_internal,
              "Get statistics from last optimization");
-    
+
     // MultiStageConfig class
     py::class_<DrudeMultiStage::MultiStageConfig>(m, "MultiStageConfig", "Configuration for multi-stage optimization")
         .def(py::init<>())
@@ -262,7 +262,7 @@ void init_drude_bindings(py::module& m) {
                       "Density threshold for adaptation (g/cm³)")
         .def_readwrite("polarizabilityThreshold", &DrudeMultiStage::MultiStageConfig::polarizabilityThreshold,
                       "Polarizability threshold for adaptation (nm³)");
-    
+
     // MultiStageStats class
     py::class_<DrudeMultiStage::MultiStageStats>(m, "MultiStageStats", "Statistics from multi-stage optimization")
         // Timing
@@ -283,7 +283,7 @@ void init_drude_bindings(py::module& m) {
         .def_readonly("systemDensity", &DrudeMultiStage::MultiStageStats::systemDensity, "System density (g/cm³)")
         .def_readonly("avgPolarizability", &DrudeMultiStage::MultiStageStats::avgPolarizability, "Average polarizability (nm³)")
         .def_readonly("converged", &DrudeMultiStage::MultiStageStats::converged, "Final convergence status");
-    
+
     // MultiStage class for configuration
     py::class_<DrudeMultiStage>(m, "MultiStageOptimizer", "Multi-stage Direct→FastFBP→TCG→SCF optimizer")
         .def_static("getInstance", []() -> DrudeMultiStage* {
@@ -306,18 +306,18 @@ void init_drude_bindings(py::module& m) {
              py::arg("enable"), "Enable/disable TCG stage")
         .def("enableSCFStage", &DrudeMultiStage::enableSCFStage,
              py::arg("enable"), "Enable/disable SCF stage");
-    
+
     // DrudeSequentialOptimizer - Order-sensitive optimizer
     py::class_<drude::DrudeSequentialOptimizer>(m, "DrudeOptimizer")
         .def(py::init<>(), "Create an empty optimizer")
         .def(py::init([](py::kwargs kwargs) {
             // Capture kwargs in order (Python 3.7+ guarantees order)
             std::vector<std::pair<std::string, double>> sequence;
-            
+
             for (auto item : kwargs) {
                 std::string key = py::str(item.first);
                 double value = 0.0;
-                
+
                 // Handle different parameter types
                 if (py::isinstance<py::int_>(item.second)) {
                     value = item.second.cast<int>();
@@ -326,71 +326,71 @@ void init_drude_bindings(py::module& m) {
                 } else {
                     throw py::type_error("Parameter value must be numeric");
                 }
-                
+
                 // Only add if value > 0 (0 means disabled)
                 if (value > 0) {
                     sequence.push_back({key, value});
                 }
             }
-            
+
             return drude::DrudeSequentialOptimizer::fromPythonKwargs(sequence);
         }), R"pbdoc(
             Create a sequential Drude optimizer with ordered algorithm steps.
-            
+
             Parameters are specified as keyword arguments where the order matters:
             - direct: Number of iterations for direct polarization (usually 1)
             - fast_fbp: Number of iterations for Fast Force Balance Predictor
             - tcg: Number of iterations for Truncated Conjugate Gradient
             - scf: Convergence tolerance for Self-Consistent Field (in nm)
-            
+
             Example:
                 # Different orders produce different optimization sequences
                 opt1 = DrudeOptimizer(direct=1, fast_fbp=5, tcg=3)
                 opt2 = DrudeOptimizer(fast_fbp=5, direct=1, tcg=3)
-                
+
                 # For GCMC insertion (fast)
                 opt_insert = DrudeOptimizer(direct=1, fast_fbp=3)
-                
+
                 # For GCMC deletion (accurate)
                 opt_delete = DrudeOptimizer(fast_fbp=5, tcg=3)
         )pbdoc")
-        
+
         .def("optimize", &drude::DrudeSequentialOptimizer::optimize,
              py::arg("state"),
              R"pbdoc(
              Execute the optimization sequence on the given state.
-             
+
              Args:
                  state: MCState object to optimize
-                 
+
              Returns:
                  float: Final energy after optimization (kJ/mol)
          )pbdoc")
-        
+
         .def("add_step", &drude::DrudeSequentialOptimizer::addStep,
              py::arg("algorithm"), py::arg("parameter"),
              R"pbdoc(
              Add an algorithm step to the sequence.
-             
+
              Args:
                  algorithm: Algorithm name ('direct', 'fast_fbp', 'tcg', 'scf', etc.)
                  parameter: Algorithm-specific parameter (iterations or tolerance)
          )pbdoc")
-        
+
         .def("clear_sequence", &drude::DrudeSequentialOptimizer::clearSequence,
              "Clear all steps from the optimization sequence")
-        
+
         .def("get_sequence", &drude::DrudeSequentialOptimizer::getSequence,
              "Get the current optimization sequence as a list of (algorithm, parameter) tuples")
-        
+
         .def("__str__", &drude::DrudeSequentialOptimizer::toString)
-        
+
         .def("__repr__", &drude::DrudeSequentialOptimizer::toString)
-        
+
         .def("__len__", [](const drude::DrudeSequentialOptimizer& self) {
             return self.getSequence().size();
         })
-        
+
         .def("__getitem__", [](const drude::DrudeSequentialOptimizer& self, size_t i) {
             const auto& seq = self.getSequence();
             if (i >= seq.size()) {
@@ -398,7 +398,7 @@ void init_drude_bindings(py::module& m) {
             }
             return seq[i];
         });
-    
+
     // DrudeOptimizerBuilder class (optional, for fluent API)
     py::class_<drude::DrudeOptimizerBuilder>(m, "DrudeOptimizerBuilder")
         .def(py::init<>())
@@ -419,20 +419,20 @@ void init_drude_bindings(py::module& m) {
              "Add custom algorithm step")
         .def("build", &drude::DrudeOptimizerBuilder::build,
              "Build the final optimizer");
-    
+
     // ============================================================================
     // EXPERIMENTAL DRUDE IMPLEMENTATION (OpenMM-style)
     // ============================================================================
     // WARNING: DrudeExperimental may cause segmentation faults
     // Use DrudeComplete for production. This is for testing/comparison only.
     // Re-enabled temporarily for OpenMM alignment testing
-    
+
     using namespace ::pygcmc::platform::cpu::exp;
-    
+
     // Static instance for experimental version
     static DrudeExperimentalCore g_experimentalDrude;
-    
-    py::class_<DrudeExperimentalCore>(m, "DrudeExperimental", 
+
+    py::class_<DrudeExperimentalCore>(m, "DrudeExperimental",
                                       "Experimental Drude implementation with OpenMM-style algorithm (WARNING: May segfault)")
         .def_static("instance", []() -> DrudeExperimentalCore& {
             return g_experimentalDrude;

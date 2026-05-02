@@ -14,7 +14,7 @@ namespace setup {
 
 /**
  * @brief Builds complete simulation input from various file sources
- * 
+ *
  * This class orchestrates the loading of INP, PDB, TOP, PAR, and ITP files
  * to create a fully initialized MCState with real molecular structure,
  * topology, and force field parameters.
@@ -52,7 +52,7 @@ public:
 
     /**
      * @brief Build complete simulation input
-     * 
+     *
      * This method:
      * 1. Parses INP file to get all file paths and parameters
      * 2. Loads PDB structure if specified
@@ -60,7 +60,7 @@ public:
      * 4. Loads PAR force field parameters if specified
      * 5. Combines molecular data using MolecularCombiner
      * 6. Initializes MCState using MCInitializer
-     * 
+     *
      * @return Result containing all loaded data
      * @throw std::runtime_error if required files cannot be loaded
      */
@@ -68,7 +68,7 @@ public:
 
     /**
      * @brief Load fragment templates from ITP files
-     * 
+     *
      * @param fragItpFiles List of ITP file paths from INP
      * @param parameters Parsed parameters containing fragment info
      * @return Map of fragment name to template
@@ -119,9 +119,9 @@ private:
     /**
      * @brief Resolve file path relative to base directory
      */
-    std::string resolveFilePath(const std::string& path, 
+    std::string resolveFilePath(const std::string& path,
                                 const std::filesystem::path& baseDir) const;
-    
+
     void log(const std::string& message) const;
 };
 

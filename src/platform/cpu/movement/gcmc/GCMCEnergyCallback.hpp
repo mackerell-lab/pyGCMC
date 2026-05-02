@@ -15,7 +15,7 @@ using namespace model::montecarlo;
 
 /**
  * @brief Energy calculation callback interface for GCMC
- * 
+ *
  * This interface allows GCMC to use the existing energy modules
  * (DIRECT, EWALD, PME) for accurate energy calculations.
  */
@@ -25,23 +25,23 @@ public:
     using SystemEnergyFunc = std::function<double(MCState&)>;
     using ResidueEnergyFunc = std::function<double(MCState&, int)>;
     using EnergyDifferenceFunc = std::function<double(MCState&, int, const Vector3&, const Vector3&)>;
-    
-    GCMCEnergyCallback() 
+
+    GCMCEnergyCallback()
         : energyMethod_(EnergyMethod::DIRECT),
           useCutoff_(true),
           usePBC_(true) {}
-    
+
     // Set energy calculation method
     void setEnergyMethod(EnergyMethod method) {
         energyMethod_ = method;
     }
-    
+
     // Set calculation parameters
     void setParameters(bool useCutoff, bool usePBC) {
         useCutoff_ = useCutoff;
         usePBC_ = usePBC;
     }
-    
+
     /**
      * @brief Calculate total system energy
      * @param state System state
@@ -61,7 +61,7 @@ public:
             return energy::getTotalEnergyUniquePairs(state, EnergyMethod::DIRECT);
         }
     }
-    
+
     /**
      * @brief Calculate energy of a single residue
      * @param state System state
@@ -94,7 +94,7 @@ public:
         const auto& residue = state.residues[residueIdx];
         return residue.energy_vdw + residue.energy_elec;
     }
-    
+
     /**
      * @brief Calculate energy difference for a position change
      * @param state System state
@@ -107,7 +107,7 @@ public:
                                     const Vector3& oldPos, const Vector3& newPos) {
         // Calculate energy at old position
         double oldEnergy = calculateResidueEnergy(state, residueIdx);
-        
+
         // Temporarily move residue to new position
         if (residueIdx >= 0 && residueIdx < static_cast<int>(state.residues.size())) {
             auto& residue = state.residues[residueIdx];
@@ -117,10 +117,10 @@ public:
                 atom.z += (newPos.z - oldPos.z);
             }
         }
-        
+
         // Calculate energy at new position
         double newEnergy = calculateResidueEnergy(state, residueIdx);
-        
+
         // Restore original position
         if (residueIdx >= 0 && residueIdx < static_cast<int>(state.residues.size())) {
             auto& residue = state.residues[residueIdx];
@@ -130,10 +130,10 @@ public:
                 atom.z -= (newPos.z - oldPos.z);
             }
         }
-        
+
         return newEnergy - oldEnergy;
     }
-    
+
     /**
      * @brief Initialize Ewald parameters
      * @param cutoff Cutoff distance in nm
@@ -148,14 +148,14 @@ public:
             // from the Ewald module
         }
     }
-    
+
     /**
      * @brief Initialize PME parameters
      * @param cutoff Cutoff distance in nm
      * @param box Box dimensions
      * @param gridSize Grid dimensions for PME
      */
-    void initializePME(double cutoff, const std::vector<double>& box, 
+    void initializePME(double cutoff, const std::vector<double>& box,
                       const std::vector<int>& gridSize) {
         (void)cutoff;   // Suppress unused parameter warning
         (void)box;      // Suppress unused parameter warning
@@ -166,7 +166,7 @@ public:
             // from the PME module
         }
     }
-    
+
 private:
     EnergyMethod energyMethod_;
     bool useCutoff_;

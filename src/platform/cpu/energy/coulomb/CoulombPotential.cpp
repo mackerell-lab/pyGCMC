@@ -12,4 +12,4 @@ double calcCoulombEnergy(double r, double q1, double q2) {
 } // namespace coulomb
 } // namespace cpu
 } // namespace platform
-} // namespace pygcmc 
+} // namespace pygcmc

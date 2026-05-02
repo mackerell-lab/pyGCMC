@@ -26,11 +26,11 @@ struct TopologyAtom {
     int segment_id;        ///< ID of the segment this atom belongs to
     double alpha = 0.0;     ///< Polarizability (Drude force field)
     double thole = 0.0;     ///< Thole screening parameter (Drude force field)
-    
+
     // Getter methods for consistency with AtomCore interface
     double get_alpha() const { return alpha; }
     double get_thole() const { return thole; }
-    
+
     // Setter methods for Drude parameters
     void set_alpha(double a) { alpha = a; }
     void set_thole(double t) { thole = t; }

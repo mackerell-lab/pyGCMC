@@ -12,10 +12,10 @@ class PrmParserBondedSections {
 public:
     // Parse dihedrals section
     static void parseDihedralsSection(std::istream& input, pygcmc::model::ForceField& ff, bool& debug_output);
-    
+
     // Parse improper section
     static void parseImproperSection(std::istream& input, pygcmc::model::ForceField& ff, bool& debug_output);
-    
+
     // Parse NBFIX section
     static void parseNBFixSection(std::istream& input, pygcmc::model::ForceField& ff, bool& debug_output);
 };
