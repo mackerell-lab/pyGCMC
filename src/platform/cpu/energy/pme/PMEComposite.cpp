@@ -5,7 +5,7 @@
 #include "PMEReal.hpp"
 #include "PMESelf.hpp"
 #include "../common/EnergyDirectCore.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 
 namespace pygcmc {
 namespace platform {

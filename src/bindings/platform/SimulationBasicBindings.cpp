@@ -7,7 +7,7 @@
 // Use new API headers instead of simulation.hpp
 #include "../../platform/cpu/energy/EnergyAPI.hpp"
 #include "../../system/common/SystemLogger.hpp"
-#include "../../platform/platform.hpp"
+#include "../../platform/Platform.hpp"
 
 namespace py = pybind11;
 

@@ -1,9 +1,9 @@
-// src/io/topology/psfParserSections.hpp
+// src/io/topology/PsfParserSections.hpp
 
 #pragma once
 
-#include "psfParserSectionsBasic.hpp"
-#include "psfParserSectionsConnectivity.hpp"
+#include "PsfParserSectionsBasic.hpp"
+#include "PsfParserSectionsConnectivity.hpp"
 #include "../../model/ModelModule.hpp"
 #include <string>
 #include <vector>

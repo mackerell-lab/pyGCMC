@@ -4,7 +4,7 @@
 #include "../../../../model/montecarlo/MCMain.hpp"
 #include "../bias/CavityBias.hpp"
 #include "../bias/ConfigBias.hpp"
-#include "../reservoir/fragment_reservoir.hpp"
+#include "../reservoir/FragmentReservoir.hpp"
 #include <memory>
 #include <vector>
 #include <random>

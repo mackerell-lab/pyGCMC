@@ -4,7 +4,7 @@
 #include "PMEFFT3D.hpp"
 #include "PMESystemCore.hpp"
 #include "PMEGridCharge.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 #include <cmath>
 #include <algorithm>
 

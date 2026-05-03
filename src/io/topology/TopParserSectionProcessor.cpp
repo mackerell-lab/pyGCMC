@@ -1,7 +1,7 @@
-// src/io/topology/topParserSectionProcessor.cpp
+// src/io/topology/TopParserSectionProcessor.cpp
 
-#include "topParserSectionProcessor.hpp"
-#include "topParserUtilities.hpp"
+#include "TopParserSectionProcessor.hpp"
+#include "TopParserUtilities.hpp"
 #include <algorithm>
 #include <cctype>
 

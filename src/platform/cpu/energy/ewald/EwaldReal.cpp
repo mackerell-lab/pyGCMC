@@ -1,6 +1,6 @@
 #include "EwaldReal.hpp"
 #include "../lj/LJMain.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 #include <cmath>
 #include <algorithm>
 

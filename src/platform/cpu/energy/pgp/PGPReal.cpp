@@ -1,7 +1,7 @@
 #include "PGPReal.hpp"
 #include "PGPGlobal.hpp"
 #include "PGPCore.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 #include <cmath>
 
 namespace pygcmc {

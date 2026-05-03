@@ -53,8 +53,6 @@ void init_montecarlo_bindings(py::module& m, py::module&) {
         .def("insert_residue", &pygcmc::system::MonteCarloSystem::insertResidue)
         .def("remove_residue", &pygcmc::system::MonteCarloSystem::removeResidue)
         .def("translate_residue", &pygcmc::system::MonteCarloSystem::translateResidue)
-        .def("calc_non_bonded_energy", &pygcmc::system::MonteCarloSystem::calcNonBondedEnergy)
-        .def("calc_total_energy", &pygcmc::system::MonteCarloSystem::calcTotalEnergy)
         .def("get_state", (const pygcmc::model::MCState& (pygcmc::system::MonteCarloSystem::*)() const) &pygcmc::system::MonteCarloSystem::getState, py::return_value_policy::reference)
         .def("get_state_mutable", (pygcmc::model::MCState& (pygcmc::system::MonteCarloSystem::*)()) &pygcmc::system::MonteCarloSystem::getState, py::return_value_policy::reference)
         .def("get_active_atom_count", &pygcmc::system::MonteCarloSystem::getActiveAtomCount)

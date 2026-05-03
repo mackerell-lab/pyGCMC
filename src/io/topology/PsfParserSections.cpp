@@ -1,7 +1,7 @@
-// src/io/topology/psfParserSections.cpp
+// src/io/topology/PsfParserSections.cpp
 
-#include "psfParserSections.hpp"
-#include "psfParserStringUtils.hpp"
+#include "PsfParserSections.hpp"
+#include "PsfParserStringUtils.hpp"
 #include <sstream>
 #include <iostream>
 #include <array>

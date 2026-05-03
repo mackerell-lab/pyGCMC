@@ -1,7 +1,7 @@
 #include "PGPComposite.hpp"
 #include "PGPGlobal.hpp"
 #include "PGPPrecompute.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 
 namespace pygcmc {
 namespace platform {

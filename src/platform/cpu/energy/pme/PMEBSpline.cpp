@@ -2,7 +2,7 @@
 #include "PMEGlobal.hpp"
 #include "PMECore.hpp"
 #include "PMEConfig.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>

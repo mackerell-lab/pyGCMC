@@ -1,8 +1,8 @@
-// src/io/topology/topParserPreprocessor.hpp
+// src/io/topology/TopParserPreprocessor.hpp
 
 #pragma once
 
-#include "topParserStructures.hpp"
+#include "TopParserStructures.hpp"
 #include <iostream>
 #include <set>
 

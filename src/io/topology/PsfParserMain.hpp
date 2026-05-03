@@ -1,4 +1,4 @@
-// src/io/topology/psfParserMain.hpp
+// src/io/topology/PsfParserMain.hpp
 
 #pragma once
 
@@ -50,8 +50,11 @@ public:
     bool parse_to_topology(const std::string& filename, model::Topology& topology);
 
 private:
+    friend class PSFParserStringUtils;
+
     // Helper functions
     static std::string trim(const std::string& str);
+    static bool parse_lines_to_topology(const std::vector<std::string>& lines, model::Topology& topology);
 };
 
 } // namespace io

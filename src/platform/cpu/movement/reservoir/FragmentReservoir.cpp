@@ -1,7 +1,7 @@
 // Fragment Reservoir Stub Implementation
 // Provides minimal implementation for Python binding tests
 
-#include "../reservoir/fragment_reservoir.hpp"
+#include "../reservoir/FragmentReservoir.hpp"
 #include <iostream>
 
 namespace pygcmc {

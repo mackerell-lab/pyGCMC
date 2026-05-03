@@ -19,7 +19,7 @@
  * - AcceptanceCalculator.hpp: Acceptance criteria
  *
  * **reservoir/ directory** - Fragment Management
- * - fragment_reservoir.hpp: Fragment templates and instances
+ * - FragmentReservoir.hpp: Fragment templates and instances
  *
  * **bias/ directory** - Advanced Biasing Techniques
  * - CavityBias.hpp: Cavity detection and biased insertion
@@ -64,7 +64,7 @@
 #include "gcmc/GCMCAcceptance.hpp"
 
 // Fragment reservoir system
-#include "reservoir/fragment_reservoir.hpp"
+#include "reservoir/FragmentReservoir.hpp"
 
 // Advanced biasing techniques
 #include "bias/CavityBias.hpp"

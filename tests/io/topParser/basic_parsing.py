@@ -108,3 +108,28 @@ def test_parse_step1_top(test_data_dir):
     # For example, check total atom count or partial checks:
     # assert topology.get_num_atoms() == <some_expected_number>
     # ...
+
+
+def test_parse_top_string_with_isolated_temp_file():
+    """Test parsing TOP content directly from a string."""
+    top_content = """
+[ moleculetype ]
+MOL 3
+
+[ atoms ]
+1 C 1 MOL C1 1 0.0 12.011
+2 H 1 MOL H1 1 0.0 1.008
+
+[ bonds ]
+1 2 1 0.109 284512.0
+
+[ molecules ]
+MOL 2
+"""
+
+    topology = TOPParser.parse_string(top_content)
+
+    assert topology.get_num_atoms() == 4
+    assert topology.get_num_residues() == 2
+    assert topology.get_num_segments() == 2
+    assert topology.get_num_bonds() == 2

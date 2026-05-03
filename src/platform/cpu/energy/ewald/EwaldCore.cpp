@@ -1,5 +1,5 @@
 #include "EwaldCore.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 #include <cmath>
 #include <stdexcept>
 #include <algorithm>

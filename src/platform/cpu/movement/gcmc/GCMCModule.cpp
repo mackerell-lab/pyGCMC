@@ -4,7 +4,7 @@
 #include "GCMCBias.hpp"
 #include "GCMCStats.hpp"
 #include "GCMCAcceptance.hpp"
-#include "../reservoir/fragment_reservoir.hpp"
+#include "../reservoir/FragmentReservoir.hpp"
 #include "../bias/CavityBias.hpp"
 #include "../bias/ConfigBias.hpp"
 #include "../../energy/EnergyModule.hpp"

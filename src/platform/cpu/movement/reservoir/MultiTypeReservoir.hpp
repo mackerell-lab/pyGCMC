@@ -2,7 +2,7 @@
 #ifndef PYGCMC_PLATFORM_CPU_MOVEMENT_RESERVOIR_MULTITYPERESERVOIR_HPP
 #define PYGCMC_PLATFORM_CPU_MOVEMENT_RESERVOIR_MULTITYPERESERVOIR_HPP
 
-#include "fragment_reservoir.hpp"
+#include "FragmentReservoir.hpp"
 #include <random>
 #include <unordered_map>
 

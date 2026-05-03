@@ -1,7 +1,7 @@
 #include "PMESelf.hpp"
 #include "PMEGlobal.hpp"
 #include "PMECore.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 #include <cmath>
 
 namespace pygcmc {

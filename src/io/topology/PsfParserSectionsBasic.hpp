@@ -1,4 +1,4 @@
-// src/io/topology/psfParserSectionsBasic.hpp
+// src/io/topology/PsfParserSectionsBasic.hpp
 
 #pragma once
 

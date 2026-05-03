@@ -1,7 +1,7 @@
 #include "PGPInterpolation.hpp"
 #include "PGPGlobal.hpp"
 #include "PGPPrecompute.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 #include "../common/EnergyUtils.hpp"      // applyPBC
 #include "../common/EnergyConstants.hpp"  // COULOMB
 #include <cmath>

@@ -1,6 +1,6 @@
 #include "PMEConfig.hpp"
 #include "PMEGlobal.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 #include <cmath>
 
 namespace pygcmc {

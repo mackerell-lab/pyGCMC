@@ -27,7 +27,8 @@ def test_data_dir():
 # Basic parsing functionality
 from topParser.basic_parsing import (
     test_parse_protein_top,
-    test_parse_step1_top
+    test_parse_step1_top,
+    test_parse_top_string_with_isolated_temp_file
 )
 
 # Molecular structures

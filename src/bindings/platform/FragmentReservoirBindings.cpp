@@ -3,7 +3,7 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include "../../platform/cpu/movement/reservoir/fragment_reservoir.hpp"
+#include "../../platform/cpu/movement/reservoir/FragmentReservoir.hpp"
 #include "../../platform/cpu/movement/common/MovementUtils.hpp"
 
 namespace py = pybind11;

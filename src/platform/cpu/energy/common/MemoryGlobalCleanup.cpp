@@ -6,7 +6,7 @@
 #include "../pgp/PGPCore.hpp"
 #include "MemoryPool.hpp"
 #include "MemorySafetyChecks.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 #include <thread>
 #include <chrono>
 

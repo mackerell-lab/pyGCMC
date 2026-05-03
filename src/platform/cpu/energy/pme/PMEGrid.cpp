@@ -2,7 +2,7 @@
 #include "PMEGridCharge.hpp"
 #include "PMEGridUtils.hpp"
 #include "PMESpline.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 #include <algorithm>
 #include <cmath>
 #include <vector>

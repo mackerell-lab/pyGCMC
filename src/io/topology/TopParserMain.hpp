@@ -1,11 +1,11 @@
-// src/io/topology/topParserMain.hpp
+// src/io/topology/TopParserMain.hpp
 
 #pragma once
 
-#include "topParserStructures.hpp"
-#include "topParserUtilities.hpp"
-#include "topParserPreprocessor.hpp"
-#include "topParserSections.hpp"
+#include "TopParserStructures.hpp"
+#include "TopParserUtilities.hpp"
+#include "TopParserPreprocessor.hpp"
+#include "TopParserSections.hpp"
 #include "model/ModelModule.hpp"
 #include <string>
 #include <vector>

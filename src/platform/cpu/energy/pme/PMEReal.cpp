@@ -1,7 +1,7 @@
 #include "PMEReal.hpp"
 #include "PMEGlobal.hpp"
 #include "PMECore.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 #include "../lj/LJMain.hpp"
 #include <cmath>
 #include <algorithm>

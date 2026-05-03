@@ -1,9 +1,9 @@
-// src/io/topology/psfParserMain.cpp
+// src/io/topology/PsfParserMain.cpp
 
-#include "psfParserMain.hpp"
-#include "psfParserStringUtils.hpp"
-#include "psfParserSections.hpp"
-#include "psfParserSectionsConnectivity.hpp"
+#include "PsfParserMain.hpp"
+#include "PsfParserStringUtils.hpp"
+#include "PsfParserSections.hpp"
+#include "PsfParserSectionsConnectivity.hpp"
 #include <fstream>
 #include <sstream>
 #include <vector>
@@ -52,12 +52,15 @@ std::string PSFParser::trim(const std::string& str) {
 }
 
 bool PSFParser::parse_to_topology(const std::string& filename, model::Topology& topology) {
-    // Read all lines at once
     std::vector<std::string> lines;
     if (!readFileToLines(filename, lines)) {
         return false;
     }
 
+    return parse_lines_to_topology(lines, topology);
+}
+
+bool PSFParser::parse_lines_to_topology(const std::vector<std::string>& lines, model::Topology& topology) {
     // Check for extended Drude format in header
     bool is_extended_format = false;
     bool is_drude_format = false;

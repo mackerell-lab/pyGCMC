@@ -11,8 +11,6 @@ namespace cpu {
 namespace movement {
 namespace gcmc {
 
-using namespace model::montecarlo;
-
 /**
  * @brief Energy calculation callback interface for GCMC
  *
@@ -22,9 +20,9 @@ using namespace model::montecarlo;
 class GCMCEnergyCallback {
 public:
     // Callback function types
-    using SystemEnergyFunc = std::function<double(MCState&)>;
-    using ResidueEnergyFunc = std::function<double(MCState&, int)>;
-    using EnergyDifferenceFunc = std::function<double(MCState&, int, const Vector3&, const Vector3&)>;
+    using SystemEnergyFunc = std::function<double(model::MCState&)>;
+    using ResidueEnergyFunc = std::function<double(model::MCState&, int)>;
+    using EnergyDifferenceFunc = std::function<double(model::MCState&, int, const Vector3&, const Vector3&)>;
 
     GCMCEnergyCallback()
         : energyMethod_(EnergyMethod::DIRECT),
@@ -47,7 +45,7 @@ public:
      * @param state System state
      * @return Total energy in kJ/mol
      */
-    double calculateSystemEnergy(MCState& state) {
+    double calculateSystemEnergy(model::MCState& state) {
         // Use the energy module to calculate system energy
         if (energyMethod_ == EnergyMethod::PME) {
             // Long-range methods require PBC; validateBox should also see the cutoff.
@@ -68,7 +66,7 @@ public:
      * @param residueIdx Residue index
      * @return Energy in kJ/mol
      */
-    double calculateResidueEnergy(MCState& state, int residueIdx) {
+    double calculateResidueEnergy(model::MCState& state, int residueIdx) {
         if (residueIdx < 0 || residueIdx >= static_cast<int>(state.residues.size())) {
             return 0.0;
         }
@@ -103,7 +101,7 @@ public:
      * @param newPos New position
      * @return Energy difference in kJ/mol
      */
-    double calculateEnergyDifference(MCState& state, int residueIdx,
+    double calculateEnergyDifference(model::MCState& state, int residueIdx,
                                     const Vector3& oldPos, const Vector3& newPos) {
         // Calculate energy at old position
         double oldEnergy = calculateResidueEnergy(state, residueIdx);

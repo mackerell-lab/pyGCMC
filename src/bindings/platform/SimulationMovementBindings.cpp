@@ -2,8 +2,6 @@
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl_bind.h>
-// Use the new MovementAPI instead of including individual headers
-#include "../../platform/cpu/movement/MovementAPI.hpp"
 #include "../../platform/cpu/movement/core/MovementMain.hpp"
 #include "../../platform/cpu/movement/common/MovementParams.hpp"
 #include "../../platform/cpu/movement/common/MovementResult.hpp"
@@ -322,62 +320,6 @@ void init_movement_bindings(py::module& m) {
         py::arg("thermalLambdaNm"),
         "Compute deletion acceptance probability with both cavity and thermal wavelength factors");
 
-    // Basic GCMC functions using MovementAPI
-    movement.def("initializeGCMC", &initializeGCMC,
-                "Initialize GCMC module with state");
-
-    movement.def("performGCMCMove", &performGCMCMove,
-                "Perform a single GCMC move");
-
-    movement.def("runGCMCSteps", &runGCMCSteps,
-                "Run multiple GCMC steps",
-                py::arg("nSteps"));
-
-    movement.def("getGCMCStatistics", &getGCMCStatistics,
-                "Get GCMC statistics");
-
-    // Fragment reservoir functions
-    movement.def("addFragmentToReservoir", &addFragmentToReservoir,
-                "Add a fragment to the reservoir",
-                py::arg("name"),
-                py::arg("atoms"),
-                py::arg("chemicalPotential") = -15.7);
-
-    movement.def("clearFragmentReservoir", &clearFragmentReservoir,
-                "Clear the fragment reservoir");
-
-    movement.def("getFragmentCount", &getFragmentCount,
-                "Get number of fragments in reservoir");
-
-    // Individual move types
-    movement.def("attemptInsertion", &attemptInsertion,
-                "Attempt an insertion move");
-
-    movement.def("attemptDeletion", &attemptDeletion,
-                "Attempt a deletion move");
-
-    movement.def("attemptTranslation", &attemptTranslation,
-                "Attempt a translation move",
-                py::arg("state"),
-                py::arg("residueIndex"));
-
-    movement.def("attemptRotation", &attemptRotation,
-                "Attempt a rotation move",
-                py::arg("state"),
-                py::arg("residueIndex"));
-
-    // Utility functions
-    movement.def("setRandomSeed", &setRandomSeed,
-                "Set random seed for movement operations",
-                py::arg("seed"));
-
-    movement.def("setCavityBiasEnabled", &setCavityBiasEnabled,
-                "Enable/disable cavity bias",
-                py::arg("enabled"));
-
-    movement.def("setConfigBiasEnabled", &setConfigBiasEnabled,
-                "Enable/disable configurational bias",
-                py::arg("enabled"));
 
     // Bind Vector3 class (required for several other classes)
     // Note: using the movement namespace Vector3

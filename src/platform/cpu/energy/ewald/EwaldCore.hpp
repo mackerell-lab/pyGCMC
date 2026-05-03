@@ -1,7 +1,7 @@
 #pragma once
 
 #include "model/ModelModule.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 #include "../common/EnergyConstants.hpp"
 #include "../common/EnergyUtils.hpp"
 #include <vector>

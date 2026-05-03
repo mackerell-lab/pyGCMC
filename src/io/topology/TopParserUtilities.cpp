@@ -1,6 +1,6 @@
-// src/io/topology/topParserUtilities.cpp
+// src/io/topology/TopParserUtilities.cpp
 
-#include "topParserUtilities.hpp"
+#include "TopParserUtilities.hpp"
 #include <sstream>
 #include <algorithm>
 #include <cctype>
@@ -23,18 +23,20 @@ std::string TopParserUtilities::remove_comment(const std::string& line) {
     return line;
 }
 
-std::string TopParserUtilities::trim(std::string& str) {
+std::string TopParserUtilities::trim(const std::string& str) {
+    std::string trimmed = str;
+
     // Trim leading spaces
-    str.erase(str.begin(), std::find_if(str.begin(), str.end(), [](unsigned char ch) {
+    trimmed.erase(trimmed.begin(), std::find_if(trimmed.begin(), trimmed.end(), [](unsigned char ch) {
         return !std::isspace(ch);
     }));
 
     // Trim trailing spaces
-    str.erase(std::find_if(str.rbegin(), str.rend(), [](unsigned char ch) {
+    trimmed.erase(std::find_if(trimmed.rbegin(), trimmed.rend(), [](unsigned char ch) {
         return !std::isspace(ch);
-    }).base(), str.end());
+    }).base(), trimmed.end());
 
-    return str;
+    return trimmed;
 }
 
 std::vector<std::string> TopParserUtilities::split(const std::string& str) {

@@ -11,7 +11,7 @@
 // GCMC specific headers
 #include "../../platform/cpu/movement/gcmc/GCMCEngine.hpp"
 #include "../../platform/cpu/movement/gcmc/GCMCAcceptance.hpp"
-#include "../../platform/cpu/movement/reservoir/fragment_reservoir.hpp"
+#include "../../platform/cpu/movement/reservoir/FragmentReservoir.hpp"
 #include "../../platform/cpu/movement/bias/CavityBias.hpp"
 #include "../../platform/cpu/simulation/impl/GCMCSimulation.hpp"
 #include "../../model/montecarlo/MCStructures.hpp"

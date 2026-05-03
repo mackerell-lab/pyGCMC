@@ -1,8 +1,8 @@
-// src/io/topology/topParserMoleculeBuilder.cpp
+// src/io/topology/TopParserMoleculeBuilder.cpp
 
-#include "topParserMoleculeBuilder.hpp"
-#include "topParserSections.hpp"
-#include "topParserUtilities.hpp"
+#include "TopParserMoleculeBuilder.hpp"
+#include "TopParserSections.hpp"
+#include "TopParserUtilities.hpp"
 
 namespace pygcmc {
 namespace io {

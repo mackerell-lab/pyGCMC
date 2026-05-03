@@ -4,7 +4,7 @@
 #include "../../movement/gcmc/GCMCEngine.hpp"
 #include "../../movement/gcmc/GCMCAcceptance.hpp"
 #include "../../movement/gcmc/GCMCStatistics.hpp"
-#include "../../movement/reservoir/fragment_reservoir.hpp"
+#include "../../movement/reservoir/FragmentReservoir.hpp"
 #include "../../movement/reservoir/MultiTypeReservoir.hpp"
 #include "../../movement/bias/CavityBias.hpp"
 #include "../../energy/EnergyModule.hpp"

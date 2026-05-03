@@ -4,7 +4,7 @@
 #include "platform/cpu/energy/pme/PMEGlobal.hpp"
 #include "platform/cpu/energy/pme/PMESetup.hpp"
 #include "platform/cpu/energy/common/MemorySafetyChecks.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 
 namespace pygcmc {
 namespace platform {

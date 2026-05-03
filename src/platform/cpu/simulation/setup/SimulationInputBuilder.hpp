@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../../../../model/ModelModule.hpp"
-#include "../../movement/reservoir/fragment_reservoir.hpp"
+#include "../../movement/reservoir/FragmentReservoir.hpp"
 #include <memory>
 #include <string>
 #include <filesystem>

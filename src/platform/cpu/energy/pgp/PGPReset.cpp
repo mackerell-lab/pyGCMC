@@ -1,6 +1,6 @@
 #include "PGPCore.hpp"
 #include "PGPGlobal.hpp"
-#include "../../../platform.hpp"
+#include "../../../Platform.hpp"
 #include <thread>
 #include <chrono>
 

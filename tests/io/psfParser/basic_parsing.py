@@ -59,6 +59,21 @@ def test_parse_protein_psf(test_data_dir):
         assert abs(ht.charge - 0.33) < 1e-6, f"Wrong charge for {ht.name}"
 
 
+def test_parse_psf_string_matches_file(test_data_dir):
+    """Test parsing PSF content directly from memory."""
+    psf_file = os.path.join(test_data_dir, "test_proa.psf")
+    file_topology = PSFParser.parse_file(psf_file)
+
+    with open(psf_file, "r") as handle:
+        string_topology = PSFParser.parse_string(handle.read())
+
+    assert string_topology.get_num_atoms() == file_topology.get_num_atoms()
+    assert string_topology.get_num_bonds() == file_topology.get_num_bonds()
+    assert string_topology.get_num_angles() == file_topology.get_num_angles()
+    assert string_topology.get_num_dihedrals() == file_topology.get_num_dihedrals()
+    assert string_topology.get_num_impropers() == file_topology.get_num_impropers()
+
+
 def test_parse_nonexistent_file(test_data_dir):
     """Test parsing a non-existent PSF file."""
     psf_file = os.path.join(test_data_dir, "nonexistent.psf")

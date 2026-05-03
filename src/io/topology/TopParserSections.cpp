@@ -1,6 +1,6 @@
-// src/io/topology/topParserSections.cpp
+// src/io/topology/TopParserSections.cpp
 
-#include "topParserSections.hpp"
+#include "TopParserSections.hpp"
 #include <algorithm>
 #include <array>
 

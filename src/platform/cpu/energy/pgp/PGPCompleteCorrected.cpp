@@ -7,7 +7,7 @@
 #include "PGPInterpolation.hpp"
 #include "PGPSelf.hpp"
 #include "../common/EnergyUtils.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 #include <cmath>
 #include <cstdio>
 

@@ -1,5 +1,5 @@
 #include "EwaldRecip.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 #include <cmath>
 #include <iostream>
 

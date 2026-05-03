@@ -1,5 +1,5 @@
 #include "GCMCBias.hpp"
-#include "../reservoir/fragment_reservoir.hpp"
+#include "../reservoir/FragmentReservoir.hpp"
 #include <cmath>
 #include <algorithm>
 #include <numeric>

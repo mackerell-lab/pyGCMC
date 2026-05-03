@@ -1,6 +1,6 @@
 #include "SystemInitializer.hpp"
 #include "../../../../io/parameters/InpParserGCMC.hpp"
-#include "../../../../io/topology/psfParserMain.hpp"
+#include "../../../../io/topology/PsfParserMain.hpp"
 #include "../../../../io/structure/PdbParserMain.hpp"
 #include "../../../../io/forcefield/PrmParserMain.hpp"
 #include <iostream>

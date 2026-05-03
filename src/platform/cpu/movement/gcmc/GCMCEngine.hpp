@@ -2,7 +2,7 @@
 #define PYGCMC_PLATFORM_CPU_MOVEMENT_GCMC_ENGINE_HPP
 
 #include "../../../../model/montecarlo/MCMain.hpp"
-#include "../reservoir/fragment_reservoir.hpp"
+#include "../reservoir/FragmentReservoir.hpp"
 #include "../bias/CavityBias.hpp"
 #include "../bias/ConfigBias.hpp"
 #include "../../energy/EnergyModule.hpp"
@@ -23,9 +23,6 @@ namespace platform {
 namespace cpu {
 namespace movement {
 namespace gcmc {
-
-using namespace model::montecarlo;
-using namespace energy;
 
 // Energy backend selector for gcmc moves.
 // This is intentionally separate from platform::cpu::EnergyMethod to avoid
@@ -104,7 +101,7 @@ public:
     ~GCMCEngine();
 
     // Initialize
-    void initialize(MCState* state, FragmentReservoir* reservoir);
+    void initialize(model::MCState* state, FragmentReservoir* reservoir);
 
     // Set components
     void setCavityManager(CavityManager* cavityManager) {
@@ -141,20 +138,16 @@ public:
     // Energy calculations
     double calculateSystemEnergy();
     double calculateFragmentEnergy(int residueIdx);
-    double calculateInteractionEnergy(int residueIdx);
-    double calculatePairEnergy(int idx1, int idx2);
 
     // Bias calculations
     double calculateInsertionBias(const FragmentTemplate& tmpl,
                                   const Vector3& position,
                                   const Quaternion& orientation);
-    double calculateDeletionBias(int residueIdx);
     double calculateDeletionBiasAtPosition(const Vector3& position);
 
     // State synchronization
     void synchronizeStateWithReservoir(int instanceId, bool isInsertion);
     void updateAtomCoordinates(int residueIdx);  // Update positions without changing count
-    double calculateRegrowthBias(int residueIdx);
 
     // Acceptance criteria
     bool acceptMove(double deltaE, double bias, double temperature);
@@ -245,7 +238,7 @@ public:
 
 private:
     // State and components
-    MCState* state_;
+    model::MCState* state_;
     FragmentReservoir* reservoir_;
     CavityManager* cavityManager_;
     ConfigBiasManager* configBias_;

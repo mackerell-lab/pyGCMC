@@ -7,7 +7,7 @@
 #include "PGPPrecompute.hpp"
 #include "../lj/LJMain.hpp"
 #include "../common/EnergyDirectCore.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 
 namespace pygcmc {
 namespace platform {

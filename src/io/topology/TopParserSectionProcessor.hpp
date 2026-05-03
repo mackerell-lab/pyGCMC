@@ -1,8 +1,8 @@
-// src/io/topology/topParserSectionProcessor.hpp
+// src/io/topology/TopParserSectionProcessor.hpp
 
 #pragma once
 
-#include "topParserStructures.hpp"
+#include "TopParserStructures.hpp"
 #include <string>
 #include <vector>
 #include <map>

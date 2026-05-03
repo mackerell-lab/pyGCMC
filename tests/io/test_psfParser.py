@@ -30,6 +30,7 @@ def test_data_dir():
 # Basic parsing functionality
 from psfParser.basic_parsing import (
     test_parse_protein_psf,
+    test_parse_psf_string_matches_file,
     test_parse_nonexistent_file,
     test_parse_invalid_psf,
     test_parse_out_of_order_psf

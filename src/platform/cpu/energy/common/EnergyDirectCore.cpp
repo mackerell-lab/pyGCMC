@@ -1,7 +1,7 @@
 #include "EnergyDirectCore.hpp"
 #include "../coulomb/CoulombPairCore.hpp"
 #include "EnergyUtils.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 #include <stdexcept>
 #include <sstream>
 #include <limits>

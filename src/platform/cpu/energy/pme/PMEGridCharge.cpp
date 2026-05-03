@@ -3,7 +3,7 @@
 #include "PMEGridPrep.hpp"
 #include "PMEGridMap.hpp"
 #include "PMECore.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 #include <algorithm>
 
 namespace pygcmc {

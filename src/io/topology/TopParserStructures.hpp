@@ -1,4 +1,4 @@
-// src/io/topology/topParserStructures.hpp
+// src/io/topology/TopParserStructures.hpp
 
 #pragma once
 

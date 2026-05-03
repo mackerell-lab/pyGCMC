@@ -8,7 +8,7 @@
 #include "PGPCore.hpp"
 #include "PGPPrecompute.hpp"
 #include "PGPGlobal.hpp"
-#include "../../../platform.hpp"
+#include "../../../Platform.hpp"
 #include <memory>
 
 namespace pygcmc {

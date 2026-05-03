@@ -1,8 +1,8 @@
-// src/io/topology/topParserUtilities.hpp
+// src/io/topology/TopParserUtilities.hpp
 
 #pragma once
 
-#include "topParserStructures.hpp"
+#include "TopParserStructures.hpp"
 #include <iostream>
 
 namespace pygcmc {
@@ -26,7 +26,7 @@ public:
 
     // String utility functions
     static std::string remove_comment(const std::string& line);
-    static std::string trim(std::string& str);
+    static std::string trim(const std::string& str);
     static std::vector<std::string> split(const std::string& str);
 
     // Type-specific helpers

@@ -1,4 +1,4 @@
-// src/io/topology/topParserStringUtils.hpp
+// src/io/topology/TopParserStringUtils.hpp
 
 #pragma once
 
@@ -11,7 +11,7 @@ namespace io {
 class TopParserStringUtils {
 public:
     /**
-     * Parse a topology string by creating a temporary file
+     * Parse a topology string using an isolated temporary file
      * @param top_str The topology string content
      * @return Parsed topology
      */

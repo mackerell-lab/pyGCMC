@@ -1,6 +1,6 @@
-// src/io/topology/topParserPreprocessor.cpp
+// src/io/topology/TopParserPreprocessor.cpp
 
-#include "topParserPreprocessor.hpp"
+#include "TopParserPreprocessor.hpp"
 #include <fstream>
 #include <sstream>
 #include <algorithm>
@@ -10,6 +10,28 @@
 
 namespace pygcmc {
 namespace io {
+
+namespace {
+
+std::string trimCopy(const std::string& value) {
+    std::string trimmed = value;
+    trimmed.erase(trimmed.begin(), std::find_if(trimmed.begin(), trimmed.end(), [](unsigned char ch) {
+        return !std::isspace(ch);
+    }));
+    trimmed.erase(std::find_if(trimmed.rbegin(), trimmed.rend(), [](unsigned char ch) {
+        return !std::isspace(ch);
+    }).base(), trimmed.end());
+    return trimmed;
+}
+
+std::string unquoteIncludePath(const std::string& value) {
+    if (value.size() >= 2 && value.front() == '"' && value.back() == '"') {
+        return value.substr(1, value.length() - 2);
+    }
+    return value;
+}
+
+} // namespace
 
 // Static debug flag definition
 static bool debug_enabled_ = false;
@@ -42,13 +64,7 @@ bool TopParserPreprocessor::collect_all_lines(const std::string& filename, std::
 
     while (std::getline(file, line)) {
         line_number++;
-        // Simple trim implementation
-        line.erase(line.begin(), std::find_if(line.begin(), line.end(), [](unsigned char ch) {
-            return !std::isspace(ch);
-        }));
-        line.erase(std::find_if(line.rbegin(), line.rend(), [](unsigned char ch) {
-            return !std::isspace(ch);
-        }).base(), line.end());
+        line = trimCopy(line);
 
         // Skip empty lines and comments
         if (line.empty() || line[0] == ';') {
@@ -88,17 +104,11 @@ bool TopParserPreprocessor::process_preprocessor_line(const std::string& line, c
         if (!pp_state.should_skip()) {
             std::string include_path;
             std::getline(iss, include_path);
-            // Simple trim
-            include_path.erase(include_path.begin(), std::find_if(include_path.begin(), include_path.end(), [](unsigned char ch) {
-                return !std::isspace(ch);
-            }));
-            include_path.erase(std::find_if(include_path.rbegin(), include_path.rend(), [](unsigned char ch) {
-                return !std::isspace(ch);
-            }).base(), include_path.end());
+            include_path = unquoteIncludePath(trimCopy(include_path));
 
-            // Remove quotes if present
-            if (include_path.front() == '"' && include_path.back() == '"') {
-                include_path = include_path.substr(1, include_path.length() - 2);
+            if (include_path.empty()) {
+                debug_print("Warning: Empty #include at ", parent_file, ":", line_number, "\n");
+                return true;
             }
 
             std::string resolved_path = resolve_include_path(include_path, parent_file);
@@ -184,15 +194,11 @@ bool TopParserPreprocessor::process_preprocessor_line(const std::string& line, c
             iss >> macro_name;
             std::string macro_value;
             std::getline(iss, macro_value);
-            // Simple trim
-            macro_value.erase(macro_value.begin(), std::find_if(macro_value.begin(), macro_value.end(), [](unsigned char ch) {
-                return !std::isspace(ch);
-            }));
-            macro_value.erase(std::find_if(macro_value.rbegin(), macro_value.rend(), [](unsigned char ch) {
-                return !std::isspace(ch);
-            }).base(), macro_value.end());
-            pp_state.defines[macro_name] = macro_value;
-            debug_print("Defined macro: ", macro_name, " = ", macro_value, "\n");
+            if (!macro_name.empty()) {
+                macro_value = trimCopy(macro_value);
+                pp_state.defines[macro_name] = macro_value;
+                debug_print("Defined macro: ", macro_name, " = ", macro_value, "\n");
+            }
         }
     }
     else if (directive == "#undef") {
@@ -215,24 +221,11 @@ void TopParserPreprocessor::parse_sections(const std::vector<LineInfo>& all_line
 
         // Check for section header
         if (line[0] == '[') {
-            std::string tmp = line;
-            // Simple trim
-            tmp.erase(tmp.begin(), std::find_if(tmp.begin(), tmp.end(), [](unsigned char ch) {
-                return !std::isspace(ch);
-            }));
-            tmp.erase(std::find_if(tmp.rbegin(), tmp.rend(), [](unsigned char ch) {
-                return !std::isspace(ch);
-            }).base(), tmp.end());
+            std::string tmp = trimCopy(line);
             // Remove brackets and trim again
             if (tmp.front() == '[') tmp.erase(tmp.begin());
             if (!tmp.empty() && tmp.back() == ']') tmp.pop_back();
-            // Trim again
-            tmp.erase(tmp.begin(), std::find_if(tmp.begin(), tmp.end(), [](unsigned char ch) {
-                return !std::isspace(ch);
-            }));
-            tmp.erase(std::find_if(tmp.rbegin(), tmp.rend(), [](unsigned char ch) {
-                return !std::isspace(ch);
-            }).base(), tmp.end());
+            tmp = trimCopy(tmp);
             current_section = tmp;
 
             // Ensure section exists in map

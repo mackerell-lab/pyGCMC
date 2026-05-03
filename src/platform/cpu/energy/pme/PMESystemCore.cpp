@@ -3,7 +3,7 @@
 #include "PMECore.hpp"
 #include "PMEGridCharge.hpp"
 #include "PMERecip.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 #include <cmath>
 #include <algorithm>
 

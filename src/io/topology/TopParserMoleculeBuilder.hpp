@@ -1,9 +1,9 @@
-// src/io/topology/topParserMoleculeBuilder.hpp
+// src/io/topology/TopParserMoleculeBuilder.hpp
 
 #pragma once
 
 #include "../../model/ModelModule.hpp"
-#include "topParserSectionProcessor.hpp"
+#include "TopParserSectionProcessor.hpp"
 #include <string>
 #include <vector>
 #include <map>

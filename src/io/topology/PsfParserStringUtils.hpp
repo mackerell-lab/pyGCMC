@@ -1,4 +1,4 @@
-// src/io/topology/psfParserStringUtils.hpp
+// src/io/topology/PsfParserStringUtils.hpp
 
 #pragma once
 
@@ -11,7 +11,7 @@ namespace io {
 class PSFParserStringUtils {
 public:
     /**
-     * Parse a PSF string by creating a temporary file
+     * Parse a PSF string in memory
      * @param psf_str The PSF string content
      * @return Parsed topology
      */

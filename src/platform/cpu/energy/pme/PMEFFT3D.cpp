@@ -1,6 +1,6 @@
 #include "PMEFFT3D.hpp"
 #include "PMEFFTCore.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>

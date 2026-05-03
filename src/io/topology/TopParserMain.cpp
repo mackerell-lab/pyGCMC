@@ -1,9 +1,9 @@
-// src/io/topology/topParserMain.cpp
+// src/io/topology/TopParserMain.cpp
 
-#include "topParserMain.hpp"
-#include "topParserStringUtils.hpp"
-#include "topParserSectionProcessor.hpp"
-#include "topParserMoleculeBuilder.hpp"
+#include "TopParserMain.hpp"
+#include "TopParserStringUtils.hpp"
+#include "TopParserSectionProcessor.hpp"
+#include "TopParserMoleculeBuilder.hpp"
 #include <stdexcept>
 
 namespace pygcmc {

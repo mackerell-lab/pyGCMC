@@ -2294,25 +2294,6 @@ double GCMCEngine::calculateFragmentEnergy(int residueIdx) {
     return energy;
 }
 
-// Calculate interaction energy
-double GCMCEngine::calculateInteractionEnergy(int residueIdx) {
-    // This function is now deprecated - use calculateFragmentEnergy instead
-    // which properly uses the energy module
-    return calculateFragmentEnergy(residueIdx);
-}
-
-// Calculate pair energy
-double GCMCEngine::calculatePairEnergy(int idx1, int idx2) {
-    // Suppress unused parameter warnings
-    (void)idx1;
-    (void)idx2;
-
-    // This function is now deprecated - the energy module handles
-    // all pair interactions properly with the correct force field parameters
-    // Use calculateFragmentEnergy or calculateSystemEnergy instead
-    return 0.0;
-}
-
 // Calculate insertion bias
 double GCMCEngine::calculateInsertionBias(const FragmentTemplate& tmpl,
                                          const Vector3& position,
@@ -2362,28 +2343,6 @@ double GCMCEngine::calculateDeletionBiasAtPosition(const Vector3& position) {
     return bias;
 }
 
-// Calculate deletion bias (legacy - depends on reservoir state)
-double GCMCEngine::calculateDeletionBias(int residueIdx) {
-    // Try to get position from reservoir
-    FragmentInstance* instance = reservoir_->getInstance(residueIdx);
-    if (instance) {
-        Vector3 pos(instance->position.x, instance->position.y, instance->position.z);
-        return calculateDeletionBiasAtPosition(pos);
-    }
-    // Fallback if instance not accessible
-    return 1.0;
-}
-
-// Calculate regrowth bias
-double GCMCEngine::calculateRegrowthBias(int residueIdx) {
-    // Combination of deletion and insertion biases
-    double deletionBias = calculateDeletionBias(residueIdx);
-
-    // Would calculate insertion bias at new position
-    double insertionBias = 1.0;
-
-    return deletionBias * insertionBias;
-}
 
 double GCMCEngine::getBoxVolume() const {
     if (!state_) {

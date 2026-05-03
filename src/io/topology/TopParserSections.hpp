@@ -1,9 +1,9 @@
-// src/io/topology/topParserSections.hpp
+// src/io/topology/TopParserSections.hpp
 
 #pragma once
 
-#include "topParserStructures.hpp"
-#include "topParserUtilities.hpp"
+#include "TopParserStructures.hpp"
+#include "TopParserUtilities.hpp"
 
 namespace pygcmc {
 namespace io {

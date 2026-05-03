@@ -1,6 +1,6 @@
 #include "PMESpline.hpp"
 #include "PMECore.hpp"
-#include "platform/platform.hpp"
+#include "platform/Platform.hpp"
 #include <cmath>
 #include <algorithm>
 
